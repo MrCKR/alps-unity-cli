@@ -318,7 +318,7 @@ namespace Alps.UnityCli.Bridge
         private static string AssetSearchJson(QueryArgs args)
         {
             var filter = BuildAssetFilter(args);
-            var guids = AssetDatabase.FindAssets(filter).Select(guid => AssetRecord(guid)).Where(record => record != null).ToList();
+            var guids = AssetDatabase.FindAssets(filter).Select(guid => CreateAssetRecord(guid)).Where(record => record != null).ToList();
             if (!string.IsNullOrWhiteSpace(args?.path))
             {
                 var normalized = NormalizeAssetPath(args.path);
@@ -335,13 +335,13 @@ namespace Alps.UnityCli.Bridge
             AssetRecord record = null;
             if (!string.IsNullOrWhiteSpace(args?.guid))
             {
-                record = AssetRecord(args.guid);
+                record = CreateAssetRecord(args.guid);
             }
             else
             {
                 var target = args?.path ?? args?.target ?? args?.query;
                 var path = NormalizeAssetPath(target);
-                record = AssetRecord(AssetDatabase.AssetPathToGUID(path));
+                record = CreateAssetRecord(AssetDatabase.AssetPathToGUID(path));
             }
 
             if (record == null || string.IsNullOrWhiteSpace(record.Guid))
@@ -518,7 +518,7 @@ namespace Alps.UnityCli.Bridge
             return normalized;
         }
 
-        private static AssetRecord AssetRecord(string guid)
+        private static AssetRecord CreateAssetRecord(string guid)
         {
             if (string.IsNullOrWhiteSpace(guid))
             {
