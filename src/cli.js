@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { ensureLocalAgent, postBridgeHeartbeat, startAgentServer } from "./agent.js";
-import { statusCommand, projectInfoCommand, instanceCurrentCommand, instanceListCommand, instanceUseCommand } from "./commands.js";
+import { statusCommand, projectInfoCommand, instanceCurrentCommand, instanceListCommand, instanceUseCommand, liveQueryCommand } from "./commands.js";
 import { createInstanceId } from "./instances.js";
 import { createRequestId, failure, success } from "./request.js";
 
@@ -47,6 +47,18 @@ async function main() {
     result = await instanceCurrentCommand(requestId);
   } else if (command === "instance" && subcommand === "use") {
     result = await instanceUseCommand(requestId, argument);
+  } else if (command === "scene" && ["active", "hierarchy", "build-settings"].includes(subcommand)) {
+    result = await liveQueryCommand(requestId, `scene.${subcommand}`, queryArgs(flags), options);
+  } else if (command === "go" && subcommand === "find") {
+    result = await liveQueryCommand(requestId, "go.find", targetArgs(flags), options);
+  } else if (command === "go" && subcommand === "inspect") {
+    result = await liveQueryCommand(requestId, "go.inspect", targetArgs(flags, argument), options);
+  } else if (command === "asset" && subcommand === "search") {
+    result = await liveQueryCommand(requestId, "asset.search", assetArgs(flags, argument), options);
+  } else if (command === "asset" && subcommand === "info") {
+    result = await liveQueryCommand(requestId, "asset.info", assetArgs(flags, argument), options);
+  } else if (command === "editor" && subcommand === "console") {
+    result = await liveQueryCommand(requestId, "editor.console", consoleArgs(flags), options);
   } else if (command === "bridge" && subcommand === "register") {
     result = await bridgeRegisterCommand(requestId, flags);
   } else if (command === "agent" && subcommand === "start") {
@@ -56,13 +68,66 @@ async function main() {
       requestId,
       code: "E_CONNECTION_FAILED",
       message: `Unknown command: ${positional.join(" ")}`,
-      nextActions: [{ action: "showHelp", description: "Use status, project info, instance list, instance current, or instance use." }]
+      nextActions: [{ action: "showHelp", description: "Use status, project info, instance list/current/use, scene, go, asset, editor console, bridge register, or agent start." }]
     });
   }
 
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`, () => {
     process.exit(result.ok ? 0 : 1);
   });
+}
+
+function queryArgs(flags) {
+  return {
+    pageSize: numberFlag(flags, "page-size") ?? numberFlag(flags, "limit"),
+    cursor: stringFlag(flags, "cursor"),
+    filter: stringFlag(flags, "filter")
+  };
+}
+
+function targetArgs(flags, positionalTarget) {
+  return {
+    ...queryArgs(flags),
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name"),
+    name: stringFlag(flags, "name"),
+    tag: stringFlag(flags, "tag"),
+    layer: stringFlag(flags, "layer"),
+    component: stringFlag(flags, "component"),
+    path: stringFlag(flags, "path"),
+    id: stringFlag(flags, "id")
+  };
+}
+
+function assetArgs(flags, positionalTarget) {
+  return {
+    ...queryArgs(flags),
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "path") ?? stringFlag(flags, "query"),
+    query: stringFlag(flags, "query") ?? stringFlag(flags, "filter") ?? positionalTarget,
+    type: stringFlag(flags, "type"),
+    path: stringFlag(flags, "path"),
+    guid: stringFlag(flags, "guid")
+  };
+}
+
+function consoleArgs(flags) {
+  return {
+    ...queryArgs(flags),
+    type: stringFlag(flags, "type"),
+    count: numberFlag(flags, "count") ?? numberFlag(flags, "limit"),
+    clear: flags.clear === true || flags.clear === "true"
+  };
+}
+
+function stringFlag(flags, key) {
+  return typeof flags[key] === "string" ? flags[key] : undefined;
+}
+
+function numberFlag(flags, key) {
+  if (typeof flags[key] !== "string") {
+    return undefined;
+  }
+  const value = Number.parseInt(flags[key], 10);
+  return Number.isFinite(value) ? value : undefined;
 }
 
 async function bridgeRegisterCommand(requestId, flags) {

@@ -47,3 +47,19 @@ npm test
 ```
 
 The test suite covers no instance, one busy instance, multiple instances, project mismatch, incompatible bridge version, `E_AGENT_UNAVAILABLE`, Local Agent heartbeat registration, and the CLI `bridge register` contract.
+
+## Query commands
+
+The first query batch returns stable JSON envelopes with `ok`, `requestId`, `mode`, `logs`, `nextActions`, and `data`.
+
+- `alps-unity scene active --project <path>`
+- `alps-unity scene hierarchy --project <path> --page-size 100 --cursor 0 --filter Camera`
+- `alps-unity scene build-settings --project <path>`
+- `alps-unity go find --project <path> --name Player --component Rigidbody`
+- `alps-unity go inspect --project <path> --path Root/Player`
+- `alps-unity asset search --project <path> --query Player --type Prefab --page-size 100`
+- `alps-unity asset info --project <path> --path Assets/Prefabs/Player.prefab`
+- `alps-unity editor console --project <path> --type error --count 50 --filter NullReference`
+- `alps-unity editor console --project <path> --clear`
+
+Live query commands require a registered Unity Editor Bridge instance for the selected project. Use `alps-unity status`, `alps-unity instance list`, and `alps-unity bridge register` for connection diagnostics.
