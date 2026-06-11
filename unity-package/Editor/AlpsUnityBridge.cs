@@ -64,7 +64,11 @@ namespace Alps.UnityCli.Bridge
                 request.uploadHandler = new UploadHandlerRaw(Encoding.UTF8.GetBytes(json));
                 request.downloadHandler = new DownloadHandlerBuffer();
                 request.SetRequestHeader("Content-Type", "application/json");
-                yield return request.SendWebRequest();
+                var operation = request.SendWebRequest();
+                while (!operation.isDone)
+                {
+                    yield return null;
+                }
 
                 if (request.result != UnityWebRequest.Result.Success)
                 {
