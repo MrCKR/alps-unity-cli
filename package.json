@@ -1,0 +1,21 @@
+{
+  "name": "alps-unity-cli",
+  "version": "0.1.0",
+  "description": "Windows-first CLI foundation for Alps Unity automation.",
+  "type": "module",
+  "bin": {
+    "alps-unity": "./bin/alps-unity.js"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "scripts": {
+    "test": "node --test"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "README.md"
+  ],
+  "license": "UNLICENSED"
+}
