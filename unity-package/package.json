@@ -1,0 +1,10 @@
+{
+  "name": "com.alps.unity-cli.bridge",
+  "version": "1.0.0",
+  "displayName": "Alps Unity CLI Bridge",
+  "description": "Registers Unity Editor instances with the Alps Unity CLI Local Agent.",
+  "unity": "2021.3",
+  "author": {
+    "name": "Alps"
+  }
+}

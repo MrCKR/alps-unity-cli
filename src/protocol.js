@@ -1,0 +1,1 @@
+export const SUPPORTED_BRIDGE_MAJOR = 1;

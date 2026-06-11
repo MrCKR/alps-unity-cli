@@ -1,0 +1,20 @@
+{
+  "name": "@alps/unity-cli",
+  "version": "0.1.0",
+  "description": "Windows-first Alps Unity CLI connection and instance management foundation.",
+  "type": "module",
+  "bin": {
+    "alps-unity": "src/cli.js"
+  },
+  "scripts": {
+    "test": "node --test test/**/*.test.js"
+  },
+  "files": [
+    "src",
+    "unity-package",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}
