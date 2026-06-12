@@ -94,6 +94,8 @@ test("Unity Bridge UI operations expose uGUI and UI Toolkit diagnostics", async 
   assert.match(source, /AddComponent<UiText>\(\)/);
   assert.match(source, /AddComponent<UiButton>\(\)/);
   assert.match(source, /AddComponent<UiImage>\(\)/);
+  assert.match(source, /HierarchyPath\(parent\.gameObject\)/);
+  assert.doesNotMatch(source, /HierarchyPath\(parent\)\)/);
   assert.match(source, /UIDocument/);
   assert.match(source, /VisualTreeAsset/);
   assert.match(source, /StyleSheet/);
