@@ -2,13 +2,15 @@
 import { mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { parseArgs, getBoolean, getNumber, getString } from "./args.js";
+import { batchJsonSchema, runBatch } from "./batch.js";
+import { bridgeCommandName, executeBridgeCommand, type BridgeRuntime } from "./bridge-commands.js";
 import { JobRunner } from "./job-runner.js";
 import { JobStore } from "./job-store.js";
 import { createRequestId, failure, printJson, success } from "./output.js";
 import { defaultDataDir, discoverUnity, ensureWindows } from "./platform.js";
 import type { CliResult, JobKind, JobRecord } from "./types.js";
 
-interface Runtime {
+interface Runtime extends BridgeRuntime {
   store: JobStore;
   runner: JobRunner;
   dataDir: string;
@@ -34,6 +36,15 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
 
     if (group === "job") {
       return handleJob(command, parsed.flags, runtime, requestId);
+    }
+
+    if (group === "batch") {
+      return handleBatch(command, parsed.positional[2], parsed.flags, runtime, requestId);
+    }
+
+    const bridgeCommand = bridgeCommandName(group, command);
+    if (bridgeCommand) {
+      return executeBridgeCommand(requestId, bridgeCommand, parsed.flags, parsed.positional[2], runtime);
     }
 
     if (group === "editor" && command === "refresh") {
@@ -98,6 +109,30 @@ async function runJobWorker(flags: Record<string, string | boolean>, requestId: 
   } catch (error) {
     return failure(requestId, "WORKER_FAILED", error instanceof Error ? error.message : String(error));
   }
+}
+
+async function handleBatch(command: string | undefined, filePath: string | undefined, flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult> {
+  if (command === "schema") {
+    return success(requestId, batchJsonSchema());
+  }
+
+  if (command !== "run") {
+    return failure(requestId, "UNKNOWN_BATCH_COMMAND", "Expected batch run <file> or batch schema.");
+  }
+
+  if (!filePath) {
+    return failure(requestId, "BATCH_FILE_REQUIRED", "Pass a batch JSON file: alps-unity batch run <file>.");
+  }
+
+  return runBatch({
+    filePath,
+    requestId,
+    runtime,
+    failFast: flags["fail-fast"] === undefined ? undefined : getBoolean(flags, "fail-fast"),
+    parallel: getNumber(flags, "parallel"),
+    dryRun: getBoolean(flags, "preflight") || getBoolean(flags, "dry-run"),
+    executeStep: (stepArgv) => execute(stepArgv, runtime)
+  });
 }
 
 async function handleJob(command: string | undefined, flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult> {
@@ -193,6 +228,13 @@ function help(): Record<string, unknown> {
       "job status --id <jobId>",
       "job logs --id <jobId> [--tail 100]",
       "job cancel --id <jobId>",
+      "batch schema",
+      "batch run <file.json> [--preflight] [--fail-fast true|false] [--parallel 1]",
+      "scene hierarchy [--page-size 100] [--bridge-endpoint <url>]",
+      "go find --name <name> [--bridge-endpoint <url>]",
+      "component set <target> --component <type> --property <name> --value <value>",
+      "script create <path> --content-file <file>",
+      "screenshot capture <path>",
       "editor refresh --compile [--wait] [--project <path>] [--unity <Unity.exe>]",
       "test run [--platform EditMode|PlayMode] [--wait]",
       "test poll --id <jobId>",
