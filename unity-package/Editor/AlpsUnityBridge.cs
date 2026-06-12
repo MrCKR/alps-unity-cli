@@ -94,7 +94,34 @@ namespace AlpsUnityCli
                 WorkQueue.Enqueue(item);
             }
 
-            item.Completed.Wait(TimeSpan.FromSeconds(60));
+            var timeout = TimeSpan.FromSeconds(60);
+            if (!item.Completed.Wait(timeout))
+            {
+                if (item.CancelBeforeStart())
+                {
+                    WriteLog("bridge_request_timeout_cancelled requestId=" + request.RequestId + " command=" + request.Command);
+                    WriteJson(context, ErrorJson("E_UNITY_BUSY", "Unity Editor did not start the bridge request within 60 seconds; the request was cancelled before execution.", "No Unity side effects were applied. Wait for Unity to finish compiling/importing and retry."), 200);
+                    return;
+                }
+
+                if (item.Completed.IsSet)
+                {
+                    WriteJson(context, item.Response ?? ErrorJson("E_UNITY_BUSY", "Unity Editor did not finish the bridge request within 60 seconds.", "Wait for Unity to finish compiling/importing and retry."), 200);
+                    return;
+                }
+
+                item.MarkTimedOut();
+                WriteLog("bridge_request_timeout_started requestId=" + request.RequestId + " command=" + request.Command + " mutating=" + IsMutatingCommand(request.Command));
+                if (IsMutatingCommand(request.Command))
+                {
+                    WriteJson(context, SuccessJson("{\"status\":\"running\",\"requestId\":" + Quote(request.RequestId) + ",\"command\":" + Quote(request.Command) + ",\"timeoutSeconds\":60,\"sideEffectSemantics\":\"started-before-http-timeout\",\"message\":\"Unity started this mutating request before the HTTP wait timeout; it may still complete. This is not a failure envelope. Inspect logPath and requestId before retrying.\",\"logPath\":" + Quote(LogPath()) + "}"), 200);
+                    return;
+                }
+
+                WriteJson(context, ErrorJson("E_UNITY_BUSY", "Unity Editor started the bridge request but did not finish within 60 seconds.", "Wait for Unity to finish compiling/importing and retry."), 200);
+                return;
+            }
+
             WriteJson(context, item.Response ?? ErrorJson("E_UNITY_BUSY", "Unity Editor did not finish the bridge request within 60 seconds.", "Wait for Unity to finish compiling/importing and retry."), 200);
         }
 
@@ -112,6 +139,14 @@ namespace AlpsUnityCli
                     item = WorkQueue.Dequeue();
                 }
 
+                if (!item.TryStart())
+                {
+                    WriteLog("bridge_request_skipped_expired requestId=" + item.Request.RequestId + " command=" + item.Request.Command);
+                    item.Response = item.Response ?? ErrorJson("E_BRIDGE_REQUEST_EXPIRED", "Bridge request expired before Unity started executing it.", "Retry after Unity is no longer busy.");
+                    item.Completed.Set();
+                    continue;
+                }
+
                 try
                 {
                     item.Response = Execute(item.Request);
@@ -126,6 +161,10 @@ namespace AlpsUnityCli
                 }
                 finally
                 {
+                    if (item.TimedOut)
+                    {
+                        WriteLog("bridge_request_completed_after_http_timeout requestId=" + item.Request.RequestId + " command=" + item.Request.Command);
+                    }
                     item.Completed.Set();
                 }
             }
@@ -382,7 +421,7 @@ namespace AlpsUnityCli
                 var total = CountHierarchy(root.transform);
                 CollectHierarchy(root.transform, items, cursor, pageSize, new Counter());
                 var nextCursor = cursor + items.Count < total ? (cursor + items.Count).ToString(CultureInfo.InvariantCulture) : null;
-                return SuccessJson("{\"prefab\":" + PrefabAssetJson(path, root) + ",\"items\":[" + string.Join(",", items.ToArray()) + "],\"pageInfo\":{\"pageSize\":" + pageSize.ToString(CultureInfo.InvariantCulture) + ",\"cursor\":" + cursor.ToString(CultureInfo.InvariantCulture) + ",\"nextCursor\":" + Quote(nextCursor) + ",\"total\":" + total.ToString(CultureInfo.InvariantCulture) + "},\"logPath\":" + Quote(LogPath()) + "}");
+                return SuccessJson("{\"prefab\":" + PrefabAssetJson(path, root, root) + ",\"items\":[" + string.Join(",", items.ToArray()) + "],\"pageInfo\":{\"pageSize\":" + pageSize.ToString(CultureInfo.InvariantCulture) + ",\"cursor\":" + cursor.ToString(CultureInfo.InvariantCulture) + ",\"nextCursor\":" + Quote(nextCursor) + ",\"total\":" + total.ToString(CultureInfo.InvariantCulture) + "},\"logPath\":" + Quote(LogPath()) + "}");
             }
             finally
             {
@@ -398,6 +437,17 @@ namespace AlpsUnityCli
                 + CapabilityJson("screenshot", ScreenshotCommands) + ","
                 + CapabilityJson("prefab", PrefabCommands)
                 + "]";
+        }
+
+        private static bool IsMutatingCommand(string command)
+        {
+            return command == "prefab.create"
+                || command == "prefab.stage-open"
+                || command == "prefab.stage-save"
+                || command == "prefab.stage-close"
+                || command == "camera.screenshot"
+                || command == "scene.screenshot"
+                || command == "screenshot.capture";
         }
 
         private static string CapabilityJson(string domain, string[] commands)
@@ -539,10 +589,21 @@ namespace AlpsUnityCli
 
         private static string PrefabAssetJson(string path, GameObject prefab)
         {
+            var dependencies = AssetDatabase.GetDependencies(path, false);
+            return PrefabAssetJson(path, prefab, null, dependencies);
+        }
+
+        private static string PrefabAssetJson(string path, GameObject prefab, GameObject contentsRoot)
+        {
+            var dependencies = AssetDatabase.GetDependencies(path, false);
+            return PrefabAssetJson(path, prefab, contentsRoot, dependencies);
+        }
+
+        private static string PrefabAssetJson(string path, GameObject prefab, GameObject contentsRoot, string[] dependencies)
+        {
             var guid = AssetDatabase.AssetPathToGUID(path);
             var assetType = PrefabUtility.GetPrefabAssetType(prefab).ToString();
             var instanceStatus = PrefabUtility.GetPrefabInstanceStatus(prefab).ToString();
-            var dependencies = AssetDatabase.GetDependencies(path, false);
             return "{"
                 + "\"path\":" + Quote(path) + ","
                 + "\"guid\":" + Quote(guid) + ","
@@ -550,7 +611,95 @@ namespace AlpsUnityCli
                 + "\"assetType\":" + Quote(assetType) + ","
                 + "\"instanceStatus\":" + Quote(instanceStatus) + ","
                 + "\"isVariant\":" + Bool(assetType == "Variant") + ","
-                + "\"dependencyCount\":" + dependencies.Length.ToString(CultureInfo.InvariantCulture)
+                + "\"variant\":" + PrefabVariantJson(prefab) + ","
+                + "\"dependencyCount\":" + dependencies.Length.ToString(CultureInfo.InvariantCulture) + ","
+                + "\"dependencies\":" + DependencySummaryJson(dependencies) + ","
+                + "\"nestedPrefabs\":" + NestedPrefabReferencesJson(path, contentsRoot)
+                + "}";
+        }
+
+        private static string PrefabVariantJson(GameObject prefab)
+        {
+            var source = PrefabUtility.GetCorrespondingObjectFromSource(prefab);
+            var sourcePath = source == null ? null : NormalizeAssetPath(AssetDatabase.GetAssetPath(source));
+            var sourceGuid = string.IsNullOrEmpty(sourcePath) ? null : AssetDatabase.AssetPathToGUID(sourcePath);
+            return "{"
+                + "\"isVariant\":" + Bool(PrefabUtility.GetPrefabAssetType(prefab) == PrefabAssetType.Variant) + ","
+                + "\"basePath\":" + Quote(sourcePath) + ","
+                + "\"baseGuid\":" + Quote(sourceGuid) + ","
+                + "\"sourcePath\":" + Quote(sourcePath) + ","
+                + "\"sourceGuid\":" + Quote(sourceGuid)
+                + "}";
+        }
+
+        private static string DependencySummaryJson(string[] dependencies)
+        {
+            var items = new List<string>();
+            foreach (var dependency in dependencies)
+            {
+                var type = AssetDatabase.GetMainAssetTypeAtPath(dependency);
+                items.Add("{\"path\":" + Quote(NormalizeAssetPath(dependency)) + ",\"guid\":" + Quote(AssetDatabase.AssetPathToGUID(dependency)) + ",\"type\":" + Quote(type == null ? null : type.Name) + "}");
+            }
+            return "{\"count\":" + dependencies.Length.ToString(CultureInfo.InvariantCulture) + ",\"items\":[" + string.Join(",", items.ToArray()) + "]}";
+        }
+
+        private static string NestedPrefabReferencesJson(string prefabPath, GameObject contentsRoot)
+        {
+            if (contentsRoot != null)
+            {
+                return NestedPrefabReferencesJsonFromRoot(prefabPath, contentsRoot);
+            }
+
+            var root = PrefabUtility.LoadPrefabContents(prefabPath);
+            try
+            {
+                return NestedPrefabReferencesJsonFromRoot(prefabPath, root);
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(root);
+            }
+        }
+
+        private static string NestedPrefabReferencesJsonFromRoot(string prefabPath, GameObject root)
+        {
+            var items = new List<string>();
+            var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            CollectNestedPrefabReferences(prefabPath, root.transform, root.transform, items, seen);
+            return "{\"count\":" + items.Count.ToString(CultureInfo.InvariantCulture) + ",\"items\":[" + string.Join(",", items.ToArray()) + "]}";
+        }
+
+        private static void CollectNestedPrefabReferences(string prefabPath, Transform root, Transform current, List<string> items, HashSet<string> seen)
+        {
+            if (current != root && PrefabUtility.IsAnyPrefabInstanceRoot(current.gameObject))
+            {
+                var sourcePath = NormalizeAssetPath(PrefabUtility.GetPrefabAssetPathOfNearestInstanceRoot(current.gameObject));
+                if (!string.IsNullOrEmpty(sourcePath) && !string.Equals(sourcePath, prefabPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    var key = sourcePath + "|" + HierarchyPath(current.gameObject);
+                    if (seen.Add(key))
+                    {
+                        items.Add(NestedPrefabReferenceJson(current.gameObject, sourcePath));
+                    }
+                }
+            }
+
+            foreach (Transform child in current)
+            {
+                CollectNestedPrefabReferences(prefabPath, root, child, items, seen);
+            }
+        }
+
+        private static string NestedPrefabReferenceJson(GameObject gameObject, string sourcePath)
+        {
+            var source = AssetDatabase.LoadAssetAtPath<GameObject>(sourcePath);
+            return "{"
+                + "\"name\":" + Quote(gameObject.name) + ","
+                + "\"path\":" + Quote(HierarchyPath(gameObject)) + ","
+                + "\"sourcePath\":" + Quote(sourcePath) + ","
+                + "\"sourceGuid\":" + Quote(AssetDatabase.AssetPathToGUID(sourcePath)) + ","
+                + "\"assetType\":" + Quote(source == null ? null : PrefabUtility.GetPrefabAssetType(source).ToString()) + ","
+                + "\"instanceStatus\":" + Quote(PrefabUtility.GetPrefabInstanceStatus(gameObject).ToString())
                 + "}";
         }
 
@@ -876,6 +1025,10 @@ namespace AlpsUnityCli
 
         private sealed class BridgeWorkItem
         {
+            private readonly object StateLock = new object();
+            private bool cancelled;
+            private bool started;
+
             public BridgeWorkItem(BridgeRequest request)
             {
                 Request = request;
@@ -884,6 +1037,38 @@ namespace AlpsUnityCli
             public BridgeRequest Request { get; private set; }
             public ManualResetEventSlim Completed { get; private set; } = new ManualResetEventSlim(false);
             public string Response { get; set; }
+            public bool TimedOut { get; private set; }
+
+            public bool TryStart()
+            {
+                lock (StateLock)
+                {
+                    if (cancelled)
+                    {
+                        return false;
+                    }
+                    started = true;
+                    return true;
+                }
+            }
+
+            public bool CancelBeforeStart()
+            {
+                lock (StateLock)
+                {
+                    if (started)
+                    {
+                        return false;
+                    }
+                    cancelled = true;
+                    return true;
+                }
+            }
+
+            public void MarkTimedOut()
+            {
+                TimedOut = true;
+            }
         }
 
         private sealed class BridgeRequest
