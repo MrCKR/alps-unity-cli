@@ -2,9 +2,10 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
 import test from "node:test";
-import { execute } from "./cli.js";
+import { execute, isCliEntryPoint } from "./cli.js";
 import { JobRunner } from "./job-runner.js";
 import { JobStore } from "./job-store.js";
 
@@ -44,6 +45,20 @@ async function runCli(args: string[], env: NodeJS.ProcessEnv = {}): Promise<{ co
   });
   return { code, stdout, stderr, durationMs: Date.now() - started };
 }
+
+test("CLI entrypoint detection handles normalized file paths", () => {
+  const cliPath = new URL("cli.js", import.meta.url).pathname;
+  assert.equal(isCliEntryPoint(pathToFileURL(cliPath).href, cliPath), true);
+  assert.equal(isCliEntryPoint(pathToFileURL(cliPath).href, join(cliPath, "..")), false);
+});
+
+test("node dist cli help prints an envelope", async () => {
+  const result = await runCli(["--help"]);
+  assert.equal(result.code, 0, result.stderr);
+  const payload = JSON.parse(result.stdout) as { ok: boolean; data: { usage: string } };
+  assert.equal(payload.ok, true);
+  assert.equal(payload.data.usage, "alps-unity <command> [options]");
+});
 
 test("test run returns a job and status reaches succeeded", async () => {
   const runtime = await makeRuntime();
