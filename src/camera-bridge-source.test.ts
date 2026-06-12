@@ -52,7 +52,12 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /case "physics\.settings"/);
   assert.match(source, /case "physics\.raycast"/);
   assert.match(source, /case "physics\.simulation"/);
-  assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.screenshot`, `screenshot\.capture`, `prefab\.info`, `prefab\.create`, `prefab\.stage-open`, `prefab\.stage-save`, `prefab\.stage-close`, `prefab\.hierarchy`, `ui\.canvas\.create`, `ui\.text\.create`, `ui\.button\.create`, `ui\.image\.create`, `ui\.document\.info`, `ui\.document\.create`, `ui\.hierarchy`, `material\.info`, `material\.create`, `material\.assign`, `material\.set`, `graphics\.quality`, `graphics\.settings`, `graphics\.screenshot`, `physics\.settings`, `physics\.raycast` and `physics\.simulation`/);
+  assert.match(source, /case "editor\.state"/);
+  assert.match(source, /case "editor\.play"/);
+  assert.match(source, /case "editor\.pause"/);
+  assert.match(source, /case "editor\.stop"/);
+  assert.match(source, /case "editor\.menu"/);
+  assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.screenshot`, `screenshot\.capture`, `prefab\.info`, `prefab\.create`, `prefab\.stage-open`, `prefab\.stage-save`, `prefab\.stage-close`, `prefab\.hierarchy`, `ui\.canvas\.create`, `ui\.text\.create`, `ui\.button\.create`, `ui\.image\.create`, `ui\.document\.info`, `ui\.document\.create`, `ui\.hierarchy`, `material\.info`, `material\.create`, `material\.assign`, `material\.set`, `graphics\.quality`, `graphics\.settings`, `graphics\.screenshot`, `physics\.settings`, `physics\.raycast`, `physics\.simulation`, `editor\.state`, `editor\.play`, `editor\.pause`, `editor\.stop` and `editor\.menu`/);
   assert.doesNotMatch(bridgeSection, /live query\/edit\/screenshot/);
   assert.match(bridgeSection, /`scene hierarchy`, `go find`, `component set` and `script edit` are not routed by this package yet/);
 });
@@ -244,4 +249,46 @@ test("Unity Bridge screenshot validates path, format, overwrite and busy diagnos
   assert.match(readme, /`E_CAMERA_NOT_FOUND` for `camera info` when a target Camera cannot be resolved/);
   assert.match(readme, /`E_TARGET_NOT_FOUND` for `camera screenshot` when the target is empty or cannot be resolved/);
   assert.match(readme, /C# runtime behavior for empty camera targets, missing Cameras, screenshot IO failures, actual PNG\/JPG artifacts, Prefab Stage open\/save\/close, Prefab dirty conflicts, nested\/variant Prefab summaries, Material asset creation, Renderer\/UI Graphic assignment, Material property writes, GraphicsSettings\/QualitySettings persistence, render pipeline asset resolution, Physics\/Physics2D project setting persistence, raycast collision hits, explicit simulation steps, uGUI object creation, UIDocument\/PanelSettings linking and UI hierarchy summaries must still be proven by real Windows \+ Unity Editor validation/);
+});
+
+test("Unity Bridge editor commands expose state, play/pause/stop, menu execution and busy diagnostics", async () => {
+  const source = await readFile(sourceUrl, "utf8");
+  const readme = await readFile(readmeUrl, "utf8");
+
+  assert.match(source, /private static string EditorStateJson\(\)/);
+  assert.match(source, /private static string EditorPlayJson\(BridgeRequest request\)/);
+  assert.match(source, /private static string EditorPauseJson\(BridgeRequest request\)/);
+  assert.match(source, /private static string EditorStopJson\(BridgeRequest request\)/);
+  assert.match(source, /private static string EditorMenuJson\(BridgeRequest request\)/);
+  assert.match(source, /EditorApplication\.ExecuteMenuItem\(path\)/);
+  assert.match(source, /EditorApplication\.isPlaying/);
+  assert.match(source, /EditorApplication\.isPaused/);
+  assert.match(source, /EditorApplication\.isPlayingOrWillChangePlaymode/);
+  assert.match(source, /E_UNITY_BUSY/);
+  assert.match(source, /E_PLAYMODE_TIMEOUT/);
+  assert.match(source, /E_MENU_NOT_FOUND/);
+  assert.match(source, /E_MENU_TIMEOUT/);
+  assert.match(source, /E_SCHEMA_INVALID/);
+  assert.match(source, /EnsureEditorNotBusy/);
+  assert.match(source, /WaitForPlayModeState/);
+  assert.match(source, /PrefabStageJson/);
+  assert.match(readme, /`editor state` returns playMode, pause, busy, activeScene and Prefab Stage status/);
+  assert.match(readme, /`editor play`, `editor pause` and `editor stop` control Editor PlayMode/);
+  assert.match(readme, /`editor menu <path>` executes a Unity Editor menu item/);
+  assert.match(readme, /E_UNITY_BUSY/);
+  assert.match(readme, /E_PLAYMODE_TIMEOUT/);
+  assert.match(readme, /E_MENU_NOT_FOUND/);
+  assert.match(readme, /E_MENU_TIMEOUT/);
+});
+
+test("Unity Bridge treats PlayMode switching as editor-command busy state", async () => {
+  const source = await readFile(sourceUrl, "utf8");
+  const busyStart = source.indexOf("private static void EnsureEditorNotBusy");
+  const busyEnd = source.indexOf("private static void WaitForPlayModeState", busyStart);
+  const busyBlock = source.slice(busyStart, busyEnd);
+
+  assert.ok(busyStart > -1);
+  assert.ok(busyEnd > busyStart);
+  assert.match(busyBlock, /EditorApplication\.isPlayingOrWillChangePlaymode/);
+  assert.match(busyBlock, /E_UNITY_BUSY/);
 });

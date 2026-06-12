@@ -105,6 +105,15 @@ export function bridgeCommandName(group: string | undefined, command: string | u
   if (group === "editor" && command === "console") {
     return "editor.console";
   }
+  if (group === "editor" && command === "state") {
+    return "editor.state";
+  }
+  if (group === "editor" && ["play", "pause", "stop"].includes(command ?? "")) {
+    return `editor.${command}`;
+  }
+  if (group === "editor" && command === "menu") {
+    return "editor.menu";
+  }
   if (group === "screenshot" && command === "capture") {
     return "screenshot.capture";
   }
@@ -348,6 +357,18 @@ async function commandArgs(command: string, flags: Record<string, string | boole
 
   if (command === "editor.console") {
     return compactArgs({ ...queryArgs(flags), type: stringFlag(flags, "type"), count: numberFlag(flags, "count") ?? numberFlag(flags, "limit"), clear: boolFlag(flags, "clear") });
+  }
+
+  if (command === "editor.state") {
+    return compactArgs({ ...queryArgs(flags) });
+  }
+
+  if (command === "editor.play" || command === "editor.pause" || command === "editor.stop") {
+    return compactArgs({ ...queryArgs(flags), timeoutMs: numberFlag(flags, "timeout-ms") ?? numberFlag(flags, "timeout") });
+  }
+
+  if (command === "editor.menu") {
+    return compactArgs({ ...queryArgs(flags), path: positionalTarget ?? stringFlag(flags, "path"), timeoutMs: numberFlag(flags, "timeout-ms") ?? numberFlag(flags, "timeout") });
   }
 
   if (command === "screenshot.capture") {
