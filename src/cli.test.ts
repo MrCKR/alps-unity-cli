@@ -6,6 +6,7 @@ import { pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
 import test from "node:test";
 import { execute, isCliEntryPoint } from "./cli.js";
+import { failure, printJson } from "./output.js";
 import { JobRunner } from "./job-runner.js";
 import { JobStore } from "./job-store.js";
 
@@ -57,6 +58,39 @@ test("node dist cli help prints an envelope", async () => {
   const payload = JSON.parse(result.stdout) as { ok: boolean; data: { usage: string } };
   assert.equal(payload.ok, true);
   assert.equal(payload.data.usage, "alps-unity <command> [options]");
+});
+
+test("final CLI failure envelope preserves structured error details", () => {
+  const originalWrite = process.stdout.write;
+  let output = "";
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    output += String(chunk);
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    printJson(failure("req_ambiguous", "E_TARGET_AMBIGUOUS", "UI hierarchy target is ambiguous: HUD", ["Pass a hierarchy path or instance id."], {
+      target: "HUD",
+      matchCount: 2,
+      matches: [
+        { id: 101, name: "HUD", path: "Canvas/HUD", components: ["RectTransform"] },
+        { id: 202, name: "HUD", path: "Overlay/HUD", components: ["UIDocument"] }
+      ]
+    }));
+  } finally {
+    process.stdout.write = originalWrite;
+  }
+
+  const payload = JSON.parse(output) as { ok: boolean; error: { code: string; target: string; matchCount: number; matches: unknown[]; next_actions: string[] } };
+  assert.equal(payload.ok, false);
+  assert.equal(payload.error.code, "E_TARGET_AMBIGUOUS");
+  assert.equal(payload.error.target, "HUD");
+  assert.equal(payload.error.matchCount, 2);
+  assert.deepEqual(payload.error.matches, [
+    { id: 101, name: "HUD", path: "Canvas/HUD", components: ["RectTransform"] },
+    { id: 202, name: "HUD", path: "Overlay/HUD", components: ["UIDocument"] }
+  ]);
+  assert.deepEqual(payload.error.next_actions, ["Pass a hierarchy path or instance id."]);
 });
 
 test("test run returns a job and status reaches succeeded", async () => {

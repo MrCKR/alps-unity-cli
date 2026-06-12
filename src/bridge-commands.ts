@@ -1,4 +1,4 @@
-import { readFile } from "node:fs/promises";
+import { readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import type { CliResult } from "./types.js";
 import { failure, success } from "./output.js";
@@ -14,14 +14,16 @@ export interface BridgeRequest {
   args: Record<string, unknown>;
 }
 
+interface BridgeError {
+  code?: string;
+  message?: string;
+  [key: string]: unknown;
+}
+
 interface BridgeResponse {
   ok?: boolean;
   data?: Record<string, unknown>;
-  error?: {
-    code?: string;
-    message?: string;
-    details?: unknown;
-  };
+  error?: BridgeError;
   nextActions?: string[];
 }
 
@@ -35,6 +37,9 @@ export async function executeBridgeCommand(
   const args = await commandArgs(command, flags, positionalTarget);
   const endpoint = bridgeEndpoint(flags, runtime);
   if (!runtime.bridgeExecute && !endpoint) {
+    if (command === "ui.document.info" && typeof args.path === "string") {
+      return readUiDocumentOffline(requestId, command, args.path);
+    }
     return failure(requestId, "BRIDGE_ENDPOINT_REQUIRED", "Pass --bridge-endpoint <url> or set ALPS_UNITY_BRIDGE_ENDPOINT for live query/edit/screenshot commands.", [
       "Open Unity with the Alps Unity Bridge package installed.",
       "Pass --bridge-endpoint http://127.0.0.1:<port>."
@@ -47,7 +52,7 @@ export async function executeBridgeCommand(
       : await postBridgeExecute(endpoint!, { requestId, command, args });
 
     if (bridgeResult.ok === false) {
-      return failure(requestId, bridgeResult.error?.code ?? "BRIDGE_COMMAND_FAILED", bridgeResult.error?.message ?? "Unity Bridge rejected the command.", bridgeResult.nextActions ?? []);
+      return failure(requestId, bridgeResult.error?.code ?? "BRIDGE_COMMAND_FAILED", bridgeResult.error?.message ?? "Unity Bridge rejected the command.", bridgeResult.nextActions ?? [], bridgeErrorDetails(bridgeResult.error));
     }
 
     return success(requestId, {
@@ -87,6 +92,9 @@ export function bridgeCommandName(group: string | undefined, command: string | u
   }
   if (group === "physics" && ["settings", "raycast", "simulation"].includes(command ?? "")) {
     return `physics.${command}`;
+  }
+  if (group === "ui" && ["canvas/create", "text/create", "button/create", "image/create", "document/info", "document/create", "hierarchy"].includes(command ?? "")) {
+    return `ui.${command?.replaceAll("/", ".")}`;
   }
   if (group === "script" && ["create", "read", "edit", "validate"].includes(command ?? "")) {
     return `script.${command}`;
@@ -286,6 +294,42 @@ async function commandArgs(command: string, flags: Record<string, string | boole
     });
   }
 
+  if (command.startsWith("ui.")) {
+    if (command === "ui.hierarchy") {
+      return compactArgs({ ...queryArgs(flags), target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") });
+    }
+    if (command === "ui.document.info") {
+      const documentTarget = positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name");
+      return compactArgs({
+        target: documentTarget,
+        path: stringFlag(flags, "path") ?? stringFlag(flags, "uxml") ?? (looksLikeUiAssetPath(documentTarget) ? documentTarget : undefined),
+        uss: stringFlag(flags, "uss") ?? stringFlag(flags, "style")
+      });
+    }
+    if (command === "ui.document.create") {
+      return compactArgs({
+        target: positionalTarget ?? stringFlag(flags, "target"),
+        name: stringFlag(flags, "name"),
+        uxml: stringFlag(flags, "uxml") ?? stringFlag(flags, "path"),
+        uss: stringFlag(flags, "uss") ?? stringFlag(flags, "style"),
+        panelSettings: stringFlag(flags, "panel-settings"),
+        overwrite: boolFlag(flags, "overwrite")
+      });
+    }
+    return compactArgs({
+      name: positionalTarget ?? stringFlag(flags, "name"),
+      parent: stringFlag(flags, "parent") ?? stringFlag(flags, "canvas"),
+      text: stringFlag(flags, "text") ?? stringFlag(flags, "label"),
+      sprite: stringFlag(flags, "sprite") ?? stringFlag(flags, "path"),
+      color: stringFlag(flags, "color"),
+      width: numberFlag(flags, "width"),
+      height: numberFlag(flags, "height"),
+      x: numberFlag(flags, "x"),
+      y: numberFlag(flags, "y"),
+      fontSize: numberFlag(flags, "font-size") ?? numberFlag(flags, "fontSize")
+    });
+  }
+
   if (command.startsWith("script.")) {
     return compactArgs({
       path: positionalTarget ?? stringFlag(flags, "path"),
@@ -330,6 +374,53 @@ function bridgeEndpoint(flags: Record<string, string | boolean>, runtime: Bridge
   return stringFlag(flags, "bridge-endpoint") ?? runtime.bridgeEndpoint ?? process.env.ALPS_UNITY_BRIDGE_ENDPOINT;
 }
 
+async function readUiDocumentOffline(requestId: string, command: string, path: string): Promise<CliResult> {
+  const documentPath = resolve(path);
+  try {
+    const documentStat = await stat(documentPath);
+    if (!documentStat.isFile()) {
+      return failure(requestId, "E_UI_DOCUMENT_PATH_INVALID", `UI document path is not a file: ${path}`, ["Pass a .uxml or .uss file path."]);
+    }
+    const content = await readFile(documentPath, "utf8");
+    const extension = documentPath.toLowerCase().endsWith(".uss") ? "uss" : documentPath.toLowerCase().endsWith(".uxml") ? "uxml" : "unknown";
+    const diagnostics = uiDocumentDiagnostics(content, extension);
+    return success(requestId, {
+      command,
+      mode: "offline-reader",
+      document: {
+        path: documentPath,
+        kind: extension,
+        bytes: Buffer.byteLength(content, "utf8"),
+        lines: content.length === 0 ? 0 : content.split(/\r?\n/).length
+      },
+      diagnostics
+    });
+  } catch (error) {
+    return failure(requestId, "E_UI_DOCUMENT_NOT_FOUND", `UI document file not found or unreadable: ${path}`, [error instanceof Error ? error.message : "Check the path and permissions."]);
+  }
+}
+
+function uiDocumentDiagnostics(content: string, extension: string): Array<Record<string, string>> {
+  const diagnostics: Array<Record<string, string>> = [];
+  if (extension === "unknown") {
+    diagnostics.push({ level: "warning", code: "UI_DOCUMENT_EXTENSION_UNKNOWN", message: "Expected a .uxml or .uss file." });
+  }
+  if (extension === "uxml" && !/<ui:UXML|<UXML|<engine:UXML/.test(content)) {
+    diagnostics.push({ level: "warning", code: "UI_UXML_ROOT_MISSING", message: "UXML root element was not detected." });
+  }
+  if (extension === "uss" && !/[.#]?[A-Za-z_][\w-]*\s*\{[^}]*\}/m.test(content)) {
+    diagnostics.push({ level: "warning", code: "UI_USS_RULE_MISSING", message: "USS style rule was not detected." });
+  }
+  if (diagnostics.length === 0) {
+    diagnostics.push({ level: "info", code: "UI_DOCUMENT_READ_OK", message: "UI document file is readable and passed basic checks." });
+  }
+  return diagnostics;
+}
+
+function looksLikeUiAssetPath(value: string | undefined): boolean {
+  return typeof value === "string" && /\.(uxml|uss)$/i.test(value);
+}
+
 async function postBridgeExecute(endpoint: string, payload: BridgeRequest): Promise<BridgeResponse> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 10_000);
@@ -347,6 +438,14 @@ async function postBridgeExecute(endpoint: string, payload: BridgeRequest): Prom
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function bridgeErrorDetails(error: BridgeError | undefined): Record<string, unknown> {
+  if (!error) {
+    return {};
+  }
+  const { code: _code, message: _message, ...details } = error;
+  return details;
 }
 
 function queryArgs(flags: Record<string, string | boolean>): Record<string, unknown> {
