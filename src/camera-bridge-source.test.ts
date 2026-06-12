@@ -83,6 +83,58 @@ test("Unity Bridge shader and texture operations expose diagnostics", async () =
   assert.match(readme, /`E_IMPORT_FAILED`/);
 });
 
+test("Unity Bridge Quote escapes shader read control characters as valid JSON", async () => {
+  const source = await readFile(sourceUrl, "utf8");
+
+  assert.ok(source.includes("case '\\t':"));
+  assert.ok(source.includes('builder.Append("\\\\t");'));
+  assert.ok(source.includes("case '\\b':"));
+  assert.ok(source.includes('builder.Append("\\\\b");'));
+  assert.ok(source.includes("case '\\f':"));
+  assert.ok(source.includes('builder.Append("\\\\f");'));
+  assert.match(source, /character < ' '/);
+  assert.match(source, /ToString\("x4", CultureInfo\.InvariantCulture\)/);
+  assert.ok(source.includes('"content\\":" + Quote(content)'));
+
+  const shaderContent = "Shader \"Alps/Control\" {\n\t// tab and controls \b\f\u0001\n}";
+  const json = `{"ok":true,"data":{"content":${quoteLikeBridge(shaderContent)}}}`;
+  const parsed = JSON.parse(json) as { data: { content: string } };
+  assert.equal(parsed.data.content, shaderContent);
+});
+
+function quoteLikeBridge(value: string): string {
+  let output = "\"";
+  for (const character of value) {
+    switch (character) {
+      case "\"":
+        output += "\\\"";
+        break;
+      case "\\":
+        output += "\\\\";
+        break;
+      case "\b":
+        output += "\\b";
+        break;
+      case "\f":
+        output += "\\f";
+        break;
+      case "\n":
+        output += "\\n";
+        break;
+      case "\r":
+        output += "\\r";
+        break;
+      case "\t":
+        output += "\\t";
+        break;
+      default:
+        output += character < " " ? `\\u${character.charCodeAt(0).toString(16).padStart(4, "0")}` : character;
+        break;
+    }
+  }
+  return `${output}\"`;
+}
+
 test("Unity Bridge camera screenshot captures render texture and returns artifact metadata", async () => {
   const source = await readFile(sourceUrl, "utf8");
 
