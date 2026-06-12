@@ -523,7 +523,7 @@ namespace AlpsUnityCli
             }
 
             Selection.activeGameObject = gameObject;
-            WriteLog("ui_element_created kind=" + kind + " name=" + name + " parent=" + HierarchyPath(parent));
+            WriteLog("ui_element_created kind=" + kind + " name=" + name + " parent=" + HierarchyPath(parent.gameObject));
             return SuccessJson(UiCreateJson("ui." + kind.ToLowerInvariant() + ".create", gameObject, kind));
         }
 
