@@ -22,6 +22,8 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, material, grap
   assert.match(source, /private static readonly string\[\] MaterialCommands = \{ "material\.info", "material\.create", "material\.assign", "material\.set" \}/);
   assert.match(source, /private static readonly string\[\] GraphicsCommands = \{ "graphics\.quality", "graphics\.settings", "graphics\.screenshot" \}/);
   assert.match(source, /private static readonly string\[\] PhysicsCommands = \{ "physics\.settings", "physics\.raycast", "physics\.simulation" \}/);
+  assert.match(source, /private static readonly string\[\] CodeCommands = \{ "code\.exec" \}/);
+  assert.match(source, /CapabilityJson\("code", CodeCommands\)/);
   assert.match(source, /case "camera\.list"/);
   assert.match(source, /case "camera\.info"/);
   assert.match(source, /case "camera\.screenshot"/);
@@ -43,7 +45,8 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, material, grap
   assert.match(source, /case "physics\.settings"/);
   assert.match(source, /case "physics\.raycast"/);
   assert.match(source, /case "physics\.simulation"/);
-  assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.screenshot`, `screenshot\.capture`, `prefab\.info`, `prefab\.create`, `prefab\.stage-open`, `prefab\.stage-save`, `prefab\.stage-close`, `prefab\.hierarchy`, `material\.info`, `material\.create`, `material\.assign`, `material\.set`, `graphics\.quality`, `graphics\.settings`, `graphics\.screenshot`, `physics\.settings`, `physics\.raycast` and `physics\.simulation`/);
+  assert.match(source, /case "code\.exec"/);
+  assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.screenshot`, `screenshot\.capture`, `prefab\.info`, `prefab\.create`, `prefab\.stage-open`, `prefab\.stage-save`, `prefab\.stage-close`, `prefab\.hierarchy`, `material\.info`, `material\.create`, `material\.assign`, `material\.set`, `graphics\.quality`, `graphics\.settings`, `graphics\.screenshot`, `physics\.settings`, `physics\.raycast`, `physics\.simulation` and `code\.exec`/);
   assert.doesNotMatch(bridgeSection, /live query\/edit\/screenshot/);
   assert.match(bridgeSection, /`scene hierarchy`, `go find`, `component set` and `script edit` are not routed by this package yet/);
 });
@@ -172,4 +175,5 @@ test("Unity Bridge screenshot validates path, format, overwrite and busy diagnos
   assert.match(readme, /`E_CAMERA_NOT_FOUND` for `camera info` when a target Camera cannot be resolved/);
   assert.match(readme, /`E_TARGET_NOT_FOUND` for `camera screenshot` when the target is empty or cannot be resolved/);
   assert.match(readme, /C# runtime behavior for empty camera targets, missing Cameras, screenshot IO failures, actual PNG\/JPG artifacts, Prefab Stage open\/save\/close, Prefab dirty conflicts, nested\/variant Prefab summaries, Material asset creation, Renderer\/UI Graphic assignment, Material property writes, GraphicsSettings\/QualitySettings persistence, render pipeline asset resolution, Physics\/Physics2D project setting persistence, raycast collision hits and explicit simulation steps must still be proven by real Windows \+ Unity Editor validation/);
+  assert.match(readme, /Runtime Code live and batchmode execution with real UnityEngine\/UnityEditor API calls/);
 });

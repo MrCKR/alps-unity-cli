@@ -9,8 +9,11 @@ export function success<T>(requestId: string, data: T): CliResult<T> {
   return { ok: true, requestId, data };
 }
 
-export function failure(requestId: string, code: string, message: string, nextActions: string[] = []): CliResult {
+export function failure(requestId: string, code: string, message: string, nextActions: string[] = [], details?: unknown): CliResult {
   const error: CliError = { code, message, requestId };
+  if (details !== undefined) {
+    error.details = details;
+  }
   if (nextActions.length > 0) {
     error.next_actions = nextActions;
   }

@@ -105,6 +105,7 @@ test("batch preflight accepts query edit test and screenshot example", async () 
       { id: "query", command: ["asset", "search"], args: ["--query", "Player", "--type", "Prefab"] },
       { id: "edit", command: ["script", "edit", "Assets/Scripts/Player.cs"], args: ["--find", "speed = 1", "--replace", "speed = 2"], dependsOn: ["query"] },
       { id: "test", command: ["test", "run"], args: ["--platform", "EditMode"], dependsOn: ["edit"] },
+      { id: "code", command: ["code", "exec"], args: ["--code", "return 1;"], dependsOn: ["edit"] },
       { id: "camera", command: ["camera", "info", "Main Camera"] },
       { id: "screenshot", command: ["scene", "screenshot", "Artifacts/after.png"], dependsOn: ["test", "camera"] }
     ]
@@ -115,7 +116,7 @@ test("batch preflight accepts query edit test and screenshot example", async () 
   assert.equal(result.ok, true);
   const data = result.data as { preflight: Array<{ code: string }>; steps: Array<{ id: string; parallelSafe: boolean }> };
   assert.deepEqual(data.preflight.map((item) => item.code), ["BATCH_PREFLIGHT_OK"]);
-  assert.deepEqual(data.steps.map((step) => step.id), ["query", "edit", "test", "camera", "screenshot"]);
+  assert.deepEqual(data.steps.map((step) => step.id), ["query", "edit", "test", "code", "camera", "screenshot"]);
 });
 
 test("batch preflight rejects unknown and raw commands", async () => {

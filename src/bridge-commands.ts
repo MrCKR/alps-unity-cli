@@ -32,10 +32,19 @@ export async function executeBridgeCommand(
   positionalTarget: string | undefined,
   runtime: BridgeRuntime
 ): Promise<CliResult> {
-  const args = await commandArgs(command, flags, positionalTarget);
+  return executeBridgePayload(requestId, command, await commandArgs(command, flags, positionalTarget), flags, runtime);
+}
+
+export async function executeBridgePayload(
+  requestId: string,
+  command: string,
+  args: Record<string, unknown>,
+  flags: Record<string, string | boolean>,
+  runtime: BridgeRuntime
+): Promise<CliResult> {
   const endpoint = bridgeEndpoint(flags, runtime);
   if (!runtime.bridgeExecute && !endpoint) {
-    return failure(requestId, "BRIDGE_ENDPOINT_REQUIRED", "Pass --bridge-endpoint <url> or set ALPS_UNITY_BRIDGE_ENDPOINT for live query/edit/screenshot commands.", [
+    return failure(requestId, "BRIDGE_ENDPOINT_REQUIRED", "Pass --bridge-endpoint <url> or set ALPS_UNITY_BRIDGE_ENDPOINT for live query/edit/screenshot/code commands.", [
       "Open Unity with the Alps Unity Bridge package installed.",
       "Pass --bridge-endpoint http://127.0.0.1:<port>."
     ]);
@@ -47,7 +56,7 @@ export async function executeBridgeCommand(
       : await postBridgeExecute(endpoint!, { requestId, command, args });
 
     if (bridgeResult.ok === false) {
-      return failure(requestId, bridgeResult.error?.code ?? "BRIDGE_COMMAND_FAILED", bridgeResult.error?.message ?? "Unity Bridge rejected the command.", bridgeResult.nextActions ?? []);
+      return failure(requestId, bridgeResult.error?.code ?? "BRIDGE_COMMAND_FAILED", bridgeResult.error?.message ?? "Unity Bridge rejected the command.", bridgeResult.nextActions ?? [], bridgeResult.error?.details);
     }
 
     return success(requestId, {
@@ -99,6 +108,9 @@ export function bridgeCommandName(group: string | undefined, command: string | u
   }
   if (group === "screenshot" && command === "capture") {
     return "screenshot.capture";
+  }
+  if (group === "code" && command === "exec") {
+    return "code.exec";
   }
   return undefined;
 }
@@ -308,6 +320,20 @@ async function commandArgs(command: string, flags: Record<string, string | boole
 
   if (command === "screenshot.capture") {
     return screenshotArgs(flags, positionalTarget);
+  }
+
+  if (command === "code.exec") {
+    return compactArgs({
+      sourcePath: stringFlag(flags, "file"),
+      sourceText: stringFlag(flags, "code"),
+      sourceKind: stringFlag(flags, "file") ? "file" : stringFlag(flags, "code") ? "inline" : boolFlag(flags, "stdin") ? "stdin" : undefined,
+      channel: stringFlag(flags, "channel"),
+      timeoutMs: numberFlag(flags, "timeout-ms"),
+      artifactDir: stringFlag(flags, "artifact-dir"),
+      argsJson: stringFlag(flags, "args"),
+      refs: stringFlag(flags, "refs"),
+      defines: stringFlag(flags, "define")
+    });
   }
 
   return {};

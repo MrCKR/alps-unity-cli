@@ -1,4 +1,4 @@
-export type JobKind = "refresh" | "test" | "build" | "package";
+export type JobKind = "refresh" | "test" | "build" | "package" | "code";
 
 export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled" | "timeout";
 
@@ -6,6 +6,7 @@ export interface CliError {
   code: string;
   message: string;
   requestId: string;
+  details?: unknown;
   next_actions?: string[];
 }
 
