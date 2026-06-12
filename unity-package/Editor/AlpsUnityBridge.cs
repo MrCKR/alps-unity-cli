@@ -1183,7 +1183,7 @@ namespace AlpsUnityCli
                 + CapabilityJson("prefab", PrefabCommands) + ","
                 + CapabilityJson("material", MaterialCommands) + ","
                 + CapabilityJson("graphics", GraphicsCommands) + ","
-                + CapabilityJson("physics", PhysicsCommands)
+                + CapabilityJson("physics", PhysicsCommands) + ","
                 + CapabilityJson("shader", ShaderCommands) + ","
                 + CapabilityJson("texture", TextureCommands)
                 + "]";

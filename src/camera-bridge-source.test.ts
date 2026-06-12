@@ -17,6 +17,7 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, material, grap
   assert.match(source, /CapabilityJson\("material", MaterialCommands\)/);
   assert.match(source, /CapabilityJson\("graphics", GraphicsCommands\)/);
   assert.match(source, /CapabilityJson\("physics", PhysicsCommands\)/);
+  assert.match(source, /CapabilityJson\("physics", PhysicsCommands\) \+ ","\s+\+ CapabilityJson\("shader", ShaderCommands\) \+ ","/);
   assert.match(source, /private static readonly string\[\] CameraCommands = \{ "camera\.list", "camera\.info", "camera\.screenshot" \}/);
   assert.match(source, /private static readonly string\[\] PrefabCommands = \{ "prefab\.info", "prefab\.create", "prefab\.stage-open", "prefab\.stage-save", "prefab\.stage-close", "prefab\.hierarchy" \}/);
   assert.match(source, /private static readonly string\[\] MaterialCommands = \{ "material\.info", "material\.create", "material\.assign", "material\.set" \}/);
