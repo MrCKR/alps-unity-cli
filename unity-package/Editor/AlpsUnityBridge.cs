@@ -589,6 +589,8 @@ namespace AlpsUnityCli
             AssetDatabase.SaveAssets();
             WriteLog("material_set path=" + path + " property=" + propertyName + " type=" + normalizedType);
             return SuccessJson("{\"material\":" + MaterialJson(path, material) + ",\"property\":" + Quote(propertyName) + ",\"propertyType\":" + Quote(propertyType) + ",\"appliedValue\":" + appliedValue + ",\"plannedEffects\":[{\"type\":\"material.set\",\"path\":" + Quote(path) + ",\"property\":" + Quote(propertyName) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
         private static string ShaderInfo(BridgeRequest request)
         {
             var path = ResolveShaderPath(request.StringArg("path") ?? request.StringArg("target"));
