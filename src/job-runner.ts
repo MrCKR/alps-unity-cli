@@ -203,15 +203,28 @@ export class JobRunner {
   }
 
   private async finalResult(job: JobRecord): Promise<Record<string, unknown> | undefined> {
-    if (job.kind !== "test" || typeof job.result?.resultPath !== "string") {
-      return job.result;
+    if (job.kind === "test" && typeof job.result?.resultPath === "string") {
+      const summary = await readUnityTestSummary(job.result.resultPath);
+      return summary ? { ...job.result, summary } : job.result;
     }
-
-    const summary = await readUnityTestSummary(job.result.resultPath);
-    return summary ? { ...job.result, summary } : job.result;
+    if (job.kind === "code" && typeof job.result?.resultPath === "string") {
+      const codeResult = await this.readCodeResult(job.result.resultPath);
+      return codeResult ? { ...job.result, ...codeResult } : job.result;
+    }
+    return job.result;
   }
 
   private async failureDiagnostic(job: JobRecord, code: number | null): Promise<{ code: string; message: string }> {
+    if (job.kind === "code") {
+      const resultPath = typeof job.result?.resultPath === "string" ? job.result.resultPath : undefined;
+      const codeResult = resultPath ? await this.readCodeResult(resultPath) : undefined;
+      const error = codeResult?.error as { code?: string; message?: string } | undefined;
+      if (error?.code && error?.message) {
+        return { code: error.code, message: error.message };
+      }
+      const log = await this.readLog(job.logPath);
+      return { code: codeDiagnosticCode(log), message: firstMatchingLine(log, /(E_CODE_[A-Z_]+:[^\r\n]*)/i) ?? `Unity code execution failed with exit code ${code}.` };
+    }
     if (job.kind !== "package") {
       return { code: "UNITY_BATCHMODE_FAILED", message: `Unity exited with code ${code}.` };
     }
@@ -234,6 +247,33 @@ export class JobRunner {
       return "";
     }
   }
+
+  private async readCodeResult(path: string): Promise<Record<string, unknown> | undefined> {
+    try {
+      return JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
+    } catch {
+      return undefined;
+    }
+  }
+}
+
+function codeDiagnosticCode(log: string): string {
+  if (/E_CODE_COMPILE_FAILED|error CS\d+/i.test(log)) {
+    return "E_CODE_COMPILE_FAILED";
+  }
+  if (/E_REFERENCE_RESOLUTION_FAILED/i.test(log)) {
+    return "E_REFERENCE_RESOLUTION_FAILED";
+  }
+  if (/E_EXECUTION_TIMEOUT|timed out|timeout/i.test(log)) {
+    return "E_EXECUTION_TIMEOUT";
+  }
+  if (/E_UNITY_BUSY|Another Unity instance is running|project is already open|AssetDatabase is busy/i.test(log)) {
+    return "E_UNITY_BUSY";
+  }
+  if (/E_CODE_RUNTIME_EXCEPTION|Exception/i.test(log)) {
+    return "E_CODE_RUNTIME_EXCEPTION";
+  }
+  return "E_CODE_RUNTIME_EXCEPTION";
 }
 
 function packageDiagnosticCode(log: string): string {
