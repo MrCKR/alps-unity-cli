@@ -151,3 +151,24 @@ test("bridge errors return CLI failure envelope", async () => {
   assert.equal(result.error?.code, "E_TARGET_AMBIGUOUS");
   assert.deepEqual(result.error?.next_actions, ["Pass --path or --id."]);
 });
+
+test("camera screenshot bridge target and IO errors preserve protocol envelopes", async () => {
+  const runtime = await makeRuntime();
+  const cases: Array<{ name: string; response: { code: string; message: string }; nextActions: string[] }> = [
+    { name: "empty target", response: { code: "E_TARGET_NOT_FOUND", message: "Camera screenshot requires a target Camera." }, nextActions: ["Pass a Camera name, hierarchy path or instance id."] },
+    { name: "missing camera", response: { code: "E_TARGET_NOT_FOUND", message: "Camera not found: Missing Camera" }, nextActions: ["Run alps-unity camera list to inspect available cameras."] },
+    { name: "io failure", response: { code: "E_IO_ERROR", message: "Failed to write screenshot output." }, nextActions: ["Check output path, permissions, format parameters and AlpsUnityBridge.log."] }
+  ];
+
+  for (const item of cases) {
+    const result = await execute(["camera", "screenshot", item.name === "empty target" ? "" : "Missing Camera", "--output", "Artifacts/out.png"], {
+      ...runtime,
+      bridgeExecute: async () => ({ ok: false, error: item.response, nextActions: item.nextActions })
+    });
+
+    assert.equal(result.ok, false, item.name);
+    assert.equal(result.error?.code, item.response.code, item.name);
+    assert.equal(result.error?.message, item.response.message, item.name);
+    assert.deepEqual(result.error?.next_actions, item.nextActions, item.name);
+  }
+});
