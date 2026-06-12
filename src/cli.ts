@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import { parseArgs, getBoolean, getNumber, getString } from "./args.js";
 import { JobRunner } from "./job-runner.js";
 import { JobStore } from "./job-store.js";
@@ -322,7 +323,14 @@ function help(): Record<string, unknown> {
   };
 }
 
-if (import.meta.url === `file://${process.argv[1]}`) {
+export function isCliEntryPoint(metaUrl: string, argvPath: string | undefined): boolean {
+  if (!argvPath) {
+    return false;
+  }
+  return resolve(fileURLToPath(metaUrl)) === resolve(argvPath);
+}
+
+if (isCliEntryPoint(import.meta.url, process.argv[1])) {
   execute(process.argv.slice(2)).then((result) => {
     printJson(result);
     process.exitCode = result.ok ? 0 : 1;
