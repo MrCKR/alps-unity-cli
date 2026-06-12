@@ -28,6 +28,10 @@ namespace AlpsUnityCli
         private static readonly string[] MaterialCommands = { "material.info", "material.create", "material.assign", "material.set" };
         private static readonly string[] GraphicsCommands = { "graphics.quality", "graphics.settings", "graphics.screenshot" };
         private static readonly string[] PhysicsCommands = { "physics.settings", "physics.raycast", "physics.simulation" };
+        private static readonly string[] ShaderCommands = { "shader.info", "shader.read", "shader.create", "shader.update" };
+        private static readonly string[] TextureCommands = { "texture.info", "texture.create", "texture.sprite", "texture.import-settings" };
+        private static readonly Queue<BridgeWorkItem> WorkQueue = new Queue<BridgeWorkItem>();
+        private static HttpListener listener;
         private static bool started;
 
         static AlpsUnityBridge()
@@ -224,6 +228,22 @@ namespace AlpsUnityCli
                     return PhysicsRaycast(request);
                 case "physics.simulation":
                     return PhysicsSimulation(request);
+                case "shader.info":
+                    return ShaderInfo(request);
+                case "shader.read":
+                    return ShaderRead(request);
+                case "shader.create":
+                    return ShaderCreate(request);
+                case "shader.update":
+                    return ShaderUpdate(request);
+                case "texture.info":
+                    return TextureInfo(request);
+                case "texture.create":
+                    return TextureCreate(request);
+                case "texture.sprite":
+                    return TextureSprite(request);
+                case "texture.import-settings":
+                    return TextureImportSettings(request);
                 default:
                     return ErrorJson("E_BRIDGE_COMMAND_UNSUPPORTED", "Unsupported bridge command: " + request.Command, "Upgrade the Alps Unity Bridge package or use a registered CLI command.");
             }
@@ -569,6 +589,568 @@ namespace AlpsUnityCli
             AssetDatabase.SaveAssets();
             WriteLog("material_set path=" + path + " property=" + propertyName + " type=" + normalizedType);
             return SuccessJson("{\"material\":" + MaterialJson(path, material) + ",\"property\":" + Quote(propertyName) + ",\"propertyType\":" + Quote(propertyType) + ",\"appliedValue\":" + appliedValue + ",\"plannedEffects\":[{\"type\":\"material.set\",\"path\":" + Quote(path) + ",\"property\":" + Quote(propertyName) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+        private static string ShaderInfo(BridgeRequest request)
+        {
+            var path = ResolveShaderPath(request.StringArg("path") ?? request.StringArg("target"));
+            var shader = LoadShaderLikeAsset(path) as Shader;
+            return SuccessJson("{\"shader\":" + ShaderAssetJson(path, shader, false) + ",\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string ShaderRead(BridgeRequest request)
+        {
+            var path = ResolveShaderPath(request.StringArg("path") ?? request.StringArg("target"));
+            LoadShaderLikeAsset(path);
+            var fullPath = AssetFullPath(path);
+            string content;
+            try
+            {
+                content = File.ReadAllText(fullPath, Encoding.UTF8);
+            }
+            catch (Exception exception)
+            {
+                throw new BridgeCommandException("E_IO_ERROR", "Failed to read Shader file: " + exception.Message, "Check file encoding and permissions: " + path);
+            }
+            return SuccessJson("{\"shader\":" + ShaderAssetJson(path, AssetDatabase.LoadAssetAtPath<Shader>(path), true) + ",\"content\":" + Quote(content) + ",\"encoding\":\"utf-8\",\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string ShaderCreate(BridgeRequest request)
+        {
+            var path = RequireShaderPath(request.StringArg("path"));
+            var overwrite = request.BoolArg("overwrite", false);
+            if (AssetExists(path) && !overwrite)
+            {
+                return ErrorJson("E_SHADER_OUTPUT_EXISTS", "Shader output already exists: " + path, "Pass --overwrite or choose a different Assets/*.shader path.");
+            }
+
+            var content = request.StringArg("content");
+            if (string.IsNullOrEmpty(content))
+            {
+                if (path.EndsWith(".shadergraph", StringComparison.OrdinalIgnoreCase))
+                {
+                    return ErrorJson("E_SHADER_CONTENT_REQUIRED", "ShaderGraph creation requires --content or --content-file.", "Pass a ShaderGraph JSON payload via --content-file.");
+                }
+                content = DefaultShaderContent(request.StringArg("name"), path);
+            }
+
+            WriteTextAsset(path, content, overwrite);
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            AssetDatabase.SaveAssets();
+            WriteLog("shader_created path=" + path);
+            return SuccessJson(ShaderMutationJson("shader.create", path));
+        }
+
+        private static string ShaderUpdate(BridgeRequest request)
+        {
+            var path = ResolveShaderPath(request.StringArg("path") ?? request.StringArg("target"));
+            LoadShaderLikeAsset(path);
+            var content = request.StringArg("content");
+            if (content == null)
+            {
+                return ErrorJson("E_SHADER_CONTENT_REQUIRED", "Shader update requires --content or --content-file.", "Pass replacement Shader content via --content-file.");
+            }
+
+            WriteTextAsset(path, content, true);
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            AssetDatabase.SaveAssets();
+            WriteLog("shader_updated path=" + path);
+            return SuccessJson(ShaderMutationJson("shader.update", path));
+        }
+
+        private static string TextureInfo(BridgeRequest request)
+        {
+            var path = ResolveTexturePath(request.StringArg("path") ?? request.StringArg("target"));
+            var texture = LoadTextureAsset(path);
+            return SuccessJson("{\"texture\":" + TextureAssetJson(path, texture) + ",\"importSettings\":" + TextureImporterJson(RequireTextureImporter(path)) + ",\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string TextureCreate(BridgeRequest request)
+        {
+            var path = RequireTexturePath(request.StringArg("path"));
+            var overwrite = request.BoolArg("overwrite", false);
+            if (AssetExists(path) && !overwrite)
+            {
+                return ErrorJson("E_TEXTURE_OUTPUT_EXISTS", "Texture output already exists: " + path, "Pass --overwrite or choose a different texture asset path.");
+            }
+
+            CreateAssetDirectory(path);
+            var source = request.StringArg("source");
+            if (!string.IsNullOrEmpty(source))
+            {
+                CopyTextureSource(source, path, overwrite);
+            }
+            else
+            {
+                WriteGeneratedTexture(path, request);
+            }
+
+            try
+            {
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+                ApplyTextureSettings(path, request, true);
+                AssetDatabase.SaveAssets();
+            }
+            catch (BridgeCommandException)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                return ErrorJson("E_IMPORT_FAILED", "Failed to import texture: " + path + " (" + exception.Message + ")", "Check texture file contents, importer settings and Unity Console diagnostics.");
+            }
+            var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            if (texture == null)
+            {
+                return ErrorJson("E_IMPORT_FAILED", "Texture import did not produce a Texture2D asset: " + path, "Check texture file contents and Unity Console diagnostics.");
+            }
+            WriteLog("texture_created path=" + path);
+            return SuccessJson(TextureMutationJson("texture.create", path, texture));
+        }
+
+        private static string TextureSprite(BridgeRequest request)
+        {
+            var path = ResolveTexturePath(request.StringArg("path") ?? request.StringArg("target"));
+            LoadTextureAsset(path);
+            var importer = RequireTextureImporter(path);
+            importer.textureType = TextureImporterType.Sprite;
+            var spriteMode = request.StringArg("spriteMode");
+            if (!string.IsNullOrEmpty(spriteMode))
+            {
+                importer.spriteImportMode = string.Equals(spriteMode, "multiple", StringComparison.OrdinalIgnoreCase) ? SpriteImportMode.Multiple : SpriteImportMode.Single;
+            }
+            var pixelsPerUnit = request.IntArg("pixelsPerUnit", -1);
+            if (pixelsPerUnit > 0)
+            {
+                importer.spritePixelsPerUnit = pixelsPerUnit;
+            }
+            importer.spritePivot = SpritePivot(request, importer.spritePivot);
+            try
+            {
+                importer.SaveAndReimport();
+                AssetDatabase.Refresh();
+            }
+            catch (Exception exception)
+            {
+                return ErrorJson("E_IMPORT_FAILED", "Failed to reimport texture as Sprite: " + path + " (" + exception.Message + ")", "Check TextureImporter settings and Unity Console diagnostics.");
+            }
+            WriteLog("texture_sprite path=" + path);
+            return SuccessJson(TextureMutationJson("texture.sprite", path, LoadTextureAsset(path)));
+        }
+
+        private static string TextureImportSettings(BridgeRequest request)
+        {
+            var path = ResolveTexturePath(request.StringArg("path") ?? request.StringArg("target"));
+            LoadTextureAsset(path);
+            bool changed;
+            try
+            {
+                changed = ApplyTextureSettings(path, request, true);
+            }
+            catch (Exception exception)
+            {
+                return ErrorJson("E_IMPORT_FAILED", "Failed to apply texture import settings: " + path + " (" + exception.Message + ")", "Check TextureImporter settings and Unity Console diagnostics.");
+            }
+            var texture = LoadTextureAsset(path);
+            return SuccessJson("{\"texture\":" + TextureAssetJson(path, texture) + ",\"importSettings\":" + TextureImporterJson(RequireTextureImporter(path)) + ",\"changed\":" + Bool(changed) + ",\"plannedEffects\":" + (changed ? "[{\"type\":\"texture.import-settings\",\"path\":" + Quote(path) + "}]" : "[]") + ",\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string RequireShaderPath(string rawPath)
+        {
+            var path = NormalizeAssetPath(rawPath);
+            if (string.IsNullOrEmpty(path))
+            {
+                throw new BridgeCommandException("E_SHADER_PATH_REQUIRED", "Pass an Assets/*.shader or Assets/*.shadergraph path.", "Use alps-unity shader info <path> or pass --path Assets/Shaders/Example.shader.");
+            }
+            if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || (!path.EndsWith(".shader", StringComparison.OrdinalIgnoreCase) && !path.EndsWith(".shadergraph", StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new BridgeCommandException("E_SHADER_PATH_INVALID", "Shader path must be under Assets/ and end with .shader or .shadergraph: " + path, "Pass a Unity asset path such as Assets/Shaders/Example.shader.");
+            }
+            return path;
+        }
+
+        private static string ResolveShaderPath(string rawPath)
+        {
+            var path = RequireShaderPath(rawPath);
+            if (!AssetExists(path))
+            {
+                throw new BridgeCommandException("E_SHADER_NOT_FOUND", "Shader asset not found: " + path, "Check the path or run alps-unity asset search --type shader.");
+            }
+            return path;
+        }
+
+        private static UnityEngine.Object LoadShaderLikeAsset(string path)
+        {
+            var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
+            if (asset == null)
+            {
+                throw new BridgeCommandException("E_SHADER_NOT_FOUND", "Shader asset not found: " + path, "Check the path or run alps-unity asset search --type shader.");
+            }
+            return asset;
+        }
+
+        private static Shader LoadShaderAsset(string path)
+        {
+            var shader = AssetDatabase.LoadAssetAtPath<Shader>(path);
+            if (shader == null)
+            {
+                throw new BridgeCommandException("E_SHADER_NOT_FOUND", "Shader asset not found or not compiled as a Shader: " + path, "Check ShaderGraph imports or Unity Console diagnostics.");
+            }
+            return shader;
+        }
+
+        private static string RequireTexturePath(string rawPath)
+        {
+            var path = NormalizeAssetPath(rawPath);
+            if (string.IsNullOrEmpty(path))
+            {
+                throw new BridgeCommandException("E_TEXTURE_PATH_REQUIRED", "Pass a texture path under Assets/.", "Use alps-unity texture info <path> or pass --path Assets/Textures/Example.png.");
+            }
+            if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || !IsTextureExtension(path))
+            {
+                throw new BridgeCommandException("E_TEXTURE_PATH_INVALID", "Texture path must be under Assets/ and use a supported texture extension: " + path, "Use .png, .jpg, .jpeg, .tga, .psd or .exr under Assets/.");
+            }
+            return path;
+        }
+
+        private static string ResolveTexturePath(string rawPath)
+        {
+            var path = RequireTexturePath(rawPath);
+            if (!AssetExists(path))
+            {
+                throw new BridgeCommandException("E_TEXTURE_NOT_FOUND", "Texture asset not found: " + path, "Check the path or run alps-unity asset search --type texture.");
+            }
+            return path;
+        }
+
+        private static Texture2D LoadTextureAsset(string path)
+        {
+            var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            if (texture == null)
+            {
+                throw new BridgeCommandException("E_TEXTURE_NOT_FOUND", "Texture asset not found or failed to import: " + path, "Check importer diagnostics in Unity Console and AlpsUnityBridge.log.");
+            }
+            return texture;
+        }
+
+        private static TextureImporter RequireTextureImporter(string path)
+        {
+            var importer = AssetImporter.GetAtPath(path) as TextureImporter;
+            if (importer == null)
+            {
+                throw new BridgeCommandException("E_TEXTURE_IMPORTER_NOT_FOUND", "TextureImporter not found for: " + path, "Reimport the asset or verify it is a texture file.");
+            }
+            return importer;
+        }
+
+        private static bool IsTextureExtension(string path)
+        {
+            var extension = Path.GetExtension(path).ToLowerInvariant();
+            return extension == ".png" || extension == ".jpg" || extension == ".jpeg" || extension == ".tga" || extension == ".psd" || extension == ".exr";
+        }
+
+        private static bool AssetExists(string assetPath)
+        {
+            return File.Exists(AssetFullPath(assetPath)) || !string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(assetPath));
+        }
+
+        private static string AssetFullPath(string assetPath)
+        {
+            return Path.Combine(ProjectRoot(), assetPath.Replace('/', Path.DirectorySeparatorChar));
+        }
+
+        private static void WriteTextAsset(string path, string content, bool overwrite)
+        {
+            CreateAssetDirectory(path);
+            var fullPath = AssetFullPath(path);
+            if (File.Exists(fullPath) && !overwrite)
+            {
+                throw new BridgeCommandException("E_OUTPUT_EXISTS", "Output already exists: " + path, "Pass --overwrite or choose a different asset path.");
+            }
+            try
+            {
+                File.WriteAllText(fullPath, content, new UTF8Encoding(false));
+                AssetDatabase.Refresh();
+            }
+            catch (Exception exception)
+            {
+                throw new BridgeCommandException("E_IO_ERROR", "Failed to write asset file: " + exception.Message, "Check destination path and permissions: " + path);
+            }
+        }
+
+        private static string DefaultShaderContent(string rawName, string path)
+        {
+            var name = string.IsNullOrEmpty(rawName) ? Path.GetFileNameWithoutExtension(path) : rawName;
+            return "Shader \"Alps/" + EscapeShaderName(name) + "\" {\n    Properties {\n        _Color (\"Color\", Color) = (1,1,1,1)\n    }\n    SubShader {\n        Tags { \"RenderType\"=\"Opaque\" }\n        Pass {\n            CGPROGRAM\n            #include \"UnityCG.cginc\"\n            #pragma vertex vert\n            #pragma fragment frag\n            struct appdata { float4 vertex : POSITION; };\n            struct v2f { float4 vertex : SV_POSITION; };\n            fixed4 _Color;\n            v2f vert (appdata v) { v2f o; o.vertex = UnityObjectToClipPos(v.vertex); return o; }\n            fixed4 frag (v2f i) : SV_Target { return _Color; }\n            ENDCG\n        }\n    }\n}\n";
+        }
+
+        private static string EscapeShaderName(string name)
+        {
+            return (name ?? "Shader").Replace("\\", "/").Replace("\"", "");
+        }
+
+        private static string ShaderMutationJson(string type, string path)
+        {
+            var shader = AssetDatabase.LoadAssetAtPath<Shader>(path);
+            return "{\"shader\":" + ShaderAssetJson(path, shader, false) + ",\"plannedEffects\":[{\"type\":" + Quote(type) + ",\"path\":" + Quote(path) + ",\"refresh\":true}],\"logPath\":" + Quote(LogPath()) + "}";
+        }
+
+        private static string ShaderAssetJson(string path, Shader shader, bool includeContentMetadata)
+        {
+            var fullPath = AssetFullPath(path);
+            var fileInfo = new FileInfo(fullPath);
+            var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
+            return "{"
+                + "\"path\":" + Quote(path) + ","
+                + "\"guid\":" + Quote(AssetDatabase.AssetPathToGUID(path)) + ","
+                + "\"name\":" + Quote(shader != null ? shader.name : (asset != null ? asset.name : Path.GetFileNameWithoutExtension(path))) + ","
+                + "\"assetType\":" + Quote(asset == null ? null : asset.GetType().Name) + ","
+                + "\"isShaderGraph\":" + Bool(path.EndsWith(".shadergraph", StringComparison.OrdinalIgnoreCase)) + ","
+                + "\"exists\":" + Bool(fileInfo.Exists) + ","
+                + "\"sizeBytes\":" + (fileInfo.Exists ? fileInfo.Length.ToString(CultureInfo.InvariantCulture) : "0") + ","
+                + "\"encoding\":" + Quote(includeContentMetadata ? "utf-8" : null) + ","
+                + "\"diagnostics\":" + ShaderDiagnosticsJson(shader)
+                + "}";
+        }
+
+        private static string ShaderDiagnosticsJson(Shader shader)
+        {
+            if (shader == null)
+            {
+                return "{\"supported\":null,\"messageCount\":0,\"messages\":[]}";
+            }
+            var messages = ShaderMessagesJson(shader);
+            return "{\"supported\":" + Bool(shader.isSupported) + ",\"messageCount\":" + messages.Count.ToString(CultureInfo.InvariantCulture) + ",\"messages\":[" + string.Join(",", messages.ToArray()) + "]}";
+        }
+
+        private static List<string> ShaderMessagesJson(Shader shader)
+        {
+            var items = new List<string>();
+            var shaderUtil = Type.GetType("UnityEditor.ShaderUtil,UnityEditor");
+            var getMessages = shaderUtil == null ? null : shaderUtil.GetMethod("GetShaderMessages", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            if (getMessages == null)
+            {
+                return items;
+            }
+            var messages = getMessages.Invoke(null, new object[] { shader }) as Array;
+            if (messages == null)
+            {
+                return items;
+            }
+            foreach (var message in messages)
+            {
+                items.Add(ShaderMessageJson(message));
+            }
+            return items;
+        }
+
+        private static string ShaderMessageJson(object message)
+        {
+            var type = message.GetType();
+            return "{"
+                + "\"severity\":" + Quote(ReflectionValue(type, message, "severity")) + ","
+                + "\"message\":" + Quote(ReflectionValue(type, message, "message")) + ","
+                + "\"file\":" + Quote(ReflectionValue(type, message, "file")) + ","
+                + "\"line\":" + Quote(ReflectionValue(type, message, "line")) + ","
+                + "\"platform\":" + Quote(ReflectionValue(type, message, "platform"))
+                + "}";
+        }
+
+        private static string ReflectionValue(Type type, object target, string name)
+        {
+            var field = type.GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (field != null)
+            {
+                var value = field.GetValue(target);
+                return value == null ? null : value.ToString();
+            }
+            var property = type.GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (property != null)
+            {
+                var value = property.GetValue(target, null);
+                return value == null ? null : value.ToString();
+            }
+            return null;
+        }
+
+        private static void CopyTextureSource(string source, string destinationPath, bool overwrite)
+        {
+            var sourcePath = NormalizeAssetPath(source);
+            var fullSource = sourcePath.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) ? AssetFullPath(sourcePath) : Path.GetFullPath(source.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar));
+            var fullDestination = AssetFullPath(destinationPath);
+            if (!File.Exists(fullSource))
+            {
+                throw new BridgeCommandException("E_TEXTURE_SOURCE_NOT_FOUND", "Texture source file not found: " + source, "Pass --source with an existing file path or Assets/ texture path.");
+            }
+            if (File.Exists(fullDestination) && overwrite)
+            {
+                File.Delete(fullDestination);
+            }
+            File.Copy(fullSource, fullDestination, overwrite);
+            AssetDatabase.Refresh();
+        }
+
+        private static void WriteGeneratedTexture(string path, BridgeRequest request)
+        {
+            var extension = Path.GetExtension(path).ToLowerInvariant();
+            if (extension != ".png" && extension != ".jpg" && extension != ".jpeg")
+            {
+                throw new BridgeCommandException("E_TEXTURE_FORMAT_UNSUPPORTED", "Generated textures can only be written as .png or .jpg: " + path, "Pass --source for other texture formats.");
+            }
+            var width = Math.Max(1, request.IntArg("width", 1));
+            var height = Math.Max(1, request.IntArg("height", 1));
+            var color = ParseColor(request.StringArg("color"));
+            var texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+            try
+            {
+                var pixels = new Color[width * height];
+                for (var index = 0; index < pixels.Length; index++)
+                {
+                    pixels[index] = color;
+                }
+                texture.SetPixels(pixels);
+                texture.Apply();
+                var bytes = extension == ".png" ? texture.EncodeToPNG() : texture.EncodeToJPG(95);
+                File.WriteAllBytes(AssetFullPath(path), bytes);
+                AssetDatabase.Refresh();
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(texture);
+            }
+        }
+
+        private static Color ParseColor(string rawColor)
+        {
+            if (string.IsNullOrEmpty(rawColor))
+            {
+                return Color.white;
+            }
+            Color color;
+            if (ColorUtility.TryParseHtmlString(rawColor.StartsWith("#", StringComparison.Ordinal) ? rawColor : "#" + rawColor, out color))
+            {
+                return color;
+            }
+            throw new BridgeCommandException("E_TEXTURE_COLOR_INVALID", "Texture color must be a hex RGB/RGBA value: " + rawColor, "Use values like --color ffffff or --color #ff00ffff.");
+        }
+
+        private static bool ApplyTextureSettings(string path, BridgeRequest request, bool saveAndReimport)
+        {
+            var importer = RequireTextureImporter(path);
+            var changed = false;
+            changed = ApplyTextureType(importer, request.StringArg("textureType")) || changed;
+            changed = ApplyBool(request, "readable", importer.isReadable, value => importer.isReadable = value) || changed;
+            changed = ApplyBool(request, "mipmap", importer.mipmapEnabled, value => importer.mipmapEnabled = value) || changed;
+            changed = ApplyBool(request, "sRGB", importer.sRGBTexture, value => importer.sRGBTexture = value) || changed;
+            changed = ApplyBool(request, "alphaIsTransparency", importer.alphaIsTransparency, value => importer.alphaIsTransparency = value) || changed;
+            changed = ApplyEnum(request.StringArg("wrapMode"), importer.wrapMode.ToString(), value => importer.wrapMode = (TextureWrapMode)Enum.Parse(typeof(TextureWrapMode), value, true)) || changed;
+            changed = ApplyEnum(request.StringArg("filterMode"), importer.filterMode.ToString(), value => importer.filterMode = (FilterMode)Enum.Parse(typeof(FilterMode), value, true)) || changed;
+            changed = ApplyEnum(request.StringArg("compression"), importer.textureCompression.ToString(), value => importer.textureCompression = (TextureImporterCompression)Enum.Parse(typeof(TextureImporterCompression), value, true)) || changed;
+            var maxTextureSize = request.IntArg("maxTextureSize", -1);
+            if (maxTextureSize > 0 && importer.maxTextureSize != maxTextureSize)
+            {
+                importer.maxTextureSize = maxTextureSize;
+                changed = true;
+            }
+            if (saveAndReimport && changed)
+            {
+                importer.SaveAndReimport();
+                AssetDatabase.Refresh();
+                WriteLog("texture_import_settings path=" + path);
+            }
+            return changed;
+        }
+
+        private static bool ApplyTextureType(TextureImporter importer, string rawType)
+        {
+            if (string.IsNullOrEmpty(rawType))
+            {
+                return false;
+            }
+            var normalized = string.Equals(rawType, "sprite", StringComparison.OrdinalIgnoreCase) ? "Sprite" : rawType;
+            var next = (TextureImporterType)Enum.Parse(typeof(TextureImporterType), normalized, true);
+            if (importer.textureType == next)
+            {
+                return false;
+            }
+            importer.textureType = next;
+            return true;
+        }
+
+        private delegate void BoolSetter(bool value);
+        private delegate void StringSetter(string value);
+
+        private static bool ApplyBool(BridgeRequest request, string name, bool current, BoolSetter setter)
+        {
+            if (!request.HasArg(name))
+            {
+                return false;
+            }
+            var next = request.BoolArg(name, current);
+            if (current == next)
+            {
+                return false;
+            }
+            setter(next);
+            return true;
+        }
+
+        private static bool ApplyEnum(string rawValue, string current, StringSetter setter)
+        {
+            if (string.IsNullOrEmpty(rawValue) || string.Equals(rawValue, current, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+            setter(rawValue);
+            return true;
+        }
+
+        private static Vector2 SpritePivot(BridgeRequest request, Vector2 fallback)
+        {
+            var x = ParseFloat(request.StringArg("pivotX"), fallback.x);
+            var y = ParseFloat(request.StringArg("pivotY"), fallback.y);
+            return new Vector2(Mathf.Clamp01(x), Mathf.Clamp01(y));
+        }
+
+        private static float ParseFloat(string rawValue, float fallback)
+        {
+            float parsed;
+            return !string.IsNullOrEmpty(rawValue) && float.TryParse(rawValue, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed) ? parsed : fallback;
+        }
+
+        private static string TextureMutationJson(string type, string path, Texture2D texture)
+        {
+            return "{\"texture\":" + TextureAssetJson(path, texture) + ",\"importSettings\":" + TextureImporterJson(RequireTextureImporter(path)) + ",\"plannedEffects\":[{\"type\":" + Quote(type) + ",\"path\":" + Quote(path) + ",\"refresh\":true}],\"logPath\":" + Quote(LogPath()) + "}";
+        }
+
+        private static string TextureAssetJson(string path, Texture2D texture)
+        {
+            var fileInfo = new FileInfo(AssetFullPath(path));
+            return "{"
+                + "\"path\":" + Quote(path) + ","
+                + "\"guid\":" + Quote(AssetDatabase.AssetPathToGUID(path)) + ","
+                + "\"name\":" + Quote(texture == null ? Path.GetFileNameWithoutExtension(path) : texture.name) + ","
+                + "\"width\":" + (texture == null ? "0" : texture.width.ToString(CultureInfo.InvariantCulture)) + ","
+                + "\"height\":" + (texture == null ? "0" : texture.height.ToString(CultureInfo.InvariantCulture)) + ","
+                + "\"format\":" + Quote(texture == null ? null : texture.format.ToString()) + ","
+                + "\"sizeBytes\":" + (fileInfo.Exists ? fileInfo.Length.ToString(CultureInfo.InvariantCulture) : "0")
+                + "}";
+        }
+
+        private static string TextureImporterJson(TextureImporter importer)
+        {
+            return "{"
+                + "\"textureType\":" + Quote(importer.textureType.ToString()) + ","
+                + "\"spriteImportMode\":" + Quote(importer.spriteImportMode.ToString()) + ","
+                + "\"pixelsPerUnit\":" + importer.spritePixelsPerUnit.ToString(CultureInfo.InvariantCulture) + ","
+                + "\"pivot\":{\"x\":" + importer.spritePivot.x.ToString(CultureInfo.InvariantCulture) + ",\"y\":" + importer.spritePivot.y.ToString(CultureInfo.InvariantCulture) + "},"
+                + "\"readable\":" + Bool(importer.isReadable) + ","
+                + "\"mipmap\":" + Bool(importer.mipmapEnabled) + ","
+                + "\"sRGB\":" + Bool(importer.sRGBTexture) + ","
+                + "\"alphaIsTransparency\":" + Bool(importer.alphaIsTransparency) + ","
+                + "\"wrapMode\":" + Quote(importer.wrapMode.ToString()) + ","
+                + "\"filterMode\":" + Quote(importer.filterMode.ToString()) + ","
+                + "\"maxTextureSize\":" + importer.maxTextureSize.ToString(CultureInfo.InvariantCulture) + ","
+                + "\"compression\":" + Quote(importer.textureCompression.ToString())
+                + "}";
         }
 
         private static string CapabilitiesJson()
@@ -581,6 +1163,8 @@ namespace AlpsUnityCli
                 + CapabilityJson("material", MaterialCommands) + ","
                 + CapabilityJson("graphics", GraphicsCommands) + ","
                 + CapabilityJson("physics", PhysicsCommands)
+                + CapabilityJson("shader", ShaderCommands) + ","
+                + CapabilityJson("texture", TextureCommands)
                 + "]";
         }
 
@@ -593,6 +1177,11 @@ namespace AlpsUnityCli
                 || command == "material.create"
                 || command == "material.assign"
                 || command == "material.set"
+                || command == "shader.create"
+                || command == "shader.update"
+                || command == "texture.create"
+                || command == "texture.sprite"
+                || command == "texture.import-settings"
                 || command == "camera.screenshot"
                 || command == "scene.screenshot"
                 || command == "screenshot.capture"
@@ -2069,6 +2658,11 @@ namespace AlpsUnityCli
             {
                 var match = Regex.Match(body ?? string.Empty, "\\\"" + Regex.Escape(name) + "\\\"\\s*:\\s*(true|false)", RegexOptions.IgnoreCase);
                 return match.Success ? (bool?)string.Equals(match.Groups[1].Value, "true", StringComparison.OrdinalIgnoreCase) : null;
+            }
+
+            public bool HasArg(string name)
+            {
+                return Regex.IsMatch(body ?? string.Empty, "\\\"" + Regex.Escape(name) + "\\\"\\s*:");
             }
 
             public bool HasArg(string name)
