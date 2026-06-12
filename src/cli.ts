@@ -294,7 +294,7 @@ function summarizeJob(job: JobRecord): Record<string, unknown> {
     finishedAt: job.finishedAt,
     command: job.command,
     result: job.result,
-    error: job.error
+    ...(job.error ? { error: job.error } : {})
   };
 }
 
