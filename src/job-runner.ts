@@ -192,7 +192,7 @@ export class JobRunner {
           const completed = await this.store.markTerminal(job.id, code === 0 ? "succeeded" : "failed", {
             exitCode: code,
             result: diagnostic ? { ...result, diagnostic } : result,
-            error: diagnostic ?? { code: "UNITY_BATCHMODE_FAILED", message: `Unity exited with code ${code}.` }
+            error: code === 0 ? undefined : diagnostic ?? { code: "UNITY_BATCHMODE_FAILED", message: `Unity exited with code ${code}.` }
           });
           resolve(completed);
         } catch (error) {

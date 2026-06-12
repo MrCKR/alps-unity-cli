@@ -132,6 +132,37 @@ test("failed Unity exit is captured with summary", async () => {
   assert.equal(waited.error?.code, "UNITY_BATCHMODE_FAILED");
 });
 
+test("successful Unity job clears stale error from summary", async () => {
+  const runtime = await makeRuntime();
+  const unity = await makeFakeUnity(`process.exit(0);`);
+  const now = new Date().toISOString();
+  await mkdir(join(runtime.dataDir, "logs"), { recursive: true });
+  const job = await runtime.store.create({
+    id: "job_stale_error",
+    kind: "package",
+    status: "running",
+    requestId: "req_stale_error",
+    createdAt: now,
+    updatedAt: now,
+    projectPath: runtime.dataDir,
+    unityPath: unity,
+    logPath: join(runtime.dataDir, "logs", "job_stale_error.log"),
+    command: [unity],
+    result: { action: "resolve" },
+    error: { code: "UNITY_BATCHMODE_FAILED", message: "Unity exited with code 1." }
+  });
+
+  const completed = await runtime.runner.runWorker(job.id);
+  assert.equal(completed.status, "succeeded");
+  assert.equal(completed.exitCode, 0);
+  assert.equal(completed.error, undefined);
+
+  const status = await execute(["job", "status", "--id", job.id], runtime);
+  assert.equal(status.ok, true);
+  assert.equal((status.data as { status: string }).status, "succeeded");
+  assert.equal("error" in (status.data as Record<string, unknown>), false);
+});
+
 test("test run attaches Unity XML result summary", async () => {
   const runtime = await makeRuntime();
   const unity = await makeFakeUnity(`
