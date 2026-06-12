@@ -770,6 +770,11 @@ namespace AlpsUnityCli
             }
         }
 
+        private sealed class Counter
+        {
+            public int Value;
+        }
+
         private static object CurrentPrefabStage()
         {
             return InvokePrefabStageUtility("GetCurrentPrefabStage", null);
