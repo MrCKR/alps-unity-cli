@@ -170,6 +170,43 @@ test("prefab commands forward paths, pagination and planned effects", async () =
   assert.deepEqual((create.data as { plannedEffects: unknown[] }).plannedEffects, [{ type: "prefab.create", path: "Assets/Prefabs/Player.prefab" }]);
 });
 
+test("material commands forward asset paths, target, values and planned effects", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+  const bridgeExecute = async (payload: BridgeRequest) => {
+    requests.push(payload);
+    return { ok: true, data: { material: { path: payload.args.path ?? payload.args.material }, plannedEffects: payload.command === "material.info" ? [] : [{ type: payload.command, path: payload.args.path ?? payload.args.material }] } };
+  };
+
+  const info = await execute(["material", "info", "Assets/Materials/Player.mat"], { ...runtime, bridgeExecute });
+  const create = await execute(["material", "create", "Assets/Materials/Player.mat", "--shader", "Standard", "--overwrite"], { ...runtime, bridgeExecute });
+  const assign = await execute(["material", "assign", "--target", "Canvas/Button", "--material", "Assets/Materials/Player.mat", "--slot", "1"], { ...runtime, bridgeExecute });
+  const set = await execute(["material", "set", "Assets/Materials/Player.mat", "--property", "_Color", "--value", "#ff00ffff", "--type", "color"], { ...runtime, bridgeExecute });
+
+  assert.equal(info.ok, true);
+  assert.equal(create.ok, true);
+  assert.equal(assign.ok, true);
+  assert.equal(set.ok, true);
+  assert.deepEqual(requests.map((request) => request.command), ["material.info", "material.create", "material.assign", "material.set"]);
+  assert.deepEqual(requests[0].args, { path: "Assets/Materials/Player.mat" });
+  assert.deepEqual(requests[1].args, { path: "Assets/Materials/Player.mat", shader: "Standard", overwrite: true });
+  assert.deepEqual(requests[2].args, { target: "Canvas/Button", material: "Assets/Materials/Player.mat", slot: 1 });
+  assert.deepEqual(requests[3].args, { path: "Assets/Materials/Player.mat", property: "_Color", value: "#ff00ffff", type: "color" });
+  assert.deepEqual((set.data as { plannedEffects: unknown[] }).plannedEffects, [{ type: "material.set", path: "Assets/Materials/Player.mat" }]);
+});
+
+test("material bridge errors preserve structured diagnostics", async () => {
+  const runtime = await makeRuntime();
+  const result = await execute(["material", "set", "Assets/Materials/Player.mat", "--property", "_Missing", "--value", "1"], {
+    ...runtime,
+    bridgeExecute: async () => ({ ok: false, error: { code: "E_MATERIAL_PROPERTY_NOT_FOUND", message: "Material property not found: _Missing" }, nextActions: ["Run alps-unity material info <path> to inspect shader properties."] })
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_MATERIAL_PROPERTY_NOT_FOUND");
+  assert.deepEqual(result.error?.next_actions, ["Run alps-unity material info <path> to inspect shader properties."]);
+});
+
 test("prefab bridge errors preserve structured diagnostics", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["prefab", "stage-close"], {

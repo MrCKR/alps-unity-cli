@@ -136,6 +136,25 @@ test("batch preflight rejects unknown and raw commands", async () => {
   assert.ok(data.preflight.some((item) => item.code === "BATCH_COMMAND_NOT_ALLOWED"));
 });
 
+test("batch preflight marks material info parallel-safe and writes serial", async () => {
+  const runtime = await makeRuntime();
+  const batch = await writeBatch(runtime.dataDir, {
+    parallel: 2,
+    steps: [
+      { id: "read-material", command: ["material", "info", "Assets/Materials/Player.mat"] },
+      { id: "write-material", command: ["material", "set", "Assets/Materials/Player.mat"], args: ["--property", "_Color", "--value", "#ffffffff"] }
+    ]
+  });
+
+  const result = await execute(["batch", "run", batch, "--preflight"], runtime);
+
+  assert.equal(result.ok, false);
+  const data = result.data as { steps: Array<{ id: string; parallelSafe: boolean }>; preflight: Array<{ code: string; stepId?: string }> };
+  assert.equal(data.steps.find((step) => step.id === "read-material")?.parallelSafe, true);
+  assert.equal(data.steps.find((step) => step.id === "write-material")?.parallelSafe, false);
+  assert.ok(data.preflight.some((item) => item.code === "BATCH_PARALLEL_CONFLICT" && item.stepId === "write-material"));
+});
+
 test("batch parallel rejects commands not declared parallel-safe", async () => {
   const runtime = await makeRuntime();
   const unity = await writeFakeUnity(runtime.dataDir, "process.exit(0);");
