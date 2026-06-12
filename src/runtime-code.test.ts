@@ -51,10 +51,14 @@ test("code exec --file forwards live bridge payload with source hash and artifac
   assert.equal(requests[0].args.channel, "live");
   assert.equal(requests[0].args.timeoutMs, 60000);
   assert.match(String(requests[0].args.sourceSha256), /^[a-f0-9]{64}$/);
-  const manifest = JSON.parse(await readFile(join(artifactDir, "manifest.json"), "utf8")) as { command: string; source: { kind: string; sha256: string } };
+  const manifest = JSON.parse(await readFile(join(artifactDir, "manifest.json"), "utf8")) as { requestId: string; jobId: string | null; command: string; artifact: Array<{ relativePath: string; sha256: string }>; artifacts: Array<{ relativePath: string; sha256: string }>; source: { kind: string; sha256: string } };
   assert.equal(manifest.command, "code.exec");
+  assert.equal(manifest.jobId, null);
   assert.equal(manifest.source.kind, "file");
   assert.equal(manifest.source.sha256, requests[0].args.sourceSha256);
+  assert.equal(manifest.artifact[0].sha256, requests[0].args.sourceSha256);
+  assert.match(manifest.artifact[0].relativePath, /hello\.csx$/);
+  assert.equal(manifest.artifacts[0].sha256, requests[0].args.sourceSha256);
 });
 
 test("code exec preserves compile diagnostics from bridge errors", async () => {
@@ -97,7 +101,7 @@ test("code exec --channel batchmode creates Unity job and deploys bridge package
   const created = await execute(["code", "exec", "--file", sourcePath, "--channel", "batchmode", "--unity", unity, "--project", project, "--timeout-ms", "1234"], runtime);
 
   assert.equal(created.ok, true);
-  const data = created.data as { kind: string; command: string[]; result: { command: string; execution: { channel: string; timeoutMs: number }; bridge: { dependencyName: string } } };
+  const data = created.data as { jobId: string; kind: string; command: string[]; result: { command: string; execution: { channel: string; timeoutMs: number }; bridge: { dependencyName: string } } };
   assert.equal(data.kind, "code");
   assert.equal(data.result.command, "code.exec");
   assert.equal(data.result.execution.channel, "batchmode");
@@ -105,6 +109,12 @@ test("code exec --channel batchmode creates Unity job and deploys bridge package
   assert.equal(data.result.bridge.dependencyName, "com.alps.unity-cli.bridge");
   assert.ok(data.command.includes("AlpsUnityCli.Batch.ExecuteCode"));
   assert.ok(data.command.includes("-alpsCodeSource"));
+  assert.ok(data.command.includes("-alpsTimeoutMs"));
+  assert.ok(data.command.includes("-alpsProjectPath"));
+
+  const manifest = JSON.parse(await readFile(join(runtime.dataDir, "artifacts", created.requestId, "manifest.json"), "utf8")) as { jobId: string; artifact: Array<{ relativePath: string; sha256: string }> };
+  assert.equal(manifest.jobId, data.jobId);
+  assert.equal(manifest.artifact[0].sha256.length, 64);
 });
 
 test("code job reads batchmode result artifact into job summary", async () => {
@@ -125,6 +135,37 @@ process.exit(0);
   assert.deepEqual(waited.result?.data, { compile: { ok: true, diagnostics: [] }, runtime: { ok: true, returnValue: 42, stdout: "", stderr: "" } });
 });
 
+test("code exec maps artifact manifest write failures", async () => {
+  const runtime = await makeRuntime();
+  const artifactFile = join(runtime.dataDir, "not-a-directory");
+  await writeFile(artifactFile, "occupied", "utf8");
+
+  const result = await execute(["code", "exec", "--code", "return 1;", "--artifact-dir", artifactFile], runtime);
+
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_ARTIFACT_WRITE_FAILED");
+  assert.equal((result.error?.details as { artifactDir: string }).artifactDir, artifactFile);
+});
+
+test("code wait timeout returns execution timeout details while job continues", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject(runtime.dataDir);
+  const unity = await makeFakeUnity(runtime.dataDir, `setTimeout(() => process.exit(0), 1000);`);
+
+  const result = await execute(["code", "exec", "--code", "return 42;", "--channel", "batchmode", "--unity", unity, "--project", project, "--wait", "--wait-timeout-ms", "10"], runtime);
+
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_EXECUTION_TIMEOUT");
+  assert.deepEqual(result.error?.details, {
+    jobId: (result.error?.details as { jobId: string }).jobId,
+    timeoutMs: 10,
+    cancelAttempted: false,
+    cancelled: false,
+    processKilled: false,
+    domainReloadObserved: false
+  });
+});
+
 test("Unity bridge and batch source expose Runtime Code diagnostics", async () => {
   const bridge = await readFile(new URL("../unity-package/Editor/AlpsUnityBridge.cs", import.meta.url), "utf8");
   const batch = await readFile(new URL("../unity-package/Editor/AlpsUnityBatch.cs", import.meta.url), "utf8");
@@ -134,8 +175,26 @@ test("Unity bridge and batch source expose Runtime Code diagnostics", async () =
   assert.match(bridge, /E_CODE_COMPILE_FAILED/);
   assert.match(bridge, /E_CODE_RUNTIME_EXCEPTION/);
   assert.match(bridge, /E_REFERENCE_RESOLUTION_FAILED/);
+  assert.match(bridge, /requestId/);
+  assert.match(bridge, /projectPath/);
+  assert.match(bridge, /instanceId/);
+  assert.match(bridge, /unityVersion/);
+  assert.match(bridge, /bridgeVersion/);
+  assert.match(bridge, /initiator/);
+  assert.match(bridge, /timeoutMs/);
   assert.match(bridge, /CompilerDiagnosticsJson/);
   assert.match(batch, /public static void ExecuteCode\(\)/);
   assert.match(batch, /-alpsCodeResult/);
+  assert.match(batch, /-alpsTimeoutMs/);
+  assert.match(batch, /-alpsProjectPath/);
   assert.match(batch, /E_CODE_SOURCE_INVALID/);
+  assert.match(batch, /E_REFERENCE_RESOLUTION_FAILED/);
+  assert.match(batch, /nextActions/);
+  assert.match(batch, /requestId/);
+  assert.match(batch, /projectPath/);
+  assert.match(batch, /instanceId/);
+  assert.match(batch, /unityVersion/);
+  assert.match(batch, /bridgeVersion/);
+  assert.match(batch, /initiator/);
+  assert.match(batch, /timeoutMs/);
 });

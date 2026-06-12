@@ -37,6 +37,7 @@ export interface JobRecord {
   error?: {
     code: string;
     message: string;
+    details?: unknown;
   };
 }
 

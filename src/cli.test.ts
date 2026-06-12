@@ -102,7 +102,15 @@ test("wait timeout returns structured error while job keeps running", async () =
 
   const result = await execute(["editor", "refresh", "--compile", "--wait", "--wait-timeout-ms", "10", "--unity", unity, "--project", runtime.dataDir], runtime);
   assert.equal(result.ok, false);
-  assert.equal(result.error?.code, "WAIT_TIMEOUT");
+  assert.equal(result.error?.code, "E_EXECUTION_TIMEOUT");
+  assert.deepEqual(result.error?.details, {
+    jobId: (result.error?.details as { jobId: string }).jobId,
+    timeoutMs: 10,
+    cancelAttempted: false,
+    cancelled: false,
+    processKilled: false,
+    domainReloadObserved: false
+  });
 });
 
 test("cancel marks running job as cancelled", async () => {
@@ -217,7 +225,13 @@ test("process timeout marks job as timeout", async () => {
   const waited = await runtime.runner.wait(jobId, 3000);
 
   assert.equal(waited.status, "timeout");
-  assert.equal(waited.error?.code, "JOB_TIMEOUT");
+  assert.equal(waited.error?.code, "E_EXECUTION_TIMEOUT");
+  assert.deepEqual(waited.error?.details, {
+    cancelAttempted: true,
+    cancelled: false,
+    processKilled: true,
+    domainReloadObserved: false
+  });
 });
 
 async function makeUnityProject(): Promise<string> {
