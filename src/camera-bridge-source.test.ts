@@ -3,9 +3,12 @@ import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const sourceUrl = new URL("../unity-package/Editor/AlpsUnityBridge.cs", import.meta.url);
+const readmeUrl = new URL("../README.md", import.meta.url);
 
-test("Unity Bridge exposes camera and scene screenshot commands", async () => {
+test("Unity Bridge exposes documented camera and scene screenshot commands", async () => {
   const source = await readFile(sourceUrl, "utf8");
+  const readme = await readFile(readmeUrl, "utf8");
+  const bridgeSection = readme.slice(readme.indexOf("## Unity Editor Bridge"), readme.indexOf("## Batch Automation"));
 
   assert.match(source, /HttpListener/);
   assert.match(source, /POST" \|\| context\.Request\.Url\.AbsolutePath != "\/bridge\/execute"/);
@@ -16,6 +19,9 @@ test("Unity Bridge exposes camera and scene screenshot commands", async () => {
   assert.match(source, /case "camera\.screenshot"/);
   assert.match(source, /case "scene\.screenshot"/);
   assert.match(source, /case "screenshot\.capture"/);
+  assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.screenshot` and `screenshot\.capture`/);
+  assert.doesNotMatch(bridgeSection, /live query\/edit\/screenshot/);
+  assert.match(bridgeSection, /`scene hierarchy`, `go find`, `component set` and `script edit` are not routed by this package yet/);
 });
 
 test("Unity Bridge camera screenshot captures render texture and returns artifact metadata", async () => {
@@ -35,6 +41,7 @@ test("Unity Bridge camera screenshot captures render texture and returns artifac
 
 test("Unity Bridge screenshot validates path, format, overwrite and busy diagnostics", async () => {
   const source = await readFile(sourceUrl, "utf8");
+  const readme = await readFile(readmeUrl, "utf8");
 
   assert.match(source, /E_UNITY_BUSY/);
   assert.match(source, /E_CAMERA_NOT_FOUND/);
@@ -49,4 +56,7 @@ test("Unity Bridge screenshot validates path, format, overwrite and busy diagnos
   assert.match(source, /CreateScreenshotDirectory\(outputPath\)/);
   assert.match(source, /WriteScreenshotBytes\(outputPath, bytes\)/);
   assert.match(source, /Path\.GetFullPath/);
+  assert.match(readme, /`E_CAMERA_NOT_FOUND` for `camera info` when a target Camera cannot be resolved/);
+  assert.match(readme, /`E_TARGET_NOT_FOUND` for `camera screenshot` when the target is empty or cannot be resolved/);
+  assert.match(readme, /C# runtime behavior for empty camera targets, missing Cameras, screenshot IO failures and actual PNG\/JPG artifacts must still be proven by real Windows \+ Unity Editor validation/);
 });
