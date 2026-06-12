@@ -86,7 +86,11 @@ test("Unity Bridge UI operations expose uGUI and UI Toolkit diagnostics", async 
   const source = await readFile(sourceUrl, "utf8");
   const readme = await readFile(readmeUrl, "utf8");
 
-  assert.match(source, /new GameObject\(name, typeof\(RectTransform\), typeof\(Canvas\), typeof\(CanvasScaler\), typeof\(GraphicRaycaster\)\)/);
+  assert.match(source, /using UiCanvasScaler = UnityEngine\.UI\.CanvasScaler;/);
+  assert.match(source, /using UiGraphicRaycaster = UnityEngine\.UI\.GraphicRaycaster;/);
+  assert.match(source, /new GameObject\(name, typeof\(RectTransform\), typeof\(Canvas\), typeof\(UiCanvasScaler\), typeof\(UiGraphicRaycaster\)\)/);
+  assert.match(source, /GetComponent<UiCanvasScaler>\(\)/);
+  assert.match(source, /UiCanvasScaler\.ScaleMode\.ScaleWithScreenSize/);
   assert.match(source, /AddComponent<UiText>\(\)/);
   assert.match(source, /AddComponent<UiButton>\(\)/);
   assert.match(source, /AddComponent<UiImage>\(\)/);
@@ -95,13 +99,21 @@ test("Unity Bridge UI operations expose uGUI and UI Toolkit diagnostics", async 
   assert.match(source, /StyleSheet/);
   assert.match(source, /PanelSettings/);
   assert.match(source, /E_UI_PARENT_NOT_FOUND/);
+  assert.match(source, /E_TARGET_AMBIGUOUS/);
+  assert.match(source, /TargetAmbiguousErrorJson\("UI parent"/);
+  assert.match(source, /TargetAmbiguousErrorJson\("UIDocument"/);
+  assert.match(source, /TargetAmbiguousErrorJson\("UI hierarchy"/);
+  assert.match(source, /TargetMatchesJson/);
+  assert.match(source, /matchCount/);
+  assert.match(source, /ResolveGameObjectTarget/);
+  assert.match(source, /private sealed class TargetResolution/);
   assert.match(source, /E_UI_PANEL_SETTINGS_NOT_FOUND/);
   assert.match(source, /E_UI_UXML_NOT_FOUND/);
   assert.match(source, /E_UI_USS_NOT_FOUND/);
   assert.match(source, /CollectUiHierarchy/);
   assert.match(readme, /`ui canvas\/create`, `ui text\/create`, `ui button\/create` and `ui image\/create` create uGUI objects/);
   assert.match(readme, /`ui document\/info` supports live UIDocument inspection and offline `.uxml`\/`.uss` file reads/);
-  assert.match(readme, /`E_UI_PARENT_NOT_FOUND`, `E_UI_SPRITE_NOT_FOUND`, `E_UI_UXML_NOT_FOUND`, `E_UI_USS_NOT_FOUND`, `E_UI_PANEL_SETTINGS_NOT_FOUND`, `E_TARGET_NOT_FOUND` and `E_UNITY_BUSY`/);
+  assert.match(readme, /`E_UI_PARENT_NOT_FOUND`, `E_UI_SPRITE_NOT_FOUND`, `E_UI_UXML_NOT_FOUND`, `E_UI_USS_NOT_FOUND`, `E_UI_PANEL_SETTINGS_NOT_FOUND`, `E_TARGET_NOT_FOUND`, `E_TARGET_AMBIGUOUS` and `E_UNITY_BUSY`/);
 });
 
 test("Unity Bridge HTTP timeout prevents queued side effects from stale requests", async () => {

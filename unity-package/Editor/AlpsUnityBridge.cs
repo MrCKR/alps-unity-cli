@@ -14,6 +14,8 @@ using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.UIElements;
 using UiButton = UnityEngine.UI.Button;
+using UiCanvasScaler = UnityEngine.UI.CanvasScaler;
+using UiGraphicRaycaster = UnityEngine.UI.GraphicRaycaster;
 using UiImage = UnityEngine.UI.Image;
 using UiText = UnityEngine.UI.Text;
 
@@ -451,11 +453,11 @@ namespace AlpsUnityCli
         private static string UiCanvasCreate(BridgeRequest request)
         {
             var name = string.IsNullOrEmpty(request.StringArg("name")) ? "Canvas" : request.StringArg("name");
-            var canvasObject = new GameObject(name, typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+            var canvasObject = new GameObject(name, typeof(RectTransform), typeof(Canvas), typeof(UiCanvasScaler), typeof(UiGraphicRaycaster));
             var canvas = canvasObject.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            var scaler = canvasObject.GetComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            var scaler = canvasObject.GetComponent<UiCanvasScaler>();
+            scaler.uiScaleMode = UiCanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(1920, 1080);
             Selection.activeGameObject = canvasObject;
             WriteLog("ui_canvas_created name=" + name);
@@ -464,7 +466,12 @@ namespace AlpsUnityCli
 
         private static string UiElementCreate(BridgeRequest request, string kind)
         {
-            var parent = ResolveUiParent(request.StringArg("parent"));
+            var parentResolution = ResolveUiParent(request.StringArg("parent"));
+            if (parentResolution.Ambiguous)
+            {
+                return TargetAmbiguousErrorJson("UI parent", request.StringArg("parent"), parentResolution, "Pass a hierarchy path or instance id for the intended Canvas/RectTransform parent.");
+            }
+            var parent = parentResolution.Target == null ? null : parentResolution.Target.transform;
             if (parent == null)
             {
                 return ErrorJson("E_UI_PARENT_NOT_FOUND", "UI parent Canvas or RectTransform not found: " + request.StringArg("parent"), "Create a Canvas first or pass --parent with a Canvas/RectTransform hierarchy path, name or instance id.");
@@ -527,7 +534,12 @@ namespace AlpsUnityCli
             var uss = NormalizeAssetPath(request.StringArg("uss"));
             if (!string.IsNullOrEmpty(target))
             {
-                var gameObject = ResolveGameObject(target);
+                var resolution = ResolveGameObjectTarget(target);
+                if (resolution.Ambiguous)
+                {
+                    return TargetAmbiguousErrorJson("UIDocument", target, resolution, "Pass a hierarchy path or instance id for the intended UIDocument GameObject.");
+                }
+                var gameObject = resolution.Target;
                 var document = gameObject == null ? null : gameObject.GetComponent<UIDocument>();
                 if (document == null)
                 {
@@ -589,7 +601,12 @@ namespace AlpsUnityCli
             var roots = new List<GameObject>();
             if (!string.IsNullOrEmpty(target))
             {
-                var targetObject = ResolveGameObject(target);
+                var resolution = ResolveGameObjectTarget(target);
+                if (resolution.Ambiguous)
+                {
+                    return TargetAmbiguousErrorJson("UI hierarchy", target, resolution, "Pass a hierarchy path or instance id for the intended UI hierarchy root.");
+                }
+                var targetObject = resolution.Target;
                 if (targetObject == null)
                 {
                     return ErrorJson("E_TARGET_NOT_FOUND", "UI hierarchy target not found: " + target, "Pass a Canvas, UIDocument, RectTransform or UI GameObject target.");
@@ -728,15 +745,14 @@ namespace AlpsUnityCli
                 + "}";
         }
 
-        private static Transform ResolveUiParent(string target)
+        private static TargetResolution ResolveUiParent(string target)
         {
             if (!string.IsNullOrEmpty(target))
             {
-                var gameObject = ResolveGameObject(target);
-                return gameObject == null ? null : gameObject.transform;
+                return ResolveGameObjectTarget(target);
             }
             var canvas = UnityEngine.Object.FindObjectOfType<Canvas>();
-            return canvas == null ? null : canvas.transform;
+            return TargetResolution.Single(canvas == null ? null : canvas.gameObject);
         }
 
         private static void ApplyRectTransform(RectTransform rectTransform, BridgeRequest request)
@@ -985,14 +1001,25 @@ namespace AlpsUnityCli
 
         private static GameObject ResolveGameObject(string target)
         {
+            return ResolveGameObjectTarget(target).Target;
+        }
+
+        private static TargetResolution ResolveGameObjectTarget(string target)
+        {
+            var matches = new List<GameObject>();
+            if (string.IsNullOrEmpty(target))
+            {
+                return TargetResolution.FromMatches(matches);
+            }
+
             foreach (var gameObject in UnityEngine.Object.FindObjectsOfType<GameObject>())
             {
                 if (gameObject.name == target || gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) == target || HierarchyPath(gameObject) == target)
                 {
-                    return gameObject;
+                    matches.Add(gameObject);
                 }
             }
-            return null;
+            return TargetResolution.FromMatches(matches);
         }
 
         private static string PrefabAssetJson(string path, GameObject prefab)
@@ -1404,6 +1431,23 @@ namespace AlpsUnityCli
             return "{\"ok\":false,\"error\":{\"code\":" + Quote(code) + ",\"message\":" + Quote(message) + "},\"nextActions\":[" + Quote(nextAction) + "]}";
         }
 
+        private static string TargetAmbiguousErrorJson(string label, string target, TargetResolution resolution, string nextAction)
+        {
+            return "{\"ok\":false,\"error\":{\"code\":\"E_TARGET_AMBIGUOUS\",\"message\":" + Quote(label + " target is ambiguous: " + target) + ",\"target\":" + Quote(target) + ",\"matchCount\":" + resolution.Matches.Count.ToString(CultureInfo.InvariantCulture) + ",\"matches\":" + TargetMatchesJson(resolution.Matches) + "},\"nextActions\":[" + Quote(nextAction) + "]}";
+        }
+
+        private static string TargetMatchesJson(List<GameObject> matches)
+        {
+            var items = new List<string>();
+            var limit = Math.Min(matches.Count, 10);
+            for (var index = 0; index < limit; index++)
+            {
+                var gameObject = matches[index];
+                items.Add("{\"id\":" + gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) + ",\"name\":" + Quote(gameObject.name) + ",\"path\":" + Quote(HierarchyPath(gameObject)) + ",\"components\":" + ComponentNamesJson(gameObject) + "}");
+            }
+            return "[" + string.Join(",", items.ToArray()) + "]";
+        }
+
         private static string Quote(string value)
         {
             if (value == null)
@@ -1558,6 +1602,38 @@ namespace AlpsUnityCli
             public int Height { get; private set; }
             public bool Transparent { get; private set; }
             public int Quality { get; private set; }
+        }
+
+        private sealed class TargetResolution
+        {
+            public readonly GameObject Target;
+            public readonly List<GameObject> Matches;
+
+            private TargetResolution(List<GameObject> matches)
+            {
+                Matches = matches;
+                Target = matches.Count == 1 ? matches[0] : null;
+            }
+
+            public bool Ambiguous
+            {
+                get { return Matches.Count > 1; }
+            }
+
+            public static TargetResolution Single(GameObject target)
+            {
+                var matches = new List<GameObject>();
+                if (target != null)
+                {
+                    matches.Add(target);
+                }
+                return new TargetResolution(matches);
+            }
+
+            public static TargetResolution FromMatches(List<GameObject> matches)
+            {
+                return new TargetResolution(matches);
+            }
         }
 
         private sealed class BridgeCommandException : Exception
