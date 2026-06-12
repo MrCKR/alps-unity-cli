@@ -258,6 +258,12 @@ test("ui target ambiguity diagnostics are preserved for parent, document and hie
     assert.equal(result.ok, false, item.name);
     assert.equal(result.error?.code, "E_TARGET_AMBIGUOUS", item.name);
     assert.equal(result.error?.message, item.message, item.name);
+    assert.equal(result.error?.target, "HUD", item.name);
+    assert.equal(result.error?.matchCount, 2, item.name);
+    assert.deepEqual(result.error?.matches, [
+      { id: 101, name: "HUD", path: "Canvas/HUD", components: ["RectTransform"] },
+      { id: 202, name: "HUD", path: "Overlay/HUD", components: ["UIDocument"] }
+    ], item.name);
     assert.deepEqual(result.error?.next_actions, [item.nextAction], item.name);
   }
 });

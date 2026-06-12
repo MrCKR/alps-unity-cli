@@ -7,6 +7,7 @@ export interface CliError {
   message: string;
   requestId: string;
   next_actions?: string[];
+  [key: string]: unknown;
 }
 
 export interface CliResult<T = unknown> {

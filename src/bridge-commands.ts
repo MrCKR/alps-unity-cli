@@ -14,14 +14,16 @@ export interface BridgeRequest {
   args: Record<string, unknown>;
 }
 
+interface BridgeError {
+  code?: string;
+  message?: string;
+  [key: string]: unknown;
+}
+
 interface BridgeResponse {
   ok?: boolean;
   data?: Record<string, unknown>;
-  error?: {
-    code?: string;
-    message?: string;
-    details?: unknown;
-  };
+  error?: BridgeError;
   nextActions?: string[];
 }
 
@@ -50,7 +52,7 @@ export async function executeBridgeCommand(
       : await postBridgeExecute(endpoint!, { requestId, command, args });
 
     if (bridgeResult.ok === false) {
-      return failure(requestId, bridgeResult.error?.code ?? "BRIDGE_COMMAND_FAILED", bridgeResult.error?.message ?? "Unity Bridge rejected the command.", bridgeResult.nextActions ?? []);
+      return failure(requestId, bridgeResult.error?.code ?? "BRIDGE_COMMAND_FAILED", bridgeResult.error?.message ?? "Unity Bridge rejected the command.", bridgeResult.nextActions ?? [], bridgeErrorDetails(bridgeResult.error));
     }
 
     return success(requestId, {
@@ -336,6 +338,14 @@ async function postBridgeExecute(endpoint: string, payload: BridgeRequest): Prom
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function bridgeErrorDetails(error: BridgeError | undefined): Record<string, unknown> {
+  if (!error) {
+    return {};
+  }
+  const { code: _code, message: _message, ...details } = error;
+  return details;
 }
 
 function queryArgs(flags: Record<string, string | boolean>): Record<string, unknown> {
