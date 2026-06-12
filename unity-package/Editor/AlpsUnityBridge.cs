@@ -12,6 +12,7 @@ using System.Threading.Tasks;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace AlpsUnityCli
 {
@@ -25,8 +26,8 @@ namespace AlpsUnityCli
         private static readonly string[] ScreenshotCommands = { "screenshot.capture" };
         private static readonly string[] PrefabCommands = { "prefab.info", "prefab.create", "prefab.stage-open", "prefab.stage-save", "prefab.stage-close", "prefab.hierarchy" };
         private static readonly string[] MaterialCommands = { "material.info", "material.create", "material.assign", "material.set" };
-        private static readonly Queue<BridgeWorkItem> WorkQueue = new Queue<BridgeWorkItem>();
-        private static HttpListener listener;
+        private static readonly string[] GraphicsCommands = { "graphics.quality", "graphics.settings", "graphics.screenshot" };
+        private static readonly string[] PhysicsCommands = { "physics.settings", "physics.raycast", "physics.simulation" };
         private static bool started;
 
         static AlpsUnityBridge()
@@ -211,6 +212,18 @@ namespace AlpsUnityCli
                     return MaterialAssign(request);
                 case "material.set":
                     return MaterialSet(request);
+                case "graphics.quality":
+                    return GraphicsQuality(request);
+                case "graphics.settings":
+                    return GraphicsSettingsCommand(request);
+                case "graphics.screenshot":
+                    return GraphicsScreenshot(request);
+                case "physics.settings":
+                    return PhysicsSettingsCommand(request);
+                case "physics.raycast":
+                    return PhysicsRaycast(request);
+                case "physics.simulation":
+                    return PhysicsSimulation(request);
                 default:
                     return ErrorJson("E_BRIDGE_COMMAND_UNSUPPORTED", "Unsupported bridge command: " + request.Command, "Upgrade the Alps Unity Bridge package or use a registered CLI command.");
             }
@@ -565,7 +578,9 @@ namespace AlpsUnityCli
                 + CapabilityJson("scene", SceneCommands) + ","
                 + CapabilityJson("screenshot", ScreenshotCommands) + ","
                 + CapabilityJson("prefab", PrefabCommands) + ","
-                + CapabilityJson("material", MaterialCommands)
+                + CapabilityJson("material", MaterialCommands) + ","
+                + CapabilityJson("graphics", GraphicsCommands) + ","
+                + CapabilityJson("physics", PhysicsCommands)
                 + "]";
         }
 
@@ -580,7 +595,12 @@ namespace AlpsUnityCli
                 || command == "material.set"
                 || command == "camera.screenshot"
                 || command == "scene.screenshot"
-                || command == "screenshot.capture";
+                || command == "screenshot.capture"
+                || command == "graphics.quality"
+                || command == "graphics.settings"
+                || command == "graphics.screenshot"
+                || command == "physics.settings"
+                || command == "physics.simulation";
         }
 
         private static string CapabilityJson(string domain, string[] commands)
@@ -645,6 +665,11 @@ namespace AlpsUnityCli
 
         private static string ScreenshotJson(ScreenshotResult capture, string source, string target)
         {
+            return ScreenshotDataJson(capture, source, target).TrimEnd('}') + ",\"logPath\":" + Quote(LogPath()) + "}";
+        }
+
+        private static string ScreenshotDataJson(ScreenshotResult capture, string source, string target)
+        {
             return "{"
                 + "\"screenshotPath\":" + Quote(capture.Path) + ","
                 + "\"artifactPath\":" + Quote(capture.Path) + ","
@@ -654,8 +679,7 @@ namespace AlpsUnityCli
                 + "\"transparent\":" + Bool(capture.Transparent) + ","
                 + "\"quality\":" + capture.Quality.ToString(CultureInfo.InvariantCulture) + ","
                 + "\"source\":" + Quote(source) + ","
-                + "\"target\":" + Quote(target) + ","
-                + "\"logPath\":" + Quote(LogPath())
+                + "\"target\":" + Quote(target)
                 + "}";
         }
 
@@ -718,6 +742,158 @@ namespace AlpsUnityCli
                 }
             }
             return null;
+        }
+
+        private static string GraphicsQuality(BridgeRequest request)
+        {
+            var effects = new List<string>();
+            var requestedQualityLevel = request.OptionalIntArg("qualityLevel");
+            if (requestedQualityLevel.HasValue)
+            {
+                SetQualityLevel(requestedQualityLevel.Value, effects);
+            }
+            ApplyQualityInt(request, "vSyncCount", "vSyncCount", delegate(int value) { QualitySettings.vSyncCount = value; }, effects);
+            ApplyQualityInt(request, "antiAliasing", "antiAliasing", delegate(int value) { QualitySettings.antiAliasing = value; }, effects);
+            ApplyQualityFloat(request, "shadowDistance", "shadowDistance", delegate(float value) { QualitySettings.shadowDistance = value; }, effects);
+            ApplyQualityInt(request, "masterTextureLimit", "masterTextureLimit", delegate(int value) { QualitySettings.masterTextureLimit = value; }, effects);
+            ApplyQualityFloat(request, "lodBias", "lodBias", delegate(float value) { QualitySettings.lodBias = value; }, effects);
+            ApplyQualityInt(request, "maximumLODLevel", "maximumLODLevel", delegate(int value) { QualitySettings.maximumLODLevel = value; }, effects);
+            ApplyQualityEnum<AnisotropicFiltering>(request, "anisotropicFiltering", "anisotropicFiltering", delegate(AnisotropicFiltering value) { QualitySettings.anisotropicFiltering = value; }, effects);
+            ApplyQualityEnum<ShadowQuality>(request, "shadows", "shadows", delegate(ShadowQuality value) { QualitySettings.shadows = value; }, effects);
+            ApplyQualityEnum<ShadowResolution>(request, "shadowResolution", "shadowResolution", delegate(ShadowResolution value) { QualitySettings.shadowResolution = value; }, effects);
+            ApplyQualityBool(request, "realtimeReflectionProbes", "realtimeReflectionProbes", delegate(bool value) { QualitySettings.realtimeReflectionProbes = value; }, effects);
+            ApplyQualityBool(request, "softParticles", "softParticles", delegate(bool value) { QualitySettings.softParticles = value; }, effects);
+            if (effects.Count > 0)
+            {
+                AssetDatabase.SaveAssets();
+                WriteLog("graphics_quality_updated effects=" + effects.Count.ToString(CultureInfo.InvariantCulture));
+            }
+            return SuccessJson("{\"graphics\":" + GraphicsSummaryJson() + ",\"qualitySettings\":" + QualitySettingsJson() + ",\"plannedEffects\":[" + string.Join(",", effects.ToArray()) + "],\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string GraphicsSettingsCommand(BridgeRequest request)
+        {
+            var effects = new List<string>();
+            ApplyQualityInt(request, "antiAliasing", "antiAliasing", delegate(int value) { QualitySettings.antiAliasing = value; }, effects);
+            ApplyQualityFloat(request, "shadowDistance", "shadowDistance", delegate(float value) { QualitySettings.shadowDistance = value; }, effects);
+            ApplyQualityInt(request, "vSyncCount", "vSyncCount", delegate(int value) { QualitySettings.vSyncCount = value; }, effects);
+            ApplyQualityInt(request, "masterTextureLimit", "masterTextureLimit", delegate(int value) { QualitySettings.masterTextureLimit = value; }, effects);
+            ApplyQualityFloat(request, "lodBias", "lodBias", delegate(float value) { QualitySettings.lodBias = value; }, effects);
+            ApplyQualityInt(request, "maximumLODLevel", "maximumLODLevel", delegate(int value) { QualitySettings.maximumLODLevel = value; }, effects);
+            if (request.HasArg("renderPipeline"))
+            {
+                var value = request.StringArg("renderPipeline");
+                if (string.Equals(value, "null", StringComparison.OrdinalIgnoreCase) || string.Equals(value, "built-in", StringComparison.OrdinalIgnoreCase) || string.IsNullOrEmpty(value))
+                {
+                    GraphicsSettings.defaultRenderPipeline = null;
+                }
+                else
+                {
+                    var pipeline = AssetDatabase.LoadAssetAtPath<RenderPipelineAsset>(NormalizeAssetPath(value));
+                    if (pipeline == null)
+                    {
+                        return ErrorJson("E_RENDER_PIPELINE_NOT_FOUND", "RenderPipelineAsset not found: " + value, "Pass an Assets/*.asset RenderPipelineAsset path or use --render-pipeline built-in.");
+                    }
+                    GraphicsSettings.defaultRenderPipeline = pipeline;
+                }
+                effects.Add(EffectJson("graphics.settings", "renderPipeline", value));
+            }
+            if (request.HasArg("property"))
+            {
+                ApplyGenericGraphicsSetting(request, effects);
+            }
+            if (effects.Count > 0)
+            {
+                AssetDatabase.SaveAssets();
+                WriteLog("graphics_settings_updated effects=" + effects.Count.ToString(CultureInfo.InvariantCulture));
+            }
+            return SuccessJson("{\"graphics\":" + GraphicsSummaryJson() + ",\"qualitySettings\":" + QualitySettingsJson() + ",\"plannedEffects\":[" + string.Join(",", effects.ToArray()) + "],\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string GraphicsScreenshot(BridgeRequest request)
+        {
+            var camera = SceneView.lastActiveSceneView != null ? SceneView.lastActiveSceneView.camera : ResolveCamera(null);
+            if (camera == null)
+            {
+                return ErrorJson("E_SCENE_VIEW_NOT_AVAILABLE", "No SceneView or Camera is available for graphics screenshot capture.", "Open a SceneView or create an active Camera in the scene.");
+            }
+            var capture = CaptureCamera(camera, request);
+            return SuccessJson("{\"diagnostics\":" + GraphicsSummaryJson() + ",\"qualitySettings\":" + QualitySettingsJson() + ",\"screenshot\":" + ScreenshotDataJson(capture, "graphics", camera.name) + ",\"screenshotPath\":" + Quote(capture.Path) + ",\"artifactPath\":" + Quote(capture.Path) + ",\"plannedEffects\":[" + EffectJson("graphics.screenshot", "path", capture.Path) + "],\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string PhysicsSettingsCommand(BridgeRequest request)
+        {
+            var effects = new List<string>();
+            ApplyPhysicsVector3(request, "gravity", effects);
+            ApplyPhysicsVector2(request, "gravity2d", effects);
+            ApplyPhysicsFloat(request, "defaultContactOffset", "defaultContactOffset", delegate(float value) { Physics.defaultContactOffset = value; }, effects);
+            ApplyPhysicsFloat(request, "bounceThreshold", "bounceThreshold", delegate(float value) { Physics.bounceThreshold = value; }, effects);
+            ApplyPhysicsInt(request, "defaultSolverIterations", "defaultSolverIterations", delegate(int value) { Physics.defaultSolverIterations = value; }, effects);
+            ApplyPhysicsInt(request, "defaultSolverVelocityIterations", "defaultSolverVelocityIterations", delegate(int value) { Physics.defaultSolverVelocityIterations = value; }, effects);
+            ApplyPhysicsBool(request, "queriesHitTriggers", "queriesHitTriggers", delegate(bool value) { Physics.queriesHitTriggers = value; }, effects);
+            ApplyPhysicsBool(request, "queriesHitBackfaces", "queriesHitBackfaces", delegate(bool value) { Physics.queriesHitBackfaces = value; }, effects);
+            ApplyPhysicsBool(request, "queriesStartInColliders", "queriesStartInColliders", delegate(bool value) { Physics2D.queriesStartInColliders = value; }, effects);
+            ApplyPhysicsBool(request, "autoSimulation", "autoSimulation", delegate(bool value) { Physics.autoSimulation = value; }, effects);
+            if (request.HasArg("property"))
+            {
+                ApplyGenericPhysicsSetting(request, effects);
+            }
+            if (effects.Count > 0)
+            {
+                AssetDatabase.SaveAssets();
+                WriteLog("physics_settings_updated effects=" + effects.Count.ToString(CultureInfo.InvariantCulture));
+            }
+            return SuccessJson("{\"physics\":" + PhysicsSettingsJson() + ",\"plannedEffects\":[" + string.Join(",", effects.ToArray()) + "],\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string PhysicsRaycast(BridgeRequest request)
+        {
+            var mode = NormalizeMode(request.StringArg("mode"));
+            var distance = Math.Max(0f, request.FloatArg("distance", 100f));
+            var layerMask = request.IntArg("layerMask", Physics.DefaultRaycastLayers);
+            if (mode == "2d")
+            {
+                var origin = new Vector2(request.FloatArg("originX", 0f), request.FloatArg("originY", 0f));
+                var direction = NormalizeVector2(new Vector2(request.FloatArg("directionX", 1f), request.FloatArg("directionY", 0f)));
+                if (request.BoolArg("all", false))
+                {
+                    var hits = Physics2D.RaycastAll(origin, direction, distance, layerMask);
+                    return SuccessJson("{\"mode\":\"2d\",\"query\":" + Raycast2DQueryJson(origin, direction, distance, layerMask) + ",\"hitCount\":" + hits.Length.ToString(CultureInfo.InvariantCulture) + ",\"hits\":" + Raycast2DHitsJson(hits) + ",\"logPath\":" + Quote(LogPath()) + "}");
+                }
+                var hit = Physics2D.Raycast(origin, direction, distance, layerMask);
+                return SuccessJson("{\"mode\":\"2d\",\"query\":" + Raycast2DQueryJson(origin, direction, distance, layerMask) + ",\"hit\":" + Bool(hit.collider != null) + ",\"hitCount\":" + (hit.collider != null ? "1" : "0") + ",\"hits\":[" + (hit.collider != null ? Raycast2DHitJson(hit) : string.Empty) + "],\"nextActions\":" + RaycastNextActionsJson(hit.collider != null) + ",\"logPath\":" + Quote(LogPath()) + "}");
+            }
+
+            var origin3d = new Vector3(request.FloatArg("originX", 0f), request.FloatArg("originY", 0f), request.FloatArg("originZ", 0f));
+            var direction3d = NormalizeVector3(new Vector3(request.FloatArg("directionX", 0f), request.FloatArg("directionY", 0f), request.FloatArg("directionZ", 1f)));
+            if (request.BoolArg("all", false))
+            {
+                var hits = Physics.RaycastAll(origin3d, direction3d, distance, layerMask);
+                Array.Sort(hits, delegate(RaycastHit a, RaycastHit b) { return a.distance.CompareTo(b.distance); });
+                return SuccessJson("{\"mode\":\"3d\",\"query\":" + Raycast3DQueryJson(origin3d, direction3d, distance, layerMask) + ",\"hitCount\":" + hits.Length.ToString(CultureInfo.InvariantCulture) + ",\"hits\":" + Raycast3DHitsJson(hits) + ",\"logPath\":" + Quote(LogPath()) + "}");
+            }
+            RaycastHit hit3d;
+            var didHit = Physics.Raycast(origin3d, direction3d, out hit3d, distance, layerMask);
+            return SuccessJson("{\"mode\":\"3d\",\"query\":" + Raycast3DQueryJson(origin3d, direction3d, distance, layerMask) + ",\"hit\":" + Bool(didHit) + ",\"hitCount\":" + (didHit ? "1" : "0") + ",\"hits\":[" + (didHit ? Raycast3DHitJson(hit3d) : string.Empty) + "],\"nextActions\":" + RaycastNextActionsJson(didHit) + ",\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string PhysicsSimulation(BridgeRequest request)
+        {
+            var steps = Math.Max(1, request.IntArg("steps", 1));
+            var deltaTime = Math.Max(0.0001f, request.FloatArg("deltaTime", Time.fixedDeltaTime));
+            var simulate = request.BoolArg("simulate", false);
+            var effects = new List<string>();
+            if (simulate)
+            {
+                for (var i = 0; i < steps; i++)
+                {
+                    Physics.Simulate(deltaTime);
+                    Physics2D.Simulate(deltaTime);
+                }
+                effects.Add(EffectJson("physics.simulation", "steps", steps.ToString(CultureInfo.InvariantCulture)));
+                WriteLog("physics_simulated steps=" + steps.ToString(CultureInfo.InvariantCulture) + " deltaTime=" + deltaTime.ToString(CultureInfo.InvariantCulture));
+            }
+            return SuccessJson("{\"simulation\":{\"simulate\":" + Bool(simulate) + ",\"steps\":" + steps.ToString(CultureInfo.InvariantCulture) + ",\"deltaTime\":" + deltaTime.ToString(CultureInfo.InvariantCulture) + ",\"fixedDeltaTime\":" + Time.fixedDeltaTime.ToString(CultureInfo.InvariantCulture) + ",\"autoSimulation\":" + Bool(Physics.autoSimulation) + "},\"physics\":" + PhysicsSettingsJson() + ",\"plannedEffects\":[" + string.Join(",", effects.ToArray()) + "],\"logPath\":" + Quote(LogPath()) + "}");
         }
 
         private static string PrefabAssetJson(string path, GameObject prefab)
@@ -1466,6 +1642,293 @@ namespace AlpsUnityCli
             return value ? "true" : "false";
         }
 
+        private static string Number(float value)
+        {
+            return value.ToString(CultureInfo.InvariantCulture);
+        }
+
+        private static string Vector2Json(Vector2 value)
+        {
+            return "{\"x\":" + Number(value.x) + ",\"y\":" + Number(value.y) + "}";
+        }
+
+        private static string Vector3Json(Vector3 value)
+        {
+            return "{\"x\":" + Number(value.x) + ",\"y\":" + Number(value.y) + ",\"z\":" + Number(value.z) + "}";
+        }
+
+        private static string EffectJson(string type, string property, string value)
+        {
+            return "{\"type\":" + Quote(type) + ",\"property\":" + Quote(property) + ",\"value\":" + Quote(value) + "}";
+        }
+
+        private static string GraphicsSummaryJson()
+        {
+            var pipeline = GraphicsSettings.defaultRenderPipeline;
+            var pipelinePath = pipeline == null ? null : NormalizeAssetPath(AssetDatabase.GetAssetPath(pipeline));
+            return "{\"renderPipeline\":{\"active\":" + Quote(RenderPipelineSummaryName()) + ",\"defaultAsset\":" + Quote(pipeline == null ? null : pipeline.name) + ",\"defaultAssetPath\":" + Quote(pipelinePath) + "},\"currentQualityLevel\":" + QualitySettings.GetQualityLevel().ToString(CultureInfo.InvariantCulture) + ",\"qualityLevelName\":" + Quote(QualitySettings.names.Length > QualitySettings.GetQualityLevel() ? QualitySettings.names[QualitySettings.GetQualityLevel()] : null) + "}";
+        }
+
+        private static string RenderPipelineSummaryName()
+        {
+            if (GraphicsSettings.currentRenderPipeline != null)
+            {
+                return GraphicsSettings.currentRenderPipeline.GetType().Name;
+            }
+            return GraphicsSettings.defaultRenderPipeline != null ? GraphicsSettings.defaultRenderPipeline.GetType().Name : "Built-in";
+        }
+
+        private static string QualitySettingsJson()
+        {
+            var names = new List<string>();
+            foreach (var name in QualitySettings.names)
+            {
+                names.Add(Quote(name));
+            }
+            return "{\"names\":[" + string.Join(",", names.ToArray()) + "],\"currentLevel\":" + QualitySettings.GetQualityLevel().ToString(CultureInfo.InvariantCulture) + ",\"vSyncCount\":" + QualitySettings.vSyncCount.ToString(CultureInfo.InvariantCulture) + ",\"antiAliasing\":" + QualitySettings.antiAliasing.ToString(CultureInfo.InvariantCulture) + ",\"shadowDistance\":" + Number(QualitySettings.shadowDistance) + ",\"masterTextureLimit\":" + QualitySettings.masterTextureLimit.ToString(CultureInfo.InvariantCulture) + ",\"lodBias\":" + Number(QualitySettings.lodBias) + ",\"maximumLODLevel\":" + QualitySettings.maximumLODLevel.ToString(CultureInfo.InvariantCulture) + ",\"anisotropicFiltering\":" + Quote(QualitySettings.anisotropicFiltering.ToString()) + ",\"shadows\":" + Quote(QualitySettings.shadows.ToString()) + ",\"shadowResolution\":" + Quote(QualitySettings.shadowResolution.ToString()) + ",\"realtimeReflectionProbes\":" + Bool(QualitySettings.realtimeReflectionProbes) + ",\"softParticles\":" + Bool(QualitySettings.softParticles) + "}";
+        }
+
+        private static string PhysicsSettingsJson()
+        {
+            return "{\"mode\":\"3d+2d\",\"gravity\":" + Vector3Json(Physics.gravity) + ",\"gravity2d\":" + Vector2Json(Physics2D.gravity) + ",\"defaultContactOffset\":" + Number(Physics.defaultContactOffset) + ",\"bounceThreshold\":" + Number(Physics.bounceThreshold) + ",\"defaultSolverIterations\":" + Physics.defaultSolverIterations.ToString(CultureInfo.InvariantCulture) + ",\"defaultSolverVelocityIterations\":" + Physics.defaultSolverVelocityIterations.ToString(CultureInfo.InvariantCulture) + ",\"queriesHitTriggers\":" + Bool(Physics.queriesHitTriggers) + ",\"queriesHitBackfaces\":" + Bool(Physics.queriesHitBackfaces) + ",\"queriesStartInColliders\":" + Bool(Physics2D.queriesStartInColliders) + ",\"autoSimulation\":" + Bool(Physics.autoSimulation) + "}";
+        }
+
+        private static void SetQualityLevel(int level, List<string> effects)
+        {
+            if (level < 0 || level >= QualitySettings.names.Length)
+            {
+                throw new BridgeCommandException("E_QUALITY_LEVEL_INVALID", "Quality level is out of range: " + level.ToString(CultureInfo.InvariantCulture), "Run alps-unity graphics quality to inspect available quality level names and indexes.");
+            }
+            QualitySettings.SetQualityLevel(level, true);
+            effects.Add(EffectJson("graphics.quality", "qualityLevel", level.ToString(CultureInfo.InvariantCulture)));
+        }
+
+        private static void ApplyGenericGraphicsSetting(BridgeRequest request, List<string> effects)
+        {
+            var property = request.StringArg("property");
+            var value = request.StringArg("value");
+            if (property == "vSyncCount")
+            {
+                QualitySettings.vSyncCount = ParseInt(value, property);
+            }
+            else if (property == "antiAliasing")
+            {
+                QualitySettings.antiAliasing = ParseInt(value, property);
+            }
+            else if (property == "shadowDistance")
+            {
+                QualitySettings.shadowDistance = ParseFloat(value, property);
+            }
+            else
+            {
+                throw new BridgeCommandException("E_GRAPHICS_SETTING_UNSUPPORTED", "Unsupported graphics setting: " + property, "Use named flags such as --anti-aliasing, --shadow-distance or --render-pipeline.");
+            }
+            effects.Add(EffectJson("graphics.settings", property, value));
+        }
+
+        private static void ApplyGenericPhysicsSetting(BridgeRequest request, List<string> effects)
+        {
+            var property = request.StringArg("property");
+            var value = request.StringArg("value");
+            if (property == "gravityY")
+            {
+                Physics.gravity = new Vector3(Physics.gravity.x, ParseFloat(value, property), Physics.gravity.z);
+            }
+            else if (property == "defaultContactOffset")
+            {
+                Physics.defaultContactOffset = ParseFloat(value, property);
+            }
+            else if (property == "queriesHitTriggers")
+            {
+                Physics.queriesHitTriggers = ParseBool(value, property);
+            }
+            else
+            {
+                throw new BridgeCommandException("E_PHYSICS_SETTING_UNSUPPORTED", "Unsupported physics setting: " + property, "Use named flags such as --gravity-y, --default-contact-offset or --queries-hit-triggers.");
+            }
+            effects.Add(EffectJson("physics.settings", property, value));
+        }
+
+        private static void ApplyQualityInt(BridgeRequest request, string arg, string property, Action<int> setter, List<string> effects)
+        {
+            var value = request.OptionalIntArg(arg);
+            if (!value.HasValue) return;
+            setter(value.Value);
+            effects.Add(EffectJson("graphics.quality", property, value.Value.ToString(CultureInfo.InvariantCulture)));
+        }
+
+        private static void ApplyQualityFloat(BridgeRequest request, string arg, string property, Action<float> setter, List<string> effects)
+        {
+            var value = request.OptionalFloatArg(arg);
+            if (!value.HasValue) return;
+            setter(value.Value);
+            effects.Add(EffectJson("graphics.quality", property, Number(value.Value)));
+        }
+
+        private static void ApplyQualityBool(BridgeRequest request, string arg, string property, Action<bool> setter, List<string> effects)
+        {
+            var value = request.OptionalBoolArg(arg);
+            if (!value.HasValue) return;
+            setter(value.Value);
+            effects.Add(EffectJson("graphics.quality", property, Bool(value.Value)));
+        }
+
+        private static void ApplyQualityEnum<T>(BridgeRequest request, string arg, string property, Action<T> setter, List<string> effects) where T : struct
+        {
+            if (!request.HasArg(arg)) return;
+            T parsed;
+            if (!Enum.TryParse<T>(request.StringArg(arg), true, out parsed))
+            {
+                throw new BridgeCommandException("E_GRAPHICS_SETTING_INVALID", "Invalid " + property + " value: " + request.StringArg(arg), "Use a Unity enum value for " + property + ".");
+            }
+            setter(parsed);
+            effects.Add(EffectJson("graphics.quality", property, parsed.ToString()));
+        }
+
+        private static void ApplyPhysicsInt(BridgeRequest request, string arg, string property, Action<int> setter, List<string> effects)
+        {
+            var value = request.OptionalIntArg(arg);
+            if (!value.HasValue) return;
+            setter(value.Value);
+            effects.Add(EffectJson("physics.settings", property, value.Value.ToString(CultureInfo.InvariantCulture)));
+        }
+
+        private static void ApplyPhysicsFloat(BridgeRequest request, string arg, string property, Action<float> setter, List<string> effects)
+        {
+            var value = request.OptionalFloatArg(arg);
+            if (!value.HasValue) return;
+            setter(value.Value);
+            effects.Add(EffectJson("physics.settings", property, Number(value.Value)));
+        }
+
+        private static void ApplyPhysicsBool(BridgeRequest request, string arg, string property, Action<bool> setter, List<string> effects)
+        {
+            var value = request.OptionalBoolArg(arg);
+            if (!value.HasValue) return;
+            setter(value.Value);
+            effects.Add(EffectJson("physics.settings", property, Bool(value.Value)));
+        }
+
+        private static void ApplyPhysicsVector3(BridgeRequest request, string property, List<string> effects)
+        {
+            var x = request.OptionalFloatArg(property + "X");
+            var y = request.OptionalFloatArg(property + "Y");
+            var z = request.OptionalFloatArg(property + "Z");
+            if (!x.HasValue && !y.HasValue && !z.HasValue) return;
+            Physics.gravity = new Vector3(x ?? Physics.gravity.x, y ?? Physics.gravity.y, z ?? Physics.gravity.z);
+            effects.Add(EffectJson("physics.settings", property, Vector3Json(Physics.gravity)));
+        }
+
+        private static void ApplyPhysicsVector2(BridgeRequest request, string property, List<string> effects)
+        {
+            var x = request.OptionalFloatArg(property + "X");
+            var y = request.OptionalFloatArg(property + "Y");
+            if (!x.HasValue && !y.HasValue) return;
+            Physics2D.gravity = new Vector2(x ?? Physics2D.gravity.x, y ?? Physics2D.gravity.y);
+            effects.Add(EffectJson("physics.settings", property, Vector2Json(Physics2D.gravity)));
+        }
+
+        private static string NormalizeMode(string mode)
+        {
+            return string.Equals(mode, "2d", StringComparison.OrdinalIgnoreCase) ? "2d" : "3d";
+        }
+
+        private static Vector2 NormalizeVector2(Vector2 value)
+        {
+            return value.sqrMagnitude <= 0f ? Vector2.right : value.normalized;
+        }
+
+        private static Vector3 NormalizeVector3(Vector3 value)
+        {
+            return value.sqrMagnitude <= 0f ? Vector3.forward : value.normalized;
+        }
+
+        private static string RaycastNextActionsJson(bool hit)
+        {
+            return hit ? "[]" : "[" + Quote("No Physics collider matched the ray; adjust origin, direction, distance or layer mask.") + "]";
+        }
+
+        private static string Raycast3DQueryJson(Vector3 origin, Vector3 direction, float distance, int layerMask)
+        {
+            return "{\"origin\":" + Vector3Json(origin) + ",\"direction\":" + Vector3Json(direction) + ",\"distance\":" + Number(distance) + ",\"layerMask\":" + layerMask.ToString(CultureInfo.InvariantCulture) + "}";
+        }
+
+        private static string Raycast2DQueryJson(Vector2 origin, Vector2 direction, float distance, int layerMask)
+        {
+            return "{\"origin\":" + Vector2Json(origin) + ",\"direction\":" + Vector2Json(direction) + ",\"distance\":" + Number(distance) + ",\"layerMask\":" + layerMask.ToString(CultureInfo.InvariantCulture) + "}";
+        }
+
+        private static string Raycast3DHitsJson(RaycastHit[] hits)
+        {
+            var items = new List<string>();
+            foreach (var hit in hits)
+            {
+                items.Add(Raycast3DHitJson(hit));
+            }
+            return "[" + string.Join(",", items.ToArray()) + "]";
+        }
+
+        private static string Raycast3DHitJson(RaycastHit hit)
+        {
+            var gameObject = hit.collider != null ? hit.collider.gameObject : null;
+            return "{\"distance\":" + Number(hit.distance) + ",\"point\":" + Vector3Json(hit.point) + ",\"normal\":" + Vector3Json(hit.normal) + ",\"collider\":" + ColliderJson(gameObject, hit.collider == null ? null : hit.collider.GetType().Name) + "}";
+        }
+
+        private static string Raycast2DHitsJson(RaycastHit2D[] hits)
+        {
+            var items = new List<string>();
+            foreach (var hit in hits)
+            {
+                items.Add(Raycast2DHitJson(hit));
+            }
+            return "[" + string.Join(",", items.ToArray()) + "]";
+        }
+
+        private static string Raycast2DHitJson(RaycastHit2D hit)
+        {
+            var gameObject = hit.collider != null ? hit.collider.gameObject : null;
+            return "{\"distance\":" + Number(hit.distance) + ",\"point\":" + Vector2Json(hit.point) + ",\"normal\":" + Vector2Json(hit.normal) + ",\"collider\":" + ColliderJson(gameObject, hit.collider == null ? null : hit.collider.GetType().Name) + "}";
+        }
+
+        private static string ColliderJson(GameObject gameObject, string colliderType)
+        {
+            if (gameObject == null)
+            {
+                return "null";
+            }
+            return "{\"id\":" + gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) + ",\"name\":" + Quote(gameObject.name) + ",\"path\":" + Quote(HierarchyPath(gameObject)) + ",\"type\":" + Quote(colliderType) + "}";
+        }
+
+        private static int ParseInt(string value, string property)
+        {
+            int parsed;
+            if (!int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed))
+            {
+                throw new BridgeCommandException("E_SETTING_VALUE_INVALID", "Expected integer for " + property + ": " + value, "Pass a valid numeric setting value.");
+            }
+            return parsed;
+        }
+
+        private static float ParseFloat(string value, string property)
+        {
+            float parsed;
+            if (!float.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed))
+            {
+                throw new BridgeCommandException("E_SETTING_VALUE_INVALID", "Expected number for " + property + ": " + value, "Pass a valid numeric setting value.");
+            }
+            return parsed;
+        }
+
+        private static bool ParseBool(string value, string property)
+        {
+            bool parsed;
+            if (!bool.TryParse(value, out parsed))
+            {
+                throw new BridgeCommandException("E_SETTING_VALUE_INVALID", "Expected boolean for " + property + ": " + value, "Pass true or false.");
+            }
+            return parsed;
+        }
+
         private static string LogPath()
         {
             return Path.Combine(ProjectRoot(), "Logs", "AlpsUnityBridge.log");
@@ -1558,6 +2021,12 @@ namespace AlpsUnityCli
 
             public int IntArg(string name, int fallback)
             {
+                var parsed = OptionalIntArg(name);
+                return parsed.HasValue ? parsed.Value : fallback;
+            }
+
+            public int? OptionalIntArg(string name)
+            {
                 var match = Regex.Match(body ?? string.Empty, "\\\"" + Regex.Escape(name) + "\\\"\\s*:\\s*(?:\\\")?(-?\\d+)(?:\\\")?");
                 if (match.Success)
                 {
@@ -1567,13 +2036,44 @@ namespace AlpsUnityCli
                         return parsed;
                     }
                 }
-                return fallback;
+                return null;
+            }
+
+            public float FloatArg(string name, float fallback)
+            {
+                var parsed = OptionalFloatArg(name);
+                return parsed.HasValue ? parsed.Value : fallback;
+            }
+
+            public float? OptionalFloatArg(string name)
+            {
+                var match = Regex.Match(body ?? string.Empty, "\\\"" + Regex.Escape(name) + "\\\"\\s*:\\s*(?:\\\")?(-?\\d+(?:\\.\\d+)?)(?:\\\")?");
+                if (match.Success)
+                {
+                    float parsed;
+                    if (float.TryParse(match.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed))
+                    {
+                        return parsed;
+                    }
+                }
+                return null;
             }
 
             public bool BoolArg(string name, bool fallback)
             {
+                var parsed = OptionalBoolArg(name);
+                return parsed.HasValue ? parsed.Value : fallback;
+            }
+
+            public bool? OptionalBoolArg(string name)
+            {
                 var match = Regex.Match(body ?? string.Empty, "\\\"" + Regex.Escape(name) + "\\\"\\s*:\\s*(true|false)", RegexOptions.IgnoreCase);
-                return match.Success ? string.Equals(match.Groups[1].Value, "true", StringComparison.OrdinalIgnoreCase) : fallback;
+                return match.Success ? (bool?)string.Equals(match.Groups[1].Value, "true", StringComparison.OrdinalIgnoreCase) : null;
+            }
+
+            public bool HasArg(string name)
+            {
+                return Regex.IsMatch(body ?? string.Empty, "\\\"" + Regex.Escape(name) + "\\\"\\s*:");
             }
 
             private static string ExtractString(string json, string name)

@@ -207,6 +207,48 @@ test("material bridge errors preserve structured diagnostics", async () => {
   assert.deepEqual(result.error?.next_actions, ["Run alps-unity material info <path> to inspect shader properties."]);
 });
 
+test("graphics commands forward settings and screenshot diagnostics", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+  const bridgeExecute = async (payload: BridgeRequest) => {
+    requests.push(payload);
+    return { ok: true, data: { graphics: { renderPipeline: { active: "Built-in" } }, plannedEffects: payload.args } };
+  };
+
+  const quality = await execute(["graphics", "quality", "--quality-level", "2", "--v-sync-count", "1", "--shadow-distance", "75.5", "--soft-particles", "false"], { ...runtime, bridgeExecute });
+  const settings = await execute(["graphics", "settings", "--render-pipeline", "Assets/Settings/URP.asset", "--anti-aliasing", "4"], { ...runtime, bridgeExecute });
+  const screenshot = await execute(["graphics", "screenshot", "Artifacts/graphics.png", "--width", "1024", "--height", "768", "--include-diagnostics", "--overwrite"], { ...runtime, bridgeExecute });
+
+  assert.equal(quality.ok, true);
+  assert.equal(settings.ok, true);
+  assert.equal(screenshot.ok, true);
+  assert.deepEqual(requests.map((request) => request.command), ["graphics.quality", "graphics.settings", "graphics.screenshot"]);
+  assert.deepEqual(requests[0].args, { qualityLevel: 2, vSyncCount: 1, shadowDistance: 75.5, softParticles: false });
+  assert.deepEqual(requests[1].args, { antiAliasing: 4, renderPipeline: "Assets/Settings/URP.asset" });
+  assert.deepEqual(requests[2].args, { path: "Artifacts/graphics.png", width: 1024, height: 768, overwrite: true, includeDiagnostics: true });
+});
+
+test("physics commands forward settings, raycast and simulation inputs", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+  const bridgeExecute = async (payload: BridgeRequest) => {
+    requests.push(payload);
+    return { ok: true, data: { physics: {}, plannedEffects: payload.command === "physics.raycast" ? [] : [{ type: payload.command }] } };
+  };
+
+  const settings = await execute(["physics", "settings", "--gravity-y", "-9.81", "--gravity2d-y", "-12.5", "--queries-hit-triggers", "false", "--default-solver-iterations", "8"], { ...runtime, bridgeExecute });
+  const raycast = await execute(["physics", "raycast", "--mode", "2d", "--origin-x", "1", "--origin-y", "2", "--direction-x", "0", "--direction-y", "-1", "--distance", "50", "--layer-mask", "5", "--all"], { ...runtime, bridgeExecute });
+  const simulation = await execute(["physics", "simulation", "--steps", "3", "--delta-time", "0.016", "--simulate"], { ...runtime, bridgeExecute });
+
+  assert.equal(settings.ok, true);
+  assert.equal(raycast.ok, true);
+  assert.equal(simulation.ok, true);
+  assert.deepEqual(requests.map((request) => request.command), ["physics.settings", "physics.raycast", "physics.simulation"]);
+  assert.deepEqual(requests[0].args, { gravityY: -9.81, gravity2dY: -12.5, defaultSolverIterations: 8, queriesHitTriggers: false });
+  assert.deepEqual(requests[1].args, { mode: "2d", originX: 1, originY: 2, directionX: 0, directionY: -1, distance: 50, layerMask: 5, all: true });
+  assert.deepEqual(requests[2].args, { steps: 3, deltaTime: 0.016, simulate: true });
+});
+
 test("prefab bridge errors preserve structured diagnostics", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["prefab", "stage-close"], {

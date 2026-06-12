@@ -82,6 +82,12 @@ export function bridgeCommandName(group: string | undefined, command: string | u
   if (group === "material" && ["info", "create", "assign", "set"].includes(command ?? "")) {
     return `material.${command}`;
   }
+  if (group === "graphics" && ["quality", "settings", "screenshot"].includes(command ?? "")) {
+    return `graphics.${command}`;
+  }
+  if (group === "physics" && ["settings", "raycast", "simulation"].includes(command ?? "")) {
+    return `physics.${command}`;
+  }
   if (group === "script" && ["create", "read", "edit", "validate"].includes(command ?? "")) {
     return `script.${command}`;
   }
@@ -218,6 +224,68 @@ async function commandArgs(command: string, flags: Record<string, string | boole
     });
   }
 
+  if (command.startsWith("graphics.")) {
+    if (command === "graphics.screenshot") {
+      return compactArgs({ ...screenshotArgs(flags, positionalTarget), includeDiagnostics: boolFlag(flags, "include-diagnostics") });
+    }
+    return compactArgs({
+      ...queryArgs(flags),
+      property: stringFlag(flags, "property"),
+      value: stringFlag(flags, "value"),
+      qualityLevel: numberFlag(flags, "quality-level") ?? numberFlag(flags, "level"),
+      vSyncCount: numberFlag(flags, "v-sync-count"),
+      antiAliasing: numberFlag(flags, "anti-aliasing"),
+      shadowDistance: floatFlag(flags, "shadow-distance"),
+      masterTextureLimit: numberFlag(flags, "master-texture-limit"),
+      lodBias: floatFlag(flags, "lod-bias"),
+      maximumLODLevel: numberFlag(flags, "maximum-lod-level"),
+      anisotropicFiltering: stringFlag(flags, "anisotropic-filtering"),
+      shadows: stringFlag(flags, "shadows"),
+      shadowResolution: stringFlag(flags, "shadow-resolution"),
+      realtimeReflectionProbes: boolFlag(flags, "realtime-reflection-probes"),
+      softParticles: boolFlag(flags, "soft-particles"),
+      renderPipeline: stringFlag(flags, "render-pipeline")
+    });
+  }
+
+  if (command.startsWith("physics.")) {
+    if (command === "physics.raycast") {
+      return compactArgs({
+        mode: stringFlag(flags, "mode"),
+        originX: floatFlag(flags, "origin-x") ?? floatFlag(flags, "x"),
+        originY: floatFlag(flags, "origin-y") ?? floatFlag(flags, "y"),
+        originZ: floatFlag(flags, "origin-z") ?? floatFlag(flags, "z"),
+        directionX: floatFlag(flags, "direction-x") ?? floatFlag(flags, "dx"),
+        directionY: floatFlag(flags, "direction-y") ?? floatFlag(flags, "dy"),
+        directionZ: floatFlag(flags, "direction-z") ?? floatFlag(flags, "dz"),
+        distance: floatFlag(flags, "distance"),
+        layerMask: numberFlag(flags, "layer-mask"),
+        all: boolFlag(flags, "all")
+      });
+    }
+    if (command === "physics.simulation") {
+      return compactArgs({ mode: stringFlag(flags, "mode"), steps: numberFlag(flags, "steps"), deltaTime: floatFlag(flags, "delta-time"), simulate: boolFlag(flags, "simulate") });
+    }
+    return compactArgs({
+      mode: stringFlag(flags, "mode"),
+      property: stringFlag(flags, "property"),
+      value: stringFlag(flags, "value"),
+      gravityX: floatFlag(flags, "gravity-x"),
+      gravityY: floatFlag(flags, "gravity-y"),
+      gravityZ: floatFlag(flags, "gravity-z"),
+      gravity2dX: floatFlag(flags, "gravity2d-x"),
+      gravity2dY: floatFlag(flags, "gravity2d-y"),
+      defaultContactOffset: floatFlag(flags, "default-contact-offset"),
+      bounceThreshold: floatFlag(flags, "bounce-threshold"),
+      defaultSolverIterations: numberFlag(flags, "default-solver-iterations"),
+      defaultSolverVelocityIterations: numberFlag(flags, "default-solver-velocity-iterations"),
+      queriesHitTriggers: boolFlag(flags, "queries-hit-triggers"),
+      queriesHitBackfaces: boolFlag(flags, "queries-hit-backfaces"),
+      queriesStartInColliders: boolFlag(flags, "queries-start-in-colliders"),
+      autoSimulation: boolFlag(flags, "auto-simulation")
+    });
+  }
+
   if (command.startsWith("script.")) {
     return compactArgs({
       path: positionalTarget ?? stringFlag(flags, "path"),
@@ -327,6 +395,15 @@ function numberFlag(flags: Record<string, string | boolean>, key: string): numbe
     return undefined;
   }
   const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function floatFlag(flags: Record<string, string | boolean>, key: string): number | undefined {
+  const value = stringFlag(flags, key);
+  if (!value) {
+    return undefined;
+  }
+  const parsed = Number.parseFloat(value);
   return Number.isFinite(parsed) ? parsed : undefined;
 }
 
