@@ -555,7 +555,7 @@ namespace AlpsUnityCli
 
             var visualTree = LoadVisualTreeAsset(path);
             var styleSheet = string.IsNullOrEmpty(uss) ? null : LoadStyleSheet(uss);
-            return SuccessJson("{\"document":{" + UiAssetFieldsJson(path, visualTree) + ",\"styleSheet\":" + UiStyleSheetJson(uss, styleSheet) + "},\"diagnostics":[{\"level\":\"info\",\"code\":\"UI_DOCUMENT_READ_OK\",\"message\":\"UI Toolkit assets are readable.\"}],\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(UiDocumentAssetInfoJson(path, visualTree, uss, styleSheet));
         }
 
         private static string UiDocumentCreate(BridgeRequest request)
@@ -823,6 +823,27 @@ namespace AlpsUnityCli
                 componentNames.Add(Quote(component != null ? component.GetType().Name : "MissingScript"));
             }
             return "[" + string.Join(",", componentNames.ToArray()) + "]";
+        }
+
+        private static string UiDocumentAssetInfoJson(string path, VisualTreeAsset visualTree, string uss, StyleSheet styleSheet)
+        {
+            return "{"
+                + "\"document\":{"
+                + UiAssetFieldsJson(path, visualTree) + ","
+                + "\"styleSheet\":" + UiStyleSheetJson(uss, styleSheet)
+                + "},"
+                + "\"diagnostics\":" + UiDocumentReadDiagnosticsJson() + ","
+                + "\"logPath\":" + Quote(LogPath())
+                + "}";
+        }
+
+        private static string UiDocumentReadDiagnosticsJson()
+        {
+            return "[{"
+                + "\"level\":\"info\","
+                + "\"code\":\"UI_DOCUMENT_READ_OK\","
+                + "\"message\":\"UI Toolkit assets are readable.\""
+                + "}]";
         }
 
         private static string UiDocumentJson(UIDocument document)

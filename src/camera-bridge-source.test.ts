@@ -97,6 +97,9 @@ test("Unity Bridge UI operations expose uGUI and UI Toolkit diagnostics", async 
   assert.match(source, /UIDocument/);
   assert.match(source, /VisualTreeAsset/);
   assert.match(source, /StyleSheet/);
+  assert.match(source, /UiDocumentAssetInfoJson\(path, visualTree, uss, styleSheet\)/);
+  assert.match(source, /private static string UiDocumentReadDiagnosticsJson\(\)/);
+  assert.doesNotMatch(source, /SuccessJson\("\{\\"document\":\{" \+ UiAssetFieldsJson\(path, visualTree\) \+ ",\\"styleSheet\\":"/);
   assert.match(source, /PanelSettings/);
   assert.match(source, /E_UI_PARENT_NOT_FOUND/);
   assert.match(source, /E_TARGET_AMBIGUOUS/);
@@ -114,6 +117,28 @@ test("Unity Bridge UI operations expose uGUI and UI Toolkit diagnostics", async 
   assert.match(readme, /`ui canvas\/create`, `ui text\/create`, `ui button\/create` and `ui image\/create` create uGUI objects/);
   assert.match(readme, /`ui document\/info` supports live UIDocument inspection and offline `.uxml`\/`.uss` file reads/);
   assert.match(readme, /`E_UI_PARENT_NOT_FOUND`, `E_UI_SPRITE_NOT_FOUND`, `E_UI_UXML_NOT_FOUND`, `E_UI_USS_NOT_FOUND`, `E_UI_PANEL_SETTINGS_NOT_FOUND`, `E_TARGET_NOT_FOUND`, `E_TARGET_AMBIGUOUS` and `E_UNITY_BUSY`/);
+});
+
+test("Unity Bridge C# string literals stay balanced", async () => {
+  const source = await readFile(sourceUrl, "utf8");
+  for (const [index, line] of source.split(/\r?\n/).entries()) {
+    let inString = false;
+    let escaped = false;
+    for (const char of line) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === "\\" && inString) {
+        escaped = true;
+        continue;
+      }
+      if (char === '"') {
+        inString = !inString;
+      }
+    }
+    assert.equal(inString, false, `unterminated string literal on AlpsUnityBridge.cs:${index + 1}`);
+  }
 });
 
 test("Unity Bridge HTTP timeout prevents queued side effects from stale requests", async () => {
