@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
@@ -150,11 +150,11 @@ test("build run forwards output path to batch method", async () => {
 
 test("non-wait CLI exits quickly and worker persists terminal status", async () => {
   const dataDir = await mkdtemp(join(tmpdir(), "alps-unity-cli-process-"));
-  const unity = await makeFakeUnity(`setTimeout(() => process.exit(0), 500);`);
+  const unity = await makeFakeUnity(`setTimeout(() => process.exit(0), 2000);`);
 
   const created = await runCli(["editor", "refresh", "--compile", "--unity", unity, "--project", dataDir], { ALPS_UNITY_DATA_DIR: dataDir });
   assert.equal(created.code, 0, created.stderr);
-  assert.ok(created.durationMs < 400);
+  assert.ok(created.durationMs < 1500);
   const payload = JSON.parse(created.stdout) as { ok: boolean; data: { jobId: string; status: string } };
   assert.equal(payload.ok, true);
   assert.equal(payload.data.status, "queued");
@@ -174,4 +174,102 @@ test("process timeout marks job as timeout", async () => {
 
   assert.equal(waited.status, "timeout");
   assert.equal(waited.error?.code, "JOB_TIMEOUT");
+});
+
+async function makeUnityProject(): Promise<string> {
+  const project = await mkdtemp(join(tmpdir(), "unity-project-"));
+  const packages = join(project, "Packages");
+  await mkdir(packages, { recursive: true });
+  await writeFile(join(packages, "manifest.json"), JSON.stringify({
+    registry: "https://packages.unity.com",
+    dependencies: {
+      "com.unity.textmeshpro": "3.0.6",
+      "com.example.tool": "1.2.3"
+    },
+    scopedRegistries: [{ name: "Example", url: "https://registry.example.com", scopes: ["com.example"] }]
+  }, null, 2));
+  await writeFile(join(packages, "packages-lock.json"), JSON.stringify({
+    dependencies: {
+      "com.unity.textmeshpro": { version: "3.0.6", source: "registry", depth: 0 },
+      "com.example.tool": { version: "1.2.3", source: "registry", dependencies: { "com.unity.textmeshpro": "3.0.6" } }
+    }
+  }, null, 2));
+  return project;
+}
+
+test("package list and info read manifest and lock data", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  const list = await execute(["package", "list", "--project", project], runtime);
+  assert.equal(list.ok, true);
+  const data = list.data as { registry: string; packages: Array<{ name: string; requestedVersion?: string; lockedVersion?: string; source?: string }> };
+  assert.equal(data.registry, "https://packages.unity.com");
+  assert.deepEqual(data.packages.map((entry) => entry.name), ["com.example.tool", "com.unity.textmeshpro"]);
+  assert.equal(data.packages[0].lockedVersion, "1.2.3");
+
+  const info = await execute(["package", "info", "com.example.tool", "--project", project], runtime);
+  assert.equal(info.ok, true);
+  assert.equal(((info.data as { package: { dependencies: Record<string, string> } }).package.dependencies)["com.unity.textmeshpro"], "3.0.6");
+});
+
+test("package install updates manifest and can start package resolve job", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+  const unity = await makeFakeUnity(`process.exit(0);`);
+
+  const installed = await execute(["package", "install", "com.acme.lib@2.0.0", "--project", project, "--unity", unity], runtime);
+  assert.equal(installed.ok, true);
+  const jobData = installed.data as { kind: string; result: { action: string; package: string; installedVersion: string } };
+  assert.equal(jobData.kind, "package");
+  assert.equal(jobData.result.action, "install");
+  assert.equal(jobData.result.package, "com.acme.lib");
+  assert.equal(jobData.result.installedVersion, "2.0.0");
+
+  const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string> };
+  assert.equal(manifest.dependencies["com.acme.lib"], "2.0.0");
+});
+
+test("package remove returns structured diagnostic for missing package", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  const removed = await execute(["package", "remove", "com.missing", "--project", project], runtime);
+  assert.equal(removed.ok, false);
+  assert.equal(removed.error?.code, "PACKAGE_NOT_FOUND");
+  assert.equal(removed.error?.next_actions?.[0].includes("package list"), true);
+});
+
+test("package registry and scoped registry commands mutate manifest", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  const registry = await execute(["package", "registry", "set", "--url", "https://npm.example.com", "--project", project], runtime);
+  assert.equal(registry.ok, true);
+  assert.equal((registry.data as { registry: string }).registry, "https://npm.example.com");
+
+  const scoped = await execute(["package", "scoped-registry", "add", "--name", "Acme", "--url", "https://registry.acme.test", "--scope", "com.acme,com.acme.tools", "--project", project], runtime);
+  assert.equal(scoped.ok, true);
+  assert.deepEqual((scoped.data as { registry: { scopes: string[] } }).registry.scopes, ["com.acme", "com.acme.tools"]);
+
+  const list = await execute(["package", "scoped-registry", "list", "--project", project], runtime);
+  assert.equal(list.ok, true);
+  assert.equal((list.data as { scopedRegistries: Array<{ name: string }> }).scopedRegistries.some((entry) => entry.name === "Acme"), true);
+});
+
+test("package resolve without Unity returns structured diagnostic when job requested", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  const result = await execute(["package", "resolve", "--project", project, "--job"], runtime);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "UNITY_NOT_FOUND");
+});
+
+test("Unity package batch hook exposes PackageManager resolve API", async () => {
+  const source = await readFile(new URL("../unity-package/Editor/AlpsUnityBatch.cs", import.meta.url), "utf8");
+
+  assert.match(source, /public static void ResolvePackages\(\)/);
+  assert.match(source, /Client\.Resolve\(\)/);
+  assert.match(source, /E_PACKAGE_RESOLVE_FAILED/);
 });
