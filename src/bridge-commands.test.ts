@@ -228,6 +228,40 @@ test("ui bridge errors preserve structured diagnostics", async () => {
   assert.deepEqual(result.error?.next_actions, ["Create a PanelSettings asset in Unity."]);
 });
 
+test("ui target ambiguity diagnostics are preserved for parent, document and hierarchy", async () => {
+  const runtime = await makeRuntime();
+  const cases: Array<{ name: string; args: string[]; message: string; nextAction: string }> = [
+    { name: "parent", args: ["ui", "text/create", "Title", "--parent", "HUD"], message: "UI parent target is ambiguous: HUD", nextAction: "Pass a hierarchy path or instance id for the intended Canvas/RectTransform parent." },
+    { name: "document", args: ["ui", "document/info", "HUD"], message: "UIDocument target is ambiguous: HUD", nextAction: "Pass a hierarchy path or instance id for the intended UIDocument GameObject." },
+    { name: "hierarchy", args: ["ui", "hierarchy", "HUD"], message: "UI hierarchy target is ambiguous: HUD", nextAction: "Pass a hierarchy path or instance id for the intended UI hierarchy root." }
+  ];
+
+  for (const item of cases) {
+    const result = await execute(item.args, {
+      ...runtime,
+      bridgeExecute: async () => ({
+        ok: false,
+        error: {
+          code: "E_TARGET_AMBIGUOUS",
+          message: item.message,
+          target: "HUD",
+          matchCount: 2,
+          matches: [
+            { id: 101, name: "HUD", path: "Canvas/HUD", components: ["RectTransform"] },
+            { id: 202, name: "HUD", path: "Overlay/HUD", components: ["UIDocument"] }
+          ]
+        },
+        nextActions: [item.nextAction]
+      })
+    });
+
+    assert.equal(result.ok, false, item.name);
+    assert.equal(result.error?.code, "E_TARGET_AMBIGUOUS", item.name);
+    assert.equal(result.error?.message, item.message, item.name);
+    assert.deepEqual(result.error?.next_actions, [item.nextAction], item.name);
+  }
+});
+
 test("prefab bridge errors preserve structured diagnostics", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["prefab", "stage-close"], {
