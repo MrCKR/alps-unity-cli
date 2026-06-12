@@ -5,6 +5,31 @@ import test from "node:test";
 const sourceUrl = new URL("../unity-package/Editor/AlpsUnityBridge.cs", import.meta.url);
 const readmeUrl = new URL("../README.md", import.meta.url);
 
+test("Unity Bridge source keeps top-level C# methods structurally balanced", async () => {
+  const source = await readFile(sourceUrl, "utf8");
+  const strippedSource = stripCSharpTrivia(source);
+  const topLevelSource = strippedSource.slice(0, strippedSource.indexOf("        private sealed class BridgeWorkItem"));
+  let braceDepth = 0;
+
+  for (const [index, line] of topLevelSource.split("\n").entries()) {
+    assert.ok(braceDepth >= 0, `C# brace depth went negative before line ${index + 1}`);
+
+    if (/^\s+private static (?!readonly\b).*\)\s*(?:where\b.*)?$/.test(line)) {
+      assert.equal(braceDepth, 2, `Top-level C# method declaration is nested at line ${index + 1}: ${line.trim()}`);
+    }
+
+    for (const character of line) {
+      if (character === "{") {
+        braceDepth += 1;
+      } else if (character === "}") {
+        braceDepth -= 1;
+      }
+    }
+  }
+
+  assert.equal(braceDepth, 2);
+});
+
 test("Unity Bridge exposes documented camera, screenshot, prefab, material, graphics, physics, shader and texture commands", async () => {
   const source = await readFile(sourceUrl, "utf8");
   const readme = await readFile(readmeUrl, "utf8");
@@ -105,6 +130,94 @@ test("Unity Bridge Quote escapes shader read control characters as valid JSON", 
   const parsed = JSON.parse(json) as { data: { content: string } };
   assert.equal(parsed.data.content, shaderContent);
 });
+
+function stripCSharpTrivia(source: string): string {
+  let output = "";
+  let index = 0;
+
+  while (index < source.length) {
+    const current = source[index];
+    const next = source[index + 1];
+    const following = source[index + 2];
+
+    if (current === "/" && next === "/") {
+      output += "  ";
+      index += 2;
+      while (index < source.length && source[index] !== "\n") {
+        output += " ";
+        index += 1;
+      }
+      continue;
+    }
+
+    if (current === "/" && next === "*") {
+      output += "  ";
+      index += 2;
+      while (index < source.length) {
+        if (source[index] === "*" && source[index + 1] === "/") {
+          output += "  ";
+          index += 2;
+          break;
+        }
+        output += source[index] === "\n" ? "\n" : " ";
+        index += 1;
+      }
+      continue;
+    }
+
+    const isInterpolatedVerbatimString = current === "$" && next === "@" && following === "\"";
+    const isVerbatimInterpolatedString = current === "@" && next === "$" && following === "\"";
+    const isVerbatimString = current === "@" && next === "\"";
+    if (isInterpolatedVerbatimString || isVerbatimInterpolatedString || isVerbatimString) {
+      const prefixLength = isVerbatimString ? 2 : 3;
+      output += " ".repeat(prefixLength);
+      index += prefixLength;
+      while (index < source.length) {
+        if (source[index] === "\"" && source[index + 1] === "\"") {
+          output += "  ";
+          index += 2;
+          continue;
+        }
+        const done = source[index] === "\"";
+        output += source[index] === "\n" ? "\n" : " ";
+        index += 1;
+        if (done) {
+          break;
+        }
+      }
+      continue;
+    }
+
+    const isInterpolatedString = current === "$" && next === "\"";
+    const isRegularString = current === "\"";
+    const isCharacterLiteral = current === "'";
+    if (isInterpolatedString || isRegularString || isCharacterLiteral) {
+      const delimiter = isCharacterLiteral ? "'" : "\"";
+      const prefixLength = isInterpolatedString ? 2 : 1;
+      output += " ".repeat(prefixLength);
+      index += prefixLength;
+      while (index < source.length) {
+        if (source[index] === "\\") {
+          output += "  ";
+          index += 2;
+          continue;
+        }
+        const done = source[index] === delimiter;
+        output += source[index] === "\n" ? "\n" : " ";
+        index += 1;
+        if (done) {
+          break;
+        }
+      }
+      continue;
+    }
+
+    output += current;
+    index += 1;
+  }
+
+  return output;
+}
 
 function quoteLikeBridge(value: string): string {
   let output = "\"";
