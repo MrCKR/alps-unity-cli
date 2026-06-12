@@ -5,7 +5,7 @@ import test from "node:test";
 const sourceUrl = new URL("../unity-package/Editor/AlpsUnityBridge.cs", import.meta.url);
 const readmeUrl = new URL("../README.md", import.meta.url);
 
-test("Unity Bridge exposes documented camera, screenshot, prefab, material, graphics and physics commands", async () => {
+test("Unity Bridge exposes documented camera, screenshot, prefab, material, graphics, physics, shader and texture commands", async () => {
   const source = await readFile(sourceUrl, "utf8");
   const readme = await readFile(readmeUrl, "utf8");
   const bridgeSection = readme.slice(readme.indexOf("## Unity Editor Bridge"), readme.indexOf("## Batch Automation"));
@@ -22,6 +22,10 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, material, grap
   assert.match(source, /private static readonly string\[\] MaterialCommands = \{ "material\.info", "material\.create", "material\.assign", "material\.set" \}/);
   assert.match(source, /private static readonly string\[\] GraphicsCommands = \{ "graphics\.quality", "graphics\.settings", "graphics\.screenshot" \}/);
   assert.match(source, /private static readonly string\[\] PhysicsCommands = \{ "physics\.settings", "physics\.raycast", "physics\.simulation" \}/);
+  assert.match(source, /CapabilityJson\("shader", ShaderCommands\)/);
+  assert.match(source, /CapabilityJson\("texture", TextureCommands\)/);
+  assert.match(source, /private static readonly string\[\] ShaderCommands = \{ "shader\.info", "shader\.read", "shader\.create", "shader\.update" \}/);
+  assert.match(source, /private static readonly string\[\] TextureCommands = \{ "texture\.info", "texture\.create", "texture\.sprite", "texture\.import-settings" \}/);
   assert.match(source, /case "camera\.list"/);
   assert.match(source, /case "camera\.info"/);
   assert.match(source, /case "camera\.screenshot"/);
@@ -43,9 +47,40 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, material, grap
   assert.match(source, /case "physics\.settings"/);
   assert.match(source, /case "physics\.raycast"/);
   assert.match(source, /case "physics\.simulation"/);
-  assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.screenshot`, `screenshot\.capture`, `prefab\.info`, `prefab\.create`, `prefab\.stage-open`, `prefab\.stage-save`, `prefab\.stage-close`, `prefab\.hierarchy`, `material\.info`, `material\.create`, `material\.assign`, `material\.set`, `graphics\.quality`, `graphics\.settings`, `graphics\.screenshot`, `physics\.settings`, `physics\.raycast` and `physics\.simulation`/);
+
+  assert.match(source, /case "shader\.info"/);
+  assert.match(source, /case "shader\.read"/);
+  assert.match(source, /case "shader\.create"/);
+  assert.match(source, /case "shader\.update"/);
+  assert.match(source, /case "texture\.info"/);
+  assert.match(source, /case "texture\.create"/);
+  assert.match(source, /case "texture\.sprite"/);
+  assert.match(source, /case "texture\.import-settings"/);
+  assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.screenshot`, `screenshot\.capture`, `prefab\.info`, `prefab\.create`, `prefab\.stage-open`, `prefab\.stage-save`, `prefab\.stage-close`, `prefab\.hierarchy`, `material\.info`, `material\.create`, `material\.assign`, `material\.set`, `graphics\.quality`, `graphics\.settings`, `graphics\.screenshot`, `physics\.settings`, `physics\.raycast`, `physics\.simulation`, `shader\.info`, `shader\.read`, `shader\.create`, `shader\.update`, `texture\.info`, `texture\.create`, `texture\.sprite` and `texture\.import-settings`/);
   assert.doesNotMatch(bridgeSection, /live query\/edit\/screenshot/);
   assert.match(bridgeSection, /`scene hierarchy`, `go find`, `component set` and `script edit` are not routed by this package yet/);
+});
+
+test("Unity Bridge shader and texture operations expose diagnostics", async () => {
+  const source = await readFile(sourceUrl, "utf8");
+  const readme = await readFile(readmeUrl, "utf8");
+
+  assert.match(source, /ShaderUtil,UnityEditor/);
+  assert.match(source, /GetShaderMessages/);
+  assert.match(source, /File\.ReadAllText\(fullPath, Encoding\.UTF8\)/);
+  assert.match(source, /File\.WriteAllText\(fullPath, content, new UTF8Encoding\(false\)\)/);
+  assert.match(source, /TextureImporterType\.Sprite/);
+  assert.match(source, /TextureImporterJson/);
+  assert.match(source, /SaveAndReimport\(\)/);
+  assert.match(source, /E_SHADER_NOT_FOUND/);
+  assert.match(source, /E_TEXTURE_NOT_FOUND/);
+  assert.match(source, /E_IMPORT_FAILED/);
+  assert.match(source, /plannedEffects/);
+  assert.match(readme, /`shader info\/read\/create\/update`/);
+  assert.match(readme, /`texture info\/create\/sprite\/import-settings`/);
+  assert.match(readme, /`E_SHADER_NOT_FOUND`/);
+  assert.match(readme, /`E_TEXTURE_NOT_FOUND`/);
+  assert.match(readme, /`E_IMPORT_FAILED`/);
 });
 
 test("Unity Bridge camera screenshot captures render texture and returns artifact metadata", async () => {
@@ -171,5 +206,5 @@ test("Unity Bridge screenshot validates path, format, overwrite and busy diagnos
   assert.match(source, /Path\.GetFullPath/);
   assert.match(readme, /`E_CAMERA_NOT_FOUND` for `camera info` when a target Camera cannot be resolved/);
   assert.match(readme, /`E_TARGET_NOT_FOUND` for `camera screenshot` when the target is empty or cannot be resolved/);
-  assert.match(readme, /C# runtime behavior for empty camera targets, missing Cameras, screenshot IO failures, actual PNG\/JPG artifacts, Prefab Stage open\/save\/close, Prefab dirty conflicts, nested\/variant Prefab summaries, Material asset creation, Renderer\/UI Graphic assignment, Material property writes, GraphicsSettings\/QualitySettings persistence, render pipeline asset resolution, Physics\/Physics2D project setting persistence, raycast collision hits and explicit simulation steps must still be proven by real Windows \+ Unity Editor validation/);
+  assert.match(readme, /C# runtime behavior for empty camera targets, missing Cameras, screenshot IO failures, actual PNG\/JPG artifacts, Prefab Stage open\/save\/close, Prefab dirty conflicts, nested\/variant Prefab summaries, Material asset creation, Renderer\/UI Graphic assignment, Material property writes, GraphicsSettings\/QualitySettings persistence, render pipeline asset resolution, Physics\/Physics2D project setting persistence, raycast collision hits and explicit simulation steps, Shader import diagnostics and TextureImporter mutations must still be proven by real Windows \+ Unity Editor validation/);
 });
