@@ -71,14 +71,16 @@ export class JobRunner {
     if (terminalStatuses.includes(job.status)) {
       throw new Error(`Job is already terminal: ${job.status}`);
     }
+    let processKilled = false;
     if (job.pid) {
       try {
         process.kill(job.pid);
+        processKilled = true;
       } catch {
         // Process may already be gone; the persisted state is still updated below.
       }
     }
-    return this.store.markTerminal(id, "cancelled", { error: { code: "JOB_CANCELLED", message: "Job was cancelled." } });
+    return this.store.markTerminal(id, "cancelled", { error: { code: "JOB_CANCELLED", message: "Job was cancelled.", details: timeoutDetails(true, true, processKilled, false) } });
   }
 
   async logs(id: string, tail = 100): Promise<{ logPath: string; lines: string[] }> {
@@ -181,7 +183,7 @@ export class JobRunner {
           if (timedOut) {
             const timedOutJob = await this.store.markTerminal(job.id, "timeout", {
               exitCode: code,
-              error: { code: "JOB_TIMEOUT", message: "Unity batchmode job exceeded timeout." }
+              error: { code: "E_EXECUTION_TIMEOUT", message: "Unity batchmode job exceeded timeout.", details: timeoutDetails(true, false, true, false) }
             });
             resolve(timedOutJob);
             return;
@@ -255,6 +257,10 @@ export class JobRunner {
       return undefined;
     }
   }
+}
+
+function timeoutDetails(cancelAttempted: boolean, cancelled: boolean, processKilled: boolean, domainReloadObserved: boolean): Record<string, boolean> {
+  return { cancelAttempted, cancelled, processKilled, domainReloadObserved };
 }
 
 function codeDiagnosticCode(log: string): string {

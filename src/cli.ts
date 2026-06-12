@@ -305,10 +305,18 @@ async function startUnityJob(kind: JobKind, flags: Record<string, string | boole
   const waitTimeoutMs = getNumber(flags, "wait-timeout-ms") ?? timeoutMs ?? 600000;
   const waited = await runtime.runner.wait(job.id, waitTimeoutMs);
   if (!terminalStatuses.has(waited.status)) {
-    return failure(requestId, "WAIT_TIMEOUT", `Job did not reach a terminal state within ${waitTimeoutMs}ms.`, [
+    return failure(requestId, "E_EXECUTION_TIMEOUT", `Job did not reach a terminal state within ${waitTimeoutMs}ms.`, [
       `Run alps-unity job status --id ${job.id}.`,
-      `Run alps-unity job logs --id ${job.id}.`
-    ]);
+      `Run alps-unity job logs --id ${job.id}.`,
+      `Run alps-unity job cancel --id ${job.id} if the Unity process should be stopped.`
+    ], {
+      jobId: job.id,
+      timeoutMs: waitTimeoutMs,
+      cancelAttempted: false,
+      cancelled: false,
+      processKilled: false,
+      domainReloadObserved: false
+    });
   }
   return success(requestId, summarizeJob(waited));
 }

@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { dirname, relative, resolve } from "node:path";
 import { stdin } from "node:process";
 import { getBoolean, getNumber, getString } from "./args.js";
 import { executeBridgePayload, type BridgeRuntime } from "./bridge-commands.js";
@@ -66,7 +66,16 @@ export async function handleCode(command: string | undefined, flags: Record<stri
     refs: getString(flags, "refs") ?? ""
   };
 
-  await writeManifest(artifactDir, requestId, projectPath, source.value, channel.value, timeoutMs, parsedArgs.value);
+  const sourceArtifactResult = await writeSourceArtifact(artifactDir, source.value);
+  if (!sourceArtifactResult.ok) {
+    return failure(requestId, "E_ARTIFACT_WRITE_FAILED", `Failed to write Runtime Code source artifact: ${sourceArtifactResult.message}`, ["Check --artifact-dir permissions and free disk space."], { artifactDir, artifactPath: sourceArtifactResult.path });
+  }
+
+  const manifest = manifestData(artifactDir, requestId, undefined, projectPath, source.value, channel.value, timeoutMs, parsedArgs.value);
+  const manifestResult = await writeManifest(artifactDir, manifest);
+  if (!manifestResult.ok) {
+    return failure(requestId, "E_ARTIFACT_WRITE_FAILED", `Failed to write Runtime Code artifact manifest: ${manifestResult.message}`, ["Check --artifact-dir permissions and free disk space."], { artifactDir, manifestPath: resolve(artifactDir, "manifest.json") });
+  }
 
   if (channel.value === "live" && !getBoolean(flags, "job")) {
     return executeBridgePayload(requestId, "code.exec", payload, flags, runtime);
@@ -159,18 +168,61 @@ function parseJsonObject(value: string): { ok: true; value: Record<string, unkno
   }
 }
 
-async function writeManifest(artifactDir: string, requestId: string, projectPath: string, source: CodeSource, channel: string, timeoutMs: number, args: Record<string, unknown>): Promise<void> {
-  await mkdir(artifactDir, { recursive: true });
-  await writeFile(resolve(artifactDir, "manifest.json"), `${JSON.stringify({
+function manifestData(artifactDir: string, requestId: string, jobId: string | undefined, projectPath: string, source: CodeSource, channel: string, timeoutMs: number, args: Record<string, unknown>): Record<string, unknown> {
+  const sourceArtifactPath = source.path ?? resolve(artifactDir, "source.csx");
+  return {
     requestId,
+    jobId: jobId ?? null,
     command: "code.exec",
     createdAt: new Date().toISOString(),
     producer: "alps-unity-cli",
     projectPath,
+    artifact: [
+      {
+        kind: "source",
+        path: sourceArtifactPath,
+        relativePath: relative(artifactDir, sourceArtifactPath) || ".",
+        sha256: source.sha256,
+        sizeBytes: source.sizeBytes
+      }
+    ],
+    artifacts: [
+      {
+        kind: "source",
+        path: sourceArtifactPath,
+        relativePath: relative(artifactDir, sourceArtifactPath) || ".",
+        sha256: source.sha256,
+        sizeBytes: source.sizeBytes
+      }
+    ],
     source: { kind: source.kind, path: source.path, sha256: source.sha256, sizeBytes: source.sizeBytes },
     execution: { channel, timeoutMs },
     input: { args }
-  }, null, 2)}\n`, "utf8");
+  };
+}
+
+async function writeSourceArtifact(artifactDir: string, source: CodeSource): Promise<{ ok: true } | { ok: false; message: string; path: string }> {
+  const artifactPath = source.path ?? resolve(artifactDir, "source.csx");
+  if (source.path) {
+    return { ok: true };
+  }
+  try {
+    await mkdir(dirname(artifactPath), { recursive: true });
+    await writeFile(artifactPath, source.text, "utf8");
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : String(error), path: artifactPath };
+  }
+}
+
+async function writeManifest(artifactDir: string, manifest: Record<string, unknown>): Promise<{ ok: true } | { ok: false; message: string }> {
+  try {
+    await mkdir(artifactDir, { recursive: true });
+    await writeFile(resolve(artifactDir, "manifest.json"), `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : String(error) };
+  }
 }
 
 async function startBatchCodeJob(
@@ -190,11 +242,16 @@ async function startBatchCodeJob(
 
   const bridge = await ensurePackageBridge(projectPath);
   const sourcePath = source.path ?? resolve(artifactDir, "source.csx");
-  if (!source.path) {
-    await mkdir(dirname(sourcePath), { recursive: true });
-    await writeFile(sourcePath, source.text, "utf8");
-  }
   const resultPath = resolve(artifactDir, "result.json");
+  const result = {
+    command: "code.exec",
+    mode: "agent-job",
+    execution: { channel: "batchmode", timeoutMs, exitState: "queued" },
+    source: { kind: source.kind, path: source.path, sha256: source.sha256, sizeBytes: source.sizeBytes },
+    artifactDir,
+    resultPath,
+    bridge
+  };
   const job = await runtime.runner.start({
     kind: "code",
     projectPath,
@@ -209,18 +266,25 @@ async function startBatchCodeJob(
       "-alpsCodeDefines", String(payload.defines ?? ""),
       "-alpsCodeRefs", String(payload.refs ?? ""),
       "-alpsArtifactDir", artifactDir,
+      "-alpsTimeoutMs", String(timeoutMs),
+      "-alpsProjectPath", projectPath,
       "-alpsCodeResult", resultPath
     ],
-    result: {
-      command: "code.exec",
-      mode: "agent-job",
-      execution: { channel: "batchmode", timeoutMs, exitState: "queued" },
-      source: { kind: source.kind, path: source.path, sha256: source.sha256, sizeBytes: source.sizeBytes },
-      artifactDir,
-      resultPath,
-      bridge
-    }
+    result
   });
+  const manifestResult = await writeManifest(artifactDir, manifestData(artifactDir, requestId, job.id, projectPath, source, "batchmode", timeoutMs, payload.argsJson && typeof payload.argsJson === "string" ? JSON.parse(payload.argsJson) as Record<string, unknown> : {}));
+  if (!manifestResult.ok) {
+    const cancelled = await runtime.runner.cancel(job.id).catch(() => undefined);
+    return failure(requestId, "E_ARTIFACT_WRITE_FAILED", `Failed to write Runtime Code artifact manifest: ${manifestResult.message}`, ["Check --artifact-dir permissions and free disk space before rerunning code exec."], {
+      jobId: job.id,
+      artifactDir,
+      manifestPath: resolve(artifactDir, "manifest.json"),
+      cancelAttempted: true,
+      cancelled: cancelled?.status === "cancelled",
+      processKilled: Boolean(cancelled?.error?.details && typeof cancelled.error.details === "object" && (cancelled.error.details as { processKilled?: unknown }).processKilled),
+      domainReloadObserved: false
+    });
+  }
 
   if (!getBoolean(flags, "wait")) {
     return success(requestId, summarizeJob(job));
@@ -229,10 +293,18 @@ async function startBatchCodeJob(
   const waitTimeoutMs = getNumber(flags, "wait-timeout-ms") ?? timeoutMs;
   const waited = await runtime.runner.wait(job.id, waitTimeoutMs);
   if (!["succeeded", "failed", "cancelled", "timeout"].includes(waited.status)) {
-    return failure(requestId, "WAIT_TIMEOUT", `Job did not reach a terminal state within ${waitTimeoutMs}ms.`, [
+    return failure(requestId, "E_EXECUTION_TIMEOUT", `Job did not reach a terminal state within ${waitTimeoutMs}ms.`, [
       `Run alps-unity job status --id ${job.id}.`,
-      `Run alps-unity job logs --id ${job.id}.`
-    ]);
+      `Run alps-unity job logs --id ${job.id}.`,
+      `Run alps-unity job cancel --id ${job.id} if the Unity process should be stopped.`
+    ], {
+      jobId: job.id,
+      timeoutMs: waitTimeoutMs,
+      cancelAttempted: false,
+      cancelled: false,
+      processKilled: false,
+      domainReloadObserved: false
+    });
   }
   return success(requestId, summarizeJob(waited));
 }

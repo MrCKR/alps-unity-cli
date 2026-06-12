@@ -597,7 +597,7 @@ namespace AlpsUnityCli
                 return ErrorJson("E_CODE_SOURCE_INVALID", "Code source is empty.", "Pass --file, --stdin or --code with non-empty C# source.");
             }
 
-            var result = ExecuteCodeSource(request.RequestId, source, request.StringArg("argsJson"), request.StringArg("refs"), request.StringArg("defines"), startedAt);
+            var result = ExecuteCodeSource(request, source, startedAt);
             WriteLog("code_exec requestId=" + request.RequestId + " ok=" + result.Ok + " exitState=" + result.ExitState);
             if (!result.Ok)
             {
@@ -606,8 +606,10 @@ namespace AlpsUnityCli
             return SuccessJson(result.DataJson);
         }
 
-        private static CodeExecutionResult ExecuteCodeSource(string requestId, string source, string argsJson, string refsCsv, string definesCsv, DateTime startedAt)
+        private static CodeExecutionResult ExecuteCodeSource(BridgeRequest request, string source, DateTime startedAt)
         {
+            var requestId = request.RequestId;
+            var argsJson = request.StringArg("argsJson");
             var provider = new CSharpCodeProvider();
             var parameters = new CompilerParameters
             {
@@ -615,11 +617,11 @@ namespace AlpsUnityCli
                 GenerateInMemory = true,
                 TreatWarningsAsErrors = false
             };
-            foreach (var reference in DefaultCodeReferences(refsCsv))
+            foreach (var reference in DefaultCodeReferences(request.StringArg("refs")))
             {
                 parameters.ReferencedAssemblies.Add(reference);
             }
-            foreach (var define in SplitCsv(definesCsv))
+            foreach (var define in SplitCsv(request.StringArg("defines")))
             {
                 parameters.CompilerOptions += " /define:" + define;
             }
@@ -654,7 +656,7 @@ namespace AlpsUnityCli
                 Console.SetOut(previousOut);
                 Console.SetError(previousError);
                 var endedAt = DateTime.UtcNow;
-                var dataJson = CodeSuccessDataJson(startedAt, endedAt, stdout.ToString(), stderr.ToString(), returnValue);
+                var dataJson = CodeSuccessDataJson(request, startedAt, endedAt, stdout.ToString(), stderr.ToString(), returnValue);
                 return CodeExecutionResult.Success(dataJson);
             }
             catch (TargetInvocationException exception)
@@ -1691,6 +1693,11 @@ namespace AlpsUnityCli
             return Directory.GetParent(Application.dataPath).FullName;
         }
 
+        private static string InstanceId()
+        {
+            return System.Diagnostics.Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture);
+        }
+
         private static string HierarchyPath(GameObject gameObject)
         {
             var names = new Stack<string>();
@@ -1995,9 +2002,12 @@ namespace AlpsUnityCli
             return "[" + string.Join(",", items.ToArray()) + "]";
         }
 
-        private static string CodeSuccessDataJson(DateTime startedAt, DateTime endedAt, string stdout, string stderr, object returnValue)
+        private static string CodeSuccessDataJson(BridgeRequest request, DateTime startedAt, DateTime endedAt, string stdout, string stderr, object returnValue)
         {
-            return "{\"command\":\"code.exec\",\"mode\":\"live\",\"execution\":{\"channel\":\"live\",\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"endedAt\":" + Quote(endedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"durationMs\":" + ((long)(endedAt - startedAt).TotalMilliseconds).ToString(CultureInfo.InvariantCulture) + ",\"exitState\":\"completed\"},\"compile\":{\"ok\":true,\"diagnostics\":[]},\"runtime\":{\"ok\":true,\"returnValue\":" + ReturnValueJson(returnValue) + ",\"stdout\":" + Quote(stdout) + ",\"stderr\":" + Quote(stderr) + "},\"artifacts\":[],\"audit\":{\"command\":\"code.exec\",\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"endedAt\":" + Quote(endedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"durationMs\":" + ((long)(endedAt - startedAt).TotalMilliseconds).ToString(CultureInfo.InvariantCulture) + ",\"effects\":{\"fileWrites\":[],\"assetRefresh\":false,\"domainReload\":false,\"playModeChanged\":false,\"packagesChanged\":false}},\"logs\":{\"bridge\":" + Quote(LogPath()) + "},\"nextActions\":[]}";
+            var timeoutMs = request.OptionalIntArg("timeoutMs");
+            var timeoutJson = timeoutMs.HasValue ? timeoutMs.Value.ToString(CultureInfo.InvariantCulture) : "null";
+            var argsJson = request.StringArg("argsJson");
+            return "{\"command\":\"code.exec\",\"mode\":\"live\",\"execution\":{\"channel\":\"live\",\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"endedAt\":" + Quote(endedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"durationMs\":" + ((long)(endedAt - startedAt).TotalMilliseconds).ToString(CultureInfo.InvariantCulture) + ",\"timeoutMs\":" + timeoutJson + ",\"exitState\":\"completed\"},\"compile\":{\"ok\":true,\"diagnostics\":[]},\"runtime\":{\"ok\":true,\"returnValue\":" + ReturnValueJson(returnValue) + ",\"stdout\":" + Quote(stdout) + ",\"stderr\":" + Quote(stderr) + "},\"artifacts\":[],\"audit\":{\"requestId\":" + Quote(request.RequestId) + ",\"projectPath\":" + Quote(ProjectRoot()) + ",\"instanceId\":" + Quote(InstanceId()) + ",\"unityVersion\":" + Quote(Application.unityVersion) + ",\"bridgeVersion\":\"com.alps.unity-cli.bridge\",\"initiator\":\"cli.live\",\"input\":{\"sourceKind\":" + Quote(request.StringArg("sourceKind")) + ",\"sourcePath\":" + Quote(request.StringArg("sourcePath")) + ",\"sourceSha256\":" + Quote(request.StringArg("sourceSha256")) + ",\"args\":" + (string.IsNullOrEmpty(argsJson) ? "{}" : argsJson) + "},\"execution\":{\"timeoutMs\":" + timeoutJson + ",\"exitState\":\"completed\"},\"artifacts\":[],\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"endedAt\":" + Quote(endedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"durationMs\":" + ((long)(endedAt - startedAt).TotalMilliseconds).ToString(CultureInfo.InvariantCulture) + ",\"effects\":{\"fileWrites\":[],\"assetRefresh\":false,\"domainReload\":false,\"playModeChanged\":false,\"packagesChanged\":false}},\"logs\":{\"bridge\":" + Quote(LogPath()) + "},\"nextActions\":[]}";
         }
 
         private static string CodeDetailsJson(string diagnosticsJson, string exceptionTypeJson, string messageJson, string stackTraceJson, string stdout, string stderr)
