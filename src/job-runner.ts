@@ -188,10 +188,11 @@ export class JobRunner {
           }
 
           const result = await this.finalResult(latest);
+          const diagnostic = code === 0 ? undefined : await this.failureDiagnostic(latest, code);
           const completed = await this.store.markTerminal(job.id, code === 0 ? "succeeded" : "failed", {
             exitCode: code,
-            result,
-            error: code === 0 ? undefined : { code: "UNITY_BATCHMODE_FAILED", message: `Unity exited with code ${code}.` }
+            result: diagnostic ? { ...result, diagnostic } : result,
+            error: code === 0 ? undefined : diagnostic ?? { code: "UNITY_BATCHMODE_FAILED", message: `Unity exited with code ${code}.` }
           });
           resolve(completed);
         } catch (error) {
@@ -209,4 +210,49 @@ export class JobRunner {
     const summary = await readUnityTestSummary(job.result.resultPath);
     return summary ? { ...job.result, summary } : job.result;
   }
+
+  private async failureDiagnostic(job: JobRecord, code: number | null): Promise<{ code: string; message: string }> {
+    if (job.kind !== "package") {
+      return { code: "UNITY_BATCHMODE_FAILED", message: `Unity exited with code ${code}.` };
+    }
+
+    const log = await this.readLog(job.logPath);
+    const message = firstMatchingLine(log, /([^\r\n]*Packages[\\/]com\.alps\.unity-cli\.bridge[^\r\n]*error CS\d+:[^\r\n]*)/i)
+      ?? firstMatchingLine(log, /([^\r\n]*error CS\d+:[^\r\n]*)/i)
+      ?? firstMatchingLine(log, /E_PACKAGE_RESOLVE_FAILED:\s*(.+)/i)
+      ?? firstMatchingLine(log, /(Another Unity instance is running[^\r\n]*|project is already open[^\r\n]*|AssetDatabase is busy[^\r\n]*|Refresh busy[^\r\n]*)/i)
+      ?? firstMatchingLine(log, /(Package Manager[^\r\n]+)/i)
+      ?? `Unity PackageManager resolve failed with exit code ${code}.`;
+
+    return { code: packageDiagnosticCode(log), message };
+  }
+
+  private async readLog(path: string): Promise<string> {
+    try {
+      return await readFile(path, "utf8");
+    } catch {
+      return "";
+    }
+  }
+}
+
+function packageDiagnosticCode(log: string): string {
+  if (/Packages[\\/]com\.alps\.unity-cli\.bridge[^\r\n]*error CS\d+|error CS\d+/i.test(log)) {
+    return "BRIDGE_COMPILE_FAILED";
+  }
+  if (/version conflict|dependency conflict|conflict/i.test(log)) {
+    return "PACKAGE_VERSION_CONFLICT";
+  }
+  if (/Another Unity instance is running|project is already open|AssetDatabase is busy|Refresh busy/i.test(log)) {
+    return "UNITY_BUSY";
+  }
+  if (/E_PACKAGE_RESOLVE_FAILED/i.test(log)) {
+    return "PACKAGE_RESOLVE_FAILED";
+  }
+  return "PACKAGE_RESOLVE_FAILED";
+}
+
+function firstMatchingLine(log: string, pattern: RegExp): string | undefined {
+  const match = pattern.exec(log);
+  return match?.[1]?.trim() || match?.[0]?.trim();
 }
