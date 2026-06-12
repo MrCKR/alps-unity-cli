@@ -170,6 +170,64 @@ test("prefab commands forward paths, pagination and planned effects", async () =
   assert.deepEqual((create.data as { plannedEffects: unknown[] }).plannedEffects, [{ type: "prefab.create", path: "Assets/Prefabs/Player.prefab" }]);
 });
 
+test("ui commands forward creation, document and hierarchy arguments", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+  const bridgeExecute = async (payload: BridgeRequest) => {
+    requests.push(payload);
+    return { ok: true, data: { plannedEffects: payload.command.includes("create") ? [{ type: payload.command, args: payload.args }] : [], document: payload.command.includes("document") ? { path: payload.args.uxml ?? payload.args.path } : undefined } };
+  };
+
+  const canvas = await execute(["ui", "canvas/create", "HUD"], { ...runtime, bridgeExecute });
+  const text = await execute(["ui", "text/create", "Title", "--parent", "HUD", "--text", "Start", "--width", "320", "--height", "80", "--x", "10", "--y", "20", "--font-size", "32"], { ...runtime, bridgeExecute });
+  const button = await execute(["ui", "button/create", "PlayButton", "--canvas", "HUD", "--label", "Play"], { ...runtime, bridgeExecute });
+  const image = await execute(["ui", "image/create", "Logo", "--parent", "HUD", "--sprite", "Assets/UI/logo.png", "--color", "#ffffff"], { ...runtime, bridgeExecute });
+  const documentCreate = await execute(["ui", "document/create", "--name", "MainUIDocument", "--uxml", "Assets/UI/Main.uxml", "--uss", "Assets/UI/Main.uss", "--panel-settings", "Assets/UI/Panel.asset", "--overwrite"], { ...runtime, bridgeExecute });
+  const documentInfo = await execute(["ui", "document/info", "MainUIDocument", "--uss", "Assets/UI/Main.uss"], { ...runtime, bridgeExecute });
+  const hierarchy = await execute(["ui", "hierarchy", "HUD", "--page-size", "25", "--cursor", "50"], { ...runtime, bridgeExecute });
+
+  assert.equal(canvas.ok, true);
+  assert.equal(text.ok, true);
+  assert.equal(button.ok, true);
+  assert.equal(image.ok, true);
+  assert.equal(documentCreate.ok, true);
+  assert.equal(documentInfo.ok, true);
+  assert.equal(hierarchy.ok, true);
+  assert.deepEqual(requests.map((request) => request.command), ["ui.canvas.create", "ui.text.create", "ui.button.create", "ui.image.create", "ui.document.create", "ui.document.info", "ui.hierarchy"]);
+  assert.deepEqual(requests[0].args, { name: "HUD" });
+  assert.deepEqual(requests[1].args, { name: "Title", parent: "HUD", text: "Start", width: 320, height: 80, x: 10, y: 20, fontSize: 32 });
+  assert.deepEqual(requests[2].args, { name: "PlayButton", parent: "HUD", text: "Play" });
+  assert.deepEqual(requests[3].args, { name: "Logo", parent: "HUD", sprite: "Assets/UI/logo.png", color: "#ffffff" });
+  assert.deepEqual(requests[4].args, { name: "MainUIDocument", uxml: "Assets/UI/Main.uxml", uss: "Assets/UI/Main.uss", panelSettings: "Assets/UI/Panel.asset", overwrite: true });
+  assert.deepEqual(requests[5].args, { target: "MainUIDocument", uss: "Assets/UI/Main.uss" });
+  assert.deepEqual(requests[6].args, { pageSize: 25, cursor: "50", target: "HUD" });
+});
+
+test("ui document info reads UXML offline when bridge endpoint is absent", async () => {
+  const runtime = await makeRuntime();
+  const uxmlPath = join(runtime.dataDir, "Main.uxml");
+  await writeFile(uxmlPath, "<ui:UXML xmlns:ui=\"UnityEngine.UIElements\"><ui:VisualElement name=\"Root\" /></ui:UXML>\n", "utf8");
+
+  const result = await execute(["ui", "document/info", uxmlPath], runtime);
+
+  assert.equal(result.ok, true);
+  assert.equal((result.data as { mode: string }).mode, "offline-reader");
+  assert.equal((result.data as { document: { kind: string } }).document.kind, "uxml");
+  assert.deepEqual((result.data as { diagnostics: Array<{ code: string }> }).diagnostics.map((item) => item.code), ["UI_DOCUMENT_READ_OK"]);
+});
+
+test("ui bridge errors preserve structured diagnostics", async () => {
+  const runtime = await makeRuntime();
+  const result = await execute(["ui", "document/create", "--uxml", "Assets/UI/Main.uxml", "--panel-settings", "Assets/UI/Missing.asset"], {
+    ...runtime,
+    bridgeExecute: async () => ({ ok: false, error: { code: "E_UI_PANEL_SETTINGS_NOT_FOUND", message: "PanelSettings asset not found: Assets/UI/Missing.asset" }, nextActions: ["Create a PanelSettings asset in Unity."] })
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_UI_PANEL_SETTINGS_NOT_FOUND");
+  assert.deepEqual(result.error?.next_actions, ["Create a PanelSettings asset in Unity."]);
+});
+
 test("prefab bridge errors preserve structured diagnostics", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["prefab", "stage-close"], {
