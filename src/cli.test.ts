@@ -227,6 +227,8 @@ test("package install updates manifest, deploys bridge and can start package res
   assert.equal(jobData.result.installedVersion, "2.0.0");
   assert.equal(jobData.result.bridge.dependencyName, "com.alps.unity-cli.bridge");
   assert.match(await readFile(join(jobData.result.bridge.bridgePath, "Editor", "AlpsUnityBatch.cs"), "utf8"), /ResolvePackages/);
+  const bridgeManifest = JSON.parse(await readFile(join(jobData.result.bridge.bridgePath, "package.json"), "utf8")) as { name: string };
+  assert.equal(bridgeManifest.name, "com.alps.unity-cli.bridge");
 
   const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string> };
   assert.equal(manifest.dependencies["com.acme.lib"], "2.0.0");
@@ -252,7 +254,7 @@ test("package write commands require an existing Unity manifest", async () => {
   assert.equal(result.error?.code, "MANIFEST_NOT_FOUND");
 });
 
-test("package resolve job maps PackageManager failures to package diagnostics", async () => {
+test("package resolve job maps version conflicts to package diagnostics", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
   const unity = await makeFakeUnity(`
@@ -266,8 +268,8 @@ process.exit(1);
   assert.equal(created.ok, true);
   const waited = await runtime.runner.wait((created.data as { jobId: string }).jobId, 3000);
   assert.equal(waited.status, "failed");
-  assert.equal(waited.error?.code, "PACKAGE_RESOLVE_FAILED");
-  assert.equal((waited.result?.diagnostic as { code: string }).code, "PACKAGE_RESOLVE_FAILED");
+  assert.equal(waited.error?.code, "PACKAGE_VERSION_CONFLICT");
+  assert.equal((waited.result?.diagnostic as { code: string }).code, "PACKAGE_VERSION_CONFLICT");
 });
 
 test("package registry and scoped registry commands mutate manifest", async () => {

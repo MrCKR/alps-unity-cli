@@ -235,14 +235,14 @@ export class JobRunner {
 }
 
 function packageDiagnosticCode(log: string): string {
-  if (/E_PACKAGE_RESOLVE_FAILED/i.test(log)) {
-    return "PACKAGE_RESOLVE_FAILED";
-  }
   if (/version conflict|dependency conflict|conflict/i.test(log)) {
     return "PACKAGE_VERSION_CONFLICT";
   }
   if (/Another Unity instance is running|project is already open|AssetDatabase is busy|Refresh busy|compil/i.test(log)) {
     return "UNITY_BUSY";
+  }
+  if (/E_PACKAGE_RESOLVE_FAILED/i.test(log)) {
+    return "PACKAGE_RESOLVE_FAILED";
   }
   return "PACKAGE_RESOLVE_FAILED";
 }
