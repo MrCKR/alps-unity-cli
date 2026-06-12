@@ -66,7 +66,10 @@ test("Unity Bridge shader and texture operations expose diagnostics", async () =
   const readme = await readFile(readmeUrl, "utf8");
 
   assert.match(source, /ShaderUtil,UnityEditor/);
-  assert.match(source, /GetShaderMessages/);
+  assert.match(source, /ShaderMessagesMethod/);
+  assert.match(source, /method\.Name != "GetShaderMessages"/);
+  assert.match(source, /parameters\.Length == 1 && parameters\[0\]\.ParameterType == typeof\(Shader\)/);
+  assert.doesNotMatch(source, /GetMethod\("GetShaderMessages", BindingFlags\.Static \| BindingFlags\.Public \| BindingFlags\.NonPublic\)/);
   assert.match(source, /File\.ReadAllText\(fullPath, Encoding\.UTF8\)/);
   assert.match(source, /File\.WriteAllText\(fullPath, content, new UTF8Encoding\(false\)\)/);
   assert.match(source, /TextureImporterType\.Sprite/);
