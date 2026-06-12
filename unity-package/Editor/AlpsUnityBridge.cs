@@ -924,8 +924,7 @@ namespace AlpsUnityCli
         private static List<string> ShaderMessagesJson(Shader shader)
         {
             var items = new List<string>();
-            var shaderUtil = Type.GetType("UnityEditor.ShaderUtil,UnityEditor");
-            var getMessages = shaderUtil == null ? null : shaderUtil.GetMethod("GetShaderMessages", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            var getMessages = ShaderMessagesMethod();
             if (getMessages == null)
             {
                 return items;
@@ -940,6 +939,28 @@ namespace AlpsUnityCli
                 items.Add(ShaderMessageJson(message));
             }
             return items;
+        }
+
+        private static MethodInfo ShaderMessagesMethod()
+        {
+            var shaderUtil = Type.GetType("UnityEditor.ShaderUtil,UnityEditor");
+            if (shaderUtil == null)
+            {
+                return null;
+            }
+            foreach (var method in shaderUtil.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
+            {
+                if (method.Name != "GetShaderMessages")
+                {
+                    continue;
+                }
+                var parameters = method.GetParameters();
+                if (parameters.Length == 1 && parameters[0].ParameterType == typeof(Shader))
+                {
+                    return method;
+                }
+            }
+            return null;
         }
 
         private static string ShaderMessageJson(object message)
