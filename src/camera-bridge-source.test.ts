@@ -60,8 +60,35 @@ test("Unity Bridge prefab operations expose structured diagnostics", async () =>
   assert.match(source, /E_PREFAB_DIRTY_CONFLICT/);
   assert.match(source, /E_PREFAB_STAGE_NOT_OPEN/);
   assert.match(source, /plannedEffects/);
-  assert.match(readme, /`prefab hierarchy <path>` pages hierarchy items with `pageInfo`/);
+  assert.match(source, /PrefabVariantJson/);
+  assert.match(source, /DependencySummaryJson/);
+  assert.match(source, /NestedPrefabReferencesJson/);
+  assert.match(source, /"\\\"variant\\\":"/);
+  assert.match(source, /"\\\"dependencies\\\":"/);
+  assert.match(source, /"\\\"nestedPrefabs\\\":"/);
+  assert.match(source, /PrefabAssetJson\(path, root, root\)/);
+  assert.match(readme, /`prefab info <path>` returns Prefab metadata including GUID, root name, asset type, `variant` base\/source paths and GUIDs, `dependencies\.items`, and `nestedPrefabs\.items` rather than counts only/);
+  assert.match(readme, /`prefab hierarchy <path>` pages hierarchy items with `pageInfo`, component summaries, the same Prefab variant\/dependency summary, `nestedPrefabs\.items` and `logPath`/);
   assert.match(readme, /`E_PREFAB_PATH_REQUIRED`, `E_PREFAB_PATH_INVALID`, `E_PREFAB_NOT_FOUND`, `E_ASSET_NOT_PREFAB`, `E_PREFAB_OUTPUT_EXISTS`, `E_PREFAB_DIRTY_CONFLICT`, `E_PREFAB_STAGE_NOT_OPEN`, `E_PREFAB_STAGE_MISMATCH` and `E_UNITY_BUSY`/);
+});
+
+
+test("Unity Bridge HTTP timeout prevents queued side effects from stale requests", async () => {
+  const source = await readFile(sourceUrl, "utf8");
+  const readme = await readFile(readmeUrl, "utf8");
+
+  assert.match(source, /CancelBeforeStart/);
+  assert.match(source, /TryStart/);
+  assert.match(source, /MarkTimedOut/);
+  assert.match(source, /bridge_request_timeout_cancelled/);
+  assert.match(source, /bridge_request_timeout_started/);
+  assert.match(source, /bridge_request_skipped_expired/);
+  assert.match(source, /bridge_request_completed_after_http_timeout/);
+  assert.match(source, /sideEffectSemantics/);
+  assert.match(source, /started-before-http-timeout/);
+  assert.match(source, /IsMutatingCommand/);
+  assert.match(readme, /the bridge cancels that queued work before execution and returns `E_UNITY_BUSY` with no side effects applied/);
+  assert.match(readme, /returns a success envelope with `status: "running"`, `sideEffectSemantics: "started-before-http-timeout"`, the original `requestId` and `logPath`/);
 });
 
 test("Unity Bridge screenshot validates path, format, overwrite and busy diagnostics", async () => {
