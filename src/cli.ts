@@ -36,6 +36,10 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
       return handleJob(command, parsed.flags, runtime, requestId);
     }
 
+    if (group === "package") {
+      return await handlePackage(command, parsed.positional.slice(2), parsed.flags, runtime, requestId);
+    }
+
     if (group === "editor" && command === "refresh") {
       return startUnityJob("refresh", parsed.flags, runtime, requestId, refreshArgs(parsed.flags), { action: "refresh", compile: getBoolean(parsed.flags, "compile") });
     }
@@ -75,6 +79,9 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
 
     return failure(requestId, "UNKNOWN_COMMAND", `Unknown command: ${argv.join(" ")}`, ["Run alps-unity --help."]);
   } catch (error) {
+    if (isPackageManagerError(error)) {
+      return failure(requestId, error.code, error.message, error.nextActions);
+    }
     return failure(requestId, "COMMAND_FAILED", error instanceof Error ? error.message : String(error));
   }
 }
@@ -137,6 +144,104 @@ function refreshArgs(flags: Record<string, string | boolean>): string[] {
   return args;
 }
 
+async function handlePackage(command: string | undefined, args: string[], flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult> {
+  const projectPath = resolve(getString(flags, "project") ?? process.cwd());
+  const {
+    addScopedRegistry,
+    clearRegistry,
+    installPackage,
+    packageInfo,
+    parsePackageSpec,
+    parseScopes,
+    readSnapshot,
+    removePackage,
+    removeScopedRegistry,
+    searchRegistry,
+    setRegistry,
+    validatePackageName,
+    validateRegistryUrl
+  } = await import("./package-manager.js");
+
+  if (command === "list") {
+    return success(requestId, await readSnapshot(projectPath));
+  }
+
+  if (command === "info") {
+    const name = validatePackageName(args[0] ?? getString(flags, "name"));
+    const info = await packageInfo(projectPath, name);
+    return info ? success(requestId, { projectPath, package: info }) : failure(requestId, "PACKAGE_NOT_FOUND", `Package not found: ${name}`, ["Run alps-unity package list to inspect installed packages."]);
+  }
+
+  if (command === "search") {
+    const query = validatePackageName(args[0] ?? getString(flags, "query"));
+    const registry = validateRegistryUrl(getString(flags, "registry") ?? (await readSnapshot(projectPath)).registry ?? "https://packages.unity.com");
+    return success(requestId, { registry, query, packages: await searchRegistry(registry, query) });
+  }
+
+  if (command === "install") {
+    const spec = parsePackageSpec(validatePackageName(args[0] ?? getString(flags, "name")), getString(flags, "version"));
+    const manifest = await installPackage(projectPath, spec);
+    return maybeResolvePackage(command, flags, runtime, requestId, projectPath, { action: "install", package: spec.name, ...manifest });
+  }
+
+  if (command === "remove") {
+    const name = validatePackageName(args[0] ?? getString(flags, "name"));
+    const manifest = await removePackage(projectPath, name);
+    return maybeResolvePackage(command, flags, runtime, requestId, projectPath, { action: "remove", package: name, ...manifest });
+  }
+
+  if (command === "resolve") {
+    return maybeResolvePackage(command, flags, runtime, requestId, projectPath, { action: "resolve" });
+  }
+
+  if (command === "registry") {
+    const action = args[0] ?? getString(flags, "action") ?? "get";
+    if (action === "get") {
+      const snapshot = await readSnapshot(projectPath);
+      return success(requestId, { projectPath, manifestPath: snapshot.manifestPath, registry: snapshot.registry });
+    }
+    if (action === "set") {
+      return success(requestId, { projectPath, ...(await setRegistry(projectPath, validateRegistryUrl(getString(flags, "url") ?? args[1]))) });
+    }
+    if (action === "clear") {
+      return success(requestId, { projectPath, ...(await clearRegistry(projectPath)) });
+    }
+    return failure(requestId, "UNKNOWN_PACKAGE_REGISTRY_COMMAND", "Expected package registry get, set or clear.");
+  }
+
+  if (command === "scoped-registry") {
+    const action = args[0] ?? getString(flags, "action") ?? "list";
+    if (action === "list") {
+      const snapshot = await readSnapshot(projectPath);
+      return success(requestId, { projectPath, manifestPath: snapshot.manifestPath, scopedRegistries: snapshot.scopedRegistries });
+    }
+    if (action === "add") {
+      const name = validatePackageName(getString(flags, "name") ?? args[1]);
+      const url = validateRegistryUrl(getString(flags, "url"));
+      const scopes = parseScopes(getString(flags, "scope") ?? getString(flags, "scopes"));
+      return success(requestId, { projectPath, ...(await addScopedRegistry(projectPath, { name, url, scopes })) });
+    }
+    if (action === "remove") {
+      const name = validatePackageName(getString(flags, "name") ?? args[1]);
+      return success(requestId, { projectPath, ...(await removeScopedRegistry(projectPath, name)) });
+    }
+    return failure(requestId, "UNKNOWN_SCOPED_REGISTRY_COMMAND", "Expected package scoped-registry list, add or remove.");
+  }
+
+  return failure(requestId, "UNKNOWN_PACKAGE_COMMAND", "Expected package list, info, search, install, remove, resolve, registry or scoped-registry.");
+}
+
+async function maybeResolvePackage(command: string, flags: Record<string, string | boolean>, runtime: Runtime, requestId: string, projectPath: string, result: Record<string, unknown>): Promise<CliResult> {
+  const unityPath = getString(flags, "unity") ?? discoverUnity();
+  if (!unityPath && !getBoolean(flags, "job")) {
+    return success(requestId, { ...result, projectPath, status: "manifest_updated", resolve: "skipped", nextActions: ["Pass --unity <path-to-Unity.exe> or set UNITY_EXE to run Unity PackageManager resolve as a job."] });
+  }
+  if (!unityPath) {
+    return failure(requestId, "UNITY_NOT_FOUND", "Unity.exe was not found.", ["Pass --unity <path-to-Unity.exe> or set UNITY_EXE."]);
+  }
+  return startUnityJob("package", flags, runtime, requestId, ["-executeMethod", "AlpsUnityCli.Batch.ResolvePackages", "-alpsPackageAction", command], result);
+}
+
 async function startUnityJob(kind: JobKind, flags: Record<string, string | boolean>, runtime: Runtime, requestId: string, unityArgs: string[], result: Record<string, unknown>): Promise<CliResult> {
   const projectPath = resolve(getString(flags, "project") ?? process.cwd());
   const unityPath = getString(flags, "unity") ?? discoverUnity();
@@ -163,6 +268,10 @@ async function startUnityJob(kind: JobKind, flags: Record<string, string | boole
     ]);
   }
   return success(requestId, summarizeJob(waited));
+}
+
+function isPackageManagerError(error: unknown): error is Error & { code: string; nextActions: string[] } {
+  return error instanceof Error && typeof (error as { code?: unknown }).code === "string" && Array.isArray((error as { nextActions?: unknown }).nextActions);
 }
 
 function summarizeJob(job: JobRecord): Record<string, unknown> {
@@ -193,6 +302,14 @@ function help(): Record<string, unknown> {
       "job status --id <jobId>",
       "job logs --id <jobId> [--tail 100]",
       "job cancel --id <jobId>",
+      "package list [--project <path>]",
+      "package info <name> [--project <path>]",
+      "package search <query> [--registry <url>]",
+      "package install <name[@version]> [--project <path>] [--unity <Unity.exe>] [--wait]",
+      "package remove <name> [--project <path>] [--unity <Unity.exe>] [--wait]",
+      "package resolve [--project <path>] [--unity <Unity.exe>] [--wait]",
+      "package registry get|set|clear [--url <url>]",
+      "package scoped-registry list|add|remove --name <name> --url <url> --scope <scope>",
       "editor refresh --compile [--wait] [--project <path>] [--unity <Unity.exe>]",
       "test run [--platform EditMode|PlayMode] [--wait]",
       "test poll --id <jobId>",
