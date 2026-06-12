@@ -140,6 +140,48 @@ test("scene screenshot forwards output path and overwrite", async () => {
   assert.deepEqual(requests[0].args, { path: "Artifacts/scene.jpg", format: "jpg", width: 800, height: 600, overwrite: true });
 });
 
+test("prefab commands forward paths, pagination and planned effects", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+  const bridgeExecute = async (payload: BridgeRequest) => {
+    requests.push(payload);
+    return { ok: true, data: { prefab: { path: payload.args.path }, plannedEffects: payload.command === "prefab.create" ? [{ type: payload.command, path: payload.args.path }] : [] } };
+  };
+
+  const info = await execute(["prefab", "info", "Assets/Prefabs/Player.prefab"], { ...runtime, bridgeExecute });
+  const create = await execute(["prefab", "create", "Player", "--path", "Assets/Prefabs/Player.prefab", "--overwrite"], { ...runtime, bridgeExecute });
+  const open = await execute(["prefab", "stage-open", "Assets/Prefabs/Player.prefab"], { ...runtime, bridgeExecute });
+  const hierarchy = await execute(["prefab", "hierarchy", "Assets/Prefabs/Player.prefab", "--page-size", "25", "--cursor", "50"], { ...runtime, bridgeExecute });
+  const save = await execute(["prefab", "stage-save"], { ...runtime, bridgeExecute });
+  const close = await execute(["prefab", "stage-close", "--save"], { ...runtime, bridgeExecute });
+
+  assert.equal(info.ok, true);
+  assert.equal(create.ok, true);
+  assert.equal(open.ok, true);
+  assert.equal(hierarchy.ok, true);
+  assert.equal(save.ok, true);
+  assert.equal(close.ok, true);
+  assert.deepEqual(requests.map((request) => request.command), ["prefab.info", "prefab.create", "prefab.stage-open", "prefab.hierarchy", "prefab.stage-save", "prefab.stage-close"]);
+  assert.deepEqual(requests[0].args, { path: "Assets/Prefabs/Player.prefab" });
+  assert.deepEqual(requests[1].args, { source: "Player", path: "Assets/Prefabs/Player.prefab", overwrite: true });
+  assert.deepEqual(requests[3].args, { pageSize: 25, cursor: "50", path: "Assets/Prefabs/Player.prefab" });
+  assert.deepEqual(requests[4].args, {});
+  assert.deepEqual(requests[5].args, { save: true });
+  assert.deepEqual((create.data as { plannedEffects: unknown[] }).plannedEffects, [{ type: "prefab.create", path: "Assets/Prefabs/Player.prefab" }]);
+});
+
+test("prefab bridge errors preserve structured diagnostics", async () => {
+  const runtime = await makeRuntime();
+  const result = await execute(["prefab", "stage-close"], {
+    ...runtime,
+    bridgeExecute: async () => ({ ok: false, error: { code: "E_PREFAB_DIRTY_CONFLICT", message: "Prefab Stage has unsaved changes." }, nextActions: ["Run alps-unity prefab stage-close --save."] })
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_PREFAB_DIRTY_CONFLICT");
+  assert.deepEqual(result.error?.next_actions, ["Run alps-unity prefab stage-close --save."]);
+});
+
 test("bridge errors return CLI failure envelope", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["go", "inspect", "Player"], {

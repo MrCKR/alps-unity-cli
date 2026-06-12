@@ -44,6 +44,12 @@ alps-unity camera info "Main Camera" --bridge-endpoint http://127.0.0.1:47392
 alps-unity camera screenshot "Main Camera" --output Artifacts\main-camera.png --width 1920 --height 1080 --format png --transparent --overwrite --bridge-endpoint http://127.0.0.1:47392
 alps-unity scene screenshot Artifacts\scene-view.jpg --width 1280 --height 720 --format jpg --quality 90 --overwrite --bridge-endpoint http://127.0.0.1:47392
 alps-unity screenshot capture Artifacts\after.png --bridge-endpoint http://127.0.0.1:47392
+alps-unity prefab info Assets\Prefabs\Player.prefab --bridge-endpoint http://127.0.0.1:47392
+alps-unity prefab create Player --path Assets\Prefabs\Player.prefab --overwrite --bridge-endpoint http://127.0.0.1:47392
+alps-unity prefab stage-open Assets\Prefabs\Player.prefab --bridge-endpoint http://127.0.0.1:47392
+alps-unity prefab hierarchy Assets\Prefabs\Player.prefab --page-size 100 --bridge-endpoint http://127.0.0.1:47392
+alps-unity prefab stage-save --bridge-endpoint http://127.0.0.1:47392
+alps-unity prefab stage-close --save --bridge-endpoint http://127.0.0.1:47392
 alps-unity package list --project C:\path\UnityProject
 alps-unity package info com.unity.textmeshpro --project C:\path\UnityProject
 alps-unity package search textmeshpro --registry https://packages.unity.com
@@ -69,11 +75,13 @@ Use `--wait-timeout-ms <ms>` to limit synchronous waiting. Use `--timeout-ms <ms
 
 `camera list` returns Camera summaries including hierarchy path, tag, enabled state, `targetTexture`, clear flags, projection, FOV/orthographic size and pixel dimensions. `camera info <target>` resolves by Camera name, hierarchy path or instance id. `camera screenshot <target>` and `scene screenshot` write PNG/JPG artifacts from the live Unity Editor Bridge and return `screenshotPath`, `artifactPath`, `format`, `width`, `height`, `requestId` and `logPath` in the shared envelope. Relative output paths are resolved under the Unity project root, output directories are created automatically, and existing files require `--overwrite`. Structured errors include `E_CAMERA_NOT_FOUND` for `camera info` when a target Camera cannot be resolved, `E_TARGET_NOT_FOUND` for `camera screenshot` when the target is empty or cannot be resolved, `E_SCENE_VIEW_NOT_AVAILABLE`, `E_OUTPUT_EXISTS`, `E_OUTPUT_PATH_REQUIRED`, `E_SCREENSHOT_FORMAT_UNSUPPORTED`, `E_IO_ERROR`, `E_UNITY_BUSY` and bridge connection diagnostics.
 
+`prefab info <path>` returns Prefab metadata including GUID, root name, asset type, variant flag and dependency count. `prefab create <source> --path <path>` creates a Prefab from a scene GameObject target or copies an existing Prefab asset and returns `plannedEffects`. `prefab stage-open`, `prefab stage-save` and `prefab stage-close --save` manage Prefab Stage lifecycle through the live Unity Editor Bridge. `prefab hierarchy <path>` pages hierarchy items with `pageInfo`, component summaries and `logPath` to avoid blocking large Prefabs. Prefab paths must be `Assets/*.prefab`. Structured errors include `E_PREFAB_PATH_REQUIRED`, `E_PREFAB_PATH_INVALID`, `E_PREFAB_NOT_FOUND`, `E_ASSET_NOT_PREFAB`, `E_PREFAB_OUTPUT_EXISTS`, `E_PREFAB_DIRTY_CONFLICT`, `E_PREFAB_STAGE_NOT_OPEN`, `E_PREFAB_STAGE_MISMATCH` and `E_UNITY_BUSY`.
+
 `package list` and `package info` read `Packages/manifest.json` and `Packages/packages-lock.json`. `package install`, `package remove`, `package registry` and `package scoped-registry` update `manifest.json` directly. When `--unity` or `UNITY_EXE` is available, `package install/remove/resolve` create a `package` job that invokes Unity batchmode with `AlpsUnityCli.Batch.ResolvePackages`; otherwise install/remove return a terminal `manifest_updated` result with a `nextActions` hint to run Unity resolve.
 
 ## Unity Editor Bridge
 
-`package install/remove/resolve` deploys the bundled `com.alps.unity-cli.bridge` package into the target Unity project. When the Editor compiles that package, `AlpsUnityBridge` starts a Windows loopback HTTP listener on `http://127.0.0.1:47392` and serves `POST /bridge/execute` for the currently bundled live Bridge commands only: `camera.list`, `camera.info`, `camera.screenshot`, `scene.screenshot` and `screenshot.capture`. Other CLI query/edit commands such as `scene hierarchy`, `go find`, `component set` and `script edit` are not routed by this package yet and return `E_BRIDGE_COMMAND_UNSUPPORTED` if sent to the bundled Bridge endpoint. The bridge executes Unity APIs on the Editor main thread and writes diagnostics to `<project>\Logs\AlpsUnityBridge.log`.
+`package install/remove/resolve` deploys the bundled `com.alps.unity-cli.bridge` package into the target Unity project. When the Editor compiles that package, `AlpsUnityBridge` starts a Windows loopback HTTP listener on `http://127.0.0.1:47392` and serves `POST /bridge/execute` for the currently bundled live Bridge commands only: `camera.list`, `camera.info`, `camera.screenshot`, `scene.screenshot`, `screenshot.capture`, `prefab.info`, `prefab.create`, `prefab.stage-open`, `prefab.stage-save`, `prefab.stage-close` and `prefab.hierarchy`. Other CLI query/edit commands such as `scene hierarchy`, `go find`, `component set` and `script edit` are not routed by this package yet and return `E_BRIDGE_COMMAND_UNSUPPORTED` if sent to the bundled Bridge endpoint. The bridge executes Unity APIs on the Editor main thread and writes diagnostics to `<project>\Logs\AlpsUnityBridge.log`.
 
 ## Batch Automation
 
@@ -130,7 +138,7 @@ Example `camera-test-screenshot.json`:
 
 Batch output includes a batch requestId, each step requestId/envelope, summary counts, aggregated `plannedEffects`, and a `logIndex` that links batch record path, step requestIds, jobIds, and Unity log paths.
 
-`--parallel` is intentionally restricted to commands declared parallel-safe. Mutating/artifact commands such as `screenshot capture`, `camera screenshot`, `scene screenshot`, `editor refresh`, `test run`, and `build run` must run serially; preflight returns a structured `BATCH_PARALLEL_CONFLICT` if a batch requests unsafe parallelism.
+`--parallel` is intentionally restricted to commands declared parallel-safe. Mutating/artifact commands such as `screenshot capture`, `camera screenshot`, `scene screenshot`, `prefab create`, `prefab stage-open`, `prefab stage-save`, `prefab stage-close`, `editor refresh`, `test run`, and `build run` must run serially; preflight returns a structured `BATCH_PARALLEL_CONFLICT` if a batch requests unsafe parallelism.
 
 ## Windows logs and diagnostics
 
@@ -144,7 +152,7 @@ The default diagnostic data and log directory is:
 
 ## Windows + Unity Editor Follow-up Verification
 
-Automated tests use fake Unity and injected bridge executors to verify CLI behavior without requiring Unity. TypeScript tests cover CLI protocol forwarding and failure-envelope preservation for Bridge responses; `src/camera-bridge-source.test.ts` is a source-level guard for the bundled C# Bridge implementation. These tests do not instantiate Unity Editor, so C# runtime behavior for empty camera targets, missing Cameras, screenshot IO failures and actual PNG/JPG artifacts must still be proven by real Windows + Unity Editor validation before release.
+Automated tests use fake Unity and injected bridge executors to verify CLI behavior without requiring Unity. TypeScript tests cover CLI protocol forwarding and failure-envelope preservation for Bridge responses; `src/camera-bridge-source.test.ts` is a source-level guard for the bundled C# Bridge implementation. These tests do not instantiate Unity Editor, so C# runtime behavior for empty camera targets, missing Cameras, screenshot IO failures, actual PNG/JPG artifacts, Prefab Stage open/save/close, Prefab dirty conflicts and nested/variant Prefab summaries must still be proven by real Windows + Unity Editor validation before release.
 
 - Unity Hub / `Unity.exe` discovery across installed Editor versions.
 - Unity Bridge endpoint discovery and live camera/scene/screenshot execution against an open Editor.

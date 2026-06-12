@@ -76,6 +76,9 @@ export function bridgeCommandName(group: string | undefined, command: string | u
   if (group === "asset" && ["search", "info", "mkdir", "import", "move", "delete"].includes(command ?? "")) {
     return `asset.${command}`;
   }
+  if (group === "prefab" && ["info", "create", "stage-open", "stage-save", "stage-close", "hierarchy"].includes(command ?? "")) {
+    return `prefab.${command}`;
+  }
   if (group === "script" && ["create", "read", "edit", "validate"].includes(command ?? "")) {
     return `script.${command}`;
   }
@@ -163,6 +166,23 @@ async function commandArgs(command: string, flags: Record<string, string | boole
       source: stringFlag(flags, "source"),
       destination: stringFlag(flags, "destination") ?? stringFlag(flags, "to"),
       type: stringFlag(flags, "type")
+    });
+  }
+
+  if (command.startsWith("prefab.")) {
+    if (command === "prefab.create") {
+      return compactArgs({
+        source: positionalTarget ?? stringFlag(flags, "source") ?? stringFlag(flags, "target"),
+        path: stringFlag(flags, "path") ?? stringFlag(flags, "destination") ?? stringFlag(flags, "to"),
+        overwrite: boolFlag(flags, "overwrite")
+      });
+    }
+    if (command === "prefab.stage-save" || command === "prefab.stage-close") {
+      return compactArgs({ path: positionalTarget ?? stringFlag(flags, "path"), save: boolFlag(flags, "save") });
+    }
+    return compactArgs({
+      ...queryArgs(flags),
+      path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "prefab")
     });
   }
 

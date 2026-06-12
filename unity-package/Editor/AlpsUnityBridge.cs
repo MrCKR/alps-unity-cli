@@ -4,11 +4,13 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Net;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 
 namespace AlpsUnityCli
@@ -21,6 +23,7 @@ namespace AlpsUnityCli
         private static readonly string[] CameraCommands = { "camera.list", "camera.info", "camera.screenshot" };
         private static readonly string[] SceneCommands = { "scene.screenshot" };
         private static readonly string[] ScreenshotCommands = { "screenshot.capture" };
+        private static readonly string[] PrefabCommands = { "prefab.info", "prefab.create", "prefab.stage-open", "prefab.stage-save", "prefab.stage-close", "prefab.hierarchy" };
         private static readonly Queue<BridgeWorkItem> WorkQueue = new Queue<BridgeWorkItem>();
         private static HttpListener listener;
         private static bool started;
@@ -115,7 +118,7 @@ namespace AlpsUnityCli
                 }
                 catch (BridgeCommandException exception)
                 {
-                    item.Response = ErrorJson(exception.Code, exception.Message, "Check output path, permissions, format parameters and AlpsUnityBridge.log.");
+                    item.Response = ErrorJson(exception.Code, exception.Message, exception.NextAction ?? "Check output path, permissions, format parameters and AlpsUnityBridge.log.");
                 }
                 catch (Exception exception)
                 {
@@ -148,6 +151,18 @@ namespace AlpsUnityCli
                 case "scene.screenshot":
                 case "screenshot.capture":
                     return SceneScreenshot(request);
+                case "prefab.info":
+                    return PrefabInfo(request);
+                case "prefab.create":
+                    return PrefabCreate(request);
+                case "prefab.stage-open":
+                    return PrefabStageOpen(request);
+                case "prefab.stage-save":
+                    return PrefabStageSave(request);
+                case "prefab.stage-close":
+                    return PrefabStageClose(request);
+                case "prefab.hierarchy":
+                    return PrefabHierarchy(request);
                 default:
                     return ErrorJson("E_BRIDGE_COMMAND_UNSUPPORTED", "Unsupported bridge command: " + request.Command, "Upgrade the Alps Unity Bridge package or use a registered CLI command.");
             }
@@ -245,12 +260,143 @@ namespace AlpsUnityCli
             return new ScreenshotResult(outputPath, format, width, height, transparent, quality);
         }
 
+        private static string PrefabInfo(BridgeRequest request)
+        {
+            var path = RequirePrefabPath(request.StringArg("path"));
+            var prefab = LoadPrefabAsset(path);
+            return SuccessJson("{\"prefab\":" + PrefabAssetJson(path, prefab) + ",\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string PrefabCreate(BridgeRequest request)
+        {
+            var source = request.StringArg("source");
+            var path = RequirePrefabOutputPath(request.StringArg("path"));
+            var overwrite = request.BoolArg("overwrite", false);
+            if (string.IsNullOrEmpty(source))
+            {
+                return ErrorJson("E_TARGET_NOT_FOUND", "Prefab create requires a source GameObject or Prefab asset path.", "Pass a hierarchy path, GameObject name, instance id, or existing Assets/*.prefab path.");
+            }
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(path) != null && !overwrite)
+            {
+                return ErrorJson("E_PREFAB_OUTPUT_EXISTS", "Prefab output already exists: " + path, "Pass --overwrite or choose a different Assets/*.prefab path.");
+            }
+
+            CreateAssetDirectory(path);
+            var sourcePrefab = AssetDatabase.LoadAssetAtPath<GameObject>(NormalizeAssetPath(source));
+            if (sourcePrefab != null)
+            {
+                if (AssetDatabase.LoadAssetAtPath<GameObject>(path) != null)
+                {
+                    AssetDatabase.DeleteAsset(path);
+                }
+                if (!AssetDatabase.CopyAsset(NormalizeAssetPath(source), path))
+                {
+                    return ErrorJson("E_PREFAB_CREATE_FAILED", "Failed to copy Prefab asset to: " + path, "Check destination path and Unity Console diagnostics.");
+                }
+                AssetDatabase.SaveAssets();
+                WriteLog("prefab_created source=" + source + " path=" + path + " mode=copy");
+                return SuccessJson(PrefabCreateJson(source, path, "copy"));
+            }
+
+            var gameObject = ResolveGameObject(source);
+            if (gameObject == null)
+            {
+                return ErrorJson("E_TARGET_NOT_FOUND", "Source GameObject not found: " + source, "Run alps-unity scene hierarchy or pass a hierarchy path / instance id.");
+            }
+            if (AssetDatabase.LoadAssetAtPath<GameObject>(path) != null)
+            {
+                AssetDatabase.DeleteAsset(path);
+            }
+            var saved = PrefabUtility.SaveAsPrefabAssetAndConnect(gameObject, path, InteractionMode.AutomatedAction);
+            if (saved == null)
+            {
+                return ErrorJson("E_PREFAB_CREATE_FAILED", "Failed to create Prefab at: " + path, "Check destination path, scene object validity and Unity Console diagnostics.");
+            }
+            AssetDatabase.SaveAssets();
+            WriteLog("prefab_created source=" + source + " path=" + path + " mode=scene");
+            return SuccessJson(PrefabCreateJson(source, path, "scene"));
+        }
+
+        private static string PrefabStageOpen(BridgeRequest request)
+        {
+            var path = RequirePrefabPath(request.StringArg("path"));
+            LoadPrefabAsset(path);
+            var stage = CurrentPrefabStage();
+            if (stage != null && StageIsDirty(stage) && !string.Equals(StageAssetPath(stage), path, StringComparison.OrdinalIgnoreCase))
+            {
+                return ErrorJson("E_PREFAB_DIRTY_CONFLICT", "Current Prefab Stage has unsaved changes.", "Run alps-unity prefab stage-save, or close/save the current Prefab Stage in Unity before opening another Prefab.");
+            }
+
+            if (!OpenPrefabStage(path))
+            {
+                return ErrorJson("E_PREFAB_STAGE_OPEN_FAILED", "Failed to open Prefab Stage: " + path, "Check Unity Console and AlpsUnityBridge.log.");
+            }
+            WriteLog("prefab_stage_open path=" + path);
+            return SuccessJson(PrefabStageJson("open", path, false));
+        }
+
+        private static string PrefabStageSave(BridgeRequest request)
+        {
+            var stage = RequireCurrentPrefabStage(request.StringArg("path"));
+            var path = StageAssetPath(stage);
+            if (!SavePrefabStage(stage))
+            {
+                return ErrorJson("E_PREFAB_STAGE_SAVE_FAILED", "Failed to save Prefab Stage: " + path, "Check Unity Console and AlpsUnityBridge.log.");
+            }
+            AssetDatabase.SaveAssets();
+            WriteLog("prefab_stage_save path=" + path);
+            return SuccessJson(PrefabStageJson("save", path, false));
+        }
+
+        private static string PrefabStageClose(BridgeRequest request)
+        {
+            var stage = RequireCurrentPrefabStage(request.StringArg("path"));
+            var path = StageAssetPath(stage);
+            var save = request.BoolArg("save", false);
+            if (StageIsDirty(stage) && !save)
+            {
+                return ErrorJson("E_PREFAB_DIRTY_CONFLICT", "Prefab Stage has unsaved changes: " + path, "Run alps-unity prefab stage-close --save or alps-unity prefab stage-save before closing.");
+            }
+            if (save && !SavePrefabStage(stage))
+            {
+                return ErrorJson("E_PREFAB_STAGE_SAVE_FAILED", "Failed to save Prefab Stage before close: " + path, "Check Unity Console and AlpsUnityBridge.log.");
+            }
+            if (!ClosePrefabStage())
+            {
+                return ErrorJson("E_PREFAB_STAGE_CLOSE_FAILED", "Failed to close Prefab Stage: " + path, "Close the Prefab Stage in Unity or check AlpsUnityBridge.log.");
+            }
+            WriteLog("prefab_stage_close path=" + path + " save=" + save);
+            return SuccessJson(PrefabStageJson("close", path, false));
+        }
+
+        private static string PrefabHierarchy(BridgeRequest request)
+        {
+            var path = RequirePrefabPath(request.StringArg("path"));
+            LoadPrefabAsset(path);
+            var pageSize = Math.Max(1, request.IntArg("pageSize", 100));
+            var cursor = Math.Max(0, request.IntArg("cursor", 0));
+            var root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                var items = new List<string>();
+                var total = CountHierarchy(root.transform);
+                CollectHierarchy(root.transform, items, cursor, pageSize, new Counter());
+                var nextCursor = cursor + items.Count < total ? (cursor + items.Count).ToString(CultureInfo.InvariantCulture) : null;
+                return SuccessJson("{\"prefab\":" + PrefabAssetJson(path, root) + ",\"items\":[" + string.Join(",", items.ToArray()) + "],\"pageInfo\":{\"pageSize\":" + pageSize.ToString(CultureInfo.InvariantCulture) + ",\"cursor\":" + cursor.ToString(CultureInfo.InvariantCulture) + ",\"nextCursor\":" + Quote(nextCursor) + ",\"total\":" + total.ToString(CultureInfo.InvariantCulture) + "},\"logPath\":" + Quote(LogPath()) + "}");
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(root);
+            }
+        }
+
         private static string CapabilitiesJson()
         {
             return "["
                 + CapabilityJson("camera", CameraCommands) + ","
                 + CapabilityJson("scene", SceneCommands) + ","
-                + CapabilityJson("screenshot", ScreenshotCommands)
+                + CapabilityJson("screenshot", ScreenshotCommands) + ","
+                + CapabilityJson("prefab", PrefabCommands)
                 + "]";
         }
 
@@ -328,6 +474,258 @@ namespace AlpsUnityCli
                 + "\"target\":" + Quote(target) + ","
                 + "\"logPath\":" + Quote(LogPath())
                 + "}";
+        }
+
+        private static string RequirePrefabPath(string rawPath)
+        {
+            var path = NormalizeAssetPath(rawPath);
+            if (string.IsNullOrEmpty(path))
+            {
+                throw new BridgeCommandException("E_PREFAB_PATH_REQUIRED", "Pass an Assets/*.prefab path.", "Use alps-unity prefab info <path> or pass --path Assets/Example.prefab.");
+            }
+            if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || !path.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new BridgeCommandException("E_PREFAB_PATH_INVALID", "Prefab path must be under Assets/ and end with .prefab: " + path, "Pass a Unity asset path such as Assets/Prefabs/Player.prefab.");
+            }
+            return path;
+        }
+
+        private static string RequirePrefabOutputPath(string rawPath)
+        {
+            return RequirePrefabPath(rawPath);
+        }
+
+        private static GameObject LoadPrefabAsset(string path)
+        {
+            var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            if (prefab == null)
+            {
+                throw new BridgeCommandException("E_PREFAB_NOT_FOUND", "Prefab asset not found: " + path, "Check the path or run alps-unity asset search --type prefab.");
+            }
+            if (PrefabUtility.GetPrefabAssetType(prefab) == PrefabAssetType.NotAPrefab)
+            {
+                throw new BridgeCommandException("E_ASSET_NOT_PREFAB", "Asset is not a Prefab: " + path, "Pass an Assets/*.prefab asset path.");
+            }
+            return prefab;
+        }
+
+        private static string NormalizeAssetPath(string rawPath)
+        {
+            return string.IsNullOrEmpty(rawPath) ? null : rawPath.Replace('\\', '/').Trim();
+        }
+
+        private static void CreateAssetDirectory(string assetPath)
+        {
+            var directory = Path.GetDirectoryName(assetPath);
+            if (string.IsNullOrEmpty(directory) || AssetDatabase.IsValidFolder(directory.Replace('\\', '/')))
+            {
+                return;
+            }
+            Directory.CreateDirectory(Path.Combine(ProjectRoot(), directory.Replace('/', Path.DirectorySeparatorChar)));
+            AssetDatabase.Refresh();
+        }
+
+        private static GameObject ResolveGameObject(string target)
+        {
+            foreach (var gameObject in UnityEngine.Object.FindObjectsOfType<GameObject>())
+            {
+                if (gameObject.name == target || gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) == target || HierarchyPath(gameObject) == target)
+                {
+                    return gameObject;
+                }
+            }
+            return null;
+        }
+
+        private static string PrefabAssetJson(string path, GameObject prefab)
+        {
+            var guid = AssetDatabase.AssetPathToGUID(path);
+            var assetType = PrefabUtility.GetPrefabAssetType(prefab).ToString();
+            var instanceStatus = PrefabUtility.GetPrefabInstanceStatus(prefab).ToString();
+            var dependencies = AssetDatabase.GetDependencies(path, false);
+            return "{"
+                + "\"path\":" + Quote(path) + ","
+                + "\"guid\":" + Quote(guid) + ","
+                + "\"rootName\":" + Quote(prefab.name) + ","
+                + "\"assetType\":" + Quote(assetType) + ","
+                + "\"instanceStatus\":" + Quote(instanceStatus) + ","
+                + "\"isVariant\":" + Bool(assetType == "Variant") + ","
+                + "\"dependencyCount\":" + dependencies.Length.ToString(CultureInfo.InvariantCulture)
+                + "}";
+        }
+
+        private static string PrefabCreateJson(string source, string path, string mode)
+        {
+            return "{"
+                + "\"prefab\":" + PrefabAssetJson(path, LoadPrefabAsset(path)) + ","
+                + "\"source\":" + Quote(source) + ","
+                + "\"mode\":" + Quote(mode) + ","
+                + "\"plannedEffects\":[{\"type\":\"prefab.create\",\"path\":" + Quote(path) + ",\"source\":" + Quote(source) + "}],"
+                + "\"logPath\":" + Quote(LogPath())
+                + "}";
+        }
+
+        private static string PrefabStageJson(string action, string path, bool dirty)
+        {
+            return "{"
+                + "\"stage\":{\"action\":" + Quote(action) + ",\"path\":" + Quote(path) + ",\"dirty\":" + Bool(dirty) + "},"
+                + "\"plannedEffects\":[{\"type\":" + Quote("prefab.stage-" + action) + ",\"path\":" + Quote(path) + "}],"
+                + "\"logPath\":" + Quote(LogPath())
+                + "}";
+        }
+
+        private static string HierarchyItemJson(Transform transform)
+        {
+            var componentNames = new List<string>();
+            foreach (var component in transform.GetComponents<Component>())
+            {
+                componentNames.Add(Quote(component != null ? component.GetType().Name : "MissingScript"));
+            }
+            var gameObject = transform.gameObject;
+            return "{"
+                + "\"id\":" + gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) + ","
+                + "\"name\":" + Quote(gameObject.name) + ","
+                + "\"path\":" + Quote(HierarchyPath(gameObject)) + ","
+                + "\"active\":" + Bool(gameObject.activeSelf) + ","
+                + "\"tag\":" + Quote(gameObject.tag) + ","
+                + "\"layer\":" + gameObject.layer.ToString(CultureInfo.InvariantCulture) + ","
+                + "\"componentCount\":" + componentNames.Count.ToString(CultureInfo.InvariantCulture) + ","
+                + "\"components\":[" + string.Join(",", componentNames.ToArray()) + "]"
+                + "}";
+        }
+
+        private static int CountHierarchy(Transform transform)
+        {
+            var count = 1;
+            foreach (Transform child in transform)
+            {
+                count += CountHierarchy(child);
+            }
+            return count;
+        }
+
+        private static void CollectHierarchy(Transform transform, List<string> items, int cursor, int pageSize, Counter counter)
+        {
+            if (counter.Value >= cursor && items.Count < pageSize)
+            {
+                items.Add(HierarchyItemJson(transform));
+            }
+            counter.Value++;
+            foreach (Transform child in transform)
+            {
+                if (items.Count >= pageSize)
+                {
+                    return;
+                }
+                CollectHierarchy(child, items, cursor, pageSize, counter);
+            }
+        }
+
+        private static object CurrentPrefabStage()
+        {
+            return InvokePrefabStageUtility("GetCurrentPrefabStage", null);
+        }
+
+        private static object RequireCurrentPrefabStage(string requestedPath)
+        {
+            var stage = CurrentPrefabStage();
+            if (stage == null)
+            {
+                throw new BridgeCommandException("E_PREFAB_STAGE_NOT_OPEN", "No Prefab Stage is currently open.", "Run alps-unity prefab stage-open <path> first.");
+            }
+            var path = StageAssetPath(stage);
+            if (!string.IsNullOrEmpty(requestedPath) && !string.Equals(NormalizeAssetPath(requestedPath), path, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new BridgeCommandException("E_PREFAB_STAGE_MISMATCH", "Current Prefab Stage is " + path + ", not " + requestedPath, "Run stage-save/stage-close without --path or use the currently open Prefab path.");
+            }
+            return stage;
+        }
+
+        private static bool OpenPrefabStage(string path)
+        {
+            return InvokePrefabStageUtility("OpenPrefab", new object[] { path }) != null;
+        }
+
+        private static bool SavePrefabStage(object stage)
+        {
+            var method = stage.GetType().GetMethod("SavePrefab", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (method != null)
+            {
+                method.Invoke(stage, null);
+                return true;
+            }
+            var root = StageRoot(stage);
+            var path = StageAssetPath(stage);
+            if (root == null || string.IsNullOrEmpty(path))
+            {
+                return false;
+            }
+            PrefabUtility.SaveAsPrefabAsset(root, path);
+            return true;
+        }
+
+        private static bool ClosePrefabStage()
+        {
+            if (InvokePrefabStageUtilityVoid("CloseCurrentPrefabStage", null))
+            {
+                return true;
+            }
+            var method = typeof(StageUtility).GetMethod("GoBackToPreviousStage", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            if (method == null)
+            {
+                return false;
+            }
+            method.Invoke(null, null);
+            return true;
+        }
+
+        private static object InvokePrefabStageUtility(string methodName, object[] args)
+        {
+            var method = PrefabStageUtilityMethod(methodName, args == null ? 0 : args.Length);
+            return method == null ? null : method.Invoke(null, args);
+        }
+
+        private static bool InvokePrefabStageUtilityVoid(string methodName, object[] args)
+        {
+            var method = PrefabStageUtilityMethod(methodName, args == null ? 0 : args.Length);
+            if (method == null)
+            {
+                return false;
+            }
+            method.Invoke(null, args);
+            return true;
+        }
+
+        private static MethodInfo PrefabStageUtilityMethod(string methodName, int parameterCount)
+        {
+            var type = typeof(PrefabStageUtility);
+            var flags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+            foreach (var method in type.GetMethods(flags))
+            {
+                if (method.Name == methodName && method.GetParameters().Length == parameterCount)
+                {
+                    return method;
+                }
+            }
+            return null;
+        }
+
+        private static string StageAssetPath(object stage)
+        {
+            var property = stage.GetType().GetProperty("assetPath", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            return property == null ? null : NormalizeAssetPath(property.GetValue(stage, null) as string);
+        }
+
+        private static GameObject StageRoot(object stage)
+        {
+            var property = stage.GetType().GetProperty("prefabContentsRoot", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            return property == null ? null : property.GetValue(stage, null) as GameObject;
+        }
+
+        private static bool StageIsDirty(object stage)
+        {
+            var root = StageRoot(stage);
+            return root != null && root.scene.isDirty;
         }
 
         private static string ResolveScreenshotOutputPath(string rawPath)
@@ -514,7 +912,7 @@ namespace AlpsUnityCli
 
             public int IntArg(string name, int fallback)
             {
-                var match = Regex.Match(body ?? string.Empty, "\\\"" + Regex.Escape(name) + "\\\"\\s*:\\s*(-?\\d+)");
+                var match = Regex.Match(body ?? string.Empty, "\\\"" + Regex.Escape(name) + "\\\"\\s*:\\s*(?:\\\")?(-?\\d+)(?:\\\")?");
                 if (match.Success)
                 {
                     int parsed;
@@ -566,12 +964,14 @@ namespace AlpsUnityCli
 
         private sealed class BridgeCommandException : Exception
         {
-            public BridgeCommandException(string code, string message) : base(message)
+            public BridgeCommandException(string code, string message, string nextAction = null) : base(message)
             {
                 Code = code;
+                NextAction = nextAction;
             }
 
             public string Code { get; private set; }
+            public string NextAction { get; private set; }
         }
     }
 }
