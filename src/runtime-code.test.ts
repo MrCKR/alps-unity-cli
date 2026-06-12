@@ -51,14 +51,18 @@ test("code exec --file forwards live bridge payload with source hash and artifac
   assert.equal(requests[0].args.channel, "live");
   assert.equal(requests[0].args.timeoutMs, 60000);
   assert.match(String(requests[0].args.sourceSha256), /^[a-f0-9]{64}$/);
-  const manifest = JSON.parse(await readFile(join(artifactDir, "manifest.json"), "utf8")) as { requestId: string; jobId: string | null; command: string; artifact: Array<{ relativePath: string; sha256: string }>; artifacts: Array<{ relativePath: string; sha256: string }>; source: { kind: string; sha256: string } };
+  const manifest = JSON.parse(await readFile(join(artifactDir, "manifest.json"), "utf8")) as { requestId: string; jobId: string | null; command: string; artifact: Array<{ kind: string; path: string; relativePath: string; sha256: string; sizeBytes: number }>; artifacts: Array<{ kind: string; path: string; relativePath: string; sha256: string; sizeBytes: number }>; source: { kind: string; sha256: string } };
   assert.equal(manifest.command, "code.exec");
   assert.equal(manifest.jobId, null);
   assert.equal(manifest.source.kind, "file");
   assert.equal(manifest.source.sha256, requests[0].args.sourceSha256);
+  assert.deepEqual(manifest.artifact.map((artifact) => artifact.kind), ["source"]);
+  assert.deepEqual(manifest.artifacts.map((artifact) => artifact.kind), ["source"]);
+  assert.equal(manifest.artifact[0].path, sourcePath);
   assert.equal(manifest.artifact[0].sha256, requests[0].args.sourceSha256);
   assert.match(manifest.artifact[0].relativePath, /hello\.csx$/);
-  assert.equal(manifest.artifacts[0].sha256, requests[0].args.sourceSha256);
+  assert.equal(manifest.artifact[0].sizeBytes, Buffer.byteLength("Console.WriteLine(\"hi\"); return 7;\n", "utf8"));
+  assert.deepEqual(manifest.artifacts, manifest.artifact);
 });
 
 test("code exec preserves compile diagnostics from bridge errors", async () => {
@@ -77,18 +81,20 @@ test("code exec preserves compile diagnostics from bridge errors", async () => {
   assert.deepEqual(result.error?.details, { diagnostics: [{ id: "CS0103", line: 1, column: 8 }] });
 });
 
-test("code exec validates source selection, args json and channel", async () => {
+test("code exec validates source selection, args json, channel and refs", async () => {
   const runtime = await makeRuntime();
 
   const missing = await execute(["code", "exec"], runtime);
   const both = await execute(["code", "exec", "--code", "return 1;", "--stdin"], runtime);
   const args = await execute(["code", "exec", "--code", "return 1;", "--args", "[]"], runtime);
   const channel = await execute(["code", "exec", "--code", "return 1;", "--channel", "raw"], runtime);
+  const refs = await execute(["code", "exec", "--code", "return 1;", "--refs", join(runtime.dataDir, "missing.dll")], runtime);
 
   assert.equal(missing.error?.code, "E_CODE_SOURCE_INVALID");
   assert.equal(both.error?.code, "E_CODE_SOURCE_INVALID");
   assert.equal(args.error?.code, "E_SCHEMA_INVALID");
   assert.equal(channel.error?.code, "E_SCHEMA_INVALID");
+  assert.equal(refs.error?.code, "E_REFERENCE_RESOLUTION_FAILED");
 });
 
 test("code exec --channel batchmode creates Unity job and deploys bridge package", async () => {
@@ -132,7 +138,18 @@ process.exit(0);
   const waited = await runtime.runner.wait(jobId, 3000);
 
   assert.equal(waited.status, "succeeded");
-  assert.deepEqual(waited.result?.data, { compile: { ok: true, diagnostics: [] }, runtime: { ok: true, returnValue: 42, stdout: "", stderr: "" } });
+  const artifacts = waited.result?.artifacts as Array<{ kind: string; relativePath: string; sha256: string; sizeBytes: number }>;
+  assert.deepEqual(waited.result?.data, { compile: { ok: true, diagnostics: [] }, runtime: { ok: true, returnValue: 42, stdout: "", stderr: "" }, artifacts });
+  assert.deepEqual(artifacts.map((artifact) => artifact.kind), ["source", "result"]);
+  assert.equal(artifacts[0].relativePath, "source.csx");
+  assert.equal(artifacts[1].relativePath, "result.json");
+  assert.match(artifacts[1].sha256, /^[a-f0-9]{64}$/);
+  assert.ok(artifacts[1].sizeBytes > 0);
+
+  const artifactDir = waited.result?.artifactDir as string;
+  const manifest = JSON.parse(await readFile(join(artifactDir, "manifest.json"), "utf8")) as { artifact: Array<{ kind: string; relativePath: string; sha256: string; sizeBytes: number }>; artifacts: Array<{ kind: string; relativePath: string; sha256: string; sizeBytes: number }> };
+  assert.deepEqual(manifest.artifact, artifacts);
+  assert.deepEqual(manifest.artifacts, artifacts);
 });
 
 test("code exec maps artifact manifest write failures", async () => {
@@ -183,6 +200,8 @@ test("Unity bridge and batch source expose Runtime Code diagnostics", async () =
   assert.match(bridge, /initiator/);
   assert.match(bridge, /timeoutMs/);
   assert.match(bridge, /CompilerDiagnosticsJson/);
+  assert.match(bridge, /ValidateCodeReferences/);
+  assert.match(bridge, /Runtime Code reference was not found/);
   assert.match(batch, /public static void ExecuteCode\(\)/);
   assert.match(batch, /-alpsCodeResult/);
   assert.match(batch, /-alpsTimeoutMs/);
@@ -197,4 +216,6 @@ test("Unity bridge and batch source expose Runtime Code diagnostics", async () =
   assert.match(batch, /bridgeVersion/);
   assert.match(batch, /initiator/);
   assert.match(batch, /timeoutMs/);
+  assert.match(batch, /ValidateReferences/);
+  assert.match(batch, /Runtime Code reference was not found/);
 });

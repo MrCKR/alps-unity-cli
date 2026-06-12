@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { constants } from "node:fs";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import { stdin } from "node:process";
 import { getBoolean, getNumber, getString } from "./args.js";
@@ -50,6 +51,11 @@ export async function handleCode(command: string | undefined, flags: Record<stri
     return failure(requestId, "E_SCHEMA_INVALID", parsedArgs.message, ["Pass --args as a JSON object."]);
   }
 
+  const refs = await validateExtraReferences(getString(flags, "refs"), requestId);
+  if (!refs.ok) {
+    return refs.result;
+  }
+
   const payload = {
     command: "code.exec",
     sourceKind: source.value.kind,
@@ -63,7 +69,7 @@ export async function handleCode(command: string | undefined, flags: Record<stri
     projectPath,
     argsJson: JSON.stringify(parsedArgs.value),
     defines: getString(flags, "define") ?? "",
-    refs: getString(flags, "refs") ?? ""
+    refs: refs.value
   };
 
   const sourceArtifactResult = await writeSourceArtifact(artifactDir, source.value);
@@ -168,8 +174,37 @@ function parseJsonObject(value: string): { ok: true; value: Record<string, unkno
   }
 }
 
-function manifestData(artifactDir: string, requestId: string, jobId: string | undefined, projectPath: string, source: CodeSource, channel: string, timeoutMs: number, args: Record<string, unknown>): Record<string, unknown> {
+async function validateExtraReferences(refsCsv: string | undefined, requestId: string): Promise<{ ok: true; value: string } | { ok: false; result: CliResult }> {
+  if (!refsCsv) {
+    return { ok: true, value: "" };
+  }
+  const refs = refsCsv.split(",").map((part) => part.trim()).filter(Boolean);
+  for (const reference of refs) {
+    try {
+      await access(reference, constants.R_OK);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      return {
+        ok: false,
+        result: failure(requestId, "E_REFERENCE_RESOLUTION_FAILED", `Runtime Code reference is not readable: ${reference}.`, [
+          message,
+          "Pass --refs with existing readable assembly paths."
+        ])
+      };
+    }
+  }
+  return { ok: true, value: refs.join(",") };
+}
+
+function manifestData(artifactDir: string, requestId: string, jobId: string | undefined, projectPath: string, source: CodeSource, channel: string, timeoutMs: number, args: Record<string, unknown>, extraArtifacts: Array<Record<string, unknown>> = []): Record<string, unknown> {
   const sourceArtifactPath = source.path ?? resolve(artifactDir, "source.csx");
+  const sourceArtifact = {
+    kind: "source",
+    path: sourceArtifactPath,
+    relativePath: normalizeRelativePath(relative(artifactDir, sourceArtifactPath) || "."),
+    sha256: source.sha256,
+    sizeBytes: source.sizeBytes
+  };
   return {
     requestId,
     jobId: jobId ?? null,
@@ -177,24 +212,8 @@ function manifestData(artifactDir: string, requestId: string, jobId: string | un
     createdAt: new Date().toISOString(),
     producer: "alps-unity-cli",
     projectPath,
-    artifact: [
-      {
-        kind: "source",
-        path: sourceArtifactPath,
-        relativePath: relative(artifactDir, sourceArtifactPath) || ".",
-        sha256: source.sha256,
-        sizeBytes: source.sizeBytes
-      }
-    ],
-    artifacts: [
-      {
-        kind: "source",
-        path: sourceArtifactPath,
-        relativePath: relative(artifactDir, sourceArtifactPath) || ".",
-        sha256: source.sha256,
-        sizeBytes: source.sizeBytes
-      }
-    ],
+    artifact: [sourceArtifact, ...extraArtifacts],
+    artifacts: [sourceArtifact, ...extraArtifacts],
     source: { kind: source.kind, path: source.path, sha256: source.sha256, sizeBytes: source.sizeBytes },
     execution: { channel, timeoutMs },
     input: { args }
@@ -248,6 +267,13 @@ async function startBatchCodeJob(
     mode: "agent-job",
     execution: { channel: "batchmode", timeoutMs, exitState: "queued" },
     source: { kind: source.kind, path: source.path, sha256: source.sha256, sizeBytes: source.sizeBytes },
+    artifacts: [{
+      kind: "source",
+      path: sourcePath,
+      relativePath: normalizeRelativePath(relative(artifactDir, sourcePath) || "."),
+      sha256: source.sha256,
+      sizeBytes: source.sizeBytes
+    }],
     artifactDir,
     resultPath,
     bridge
@@ -307,6 +333,10 @@ async function startBatchCodeJob(
     });
   }
   return success(requestId, summarizeJob(waited));
+}
+
+function normalizeRelativePath(path: string): string {
+  return path.split("\\").join("/");
 }
 
 function summarizeJob(job: JobRecord): Record<string, unknown> {

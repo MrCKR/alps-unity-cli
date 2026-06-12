@@ -91,7 +91,13 @@ namespace AlpsUnityCli
             {
                 var provider = new CSharpCodeProvider();
                 var parameters = new CompilerParameters { GenerateExecutable = false, GenerateInMemory = true, TreatWarningsAsErrors = false };
-                foreach (var reference in DefaultReferences(refsCsv)) parameters.ReferencedAssemblies.Add(reference);
+                var references = DefaultReferences(refsCsv).ToList();
+                var referenceError = ValidateReferences(references);
+                if (!string.IsNullOrEmpty(referenceError))
+                {
+                    return CodeExecutionResult.Fail("E_REFERENCE_RESOLUTION_FAILED", referenceError, "{\"referenceError\":" + Quote(referenceError) + "}", NextActionsJson("Check Unity/Editor/project assembly references and --refs."));
+                }
+                foreach (var reference in references) parameters.ReferencedAssemblies.Add(reference);
                 foreach (var define in SplitCsv(definesCsv)) parameters.CompilerOptions += " /define:" + define;
                 compiled = provider.CompileAssemblyFromSource(parameters, WrapCodeSource(source));
             }
@@ -163,6 +169,23 @@ namespace AlpsUnityCli
         private static void AddReference(List<string> references, string reference)
         {
             if (!string.IsNullOrEmpty(reference) && !references.Contains(reference)) references.Add(reference);
+        }
+
+        private static string ValidateReferences(IEnumerable<string> references)
+        {
+            foreach (var reference in references)
+            {
+                try
+                {
+                    if (!File.Exists(reference)) return "Runtime Code reference was not found: " + reference;
+                    using (File.Open(reference, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) { }
+                }
+                catch (Exception exception)
+                {
+                    return "Runtime Code reference is not readable: " + reference + " (" + exception.Message + ")";
+                }
+            }
+            return null;
         }
 
         private static IEnumerable<string> SplitCsv(string value)
