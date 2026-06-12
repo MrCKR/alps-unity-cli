@@ -79,6 +79,9 @@ export function bridgeCommandName(group: string | undefined, command: string | u
   if (group === "prefab" && ["info", "create", "stage-open", "stage-save", "stage-close", "hierarchy"].includes(command ?? "")) {
     return `prefab.${command}`;
   }
+  if (group === "material" && ["info", "create", "assign", "set"].includes(command ?? "")) {
+    return `material.${command}`;
+  }
   if (group === "script" && ["create", "read", "edit", "validate"].includes(command ?? "")) {
     return `script.${command}`;
   }
@@ -183,6 +186,35 @@ async function commandArgs(command: string, flags: Record<string, string | boole
     return compactArgs({
       ...queryArgs(flags),
       path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "prefab")
+    });
+  }
+
+  if (command.startsWith("material.")) {
+    if (command === "material.create") {
+      return compactArgs({
+        path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "material"),
+        shader: stringFlag(flags, "shader"),
+        overwrite: boolFlag(flags, "overwrite")
+      });
+    }
+    if (command === "material.assign") {
+      return compactArgs({
+        target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name"),
+        material: stringFlag(flags, "material") ?? stringFlag(flags, "path"),
+        slot: numberFlag(flags, "slot") ?? numberFlag(flags, "material-index")
+      });
+    }
+    if (command === "material.set") {
+      return compactArgs({
+        path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "material"),
+        property: stringFlag(flags, "property"),
+        value: stringFlag(flags, "value"),
+        type: stringFlag(flags, "type")
+      });
+    }
+    return compactArgs({
+      ...queryArgs(flags),
+      path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "material")
     });
   }
 
