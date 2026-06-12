@@ -61,8 +61,11 @@ export async function executeBridgeCommand(
 }
 
 export function bridgeCommandName(group: string | undefined, command: string | undefined): string | undefined {
-  if (group === "scene" && ["active", "hierarchy", "build-settings", "create", "load", "save"].includes(command ?? "")) {
+  if (group === "scene" && ["active", "hierarchy", "build-settings", "screenshot", "create", "load", "save"].includes(command ?? "")) {
     return `scene.${command}`;
+  }
+  if (group === "camera" && ["list", "info", "screenshot"].includes(command ?? "")) {
+    return `camera.${command}`;
   }
   if (group === "go" && ["find", "inspect", "create", "modify", "delete"].includes(command ?? "")) {
     return `go.${command}`;
@@ -93,7 +96,20 @@ async function commandArgs(command: string, flags: Record<string, string | boole
     if (["scene.create", "scene.load", "scene.save"].includes(command)) {
       return compactArgs({ path: positionalTarget ?? stringFlag(flags, "path"), name: stringFlag(flags, "name") });
     }
+    if (command === "scene.screenshot") {
+      return screenshotArgs(flags, positionalTarget);
+    }
     return queryArgs(flags);
+  }
+
+  if (command.startsWith("camera.")) {
+    if (command === "camera.list") {
+      return queryArgs(flags);
+    }
+    if (command === "camera.info") {
+      return compactArgs({ target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") });
+    }
+    return compactArgs({ ...screenshotArgs(flags, undefined), target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") });
   }
 
   if (command === "go.find" || command === "go.inspect") {
@@ -171,10 +187,23 @@ async function commandArgs(command: string, flags: Record<string, string | boole
   }
 
   if (command === "screenshot.capture") {
-    return compactArgs({ path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "output"), width: numberFlag(flags, "width"), height: numberFlag(flags, "height"), gameView: boolFlag(flags, "game-view") });
+    return screenshotArgs(flags, positionalTarget);
   }
 
   return {};
+}
+
+function screenshotArgs(flags: Record<string, string | boolean>, positionalPath: string | undefined): Record<string, unknown> {
+  return compactArgs({
+    path: positionalPath ?? stringFlag(flags, "path") ?? stringFlag(flags, "output"),
+    format: stringFlag(flags, "format"),
+    width: numberFlag(flags, "width"),
+    height: numberFlag(flags, "height"),
+    transparent: boolFlag(flags, "transparent"),
+    quality: numberFlag(flags, "quality"),
+    overwrite: boolFlag(flags, "overwrite"),
+    gameView: boolFlag(flags, "game-view")
+  });
 }
 
 function bridgeEndpoint(flags: Record<string, string | boolean>, runtime: BridgeRuntime): string | undefined {
