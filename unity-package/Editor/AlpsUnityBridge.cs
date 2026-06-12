@@ -486,7 +486,7 @@ namespace AlpsUnityCli
             {
                 var text = gameObject.AddComponent<UiText>();
                 text.text = string.IsNullOrEmpty(request.StringArg("text")) ? name : request.StringArg("text");
-                text.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+                text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
                 text.fontSize = request.IntArg("fontSize", 24);
                 text.color = ParseColor(request.StringArg("color"), Color.black);
             }
@@ -500,7 +500,7 @@ namespace AlpsUnityCli
                 StretchRect(labelObject.GetComponent<RectTransform>());
                 var label = labelObject.AddComponent<UiText>();
                 label.text = string.IsNullOrEmpty(request.StringArg("text")) ? name : request.StringArg("text");
-                label.font = Resources.GetBuiltinResource<Font>("Arial.ttf");
+                label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
                 label.fontSize = request.IntArg("fontSize", 24);
                 label.alignment = TextAnchor.MiddleCenter;
                 label.color = Color.black;
