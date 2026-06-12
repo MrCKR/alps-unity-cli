@@ -1,7 +1,7 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
-import { mkdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { join, relative } from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import type { JobRecord, JobStatus, RunJobOptions } from "./types.js";
@@ -210,8 +210,18 @@ export class JobRunner {
       return summary ? { ...job.result, summary } : job.result;
     }
     if (job.kind === "code" && typeof job.result?.resultPath === "string") {
+      const resultArtifact = await this.resultArtifact(job.result);
       const codeResult = await this.readCodeResult(job.result.resultPath);
-      return codeResult ? { ...job.result, ...codeResult } : job.result;
+      const result = codeResult ? { ...job.result, ...codeResult } : job.result;
+      if (resultArtifact) {
+        await this.updateArtifactManifest(job.result, resultArtifact);
+        const artifacts = [...artifactList(result.artifacts), resultArtifact];
+        result.artifacts = artifacts;
+        if (result.data && typeof result.data === "object" && !Array.isArray(result.data)) {
+          result.data = { ...result.data, artifacts };
+        }
+      }
+      return result;
     }
     return job.result;
   }
@@ -257,6 +267,47 @@ export class JobRunner {
       return undefined;
     }
   }
+
+  private async resultArtifact(result: Record<string, unknown>): Promise<Record<string, unknown> | undefined> {
+    if (typeof result.resultPath !== "string" || typeof result.artifactDir !== "string") {
+      return undefined;
+    }
+    try {
+      const content = await readFile(result.resultPath);
+      return {
+        kind: "result",
+        path: result.resultPath,
+        relativePath: normalizeRelativePath(relative(result.artifactDir, result.resultPath) || "."),
+        sha256: createHash("sha256").update(content).digest("hex"),
+        sizeBytes: content.byteLength
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async updateArtifactManifest(result: Record<string, unknown>, artifact: Record<string, unknown>): Promise<void> {
+    if (typeof result.artifactDir !== "string") {
+      return;
+    }
+    const manifestPath = join(result.artifactDir, "manifest.json");
+    try {
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+      const artifacts = [...artifactList(manifest.artifacts).filter((entry) => entry.relativePath !== artifact.relativePath), artifact];
+      manifest.artifact = artifacts;
+      manifest.artifacts = artifacts;
+      await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+    } catch {
+    }
+  }
+}
+
+function artifactList(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item)) : [];
+}
+
+function normalizeRelativePath(path: string): string {
+  return path.split("\\").join("/");
 }
 
 function timeoutDetails(cancelAttempted: boolean, cancelled: boolean, processKilled: boolean, domainReloadObserved: boolean): Record<string, boolean> {

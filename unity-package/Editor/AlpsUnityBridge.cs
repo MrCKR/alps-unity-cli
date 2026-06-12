@@ -617,7 +617,13 @@ namespace AlpsUnityCli
                 GenerateInMemory = true,
                 TreatWarningsAsErrors = false
             };
-            foreach (var reference in DefaultCodeReferences(request.StringArg("refs")))
+            var references = DefaultCodeReferences(request.StringArg("refs")).ToList();
+            var referenceError = ValidateCodeReferences(references);
+            if (!string.IsNullOrEmpty(referenceError))
+            {
+                return CodeExecutionResult.Fail("E_REFERENCE_RESOLUTION_FAILED", referenceError, "{\"referenceError\":" + Quote(referenceError) + "}", "Check Unity/Editor/project assembly references and --refs.");
+            }
+            foreach (var reference in references)
             {
                 parameters.ReferencedAssemblies.Add(reference);
             }
@@ -1979,6 +1985,23 @@ namespace AlpsUnityCli
         {
             if (string.IsNullOrEmpty(reference)) return;
             if (!references.Contains(reference)) references.Add(reference);
+        }
+
+        private static string ValidateCodeReferences(IEnumerable<string> references)
+        {
+            foreach (var reference in references)
+            {
+                try
+                {
+                    if (!File.Exists(reference)) return "Runtime Code reference was not found: " + reference;
+                    using (File.Open(reference, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) { }
+                }
+                catch (Exception exception)
+                {
+                    return "Runtime Code reference is not readable: " + reference + " (" + exception.Message + ")";
+                }
+            }
+            return null;
         }
 
         private static IEnumerable<string> SplitCsv(string value)
