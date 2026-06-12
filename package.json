@@ -1,0 +1,25 @@
+{
+  "name": "@alps/unity-cli",
+  "version": "0.1.0",
+  "description": "Windows-first npm CLI for Unity job, test, build and refresh automation.",
+  "type": "module",
+  "bin": {
+    "alps-unity": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "node --test dist/**/*.test.js",
+    "pretest": "npm run build"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.10",
+    "typescript": "^5.5.3"
+  }
+}
