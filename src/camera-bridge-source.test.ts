@@ -92,6 +92,8 @@ test("Unity Bridge UI operations expose uGUI and UI Toolkit diagnostics", async 
   assert.match(source, /GetComponent<UiCanvasScaler>\(\)/);
   assert.match(source, /UiCanvasScaler\.ScaleMode\.ScaleWithScreenSize/);
   assert.match(source, /AddComponent<UiText>\(\)/);
+  assert.equal(source.match(/Resources\.GetBuiltinResource<Font>\("LegacyRuntime\.ttf"\)/g)?.length, 2);
+  assert.doesNotMatch(source, /Arial\.ttf/);
   assert.match(source, /AddComponent<UiButton>\(\)/);
   assert.match(source, /AddComponent<UiImage>\(\)/);
   assert.match(source, /HierarchyPath\(parent\.gameObject\)/);
