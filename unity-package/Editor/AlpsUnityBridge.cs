@@ -247,6 +247,16 @@ namespace AlpsUnityCli
                     return PhysicsRaycast(request);
                 case "physics.simulation":
                     return PhysicsSimulation(request);
+                case "editor.state":
+                    return SuccessJson(EditorStateJson());
+                case "editor.play":
+                    return SuccessJson(EditorPlayJson(request));
+                case "editor.pause":
+                    return SuccessJson(EditorPauseJson(request));
+                case "editor.stop":
+                    return SuccessJson(EditorStopJson(request));
+                case "editor.menu":
+                    return SuccessJson(EditorMenuJson(request));
                 default:
                     return ErrorJson("E_BRIDGE_COMMAND_UNSUPPORTED", "Unsupported bridge command: " + request.Command, "Upgrade the Alps Unity Bridge package or use a registered CLI command.");
             }
@@ -1352,6 +1362,109 @@ namespace AlpsUnityCli
                 WriteLog("physics_simulated steps=" + steps.ToString(CultureInfo.InvariantCulture) + " deltaTime=" + deltaTime.ToString(CultureInfo.InvariantCulture));
             }
             return SuccessJson("{\"simulation\":{\"simulate\":" + Bool(simulate) + ",\"steps\":" + steps.ToString(CultureInfo.InvariantCulture) + ",\"deltaTime\":" + deltaTime.ToString(CultureInfo.InvariantCulture) + ",\"fixedDeltaTime\":" + Time.fixedDeltaTime.ToString(CultureInfo.InvariantCulture) + ",\"autoSimulation\":" + Bool(Physics.autoSimulation) + "},\"physics\":" + PhysicsSettingsJson() + ",\"plannedEffects\":[" + string.Join(",", effects.ToArray()) + "],\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string EditorStateJson()
+        {
+            var scene = SceneManager.GetActiveScene();
+            var prefabStage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
+            return $"\"playMode\":{{\"isPlaying\":{Bool(EditorApplication.isPlaying)},\"isPaused\":{Bool(EditorApplication.isPaused)},\"isPlayingOrWillChangePlaymode\":{Bool(EditorApplication.isPlayingOrWillChangePlaymode)}}},\"busy\":{{\"isBusy\":{Bool(EditorApplication.isCompiling || EditorApplication.isUpdating || EditorApplication.isPlayingOrWillChangePlaymode || BuildPipeline.isBuildingPlayer)},\"compiling\":{Bool(EditorApplication.isCompiling)},\"updating\":{Bool(EditorApplication.isUpdating)},\"building\":{Bool(BuildPipeline.isBuildingPlayer)},\"domainReloading\":{Bool(EditorApplication.isCompiling)},\"playModeChanging\":{Bool(EditorApplication.isPlayingOrWillChangePlaymode)}}},\"activeScene\":{{\"name\":{Quote(scene.name)},\"path\":{Quote(scene.path)},\"isLoaded\":{Bool(scene.isLoaded)},\"isDirty\":{Bool(scene.isDirty)}}},\"prefabStage\":{PrefabStageJson(prefabStage)},\"plannedEffects\":[]";
+        }
+
+        private static string EditorPlayJson(BridgeRequest request)
+        {
+            EnsureEditorNotBusy("editor.play");
+            var before = EditorApplication.isPlaying;
+            EditorApplication.isPaused = false;
+            EditorApplication.isPlaying = true;
+            WaitForPlayModeState(true, TimeoutMs(request));
+            return $"\"plannedEffects\":[{{\"type\":\"editor.play\",\"from\":{Bool(before)},\"to\":true}}],\"result\":{{\"requested\":\"play\",\"changed\":{Bool(before != EditorApplication.isPlaying)},\"isPlaying\":{Bool(EditorApplication.isPlaying)},\"isPaused\":{Bool(EditorApplication.isPaused)}}},\"state\":{{{EditorStateJson()}}}";
+        }
+
+        private static string EditorPauseJson(BridgeRequest request)
+        {
+            EnsureEditorNotBusy("editor.pause");
+            var before = EditorApplication.isPaused;
+            EditorApplication.isPaused = !EditorApplication.isPaused;
+            return $"\"plannedEffects\":[{{\"type\":\"editor.pause\",\"from\":{Bool(before)},\"to\":{Bool(EditorApplication.isPaused)}}}],\"result\":{{\"requested\":\"pause\",\"changed\":{Bool(before != EditorApplication.isPaused)},\"isPlaying\":{Bool(EditorApplication.isPlaying)},\"isPaused\":{Bool(EditorApplication.isPaused)}}},\"state\":{{{EditorStateJson()}}}";
+        }
+
+        private static string EditorStopJson(BridgeRequest request)
+        {
+            EnsureEditorNotBusy("editor.stop");
+            var before = EditorApplication.isPlaying;
+            EditorApplication.isPaused = false;
+            EditorApplication.isPlaying = false;
+            WaitForPlayModeState(false, TimeoutMs(request));
+            return $"\"plannedEffects\":[{{\"type\":\"editor.stop\",\"from\":{Bool(before)},\"to\":false}}],\"result\":{{\"requested\":\"stop\",\"changed\":{Bool(before != EditorApplication.isPlaying)},\"isPlaying\":{Bool(EditorApplication.isPlaying)},\"isPaused\":{Bool(EditorApplication.isPaused)}}},\"state\":{{{EditorStateJson()}}}";
+        }
+
+        private static string EditorMenuJson(BridgeRequest request)
+        {
+            EnsureEditorNotBusy("editor.menu");
+            var path = request.StringArg("path");
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                throw new BridgeCommandException("E_SCHEMA_INVALID", "Editor menu path is required.", "Use alps-unity editor menu <path>, for example File/Save.");
+            }
+
+            var startedAt = DateTime.UtcNow;
+            var executed = EditorApplication.ExecuteMenuItem(path);
+            if (!executed)
+            {
+                throw new BridgeCommandException("E_MENU_NOT_FOUND", "Unity menu item was not found or could not be executed.", "Use the exact Unity Editor menu path, such as File/Save or Assets/Refresh.");
+            }
+
+            var elapsedMs = (int)Math.Round((DateTime.UtcNow - startedAt).TotalMilliseconds);
+            var timeoutMs = TimeoutMs(request);
+            if (elapsedMs > timeoutMs)
+            {
+                throw new BridgeCommandException("E_MENU_TIMEOUT", "Unity menu item execution exceeded the requested timeout.", "Check Unity Editor and Alps Bridge logs for long-running menu work.");
+            }
+
+            return $"\"plannedEffects\":[{{\"type\":\"editor.menu\",\"path\":{Quote(path)}}}],\"result\":{{\"path\":{Quote(path)},\"executed\":true,\"elapsedMs\":{elapsedMs}}},\"summary\":{{\"affected\":\"Unity Editor menu item executed\"}},\"state\":{{{EditorStateJson()}}}";
+        }
+
+        private static string PrefabStageJson(object prefabStage)
+        {
+            if (prefabStage == null)
+            {
+                return "null";
+            }
+            var type = prefabStage.GetType();
+            var assetPath = type.GetProperty("assetPath")?.GetValue(prefabStage)?.ToString();
+            var sceneValue = type.GetProperty("scene")?.GetValue(prefabStage);
+            var scenePath = sceneValue is Scene scene ? scene.path : null;
+            return $"{{\"assetPath\":{Quote(assetPath)},\"scenePath\":{Quote(scenePath)}}}";
+        }
+
+        private static int TimeoutMs(BridgeRequest request)
+        {
+            var value = request.OptionalIntArg("timeoutMs");
+            return value > 0 ? Math.Min(value.Value, 7000) : 7000;
+        }
+
+        private static void EnsureEditorNotBusy(string command)
+        {
+            if (EditorApplication.isCompiling || EditorApplication.isUpdating || BuildPipeline.isBuildingPlayer || EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                throw new BridgeCommandException("E_UNITY_BUSY", "Unity Editor is busy and cannot run this editor command right now.", "Wait for compiling, asset importing, build, PlayMode switching, or domain reload to complete, then retry.");
+            }
+        }
+
+        private static void WaitForPlayModeState(bool expectedPlaying, int timeoutMs)
+        {
+            var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+            while (DateTime.UtcNow <= deadline)
+            {
+                var reached = expectedPlaying ? (EditorApplication.isPlaying || EditorApplication.isPlayingOrWillChangePlaymode) : (!EditorApplication.isPlaying && !EditorApplication.isPlayingOrWillChangePlaymode);
+                if (reached)
+                {
+                    return;
+                }
+                Thread.Sleep(25);
+            }
+            throw new BridgeCommandException("E_PLAYMODE_TIMEOUT", "Unity PlayMode did not reach the requested state before the timeout.", "Wait for PlayMode switching or domain reload to finish, then retry.");
         }
 
         private static string PrefabAssetJson(string path, GameObject prefab)

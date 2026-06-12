@@ -391,3 +391,56 @@ test("camera screenshot bridge target and IO errors preserve protocol envelopes"
     assert.deepEqual(result.error?.next_actions, item.nextActions, item.name);
   }
 });
+
+test("editor state/play/pause/stop/menu commands forward args and return envelope", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+  const bridgeExecute = async (payload: BridgeRequest) => {
+    requests.push(payload);
+    if (payload.command === "editor.state") {
+      return { ok: true, data: { command: payload.command, playMode: { isPlaying: false, isPaused: false }, activeScene: { path: "Assets/Scenes/Main.unity" } } };
+    }
+    if (payload.command === "editor.menu") {
+      return { ok: true, data: { command: payload.command, plannedEffects: [{ type: "editor.menu", path: payload.args.path }], result: { path: payload.args.path, executed: true } } };
+    }
+    return { ok: true, data: { command: payload.command, plannedEffects: [{ type: payload.command }], result: { requested: payload.command.split(".")[1] } } };
+  };
+
+  const state = await execute(["editor", "state"], { ...runtime, bridgeExecute });
+  const play = await execute(["editor", "play", "--timeout-ms", "2500"], { ...runtime, bridgeExecute });
+  const pause = await execute(["editor", "pause"], { ...runtime, bridgeExecute });
+  const stop = await execute(["editor", "stop", "--timeout", "3000"], { ...runtime, bridgeExecute });
+  const menu = await execute(["editor", "menu", "File/Save", "--timeout-ms", "7000"], { ...runtime, bridgeExecute });
+
+  assert.equal(state.ok, true);
+  assert.equal(play.ok, true);
+  assert.equal(pause.ok, true);
+  assert.equal(stop.ok, true);
+  assert.equal(menu.ok, true);
+  assert.deepEqual(requests.map((request) => request.command), ["editor.state", "editor.play", "editor.pause", "editor.stop", "editor.menu"]);
+  assert.deepEqual(requests[1].args, { timeoutMs: 2500 });
+  assert.deepEqual(requests[2].args, {});
+  assert.deepEqual(requests[3].args, { timeoutMs: 3000 });
+  assert.deepEqual(requests[4].args, { path: "File/Save", timeoutMs: 7000 });
+});
+
+test("editor bridge errors preserve structured diagnostics", async () => {
+  const runtime = await makeRuntime();
+  const cases: Array<{ name: string; args: string[]; response: { code: string; message: string }; nextActions: string[] }> = [
+    { name: "busy", args: ["editor", "menu", "File/Save"], response: { code: "E_UNITY_BUSY", message: "Unity Editor is busy and cannot run this editor command right now." }, nextActions: ["Wait for compiling, asset importing, build, PlayMode switching, or domain reload to complete, then retry."] },
+    { name: "playmode timeout", args: ["editor", "stop"], response: { code: "E_PLAYMODE_TIMEOUT", message: "Unity PlayMode did not reach the requested state before the timeout." }, nextActions: ["Wait for PlayMode switching or domain reload to finish, then retry."] },
+    { name: "menu not found", args: ["editor", "menu", "Tools/Missing"], response: { code: "E_MENU_NOT_FOUND", message: "Unity menu item was not found or could not be executed." }, nextActions: ["Use the exact Unity Editor menu path, such as File/Save or Assets/Refresh."] },
+    { name: "menu timeout", args: ["editor", "menu", "Tools/Slow"], response: { code: "E_MENU_TIMEOUT", message: "Unity menu item execution exceeded the requested timeout." }, nextActions: ["Check Unity Editor and Alps Bridge logs for long-running menu work."] }
+  ];
+
+  for (const item of cases) {
+    const result = await execute(item.args, {
+      ...runtime,
+      bridgeExecute: async () => ({ ok: false, error: item.response, nextActions: item.nextActions })
+    });
+
+    assert.equal(result.ok, false, item.name);
+    assert.equal(result.error?.code, item.response.code, item.name);
+    assert.deepEqual(result.error?.next_actions, item.nextActions, item.name);
+  }
+});
