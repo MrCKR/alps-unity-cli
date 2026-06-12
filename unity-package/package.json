@@ -1,0 +1,7 @@
+{
+  "name": "com.alps.unity-cli.bridge",
+  "version": "0.1.0",
+  "displayName": "Alps Unity CLI Bridge",
+  "description": "Editor batch bridge used by Alps Unity CLI package commands.",
+  "unity": "2022.3"
+}
