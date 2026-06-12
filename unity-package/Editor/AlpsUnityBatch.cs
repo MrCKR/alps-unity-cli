@@ -10,7 +10,8 @@ namespace AlpsUnityCli
     {
         public static void ResolvePackages()
         {
-            var request = Client.Resolve();
+            Client.Resolve();
+            var request = Client.List(false, true);
             WaitForRequest(request);
 
             if (request.Status == StatusCode.Failure)

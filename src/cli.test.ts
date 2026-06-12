@@ -287,6 +287,25 @@ process.exit(1);
   assert.equal((waited.result?.diagnostic as { code: string }).code, "PACKAGE_VERSION_CONFLICT");
 });
 
+test("package resolve job maps bridge compile errors to compile diagnostics", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+  const unity = await makeFakeUnity(`
+const fs = require("node:fs");
+const logIndex = process.argv.indexOf("-logFile");
+if (logIndex >= 0) fs.appendFileSync(process.argv[logIndex + 1], "Packages\\\\com.alps.unity-cli.bridge\\\\Editor\\\\AlpsUnityBatch.cs(13,17): error CS0815: Cannot assign void to an implicitly-typed variable\\n[Package Manager] UpmClient::Connect -- IPC stream closed\\n");
+process.exit(1);
+`);
+
+  const created = await execute(["package", "resolve", "--project", project, "--unity", unity], runtime);
+  assert.equal(created.ok, true);
+  const waited = await runtime.runner.wait((created.data as { jobId: string }).jobId, 3000);
+  assert.equal(waited.status, "failed");
+  assert.equal(waited.error?.code, "BRIDGE_COMPILE_FAILED");
+  assert.equal((waited.result?.diagnostic as { code: string }).code, "BRIDGE_COMPILE_FAILED");
+  assert.match(waited.error?.message ?? "", /CS0815/);
+});
+
 test("package registry and scoped registry commands mutate manifest", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
@@ -318,5 +337,7 @@ test("Unity package batch hook exposes PackageManager resolve API", async () => 
 
   assert.match(source, /public static void ResolvePackages\(\)/);
   assert.match(source, /Client\.Resolve\(\)/);
+  assert.match(source, /Client\.List\(false, true\)/);
+  assert.doesNotMatch(source, /var\s+\w+\s*=\s*Client\.Resolve\(\)/);
   assert.match(source, /E_PACKAGE_RESOLVE_FAILED/);
 });
