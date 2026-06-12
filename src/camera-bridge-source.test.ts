@@ -9,6 +9,8 @@ test("Unity Bridge exposes camera and scene screenshot commands", async () => {
 
   assert.match(source, /HttpListener/);
   assert.match(source, /POST" \|\| context\.Request\.Url\.AbsolutePath != "\/bridge\/execute"/);
+  assert.match(source, /CapabilityJson\("camera", CameraCommands\)/);
+  assert.match(source, /private static readonly string\[\] CameraCommands = \{ "camera\.list", "camera\.info", "camera\.screenshot" \}/);
   assert.match(source, /case "camera\.list"/);
   assert.match(source, /case "camera\.info"/);
   assert.match(source, /case "camera\.screenshot"/);
@@ -36,11 +38,15 @@ test("Unity Bridge screenshot validates path, format, overwrite and busy diagnos
 
   assert.match(source, /E_UNITY_BUSY/);
   assert.match(source, /E_CAMERA_NOT_FOUND/);
+  assert.match(source, /E_TARGET_NOT_FOUND/);
   assert.match(source, /E_SCENE_VIEW_NOT_AVAILABLE/);
   assert.match(source, /E_OUTPUT_PATH_REQUIRED/);
   assert.match(source, /E_OUTPUT_EXISTS/);
   assert.match(source, /E_SCREENSHOT_FORMAT_UNSUPPORTED/);
+  assert.match(source, /E_IO_ERROR/);
+  assert.match(source, /string\.IsNullOrEmpty\(target\)/);
   assert.match(source, /File\.Exists\(outputPath\) && !overwrite/);
-  assert.match(source, /Directory\.CreateDirectory\(Path\.GetDirectoryName\(outputPath\)\)/);
+  assert.match(source, /CreateScreenshotDirectory\(outputPath\)/);
+  assert.match(source, /WriteScreenshotBytes\(outputPath, bytes\)/);
   assert.match(source, /Path\.GetFullPath/);
 });

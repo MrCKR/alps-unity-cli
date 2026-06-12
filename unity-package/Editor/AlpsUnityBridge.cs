@@ -18,6 +18,9 @@ namespace AlpsUnityCli
     {
         private const int Port = 47392;
         private static readonly object QueueLock = new object();
+        private static readonly string[] CameraCommands = { "camera.list", "camera.info", "camera.screenshot" };
+        private static readonly string[] SceneCommands = { "scene.screenshot" };
+        private static readonly string[] ScreenshotCommands = { "screenshot.capture" };
         private static readonly Queue<BridgeWorkItem> WorkQueue = new Queue<BridgeWorkItem>();
         private static HttpListener listener;
         private static bool started;
@@ -70,7 +73,7 @@ namespace AlpsUnityCli
         {
             if (context.Request.HttpMethod == "GET" && context.Request.Url.AbsolutePath == "/health")
             {
-                WriteJson(context, "{\"ok\":true,\"data\":{\"bridge\":\"alps-unity-cli\",\"port\":" + Port + "}}", 200);
+                WriteJson(context, "{\"ok\":true,\"data\":{\"bridge\":\"alps-unity-cli\",\"port\":" + Port + ",\"route\":\"POST /bridge/execute\",\"capabilities\":" + CapabilitiesJson() + "}}", 200);
                 return;
             }
 
@@ -162,10 +165,16 @@ namespace AlpsUnityCli
 
         private static string CameraScreenshot(BridgeRequest request)
         {
-            var camera = ResolveCamera(request.StringArg("target"));
+            var target = request.StringArg("target");
+            if (string.IsNullOrEmpty(target))
+            {
+                return ErrorJson("E_TARGET_NOT_FOUND", "Camera screenshot requires a target Camera.", "Pass a Camera name, hierarchy path or instance id. Run alps-unity camera list to inspect available cameras.");
+            }
+
+            var camera = ResolveCamera(target);
             if (camera == null)
             {
-                return ErrorJson("E_CAMERA_NOT_FOUND", "Camera not found: " + request.StringArg("target"), "Run alps-unity camera list to inspect available cameras.");
+                return ErrorJson("E_TARGET_NOT_FOUND", "Camera not found: " + target, "Run alps-unity camera list to inspect available cameras.");
             }
 
             var capture = CaptureCamera(camera, request);
@@ -186,7 +195,7 @@ namespace AlpsUnityCli
 
         private static ScreenshotResult CaptureCamera(Camera camera, BridgeRequest request)
         {
-            var outputPath = ResolveOutputPath(request.StringArg("path"));
+            var outputPath = ResolveScreenshotOutputPath(request.StringArg("path"));
             var format = NormalizeFormat(request.StringArg("format"), outputPath);
             var overwrite = request.BoolArg("overwrite", false);
             if (File.Exists(outputPath) && !overwrite)
@@ -194,7 +203,7 @@ namespace AlpsUnityCli
                 throw new BridgeCommandException("E_OUTPUT_EXISTS", "Screenshot output already exists: " + outputPath);
             }
 
-            Directory.CreateDirectory(Path.GetDirectoryName(outputPath));
+            CreateScreenshotDirectory(outputPath);
             var width = Math.Max(1, request.IntArg("width", camera.pixelWidth > 0 ? camera.pixelWidth : 1280));
             var height = Math.Max(1, request.IntArg("height", camera.pixelHeight > 0 ? camera.pixelHeight : 720));
             var transparent = request.BoolArg("transparent", false);
@@ -219,7 +228,7 @@ namespace AlpsUnityCli
                 texture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
                 texture.Apply();
                 var bytes = format == "jpg" ? texture.EncodeToJPG(quality) : texture.EncodeToPNG();
-                File.WriteAllBytes(outputPath, bytes);
+                WriteScreenshotBytes(outputPath, bytes);
             }
             finally
             {
@@ -234,6 +243,25 @@ namespace AlpsUnityCli
 
             WriteLog("screenshot_written path=" + outputPath + " width=" + width + " height=" + height + " format=" + format);
             return new ScreenshotResult(outputPath, format, width, height, transparent, quality);
+        }
+
+        private static string CapabilitiesJson()
+        {
+            return "["
+                + CapabilityJson("camera", CameraCommands) + ","
+                + CapabilityJson("scene", SceneCommands) + ","
+                + CapabilityJson("screenshot", ScreenshotCommands)
+                + "]";
+        }
+
+        private static string CapabilityJson(string domain, string[] commands)
+        {
+            var quotedCommands = new List<string>();
+            foreach (var command in commands)
+            {
+                quotedCommands.Add(Quote(command));
+            }
+            return "{\"domain\":" + Quote(domain) + ",\"route\":\"POST /bridge/execute\",\"commands\":[" + string.Join(",", quotedCommands.ToArray()) + "]}";
         }
 
         private static Camera ResolveCamera(string target)
@@ -302,6 +330,22 @@ namespace AlpsUnityCli
                 + "}";
         }
 
+        private static string ResolveScreenshotOutputPath(string rawPath)
+        {
+            try
+            {
+                return ResolveOutputPath(rawPath);
+            }
+            catch (BridgeCommandException)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                throw new BridgeCommandException("E_IO_ERROR", "Failed to resolve screenshot output path: " + exception.Message);
+            }
+        }
+
         private static string ResolveOutputPath(string rawPath)
         {
             if (string.IsNullOrEmpty(rawPath))
@@ -311,6 +355,30 @@ namespace AlpsUnityCli
 
             var normalized = rawPath.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
             return Path.GetFullPath(Path.IsPathRooted(normalized) ? normalized : Path.Combine(ProjectRoot(), normalized));
+        }
+
+        private static void CreateScreenshotDirectory(string outputPath)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(outputPath));
+            }
+            catch (Exception exception)
+            {
+                throw new BridgeCommandException("E_IO_ERROR", "Failed to create screenshot output directory: " + exception.Message);
+            }
+        }
+
+        private static void WriteScreenshotBytes(string outputPath, byte[] bytes)
+        {
+            try
+            {
+                File.WriteAllBytes(outputPath, bytes);
+            }
+            catch (Exception exception)
+            {
+                throw new BridgeCommandException("E_IO_ERROR", "Failed to write screenshot output: " + exception.Message);
+            }
         }
 
         private static string NormalizeFormat(string rawFormat, string outputPath)
