@@ -87,6 +87,59 @@ test("screenshot command forwards output path", async () => {
   assert.equal((result.data as { screenshotPath: string }).screenshotPath, "Artifacts/after.png");
 });
 
+test("camera commands forward target and screenshot options", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+
+  const list = await execute(["camera", "list"], {
+    ...runtime,
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { cameras: [{ name: "Main Camera" }] } };
+    }
+  });
+
+  const info = await execute(["camera", "info", "Main Camera"], {
+    ...runtime,
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { camera: { name: payload.args.target } } };
+    }
+  });
+
+  const screenshot = await execute(["camera", "screenshot", "Main Camera", "--output", "Artifacts/camera.png", "--format", "png", "--width", "1920", "--height", "1080", "--transparent", "--overwrite", "--quality", "90"], {
+    ...runtime,
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { screenshotPath: payload.args.path, format: payload.args.format, width: payload.args.width, height: payload.args.height } };
+    }
+  });
+
+  assert.equal(list.ok, true);
+  assert.equal(info.ok, true);
+  assert.equal(screenshot.ok, true);
+  assert.deepEqual(requests.map((request) => request.command), ["camera.list", "camera.info", "camera.screenshot"]);
+  assert.deepEqual(requests[1].args, { target: "Main Camera" });
+  assert.deepEqual(requests[2].args, { path: "Artifacts/camera.png", format: "png", width: 1920, height: 1080, transparent: true, quality: 90, overwrite: true, target: "Main Camera" });
+});
+
+test("scene screenshot forwards output path and overwrite", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+
+  const result = await execute(["scene", "screenshot", "Artifacts/scene.jpg", "--width", "800", "--height", "600", "--format", "jpg", "--overwrite"], {
+    ...runtime,
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { screenshotPath: payload.args.path, source: "scene" } };
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(requests[0].command, "scene.screenshot");
+  assert.deepEqual(requests[0].args, { path: "Artifacts/scene.jpg", format: "jpg", width: 800, height: 600, overwrite: true });
+});
+
 test("bridge errors return CLI failure envelope", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["go", "inspect", "Player"], {

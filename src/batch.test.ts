@@ -65,7 +65,8 @@ test("batch runs query edit test and screenshot commands from one TS registry", 
       { id: "query-player", command: ["go", "find"], args: ["--name", "Player"] },
       { id: "edit-player", command: ["component", "set", "Player"], args: ["--component", "Camera", "--property", "enabled", "--value", "false"], dependsOn: ["query-player"] },
       { id: "run-tests", command: ["test", "run"], args: ["--platform", "EditMode"], dependsOn: ["edit-player"] },
-      { id: "capture", command: ["screenshot", "capture", "Artifacts/player.png"], dependsOn: ["run-tests"] }
+      { id: "camera", command: ["camera", "list"] },
+      { id: "capture", command: ["camera", "screenshot", "Main Camera"], args: ["--output", "Artifacts/player.png", "--overwrite"], dependsOn: ["run-tests", "camera"] }
     ]
   });
   const bridgeRuntime = {
@@ -77,7 +78,8 @@ test("batch runs query edit test and screenshot commands from one TS registry", 
         data: {
           plannedEffects: payload.command.includes("set") || payload.command.includes("screenshot") ? [{ type: payload.command, args: payload.args }] : [],
           items: payload.command === "go.find" ? [{ name: "Player" }] : undefined,
-          screenshotPath: payload.command === "screenshot.capture" ? payload.args.path : undefined
+          cameras: payload.command === "camera.list" ? [{ name: "Main Camera" }] : undefined,
+          screenshotPath: payload.command === "camera.screenshot" ? payload.args.path : undefined
         }
       };
     }
@@ -87,11 +89,11 @@ test("batch runs query edit test and screenshot commands from one TS registry", 
 
   assert.equal(result.ok, true);
   const data = result.data as { summary: { succeeded: number }; plannedEffects: Array<{ type: string }>; steps: Array<{ id: string; jobId?: string; envelope: { data: { command?: string } } }> };
-  assert.equal(data.summary.succeeded, 4);
-  assert.deepEqual(bridgeRequests.map((request) => request.command), ["go.find", "component.set", "screenshot.capture"]);
+  assert.equal(data.summary.succeeded, 5);
+  assert.deepEqual(bridgeRequests.map((request) => request.command), ["go.find", "component.set", "camera.list", "camera.screenshot"]);
   assert.deepEqual(bridgeRequests[1].args, { target: "Player", component: "Camera", property: "enabled", value: "false" });
   assert.ok(typeof data.steps.find((step) => step.id === "run-tests")?.jobId === "string");
-  assert.deepEqual(data.plannedEffects.map((effect) => effect.type), ["component.set", "screenshot.capture"]);
+  assert.deepEqual(data.plannedEffects.map((effect) => effect.type), ["component.set", "camera.screenshot"]);
 });
 
 test("batch preflight accepts query edit test and screenshot example", async () => {
@@ -103,7 +105,8 @@ test("batch preflight accepts query edit test and screenshot example", async () 
       { id: "query", command: ["asset", "search"], args: ["--query", "Player", "--type", "Prefab"] },
       { id: "edit", command: ["script", "edit", "Assets/Scripts/Player.cs"], args: ["--find", "speed = 1", "--replace", "speed = 2"], dependsOn: ["query"] },
       { id: "test", command: ["test", "run"], args: ["--platform", "EditMode"], dependsOn: ["edit"] },
-      { id: "screenshot", command: ["screenshot", "capture", "Artifacts/after.png"], dependsOn: ["test"] }
+      { id: "camera", command: ["camera", "info", "Main Camera"] },
+      { id: "screenshot", command: ["scene", "screenshot", "Artifacts/after.png"], dependsOn: ["test", "camera"] }
     ]
   });
 
@@ -112,7 +115,7 @@ test("batch preflight accepts query edit test and screenshot example", async () 
   assert.equal(result.ok, true);
   const data = result.data as { preflight: Array<{ code: string }>; steps: Array<{ id: string; parallelSafe: boolean }> };
   assert.deepEqual(data.preflight.map((item) => item.code), ["BATCH_PREFLIGHT_OK"]);
-  assert.deepEqual(data.steps.map((step) => step.id), ["query", "edit", "test", "screenshot"]);
+  assert.deepEqual(data.steps.map((step) => step.id), ["query", "edit", "test", "camera", "screenshot"]);
 });
 
 test("batch preflight rejects unknown and raw commands", async () => {
