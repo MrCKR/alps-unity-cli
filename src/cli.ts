@@ -239,7 +239,9 @@ async function maybeResolvePackage(command: string, flags: Record<string, string
   if (!unityPath) {
     return failure(requestId, "UNITY_NOT_FOUND", "Unity.exe was not found.", ["Pass --unity <path-to-Unity.exe> or set UNITY_EXE."]);
   }
-  return startUnityJob("package", flags, runtime, requestId, ["-executeMethod", "AlpsUnityCli.Batch.ResolvePackages", "-alpsPackageAction", command], result);
+  const { ensurePackageBridge } = await import("./package-manager.js");
+  const bridge = await ensurePackageBridge(projectPath);
+  return startUnityJob("package", flags, runtime, requestId, ["-executeMethod", "AlpsUnityCli.Batch.ResolvePackages", "-alpsPackageAction", command], { ...result, bridge });
 }
 
 async function startUnityJob(kind: JobKind, flags: Record<string, string | boolean>, runtime: Runtime, requestId: string, unityArgs: string[], result: Record<string, unknown>): Promise<CliResult> {

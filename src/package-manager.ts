@@ -1,5 +1,6 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { dirname, join, resolve } from "node:path";
+import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
+import { join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 export interface UnityManifest {
   dependencies?: Record<string, string>;
@@ -60,7 +61,7 @@ export interface PackageSpec {
   version: string;
 }
 
-const defaultManifest: UnityManifest = { dependencies: {} };
+const bridgePackageName = "com.alps.unity-cli.bridge";
 
 export function packagePaths(projectPath: string): PackageManagerPaths {
   const resolvedProject = resolve(projectPath);
@@ -94,7 +95,7 @@ export async function packageInfo(projectPath: string, name: string): Promise<Pa
 
 export async function installPackage(projectPath: string, spec: PackageSpec): Promise<{ manifestPath: string; previousVersion?: string; installedVersion: string }> {
   const paths = packagePaths(projectPath);
-  const manifest = await readManifest(paths.manifestPath, true);
+  const manifest = await readManifest(paths.manifestPath, false);
   manifest.dependencies ??= {};
   const previousVersion = manifest.dependencies[spec.name];
   manifest.dependencies[spec.name] = spec.version;
@@ -116,7 +117,7 @@ export async function removePackage(projectPath: string, name: string): Promise<
 
 export async function setRegistry(projectPath: string, url: string): Promise<{ manifestPath: string; registry: string }> {
   const paths = packagePaths(projectPath);
-  const manifest = await readManifest(paths.manifestPath, true);
+  const manifest = await readManifest(paths.manifestPath, false);
   manifest.registry = url;
   await writeManifest(paths.manifestPath, manifest);
   return { manifestPath: paths.manifestPath, registry: url };
@@ -133,7 +134,7 @@ export async function clearRegistry(projectPath: string): Promise<{ manifestPath
 
 export async function addScopedRegistry(projectPath: string, registry: ScopedRegistry): Promise<{ manifestPath: string; registry: ScopedRegistry; replaced: boolean }> {
   const paths = packagePaths(projectPath);
-  const manifest = await readManifest(paths.manifestPath, true);
+  const manifest = await readManifest(paths.manifestPath, false);
   const registries = normalizeScopedRegistries(manifest.scopedRegistries);
   const index = registries.findIndex((existing) => existing.name === registry.name);
   const normalized = { name: registry.name, url: registry.url, scopes: uniqueScopes(registry.scopes) };
@@ -160,6 +161,23 @@ export async function removeScopedRegistry(projectPath: string, name: string): P
   manifest.scopedRegistries = registries;
   await writeManifest(paths.manifestPath, manifest);
   return { manifestPath: paths.manifestPath, removed };
+}
+
+export async function ensurePackageBridge(projectPath: string): Promise<{ manifestPath: string; bridgePath: string; dependencyName: string; dependencySpec: string }> {
+  const paths = packagePaths(projectPath);
+  const manifest = await readManifest(paths.manifestPath, false);
+  manifest.dependencies ??= {};
+
+  const sourcePath = resolve(fileURLToPath(new URL("../unity-package", import.meta.url)));
+  const bridgePath = join(paths.projectPath, "Packages", bridgePackageName);
+  const dependencySpec = `file:${bridgePath.replace(/\\/g, "/")}`;
+
+  await mkdir(bridgePath, { recursive: true });
+  await cp(sourcePath, bridgePath, { recursive: true, force: true });
+  manifest.dependencies[bridgePackageName] = dependencySpec;
+  await writeManifest(paths.manifestPath, manifest);
+
+  return { manifestPath: paths.manifestPath, bridgePath, dependencyName: bridgePackageName, dependencySpec };
 }
 
 export function parsePackageSpec(raw: string, explicitVersion?: string): PackageSpec {
@@ -232,11 +250,8 @@ async function readManifest(path: string, allowMissing: boolean): Promise<UnityM
     return JSON.parse(await readFile(path, "utf8")) as UnityManifest;
   } catch (error) {
     const nodeError = error as NodeJS.ErrnoException;
-    if (nodeError.code === "ENOENT" && allowMissing) {
-      return structuredClone(defaultManifest);
-    }
     if (nodeError.code === "ENOENT") {
-      throw new PackageManagerError("MANIFEST_NOT_FOUND", `Unity manifest not found: ${path}`, ["Run the command from a Unity project root or pass --project <path>."]);
+      throw new PackageManagerError("MANIFEST_NOT_FOUND", `Unity manifest not found: ${path}`, ["Run the command from a Unity project root or pass --project <path>. Package write commands do not create a new Unity manifest implicitly."]);
     }
     if (error instanceof SyntaxError) {
       throw new PackageManagerError("MANIFEST_INVALID", `Unity manifest is invalid JSON: ${path}`);
@@ -261,7 +276,6 @@ async function readLock(path: string): Promise<UnityLock> {
 }
 
 async function writeManifest(path: string, manifest: UnityManifest): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
   await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 }
 

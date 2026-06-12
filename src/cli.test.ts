@@ -213,21 +213,24 @@ test("package list and info read manifest and lock data", async () => {
   assert.equal(((info.data as { package: { dependencies: Record<string, string> } }).package.dependencies)["com.unity.textmeshpro"], "3.0.6");
 });
 
-test("package install updates manifest and can start package resolve job", async () => {
+test("package install updates manifest, deploys bridge and can start package resolve job", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
   const unity = await makeFakeUnity(`process.exit(0);`);
 
   const installed = await execute(["package", "install", "com.acme.lib@2.0.0", "--project", project, "--unity", unity], runtime);
   assert.equal(installed.ok, true);
-  const jobData = installed.data as { kind: string; result: { action: string; package: string; installedVersion: string } };
+  const jobData = installed.data as { kind: string; result: { action: string; package: string; installedVersion: string; bridge: { dependencyName: string; bridgePath: string } } };
   assert.equal(jobData.kind, "package");
   assert.equal(jobData.result.action, "install");
   assert.equal(jobData.result.package, "com.acme.lib");
   assert.equal(jobData.result.installedVersion, "2.0.0");
+  assert.equal(jobData.result.bridge.dependencyName, "com.alps.unity-cli.bridge");
+  assert.match(await readFile(join(jobData.result.bridge.bridgePath, "Editor", "AlpsUnityBatch.cs"), "utf8"), /ResolvePackages/);
 
   const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string> };
   assert.equal(manifest.dependencies["com.acme.lib"], "2.0.0");
+  assert.match(manifest.dependencies["com.alps.unity-cli.bridge"], /^file:/);
 });
 
 test("package remove returns structured diagnostic for missing package", async () => {
@@ -238,6 +241,33 @@ test("package remove returns structured diagnostic for missing package", async (
   assert.equal(removed.ok, false);
   assert.equal(removed.error?.code, "PACKAGE_NOT_FOUND");
   assert.equal(removed.error?.next_actions?.[0].includes("package list"), true);
+});
+
+test("package write commands require an existing Unity manifest", async () => {
+  const runtime = await makeRuntime();
+  const project = await mkdtemp(join(tmpdir(), "not-unity-project-"));
+
+  const result = await execute(["package", "install", "com.acme.lib", "--project", project], runtime);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "MANIFEST_NOT_FOUND");
+});
+
+test("package resolve job maps PackageManager failures to package diagnostics", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+  const unity = await makeFakeUnity(`
+const fs = require("node:fs");
+const logIndex = process.argv.indexOf("-logFile");
+if (logIndex >= 0) fs.appendFileSync(process.argv[logIndex + 1], "E_PACKAGE_RESOLVE_FAILED: version conflict for com.acme.lib\\n");
+process.exit(1);
+`);
+
+  const created = await execute(["package", "resolve", "--project", project, "--unity", unity], runtime);
+  assert.equal(created.ok, true);
+  const waited = await runtime.runner.wait((created.data as { jobId: string }).jobId, 3000);
+  assert.equal(waited.status, "failed");
+  assert.equal(waited.error?.code, "PACKAGE_RESOLVE_FAILED");
+  assert.equal((waited.result?.diagnostic as { code: string }).code, "PACKAGE_RESOLVE_FAILED");
 });
 
 test("package registry and scoped registry commands mutate manifest", async () => {
