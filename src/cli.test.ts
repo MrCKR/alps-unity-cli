@@ -271,6 +271,23 @@ test("package list and info read manifest and lock data", async () => {
   assert.equal(((info.data as { package: { dependencies: Record<string, string> } }).package.dependencies)["com.unity.textmeshpro"], "3.0.6");
 });
 
+test("package list and info accept UTF-8 BOM manifest and lock", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+  const packages = join(project, "Packages");
+  const manifest = await readFile(join(packages, "manifest.json"), "utf8");
+  const lock = await readFile(join(packages, "packages-lock.json"), "utf8");
+  await writeFile(join(packages, "manifest.json"), `\ufeff${manifest}`, "utf8");
+  await writeFile(join(packages, "packages-lock.json"), `\ufeff${lock}`, "utf8");
+
+  const list = await execute(["package", "list", "--project", project], runtime);
+  const info = await execute(["package", "info", "com.example.tool", "--project", project], runtime);
+
+  assert.equal(list.ok, true);
+  assert.equal(info.ok, true);
+  assert.equal(((info.data as { package: { dependencies: Record<string, string> } }).package.dependencies)["com.unity.textmeshpro"], "3.0.6");
+});
+
 test("package install updates manifest, deploys bridge and can start package resolve job", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
