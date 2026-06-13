@@ -1968,13 +1968,24 @@ namespace AlpsUnityCli
             AddReference(references, typeof(Enumerable).Assembly.Location);
             AddReference(references, typeof(UnityEngine.Object).Assembly.Location);
             AddReference(references, typeof(EditorApplication).Assembly.Location);
+            AddReferenceIfExists(references, Path.Combine(EditorApplication.applicationContentsPath, "Managed", "netstandard.dll"));
+            AddReferenceIfExists(references, Path.Combine(EditorApplication.applicationContentsPath, "Managed", "UnityEngine", "UnityEngine.dll"));
+            AddReferenceIfExists(references, Path.Combine(EditorApplication.applicationContentsPath, "Managed", "UnityEngine", "UnityEngine.CoreModule.dll"));
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
                 if (assembly.IsDynamic || string.IsNullOrEmpty(assembly.Location)) continue;
                 var name = assembly.GetName().Name;
-                if (name.StartsWith("Assembly-CSharp", StringComparison.OrdinalIgnoreCase) || name.StartsWith("Unity.", StringComparison.OrdinalIgnoreCase))
+                if (name.Equals("netstandard", StringComparison.OrdinalIgnoreCase) || name.StartsWith("Assembly-CSharp", StringComparison.OrdinalIgnoreCase) || name.StartsWith("Unity.", StringComparison.OrdinalIgnoreCase))
                 {
                     AddReference(references, assembly.Location);
+                }
+            }
+            var scriptAssemblies = Path.Combine(ProjectRoot(), "Library", "ScriptAssemblies");
+            if (Directory.Exists(scriptAssemblies))
+            {
+                foreach (var assemblyPath in Directory.GetFiles(scriptAssemblies, "*.dll"))
+                {
+                    AddReference(references, assemblyPath);
                 }
             }
             foreach (var reference in SplitCsv(refsCsv))
@@ -1988,6 +1999,11 @@ namespace AlpsUnityCli
         {
             if (string.IsNullOrEmpty(reference)) return;
             if (!references.Contains(reference)) references.Add(reference);
+        }
+
+        private static void AddReferenceIfExists(List<string> references, string reference)
+        {
+            if (!string.IsNullOrEmpty(reference) && File.Exists(reference)) AddReference(references, reference);
         }
 
         private static string ValidateCodeReferences(IEnumerable<string> references)
@@ -2326,7 +2342,32 @@ namespace AlpsUnityCli
 
             private static string Unescape(string value)
             {
-                return value.Replace("\\\"", "\"").Replace("\\\\", "\\").Replace("\\/", "/").Replace("\\n", "\n").Replace("\\r", "\r").Replace("\\t", "\t");
+                var builder = new StringBuilder();
+                for (var index = 0; index < value.Length; index++)
+                {
+                    var current = value[index];
+                    if (current != '\\' || index + 1 >= value.Length)
+                    {
+                        builder.Append(current);
+                        continue;
+                    }
+
+                    var escaped = value[++index];
+                    switch (escaped)
+                    {
+                        case '\"': builder.Append('\"'); break;
+                        case '\\': builder.Append('\\'); break;
+                        case '/': builder.Append('/'); break;
+                        case 'n': builder.Append('\n'); break;
+                        case 'r': builder.Append('\r'); break;
+                        case 't': builder.Append('\t'); break;
+                        default:
+                            builder.Append('\\');
+                            builder.Append(escaped);
+                            break;
+                    }
+                }
+                return builder.ToString();
             }
         }
 
