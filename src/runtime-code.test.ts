@@ -65,6 +65,38 @@ test("code exec --file forwards live bridge payload with source hash and artifac
   assert.deepEqual(manifest.artifacts, manifest.artifact);
 });
 
+test("code exec maps live timeout and busy bridge responses to structured envelopes", async () => {
+  const runtime = await makeRuntime();
+  const running = await execute(["code", "exec", "--code", "return 1;", "--timeout-ms", "1000"], {
+    ...runtime,
+    bridgeExecute: async () => ({
+      ok: true,
+      data: { status: "running", requestId: "req_bridge", sideEffectSemantics: "started-before-http-timeout", logPath: "Logs/AlpsUnityBridge.log" }
+    })
+  });
+  const busy = await execute(["code", "exec", "--code", "return 1;"], {
+    ...runtime,
+    bridgeExecute: async () => ({
+      ok: false,
+      error: { code: "E_UNITY_BUSY", message: "Unity Editor is compiling or importing assets.", details: { requestId: "req_busy", logPath: "Logs/AlpsUnityBridge.log" } },
+      nextActions: ["Wait for Unity to finish compiling/importing and retry."]
+    })
+  });
+
+  assert.equal(running.ok, false);
+  assert.equal(running.error?.code, "E_EXECUTION_TIMEOUT");
+  assert.equal((running.error?.details as { command: string }).command, "code.exec");
+  assert.equal((running.error?.details as { channel: string }).channel, "live");
+  assert.equal((running.error?.details as { timeoutMs: number }).timeoutMs, 1000);
+  assert.equal((running.error?.details as { logPath: string }).logPath, "Logs/AlpsUnityBridge.log");
+  assert.deepEqual((running.error?.details as { audit: { command: string; channel: string; timeoutMs: number } }).audit, { requestId: running.requestId, command: "code.exec", channel: "live", timeoutMs: 1000 });
+  assert.deepEqual((running.error?.details as { logs: { bridge: string } }).logs, { bridge: "Logs/AlpsUnityBridge.log" });
+  assert.match(running.error?.next_actions?.join("\n") ?? "", /AlpsUnityBridge\.log/);
+  assert.equal(busy.ok, false);
+  assert.equal(busy.error?.code, "E_UNITY_BUSY");
+  assert.deepEqual(busy.error?.details, { requestId: "req_busy", logPath: "Logs/AlpsUnityBridge.log" });
+});
+
 test("code exec preserves compile diagnostics from bridge errors", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["code", "exec", "--code", "return missing;"], {
