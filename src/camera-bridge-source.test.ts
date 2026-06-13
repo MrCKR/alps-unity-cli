@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const sourceUrl = new URL("../unity-package/Editor/AlpsUnityBridge.cs", import.meta.url);
+const sourceUrl = new URL("../unitypkg/Editor/AlpsUnityBridge.cs", import.meta.url);
 const readmeUrl = new URL("../README.md", import.meta.url);
 
 test("Unity Bridge source keeps top-level C# methods structurally balanced", async () => {

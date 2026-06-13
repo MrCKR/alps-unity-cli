@@ -371,7 +371,7 @@ function validateBatch(batch: BatchDefinition, normalized: { steps: NormalizedSt
     }
 
     if (step.argv[0] === "raw" || step.argv.includes("raw")) {
-      diagnostics.push({ level: "error", code: "BATCH_RAW_COMMAND_FORBIDDEN", message: "Batch does not provide raw MCP or raw tool escape hatches.", stepId: step.id, command: step.argv.join(" ") });
+      diagnostics.push({ level: "error", code: "BATCH_RAW_COMMAND_FORBIDDEN", message: "Batch does not provide bottom-layer escape hatches.", stepId: step.id, command: step.argv.join(" ") });
     }
 
     if (parallel > 1 && !step.parallelSafe) {
@@ -579,7 +579,7 @@ function batchFailure(requestId: string, code: string, message: string, data: un
       code,
       message,
       requestId,
-      next_actions: ["Fix the batch file and rerun alps-unity batch run <file> --preflight."]
+      next_actions: ["Fix the batch file and rerun unity_cli batch run <file> --preflight."]
     }
   };
 }

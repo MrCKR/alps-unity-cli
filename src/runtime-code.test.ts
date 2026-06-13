@@ -11,7 +11,7 @@ import type { BridgeRequest } from "./bridge-commands.js";
 process.env.ALPS_UNITY_ALLOW_NON_WINDOWS = "1";
 
 async function makeRuntime() {
-  const dataDir = await mkdtemp(join(tmpdir(), "alps-unity-code-"));
+  const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-code-"));
   const store = new JobStore(dataDir);
   return { dataDir, store, runner: new JobRunner(store, dataDir) };
 }
@@ -229,8 +229,8 @@ test("code wait timeout returns execution timeout details while job continues", 
 });
 
 test("Unity bridge and batch source expose Runtime Code diagnostics", async () => {
-  const bridge = await readFile(new URL("../unity-package/Editor/AlpsUnityBridge.cs", import.meta.url), "utf8");
-  const batch = await readFile(new URL("../unity-package/Editor/AlpsUnityBatch.cs", import.meta.url), "utf8");
+  const bridge = await readFile(new URL("../unitypkg/Editor/AlpsUnityBridge.cs", import.meta.url), "utf8");
+  const batch = await readFile(new URL("../unitypkg/Editor/AlpsUnityBatch.cs", import.meta.url), "utf8");
 
   assert.match(bridge, /private static HttpListener listener/);
   assert.match(bridge, /private static readonly Queue<BridgeWorkItem> WorkQueue/);

@@ -10,7 +10,7 @@ import { JobStore } from "./job-store.js";
 process.env.ALPS_UNITY_ALLOW_NON_WINDOWS = "1";
 
 async function makeRuntime() {
-  const dataDir = await mkdtemp(join(tmpdir(), "alps-unity-docs-reflect-"));
+  const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-docs-reflect-"));
   const store = new JobStore(dataDir);
   return { dataDir, store, runner: new JobRunner(store, dataDir) };
 }

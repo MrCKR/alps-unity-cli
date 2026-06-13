@@ -760,7 +760,7 @@ async function customToolArgs(command: string, flags: Record<string, string | bo
 
   const name = positionalTarget ?? stringFlag(flags, "name");
   if (!name) {
-    throw new BridgeArgumentError("E_TOOL_NOT_FOUND", "Pass a custom tool name: alps-unity custom-tool run <name>.", ["Run alps-unity custom-tool list to inspect registered tools."]);
+    throw new BridgeArgumentError("E_TOOL_NOT_FOUND", "Pass a custom tool name: unity_cli custom-tool run <name>.", ["Run unity_cli custom-tool list to inspect registered tools."]);
   }
 
   const timeoutMs = timeoutFlag(flags, 30_000, 600_000);
