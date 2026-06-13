@@ -1,5 +1,6 @@
 import { readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
+import { stdin } from "node:process";
 import type { CliResult } from "./types.js";
 import { failure, success } from "./output.js";
 
@@ -12,6 +13,12 @@ export interface BridgeRequest {
   requestId: string;
   command: string;
   args: Record<string, unknown>;
+}
+
+class BridgeArgumentError extends Error {
+  public constructor(public readonly code: string, message: string, public readonly nextActions: string[] = []) {
+    super(message);
+  }
 }
 
 interface BridgeError {
@@ -34,7 +41,14 @@ export async function executeBridgeCommand(
   positionalTarget: string | undefined,
   runtime: BridgeRuntime
 ): Promise<CliResult> {
-  return executeBridgePayload(requestId, command, await commandArgs(command, flags, positionalTarget), flags, runtime);
+  try {
+    return executeBridgePayload(requestId, command, await commandArgs(command, flags, positionalTarget), flags, runtime);
+  } catch (error) {
+    if (error instanceof BridgeArgumentError) {
+      return failure(requestId, error.code, error.message, error.nextActions);
+    }
+    throw error;
+  }
 }
 
 export async function executeBridgePayload(
@@ -79,6 +93,12 @@ export async function executeBridgePayload(
     if (command === "code.exec" && isAbortLikeError(error)) {
       return liveCodeTimeoutFailure(requestId, endpoint, args, { cause: errorMessage(error) });
     }
+    if (command === "custom-tool.run" && isAbortLikeError(error)) {
+      return failure(requestId, "E_EXECUTION_TIMEOUT", "custom-tool.run exceeded the requested timeout before the Unity Bridge returned a response.", [
+        "Inspect AlpsUnityBridge.log and the requestId before retrying; the Editor may still be finishing a long-running tool.",
+        "Use --job only as a preference marker in this release; Local Agent asynchronous custom-tool jobs are not implemented yet."
+      ], { requestId, command, timeoutMs: typeof args.timeoutMs === "number" ? args.timeoutMs : 30_000, bridgeEndpoint: endpoint ?? null });
+    }
     return failure(requestId, "BRIDGE_CONNECTION_FAILED", errorMessage(error), ["Check Unity Bridge endpoint and logs."]);
   }
 }
@@ -110,6 +130,9 @@ export function bridgeCommandName(group: string | undefined, command: string | u
   }
   if (group === "physics" && ["settings", "raycast", "simulation"].includes(command ?? "")) {
     return `physics.${command}`;
+  }
+  if (group === "custom-tool" && ["list", "run"].includes(command ?? "")) {
+    return `custom-tool.${command}`;
   }
   if (group === "shader" && ["info", "read", "create", "update"].includes(command ?? "")) {
     return `shader.${command}`;
@@ -334,6 +357,10 @@ async function commandArgs(command: string, flags: Record<string, string | boole
       queriesStartInColliders: boolFlag(flags, "queries-start-in-colliders"),
       autoSimulation: boolFlag(flags, "auto-simulation")
     });
+  }
+
+  if (command.startsWith("custom-tool.")) {
+    return customToolArgs(command, flags, positionalTarget);
   }
 
   if (command.startsWith("shader.")) {
@@ -591,6 +618,10 @@ function bridgeHttpTimeoutMs(payload: BridgeRequest): number {
   if (payload.command === "code.exec" && typeof payload.args.timeoutMs === "number" && Number.isFinite(payload.args.timeoutMs) && payload.args.timeoutMs > 0) {
     return payload.args.timeoutMs + 5000;
   }
+  if (payload.command === "custom-tool.run") {
+    const timeoutMs = typeof payload.args.timeoutMs === "number" && Number.isFinite(payload.args.timeoutMs) ? payload.args.timeoutMs : 30_000;
+    return Math.max(timeoutMs + 5000, 65_000);
+  }
   return 10_000;
 }
 
@@ -676,6 +707,80 @@ async function contentFlag(flags: Record<string, string | boolean>): Promise<str
   }
   const filePath = stringFlag(flags, "content-file");
   return filePath ? readFile(resolve(filePath), "utf8") : undefined;
+}
+
+async function customToolArgs(command: string, flags: Record<string, string | boolean>, positionalTarget: string | undefined): Promise<Record<string, unknown>> {
+  const projectPath = resolve(stringFlag(flags, "project") ?? process.cwd());
+  const instanceId = stringFlag(flags, "instance");
+
+  if (command === "custom-tool.list") {
+    return compactArgs({ projectPath, instanceId });
+  }
+
+  const name = positionalTarget ?? stringFlag(flags, "name");
+  if (!name) {
+    throw new BridgeArgumentError("E_TOOL_NOT_FOUND", "Pass a custom tool name: alps-unity custom-tool run <name>.", ["Run alps-unity custom-tool list to inspect registered tools."]);
+  }
+
+  const timeoutMs = timeoutFlag(flags, 30_000, 600_000);
+  const artifactDir = stringFlag(flags, "artifact-dir");
+  return compactArgs({
+    projectPath,
+    instanceId,
+    name,
+    input: await customToolInput(flags),
+    timeoutMs,
+    artifactDir: artifactDir ? resolve(artifactDir) : undefined,
+    execution: { preferJob: boolFlag(flags, "job") === true }
+  });
+}
+
+async function customToolInput(flags: Record<string, string | boolean>): Promise<unknown> {
+  const sources = [stringFlag(flags, "input") !== undefined, stringFlag(flags, "input-file") !== undefined, boolFlag(flags, "stdin") === true].filter(Boolean).length;
+  if (sources > 1) {
+    throw new BridgeArgumentError("E_SCHEMA_INVALID", "Pass only one of --input, --input-file or --stdin for custom-tool run.");
+  }
+
+  let raw = stringFlag(flags, "input");
+  const inputFile = stringFlag(flags, "input-file");
+  if (inputFile) {
+    try {
+      raw = await readFile(resolve(inputFile), "utf8");
+    } catch (error) {
+      throw new BridgeArgumentError("E_PATH_INVALID", error instanceof Error ? error.message : String(error));
+    }
+  }
+  if (boolFlag(flags, "stdin") === true) {
+    raw = await readStdin();
+  }
+  if (raw === undefined || raw.trim() === "") {
+    return {};
+  }
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch (error) {
+    throw new BridgeArgumentError("E_SCHEMA_INVALID", `custom-tool input must be valid JSON: ${error instanceof Error ? error.message : String(error)}`);
+  }
+}
+
+function timeoutFlag(flags: Record<string, string | boolean>, fallback: number, max: number): number {
+  const raw = stringFlag(flags, "timeout-ms");
+  if (!raw) {
+    return fallback;
+  }
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed <= 0 || parsed > max) {
+    throw new BridgeArgumentError("E_SCHEMA_INVALID", `--timeout-ms must be an integer between 1 and ${max}.`);
+  }
+  return parsed;
+}
+
+async function readStdin(): Promise<string> {
+  const chunks: Buffer[] = [];
+  for await (const chunk of stdin) {
+    chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks).toString("utf8");
 }
 
 function numberFlag(flags: Record<string, string | boolean>, key: string): number | undefined {

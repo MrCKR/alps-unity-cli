@@ -24,6 +24,13 @@ async function makeUnityProject(root: string): Promise<string> {
 }
 
 async function makeFakeUnity(dataDir: string, body: string): Promise<string> {
+  if (process.platform === "win32") {
+    const script = join(dataDir, "UnityFake.js");
+    const path = join(dataDir, "Unity.cmd");
+    await writeFile(script, body, "utf8");
+    await writeFile(path, `@echo off\r\n"${process.execPath}" "%~dp0UnityFake.js" %*\r\nif errorlevel 1 exit /b %errorlevel%\r\n`, "utf8");
+    return path;
+  }
   const path = join(dataDir, "Unity.exe");
   await writeFile(path, `#!/usr/bin/env node\n${body}\n`, { mode: 0o755 });
   return path;
