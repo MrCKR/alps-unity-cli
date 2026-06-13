@@ -119,6 +119,7 @@ namespace AlpsUnityCli
             EditorApplication.update += ProcessQueuedWork;
             AssemblyReloadEvents.beforeAssemblyReload += StopListener;
             EditorApplication.quitting += StopListener;
+            StopStaleBridgeListeners();
             StartListener();
         }
 
@@ -142,6 +143,37 @@ namespace AlpsUnityCli
             {
                 WriteLog("bridge_start_failed " + exception.GetType().Name + ": " + exception.Message);
             }
+        }
+
+        private static void StopStaleBridgeListeners()
+        {
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                var type = assembly.GetType("AlpsUnityCli.AlpsUnityBridge", false);
+                if (type == null || type == typeof(AlpsUnityBridge))
+                {
+                    continue;
+                }
+                var method = type.GetMethod("StopListener", BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);
+                if (method == null)
+                {
+                    continue;
+                }
+                try
+                {
+                    method.Invoke(null, null);
+                    WriteLog("stale_bridge_listener_stopped assembly=" + assembly.GetName().Name);
+                }
+                catch (Exception exception)
+                {
+                    WriteLog("stale_bridge_listener_stop_failed assembly=" + assembly.GetName().Name + " " + exception.GetType().Name + ": " + exception.Message);
+                }
+            }
+        }
+
+        private static string BridgeBuildStamp()
+        {
+            return typeof(AlpsUnityBridgeBuildInfo).GetField("BuildStamp", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).GetValue(null) as string ?? "unknown";
         }
 
         private static void StopListener()
@@ -182,7 +214,7 @@ namespace AlpsUnityCli
         {
             if (context.Request.HttpMethod == "GET" && context.Request.Url.AbsolutePath == "/health")
             {
-                WriteJson(context, "{\"ok\":true,\"data\":{\"bridge\":\"alps-unity-cli\",\"port\":" + Port + ",\"route\":\"POST /bridge/execute\",\"capabilities\":" + CapabilitiesJson() + "}}", 200);
+                WriteJson(context, "{\"ok\":true,\"data\":{\"bridge\":\"alps-unity-cli\",\"port\":" + Port + ",\"route\":\"POST /bridge/execute\",\"buildStamp\":" + Quote(BridgeBuildStamp()) + ",\"capabilities\":" + CapabilitiesJson() + "}}", 200);
                 return;
             }
 
@@ -3077,7 +3109,14 @@ namespace AlpsUnityCli
         {
             var scene = SceneManager.GetActiveScene();
             var prefabStage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
-            return $"{{\"playMode\":{{\"isPlaying\":{Bool(EditorApplication.isPlaying)},\"isPaused\":{Bool(EditorApplication.isPaused)},\"isPlayingOrWillChangePlaymode\":{Bool(EditorApplication.isPlayingOrWillChangePlaymode)}}},\"busy\":{{\"isBusy\":{Bool(EditorApplication.isCompiling || EditorApplication.isUpdating || EditorApplication.isPlayingOrWillChangePlaymode || BuildPipeline.isBuildingPlayer)},\"compiling\":{Bool(EditorApplication.isCompiling)},\"updating\":{Bool(EditorApplication.isUpdating)},\"building\":{Bool(BuildPipeline.isBuildingPlayer)},\"domainReloading\":{Bool(EditorApplication.isCompiling)},\"playModeChanging\":{Bool(EditorApplication.isPlayingOrWillChangePlaymode)}}},\"activeScene\":{{\"name\":{Quote(scene.name)},\"path\":{Quote(scene.path)},\"isLoaded\":{Bool(scene.isLoaded)},\"isDirty\":{Bool(scene.isDirty)}}},\"prefabStage\":{PrefabStageJson(prefabStage)},\"plannedEffects\":[]}}";
+            return "{"
+                + "\"playMode\":{\"isPlaying\":" + Bool(EditorApplication.isPlaying) + ",\"isPaused\":" + Bool(EditorApplication.isPaused) + ",\"isPlayingOrWillChangePlaymode\":" + Bool(EditorApplication.isPlayingOrWillChangePlaymode) + "},"
+                + "\"busy\":{\"isBusy\":" + Bool(EditorApplication.isCompiling || EditorApplication.isUpdating || EditorApplication.isPlayingOrWillChangePlaymode || BuildPipeline.isBuildingPlayer) + ",\"compiling\":" + Bool(EditorApplication.isCompiling) + ",\"updating\":" + Bool(EditorApplication.isUpdating) + ",\"building\":" + Bool(BuildPipeline.isBuildingPlayer) + ",\"domainReloading\":" + Bool(EditorApplication.isCompiling) + ",\"playModeChanging\":" + Bool(EditorApplication.isPlayingOrWillChangePlaymode) + "},"
+                + "\"activeScene\":{\"name\":" + Quote(scene.name) + ",\"path\":" + Quote(scene.path) + ",\"isLoaded\":" + Bool(scene.isLoaded) + ",\"isDirty\":" + Bool(scene.isDirty) + "},"
+                + "\"prefabStage\":" + PrefabStageJson(prefabStage) + ","
+                + "\"bridge\":{\"buildStamp\":" + Quote(BridgeBuildStamp()) + "},"
+                + "\"plannedEffects\":[]"
+                + "}";
         }
 
         private static string EditorPlayJson(BridgeRequest request)

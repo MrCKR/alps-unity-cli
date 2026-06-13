@@ -163,7 +163,7 @@ export async function removeScopedRegistry(projectPath: string, name: string): P
   return { manifestPath: paths.manifestPath, removed };
 }
 
-export async function ensurePackageBridge(projectPath: string): Promise<{ manifestPath: string; bridgePath: string; dependencyName: string; dependencySpec: string }> {
+export async function ensurePackageBridge(projectPath: string): Promise<{ manifestPath: string; bridgePath: string; dependencyName: string; dependencySpec: string; buildStampPath: string; buildStamp: string }> {
   const paths = packagePaths(projectPath);
   const manifest = await readManifest(paths.manifestPath, false);
   manifest.dependencies ??= {};
@@ -174,10 +174,13 @@ export async function ensurePackageBridge(projectPath: string): Promise<{ manife
 
   await mkdir(bridgePath, { recursive: true });
   await cp(sourcePath, bridgePath, { recursive: true, force: true });
+  const buildStamp = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  const buildStampPath = join(bridgePath, "Editor", "AlpsUnityBridgeBuildInfo.cs");
+  await writeFile(buildStampPath, bridgeBuildInfoSource(buildStamp), "utf8");
   manifest.dependencies[bridgePackageName] = dependencySpec;
   await writeManifest(paths.manifestPath, manifest);
 
-  return { manifestPath: paths.manifestPath, bridgePath, dependencyName: bridgePackageName, dependencySpec };
+  return { manifestPath: paths.manifestPath, bridgePath, dependencyName: bridgePackageName, dependencySpec, buildStampPath, buildStamp };
 }
 
 export function parsePackageSpec(raw: string, explicitVersion?: string): PackageSpec {
@@ -243,6 +246,21 @@ export class PackageManagerError extends Error {
   ) {
     super(message);
   }
+}
+
+function bridgeBuildInfoSource(buildStamp: string): string {
+  return [
+    "#if UNITY_EDITOR",
+    "namespace AlpsUnityCli",
+    "{",
+    "    internal static class AlpsUnityBridgeBuildInfo",
+    "    {",
+    `        public const string BuildStamp = \"${buildStamp}\";`,
+    "    }",
+    "}",
+    "#endif",
+    ""
+  ].join("\n");
 }
 
 async function readManifest(path: string, allowMissing: boolean): Promise<UnityManifest> {
