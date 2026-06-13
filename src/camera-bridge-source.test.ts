@@ -30,6 +30,12 @@ test("Unity Bridge source keeps top-level C# methods structurally balanced", asy
   assert.equal(braceDepth, 2);
 });
 
+test("Unity Bridge source does not duplicate C# method signatures", async () => {
+  const source = await readFile(sourceUrl, "utf8");
+
+  assert.deepEqual(duplicateCSharpMethodSignatures(source), []);
+});
+
 test("Unity Bridge exposes documented camera, screenshot, prefab, material, graphics, physics, shader and texture commands", async () => {
   const source = await readFile(sourceUrl, "utf8");
   const readme = await readFile(readmeUrl, "utf8");
@@ -217,6 +223,92 @@ function stripCSharpTrivia(source: string): string {
   }
 
   return output;
+}
+
+function duplicateCSharpMethodSignatures(source: string): string[] {
+  const strippedSource = stripCSharpTrivia(source);
+  const seen = new Map<string, number>();
+  const duplicates: string[] = [];
+  const pendingTypes: string[] = [];
+  const typeStack: Array<{ name: string; depth: number }> = [];
+  let braceDepth = 0;
+
+  for (const [index, line] of strippedSource.split("\n").entries()) {
+    while (typeStack.length > 0 && braceDepth < typeStack[typeStack.length - 1].depth) {
+      typeStack.pop();
+    }
+
+    const typeMatch = line.match(/^\s*(?:(?:public|private|internal|protected)\s+)?(?:(?:sealed|static|partial|abstract)\s+)*class\s+(\w+)/);
+    if (typeMatch) {
+      pendingTypes.push(typeMatch[1]);
+    }
+
+    const methodMatch = line.match(/^\s*(?:public|private|internal|protected)\s+(?:static\s+)?[\w.<>,\[\]?]+\s+(\w+)(?:<[^>]+>)?\((.*)\)\s*(?:where\b.*)?$/);
+    if (methodMatch) {
+      const owner = typeStack.length > 0 ? typeStack[typeStack.length - 1].name : "<global>";
+      const signature = `${owner}.${methodMatch[1]}(${normalizeCSharpParameterTypes(methodMatch[2]).join(",")})`;
+      const firstLine = seen.get(signature);
+      if (firstLine !== undefined) {
+        duplicates.push(`${signature} first declared at line ${firstLine}, duplicated at line ${index + 1}`);
+      } else {
+        seen.set(signature, index + 1);
+      }
+    }
+
+    for (const character of line) {
+      if (character === "{") {
+        braceDepth += 1;
+        const typeName = pendingTypes.shift();
+        if (typeName !== undefined) {
+          typeStack.push({ name: typeName, depth: braceDepth });
+        }
+      } else if (character === "}") {
+        braceDepth -= 1;
+        while (typeStack.length > 0 && braceDepth < typeStack[typeStack.length - 1].depth) {
+          typeStack.pop();
+        }
+      }
+    }
+  }
+
+  return duplicates;
+}
+
+function normalizeCSharpParameterTypes(parameters: string): string[] {
+  const trimmedParameters = parameters.trim();
+  if (trimmedParameters.length === 0) {
+    return [];
+  }
+
+  return splitTopLevelCommas(trimmedParameters).map((parameter) => {
+    const withoutDefault = parameter.split("=")[0].trim();
+    const tokens = withoutDefault.split(/\s+/);
+    return tokens.slice(0, -1).join(" ");
+  });
+}
+
+function splitTopLevelCommas(value: string): string[] {
+  const parts: string[] = [];
+  let current = "";
+  let angleDepth = 0;
+
+  for (const character of value) {
+    if (character === "<") {
+      angleDepth += 1;
+    } else if (character === ">") {
+      angleDepth -= 1;
+    }
+
+    if (character === "," && angleDepth === 0) {
+      parts.push(current.trim());
+      current = "";
+    } else {
+      current += character;
+    }
+  }
+
+  parts.push(current.trim());
+  return parts;
 }
 
 function quoteLikeBridge(value: string): string {
