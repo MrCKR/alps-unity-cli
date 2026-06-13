@@ -178,11 +178,7 @@ async function handleJob(command: string | undefined, flags: Record<string, stri
 }
 
 function refreshArgs(flags: Record<string, string | boolean>): string[] {
-  const args = ["-executeMethod", "AlpsUnityCli.Batch.Refresh"];
-  if (getBoolean(flags, "compile")) {
-    args[1] = "AlpsUnityCli.Batch.RefreshAndCompile";
-  }
-  return args;
+  return ["-executeMethod", getBoolean(flags, "compile") ? "AlpsUnityCli.Batch.ResolvePackages" : "AlpsUnityCli.Batch.Refresh"];
 }
 
 async function handlePackage(command: string | undefined, args: string[], flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult> {

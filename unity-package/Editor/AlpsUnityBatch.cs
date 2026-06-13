@@ -52,6 +52,13 @@ namespace AlpsUnityCli
             }
         }
 
+        public static void Refresh()
+        {
+            AssetDatabase.Refresh();
+            Console.WriteLine("AssetDatabase refresh completed.");
+            EditorApplication.Exit(0);
+        }
+
         public static void ResolvePackages()
         {
             Client.Resolve();
@@ -78,7 +85,9 @@ namespace AlpsUnityCli
             {
                 if (args[index] == name)
                 {
-                    return args[index + 1];
+                    var value = args[index + 1];
+                    if (value == "__ALPS_EMPTY__" || value.StartsWith("-", StringComparison.Ordinal)) return string.Empty;
+                    return value;
                 }
             }
             return null;
@@ -156,11 +165,19 @@ namespace AlpsUnityCli
             AddReference(references, typeof(Enumerable).Assembly.Location);
             AddReference(references, typeof(UnityEngine.Object).Assembly.Location);
             AddReference(references, typeof(EditorApplication).Assembly.Location);
+            AddReferenceIfExists(references, Path.Combine(EditorApplication.applicationContentsPath, "Managed", "netstandard.dll"));
+            AddReferenceIfExists(references, Path.Combine(EditorApplication.applicationContentsPath, "Managed", "UnityEngine", "UnityEngine.dll"));
+            AddReferenceIfExists(references, Path.Combine(EditorApplication.applicationContentsPath, "Managed", "UnityEngine", "UnityEngine.CoreModule.dll"));
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
                 if (assembly.IsDynamic || string.IsNullOrEmpty(assembly.Location)) continue;
                 var name = assembly.GetName().Name;
-                if (name.StartsWith("Assembly-CSharp", StringComparison.OrdinalIgnoreCase) || name.StartsWith("Unity.", StringComparison.OrdinalIgnoreCase)) AddReference(references, assembly.Location);
+                if (name.Equals("netstandard", StringComparison.OrdinalIgnoreCase) || name.StartsWith("Assembly-CSharp", StringComparison.OrdinalIgnoreCase) || name.StartsWith("Unity.", StringComparison.OrdinalIgnoreCase)) AddReference(references, assembly.Location);
+            }
+            var scriptAssemblies = Path.Combine(ProjectPath(), "Library", "ScriptAssemblies");
+            if (Directory.Exists(scriptAssemblies))
+            {
+                foreach (var assemblyPath in Directory.GetFiles(scriptAssemblies, "*.dll")) AddReference(references, assemblyPath);
             }
             foreach (var reference in SplitCsv(refsCsv)) AddReference(references, reference);
             return references;
@@ -169,6 +186,11 @@ namespace AlpsUnityCli
         private static void AddReference(List<string> references, string reference)
         {
             if (!string.IsNullOrEmpty(reference) && !references.Contains(reference)) references.Add(reference);
+        }
+
+        private static void AddReferenceIfExists(List<string> references, string reference)
+        {
+            if (!string.IsNullOrEmpty(reference) && File.Exists(reference)) AddReference(references, reference);
         }
 
         private static string ValidateReferences(IEnumerable<string> references)

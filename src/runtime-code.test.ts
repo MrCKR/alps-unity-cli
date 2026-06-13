@@ -117,6 +117,7 @@ test("code exec --channel batchmode creates Unity job and deploys bridge package
   assert.ok(data.command.includes("-alpsCodeSource"));
   assert.ok(data.command.includes("-alpsTimeoutMs"));
   assert.ok(data.command.includes("-alpsProjectPath"));
+  assert.equal(data.command[data.command.indexOf("-alpsCodeRefs") + 1], "__ALPS_EMPTY__");
 
   const manifest = JSON.parse(await readFile(join(runtime.dataDir, "artifacts", created.requestId, "manifest.json"), "utf8")) as { jobId: string; artifact: Array<{ relativePath: string; sha256: string }> };
   assert.equal(manifest.jobId, data.jobId);
@@ -206,6 +207,10 @@ test("Unity bridge and batch source expose Runtime Code diagnostics", async () =
   assert.match(bridge, /ValidateCodeReferences/);
   assert.match(bridge, /Runtime Code reference was not found/);
   assert.match(batch, /public static void ExecuteCode\(\)/);
+  assert.match(batch, /public static void Refresh\(\)/);
+  assert.match(batch, /__ALPS_EMPTY__/);
+  assert.match(batch, /netstandard\.dll/);
+  assert.match(batch, /Library", "ScriptAssemblies/);
   assert.match(batch, /-alpsCodeResult/);
   assert.match(batch, /-alpsTimeoutMs/);
   assert.match(batch, /-alpsProjectPath/);

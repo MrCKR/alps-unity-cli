@@ -290,7 +290,7 @@ async function startBatchCodeJob(
       "-alpsCodeSource", sourcePath,
       "-alpsCodeArgs", String(payload.argsJson ?? "{}"),
       "-alpsCodeDefines", String(payload.defines ?? ""),
-      "-alpsCodeRefs", String(payload.refs ?? ""),
+      "-alpsCodeRefs", codeRefsArg(payload.refs),
       "-alpsArtifactDir", artifactDir,
       "-alpsTimeoutMs", String(timeoutMs),
       "-alpsProjectPath", projectPath,
@@ -337,6 +337,10 @@ async function startBatchCodeJob(
 
 function normalizeRelativePath(path: string): string {
   return path.split("\\").join("/");
+}
+
+function codeRefsArg(refs: unknown): string {
+  return typeof refs === "string" && refs.length > 0 ? refs : "__ALPS_EMPTY__";
 }
 
 function summarizeJob(job: JobRecord): Record<string, unknown> {
