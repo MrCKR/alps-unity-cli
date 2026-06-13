@@ -106,7 +106,7 @@ export async function handleReflectCommand(
     const versioned = filterVersion(cache, getString(flags, "unity-version") ?? getString(flags, "version"), "REFLECT_VERSION_NOT_FOUND");
     if (versioned.entries.length === 0 && assemblyDiagnostics(versioned).some((diagnostic) => diagnostic.level === "error")) {
       return failure(requestId, "REFLECT_ASSEMBLY_LOAD_FAILED", "Reflection cache contains only failed assembly loads.", [
-        "Regenerate the reflection cache from a Unity batchmode or live bridge session.",
+        "Regenerate the reflection cache from Unity batchmode or a live bridge context.",
         "Check assembly paths and Unity compilation errors."
       ]);
     }
@@ -127,12 +127,12 @@ export async function handleReflectCommand(
 
 async function docsGet(api: string | undefined, flags: Record<string, string | boolean>, requestId: string, cache: CacheIndex): Promise<CliResult> {
   if (!api) {
-    return failure(requestId, "DOCS_API_REQUIRED", "Pass an API name: alps-unity docs get <api>.");
+    return failure(requestId, "DOCS_API_REQUIRED", "Pass an API name: unity_cli docs get <api>.");
   }
   const matches = cache.entries.filter((entry) => entryMatchesName(entry, api));
   if (matches.length === 0) {
     return failure(requestId, "DOCS_API_NOT_FOUND", `Unity API documentation was not found in the offline cache: ${api}.`, [
-      "Run alps-unity docs search <query> to inspect cached APIs.",
+      "Run unity_cli docs search <query> to inspect cached APIs.",
       "Pass --docs-dir <path> or set ALPS_UNITY_DOCS_DIR to a populated cache."
     ]);
   }
@@ -160,7 +160,7 @@ async function docsGet(api: string | undefined, flags: Record<string, string | b
 
 function docsSearch(query: string | undefined, flags: Record<string, string | boolean>, requestId: string, cache: CacheIndex): CliResult {
   if (!query) {
-    return failure(requestId, "DOCS_QUERY_REQUIRED", "Pass a search query: alps-unity docs search <query>.");
+    return failure(requestId, "DOCS_QUERY_REQUIRED", "Pass a search query: unity_cli docs search <query>.");
   }
   const scored = scoreEntries(cache.entries, query)
     .filter((entry) => entry.score > 0)
@@ -182,12 +182,12 @@ function docsSearch(query: string | undefined, flags: Record<string, string | bo
 
 function reflectType(name: string | undefined, flags: Record<string, string | boolean>, requestId: string, cache: CacheIndex): CliResult {
   if (!name) {
-    return failure(requestId, "REFLECT_TYPE_REQUIRED", "Pass a type name: alps-unity reflect type <name>.");
+    return failure(requestId, "REFLECT_TYPE_REQUIRED", "Pass a type name: unity_cli reflect type <name>.");
   }
   const matches = typeMatches(cache.entries, name);
   if (matches.length === 0) {
     return failure(requestId, "REFLECT_TYPE_NOT_FOUND", `Type was not found in the offline reflection cache: ${name}.`, [
-      "Run alps-unity reflect search <query> to inspect cached types and members.",
+      "Run unity_cli reflect search <query> to inspect cached types and members.",
       "Regenerate the reflection cache from Unity if the type comes from project assemblies."
     ]);
   }
@@ -215,21 +215,21 @@ function reflectType(name: string | undefined, flags: Record<string, string | bo
 
 function reflectMember(target: string | undefined, flags: Record<string, string | boolean>, requestId: string, cache: CacheIndex): CliResult {
   if (!target || !target.includes(".")) {
-    return failure(requestId, "REFLECT_MEMBER_REQUIRED", "Pass a member target: alps-unity reflect member <type.member>.");
+    return failure(requestId, "REFLECT_MEMBER_REQUIRED", "Pass a member target: unity_cli reflect member <type.member>.");
   }
   const lastDot = target.lastIndexOf(".");
   const typeName = target.slice(0, lastDot);
   const memberName = target.slice(lastDot + 1);
   const types = typeMatches(cache.entries, typeName);
   if (types.length === 0) {
-    return failure(requestId, "REFLECT_TYPE_NOT_FOUND", `Type was not found in the offline reflection cache: ${typeName}.`, ["Run alps-unity reflect search <query> to inspect cached types and members."]);
+    return failure(requestId, "REFLECT_TYPE_NOT_FOUND", `Type was not found in the offline reflection cache: ${typeName}.`, ["Run unity_cli reflect search <query> to inspect cached types and members."]);
   }
 
   const memberMatches = types.flatMap((type) => (type.members ?? [])
     .filter((member) => normalize(member.name) === normalize(memberName))
     .map((member) => ({ type, member })));
   if (memberMatches.length === 0) {
-    return failure(requestId, "REFLECT_MEMBER_NOT_FOUND", `Member was not found in the offline reflection cache: ${target}.`, ["Run alps-unity reflect type <type> to inspect cached members."]);
+    return failure(requestId, "REFLECT_MEMBER_NOT_FOUND", `Member was not found in the offline reflection cache: ${target}.`, ["Run unity_cli reflect type <type> to inspect cached members."]);
   }
   if (memberMatches.length > 1) {
     return failure(requestId, "REFLECT_MEMBER_AMBIGUOUS", `Multiple members matched: ${target}.`, [
@@ -259,7 +259,7 @@ function reflectMember(target: string | undefined, flags: Record<string, string 
 
 function reflectSearch(query: string | undefined, flags: Record<string, string | boolean>, requestId: string, cache: CacheIndex): CliResult {
   if (!query) {
-    return failure(requestId, "REFLECT_QUERY_REQUIRED", "Pass a search query: alps-unity reflect search <query>.");
+    return failure(requestId, "REFLECT_QUERY_REQUIRED", "Pass a search query: unity_cli reflect search <query>.");
   }
   const typeResults = scoreEntries(cache.entries, query)
     .filter((entry) => entry.score > 0)
@@ -319,13 +319,13 @@ async function loadDocsCache(root: string): Promise<CacheIndex> {
 async function loadReflectCache(root: string): Promise<CacheIndex> {
   await assertDirectory(root, "REFLECT_CACHE_MISSING", "Unity reflection cache was not found.", [
     "Pass --reflect-dir <path> or set ALPS_UNITY_REFLECT_DIR.",
-    "Generate a reflection index from Unity batchmode or a live bridge session."
+    "Generate a reflection index from Unity batchmode or a live bridge context."
   ]);
   const json = await readFirstJson(root, reflectIndexCandidates);
   if (!json) {
     throw new CacheError("REFLECT_CACHE_MISSING", "Unity reflection cache has no readable index file.", [
       "Add reflect-index.json, unity-reflect.json, reflect.json, or index.json.",
-      "Regenerate the reflection cache from Unity batchmode or a live bridge session."
+      "Regenerate the reflection cache from Unity batchmode or a live bridge context."
     ]);
   }
   const parsed = normalizeIndex(json.data, root, "reflect");

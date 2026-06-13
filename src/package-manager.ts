@@ -108,7 +108,7 @@ export async function removePackage(projectPath: string, name: string): Promise<
   const manifest = await readManifest(paths.manifestPath, false);
   const removedVersion = manifest.dependencies?.[name];
   if (!removedVersion) {
-    throw new PackageManagerError("PACKAGE_NOT_FOUND", `Package is not declared in manifest: ${name}`, ["Run alps-unity package list to inspect installed packages."]);
+    throw new PackageManagerError("PACKAGE_NOT_FOUND", `Package is not declared in manifest: ${name}`, ["Run unity_cli package list to inspect installed packages."]);
   }
   delete manifest.dependencies?.[name];
   await writeManifest(paths.manifestPath, manifest);
@@ -155,7 +155,7 @@ export async function removeScopedRegistry(projectPath: string, name: string): P
   const registries = normalizeScopedRegistries(manifest.scopedRegistries);
   const index = registries.findIndex((registry) => registry.name === name);
   if (index < 0) {
-    throw new PackageManagerError("SCOPED_REGISTRY_NOT_FOUND", `Scoped registry not found: ${name}`, ["Run alps-unity package scoped-registry list."]);
+    throw new PackageManagerError("SCOPED_REGISTRY_NOT_FOUND", `Scoped registry not found: ${name}`, ["Run unity_cli package scoped-registry list."]);
   }
   const [removed] = registries.splice(index, 1);
   manifest.scopedRegistries = registries;
@@ -168,7 +168,7 @@ export async function ensurePackageBridge(projectPath: string): Promise<{ manife
   const manifest = await readManifest(paths.manifestPath, false);
   manifest.dependencies ??= {};
 
-  const sourcePath = resolve(fileURLToPath(new URL("../unity-package", import.meta.url)));
+  const sourcePath = resolve(fileURLToPath(new URL("../unitypkg", import.meta.url)));
   const bridgePath = join(paths.projectPath, "Packages", bridgePackageName);
   const dependencySpec = `file:${bridgePath.replace(/\\/g, "/")}`;
 

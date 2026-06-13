@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://alps.local/schemas/response-envelope.schema.json",
+  "title": "Unity CLI Response Envelope",
+  "oneOf": [
+    {
+      "type": "object",
+      "required": ["ok", "requestId", "data"],
+      "properties": {
+        "ok": { "const": true },
+        "requestId": { "type": "string" },
+        "data": { "type": "object" }
+      },
+      "additionalProperties": false
+    },
+    {
+      "type": "object",
+      "required": ["ok", "requestId", "error"],
+      "properties": {
+        "ok": { "const": false },
+        "requestId": { "type": "string" },
+        "error": { "$ref": "./error-code.schema.json" }
+      },
+      "additionalProperties": false
+    }
+  ]
+}
