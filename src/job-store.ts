@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { JobRecord, JobStatus, JobStoreData } from "./types.js";
 
@@ -62,6 +62,8 @@ export class JobStore {
 
   private async write(data: JobStoreData): Promise<void> {
     await mkdir(dirname(this.filePath), { recursive: true });
-    await writeFile(this.filePath, JSON.stringify(data, null, 2), "utf8");
+    const tempPath = `${this.filePath}.${process.pid}.${Date.now()}.tmp`;
+    await writeFile(tempPath, JSON.stringify(data, null, 2), "utf8");
+    await rename(tempPath, this.filePath);
   }
 }

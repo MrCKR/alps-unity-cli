@@ -5,7 +5,38 @@ import test from "node:test";
 const sourceUrl = new URL("../unity-package/Editor/AlpsUnityBridge.cs", import.meta.url);
 const readmeUrl = new URL("../README.md", import.meta.url);
 
-test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, graphics and physics commands", async () => {
+test("Unity Bridge source keeps top-level C# methods structurally balanced", async () => {
+  const source = await readFile(sourceUrl, "utf8");
+  const strippedSource = stripCSharpTrivia(source);
+  const topLevelSource = strippedSource.slice(0, strippedSource.indexOf("        private sealed class BridgeWorkItem"));
+  let braceDepth = 0;
+
+  for (const [index, line] of topLevelSource.split("\n").entries()) {
+    assert.ok(braceDepth >= 0, `C# brace depth went negative before line ${index + 1}`);
+
+    if (/^\s+private static (?!readonly\b).*\)\s*(?:where\b.*)?$/.test(line)) {
+      assert.equal(braceDepth, 2, `Top-level C# method declaration is nested at line ${index + 1}: ${line.trim()}`);
+    }
+
+    for (const character of line) {
+      if (character === "{") {
+        braceDepth += 1;
+      } else if (character === "}") {
+        braceDepth -= 1;
+      }
+    }
+  }
+
+  assert.equal(braceDepth, 2);
+});
+
+test("Unity Bridge source does not duplicate C# method signatures", async () => {
+  const source = await readFile(sourceUrl, "utf8");
+
+  assert.deepEqual(duplicateCSharpMethodSignatures(source), []);
+});
+
+test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, graphics, physics, shader, texture and editor commands", async () => {
   const source = await readFile(sourceUrl, "utf8");
   const readme = await readFile(readmeUrl, "utf8");
   const bridgeSection = readme.slice(readme.indexOf("## Unity Editor Bridge"), readme.indexOf("## Batch Automation"));
@@ -18,12 +49,17 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /CapabilityJson\("material", MaterialCommands\)/);
   assert.match(source, /CapabilityJson\("graphics", GraphicsCommands\)/);
   assert.match(source, /CapabilityJson\("physics", PhysicsCommands\)/);
+  assert.match(source, /CapabilityJson\("physics", PhysicsCommands\) \+ ","\s+\+ CapabilityJson\("shader", ShaderCommands\) \+ ","/);
+  assert.match(source, /CapabilityJson\("shader", ShaderCommands\)/);
+  assert.match(source, /CapabilityJson\("texture", TextureCommands\)/);
   assert.match(source, /private static readonly string\[\] CameraCommands = \{ "camera\.list", "camera\.info", "camera\.screenshot" \}/);
   assert.match(source, /private static readonly string\[\] PrefabCommands = \{ "prefab\.info", "prefab\.create", "prefab\.stage-open", "prefab\.stage-save", "prefab\.stage-close", "prefab\.hierarchy" \}/);
   assert.match(source, /private static readonly string\[\] UiCommands = \{ "ui\.canvas\.create", "ui\.text\.create", "ui\.button\.create", "ui\.image\.create", "ui\.document\.info", "ui\.document\.create", "ui\.hierarchy" \}/);
   assert.match(source, /private static readonly string\[\] MaterialCommands = \{ "material\.info", "material\.create", "material\.assign", "material\.set" \}/);
   assert.match(source, /private static readonly string\[\] GraphicsCommands = \{ "graphics\.quality", "graphics\.settings", "graphics\.screenshot" \}/);
   assert.match(source, /private static readonly string\[\] PhysicsCommands = \{ "physics\.settings", "physics\.raycast", "physics\.simulation" \}/);
+  assert.match(source, /private static readonly string\[\] ShaderCommands = \{ "shader\.info", "shader\.read", "shader\.create", "shader\.update" \}/);
+  assert.match(source, /private static readonly string\[\] TextureCommands = \{ "texture\.info", "texture\.create", "texture\.sprite", "texture\.import-settings" \}/);
   assert.match(source, /case "camera\.list"/);
   assert.match(source, /case "camera\.info"/);
   assert.match(source, /case "camera\.screenshot"/);
@@ -52,15 +88,197 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /case "physics\.settings"/);
   assert.match(source, /case "physics\.raycast"/);
   assert.match(source, /case "physics\.simulation"/);
+  assert.match(source, /case "shader\.info"/);
+  assert.match(source, /case "shader\.read"/);
+  assert.match(source, /case "shader\.create"/);
+  assert.match(source, /case "shader\.update"/);
+  assert.match(source, /case "texture\.info"/);
+  assert.match(source, /case "texture\.create"/);
+  assert.match(source, /case "texture\.sprite"/);
+  assert.match(source, /case "texture\.import-settings"/);
   assert.match(source, /case "editor\.state"/);
   assert.match(source, /case "editor\.play"/);
   assert.match(source, /case "editor\.pause"/);
   assert.match(source, /case "editor\.stop"/);
   assert.match(source, /case "editor\.menu"/);
-  assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.screenshot`, `screenshot\.capture`, `prefab\.info`, `prefab\.create`, `prefab\.stage-open`, `prefab\.stage-save`, `prefab\.stage-close`, `prefab\.hierarchy`, `ui\.canvas\.create`, `ui\.text\.create`, `ui\.button\.create`, `ui\.image\.create`, `ui\.document\.info`, `ui\.document\.create`, `ui\.hierarchy`, `material\.info`, `material\.create`, `material\.assign`, `material\.set`, `graphics\.quality`, `graphics\.settings`, `graphics\.screenshot`, `physics\.settings`, `physics\.raycast`, `physics\.simulation`, `editor\.state`, `editor\.play`, `editor\.pause`, `editor\.stop` and `editor\.menu`/);
+  assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.screenshot`, `screenshot\.capture`, `prefab\.info`, `prefab\.create`, `prefab\.stage-open`, `prefab\.stage-save`, `prefab\.stage-close`, `prefab\.hierarchy`, `ui\.canvas\.create`, `ui\.text\.create`, `ui\.button\.create`, `ui\.image\.create`, `ui\.document\.info`, `ui\.document\.create`, `ui\.hierarchy`, `material\.info`, `material\.create`, `material\.assign`, `material\.set`, `graphics\.quality`, `graphics\.settings`, `graphics\.screenshot`, `physics\.settings`, `physics\.raycast`, `physics\.simulation`, `shader\.info`, `shader\.read`, `shader\.create`, `shader\.update`, `texture\.info`, `texture\.create`, `texture\.sprite`, `texture\.import-settings`, `editor\.state`, `editor\.play`, `editor\.pause`, `editor\.stop` and `editor\.menu`/);
   assert.doesNotMatch(bridgeSection, /live query\/edit\/screenshot/);
   assert.match(bridgeSection, /`scene hierarchy`, `go find`, `component set` and `script edit` are not routed by this package yet/);
 });
+
+function stripCSharpTrivia(source: string): string {
+  let output = "";
+  let index = 0;
+
+  while (index < source.length) {
+    const current = source[index];
+    const next = source[index + 1];
+    const following = source[index + 2];
+
+    if (current === "/" && next === "/") {
+      output += "  ";
+      index += 2;
+      while (index < source.length && source[index] !== "\n") {
+        output += " ";
+        index += 1;
+      }
+      continue;
+    }
+
+    if (current === "/" && next === "*") {
+      output += "  ";
+      index += 2;
+      while (index < source.length) {
+        if (source[index] === "*" && source[index + 1] === "/") {
+          output += "  ";
+          index += 2;
+          break;
+        }
+        output += source[index] === "\n" ? "\n" : " ";
+        index += 1;
+      }
+      continue;
+    }
+
+    const isInterpolatedVerbatimString = current === "$" && next === "@" && following === "\"";
+    const isVerbatimInterpolatedString = current === "@" && next === "$" && following === "\"";
+    const isVerbatimString = current === "@" && next === "\"";
+    if (isInterpolatedVerbatimString || isVerbatimInterpolatedString || isVerbatimString) {
+      const prefixLength = isVerbatimString ? 2 : 3;
+      output += " ".repeat(prefixLength);
+      index += prefixLength;
+      while (index < source.length) {
+        if (source[index] === "\"" && source[index + 1] === "\"") {
+          output += "  ";
+          index += 2;
+          continue;
+        }
+        const done = source[index] === "\"";
+        output += source[index] === "\n" ? "\n" : " ";
+        index += 1;
+        if (done) {
+          break;
+        }
+      }
+      continue;
+    }
+
+    const isInterpolatedString = current === "$" && next === "\"";
+    const isRegularString = current === "\"";
+    const isCharacterLiteral = current === "'";
+    if (isInterpolatedString || isRegularString || isCharacterLiteral) {
+      const delimiter = isCharacterLiteral ? "'" : "\"";
+      const prefixLength = isInterpolatedString ? 2 : 1;
+      output += " ".repeat(prefixLength);
+      index += prefixLength;
+      while (index < source.length) {
+        if (source[index] === "\\") {
+          output += "  ";
+          index += 2;
+          continue;
+        }
+        const done = source[index] === delimiter;
+        output += source[index] === "\n" ? "\n" : " ";
+        index += 1;
+        if (done) {
+          break;
+        }
+      }
+      continue;
+    }
+
+    output += current;
+    index += 1;
+  }
+
+  return output;
+}
+
+function duplicateCSharpMethodSignatures(source: string): string[] {
+  const strippedSource = stripCSharpTrivia(source);
+  const seen = new Map<string, number>();
+  const duplicates: string[] = [];
+  const pendingTypes: string[] = [];
+  const typeStack: Array<{ name: string; depth: number }> = [];
+  let braceDepth = 0;
+
+  for (const [index, line] of strippedSource.split("\n").entries()) {
+    while (typeStack.length > 0 && braceDepth < typeStack[typeStack.length - 1].depth) {
+      typeStack.pop();
+    }
+
+    const typeMatch = line.match(/^\s*(?:(?:public|private|internal|protected)\s+)?(?:(?:sealed|static|partial|abstract)\s+)*class\s+(\w+)/);
+    if (typeMatch) {
+      pendingTypes.push(typeMatch[1]);
+    }
+
+    const methodMatch = line.match(/^\s*(?:public|private|internal|protected)\s+(?:static\s+)?[\w.<>,\[\]?]+\s+(\w+)(?:<[^>]+>)?\((.*)\)\s*(?:where\b.*)?$/);
+    if (methodMatch) {
+      const owner = typeStack.length > 0 ? typeStack[typeStack.length - 1].name : "<global>";
+      const signature = `${owner}.${methodMatch[1]}(${normalizeCSharpParameterTypes(methodMatch[2]).join(",")})`;
+      const firstLine = seen.get(signature);
+      if (firstLine !== undefined) {
+        duplicates.push(`${signature} first declared at line ${firstLine}, duplicated at line ${index + 1}`);
+      } else {
+        seen.set(signature, index + 1);
+      }
+    }
+
+    for (const character of line) {
+      if (character === "{") {
+        braceDepth += 1;
+        const typeName = pendingTypes.shift();
+        if (typeName !== undefined) {
+          typeStack.push({ name: typeName, depth: braceDepth });
+        }
+      } else if (character === "}") {
+        braceDepth -= 1;
+        while (typeStack.length > 0 && braceDepth < typeStack[typeStack.length - 1].depth) {
+          typeStack.pop();
+        }
+      }
+    }
+  }
+
+  return duplicates;
+}
+
+function normalizeCSharpParameterTypes(parameters: string): string[] {
+  const trimmedParameters = parameters.trim();
+  if (trimmedParameters.length === 0) {
+    return [];
+  }
+
+  return splitTopLevelCommas(trimmedParameters).map((parameter) => {
+    const withoutDefault = parameter.split("=")[0].trim();
+    const tokens = withoutDefault.split(/\s+/);
+    return tokens.slice(0, -1).join(" ");
+  });
+}
+
+function splitTopLevelCommas(value: string): string[] {
+  const parts: string[] = [];
+  let current = "";
+  let angleDepth = 0;
+
+  for (const character of value) {
+    if (character === "<") {
+      angleDepth += 1;
+    } else if (character === ">") {
+      angleDepth -= 1;
+    }
+
+    if (character === "," && angleDepth === 0) {
+      parts.push(current.trim());
+      current = "";
+    } else {
+      current += character;
+    }
+  }
+
+  parts.push(current.trim());
+  return parts;
+}
 
 test("Unity Bridge camera screenshot captures render texture and returns artifact metadata", async () => {
   const source = await readFile(sourceUrl, "utf8");
@@ -102,6 +320,31 @@ test("Unity Bridge prefab operations expose structured diagnostics", async () =>
   assert.match(readme, /`E_PREFAB_PATH_REQUIRED`, `E_PREFAB_PATH_INVALID`, `E_PREFAB_NOT_FOUND`, `E_ASSET_NOT_PREFAB`, `E_PREFAB_OUTPUT_EXISTS`, `E_PREFAB_DIRTY_CONFLICT`, `E_PREFAB_STAGE_NOT_OPEN`, `E_PREFAB_STAGE_MISMATCH` and `E_UNITY_BUSY`/);
 });
 
+
+test("Unity Bridge shader and texture operations expose diagnostics", async () => {
+  const source = await readFile(sourceUrl, "utf8");
+  const readme = await readFile(readmeUrl, "utf8");
+
+  assert.match(source, /ShaderUtil,UnityEditor/);
+  assert.match(source, /ShaderMessagesMethod/);
+  assert.match(source, /method\.Name != "GetShaderMessages"/);
+  assert.match(source, /parameters\.Length == 1 && parameters\[0\]\.ParameterType == typeof\(Shader\)/);
+  assert.doesNotMatch(source, /GetMethod\("GetShaderMessages", BindingFlags\.Static \| BindingFlags\.Public \| BindingFlags\.NonPublic\)/);
+  assert.match(source, /File\.ReadAllText\(fullPath, Encoding\.UTF8\)/);
+  assert.match(source, /File\.WriteAllText\(fullPath, content, new UTF8Encoding\(false\)\)/);
+  assert.match(source, /TextureImporterType\.Sprite/);
+  assert.match(source, /TextureImporterJson/);
+  assert.match(source, /SaveAndReimport\(\)/);
+  assert.match(source, /E_SHADER_NOT_FOUND/);
+  assert.match(source, /E_TEXTURE_NOT_FOUND/);
+  assert.match(source, /E_IMPORT_FAILED/);
+  assert.match(source, /plannedEffects/);
+  assert.match(readme, /`shader info\/read\/create\/update`/);
+  assert.match(readme, /`texture info\/create\/sprite\/import-settings`/);
+  assert.match(readme, /`E_SHADER_NOT_FOUND`/);
+  assert.match(readme, /`E_TEXTURE_NOT_FOUND`/);
+  assert.match(readme, /`E_IMPORT_FAILED`/);
+});
 
 test("Unity Bridge material commands expose shader properties, assignment and diagnostics", async () => {
   const source = await readFile(sourceUrl, "utf8");
@@ -248,7 +491,7 @@ test("Unity Bridge screenshot validates path, format, overwrite and busy diagnos
   assert.match(source, /Path\.GetFullPath/);
   assert.match(readme, /`E_CAMERA_NOT_FOUND` for `camera info` when a target Camera cannot be resolved/);
   assert.match(readme, /`E_TARGET_NOT_FOUND` for `camera screenshot` when the target is empty or cannot be resolved/);
-  assert.match(readme, /C# runtime behavior for empty camera targets, missing Cameras, screenshot IO failures, actual PNG\/JPG artifacts, Prefab Stage open\/save\/close, Prefab dirty conflicts, nested\/variant Prefab summaries, Material asset creation, Renderer\/UI Graphic assignment, Material property writes, GraphicsSettings\/QualitySettings persistence, render pipeline asset resolution, Physics\/Physics2D project setting persistence, raycast collision hits, explicit simulation steps, uGUI object creation, UIDocument\/PanelSettings linking and UI hierarchy summaries must still be proven by real Windows \+ Unity Editor validation/);
+  assert.match(readme, /C# runtime behavior for empty camera targets, missing Cameras, screenshot IO failures, actual PNG\/JPG artifacts, Prefab Stage open\/save\/close, Prefab dirty conflicts, nested\/variant Prefab summaries, Material asset creation, Renderer\/UI Graphic assignment, Material property writes, GraphicsSettings\/QualitySettings persistence, render pipeline asset resolution, Physics\/Physics2D project setting persistence, raycast collision hits, explicit simulation steps, Shader import diagnostics, TextureImporter mutations, uGUI object creation, UIDocument\/PanelSettings linking and UI hierarchy summaries must still be proven by real Windows \+ Unity Editor validation/);
 });
 
 test("Unity Bridge editor commands expose state, play/pause/stop, menu execution and busy diagnostics", async () => {
