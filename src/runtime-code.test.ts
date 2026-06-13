@@ -74,11 +74,11 @@ test("code exec maps live timeout and busy bridge responses to structured envelo
       data: { status: "running", requestId: "req_bridge", sideEffectSemantics: "started-before-http-timeout", logPath: "Logs/AlpsUnityBridge.log" }
     })
   });
-  const busy = await execute(["code", "exec", "--code", "return 1;"], {
+  const busy = await execute(["code", "exec", "--code", "return 1;", "--timeout-ms", "2000"], {
     ...runtime,
     bridgeExecute: async () => ({
       ok: false,
-      error: { code: "E_UNITY_BUSY", message: "Unity Editor is compiling or importing assets.", details: { requestId: "req_busy", logPath: "Logs/AlpsUnityBridge.log" } },
+      error: { code: "E_UNITY_BUSY", message: "Unity Editor is compiling or importing assets." },
       nextActions: ["Wait for Unity to finish compiling/importing and retry."]
     })
   });
@@ -94,7 +94,12 @@ test("code exec maps live timeout and busy bridge responses to structured envelo
   assert.match(running.error?.next_actions?.join("\n") ?? "", /AlpsUnityBridge\.log/);
   assert.equal(busy.ok, false);
   assert.equal(busy.error?.code, "E_UNITY_BUSY");
-  assert.deepEqual(busy.error?.details, { requestId: "req_busy", logPath: "Logs/AlpsUnityBridge.log" });
+  assert.equal((busy.error?.details as { requestId: string }).requestId, busy.requestId);
+  assert.equal((busy.error?.details as { command: string }).command, "code.exec");
+  assert.equal((busy.error?.details as { channel: string }).channel, "live");
+  assert.equal((busy.error?.details as { timeoutMs: number }).timeoutMs, 2000);
+  assert.deepEqual((busy.error?.details as { audit: { command: string; channel: string; timeoutMs: number } }).audit, { requestId: busy.requestId, command: "code.exec", channel: "live", timeoutMs: 2000 });
+  assert.deepEqual((busy.error?.details as { logs: { bridge: string } }).logs, { bridge: "Unity project Logs/AlpsUnityBridge.log" });
 });
 
 test("code exec preserves compile diagnostics from bridge errors", async () => {

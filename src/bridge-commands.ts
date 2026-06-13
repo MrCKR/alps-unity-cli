@@ -56,7 +56,9 @@ export async function executeBridgePayload(
       : await postBridgeExecute(endpoint!, { requestId, command, args });
 
     if (bridgeResult.ok === false) {
-      return failure(requestId, bridgeResult.error?.code ?? "BRIDGE_COMMAND_FAILED", bridgeResult.error?.message ?? "Unity Bridge rejected the command.", bridgeResult.nextActions ?? [], bridgeResult.error?.details);
+      const code = bridgeResult.error?.code ?? "BRIDGE_COMMAND_FAILED";
+      const details = command === "code.exec" && code === "E_UNITY_BUSY" ? liveCodeBusyDetails(requestId, endpoint, args, bridgeResult.error?.details) : bridgeResult.error?.details;
+      return failure(requestId, code, bridgeResult.error?.message ?? "Unity Bridge rejected the command.", bridgeResult.nextActions ?? [], details);
     }
 
     if (command === "code.exec" && bridgeResult.data?.status === "running" && bridgeResult.data?.sideEffectSemantics === "started-before-http-timeout") {
@@ -387,6 +389,22 @@ function bridgeHttpTimeoutMs(payload: BridgeRequest): number {
     return payload.args.timeoutMs + 5000;
   }
   return 10_000;
+}
+
+function liveCodeBusyDetails(requestId: string, endpoint: string | undefined, args: Record<string, unknown>, details: unknown): Record<string, unknown> {
+  const timeoutMs = typeof args.timeoutMs === "number" && Number.isFinite(args.timeoutMs) ? args.timeoutMs : null;
+  const baseDetails = details && typeof details === "object" && !Array.isArray(details) ? details as Record<string, unknown> : {};
+  const logPath = typeof baseDetails.logPath === "string" ? baseDetails.logPath : "Unity project Logs/AlpsUnityBridge.log";
+  return {
+    requestId,
+    command: "code.exec",
+    channel: "live",
+    timeoutMs,
+    bridgeEndpoint: endpoint ?? null,
+    audit: { requestId, command: "code.exec", channel: "live", timeoutMs },
+    logs: { bridge: logPath },
+    ...baseDetails
+  };
 }
 
 function liveCodeTimeoutFailure(requestId: string, endpoint: string | undefined, args: Record<string, unknown>, details: Record<string, unknown>): CliResult {
