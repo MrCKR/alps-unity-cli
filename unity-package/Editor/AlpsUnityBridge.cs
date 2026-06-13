@@ -35,6 +35,8 @@ namespace AlpsUnityCli
         private static readonly string[] MaterialCommands = { "material.info", "material.create", "material.assign", "material.set" };
         private static readonly string[] GraphicsCommands = { "graphics.quality", "graphics.settings", "graphics.screenshot" };
         private static readonly string[] PhysicsCommands = { "physics.settings", "physics.raycast", "physics.simulation" };
+        private static readonly string[] AnimationCommands = { "animation.clip", "animation.state", "animation.play", "animation.stop" };
+        private static readonly string[] VfxCommands = { "vfx.graph", "vfx.effect" };
         private static readonly string[] ShaderCommands = { "shader.info", "shader.read", "shader.create", "shader.update" };
         private static readonly string[] TextureCommands = { "texture.info", "texture.create", "texture.sprite", "texture.import-settings" };
         private static readonly Queue<BridgeWorkItem> WorkQueue = new Queue<BridgeWorkItem>();
@@ -249,6 +251,18 @@ namespace AlpsUnityCli
                     return PhysicsRaycast(request);
                 case "physics.simulation":
                     return PhysicsSimulation(request);
+                case "animation.clip":
+                    return AnimationClipCommand(request);
+                case "animation.state":
+                    return AnimationState(request);
+                case "animation.play":
+                    return AnimationPlay(request);
+                case "animation.stop":
+                    return AnimationStop(request);
+                case "vfx.graph":
+                    return VfxGraph(request);
+                case "vfx.effect":
+                    return VfxEffect(request);
                 case "shader.info":
                     return ShaderInfo(request);
                 case "shader.read":
@@ -1410,6 +1424,8 @@ namespace AlpsUnityCli
                 + CapabilityJson("material", MaterialCommands) + ","
                 + CapabilityJson("graphics", GraphicsCommands) + ","
                 + CapabilityJson("physics", PhysicsCommands) + ","
+                + CapabilityJson("animation", AnimationCommands) + ","
+                + CapabilityJson("vfx", VfxCommands) + ","
                 + CapabilityJson("shader", ShaderCommands) + ","
                 + CapabilityJson("texture", TextureCommands)
                 + "]";
@@ -1437,6 +1453,11 @@ namespace AlpsUnityCli
                 || command == "graphics.screenshot"
                 || command == "physics.settings"
                 || command == "physics.simulation"
+                || command == "animation.clip"
+                || command == "animation.play"
+                || command == "animation.stop"
+                || command == "vfx.graph"
+                || command == "vfx.effect"
                 || command == "shader.create"
                 || command == "shader.update"
                 || command == "texture.create"
@@ -1973,6 +1994,414 @@ namespace AlpsUnityCli
             }
             return SuccessJson("{\"simulation\":{\"simulate\":" + Bool(simulate) + ",\"steps\":" + steps.ToString(CultureInfo.InvariantCulture) + ",\"deltaTime\":" + deltaTime.ToString(CultureInfo.InvariantCulture) + ",\"fixedDeltaTime\":" + Time.fixedDeltaTime.ToString(CultureInfo.InvariantCulture) + ",\"autoSimulation\":" + Bool(Physics.autoSimulation) + "},\"physics\":" + PhysicsSettingsJson() + ",\"plannedEffects\":[" + string.Join(",", effects.ToArray()) + "],\"logPath\":" + Quote(LogPath()) + "}");
         }
+
+        private static string AnimationClipCommand(BridgeRequest request)
+        {
+            var action = string.Equals(request.StringArg("action"), "create", StringComparison.OrdinalIgnoreCase) ? "create" : "info";
+            var path = RequireAnimationClipPath(request.StringArg("path"));
+            if (action == "create")
+            {
+                var overwrite = request.BoolArg("overwrite", false);
+                if (AssetDatabase.LoadAssetAtPath<AnimationClip>(path) != null && !overwrite)
+                {
+                    return ErrorJson("E_ANIMATION_CLIP_EXISTS", "AnimationClip already exists: " + path, "Pass --overwrite or choose a different Assets/*.anim path.");
+                }
+                CreateAssetDirectory(path);
+                if (AssetDatabase.LoadAssetAtPath<AnimationClip>(path) != null)
+                {
+                    AssetDatabase.DeleteAsset(path);
+                }
+                var clip = new AnimationClip();
+                clip.name = Path.GetFileNameWithoutExtension(path);
+                clip.frameRate = Math.Max(1f, request.FloatArg("frameRate", 60f));
+                clip.legacy = request.BoolArg("legacy", false);
+                AssetDatabase.CreateAsset(clip, path);
+                AssetDatabase.SaveAssets();
+                AssetDatabase.Refresh();
+                WriteLog("animation_clip_created path=" + path);
+                return SuccessJson("{\"clip\":" + AnimationClipJson(path, LoadAnimationClipAsset(path)) + ",\"plannedEffects\":[{\"type\":\"animation.clip.create\",\"path\":" + Quote(path) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+            }
+            return SuccessJson("{\"clip\":" + AnimationClipJson(path, LoadAnimationClipAsset(path)) + ",\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string AnimationState(BridgeRequest request)
+        {
+            var gameObject = ResolveUniqueTarget(request.StringArg("target"), "Animation state requires --target <go>.");
+            var animator = gameObject.GetComponent<Animator>();
+            if (animator == null)
+            {
+                return ErrorJson("E_ANIMATOR_NOT_FOUND", "Animator component not found on target: " + HierarchyPath(gameObject), "Add an Animator component or choose another target.");
+            }
+            var layer = Mathf.Clamp(request.IntArg("layer", 0), 0, Math.Max(0, animator.layerCount - 1));
+            return SuccessJson("{\"target\":" + GameObjectTargetJson(gameObject) + ",\"animator\":" + AnimatorJson(animator, layer) + ",\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string AnimationPlay(BridgeRequest request)
+        {
+            var gameObject = ResolveUniqueTarget(request.StringArg("target"), "Animation play requires --target <go>.");
+            var animator = gameObject.GetComponent<Animator>();
+            if (animator == null)
+            {
+                return ErrorJson("E_ANIMATOR_NOT_FOUND", "Animator component not found on target: " + HierarchyPath(gameObject), "Add an Animator component or choose another target.");
+            }
+            var state = request.StringArg("state");
+            if (string.IsNullOrEmpty(state))
+            {
+                return ErrorJson("E_ANIMATION_STATE_REQUIRED", "Animation play requires --state <name>.", "Pass an Animator state name or hash-compatible state path.");
+            }
+            var layer = request.IntArg("layer", 0);
+            if (layer < 0 || layer >= animator.layerCount)
+            {
+                return ErrorJson("E_ANIMATION_LAYER_INVALID", "Animator layer is out of range: " + layer.ToString(CultureInfo.InvariantCulture), "Run alps-unity animation state --target <go> to inspect layer count.");
+            }
+            animator.Play(state, layer, request.FloatArg("normalizedTime", 0f));
+            animator.Update(0f);
+            EditorUtility.SetDirty(animator);
+            WriteLog("animation_play target=" + HierarchyPath(gameObject) + " state=" + state + " layer=" + layer.ToString(CultureInfo.InvariantCulture));
+            return SuccessJson("{\"target\":" + GameObjectTargetJson(gameObject) + ",\"animator\":" + AnimatorJson(animator, layer) + ",\"plannedEffects\":[{\"type\":\"animation.play\",\"target\":" + Quote(HierarchyPath(gameObject)) + ",\"state\":" + Quote(state) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string AnimationStop(BridgeRequest request)
+        {
+            var gameObject = ResolveUniqueTarget(request.StringArg("target"), "Animation stop requires --target <go>.");
+            var animator = gameObject.GetComponent<Animator>();
+            if (animator == null)
+            {
+                return ErrorJson("E_ANIMATOR_NOT_FOUND", "Animator component not found on target: " + HierarchyPath(gameObject), "Add an Animator component or choose another target.");
+            }
+            animator.Rebind();
+            animator.Update(0f);
+            EditorUtility.SetDirty(animator);
+            WriteLog("animation_stop target=" + HierarchyPath(gameObject));
+            return SuccessJson("{\"target\":" + GameObjectTargetJson(gameObject) + ",\"animator\":" + AnimatorJson(animator, 0) + ",\"plannedEffects\":[{\"type\":\"animation.stop\",\"target\":" + Quote(HierarchyPath(gameObject)) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string VfxGraph(BridgeRequest request)
+        {
+            var action = string.Equals(request.StringArg("action"), "create", StringComparison.OrdinalIgnoreCase) ? "create" : "info";
+            var path = RequireVfxGraphPath(request.StringArg("path"));
+            var assetType = RequireVfxAssetType();
+            if (action == "create")
+            {
+                var overwrite = request.BoolArg("overwrite", false);
+                if (AssetDatabase.LoadAssetAtPath(path, assetType) != null && !overwrite)
+                {
+                    return ErrorJson("E_VFX_GRAPH_EXISTS", "VFX Graph already exists: " + path, "Pass --overwrite or choose a different Assets/*.vfx path.");
+                }
+                CreateAssetDirectory(path);
+                if (AssetDatabase.LoadAssetAtPath(path, assetType) != null)
+                {
+                    AssetDatabase.DeleteAsset(path);
+                }
+                var created = CreateVfxGraphAsset(path, assetType);
+                if (created == null)
+                {
+                    return ErrorJson("E_VFX_GRAPH_CREATE_FAILED", "VFX Graph asset creation did not produce a readable VisualEffectAsset: " + path, "Check Unity Console and AlpsUnityBridge.log; the Visual Effect Graph package may have changed its internal authoring API.");
+                }
+                WriteLog("vfx_graph_created path=" + path);
+                return SuccessJson("{\"graph\":" + VfxGraphJson(path, created) + ",\"plannedEffects\":[{\"type\":\"vfx.graph.create\",\"path\":" + Quote(path) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+            }
+            var asset = AssetDatabase.LoadAssetAtPath(path, assetType);
+            if (asset == null)
+            {
+                return ErrorJson("E_VFX_GRAPH_NOT_FOUND", "VFX Graph asset not found: " + path, "Check the path or create one with alps-unity vfx graph <path> --create.");
+            }
+            return SuccessJson("{\"graph\":" + VfxGraphJson(path, asset) + ",\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string VfxEffect(BridgeRequest request)
+        {
+            var visualEffectType = RequireVisualEffectType();
+            var gameObject = ResolveUniqueTarget(request.StringArg("target"), "VFX effect requires --target <go>.");
+            var component = gameObject.GetComponent(visualEffectType);
+            var effects = new List<string>();
+            if (component == null && request.BoolArg("add", false))
+            {
+                component = gameObject.AddComponent(visualEffectType);
+                effects.Add("{\"type\":\"vfx.effect.add\",\"target\":" + Quote(HierarchyPath(gameObject)) + "}");
+            }
+            if (component == null)
+            {
+                return ErrorJson("E_VFX_COMPONENT_NOT_FOUND", "VisualEffect component not found on target: " + HierarchyPath(gameObject), "Pass --add to add one or choose a target with VisualEffect.");
+            }
+            var graphPath = request.StringArg("graph");
+            if (!string.IsNullOrEmpty(graphPath))
+            {
+                var assetType = RequireVfxAssetType();
+                var graph = AssetDatabase.LoadAssetAtPath(NormalizeAssetPath(graphPath), assetType);
+                if (graph == null)
+                {
+                    return ErrorJson("E_VFX_GRAPH_NOT_FOUND", "VFX Graph asset not found: " + graphPath, "Pass an existing Assets/*.vfx path or create one with alps-unity vfx graph <path> --create.");
+                }
+                var property = visualEffectType.GetProperty("visualEffectAsset", BindingFlags.Instance | BindingFlags.Public);
+                if (property == null || !property.CanWrite)
+                {
+                    return ErrorJson("E_VFX_ASSIGN_UNSUPPORTED", "VisualEffect asset property is not writable in this Unity version.", "Assign the VFX Graph in Unity or upgrade Visual Effect Graph package.");
+                }
+                property.SetValue(component, graph, null);
+                effects.Add("{\"type\":\"vfx.effect.assign\",\"target\":" + Quote(HierarchyPath(gameObject)) + ",\"graph\":" + Quote(NormalizeAssetPath(graphPath)) + "}");
+            }
+            EditorUtility.SetDirty(component);
+            AssetDatabase.SaveAssets();
+            WriteLog("vfx_effect target=" + HierarchyPath(gameObject) + " effects=" + effects.Count.ToString(CultureInfo.InvariantCulture));
+            return SuccessJson("{\"target\":" + GameObjectTargetJson(gameObject) + ",\"effect\":" + VfxEffectJson(component) + ",\"plannedEffects\":[" + string.Join(",", effects.ToArray()) + "],\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string RequireAnimationClipPath(string rawPath)
+        {
+            var path = NormalizeAssetPath(rawPath);
+            if (string.IsNullOrEmpty(path))
+            {
+                throw new BridgeCommandException("E_ANIMATION_CLIP_PATH_REQUIRED", "Pass an Assets/*.anim path.", "Use alps-unity animation clip <path> or pass --path Assets/Animations/Example.anim.");
+            }
+            if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || !path.EndsWith(".anim", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new BridgeCommandException("E_ANIMATION_CLIP_PATH_INVALID", "AnimationClip path must be under Assets/ and end with .anim: " + path, "Pass a Unity asset path such as Assets/Animations/Player.anim.");
+            }
+            return path;
+        }
+
+        private static AnimationClip LoadAnimationClipAsset(string path)
+        {
+            var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
+            if (clip == null)
+            {
+                throw new BridgeCommandException("E_ANIMATION_CLIP_NOT_FOUND", "AnimationClip asset not found: " + path, "Check the path or create one with alps-unity animation clip <path> --create.");
+            }
+            return clip;
+        }
+
+        private static string AnimationClipJson(string path, AnimationClip clip)
+        {
+            var bindings = AnimationUtility.GetCurveBindings(clip);
+            return "{"
+                + "\"path\":" + Quote(path) + ","
+                + "\"guid\":" + Quote(AssetDatabase.AssetPathToGUID(path)) + ","
+                + "\"name\":" + Quote(clip.name) + ","
+                + "\"length\":" + Number(clip.length) + ","
+                + "\"frameRate\":" + Number(clip.frameRate) + ","
+                + "\"legacy\":" + Bool(clip.legacy) + ","
+                + "\"bindings\":" + AnimationBindingsJson(clip, bindings)
+                + "}";
+        }
+
+        private static string AnimationBindingsJson(AnimationClip clip, EditorCurveBinding[] bindings)
+        {
+            var items = new List<string>();
+            foreach (var binding in bindings)
+            {
+                var curve = AnimationUtility.GetEditorCurve(clip, binding);
+                items.Add("{\"path\":" + Quote(binding.path) + ",\"property\":" + Quote(binding.propertyName) + ",\"type\":" + Quote(binding.type == null ? null : binding.type.Name) + ",\"keyCount\":" + (curve == null ? "0" : curve.keys.Length.ToString(CultureInfo.InvariantCulture)) + "}");
+            }
+            return "{\"count\":" + bindings.Length.ToString(CultureInfo.InvariantCulture) + ",\"items\":[" + string.Join(",", items.ToArray()) + "]}";
+        }
+
+        private static string AnimatorJson(Animator animator, int layer)
+        {
+            var controller = animator.runtimeAnimatorController;
+            var controllerPath = controller == null ? null : NormalizeAssetPath(AssetDatabase.GetAssetPath(controller));
+            var layerCount = animator.layerCount;
+            var safeLayer = layerCount <= 0 ? 0 : Mathf.Clamp(layer, 0, layerCount - 1);
+            var state = layerCount > 0 ? animator.GetCurrentAnimatorStateInfo(safeLayer) : default(AnimatorStateInfo);
+            return "{"
+                + "\"enabled\":" + Bool(animator.enabled) + ","
+                + "\"layerCount\":" + layerCount.ToString(CultureInfo.InvariantCulture) + ","
+                + "\"selectedLayer\":" + safeLayer.ToString(CultureInfo.InvariantCulture) + ","
+                + "\"runtimeAnimatorController\":{\"name\":" + Quote(controller == null ? null : controller.name) + ",\"path\":" + Quote(controllerPath) + ",\"guid\":" + Quote(string.IsNullOrEmpty(controllerPath) ? null : AssetDatabase.AssetPathToGUID(controllerPath)) + "},"
+                + "\"currentState\":{\"fullPathHash\":" + state.fullPathHash.ToString(CultureInfo.InvariantCulture) + ",\"shortNameHash\":" + state.shortNameHash.ToString(CultureInfo.InvariantCulture) + ",\"normalizedTime\":" + Number(state.normalizedTime) + ",\"length\":" + Number(state.length) + "}"
+                + "}";
+        }
+
+        private static string RequireVfxGraphPath(string rawPath)
+        {
+            var path = NormalizeAssetPath(rawPath);
+            if (string.IsNullOrEmpty(path))
+            {
+                throw new BridgeCommandException("E_VFX_GRAPH_PATH_REQUIRED", "Pass an Assets/*.vfx path.", "Use alps-unity vfx graph <path> or pass --path Assets/VFX/Effect.vfx.");
+            }
+            if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || !path.EndsWith(".vfx", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new BridgeCommandException("E_VFX_GRAPH_PATH_INVALID", "VFX Graph path must be under Assets/ and end with .vfx: " + path, "Pass a Unity asset path such as Assets/VFX/Explosion.vfx.");
+            }
+            return path;
+        }
+
+        private static UnityEngine.Object CreateVfxGraphAsset(string path, Type assetType)
+        {
+            try
+            {
+                var created = CreateVfxGraphAssetWithUnityUtility(path, assetType);
+                if (created != null)
+                {
+                    return created;
+                }
+
+                WriteMinimalVfxGraphYaml(path);
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+                AssetDatabase.Refresh();
+                return AssetDatabase.LoadAssetAtPath(path, assetType);
+            }
+            catch (BridgeCommandException)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                throw new BridgeCommandException("E_VFX_GRAPH_CREATE_FAILED", "Failed to create VFX Graph asset: " + exception.GetType().Name + ": " + exception.Message, "Check Unity Console and AlpsUnityBridge.log; the Visual Effect Graph package import pipeline may have changed.");
+            }
+        }
+
+        private static UnityEngine.Object CreateVfxGraphAssetWithUnityUtility(string path, Type assetType)
+        {
+            var utilityType = FindType("UnityEditor.VisualEffectAssetEditorUtility");
+            if (utilityType == null)
+            {
+                return null;
+            }
+            var createMethod = utilityType.GetMethod("CreateNewAsset", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            if (createMethod == null)
+            {
+                return null;
+            }
+            var created = createMethod.Invoke(null, new object[] { path }) as UnityEngine.Object;
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            AssetDatabase.Refresh();
+            return created == null || !assetType.IsInstanceOfType(created) ? AssetDatabase.LoadAssetAtPath(path, assetType) : created;
+        }
+
+        private static void WriteMinimalVfxGraphYaml(string path)
+        {
+            var fullPath = Path.Combine(ProjectRoot(), path.Replace('/', Path.DirectorySeparatorChar));
+            var directory = Path.GetDirectoryName(fullPath);
+            if (!string.IsNullOrEmpty(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+            File.WriteAllText(fullPath,
+                "%YAML 1.1\n"
+                + "%TAG !u! tag:unity3d.com,2011:\n"
+                + "--- !u!114 &114350483966674976\n"
+                + "MonoBehaviour:\n"
+                + "  m_Script: {fileID: 11500000, guid: 7d4c867f6b72b714dbb5fd1780afe208, type: 3}\n"
+                + "--- !u!2058629511 &1\n"
+                + "VisualEffectResource:\n"
+                + "  m_Graph: {fileID: 114350483966674976}\n");
+        }
+
+        private static Type RequireVfxAssetType()
+        {
+            RequireVfxPackageInstalled();
+            var type = FindType("UnityEngine.VFX.VisualEffectAsset");
+            if (type == null)
+            {
+                throw new BridgeCommandException("E_VFX_PACKAGE_MISSING", "Visual Effect Graph package is installed in the manifest but its editor/runtime assemblies are not loaded.", "Wait for Unity PackageManager resolve/import to finish, then retry.");
+            }
+            return type;
+        }
+
+        private static Type RequireVisualEffectType()
+        {
+            RequireVfxPackageInstalled();
+            var type = FindType("UnityEngine.VFX.VisualEffect");
+            if (type == null)
+            {
+                throw new BridgeCommandException("E_VFX_PACKAGE_MISSING", "Visual Effect Graph package is installed in the manifest but its runtime assembly is not loaded.", "Wait for Unity PackageManager resolve/import to finish, then retry.");
+            }
+            return type;
+        }
+
+        private static void RequireVfxPackageInstalled()
+        {
+            if (!PackageManifestContains("com.unity.visualeffectgraph") && !PackageLockContains("com.unity.visualeffectgraph"))
+            {
+                throw new BridgeCommandException("E_VFX_PACKAGE_MISSING", "Visual Effect Graph package is not installed in this Unity project.", "Install com.unity.visualeffectgraph with alps-unity package install com.unity.visualeffectgraph, run package resolve, then retry.");
+            }
+        }
+
+        private static bool PackageManifestContains(string packageName)
+        {
+            return FileContains(Path.Combine(ProjectRoot(), "Packages", "manifest.json"), "\"" + packageName + "\"");
+        }
+
+        private static bool PackageLockContains(string packageName)
+        {
+            return FileContains(Path.Combine(ProjectRoot(), "Packages", "packages-lock.json"), "\"" + packageName + "\"");
+        }
+
+        private static bool FileContains(string path, string value)
+        {
+            try
+            {
+                return File.Exists(path) && File.ReadAllText(path).IndexOf(value, StringComparison.OrdinalIgnoreCase) >= 0;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static Type FindType(string fullName)
+        {
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                var type = assembly.GetType(fullName, false);
+                if (type != null)
+                {
+                    return type;
+                }
+            }
+            return null;
+        }
+
+        private static string VfxGraphJson(string path, UnityEngine.Object asset)
+        {
+            return "{\"path\":" + Quote(path) + ",\"guid\":" + Quote(AssetDatabase.AssetPathToGUID(path)) + ",\"name\":" + Quote(asset == null ? null : asset.name) + ",\"type\":" + Quote(asset == null ? null : asset.GetType().FullName) + "}";
+        }
+
+        private static string VfxEffectJson(Component component)
+        {
+            var property = component.GetType().GetProperty("visualEffectAsset", BindingFlags.Instance | BindingFlags.Public);
+            var graph = property == null ? null : property.GetValue(component, null) as UnityEngine.Object;
+            var graphPath = graph == null ? null : NormalizeAssetPath(AssetDatabase.GetAssetPath(graph));
+            return "{\"componentType\":" + Quote(component.GetType().FullName) + ",\"enabled\":" + Bool(ComponentEnabled(component)) + ",\"graph\":{\"name\":" + Quote(graph == null ? null : graph.name) + ",\"path\":" + Quote(graphPath) + ",\"guid\":" + Quote(string.IsNullOrEmpty(graphPath) ? null : AssetDatabase.AssetPathToGUID(graphPath)) + "}}";
+        }
+
+        private static bool ComponentEnabled(Component component)
+        {
+            var property = component.GetType().GetProperty("enabled", BindingFlags.Instance | BindingFlags.Public);
+            return property == null || (bool)property.GetValue(component, null);
+        }
+
+        private static GameObject ResolveUniqueTarget(string target, string requiredMessage)
+        {
+            if (string.IsNullOrEmpty(target))
+            {
+                throw new BridgeCommandException("E_TARGET_NOT_FOUND", requiredMessage, "Pass a GameObject name, hierarchy path or instance id.");
+            }
+            var matches = new List<GameObject>();
+            foreach (var gameObject in UnityEngine.Object.FindObjectsOfType<GameObject>())
+            {
+                if (gameObject.name == target || gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) == target || HierarchyPath(gameObject) == target)
+                {
+                    matches.Add(gameObject);
+                }
+            }
+            if (matches.Count > 1)
+            {
+                throw new BridgeCommandException("E_TARGET_AMBIGUOUS", "Multiple GameObjects matched: " + target, "Pass a hierarchy path or instance id.");
+            }
+            if (matches.Count == 0)
+            {
+                throw new BridgeCommandException("E_TARGET_NOT_FOUND", "Target not found: " + target, "Run alps-unity scene hierarchy or pass a hierarchy path / instance id.");
+            }
+            return matches[0];
+        }
+
+        private static string GameObjectTargetJson(GameObject gameObject)
+        {
+            return "{\"id\":" + gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) + ",\"name\":" + Quote(gameObject.name) + ",\"path\":" + Quote(HierarchyPath(gameObject)) + "}";
+        }
+
 
         private static string EditorStateJson()
         {
@@ -2832,7 +3261,7 @@ namespace AlpsUnityCli
             {
                 return "null";
             }
-            return "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "\\r").Replace("\n", "\\n") + "\"";
+            return "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "\\r").Replace("\n", "\\n").Replace("\t", "\\t") + "\"";
         }
 
         private static string Bool(bool value)

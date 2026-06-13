@@ -249,6 +249,62 @@ test("physics commands forward settings, raycast and simulation inputs", async (
   assert.deepEqual(requests[2].args, { steps: 3, deltaTime: 0.016, simulate: true });
 });
 
+test("animation and vfx commands forward Windows paths, targets and effects", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+  const bridgeExecute = async (payload: BridgeRequest) => {
+    requests.push(payload);
+    return { ok: true, data: { plannedEffects: [{ type: payload.command }], clip: { path: payload.args.path }, graph: { path: payload.args.path }, target: { path: payload.args.target } } };
+  };
+
+  const clipInfo = await execute(["animation", "clip", "Assets\\Animations\\Idle.anim"], { ...runtime, bridgeExecute });
+  const clipCreate = await execute(["animation", "clip", "Assets\\Animations\\Run.anim", "--create", "--overwrite", "--frame-rate", "30", "--legacy", "false"], { ...runtime, bridgeExecute });
+  const state = await execute(["animation", "state", "Rig/Player", "--layer", "1"], { ...runtime, bridgeExecute });
+  const play = await execute(["animation", "play", "Rig/Player", "--state", "Base Layer.Run", "--layer", "0", "--normalized-time", "0.25"], { ...runtime, bridgeExecute });
+  const stop = await execute(["animation", "stop", "Rig/Player"], { ...runtime, bridgeExecute });
+  const graphCreate = await execute(["vfx", "graph", "Assets\\VFX\\Explosion.vfx", "--create", "--overwrite"], { ...runtime, bridgeExecute });
+  const effect = await execute(["vfx", "effect", "Effects/Emitter", "--graph", "Assets\\VFX\\Explosion.vfx", "--add"], { ...runtime, bridgeExecute });
+
+  assert.equal(clipInfo.ok, true);
+  assert.equal(clipCreate.ok, true);
+  assert.equal(state.ok, true);
+  assert.equal(play.ok, true);
+  assert.equal(stop.ok, true);
+  assert.equal(graphCreate.ok, true);
+  assert.equal(effect.ok, true);
+  assert.deepEqual(requests.map((request) => request.command), ["animation.clip", "animation.clip", "animation.state", "animation.play", "animation.stop", "vfx.graph", "vfx.effect"]);
+  assert.deepEqual(requests[0].args, { action: "info", path: "Assets\\Animations\\Idle.anim" });
+  assert.deepEqual(requests[1].args, { action: "create", path: "Assets\\Animations\\Run.anim", overwrite: true, frameRate: 30, legacy: false });
+  assert.deepEqual(requests[2].args, { target: "Rig/Player", layer: 1 });
+  assert.deepEqual(requests[3].args, { target: "Rig/Player", state: "Base Layer.Run", layer: 0, normalizedTime: 0.25 });
+  assert.deepEqual(requests[4].args, { target: "Rig/Player" });
+  assert.deepEqual(requests[5].args, { action: "create", path: "Assets\\VFX\\Explosion.vfx", overwrite: true });
+  assert.deepEqual(requests[6].args, { target: "Effects/Emitter", graph: "Assets\\VFX\\Explosion.vfx", add: true });
+});
+
+test("animation and vfx bridge errors preserve diagnostics", async () => {
+  const runtime = await makeRuntime();
+  const cases: Array<{ argv: string[]; code: string; message: string; nextActions: string[] }> = [
+    { argv: ["animation", "play", "Player", "--state", "Missing"], code: "E_TARGET_AMBIGUOUS", message: "Multiple GameObjects matched: Player", nextActions: ["Pass a hierarchy path or instance id."] },
+    { argv: ["animation", "clip", "Assets/Animations/Missing.anim"], code: "E_ANIMATION_CLIP_NOT_FOUND", message: "AnimationClip asset not found", nextActions: ["Check the path or create one with alps-unity animation clip <path> --create."] },
+    { argv: ["vfx", "graph", "Assets/VFX/Explosion.vfx"], code: "E_VFX_PACKAGE_MISSING", message: "Visual Effect Graph package is not installed", nextActions: ["Install com.unity.visualeffectgraph with alps-unity package install com.unity.visualeffectgraph, run package resolve, then retry."] },
+    { argv: ["vfx", "graph", "Assets/VFX/Explosion.vfx", "--create"], code: "E_VFX_GRAPH_CREATE_FAILED", message: "VFX Graph asset creation did not produce a readable VisualEffectAsset", nextActions: ["Check Unity Console and AlpsUnityBridge.log; the Visual Effect Graph package may have changed its internal authoring API."] },
+    { argv: ["animation", "clip", "D:\\tmp\\Bad.anim"], code: "E_ANIMATION_CLIP_PATH_INVALID", message: "AnimationClip path must be under Assets/ and end with .anim: D:\\tmp\\Bad.anim", nextActions: ["Pass a Unity asset path such as Assets/Animations/Player.anim."] }
+  ];
+
+  for (const item of cases) {
+    const result = await execute(item.argv, {
+      ...runtime,
+      bridgeExecute: async () => ({ ok: false, error: { code: item.code, message: item.message }, nextActions: item.nextActions })
+    });
+
+    assert.equal(result.ok, false, item.code);
+    assert.equal(result.error?.code, item.code, item.code);
+    assert.equal(result.error?.message, item.message, item.code);
+    assert.deepEqual(result.error?.next_actions, item.nextActions, item.code);
+  }
+});
+
 test("shader commands forward paths, content and overwrite", async () => {
   const runtime = await makeRuntime();
   const contentFile = join(runtime.dataDir, "Unlit.shader");

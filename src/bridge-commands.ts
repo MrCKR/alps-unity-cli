@@ -99,6 +99,12 @@ export function bridgeCommandName(group: string | undefined, command: string | u
   if (group === "texture" && ["info", "create", "sprite", "import-settings"].includes(command ?? "")) {
     return `texture.${command}`;
   }
+  if (group === "animation" && ["clip", "state", "play", "stop"].includes(command ?? "")) {
+    return `animation.${command}`;
+  }
+  if (group === "vfx" && ["graph", "effect"].includes(command ?? "")) {
+    return `vfx.${command}`;
+  }
   if (group === "ui" && ["canvas/create", "text/create", "button/create", "image/create", "document/info", "document/create", "hierarchy"].includes(command ?? "")) {
     return `ui.${command?.replaceAll("/", ".")}`;
   }
@@ -341,6 +347,39 @@ async function commandArgs(command: string, flags: Record<string, string | boole
       filterMode: stringFlag(flags, "filter-mode"),
       maxTextureSize: numberFlag(flags, "max-texture-size"),
       compression: stringFlag(flags, "compression")
+    });
+  }
+
+  if (command.startsWith("animation.")) {
+    if (command === "animation.clip") {
+      return compactArgs({
+        action: stringFlag(flags, "action") ?? stringFlag(flags, "op") ?? (flags.create ? "create" : "info"),
+        path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "clip"),
+        overwrite: boolFlag(flags, "overwrite"),
+        frameRate: floatFlag(flags, "frame-rate"),
+        legacy: boolFlag(flags, "legacy")
+      });
+    }
+    return compactArgs({
+      ...targetArgs(flags, positionalTarget),
+      state: stringFlag(flags, "state") ?? stringFlag(flags, "name"),
+      layer: numberFlag(flags, "layer"),
+      normalizedTime: floatFlag(flags, "normalized-time")
+    });
+  }
+
+  if (command.startsWith("vfx.")) {
+    if (command === "vfx.graph") {
+      return compactArgs({
+        action: stringFlag(flags, "action") ?? stringFlag(flags, "op") ?? (flags.create ? "create" : "info"),
+        path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "graph"),
+        overwrite: boolFlag(flags, "overwrite")
+      });
+    }
+    return compactArgs({
+      ...targetArgs(flags, positionalTarget),
+      graph: stringFlag(flags, "graph") ?? stringFlag(flags, "path"),
+      add: boolFlag(flags, "add")
     });
   }
 
