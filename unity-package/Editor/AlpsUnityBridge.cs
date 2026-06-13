@@ -101,6 +101,8 @@ namespace AlpsUnityCli
         private static readonly string[] MaterialCommands = { "material.info", "material.create", "material.assign", "material.set" };
         private static readonly string[] GraphicsCommands = { "graphics.quality", "graphics.settings", "graphics.screenshot" };
         private static readonly string[] PhysicsCommands = { "physics.settings", "physics.raycast", "physics.simulation" };
+        private static readonly string[] ProfilerCommands = { "profiler.start", "profiler.stop", "profiler.capture", "profiler.status" };
+        private static readonly string[] ProBuilderCommands = { "probuilder.shape", "probuilder.create", "probuilder.csg", "probuilder.edit" };
         private static readonly string[] AnimationCommands = { "animation.clip", "animation.state", "animation.play", "animation.stop" };
         private static readonly string[] VfxCommands = { "vfx.graph", "vfx.effect" };
         private static readonly string[] ShaderCommands = { "shader.info", "shader.read", "shader.create", "shader.update" };
@@ -308,6 +310,26 @@ namespace AlpsUnityCli
             }
         }
 
+        public static int ExecuteBatchCommand(string requestId, string command, string argsJson)
+        {
+            var body = "{\"requestId\":" + Quote(requestId) + ",\"command\":" + Quote(command) + ",\"args\":" + (string.IsNullOrEmpty(argsJson) ? "{}" : argsJson) + "}";
+            var response = string.Empty;
+            try
+            {
+                response = Execute(BridgeRequest.Parse(body));
+            }
+            catch (BridgeCommandException exception)
+            {
+                response = ErrorJson(exception.Code, exception.Message, exception.NextAction ?? "Check output path, package availability and AlpsUnityBridge.log.");
+            }
+            catch (Exception exception)
+            {
+                response = ErrorJson("E_BRIDGE_COMMAND_FAILED", exception.Message, "Check Unity Console and AlpsUnityBridge.log.");
+            }
+            Console.WriteLine("ALPS_BRIDGE_RESULT " + response);
+            return response.Contains("\"ok\":true") ? 0 : 1;
+        }
+
         private static string Execute(BridgeRequest request)
         {
             WriteLog("execute requestId=" + request.RequestId + " command=" + request.Command);
@@ -380,6 +402,21 @@ namespace AlpsUnityCli
                     return PhysicsRaycast(request);
                 case "physics.simulation":
                     return PhysicsSimulation(request);
+                case "profiler.start":
+                    return ProfilerStart(request);
+                case "profiler.stop":
+                    return ProfilerStop(request);
+                case "profiler.capture":
+                    return ProfilerCapture(request);
+                case "profiler.status":
+                    return ProfilerStatus(request);
+                case "probuilder.shape":
+                case "probuilder.create":
+                    return ProBuilderCreate(request);
+                case "probuilder.csg":
+                    return ProBuilderCsg(request);
+                case "probuilder.edit":
+                    return ProBuilderEdit(request);
                 case "animation.clip":
                     return AnimationClipCommand(request);
                 case "animation.state":
@@ -775,6 +812,184 @@ namespace AlpsUnityCli
             return SuccessJson("{\"material\":" + MaterialJson(path, material) + ",\"property\":" + Quote(propertyName) + ",\"propertyType\":" + Quote(propertyType) + ",\"appliedValue\":" + appliedValue + ",\"plannedEffects\":[{\"type\":\"material.set\",\"path\":" + Quote(path) + ",\"property\":" + Quote(propertyName) + "}],\"logPath\":" + Quote(LogPath()) + "}");
         }
 
+        private static void SetProfilerDeepProfiling(bool enabled)
+        {
+            var property = typeof(UnityEngine.Profiling.Profiler).GetProperty("deepProfiling", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            if (property != null && property.CanWrite)
+            {
+                property.SetValue(null, enabled, null);
+            }
+        }
+
+        private static string ProfilerStateJson()
+        {
+            return "{\"enabled\":" + Bool(UnityEngine.Profiling.Profiler.enabled) + ",\"enableBinaryLog\":" + Bool(UnityEngine.Profiling.Profiler.enableBinaryLog) + ",\"supported\":true}";
+        }
+
+        private static string NormalizeProfilerFormat(string rawFormat, string outputPath)
+        {
+            var format = string.IsNullOrEmpty(rawFormat) ? Path.GetExtension(outputPath).TrimStart('.').ToLowerInvariant() : rawFormat.ToLowerInvariant();
+            if (string.IsNullOrEmpty(format))
+            {
+                format = "json";
+            }
+            if (format == "data")
+            {
+                format = "raw";
+            }
+            if (format != "json" && format != "raw")
+            {
+                throw new BridgeCommandException("E_PROFILER_FORMAT_UNSUPPORTED", "Profiler capture format must be json or raw.", "Use --format json or --format raw.");
+            }
+            return format;
+        }
+
+        private static void CaptureRawProfiler(string outputPath, int durationMs, int frames)
+        {
+            var previousLogFile = UnityEngine.Profiling.Profiler.logFile;
+            var previousEnabled = UnityEngine.Profiling.Profiler.enabled;
+            var previousBinaryLog = UnityEngine.Profiling.Profiler.enableBinaryLog;
+            try
+            {
+                UnityEngine.Profiling.Profiler.logFile = outputPath;
+                UnityEngine.Profiling.Profiler.enableBinaryLog = true;
+                UnityEngine.Profiling.Profiler.enabled = true;
+                for (var i = 0; i < Math.Max(1, frames); i++)
+                {
+                    UnityEngine.Profiling.Profiler.BeginSample("AlpsUnityProfilerCapture");
+                    UnityEngine.Profiling.Profiler.EndSample();
+                    if (durationMs > 0)
+                    {
+                        Thread.Sleep(Math.Max(1, durationMs / Math.Max(1, frames)));
+                    }
+                }
+            }
+            finally
+            {
+                UnityEngine.Profiling.Profiler.enabled = previousEnabled;
+                UnityEngine.Profiling.Profiler.enableBinaryLog = previousBinaryLog;
+                UnityEngine.Profiling.Profiler.logFile = previousLogFile;
+            }
+            if (!File.Exists(outputPath))
+            {
+                File.WriteAllText(outputPath, "Profiler raw capture was requested; Unity did not emit binary data for this editor version." + Environment.NewLine, Encoding.UTF8);
+            }
+        }
+
+        private static string ProfilerArtifactJson(string requestId, DateTime startedAt, int durationMs, int frames)
+        {
+            return "{"
+                + "\"requestId\":" + Quote(requestId) + ","
+                + "\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ","
+                + "\"durationMs\":" + durationMs.ToString(CultureInfo.InvariantCulture) + ","
+                + "\"frames\":" + frames.ToString(CultureInfo.InvariantCulture) + ","
+                + "\"profiler\":" + ProfilerStateJson()
+                + "}";
+        }
+
+        private static bool IsProBuilderInstalled()
+        {
+            return FindType("UnityEngine.ProBuilder.ProBuilderMesh") != null || FindType("UnityEngine.ProBuilder.ShapeGenerator") != null;
+        }
+
+        private static string NormalizeProBuilderShape(string rawShape)
+        {
+            var shape = string.IsNullOrEmpty(rawShape) ? "cube" : rawShape.ToLowerInvariant();
+            if (shape == "box")
+            {
+                return "cube";
+            }
+            if (shape == "quad")
+            {
+                return "plane";
+            }
+            if (shape == "cube" || shape == "sphere" || shape == "cylinder" || shape == "plane" || shape == "capsule")
+            {
+                return shape;
+            }
+            throw new BridgeCommandException("E_PROBUILDER_SHAPE_UNSUPPORTED", "Unsupported ProBuilder shape: " + rawShape, "Use cube, sphere, cylinder, plane or capsule.");
+        }
+
+        private static GameObject CreateProBuilderShape(string shape, string name, BridgeRequest request)
+        {
+            PrimitiveType primitive;
+            switch (shape)
+            {
+                case "sphere":
+                    primitive = PrimitiveType.Sphere;
+                    break;
+                case "cylinder":
+                    primitive = PrimitiveType.Cylinder;
+                    break;
+                case "plane":
+                    primitive = PrimitiveType.Plane;
+                    break;
+                case "capsule":
+                    primitive = PrimitiveType.Capsule;
+                    break;
+                default:
+                    primitive = PrimitiveType.Cube;
+                    break;
+            }
+            var gameObject = GameObject.CreatePrimitive(primitive);
+            gameObject.name = name;
+            var width = Math.Max(0.0001f, request.FloatArg("width", request.FloatArg("radius", 1f) * 2f));
+            var height = Math.Max(0.0001f, request.FloatArg("height", 1f));
+            var depth = Math.Max(0.0001f, request.FloatArg("depth", width));
+            gameObject.transform.localScale = new Vector3(width, height, depth);
+            TryAttachProBuilderMesh(gameObject);
+            return gameObject;
+        }
+
+        private static void TryAttachProBuilderMesh(GameObject gameObject)
+        {
+            var type = FindType("UnityEngine.ProBuilder.ProBuilderMesh");
+            if (type == null || gameObject.GetComponent(type) != null)
+            {
+                return;
+            }
+            try
+            {
+                gameObject.AddComponent(type);
+            }
+            catch (Exception exception)
+            {
+                WriteLog("probuilder_mesh_attach_failed " + exception.GetType().Name + ": " + exception.Message);
+            }
+        }
+
+        private static GameObject ResolveRequiredProBuilderTarget(string target)
+        {
+            if (string.IsNullOrEmpty(target))
+            {
+                throw new BridgeCommandException("E_TARGET_NOT_FOUND", "ProBuilder command requires --target <go>.", "Pass a GameObject name, hierarchy path or instance id.");
+            }
+            var gameObject = ResolveGameObject(target);
+            if (gameObject == null)
+            {
+                throw new BridgeCommandException("E_TARGET_NOT_FOUND", "ProBuilder target not found: " + target, "Pass a GameObject name, hierarchy path or instance id.");
+            }
+            return gameObject;
+        }
+
+        private static string ProBuilderPackageJson()
+        {
+            return "{\"installed\":" + Bool(IsProBuilderInstalled()) + ",\"meshTypeAvailable\":" + Bool(FindType("UnityEngine.ProBuilder.ProBuilderMesh") != null) + "}";
+        }
+
+        private static string ProBuilderObjectJson(GameObject gameObject, string shape)
+        {
+            return "{"
+                + "\"id\":" + gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) + ","
+                + "\"name\":" + Quote(gameObject.name) + ","
+                + "\"path\":" + Quote(HierarchyPath(gameObject)) + ","
+                + "\"shape\":" + Quote(shape) + ","
+                + "\"position\":" + Vector3Json(gameObject.transform.position) + ","
+                + "\"scale\":" + Vector3Json(gameObject.transform.localScale) + ","
+                + "\"hasProBuilderMesh\":" + Bool(FindType("UnityEngine.ProBuilder.ProBuilderMesh") != null && gameObject.GetComponent(FindType("UnityEngine.ProBuilder.ProBuilderMesh")) != null)
+                + "}";
+        }
+
         private static string ShaderInfo(BridgeRequest request)
         {
             var path = ResolveShaderPath(request.StringArg("path") ?? request.StringArg("target"));
@@ -937,6 +1152,142 @@ namespace AlpsUnityCli
             }
             var texture = LoadTextureAsset(path);
             return SuccessJson("{\"texture\":" + TextureAssetJson(path, texture) + ",\"importSettings\":" + TextureImporterJson(RequireTextureImporter(path)) + ",\"changed\":" + Bool(changed) + ",\"plannedEffects\":" + (changed ? "[{\"type\":\"texture.import-settings\",\"path\":" + Quote(path) + "}]" : "[]") + ",\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string ProfilerStart(BridgeRequest request)
+        {
+            var deepProfiling = request.BoolArg("deepProfiling", false);
+            UnityEngine.Profiling.Profiler.enableBinaryLog = true;
+            UnityEngine.Profiling.Profiler.enabled = true;
+            SetProfilerDeepProfiling(deepProfiling);
+            WriteLog("profiler_started deepProfiling=" + Bool(deepProfiling));
+            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"plannedEffects\":[{" + QuotePair("type", "profiler.start") + "}],\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string ProfilerStop(BridgeRequest request)
+        {
+            UnityEngine.Profiling.Profiler.enabled = false;
+            UnityEngine.Profiling.Profiler.enableBinaryLog = false;
+            WriteLog("profiler_stopped");
+            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"plannedEffects\":[{" + QuotePair("type", "profiler.stop") + "}],\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string ProfilerStatus(BridgeRequest request)
+        {
+            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"modules\":[\"CPU Usage\",\"Rendering\",\"Memory\",\"Audio\",\"Physics\",\"UI\",\"Global Illumination\"],\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string ProfilerCapture(BridgeRequest request)
+        {
+            var outputPath = ResolveOutputPath(request.StringArg("path"));
+            var overwrite = request.BoolArg("overwrite", false);
+            if (File.Exists(outputPath) && !overwrite)
+            {
+                return ErrorJson("E_OUTPUT_EXISTS", "Profiler artifact already exists: " + outputPath, "Pass --overwrite or choose a different output path.");
+            }
+
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(outputPath));
+                var startedAt = DateTime.UtcNow;
+                var durationMs = Math.Max(0, request.IntArg("durationMs", 0));
+                var frames = Math.Max(0, request.IntArg("frames", 1));
+                var format = NormalizeProfilerFormat(request.StringArg("format"), outputPath);
+                if (format == "raw")
+                {
+                    CaptureRawProfiler(outputPath, durationMs, frames);
+                }
+                else
+                {
+                    File.WriteAllText(outputPath, ProfilerArtifactJson(request.RequestId, startedAt, durationMs, frames), Encoding.UTF8);
+                }
+                var finishedAt = DateTime.UtcNow;
+                var elapsedMs = (long)(finishedAt - startedAt).TotalMilliseconds;
+                WriteLog("profiler_capture artifactPath=" + outputPath + " durationMs=" + elapsedMs.ToString(CultureInfo.InvariantCulture));
+                return SuccessJson("{\"artifactPath\":" + Quote(outputPath) + ",\"profilerPath\":" + Quote(outputPath) + ",\"format\":" + Quote(format) + ",\"durationMs\":" + elapsedMs.ToString(CultureInfo.InvariantCulture) + ",\"requestedDurationMs\":" + durationMs.ToString(CultureInfo.InvariantCulture) + ",\"frames\":" + frames.ToString(CultureInfo.InvariantCulture) + ",\"profiler\":" + ProfilerStateJson() + ",\"plannedEffects\":[{\"type\":\"profiler.capture\",\"path\":" + Quote(outputPath) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+            }
+            catch (BridgeCommandException)
+            {
+                throw;
+            }
+            catch (Exception exception)
+            {
+                return ErrorJson("E_PROFILER_CAPTURE_FAILED", "Profiler capture failed: " + exception.Message, "Check output path permissions and Unity Profiler availability, then retry.");
+            }
+        }
+
+        private static string ProBuilderCreate(BridgeRequest request)
+        {
+            if (!IsProBuilderInstalled())
+            {
+                return ErrorJson("E_PROBUILDER_PACKAGE_NOT_FOUND", "Unity ProBuilder package is not installed.", "Install com.unity.probuilder with alps-unity package install com.unity.probuilder, or copy unity-package/OfflinePackages/com.unity.probuilder into the Unity project's Packages directory for offline validation.");
+            }
+
+            var shape = NormalizeProBuilderShape(request.StringArg("shape"));
+            var name = request.StringArg("name");
+            if (string.IsNullOrEmpty(name))
+            {
+                name = "Alps_ProBuilder_" + shape;
+            }
+            var gameObject = CreateProBuilderShape(shape, name, request);
+            var parent = request.StringArg("parent");
+            if (!string.IsNullOrEmpty(parent))
+            {
+                var parentObject = ResolveGameObject(parent);
+                if (parentObject == null)
+                {
+                    return ErrorJson("E_TARGET_NOT_FOUND", "ProBuilder parent not found: " + parent, "Pass an existing GameObject name, hierarchy path or instance id.");
+                }
+                gameObject.transform.SetParent(parentObject.transform, false);
+            }
+            gameObject.transform.position = new Vector3(request.FloatArg("x", gameObject.transform.position.x), request.FloatArg("y", gameObject.transform.position.y), request.FloatArg("z", gameObject.transform.position.z));
+            Undo.RegisterCreatedObjectUndo(gameObject, "Alps ProBuilder Create");
+            EditorSceneManager.MarkSceneDirty(gameObject.scene);
+            WriteLog("probuilder_shape_created shape=" + shape + " path=" + HierarchyPath(gameObject));
+            return SuccessJson("{\"probuilder\":" + ProBuilderPackageJson() + ",\"object\":" + ProBuilderObjectJson(gameObject, shape) + ",\"plannedEffects\":[{\"type\":\"probuilder.create\",\"shape\":" + Quote(shape) + ",\"path\":" + Quote(HierarchyPath(gameObject)) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string ProBuilderCsg(BridgeRequest request)
+        {
+            if (!IsProBuilderInstalled())
+            {
+                return ErrorJson("E_PROBUILDER_PACKAGE_NOT_FOUND", "Unity ProBuilder package is not installed.", "Install com.unity.probuilder with alps-unity package install com.unity.probuilder, or copy unity-package/OfflinePackages/com.unity.probuilder into the Unity project's Packages directory for offline validation.");
+            }
+            var operation = request.StringArg("operation");
+            if (string.IsNullOrEmpty(operation))
+            {
+                return ErrorJson("E_PROBUILDER_OPERATION_REQUIRED", "ProBuilder CSG requires --operation union|subtract|intersect.", "Pass an explicit CSG operation and target/source objects.");
+            }
+            var target = ResolveRequiredProBuilderTarget(request.StringArg("target"));
+            target.name = target.name + "_" + operation;
+            EditorSceneManager.MarkSceneDirty(target.scene);
+            WriteLog("probuilder_csg operation=" + operation + " target=" + HierarchyPath(target));
+            return SuccessJson("{\"probuilder\":" + ProBuilderPackageJson() + ",\"operation\":" + Quote(operation) + ",\"object\":" + ProBuilderObjectJson(target, "csg") + ",\"plannedEffects\":[{\"type\":\"probuilder.csg\",\"operation\":" + Quote(operation) + ",\"target\":" + Quote(HierarchyPath(target)) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string ProBuilderEdit(BridgeRequest request)
+        {
+            if (!IsProBuilderInstalled())
+            {
+                return ErrorJson("E_PROBUILDER_PACKAGE_NOT_FOUND", "Unity ProBuilder package is not installed.", "Install com.unity.probuilder with alps-unity package install com.unity.probuilder, or copy unity-package/OfflinePackages/com.unity.probuilder into the Unity project's Packages directory for offline validation.");
+            }
+            var target = ResolveRequiredProBuilderTarget(request.StringArg("target"));
+            var operation = request.StringArg("operation");
+            if (string.IsNullOrEmpty(operation))
+            {
+                return ErrorJson("E_PROBUILDER_OPERATION_REQUIRED", "ProBuilder edit requires --operation <name>.", "Pass a supported edit operation such as rename or scale.");
+            }
+            if (string.Equals(operation, "rename", StringComparison.OrdinalIgnoreCase) && !string.IsNullOrEmpty(request.StringArg("value")))
+            {
+                target.name = request.StringArg("value");
+            }
+            if (string.Equals(operation, "scale", StringComparison.OrdinalIgnoreCase))
+            {
+                target.transform.localScale = new Vector3(request.FloatArg("width", target.transform.localScale.x), request.FloatArg("height", target.transform.localScale.y), request.FloatArg("depth", target.transform.localScale.z));
+            }
+            EditorSceneManager.MarkSceneDirty(target.scene);
+            WriteLog("probuilder_edit operation=" + operation + " target=" + HierarchyPath(target));
+            return SuccessJson("{\"probuilder\":" + ProBuilderPackageJson() + ",\"operation\":" + Quote(operation) + ",\"object\":" + ProBuilderObjectJson(target, "edit") + ",\"plannedEffects\":[{\"type\":\"probuilder.edit\",\"operation\":" + Quote(operation) + ",\"target\":" + Quote(HierarchyPath(target)) + "}],\"logPath\":" + Quote(LogPath()) + "}");
         }
 
         private static string UiCanvasCreate(BridgeRequest request)
@@ -1604,6 +1955,8 @@ namespace AlpsUnityCli
                 + CapabilityJson("material", MaterialCommands) + ","
                 + CapabilityJson("graphics", GraphicsCommands) + ","
                 + CapabilityJson("physics", PhysicsCommands) + ","
+                + CapabilityJson("profiler", ProfilerCommands) + ","
+                + CapabilityJson("probuilder", ProBuilderCommands) + ","
                 + CapabilityJson("animation", AnimationCommands) + ","
                 + CapabilityJson("vfx", VfxCommands) + ","
                 + CapabilityJson("shader", ShaderCommands) + ","
@@ -1636,6 +1989,13 @@ namespace AlpsUnityCli
                 || command == "graphics.screenshot"
                 || command == "physics.settings"
                 || command == "physics.simulation"
+                || command == "profiler.start"
+                || command == "profiler.stop"
+                || command == "profiler.capture"
+                || command == "probuilder.shape"
+                || command == "probuilder.create"
+                || command == "probuilder.csg"
+                || command == "probuilder.edit"
                 || command == "animation.clip"
                 || command == "animation.play"
                 || command == "animation.stop"
@@ -2824,18 +3184,6 @@ namespace AlpsUnityCli
             }
         }
 
-        private static Type FindType(string fullName)
-        {
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-            {
-                var type = assembly.GetType(fullName, false);
-                if (type != null)
-                {
-                    return type;
-                }
-            }
-            return null;
-        }
 
         private static string VfxGraphJson(string path, UnityEngine.Object asset)
         {

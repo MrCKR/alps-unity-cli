@@ -1,4 +1,4 @@
-export type JobKind = "refresh" | "test" | "build" | "package" | "code";
+export type JobKind = "refresh" | "test" | "build" | "package" | "code" | "profiler" | "probuilder";
 
 export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled" | "timeout";
 

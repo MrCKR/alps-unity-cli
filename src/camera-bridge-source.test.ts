@@ -36,7 +36,7 @@ test("Unity Bridge source does not duplicate C# method signatures", async () => 
   assert.deepEqual(duplicateCSharpMethodSignatures(source), []);
 });
 
-test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, graphics, physics, animation, vfx, shader, texture and editor commands", async () => {
+test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, graphics, physics, profiler, probuilder, animation, vfx, shader, texture and editor commands", async () => {
   const source = await readFile(sourceUrl, "utf8");
   const readme = await readFile(readmeUrl, "utf8");
   const bridgeSection = readme.slice(readme.indexOf("## Unity Editor Bridge"), readme.indexOf("## Batch Automation"));
@@ -49,9 +49,11 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /CapabilityJson\("material", MaterialCommands\)/);
   assert.match(source, /CapabilityJson\("graphics", GraphicsCommands\)/);
   assert.match(source, /CapabilityJson\("physics", PhysicsCommands\)/);
+  assert.match(source, /CapabilityJson\("profiler", ProfilerCommands\)/);
+  assert.match(source, /CapabilityJson\("probuilder", ProBuilderCommands\)/);
   assert.match(source, /CapabilityJson\("animation", AnimationCommands\)/);
   assert.match(source, /CapabilityJson\("vfx", VfxCommands\)/);
-  assert.match(source, /CapabilityJson\("physics", PhysicsCommands\) \+ ","\s+\+ CapabilityJson\("animation", AnimationCommands\) \+ ","\s+\+ CapabilityJson\("vfx", VfxCommands\) \+ ","\s+\+ CapabilityJson\("shader", ShaderCommands\) \+ ","/);
+  assert.match(source, /CapabilityJson\("physics", PhysicsCommands\) \+ ","\s+\+ CapabilityJson\("profiler", ProfilerCommands\) \+ ","\s+\+ CapabilityJson\("probuilder", ProBuilderCommands\) \+ ","\s+\+ CapabilityJson\("animation", AnimationCommands\) \+ ","\s+\+ CapabilityJson\("vfx", VfxCommands\) \+ ","\s+\+ CapabilityJson\("shader", ShaderCommands\) \+ ","/);
   assert.match(source, /CapabilityJson\("shader", ShaderCommands\)/);
   assert.match(source, /CapabilityJson\("texture", TextureCommands\)/);
   assert.match(source, /CapabilityJson\("code", CodeCommands\)/);
@@ -63,6 +65,8 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /private static readonly string\[\] MaterialCommands = \{ "material\.info", "material\.create", "material\.assign", "material\.set" \}/);
   assert.match(source, /private static readonly string\[\] GraphicsCommands = \{ "graphics\.quality", "graphics\.settings", "graphics\.screenshot" \}/);
   assert.match(source, /private static readonly string\[\] PhysicsCommands = \{ "physics\.settings", "physics\.raycast", "physics\.simulation" \}/);
+  assert.match(source, /private static readonly string\[\] ProfilerCommands = \{ "profiler\.start", "profiler\.stop", "profiler\.capture", "profiler\.status" \}/);
+  assert.match(source, /private static readonly string\[\] ProBuilderCommands = \{ "probuilder\.shape", "probuilder\.create", "probuilder\.csg", "probuilder\.edit" \}/);
   assert.match(source, /private static readonly string\[\] AnimationCommands = \{ "animation\.clip", "animation\.state", "animation\.play", "animation\.stop" \}/);
   assert.match(source, /private static readonly string\[\] VfxCommands = \{ "vfx\.graph", "vfx\.effect" \}/);
   assert.match(source, /private static readonly string\[\] ShaderCommands = \{ "shader\.info", "shader\.read", "shader\.create", "shader\.update" \}/);
@@ -97,6 +101,14 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /case "physics\.settings"/);
   assert.match(source, /case "physics\.raycast"/);
   assert.match(source, /case "physics\.simulation"/);
+  assert.match(source, /case "profiler\.start"/);
+  assert.match(source, /case "profiler\.stop"/);
+  assert.match(source, /case "profiler\.capture"/);
+  assert.match(source, /case "profiler\.status"/);
+  assert.match(source, /case "probuilder\.shape"/);
+  assert.match(source, /case "probuilder\.create"/);
+  assert.match(source, /case "probuilder\.csg"/);
+  assert.match(source, /case "probuilder\.edit"/);
   assert.match(source, /case "animation\.clip"/);
   assert.match(source, /case "animation\.state"/);
   assert.match(source, /case "animation\.play"/);
@@ -124,7 +136,7 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /case "code\.exec"/);
   assert.match(source, /case "custom-tool\.list"/);
   assert.match(source, /case "custom-tool\.run"/);
-  assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.hierarchy`, `scene\.screenshot`, `go\.find`, `asset\.search`, `diagnose\.preflight`, `screenshot\.capture`, `prefab\.info`, `prefab\.create`, `prefab\.stage-open`, `prefab\.stage-save`, `prefab\.stage-close`, `prefab\.hierarchy`, `ui\.canvas\.create`, `ui\.text\.create`, `ui\.button\.create`, `ui\.image\.create`, `ui\.document\.info`, `ui\.document\.create`, `ui\.hierarchy`, `material\.info`, `material\.create`, `material\.assign`, `material\.set`, `graphics\.quality`, `graphics\.settings`, `graphics\.screenshot`, `physics\.settings`, `physics\.raycast`, `physics\.simulation`, `animation\.clip`, `animation\.state`, `animation\.play`, `animation\.stop`, `vfx\.graph`, `vfx\.effect`, `shader\.info`, `shader\.read`, `shader\.create`, `shader\.update`, `texture\.info`, `texture\.create`, `texture\.sprite`, `texture\.import-settings`, `editor\.state`, `editor\.play`, `editor\.pause`, `editor\.stop`, `editor\.menu`, `editor\.console`, `code\.exec`, `custom-tool\.list` and `custom-tool\.run`/);
+  assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.hierarchy`, `scene\.screenshot`, `go\.find`, `asset\.search`, `diagnose\.preflight`, `screenshot\.capture`, `prefab\.info`, `prefab\.create`, `prefab\.stage-open`, `prefab\.stage-save`, `prefab\.stage-close`, `prefab\.hierarchy`, `ui\.canvas\.create`, `ui\.text\.create`, `ui\.button\.create`, `ui\.image\.create`, `ui\.document\.info`, `ui\.document\.create`, `ui\.hierarchy`, `material\.info`, `material\.create`, `material\.assign`, `material\.set`, `graphics\.quality`, `graphics\.settings`, `graphics\.screenshot`, `physics\.settings`, `physics\.raycast`, `physics\.simulation`, `profiler\.start`, `profiler\.stop`, `profiler\.capture`, `profiler\.status`, `probuilder\.shape`, `probuilder\.create`, `probuilder\.csg`, `probuilder\.edit`, `animation\.clip`, `animation\.state`, `animation\.play`, `animation\.stop`, `vfx\.graph`, `vfx\.effect`, `shader\.info`, `shader\.read`, `shader\.create`, `shader\.update`, `texture\.info`, `texture\.create`, `texture\.sprite`, `texture\.import-settings`, `editor\.state`, `editor\.play`, `editor\.pause`, `editor\.stop`, `editor\.menu`, `editor\.console`, `code\.exec`, `custom-tool\.list` and `custom-tool\.run`/);
   assert.doesNotMatch(bridgeSection, /live query\/edit\/screenshot/);
   assert.match(bridgeSection, /`component set` and `script edit` are not routed by this package yet/);
 });

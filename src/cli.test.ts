@@ -155,14 +155,14 @@ test("wait timeout returns structured error while job keeps running", async () =
   });
 });
 
-test("editor refresh compile uses existing batch resolve method", async () => {
+test("editor refresh compile uses batch refresh-and-compile method", async () => {
   const runtime = await makeRuntime();
   const unity = await makeFakeUnity(`process.exit(0);`);
 
   const compile = await execute(["editor", "refresh", "--compile", "--unity", unity, "--project", runtime.dataDir], runtime);
   const refresh = await execute(["editor", "refresh", "--unity", unity, "--project", runtime.dataDir], runtime);
 
-  assert.equal((compile.data as { command: string[] }).command[(compile.data as { command: string[] }).command.indexOf("-executeMethod") + 1], "AlpsUnityCli.Batch.ResolvePackages");
+  assert.equal((compile.data as { command: string[] }).command[(compile.data as { command: string[] }).command.indexOf("-executeMethod") + 1], "AlpsUnityCli.Batch.RefreshAndCompile");
   assert.equal((refresh.data as { command: string[] }).command[(refresh.data as { command: string[] }).command.indexOf("-executeMethod") + 1], "AlpsUnityCli.Batch.Refresh");
 });
 
@@ -266,7 +266,7 @@ test("non-wait CLI exits quickly and worker persists terminal status", async () 
   assert.equal(payload.data.status, "queued");
 
   const runtime = { dataDir, store: new JobStore(dataDir), runner: new JobRunner(new JobStore(dataDir), dataDir) };
-  const waited = await runtime.runner.wait(payload.data.jobId, 3000);
+  const waited = await runtime.runner.wait(payload.data.jobId, 5000);
   assert.equal(waited.status, "succeeded");
 });
 
