@@ -342,6 +342,43 @@ test("package list and info accept UTF-8 BOM manifest and lock", async () => {
   assert.equal(((info.data as { package: { dependencies: Record<string, string> } }).package.dependencies)["com.unity.textmeshpro"], "3.0.6");
 });
 
+test("init deploys bundled bridge into Unity project without requiring Unity", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  const initialized = await execute(["init", "--project", project], runtime);
+  assert.equal(initialized.ok, true);
+  const data = initialized.data as { action: string; status: string; bridge: { dependencyName: string; bridgePath: string; buildStampPath: string; buildStamp: string }; liveRefresh: { status: string }; resolve: string };
+  assert.equal(data.action, "init");
+  assert.equal(data.status, "bridge_installed");
+  assert.equal(data.bridge.dependencyName, "com.alps.unity-cli.bridge");
+  assert.equal(data.liveRefresh.status, "skipped");
+  assert.equal(data.resolve, "skipped");
+  assert.match(await readFile(join(data.bridge.bridgePath, "Editor", "AlpsUnityBridge.cs"), "utf8"), /class AlpsUnityBridge/);
+  assert.match(await readFile(data.bridge.buildStampPath, "utf8"), new RegExp(data.bridge.buildStamp));
+
+  const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string> };
+  assert.match(manifest.dependencies["com.alps.unity-cli.bridge"], /^file:/);
+});
+
+test("init asks an already open bridge to refresh assets", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+  const requests: Array<{ command: string; args: Record<string, unknown> }> = [];
+
+  const initialized = await execute(["init", "--project", project], {
+    ...runtime,
+    bridgeExecute: async (payload) => {
+      requests.push({ command: payload.command, args: payload.args });
+      return { ok: true, data: { command: payload.command, result: { executed: true } } };
+    }
+  });
+
+  assert.equal(initialized.ok, true);
+  assert.deepEqual(requests, [{ command: "editor.menu", args: { path: "Assets/Refresh", timeoutMs: 7000 } }]);
+  assert.equal(((initialized.data as { liveRefresh: { status: string } }).liveRefresh.status), "triggered");
+});
+
 test("package install updates manifest, deploys bridge and can start package resolve job", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
