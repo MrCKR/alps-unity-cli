@@ -124,7 +124,7 @@ export class JobRunner {
   }
 
   private async spawnJob(job: JobRecord): Promise<JobRecord> {
-    const child = spawn(job.unityPath, job.command.slice(1), { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(job.unityPath, job.command.slice(1), { windowsHide: true, stdio: ["ignore", "pipe", "pipe"], shell: isWindowsCommandScript(job.unityPath) });
     const logStream = createWriteStream(job.logPath, { flags: "a" });
     child.stdout.pipe(logStream);
     child.stderr.pipe(logStream);
@@ -308,6 +308,10 @@ function artifactList(value: unknown): Record<string, unknown>[] {
 
 function normalizeRelativePath(path: string): string {
   return path.split("\\").join("/");
+}
+
+function isWindowsCommandScript(path: string): boolean {
+  return process.platform === "win32" && /\.(?:cmd|bat)$/i.test(path);
 }
 
 function timeoutDetails(cancelAttempted: boolean, cancelled: boolean, processKilled: boolean, domainReloadObserved: boolean): Record<string, boolean> {

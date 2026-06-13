@@ -16,6 +16,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.SceneManagement;
 using UnityEngine.UIElements;
 using UiButton = UnityEngine.UI.Button;
 using UiCanvasScaler = UnityEngine.UI.CanvasScaler;
@@ -1654,8 +1655,8 @@ namespace AlpsUnityCli
                 DefaultTimeoutMs = attribute.DefaultTimeoutMs,
                 MaxTimeoutMs = attribute.MaxTimeoutMs,
                 SupportsJob = attribute.SupportsJob,
-                ArtifactKinds = SplitCsv(attribute.ArtifactKinds),
-                RequiredInput = SplitCsv(attribute.RequiredInput),
+                ArtifactKinds = SplitCsv(attribute.ArtifactKinds).ToArray(),
+                RequiredInput = SplitCsv(attribute.RequiredInput).ToArray(),
                 RegisteredBy = "unity-editor-package",
                 Assembly = assembly.GetName().Name,
                 Method = type.FullName + "." + method.Name,
@@ -3811,6 +3812,11 @@ namespace AlpsUnityCli
             return Directory.GetParent(Application.dataPath).FullName;
         }
 
+        private static string InstanceId()
+        {
+            return ProjectRoot();
+        }
+
         private static string HierarchyPath(GameObject gameObject)
         {
             var names = new Stack<string>();
@@ -3849,6 +3855,11 @@ namespace AlpsUnityCli
         private static string ErrorJson(string code, string message, string nextAction)
         {
             return "{\"ok\":false,\"error\":{\"code\":" + Quote(code) + ",\"message\":" + Quote(message) + "},\"nextActions\":[" + Quote(nextAction) + "]}";
+        }
+
+        private static string ErrorJsonWithDetails(string code, string message, string detailsJson, string nextAction)
+        {
+            return "{\"ok\":false,\"error\":{\"code\":" + Quote(code) + ",\"message\":" + Quote(message) + ",\"details\":" + (string.IsNullOrEmpty(detailsJson) ? "{}" : detailsJson) + "},\"nextActions\":[" + Quote(nextAction) + "]}";
         }
 
         private static string TargetAmbiguousErrorJson(string label, string target, TargetResolution resolution, string nextAction)
