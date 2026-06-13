@@ -59,13 +59,20 @@ export async function executeBridgePayload(
       return failure(requestId, bridgeResult.error?.code ?? "BRIDGE_COMMAND_FAILED", bridgeResult.error?.message ?? "Unity Bridge rejected the command.", bridgeResult.nextActions ?? [], bridgeResult.error?.details);
     }
 
+    if (command === "code.exec" && bridgeResult.data?.status === "running" && bridgeResult.data?.sideEffectSemantics === "started-before-http-timeout") {
+      return liveCodeTimeoutFailure(requestId, endpoint, args, bridgeResult.data);
+    }
+
     return success(requestId, {
       command,
       bridgeEndpoint: endpoint,
       ...bridgeResult.data
     });
   } catch (error) {
-    return failure(requestId, "BRIDGE_CONNECTION_FAILED", error instanceof Error ? error.message : String(error), ["Check Unity Bridge endpoint and logs."]);
+    if (command === "code.exec" && isAbortLikeError(error)) {
+      return liveCodeTimeoutFailure(requestId, endpoint, args, { cause: errorMessage(error) });
+    }
+    return failure(requestId, "BRIDGE_CONNECTION_FAILED", errorMessage(error), ["Check Unity Bridge endpoint and logs."]);
   }
 }
 
@@ -358,7 +365,7 @@ function bridgeEndpoint(flags: Record<string, string | boolean>, runtime: Bridge
 
 async function postBridgeExecute(endpoint: string, payload: BridgeRequest): Promise<BridgeResponse> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
+  const timeout = setTimeout(() => controller.abort(), bridgeHttpTimeoutMs(payload));
   try {
     const response = await fetch(new URL("/bridge/execute", endpoint), {
       method: "POST",
@@ -373,6 +380,42 @@ async function postBridgeExecute(endpoint: string, payload: BridgeRequest): Prom
   } finally {
     clearTimeout(timeout);
   }
+}
+
+function bridgeHttpTimeoutMs(payload: BridgeRequest): number {
+  if (payload.command === "code.exec" && typeof payload.args.timeoutMs === "number" && Number.isFinite(payload.args.timeoutMs) && payload.args.timeoutMs > 0) {
+    return payload.args.timeoutMs + 5000;
+  }
+  return 10_000;
+}
+
+function liveCodeTimeoutFailure(requestId: string, endpoint: string | undefined, args: Record<string, unknown>, details: Record<string, unknown>): CliResult {
+  const timeoutMs = typeof args.timeoutMs === "number" && Number.isFinite(args.timeoutMs) ? args.timeoutMs : null;
+  const logPath = typeof details.logPath === "string" ? details.logPath : "Unity project Logs/AlpsUnityBridge.log";
+  return failure(requestId, "E_EXECUTION_TIMEOUT", timeoutMs === null ? "Runtime Code live execution did not complete before the bridge HTTP timeout." : `Runtime Code live execution did not complete within ${timeoutMs}ms.`, [
+    "Inspect the Unity Editor for a long-running script or busy dialog.",
+    "Inspect the Unity project Logs/AlpsUnityBridge.log for bridge_request_timeout_started and requestId.",
+    "Retry after Unity is responsive, or increase --timeout-ms for intentionally long-running code."
+  ], {
+    requestId,
+    command: "code.exec",
+    channel: "live",
+    timeoutMs,
+    bridgeEndpoint: endpoint ?? null,
+    audit: { requestId, command: "code.exec", channel: "live", timeoutMs },
+    logs: { bridge: logPath },
+    ...details
+  });
+}
+
+function isAbortLikeError(error: unknown): boolean {
+  const name = error instanceof Error ? error.name : "";
+  const message = errorMessage(error);
+  return name === "AbortError" || /\b(abort|aborted|timed? out|timeout)\b/i.test(message);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function queryArgs(flags: Record<string, string | boolean>): Record<string, unknown> {
