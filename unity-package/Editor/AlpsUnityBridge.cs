@@ -1020,7 +1020,7 @@ namespace AlpsUnityCli
             }
             var width = Math.Max(1, request.IntArg("width", 1));
             var height = Math.Max(1, request.IntArg("height", 1));
-            var color = ParseColor(request.StringArg("color"));
+            var color = ParseTextureColor(request.StringArg("color"));
             var texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
             try
             {
@@ -1041,7 +1041,7 @@ namespace AlpsUnityCli
             }
         }
 
-        private static Color ParseColor(string rawColor)
+        private static Color ParseTextureColor(string rawColor)
         {
             if (string.IsNullOrEmpty(rawColor))
             {
@@ -2723,11 +2723,6 @@ namespace AlpsUnityCli
             {
                 var match = Regex.Match(body ?? string.Empty, "\\\"" + Regex.Escape(name) + "\\\"\\s*:\\s*(true|false)", RegexOptions.IgnoreCase);
                 return match.Success ? (bool?)string.Equals(match.Groups[1].Value, "true", StringComparison.OrdinalIgnoreCase) : null;
-            }
-
-            public bool HasArg(string name)
-            {
-                return Regex.IsMatch(body ?? string.Empty, "\\\"" + Regex.Escape(name) + "\\\"\\s*:");
             }
 
             public bool HasArg(string name)
