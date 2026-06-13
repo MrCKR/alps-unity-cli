@@ -1,7 +1,7 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { createWriteStream } from "node:fs";
-import { mkdir, readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { join, relative } from "node:path";
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import type { JobRecord, JobStatus, RunJobOptions } from "./types.js";
@@ -71,14 +71,16 @@ export class JobRunner {
     if (terminalStatuses.includes(job.status)) {
       throw new Error(`Job is already terminal: ${job.status}`);
     }
+    let processKilled = false;
     if (job.pid) {
       try {
         process.kill(job.pid);
+        processKilled = true;
       } catch {
         // Process may already be gone; the persisted state is still updated below.
       }
     }
-    return this.store.markTerminal(id, "cancelled", { error: { code: "JOB_CANCELLED", message: "Job was cancelled." } });
+    return this.store.markTerminal(id, "cancelled", { error: { code: "JOB_CANCELLED", message: "Job was cancelled.", details: timeoutDetails(true, true, processKilled, false) } });
   }
 
   async logs(id: string, tail = 100): Promise<{ logPath: string; lines: string[] }> {
@@ -181,7 +183,7 @@ export class JobRunner {
           if (timedOut) {
             const timedOutJob = await this.store.markTerminal(job.id, "timeout", {
               exitCode: code,
-              error: { code: "JOB_TIMEOUT", message: "Unity batchmode job exceeded timeout." }
+              error: { code: "E_EXECUTION_TIMEOUT", message: "Unity batchmode job exceeded timeout.", details: timeoutDetails(true, false, true, false) }
             });
             resolve(timedOutJob);
             return;
@@ -203,15 +205,38 @@ export class JobRunner {
   }
 
   private async finalResult(job: JobRecord): Promise<Record<string, unknown> | undefined> {
-    if (job.kind !== "test" || typeof job.result?.resultPath !== "string") {
-      return job.result;
+    if (job.kind === "test" && typeof job.result?.resultPath === "string") {
+      const summary = await readUnityTestSummary(job.result.resultPath);
+      return summary ? { ...job.result, summary } : job.result;
     }
-
-    const summary = await readUnityTestSummary(job.result.resultPath);
-    return summary ? { ...job.result, summary } : job.result;
+    if (job.kind === "code" && typeof job.result?.resultPath === "string") {
+      const resultArtifact = await this.resultArtifact(job.result);
+      const codeResult = await this.readCodeResult(job.result.resultPath);
+      const result = codeResult ? { ...job.result, ...codeResult } : job.result;
+      if (resultArtifact) {
+        await this.updateArtifactManifest(job.result, resultArtifact);
+        const artifacts = [...artifactList(result.artifacts), resultArtifact];
+        result.artifacts = artifacts;
+        if (result.data && typeof result.data === "object" && !Array.isArray(result.data)) {
+          result.data = { ...result.data, artifacts };
+        }
+      }
+      return result;
+    }
+    return job.result;
   }
 
   private async failureDiagnostic(job: JobRecord, code: number | null): Promise<{ code: string; message: string }> {
+    if (job.kind === "code") {
+      const resultPath = typeof job.result?.resultPath === "string" ? job.result.resultPath : undefined;
+      const codeResult = resultPath ? await this.readCodeResult(resultPath) : undefined;
+      const error = codeResult?.error as { code?: string; message?: string } | undefined;
+      if (error?.code && error?.message) {
+        return { code: error.code, message: error.message };
+      }
+      const log = await this.readLog(job.logPath);
+      return { code: codeDiagnosticCode(log), message: firstMatchingLine(log, /(E_CODE_[A-Z_]+:[^\r\n]*)/i) ?? `Unity code execution failed with exit code ${code}.` };
+    }
     if (job.kind !== "package") {
       return { code: "UNITY_BATCHMODE_FAILED", message: `Unity exited with code ${code}.` };
     }
@@ -234,6 +259,78 @@ export class JobRunner {
       return "";
     }
   }
+
+  private async readCodeResult(path: string): Promise<Record<string, unknown> | undefined> {
+    try {
+      return JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async resultArtifact(result: Record<string, unknown>): Promise<Record<string, unknown> | undefined> {
+    if (typeof result.resultPath !== "string" || typeof result.artifactDir !== "string") {
+      return undefined;
+    }
+    try {
+      const content = await readFile(result.resultPath);
+      return {
+        kind: "result",
+        path: result.resultPath,
+        relativePath: normalizeRelativePath(relative(result.artifactDir, result.resultPath) || "."),
+        sha256: createHash("sha256").update(content).digest("hex"),
+        sizeBytes: content.byteLength
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  private async updateArtifactManifest(result: Record<string, unknown>, artifact: Record<string, unknown>): Promise<void> {
+    if (typeof result.artifactDir !== "string") {
+      return;
+    }
+    const manifestPath = join(result.artifactDir, "manifest.json");
+    try {
+      const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as Record<string, unknown>;
+      const artifacts = [...artifactList(manifest.artifacts).filter((entry) => entry.relativePath !== artifact.relativePath), artifact];
+      manifest.artifact = artifacts;
+      manifest.artifacts = artifacts;
+      await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+    } catch {
+    }
+  }
+}
+
+function artifactList(value: unknown): Record<string, unknown>[] {
+  return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item)) : [];
+}
+
+function normalizeRelativePath(path: string): string {
+  return path.split("\\").join("/");
+}
+
+function timeoutDetails(cancelAttempted: boolean, cancelled: boolean, processKilled: boolean, domainReloadObserved: boolean): Record<string, boolean> {
+  return { cancelAttempted, cancelled, processKilled, domainReloadObserved };
+}
+
+function codeDiagnosticCode(log: string): string {
+  if (/E_CODE_COMPILE_FAILED|error CS\d+/i.test(log)) {
+    return "E_CODE_COMPILE_FAILED";
+  }
+  if (/E_REFERENCE_RESOLUTION_FAILED/i.test(log)) {
+    return "E_REFERENCE_RESOLUTION_FAILED";
+  }
+  if (/E_EXECUTION_TIMEOUT|timed out|timeout/i.test(log)) {
+    return "E_EXECUTION_TIMEOUT";
+  }
+  if (/E_UNITY_BUSY|Another Unity instance is running|project is already open|AssetDatabase is busy/i.test(log)) {
+    return "E_UNITY_BUSY";
+  }
+  if (/E_CODE_RUNTIME_EXCEPTION|Exception/i.test(log)) {
+    return "E_CODE_RUNTIME_EXCEPTION";
+  }
+  return "E_CODE_RUNTIME_EXCEPTION";
 }
 
 function packageDiagnosticCode(log: string): string {

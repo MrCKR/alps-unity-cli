@@ -1,14 +1,17 @@
 #if UNITY_EDITOR
 using System;
+using System.CodeDom.Compiler;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.CSharp;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -39,6 +42,7 @@ namespace AlpsUnityCli
         private static readonly string[] VfxCommands = { "vfx.graph", "vfx.effect" };
         private static readonly string[] ShaderCommands = { "shader.info", "shader.read", "shader.create", "shader.update" };
         private static readonly string[] TextureCommands = { "texture.info", "texture.create", "texture.sprite", "texture.import-settings" };
+        private static readonly string[] CodeCommands = { "code.exec" };
         private static readonly Queue<BridgeWorkItem> WorkQueue = new Queue<BridgeWorkItem>();
         private static HttpListener listener;
         private static bool started;
@@ -289,6 +293,8 @@ namespace AlpsUnityCli
                     return SuccessJson(EditorStopJson(request));
                 case "editor.menu":
                     return SuccessJson(EditorMenuJson(request));
+                case "code.exec":
+                    return CodeExec(request);
                 default:
                     return ErrorJson("E_BRIDGE_COMMAND_UNSUPPORTED", "Unsupported bridge command: " + request.Command, "Upgrade the Alps Unity Bridge package or use a registered CLI command.");
             }
@@ -1427,7 +1433,8 @@ namespace AlpsUnityCli
                 + CapabilityJson("animation", AnimationCommands) + ","
                 + CapabilityJson("vfx", VfxCommands) + ","
                 + CapabilityJson("shader", ShaderCommands) + ","
-                + CapabilityJson("texture", TextureCommands)
+                + CapabilityJson("texture", TextureCommands) + ","
+                + CapabilityJson("code", CodeCommands)
                 + "]";
         }
 
@@ -1462,7 +1469,8 @@ namespace AlpsUnityCli
                 || command == "shader.update"
                 || command == "texture.create"
                 || command == "texture.sprite"
-                || command == "texture.import-settings";
+                || command == "texture.import-settings"
+                || command == "code.exec";
         }
 
         private static string CapabilityJson(string domain, string[] commands)
@@ -2400,6 +2408,224 @@ namespace AlpsUnityCli
         private static string GameObjectTargetJson(GameObject gameObject)
         {
             return "{\"id\":" + gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) + ",\"name\":" + Quote(gameObject.name) + ",\"path\":" + Quote(HierarchyPath(gameObject)) + "}";
+        }
+
+
+        private static string CodeExec(BridgeRequest request)
+        {
+            var startedAt = DateTime.UtcNow;
+            var source = request.StringArg("sourceText");
+            var sourcePath = request.StringArg("sourcePath");
+            if (string.IsNullOrEmpty(source) && !string.IsNullOrEmpty(sourcePath))
+            {
+                try
+                {
+                    source = File.ReadAllText(sourcePath, Encoding.UTF8);
+                }
+                catch (Exception exception)
+                {
+                    return ErrorJson("E_CODE_SOURCE_INVALID", "Code source is not readable: " + exception.Message, "Check that --file points to a UTF-8 C# source file.");
+                }
+            }
+            if (string.IsNullOrWhiteSpace(source))
+            {
+                return ErrorJson("E_CODE_SOURCE_INVALID", "Code source is empty.", "Pass --file, --stdin or --code with non-empty C# source.");
+            }
+
+            var result = ExecuteCodeSource(request, source, startedAt);
+            WriteLog("code_exec requestId=" + request.RequestId + " ok=" + result.Ok + " exitState=" + result.ExitState);
+            if (!result.Ok)
+            {
+                return ErrorJsonWithDetails(result.ErrorCode, result.ErrorMessage, result.DetailsJson, result.NextAction);
+            }
+            return SuccessJson(result.DataJson);
+        }
+
+        private static CodeExecutionResult ExecuteCodeSource(BridgeRequest request, string source, DateTime startedAt)
+        {
+            var requestId = request.RequestId;
+            var argsJson = request.StringArg("argsJson");
+            var provider = new CSharpCodeProvider();
+            var parameters = new CompilerParameters
+            {
+                GenerateExecutable = false,
+                GenerateInMemory = true,
+                TreatWarningsAsErrors = false
+            };
+            var references = DefaultCodeReferences(request.StringArg("refs")).ToList();
+            var referenceError = ValidateCodeReferences(references);
+            if (!string.IsNullOrEmpty(referenceError))
+            {
+                return CodeExecutionResult.Fail("E_REFERENCE_RESOLUTION_FAILED", referenceError, "{\"referenceError\":" + Quote(referenceError) + "}", "Check Unity/Editor/project assembly references and --refs.");
+            }
+            foreach (var reference in references)
+            {
+                parameters.ReferencedAssemblies.Add(reference);
+            }
+            foreach (var define in SplitCsv(request.StringArg("defines")))
+            {
+                parameters.CompilerOptions += " /define:" + define;
+            }
+
+            CompilerResults compiled;
+            try
+            {
+                compiled = provider.CompileAssemblyFromSource(parameters, WrapCodeSource(source));
+            }
+            catch (Exception exception)
+            {
+                return CodeExecutionResult.Fail("E_REFERENCE_RESOLUTION_FAILED", "Failed to compile Runtime Code: " + exception.Message, CodeDetailsJson("[]", Quote(exception.GetType().Name), Quote(exception.Message), Quote(exception.StackTrace), "", ""), "Check Unity/Editor/project assembly references and --refs.");
+            }
+
+            if (compiled.Errors.HasErrors)
+            {
+                var diagnostics = CompilerDiagnosticsJson(compiled.Errors);
+                return CodeExecutionResult.Fail("E_CODE_COMPILE_FAILED", "Runtime Code compilation failed.", "{\"diagnostics\":" + diagnostics + "}", "Fix compiler diagnostics and rerun code exec.");
+            }
+
+            var stdout = new StringWriter(CultureInfo.InvariantCulture);
+            var stderr = new StringWriter(CultureInfo.InvariantCulture);
+            var previousOut = Console.Out;
+            var previousError = Console.Error;
+            try
+            {
+                Console.SetOut(stdout);
+                Console.SetError(stderr);
+                var type = compiled.CompiledAssembly.GetType("AlpsUnityCli.RuntimeCode.Script", true);
+                var method = type.GetMethod("Run", BindingFlags.Public | BindingFlags.Static);
+                var returnValue = method.Invoke(null, new object[] { argsJson ?? "{}" });
+                Console.SetOut(previousOut);
+                Console.SetError(previousError);
+                var endedAt = DateTime.UtcNow;
+                var dataJson = CodeSuccessDataJson(request, startedAt, endedAt, stdout.ToString(), stderr.ToString(), returnValue);
+                return CodeExecutionResult.Success(dataJson);
+            }
+            catch (TargetInvocationException exception)
+            {
+                Console.SetOut(previousOut);
+                Console.SetError(previousError);
+                var inner = exception.InnerException ?? exception;
+                return CodeExecutionResult.Fail("E_CODE_RUNTIME_EXCEPTION", inner.GetType().FullName + ": " + inner.Message, CodeDetailsJson("[]", Quote(inner.GetType().FullName), Quote(inner.Message), Quote(inner.StackTrace), stdout.ToString(), stderr.ToString()), "Inspect runtime stdout/stderr and exception stackTrace.");
+            }
+            catch (Exception exception)
+            {
+                Console.SetOut(previousOut);
+                Console.SetError(previousError);
+                return CodeExecutionResult.Fail("E_CODE_RUNTIME_EXCEPTION", exception.GetType().FullName + ": " + exception.Message, CodeDetailsJson("[]", Quote(exception.GetType().FullName), Quote(exception.Message), Quote(exception.StackTrace), stdout.ToString(), stderr.ToString()), "Inspect runtime stdout/stderr and exception stackTrace.");
+            }
+        }
+
+        private static string WrapCodeSource(string source)
+        {
+            if (Regex.IsMatch(source, "\\bpublic\\s+static\\s+object\\s+Run\\s*\\("))
+            {
+                return "using System; using System.IO; using System.Linq; using System.Collections.Generic; using UnityEngine; using UnityEditor; namespace AlpsUnityCli.RuntimeCode { public static class Script { " + source + " } }";
+            }
+            return "using System; using System.IO; using System.Linq; using System.Collections.Generic; using UnityEngine; using UnityEditor; namespace AlpsUnityCli.RuntimeCode { public static class Script { public static object Run(string argsJson) { " + source + " } } }";
+        }
+
+        private static IEnumerable<string> DefaultCodeReferences(string refsCsv)
+        {
+            var references = new List<string>();
+            AddReference(references, typeof(object).Assembly.Location);
+            AddReference(references, typeof(Enumerable).Assembly.Location);
+            AddReference(references, typeof(UnityEngine.Object).Assembly.Location);
+            AddReference(references, typeof(EditorApplication).Assembly.Location);
+            AddReferenceIfExists(references, Path.Combine(EditorApplication.applicationContentsPath, "Managed", "netstandard.dll"));
+            AddReferenceIfExists(references, Path.Combine(EditorApplication.applicationContentsPath, "Managed", "UnityEngine", "UnityEngine.dll"));
+            AddReferenceIfExists(references, Path.Combine(EditorApplication.applicationContentsPath, "Managed", "UnityEngine", "UnityEngine.CoreModule.dll"));
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                if (assembly.IsDynamic || string.IsNullOrEmpty(assembly.Location)) continue;
+                var name = assembly.GetName().Name;
+                if (name.Equals("netstandard", StringComparison.OrdinalIgnoreCase) || name.StartsWith("Assembly-CSharp", StringComparison.OrdinalIgnoreCase) || name.StartsWith("Unity.", StringComparison.OrdinalIgnoreCase))
+                {
+                    AddReference(references, assembly.Location);
+                }
+            }
+            var scriptAssemblies = Path.Combine(ProjectRoot(), "Library", "ScriptAssemblies");
+            if (Directory.Exists(scriptAssemblies))
+            {
+                foreach (var assemblyPath in Directory.GetFiles(scriptAssemblies, "*.dll"))
+                {
+                    AddReference(references, assemblyPath);
+                }
+            }
+            foreach (var reference in SplitCsv(refsCsv))
+            {
+                AddReference(references, reference);
+            }
+            return references;
+        }
+
+        private static void AddReference(List<string> references, string reference)
+        {
+            if (string.IsNullOrEmpty(reference)) return;
+            if (!references.Contains(reference)) references.Add(reference);
+        }
+
+        private static void AddReferenceIfExists(List<string> references, string reference)
+        {
+            if (!string.IsNullOrEmpty(reference) && File.Exists(reference)) AddReference(references, reference);
+        }
+
+        private static string ValidateCodeReferences(IEnumerable<string> references)
+        {
+            foreach (var reference in references)
+            {
+                try
+                {
+                    if (!File.Exists(reference)) return "Runtime Code reference was not found: " + reference;
+                    using (File.Open(reference, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)) { }
+                }
+                catch (Exception exception)
+                {
+                    return "Runtime Code reference is not readable: " + reference + " (" + exception.Message + ")";
+                }
+            }
+            return null;
+        }
+
+        private static IEnumerable<string> SplitCsv(string value)
+        {
+            if (string.IsNullOrEmpty(value)) yield break;
+            var parts = value.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var part in parts)
+            {
+                var trimmed = part.Trim();
+                if (!string.IsNullOrEmpty(trimmed)) yield return trimmed;
+            }
+        }
+
+        private static string CompilerDiagnosticsJson(CompilerErrorCollection errors)
+        {
+            var items = new List<string>();
+            foreach (CompilerError error in errors)
+            {
+                items.Add("{\"severity\":" + Quote(error.IsWarning ? "warning" : "error") + ",\"id\":" + Quote(error.ErrorNumber) + ",\"message\":" + Quote(error.ErrorText) + ",\"file\":" + Quote(error.FileName) + ",\"line\":" + error.Line.ToString(CultureInfo.InvariantCulture) + ",\"column\":" + error.Column.ToString(CultureInfo.InvariantCulture) + ",\"span\":null}");
+            }
+            return "[" + string.Join(",", items.ToArray()) + "]";
+        }
+
+        private static string CodeSuccessDataJson(BridgeRequest request, DateTime startedAt, DateTime endedAt, string stdout, string stderr, object returnValue)
+        {
+            var timeoutMs = request.OptionalIntArg("timeoutMs");
+            var timeoutJson = timeoutMs.HasValue ? timeoutMs.Value.ToString(CultureInfo.InvariantCulture) : "null";
+            var argsJson = request.StringArg("argsJson");
+            return "{\"command\":\"code.exec\",\"mode\":\"live\",\"execution\":{\"channel\":\"live\",\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"endedAt\":" + Quote(endedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"durationMs\":" + ((long)(endedAt - startedAt).TotalMilliseconds).ToString(CultureInfo.InvariantCulture) + ",\"timeoutMs\":" + timeoutJson + ",\"exitState\":\"completed\"},\"compile\":{\"ok\":true,\"diagnostics\":[]},\"runtime\":{\"ok\":true,\"returnValue\":" + ReturnValueJson(returnValue) + ",\"stdout\":" + Quote(stdout) + ",\"stderr\":" + Quote(stderr) + "},\"artifacts\":[],\"audit\":{\"requestId\":" + Quote(request.RequestId) + ",\"projectPath\":" + Quote(ProjectRoot()) + ",\"instanceId\":" + Quote(InstanceId()) + ",\"unityVersion\":" + Quote(Application.unityVersion) + ",\"bridgeVersion\":\"com.alps.unity-cli.bridge\",\"initiator\":\"cli.live\",\"input\":{\"sourceKind\":" + Quote(request.StringArg("sourceKind")) + ",\"sourcePath\":" + Quote(request.StringArg("sourcePath")) + ",\"sourceSha256\":" + Quote(request.StringArg("sourceSha256")) + ",\"args\":" + (string.IsNullOrEmpty(argsJson) ? "{}" : argsJson) + "},\"execution\":{\"timeoutMs\":" + timeoutJson + ",\"exitState\":\"completed\"},\"artifacts\":[],\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"endedAt\":" + Quote(endedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"durationMs\":" + ((long)(endedAt - startedAt).TotalMilliseconds).ToString(CultureInfo.InvariantCulture) + ",\"effects\":{\"fileWrites\":[],\"assetRefresh\":false,\"domainReload\":false,\"playModeChanged\":false,\"packagesChanged\":false}},\"logs\":{\"bridge\":" + Quote(LogPath()) + "},\"nextActions\":[]}";
+        }
+
+        private static string CodeDetailsJson(string diagnosticsJson, string exceptionTypeJson, string messageJson, string stackTraceJson, string stdout, string stderr)
+        {
+            return "{\"diagnostics\":" + diagnosticsJson + ",\"exceptionType\":" + exceptionTypeJson + ",\"message\":" + messageJson + ",\"stackTrace\":" + stackTraceJson + ",\"stdout\":" + Quote(stdout) + ",\"stderr\":" + Quote(stderr) + "}";
+        }
+
+        private static string ReturnValueJson(object value)
+        {
+            if (value == null) return "null";
+            if (value is bool) return Bool((bool)value);
+            if (value is int || value is long || value is float || value is double || value is decimal) return Convert.ToString(value, CultureInfo.InvariantCulture);
+            return Quote(Convert.ToString(value, CultureInfo.InvariantCulture));
         }
 
 
@@ -3574,6 +3800,27 @@ namespace AlpsUnityCli
             }
         }
 
+        private sealed class CodeExecutionResult
+        {
+            public bool Ok;
+            public string DataJson;
+            public string ErrorCode;
+            public string ErrorMessage;
+            public string DetailsJson;
+            public string NextAction;
+            public string ExitState;
+
+            public static CodeExecutionResult Success(string dataJson)
+            {
+                return new CodeExecutionResult { Ok = true, DataJson = dataJson, ExitState = "completed" };
+            }
+
+            public static CodeExecutionResult Fail(string code, string message, string detailsJson, string nextAction)
+            {
+                return new CodeExecutionResult { Ok = false, ErrorCode = code, ErrorMessage = message, DetailsJson = detailsJson, NextAction = nextAction, ExitState = "failed" };
+            }
+        }
+
         private sealed class BridgeWorkItem
         {
             private readonly object StateLock = new object();
@@ -3711,7 +3958,32 @@ namespace AlpsUnityCli
 
             private static string Unescape(string value)
             {
-                return value.Replace("\\\"", "\"").Replace("\\\\", "\\").Replace("\\/", "/").Replace("\\n", "\n").Replace("\\r", "\r").Replace("\\t", "\t");
+                var builder = new StringBuilder();
+                for (var index = 0; index < value.Length; index++)
+                {
+                    var current = value[index];
+                    if (current != '\\' || index + 1 >= value.Length)
+                    {
+                        builder.Append(current);
+                        continue;
+                    }
+
+                    var escaped = value[++index];
+                    switch (escaped)
+                    {
+                        case (char)34: builder.Append((char)34); break;
+                        case '\\': builder.Append((char)92); break;
+                        case '/': builder.Append('/'); break;
+                        case 'n': builder.Append('\n'); break;
+                        case 'r': builder.Append('\r'); break;
+                        case 't': builder.Append('\t'); break;
+                        default:
+                            builder.Append('\\');
+                            builder.Append(escaped);
+                            break;
+                    }
+                }
+                return builder.ToString();
             }
         }
 

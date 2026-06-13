@@ -247,7 +247,7 @@ export class PackageManagerError extends Error {
 
 async function readManifest(path: string, allowMissing: boolean): Promise<UnityManifest> {
   try {
-    return JSON.parse(await readFile(path, "utf8")) as UnityManifest;
+    return JSON.parse(stripJsonBom(await readFile(path, "utf8"))) as UnityManifest;
   } catch (error) {
     const nodeError = error as NodeJS.ErrnoException;
     if (nodeError.code === "ENOENT") {
@@ -262,7 +262,7 @@ async function readManifest(path: string, allowMissing: boolean): Promise<UnityM
 
 async function readLock(path: string): Promise<UnityLock> {
   try {
-    return JSON.parse(await readFile(path, "utf8")) as UnityLock;
+    return JSON.parse(stripJsonBom(await readFile(path, "utf8"))) as UnityLock;
   } catch (error) {
     const nodeError = error as NodeJS.ErrnoException;
     if (nodeError.code === "ENOENT") {
@@ -277,6 +277,10 @@ async function readLock(path: string): Promise<UnityLock> {
 
 async function writeManifest(path: string, manifest: UnityManifest): Promise<void> {
   await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+}
+
+function stripJsonBom(value: string): string {
+  return value.charCodeAt(0) === 0xfeff ? value.slice(1) : value;
 }
 
 function toPackageEntry(name: string, requestedVersion: string | undefined, locked: LockPackage | undefined): PackageEntry {
