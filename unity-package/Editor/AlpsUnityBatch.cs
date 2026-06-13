@@ -17,6 +17,15 @@ namespace AlpsUnityCli
 {
     public static class Batch
     {
+        public static void RunBridgeCommand()
+        {
+            var command = ArgValue("-alpsBridgeCommand");
+            var requestId = ArgValue("-alpsBridgeRequestId") ?? Guid.NewGuid().ToString("N");
+            var args = ArgValue("-alpsBridgeArgs") ?? "{}";
+            var exitCode = AlpsUnityBridge.ExecuteBatchCommand(requestId, command, args);
+            EditorApplication.Exit(exitCode);
+        }
+
         public static void ExecuteCode()
         {
             var requestId = ArgValue("-alpsRequestId") ?? Guid.NewGuid().ToString("N");
@@ -56,6 +65,13 @@ namespace AlpsUnityCli
         {
             AssetDatabase.Refresh();
             Console.WriteLine("AssetDatabase refresh completed.");
+            EditorApplication.Exit(0);
+        }
+
+        public static void RefreshAndCompile()
+        {
+            AssetDatabase.Refresh();
+            Console.WriteLine("AssetDatabase refresh and compile requested.");
             EditorApplication.Exit(0);
         }
 

@@ -131,6 +131,12 @@ export function bridgeCommandName(group: string | undefined, command: string | u
   if (group === "physics" && ["settings", "raycast", "simulation"].includes(command ?? "")) {
     return `physics.${command}`;
   }
+  if (group === "profiler" && ["start", "stop", "capture", "status"].includes(command ?? "")) {
+    return `profiler.${command}`;
+  }
+  if (group === "probuilder" && ["shape", "create", "csg", "edit"].includes(command ?? "")) {
+    return `probuilder.${command}`;
+  }
   if (group === "custom-tool" && ["list", "run"].includes(command ?? "")) {
     return `custom-tool.${command}`;
   }
@@ -356,6 +362,41 @@ async function commandArgs(command: string, flags: Record<string, string | boole
       queriesHitBackfaces: boolFlag(flags, "queries-hit-backfaces"),
       queriesStartInColliders: boolFlag(flags, "queries-start-in-colliders"),
       autoSimulation: boolFlag(flags, "auto-simulation")
+    });
+  }
+
+  if (command.startsWith("profiler.")) {
+    return compactArgs({
+      ...queryArgs(flags),
+      path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "output"),
+      module: stringFlag(flags, "module"),
+      format: stringFlag(flags, "format"),
+      durationMs: numberFlag(flags, "duration-ms"),
+      frames: numberFlag(flags, "frames"),
+      overwrite: boolFlag(flags, "overwrite"),
+      deepProfiling: boolFlag(flags, "deep-profiling")
+    });
+  }
+
+  if (command.startsWith("probuilder.")) {
+    return compactArgs({
+      ...(command === "probuilder.create" ? queryArgs(flags) : targetArgs(flags, positionalTarget)),
+      shape: stringFlag(flags, "shape") ?? stringFlag(flags, "type") ?? (command === "probuilder.shape" ? positionalTarget : undefined),
+      operation: stringFlag(flags, "operation") ?? stringFlag(flags, "op"),
+      name: stringFlag(flags, "name"),
+      parent: stringFlag(flags, "parent"),
+      source: stringFlag(flags, "source"),
+      x: floatFlag(flags, "x"),
+      y: floatFlag(flags, "y"),
+      z: floatFlag(flags, "z"),
+      width: floatFlag(flags, "width"),
+      height: floatFlag(flags, "height"),
+      depth: floatFlag(flags, "depth"),
+      radius: floatFlag(flags, "radius"),
+      segments: numberFlag(flags, "segments"),
+      sides: numberFlag(flags, "sides"),
+      material: stringFlag(flags, "material"),
+      value: stringFlag(flags, "value")
     });
   }
 

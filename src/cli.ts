@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs, getBoolean, getNumber, getString } from "./args.js";
 import { batchJsonSchema, runBatch } from "./batch.js";
 import { bridgeCommandName, executeBridgeCommand, executeBridgePayload, type BridgeRuntime } from "./bridge-commands.js";
+import { handleDocsCommand, handleReflectCommand } from "./docs-reflect.js";
 import { JobRunner } from "./job-runner.js";
 import { handleCode } from "./runtime-code.js";
 import { JobStore } from "./job-store.js";
@@ -56,8 +57,25 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
       return handleCode(command, parsed.flags, runtime, requestId);
     }
 
+    if (group === "docs") {
+      return handleDocsCommand(command, parsed.positional.slice(2), parsed.flags, runtime.dataDir, requestId);
+    }
+
+    if (group === "reflect") {
+      return handleReflectCommand(command, parsed.positional.slice(2), parsed.flags, runtime.dataDir, requestId);
+    }
+
     const bridgeCommand = bridgeCommandName(group, command);
     if (bridgeCommand) {
+      if (shouldRunBridgeAsJob(group, command, parsed.flags)) {
+        const args = await bridgeJobArgs(bridgeCommand, parsed.flags, parsed.positional[2]);
+        const jobArgs = ["-executeMethod", "AlpsUnityCli.Batch.RunBridgeCommand", "-alpsBridgeCommand", bridgeCommand, "-alpsBridgeRequestId", requestId, "-alpsBridgeArgs", JSON.stringify(args)];
+        return startUnityJob(group === "profiler" ? "profiler" : "probuilder", parsed.flags, runtime, requestId, jobArgs, {
+          action: bridgeCommand,
+          bridgeCommand,
+          args
+        });
+      }
       return executeBridgeCommand(requestId, bridgeCommand, parsed.flags, parsed.positional[2], runtime);
     }
 
@@ -181,8 +199,18 @@ async function handleJob(command: string | undefined, flags: Record<string, stri
   return failure(requestId, "UNKNOWN_JOB_COMMAND", "Expected job status, job logs or job cancel.");
 }
 
+async function bridgeJobArgs(command: string, flags: Record<string, string | boolean>, positionalTarget: string | undefined): Promise<Record<string, unknown>> {
+  const runtime: BridgeRuntime = { bridgeExecute: async (payload) => ({ ok: true, data: { bridgeArgs: payload.args } }) };
+  const result = await executeBridgeCommand("dry_run", command, flags, positionalTarget, runtime);
+  return ((result.data as { bridgeArgs?: Record<string, unknown> } | undefined)?.bridgeArgs ?? {}) as Record<string, unknown>;
+}
+
+function shouldRunBridgeAsJob(group: string | undefined, command: string | undefined, flags: Record<string, string | boolean>): boolean {
+  return getBoolean(flags, "job") && ((group === "profiler" && command === "capture") || group === "probuilder");
+}
+
 function refreshArgs(flags: Record<string, string | boolean>): string[] {
-  return ["-executeMethod", getBoolean(flags, "compile") ? "AlpsUnityCli.Batch.ResolvePackages" : "AlpsUnityCli.Batch.Refresh"];
+  return ["-executeMethod", getBoolean(flags, "compile") ? "AlpsUnityCli.Batch.RefreshAndCompile" : "AlpsUnityCli.Batch.Refresh"];
 }
 
 async function handleInit(flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult> {
@@ -405,6 +433,11 @@ function help(): Record<string, unknown> {
       "package scoped-registry list|add|remove --name <name> --url <url> --scope <scope>",
       "batch schema",
       "batch run <file.json> [--preflight] [--fail-fast true|false] [--parallel 1]",
+      "docs get <api> [--docs-dir <path>] [--unity-version <version>] [--format json|text]",
+      "docs search <query> [--docs-dir <path>] [--page-size 20 --cursor 0] [--format json|text]",
+      "reflect type <name> [--reflect-dir <path>] [--unity-version <version>] [--format json|text]",
+      "reflect member <type.member> [--reflect-dir <path>] [--format json|text]",
+      "reflect search <query> [--reflect-dir <path>] [--page-size 20 --cursor 0] [--format json|text]",
       "code exec (--file <path>|--stdin|--code <text>) [--channel live|batchmode] [--refs <list>] [--define <symbol>] [--args <json>] [--timeout-ms <n>] [--job] [--artifact-dir <path>]",
       "custom-tool list [--project <path>] [--instance <id>] [--bridge-endpoint <url>]",
       "custom-tool run <name> [--project <path>] [--instance <id>] [--input <json>|--input-file <path>|--stdin] [--timeout-ms 30000] [--job] [--artifact-dir <path>] [--bridge-endpoint <url>]",
@@ -426,6 +459,14 @@ function help(): Record<string, unknown> {
       "physics settings [--mode 3d|2d] [--gravity-y <n>] [--bridge-endpoint <url>]",
       "physics raycast [--origin-x 0 --origin-y 0 --origin-z 0 --direction-z 1 --distance 100] [--bridge-endpoint <url>]",
       "physics simulation [--steps 1 --delta-time 0.02 --simulate] [--bridge-endpoint <url>]",
+      "profiler status [--bridge-endpoint <url>]",
+      "profiler start [--deep-profiling] [--bridge-endpoint <url>]",
+      "profiler stop [--bridge-endpoint <url>]",
+      "profiler capture <path> [--duration-ms 1000 --frames 1 --format json|raw --overwrite] [--job --wait] [--bridge-endpoint <url>]",
+      "probuilder shape <cube|sphere|cylinder|plane|capsule> [--name <name> --parent <target>] [--job --wait] [--bridge-endpoint <url>]",
+      "probuilder create --shape <shape> [--name <name>] [--job --wait] [--bridge-endpoint <url>]",
+      "probuilder edit <target> --operation <name> [--value <value>] [--job --wait] [--bridge-endpoint <url>]",
+      "probuilder csg <target> --source <source> --operation union|subtract|intersect [--job --wait] [--bridge-endpoint <url>]",
       "animation clip <Assets/Clip.anim> [--create --overwrite --frame-rate 60] [--bridge-endpoint <url>]",
       "animation state <target> [--layer 0] [--bridge-endpoint <url>]",
       "animation play <target> --state <name> [--layer 0 --normalized-time 0] [--bridge-endpoint <url>]",
