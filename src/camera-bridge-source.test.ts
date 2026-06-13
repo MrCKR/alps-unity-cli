@@ -36,7 +36,7 @@ test("Unity Bridge source does not duplicate C# method signatures", async () => 
   assert.deepEqual(duplicateCSharpMethodSignatures(source), []);
 });
 
-test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, graphics, physics, shader, texture and editor commands", async () => {
+test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, graphics, physics, animation, vfx, shader, texture and editor commands", async () => {
   const source = await readFile(sourceUrl, "utf8");
   const readme = await readFile(readmeUrl, "utf8");
   const bridgeSection = readme.slice(readme.indexOf("## Unity Editor Bridge"), readme.indexOf("## Batch Automation"));
@@ -49,7 +49,9 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /CapabilityJson\("material", MaterialCommands\)/);
   assert.match(source, /CapabilityJson\("graphics", GraphicsCommands\)/);
   assert.match(source, /CapabilityJson\("physics", PhysicsCommands\)/);
-  assert.match(source, /CapabilityJson\("physics", PhysicsCommands\) \+ ","\s+\+ CapabilityJson\("shader", ShaderCommands\) \+ ","/);
+  assert.match(source, /CapabilityJson\("animation", AnimationCommands\)/);
+  assert.match(source, /CapabilityJson\("vfx", VfxCommands\)/);
+  assert.match(source, /CapabilityJson\("physics", PhysicsCommands\) \+ ","\s+\+ CapabilityJson\("animation", AnimationCommands\) \+ ","\s+\+ CapabilityJson\("vfx", VfxCommands\) \+ ","\s+\+ CapabilityJson\("shader", ShaderCommands\) \+ ","/);
   assert.match(source, /CapabilityJson\("shader", ShaderCommands\)/);
   assert.match(source, /CapabilityJson\("texture", TextureCommands\)/);
   assert.match(source, /private static readonly string\[\] CameraCommands = \{ "camera\.list", "camera\.info", "camera\.screenshot" \}/);
@@ -58,6 +60,8 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /private static readonly string\[\] MaterialCommands = \{ "material\.info", "material\.create", "material\.assign", "material\.set" \}/);
   assert.match(source, /private static readonly string\[\] GraphicsCommands = \{ "graphics\.quality", "graphics\.settings", "graphics\.screenshot" \}/);
   assert.match(source, /private static readonly string\[\] PhysicsCommands = \{ "physics\.settings", "physics\.raycast", "physics\.simulation" \}/);
+  assert.match(source, /private static readonly string\[\] AnimationCommands = \{ "animation\.clip", "animation\.state", "animation\.play", "animation\.stop" \}/);
+  assert.match(source, /private static readonly string\[\] VfxCommands = \{ "vfx\.graph", "vfx\.effect" \}/);
   assert.match(source, /private static readonly string\[\] ShaderCommands = \{ "shader\.info", "shader\.read", "shader\.create", "shader\.update" \}/);
   assert.match(source, /private static readonly string\[\] TextureCommands = \{ "texture\.info", "texture\.create", "texture\.sprite", "texture\.import-settings" \}/);
   assert.match(source, /case "camera\.list"/);
@@ -88,6 +92,12 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /case "physics\.settings"/);
   assert.match(source, /case "physics\.raycast"/);
   assert.match(source, /case "physics\.simulation"/);
+  assert.match(source, /case "animation\.clip"/);
+  assert.match(source, /case "animation\.state"/);
+  assert.match(source, /case "animation\.play"/);
+  assert.match(source, /case "animation\.stop"/);
+  assert.match(source, /case "vfx\.graph"/);
+  assert.match(source, /case "vfx\.effect"/);
   assert.match(source, /case "shader\.info"/);
   assert.match(source, /case "shader\.read"/);
   assert.match(source, /case "shader\.create"/);
@@ -101,9 +111,42 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /case "editor\.pause"/);
   assert.match(source, /case "editor\.stop"/);
   assert.match(source, /case "editor\.menu"/);
-  assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.screenshot`, `screenshot\.capture`, `prefab\.info`, `prefab\.create`, `prefab\.stage-open`, `prefab\.stage-save`, `prefab\.stage-close`, `prefab\.hierarchy`, `ui\.canvas\.create`, `ui\.text\.create`, `ui\.button\.create`, `ui\.image\.create`, `ui\.document\.info`, `ui\.document\.create`, `ui\.hierarchy`, `material\.info`, `material\.create`, `material\.assign`, `material\.set`, `graphics\.quality`, `graphics\.settings`, `graphics\.screenshot`, `physics\.settings`, `physics\.raycast`, `physics\.simulation`, `shader\.info`, `shader\.read`, `shader\.create`, `shader\.update`, `texture\.info`, `texture\.create`, `texture\.sprite`, `texture\.import-settings`, `editor\.state`, `editor\.play`, `editor\.pause`, `editor\.stop` and `editor\.menu`/);
+  assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.screenshot`, `screenshot\.capture`, `prefab\.info`, `prefab\.create`, `prefab\.stage-open`, `prefab\.stage-save`, `prefab\.stage-close`, `prefab\.hierarchy`, `ui\.canvas\.create`, `ui\.text\.create`, `ui\.button\.create`, `ui\.image\.create`, `ui\.document\.info`, `ui\.document\.create`, `ui\.hierarchy`, `material\.info`, `material\.create`, `material\.assign`, `material\.set`, `graphics\.quality`, `graphics\.settings`, `graphics\.screenshot`, `physics\.settings`, `physics\.raycast`, `physics\.simulation`, `animation\.clip`, `animation\.state`, `animation\.play`, `animation\.stop`, `vfx\.graph`, `vfx\.effect`, `shader\.info`, `shader\.read`, `shader\.create`, `shader\.update`, `texture\.info`, `texture\.create`, `texture\.sprite`, `texture\.import-settings`, `editor\.state`, `editor\.play`, `editor\.pause`, `editor\.stop` and `editor\.menu`/);
   assert.doesNotMatch(bridgeSection, /live query\/edit\/screenshot/);
   assert.match(bridgeSection, /`scene hierarchy`, `go find`, `component set` and `script edit` are not routed by this package yet/);
+});
+
+test("Unity Bridge animation and vfx commands expose assets, target resolver diagnostics and package checks", async () => {
+  const source = await readFile(sourceUrl, "utf8");
+  const readme = await readFile(readmeUrl, "utf8");
+
+  assert.match(source, /RequireAnimationClipPath/);
+  assert.match(source, /AnimationUtility\.GetCurveBindings/);
+  assert.match(source, /AnimatorJson/);
+  assert.match(source, /ResolveUniqueTarget/);
+  assert.match(source, /E_ANIMATION_CLIP_PATH_REQUIRED/);
+  assert.match(source, /E_ANIMATION_CLIP_PATH_INVALID/);
+  assert.match(source, /E_ANIMATION_CLIP_NOT_FOUND/);
+  assert.match(source, /E_ANIMATION_STATE_REQUIRED/);
+  assert.match(source, /FindType\("UnityEngine\.VFX\.VisualEffectAsset"\)/);
+  assert.match(source, /FindType\("UnityEngine\.VFX\.VisualEffect"\)/);
+  assert.match(source, /E_VFX_PACKAGE_MISSING/);
+  assert.match(source, /CreateVfxGraphAsset/);
+  assert.match(source, /FindType\("UnityEditor\.VisualEffectAssetEditorUtility"\)/);
+  assert.match(source, /GetMethod\("CreateNewAsset"/);
+  assert.match(source, /WriteMinimalVfxGraphYaml/);
+  assert.match(source, /VisualEffectResource:\\n/);
+  assert.doesNotMatch(source, /SetAssetPath/);
+  assert.doesNotMatch(source, /graphProperty\.SetValue/);
+  assert.match(source, /AssetDatabase\.LoadAssetAtPath\(path, assetType\)/);
+  assert.match(source, /E_TARGET_AMBIGUOUS/);
+  assert.match(source, /rawPath\.Replace\('\\\\', '\/'\)\.Trim\(\)/);
+  assert.match(source, /Replace\("\\t", "\\\\t"\)/);
+  assert.match(readme, /`animation clip <path>` reads or creates `Assets\/\*\.anim` AnimationClip assets/);
+  assert.match(readme, /`vfx graph <path>` reads or creates `Assets\/\*\.vfx` Visual Effect Graph assets/);
+  assert.match(readme, /Windows-style `Assets\\VFX\\Explosion\.vfx` paths are normalized to Unity asset paths/);
+  assert.match(readme, /`E_VFX_PACKAGE_MISSING`/);
+  assert.match(readme, /`E_VFX_GRAPH_NOT_FOUND`/);
 });
 
 function stripCSharpTrivia(source: string): string {
@@ -491,7 +534,7 @@ test("Unity Bridge screenshot validates path, format, overwrite and busy diagnos
   assert.match(source, /Path\.GetFullPath/);
   assert.match(readme, /`E_CAMERA_NOT_FOUND` for `camera info` when a target Camera cannot be resolved/);
   assert.match(readme, /`E_TARGET_NOT_FOUND` for `camera screenshot` when the target is empty or cannot be resolved/);
-  assert.match(readme, /C# runtime behavior for empty camera targets, missing Cameras, screenshot IO failures, actual PNG\/JPG artifacts, Prefab Stage open\/save\/close, Prefab dirty conflicts, nested\/variant Prefab summaries, Material asset creation, Renderer\/UI Graphic assignment, Material property writes, GraphicsSettings\/QualitySettings persistence, render pipeline asset resolution, Physics\/Physics2D project setting persistence, raycast collision hits, explicit simulation steps, Shader import diagnostics, TextureImporter mutations, uGUI object creation, UIDocument\/PanelSettings linking and UI hierarchy summaries must still be proven by real Windows \+ Unity Editor validation/);
+  assert.match(readme, /C# runtime behavior for empty camera targets, missing Cameras, screenshot IO failures, actual PNG\/JPG artifacts, Prefab Stage open\/save\/close, Prefab dirty conflicts, nested\/variant Prefab summaries, Material asset creation, Renderer\/UI Graphic assignment, Material property writes, GraphicsSettings\/QualitySettings persistence, render pipeline asset resolution, Physics\/Physics2D project setting persistence, raycast collision hits, explicit simulation steps, AnimationClip asset creation\/binding summaries, Animator state\/play\/stop behavior, VFX Graph asset creation, VisualEffect assignment, Shader import diagnostics, TextureImporter mutations, uGUI object creation, UIDocument\/PanelSettings linking and UI hierarchy summaries must still be proven by real Windows \+ Unity Editor validation/);
 });
 
 test("Unity Bridge editor commands expose state, play/pause/stop, menu execution and busy diagnostics", async () => {
