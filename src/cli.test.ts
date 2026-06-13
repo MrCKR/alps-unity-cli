@@ -20,6 +20,13 @@ async function makeRuntime() {
 
 async function makeFakeUnity(body: string): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "fake-unity-"));
+  if (process.platform === "win32") {
+    const script = join(dir, "UnityFake.js");
+    const path = join(dir, "Unity.cmd");
+    await writeFile(script, body, "utf8");
+    await writeFile(path, `@echo off\r\n"${process.execPath}" "%~dp0UnityFake.js" %*\r\nif errorlevel 1 exit /b %errorlevel%\r\n`, "utf8");
+    return path;
+  }
   const path = join(dir, "Unity.exe");
   await writeFile(path, `#!/usr/bin/env node\n${body}\n`, { mode: 0o755 });
   return path;
