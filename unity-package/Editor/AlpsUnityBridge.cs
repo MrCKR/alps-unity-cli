@@ -25,6 +25,65 @@ using UiText = UnityEngine.UI.Text;
 
 namespace AlpsUnityCli
 {
+    [AttributeUsage(AttributeTargets.Method)]
+    public sealed class AlpsCustomToolAttribute : Attribute
+    {
+        public AlpsCustomToolAttribute(string name)
+        {
+            Name = name;
+            Version = "1.0.0";
+            InputSchema = "{}";
+            OutputSchema = "{}";
+            CapabilityType = "project-write";
+            DefaultTimeoutMs = 30000;
+            MaxTimeoutMs = 600000;
+            SupportsJob = true;
+            ArtifactKinds = "json,log,file,image";
+        }
+
+        public string Name { get; private set; }
+        public string DisplayName { get; set; }
+        public string Description { get; set; }
+        public string Version { get; set; }
+        public string InputSchema { get; set; }
+        public string OutputSchema { get; set; }
+        public string CapabilityType { get; set; }
+        public int DefaultTimeoutMs { get; set; }
+        public int MaxTimeoutMs { get; set; }
+        public bool SupportsJob { get; set; }
+        public string ArtifactKinds { get; set; }
+        public string RequiredInput { get; set; }
+    }
+
+    public sealed class AlpsCustomToolContext
+    {
+        public string RequestId { get; set; }
+        public string ProjectPath { get; set; }
+        public string InputJson { get; set; }
+        public string ArtifactDir { get; set; }
+        public string LogPath { get; set; }
+    }
+
+    public sealed class AlpsCustomToolDefinition
+    {
+        public string Name { get; set; }
+        public string DisplayName { get; set; }
+        public string Description { get; set; }
+        public string Version { get; set; }
+        public string InputSchema { get; set; }
+        public string OutputSchema { get; set; }
+        public string CapabilityType { get; set; }
+        public int DefaultTimeoutMs { get; set; }
+        public int MaxTimeoutMs { get; set; }
+        public bool SupportsJob { get; set; }
+        public string[] ArtifactKinds { get; set; }
+        public string[] RequiredInput { get; set; }
+        public string RegisteredBy { get; set; }
+        public string Assembly { get; set; }
+        public string Method { get; set; }
+        public Func<AlpsCustomToolContext, string> Execute { get; set; }
+    }
+
     [InitializeOnLoad]
     public static class AlpsUnityBridge
     {
@@ -43,13 +102,18 @@ namespace AlpsUnityCli
         private static readonly string[] ShaderCommands = { "shader.info", "shader.read", "shader.create", "shader.update" };
         private static readonly string[] TextureCommands = { "texture.info", "texture.create", "texture.sprite", "texture.import-settings" };
         private static readonly string[] CodeCommands = { "code.exec" };
+        private static readonly string[] CustomToolCommands = { "custom-tool.list", "custom-tool.run" };
+        private static readonly Dictionary<string, AlpsCustomToolDefinition> CustomTools = new Dictionary<string, AlpsCustomToolDefinition>(StringComparer.Ordinal);
         private static readonly Queue<BridgeWorkItem> WorkQueue = new Queue<BridgeWorkItem>();
         private static HttpListener listener;
         private static bool started;
+        private static bool customToolsDiscovered;
 
         static AlpsUnityBridge()
         {
             EditorApplication.update += ProcessQueuedWork;
+            AssemblyReloadEvents.beforeAssemblyReload += StopListener;
+            EditorApplication.quitting += StopListener;
             StartListener();
         }
 
@@ -73,6 +137,24 @@ namespace AlpsUnityCli
             {
                 WriteLog("bridge_start_failed " + exception.GetType().Name + ": " + exception.Message);
             }
+        }
+
+        private static void StopListener()
+        {
+            try
+            {
+                if (listener != null)
+                {
+                    listener.Stop();
+                    listener.Close();
+                    listener = null;
+                }
+            }
+            catch (Exception exception)
+            {
+                WriteLog("bridge_stop_failed " + exception.GetType().Name + ": " + exception.Message);
+            }
+            started = false;
         }
 
         private static async Task ListenLoop()
@@ -295,6 +377,10 @@ namespace AlpsUnityCli
                     return SuccessJson(EditorMenuJson(request));
                 case "code.exec":
                     return CodeExec(request);
+                case "custom-tool.list":
+                    return CustomToolList(request);
+                case "custom-tool.run":
+                    return CustomToolRun(request);
                 default:
                     return ErrorJson("E_BRIDGE_COMMAND_UNSUPPORTED", "Unsupported bridge command: " + request.Command, "Upgrade the Alps Unity Bridge package or use a registered CLI command.");
             }
@@ -1434,7 +1520,8 @@ namespace AlpsUnityCli
                 + CapabilityJson("vfx", VfxCommands) + ","
                 + CapabilityJson("shader", ShaderCommands) + ","
                 + CapabilityJson("texture", TextureCommands) + ","
-                + CapabilityJson("code", CodeCommands)
+                + CapabilityJson("code", CodeCommands) + ","
+                + CapabilityJson("custom-tool", CustomToolCommands)
                 + "]";
         }
 
@@ -1470,7 +1557,8 @@ namespace AlpsUnityCli
                 || command == "texture.create"
                 || command == "texture.sprite"
                 || command == "texture.import-settings"
-                || command == "code.exec";
+                || command == "code.exec"
+                || command == "custom-tool.run";
         }
 
         private static string CapabilityJson(string domain, string[] commands)
@@ -1481,6 +1569,305 @@ namespace AlpsUnityCli
                 quotedCommands.Add(Quote(command));
             }
             return "{\"domain\":" + Quote(domain) + ",\"route\":\"POST /bridge/execute\",\"commands\":[" + string.Join(",", quotedCommands.ToArray()) + "]}";
+        }
+
+        public static void RegisterCustomTool(AlpsCustomToolDefinition definition)
+        {
+            if (definition == null || string.IsNullOrEmpty(definition.Name) || definition.Execute == null)
+            {
+                throw new ArgumentException("Custom tool registration requires name and Execute delegate.");
+            }
+            if (definition.ArtifactKinds == null)
+            {
+                definition.ArtifactKinds = new[] { "json", "log", "file", "image" };
+            }
+            if (definition.RequiredInput == null)
+            {
+                definition.RequiredInput = new string[0];
+            }
+            definition.DisplayName = string.IsNullOrEmpty(definition.DisplayName) ? definition.Name : definition.DisplayName;
+            definition.Version = string.IsNullOrEmpty(definition.Version) ? "1.0.0" : definition.Version;
+            definition.InputSchema = string.IsNullOrEmpty(definition.InputSchema) ? "{}" : definition.InputSchema;
+            definition.OutputSchema = string.IsNullOrEmpty(definition.OutputSchema) ? "{}" : definition.OutputSchema;
+            definition.CapabilityType = string.IsNullOrEmpty(definition.CapabilityType) ? "project-write" : definition.CapabilityType;
+            definition.DefaultTimeoutMs = definition.DefaultTimeoutMs <= 0 ? 30000 : definition.DefaultTimeoutMs;
+            definition.MaxTimeoutMs = definition.MaxTimeoutMs <= 0 ? 600000 : definition.MaxTimeoutMs;
+            definition.RegisteredBy = string.IsNullOrEmpty(definition.RegisteredBy) ? "unity-editor-package" : definition.RegisteredBy;
+            CustomTools[definition.Name] = definition;
+        }
+
+        private static void DiscoverCustomTools()
+        {
+            if (customToolsDiscovered)
+            {
+                return;
+            }
+            customToolsDiscovered = true;
+
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                Type[] types;
+                try
+                {
+                    types = assembly.GetTypes();
+                }
+                catch (ReflectionTypeLoadException exception)
+                {
+                    types = exception.Types;
+                }
+                catch
+                {
+                    continue;
+                }
+
+                foreach (var type in types)
+                {
+                    if (type == null) continue;
+                    foreach (var method in type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
+                    {
+                        var attribute = Attribute.GetCustomAttribute(method, typeof(AlpsCustomToolAttribute)) as AlpsCustomToolAttribute;
+                        if (attribute == null) continue;
+                        TryRegisterAttributedCustomTool(assembly, type, method, attribute);
+                    }
+                }
+            }
+        }
+
+        private static void TryRegisterAttributedCustomTool(Assembly assembly, Type type, MethodInfo method, AlpsCustomToolAttribute attribute)
+        {
+            var parameters = method.GetParameters();
+            if (method.ReturnType != typeof(string) || parameters.Length > 1 || (parameters.Length == 1 && parameters[0].ParameterType != typeof(AlpsCustomToolContext)))
+            {
+                WriteLog("custom_tool_registration_skipped name=" + attribute.Name + " reason=signature");
+                return;
+            }
+
+            RegisterCustomTool(new AlpsCustomToolDefinition
+            {
+                Name = attribute.Name,
+                DisplayName = attribute.DisplayName,
+                Description = attribute.Description,
+                Version = attribute.Version,
+                InputSchema = attribute.InputSchema,
+                OutputSchema = attribute.OutputSchema,
+                CapabilityType = attribute.CapabilityType,
+                DefaultTimeoutMs = attribute.DefaultTimeoutMs,
+                MaxTimeoutMs = attribute.MaxTimeoutMs,
+                SupportsJob = attribute.SupportsJob,
+                ArtifactKinds = SplitCsv(attribute.ArtifactKinds),
+                RequiredInput = SplitCsv(attribute.RequiredInput),
+                RegisteredBy = "unity-editor-package",
+                Assembly = assembly.GetName().Name,
+                Method = type.FullName + "." + method.Name,
+                Execute = delegate(AlpsCustomToolContext context)
+                {
+                    var result = parameters.Length == 0 ? method.Invoke(null, null) : method.Invoke(null, new object[] { context });
+                    return result == null ? "null" : (string)result;
+                }
+            });
+        }
+
+        private static string CustomToolList(BridgeRequest request)
+        {
+            DiscoverCustomTools();
+            var tools = new List<string>();
+            foreach (var pair in CustomTools)
+            {
+                tools.Add(CustomToolDefinitionJson(pair.Value));
+            }
+            tools.Sort(StringComparer.Ordinal);
+            return SuccessJson("{\"tools\":[" + string.Join(",", tools.ToArray()) + "],\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string CustomToolRun(BridgeRequest request)
+        {
+            DiscoverCustomTools();
+            var name = request.StringArg("name");
+            if (string.IsNullOrEmpty(name) || !CustomTools.ContainsKey(name))
+            {
+                return ErrorJson("E_TOOL_NOT_FOUND", "Tool not found: " + name, "Run alps-unity custom-tool list to inspect registered tools.");
+            }
+
+            var definition = CustomTools[name];
+            var timeoutMs = request.IntArg("timeoutMs", definition.DefaultTimeoutMs);
+            if (timeoutMs <= 0 || timeoutMs > definition.MaxTimeoutMs)
+            {
+                return ErrorJson("E_SCHEMA_INVALID", "timeoutMs exceeds the registered tool limit.", "Use a timeout between 1 and " + definition.MaxTimeoutMs.ToString(CultureInfo.InvariantCulture) + "ms.");
+            }
+
+            if (request.BoolArgAtPath(new[] { "args", "execution", "preferJob" }, false))
+            {
+                return ErrorJson("E_JOB_UNSUPPORTED", "--job / Local Agent custom-tool execution is not implemented by the bundled Live Bridge yet.", "Run without --job for synchronous Live Bridge execution, or wait for Local Agent job support before relying on asynchronous custom-tool semantics.");
+            }
+
+            var inputJson = request.RawJsonArg("input") ?? "{}";
+            var schemaError = ValidateCustomToolInput(definition, inputJson);
+            if (!string.IsNullOrEmpty(schemaError))
+            {
+                return ErrorJson("E_TOOL_SCHEMA_INVALID", schemaError, "Run alps-unity custom-tool list to inspect the tool inputSchema.");
+            }
+
+            var startedAt = DateTime.UtcNow;
+            var artifactDir = ResolveArtifactDir(request.StringArg("artifactDir"), request.RequestId);
+            try
+            {
+                Directory.CreateDirectory(artifactDir);
+            }
+            catch (Exception exception)
+            {
+                return ErrorJson("E_ARTIFACT_WRITE_FAILED", "Failed to create artifact directory: " + exception.Message, "Pass --artifact-dir to a writable directory.");
+            }
+
+            string resultJson;
+            try
+            {
+                WriteLog("custom_tool_run requestId=" + request.RequestId + " name=" + name + " timeoutMs=" + timeoutMs.ToString(CultureInfo.InvariantCulture));
+                resultJson = definition.Execute(new AlpsCustomToolContext
+                {
+                    RequestId = request.RequestId,
+                    ProjectPath = request.StringArg("projectPath") ?? ProjectRoot(),
+                    InputJson = inputJson,
+                    ArtifactDir = artifactDir,
+                    LogPath = LogPath()
+                });
+            }
+            catch (TargetInvocationException exception)
+            {
+                var inner = exception.InnerException ?? exception;
+                return ErrorJson("E_TOOL_EXECUTION_FAILED", inner.GetType().Name + ": " + inner.Message, "Check Unity Console and AlpsUnityBridge.log with the returned requestId.");
+            }
+            catch (Exception exception)
+            {
+                return ErrorJson("E_TOOL_EXECUTION_FAILED", exception.GetType().Name + ": " + exception.Message, "Check Unity Console and AlpsUnityBridge.log with the returned requestId.");
+            }
+
+            var endedAt = DateTime.UtcNow;
+            var durationMs = (long)(endedAt - startedAt).TotalMilliseconds;
+            var manifest = CustomToolManifestJson(request.RequestId, definition, artifactDir, startedAt, endedAt);
+            try
+            {
+                File.WriteAllText(Path.Combine(artifactDir, "manifest.json"), manifest);
+            }
+            catch (Exception exception)
+            {
+                return ErrorJson("E_ARTIFACT_WRITE_FAILED", "Failed to write artifact manifest: " + exception.Message, "Pass --artifact-dir to a writable directory.");
+            }
+            if (durationMs > timeoutMs)
+            {
+                WriteLog("custom_tool_timeout requestId=" + request.RequestId + " name=" + name + " durationMs=" + durationMs.ToString(CultureInfo.InvariantCulture) + " timeoutMs=" + timeoutMs.ToString(CultureInfo.InvariantCulture));
+                return ErrorJson("E_EXECUTION_TIMEOUT", "Tool exceeded timeoutMs after completion: " + durationMs.ToString(CultureInfo.InvariantCulture) + "ms > " + timeoutMs.ToString(CultureInfo.InvariantCulture) + "ms.", "Inspect bridge logs and artifact manifest with the returned requestId before retrying.");
+            }
+
+            return SuccessJson("{"
+                + "\"command\":\"custom-tool.run\","
+                + "\"tool\":{\"name\":" + Quote(definition.Name) + ",\"version\":" + Quote(definition.Version) + "},"
+                + "\"execution\":{\"channel\":\"live\",\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"endedAt\":" + Quote(endedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"durationMs\":" + durationMs.ToString(CultureInfo.InvariantCulture) + ",\"exitState\":\"completed\"},"
+                + "\"result\":" + JsonLiteralOrString(resultJson) + ","
+                + "\"artifacts\":[{\"id\":\"manifest\",\"kind\":\"json\",\"path\":" + Quote(Path.Combine(artifactDir, "manifest.json")) + ",\"description\":\"custom-tool artifact manifest\"}],"
+                + "\"audit\":" + CustomToolAuditJson(request, definition, artifactDir, inputJson, timeoutMs, startedAt, endedAt, "completed") + ","
+                + "\"logs\":{\"bridge\":" + Quote(LogPath()) + "}"
+                + "}");
+        }
+
+        private static string CustomToolDefinitionJson(AlpsCustomToolDefinition definition)
+        {
+            return "{"
+                + "\"name\":" + Quote(definition.Name) + ","
+                + "\"displayName\":" + Quote(definition.DisplayName) + ","
+                + "\"description\":" + Quote(definition.Description) + ","
+                + "\"version\":" + Quote(definition.Version) + ","
+                + "\"inputSchema\":" + JsonLiteralOrString(definition.InputSchema) + ","
+                + "\"outputSchema\":" + JsonLiteralOrString(definition.OutputSchema) + ","
+                + "\"capabilityType\":" + Quote(definition.CapabilityType) + ","
+                + "\"defaultTimeoutMs\":" + definition.DefaultTimeoutMs.ToString(CultureInfo.InvariantCulture) + ","
+                + "\"maxTimeoutMs\":" + definition.MaxTimeoutMs.ToString(CultureInfo.InvariantCulture) + ","
+                + "\"supportsJob\":" + Bool(definition.SupportsJob) + ","
+                + "\"artifactKinds\":" + StringArrayJson(definition.ArtifactKinds) + ","
+                + "\"registeredBy\":" + Quote(definition.RegisteredBy) + ","
+                + "\"assembly\":" + Quote(definition.Assembly) + ","
+                + "\"method\":" + Quote(definition.Method)
+                + "}";
+        }
+
+        private static string CustomToolManifestJson(string requestId, AlpsCustomToolDefinition definition, string artifactDir, DateTime startedAt, DateTime endedAt)
+        {
+            return "{"
+                + "\"requestId\":" + Quote(requestId) + ","
+                + "\"command\":\"custom-tool.run\","
+                + "\"tool\":{\"name\":" + Quote(definition.Name) + ",\"version\":" + Quote(definition.Version) + "},"
+                + "\"artifact\":[{\"id\":\"manifest\",\"kind\":\"json\",\"relativePath\":\"manifest.json\",\"producer\":\"unity-editor-package\"}],"
+                + "\"createdAt\":" + Quote(endedAt.ToString("O", CultureInfo.InvariantCulture)) + ","
+                + "\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ","
+                + "\"root\":" + Quote(artifactDir)
+                + "}";
+        }
+
+        private static string CustomToolAuditJson(BridgeRequest request, AlpsCustomToolDefinition definition, string artifactDir, string inputJson, int timeoutMs, DateTime startedAt, DateTime endedAt, string exitState)
+        {
+            return "{"
+                + "\"requestId\":" + Quote(request.RequestId) + ","
+                + "\"command\":\"custom-tool.run\","
+                + "\"projectPath\":" + Quote(request.StringArg("projectPath") ?? ProjectRoot()) + ","
+                + "\"instanceId\":" + Quote(request.StringArg("instanceId")) + ","
+                + "\"unityVersion\":" + Quote(Application.unityVersion) + ","
+                + "\"bridgeVersion\":\"com.alps.unity-cli.bridge\","
+                + "\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ","
+                + "\"endedAt\":" + Quote(endedAt.ToString("O", CultureInfo.InvariantCulture)) + ","
+                + "\"durationMs\":" + ((long)(endedAt - startedAt).TotalMilliseconds).ToString(CultureInfo.InvariantCulture) + ","
+                + "\"initiator\":{\"cliUser\":\"local\",\"cwd\":" + Quote(Directory.GetCurrentDirectory()) + "},"
+                + "\"input\":{\"sourceKind\":\"json\",\"sizeBytes\":" + Encoding.UTF8.GetByteCount(inputJson ?? string.Empty).ToString(CultureInfo.InvariantCulture) + "},"
+                + "\"execution\":{\"channel\":\"live\",\"timeoutMs\":" + timeoutMs.ToString(CultureInfo.InvariantCulture) + ",\"exitState\":" + Quote(exitState) + "},"
+                + "\"effects\":{\"fileWrites\":[],\"assetRefresh\":false,\"domainReload\":false,\"playModeChanged\":false,\"packagesChanged\":false},"
+                + "\"artifacts\":[{\"kind\":\"json\",\"path\":" + Quote(Path.Combine(artifactDir, "manifest.json")) + "}],"
+                + "\"tool\":{\"name\":" + Quote(definition.Name) + ",\"capabilityType\":" + Quote(definition.CapabilityType) + "}"
+                + "}";
+        }
+
+        private static string ValidateCustomToolInput(AlpsCustomToolDefinition definition, string inputJson)
+        {
+            var schemaJson = definition.InputSchema;
+            if (!string.IsNullOrEmpty(schemaJson) && schemaJson.Trim() != "{}")
+            {
+                var schemaType = JsonStringProperty(schemaJson, "type");
+                if (!string.IsNullOrEmpty(schemaType) && !JsonValueMatchesType(inputJson, schemaType))
+                {
+                    return "Input does not match inputSchema; expected $ to be " + schemaType + ".";
+                }
+
+                var requiredJson = JsonRawProperty(schemaJson, "required");
+                foreach (var key in JsonStringArray(requiredJson))
+                {
+                    if (JsonRawProperty(inputJson, key) == null)
+                    {
+                        return "Input does not match inputSchema; missing required property: " + key;
+                    }
+                }
+
+                var propertiesJson = JsonRawProperty(schemaJson, "properties");
+                foreach (var key in JsonObjectPropertyNames(propertiesJson))
+                {
+                    var valueJson = JsonRawProperty(inputJson, key);
+                    if (valueJson == null)
+                    {
+                        continue;
+                    }
+                    var propertySchema = JsonRawProperty(propertiesJson, key);
+                    var propertyType = JsonStringProperty(propertySchema, "type");
+                    if (!string.IsNullOrEmpty(propertyType) && !JsonValueMatchesType(valueJson, propertyType))
+                    {
+                        return "Input does not match inputSchema; property " + key + " must be " + propertyType + ".";
+                    }
+                }
+            }
+
+            foreach (var key in definition.RequiredInput ?? new string[0])
+            {
+                if (JsonRawProperty(inputJson, key) == null)
+                {
+                    return "Input does not match inputSchema; missing required property: " + key;
+                }
+            }
+            return null;
         }
 
         private static Camera ResolveCamera(string target)
@@ -3490,6 +3877,179 @@ namespace AlpsUnityCli
             return "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "\\r").Replace("\n", "\\n").Replace("\t", "\\t") + "\"";
         }
 
+        private static string JsonLiteralOrString(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return "null";
+            }
+            var trimmed = value.Trim();
+            if ((trimmed.StartsWith("{") && trimmed.EndsWith("}")) || (trimmed.StartsWith("[") && trimmed.EndsWith("]")) || trimmed == "true" || trimmed == "false" || trimmed == "null" || Regex.IsMatch(trimmed, "^-?\\d+(?:\\.\\d+)?$"))
+            {
+                return trimmed;
+            }
+            return Quote(value);
+        }
+
+        private static string StringArrayJson(string[] values)
+        {
+            var items = new List<string>();
+            foreach (var value in values ?? new string[0])
+            {
+                if (!string.IsNullOrEmpty(value))
+                {
+                    items.Add(Quote(value));
+                }
+            }
+            return "[" + string.Join(",", items.ToArray()) + "]";
+        }
+
+        private static string JsonRawProperty(string json, string name)
+        {
+            if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(name)) return null;
+            var trimmed = json.Trim();
+            if (!trimmed.StartsWith("{") || !trimmed.EndsWith("}")) return null;
+            var index = 1;
+            while (index < trimmed.Length - 1)
+            {
+                while (index < trimmed.Length && (char.IsWhiteSpace(trimmed[index]) || trimmed[index] == ',')) index++;
+                if (index >= trimmed.Length - 1 || trimmed[index] != (char)34) return null;
+                var keyEnd = FindJsonStringEnd(trimmed, index);
+                if (keyEnd <= index) return null;
+                var key = JsonUnescape(trimmed.Substring(index + 1, keyEnd - index - 1));
+                index = keyEnd + 1;
+                while (index < trimmed.Length && char.IsWhiteSpace(trimmed[index])) index++;
+                if (index >= trimmed.Length || trimmed[index] != ':') return null;
+                index++;
+                while (index < trimmed.Length && char.IsWhiteSpace(trimmed[index])) index++;
+                var valueEnd = FindJsonValueEnd(trimmed, index);
+                if (valueEnd <= index) return null;
+                if (string.Equals(key, name, StringComparison.Ordinal)) return trimmed.Substring(index, valueEnd - index).Trim();
+                index = valueEnd;
+            }
+            return null;
+        }
+
+        private static string JsonStringProperty(string json, string name)
+        {
+            var raw = JsonRawProperty(json, name);
+            if (string.IsNullOrEmpty(raw)) return null;
+            var trimmed = raw.Trim();
+            return trimmed.Length >= 2 && trimmed[0] == (char)34 && trimmed[trimmed.Length - 1] == (char)34 ? JsonUnescape(trimmed.Substring(1, trimmed.Length - 2)) : null;
+        }
+
+        private static string[] JsonStringArray(string json)
+        {
+            if (string.IsNullOrEmpty(json)) return new string[0];
+            var values = new List<string>();
+            foreach (Match match in Regex.Matches(json, "\\\"((?:\\\\.|[^\\\"])*)\\\""))
+            {
+                values.Add(JsonUnescape(match.Groups[1].Value));
+            }
+            return values.ToArray();
+        }
+
+        private static string[] JsonObjectPropertyNames(string json)
+        {
+            if (string.IsNullOrEmpty(json)) return new string[0];
+            var names = new List<string>();
+            var trimmed = json.Trim();
+            if (!trimmed.StartsWith("{") || !trimmed.EndsWith("}")) return names.ToArray();
+            var index = 1;
+            while (index < trimmed.Length - 1)
+            {
+                while (index < trimmed.Length && (char.IsWhiteSpace(trimmed[index]) || trimmed[index] == ',')) index++;
+                if (index >= trimmed.Length - 1 || trimmed[index] != (char)34) break;
+                var keyEnd = FindJsonStringEnd(trimmed, index);
+                if (keyEnd <= index) break;
+                names.Add(JsonUnescape(trimmed.Substring(index + 1, keyEnd - index - 1)));
+                index = keyEnd + 1;
+                while (index < trimmed.Length && char.IsWhiteSpace(trimmed[index])) index++;
+                if (index >= trimmed.Length || trimmed[index] != ':') break;
+                index++;
+                while (index < trimmed.Length && char.IsWhiteSpace(trimmed[index])) index++;
+                var valueEnd = FindJsonValueEnd(trimmed, index);
+                if (valueEnd <= index) break;
+                index = valueEnd;
+            }
+            return names.ToArray();
+        }
+
+        private static bool JsonValueMatchesType(string json, string expectedType)
+        {
+            var value = (json ?? string.Empty).Trim();
+            if (expectedType == "object") return value.StartsWith("{") && value.EndsWith("}");
+            if (expectedType == "array") return value.StartsWith("[") && value.EndsWith("]");
+            if (expectedType == "string") return value.StartsWith("\"") && value.EndsWith("\"");
+            if (expectedType == "boolean") return value == "true" || value == "false";
+            if (expectedType == "null") return value == "null";
+            if (expectedType == "integer") return Regex.IsMatch(value, "^-?\\d+$");
+            if (expectedType == "number") return Regex.IsMatch(value, "^-?\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?$");
+            return true;
+        }
+
+        private static int FindJsonStringEnd(string json, int start)
+        {
+            var escaping = false;
+            for (var index = start + 1; index < json.Length; index++)
+            {
+                var ch = json[index];
+                if (escaping) escaping = false;
+                else if (ch == '\\') escaping = true;
+                else if (ch == (char)34) return index;
+            }
+            return -1;
+        }
+
+        private static int FindJsonValueEnd(string json, int start)
+        {
+            var depth = 0;
+            var inString = false;
+            var escaping = false;
+            for (var index = start; index < json.Length; index++)
+            {
+                var ch = json[index];
+                if (inString)
+                {
+                    if (escaping) escaping = false;
+                    else if (ch == '\\') escaping = true;
+                    else if (ch == (char)34) inString = false;
+                    continue;
+                }
+                if (ch == (char)34) { inString = true; continue; }
+                if (ch == '{' || ch == '[') { depth++; continue; }
+                if (ch == '}' || ch == ']')
+                {
+                    if (depth == 0) return index;
+                    depth--;
+                    if (depth == 0) return index + 1;
+                    continue;
+                }
+                if (depth == 0 && ch == ',') return index;
+            }
+            return json.Length;
+        }
+
+        private static string JsonUnescape(string value)
+        {
+            return value.Replace("\\\"", "\"").Replace("\\\\", "\\").Replace("\\/", "/").Replace("\\n", "\n").Replace("\\r", "\r").Replace("\\t", "\t");
+        }
+
+        private static string ResolveArtifactDir(string rawPath, string requestId)
+        {
+            if (!string.IsNullOrEmpty(rawPath))
+            {
+                var normalized = rawPath.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
+                return Path.GetFullPath(Path.IsPathRooted(normalized) ? normalized : Path.Combine(ProjectRoot(), normalized));
+            }
+            var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            if (string.IsNullOrEmpty(root))
+            {
+                root = Path.Combine(ProjectRoot(), "Library", "AlpsUnityCLI");
+            }
+            return Path.Combine(root, "AlpsUnityCLI", "artifacts", requestId ?? Guid.NewGuid().ToString("N"));
+        }
+
         private static string Bool(bool value)
         {
             return value ? "true" : "false";
@@ -3950,10 +4510,42 @@ namespace AlpsUnityCli
                 return Regex.IsMatch(body ?? string.Empty, "\\\"" + Regex.Escape(name) + "\\\"\\s*:");
             }
 
+            public string RawJsonArg(string name)
+            {
+                return ExtractRawJson(body, name);
+            }
+
+            public bool BoolArgAtPath(string[] path, bool fallback)
+            {
+                var current = body;
+                foreach (var segment in path ?? new string[0])
+                {
+                    current = JsonRawProperty(current, segment);
+                    if (string.IsNullOrEmpty(current)) return fallback;
+                }
+                if (string.Equals(current, "true", StringComparison.OrdinalIgnoreCase)) return true;
+                if (string.Equals(current, "false", StringComparison.OrdinalIgnoreCase)) return false;
+                return fallback;
+            }
+
             private static string ExtractString(string json, string name)
             {
                 var match = Regex.Match(json ?? string.Empty, "\\\"" + Regex.Escape(name) + "\\\"\\s*:\\s*\\\"((?:\\\\.|[^\\\"])*)\\\"");
                 return match.Success ? Unescape(match.Groups[1].Value) : null;
+            }
+
+            private static string ExtractRawJson(string json, string name)
+            {
+                var match = Regex.Match(json ?? string.Empty, "\\\"" + Regex.Escape(name) + "\\\"\\s*:");
+                if (!match.Success)
+                {
+                    return null;
+                }
+                var start = match.Index + match.Length;
+                while (start < json.Length && char.IsWhiteSpace(json[start])) start++;
+                if (start >= json.Length) return null;
+                var end = FindJsonValueEnd(json, start);
+                return end > start ? json.Substring(start, end - start).Trim() : null;
             }
 
             private static string Unescape(string value)
