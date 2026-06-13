@@ -187,6 +187,9 @@ test("Unity bridge and batch source expose Runtime Code diagnostics", async () =
   const bridge = await readFile(new URL("../unity-package/Editor/AlpsUnityBridge.cs", import.meta.url), "utf8");
   const batch = await readFile(new URL("../unity-package/Editor/AlpsUnityBatch.cs", import.meta.url), "utf8");
 
+  assert.match(bridge, /private static HttpListener listener/);
+  assert.match(bridge, /private static readonly Queue<BridgeWorkItem> WorkQueue/);
+  assert.match(bridge, /using System\.Linq/);
   assert.match(bridge, /private static readonly string\[\] CodeCommands = \{ "code\.exec" \}/);
   assert.match(bridge, /case "code\.exec"/);
   assert.match(bridge, /E_CODE_COMPILE_FAILED/);

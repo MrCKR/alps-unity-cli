@@ -3,6 +3,7 @@ using System;
 using System.CodeDom.Compiler;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.IO;
 using System.Net;
 using System.Reflection;
@@ -22,6 +23,8 @@ namespace AlpsUnityCli
     public static class AlpsUnityBridge
     {
         private const int Port = 47392;
+        private static HttpListener listener;
+        private static readonly Queue<BridgeWorkItem> WorkQueue = new Queue<BridgeWorkItem>();
         private static readonly object QueueLock = new object();
         private static readonly string[] CameraCommands = { "camera.list", "camera.info", "camera.screenshot" };
         private static readonly string[] SceneCommands = { "scene.screenshot" };
