@@ -342,6 +342,23 @@ test("package list and info accept UTF-8 BOM manifest and lock", async () => {
   assert.equal(((info.data as { package: { dependencies: Record<string, string> } }).package.dependencies)["com.unity.textmeshpro"], "3.0.6");
 });
 
+test("init deploys bundled bridge into Unity project without requiring Unity", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  const initialized = await execute(["init", "--project", project], runtime);
+  assert.equal(initialized.ok, true);
+  const data = initialized.data as { action: string; status: string; bridge: { dependencyName: string; bridgePath: string }; resolve: string };
+  assert.equal(data.action, "init");
+  assert.equal(data.status, "bridge_installed");
+  assert.equal(data.bridge.dependencyName, "com.alps.unity-cli.bridge");
+  assert.equal(data.resolve, "skipped");
+  assert.match(await readFile(join(data.bridge.bridgePath, "Editor", "AlpsUnityBridge.cs"), "utf8"), /class AlpsUnityBridge/);
+
+  const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string> };
+  assert.match(manifest.dependencies["com.alps.unity-cli.bridge"], /^file:/);
+});
+
 test("package install updates manifest, deploys bridge and can start package resolve job", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
