@@ -34,13 +34,22 @@ export async function executeBridgeCommand(
   positionalTarget: string | undefined,
   runtime: BridgeRuntime
 ): Promise<CliResult> {
-  const args = await commandArgs(command, flags, positionalTarget);
+  return executeBridgePayload(requestId, command, await commandArgs(command, flags, positionalTarget), flags, runtime);
+}
+
+export async function executeBridgePayload(
+  requestId: string,
+  command: string,
+  args: Record<string, unknown>,
+  flags: Record<string, string | boolean>,
+  runtime: BridgeRuntime
+): Promise<CliResult> {
   const endpoint = bridgeEndpoint(flags, runtime);
   if (!runtime.bridgeExecute && !endpoint) {
     if (command === "ui.document.info" && typeof args.path === "string") {
       return readUiDocumentOffline(requestId, command, args.path);
     }
-    return failure(requestId, "BRIDGE_ENDPOINT_REQUIRED", "Pass --bridge-endpoint <url> or set ALPS_UNITY_BRIDGE_ENDPOINT for live query/edit/screenshot commands.", [
+    return failure(requestId, "BRIDGE_ENDPOINT_REQUIRED", "Pass --bridge-endpoint <url> or set ALPS_UNITY_BRIDGE_ENDPOINT for live query/edit/screenshot/code commands.", [
       "Open Unity with the Alps Unity Bridge package installed.",
       "Pass --bridge-endpoint http://127.0.0.1:<port>."
     ]);
@@ -52,7 +61,13 @@ export async function executeBridgeCommand(
       : await postBridgeExecute(endpoint!, { requestId, command, args });
 
     if (bridgeResult.ok === false) {
-      return failure(requestId, bridgeResult.error?.code ?? "BRIDGE_COMMAND_FAILED", bridgeResult.error?.message ?? "Unity Bridge rejected the command.", bridgeResult.nextActions ?? [], bridgeErrorDetails(bridgeResult.error));
+      const code = bridgeResult.error?.code ?? "BRIDGE_COMMAND_FAILED";
+      const details = command === "code.exec" && code === "E_UNITY_BUSY" ? liveCodeBusyDetails(requestId, endpoint, args, bridgeErrorDetails(bridgeResult.error)) : bridgeErrorDetails(bridgeResult.error);
+      return failure(requestId, code, bridgeResult.error?.message ?? "Unity Bridge rejected the command.", bridgeResult.nextActions ?? [], details);
+    }
+
+    if (command === "code.exec" && bridgeResult.data?.status === "running" && bridgeResult.data?.sideEffectSemantics === "started-before-http-timeout") {
+      return liveCodeTimeoutFailure(requestId, endpoint, args, bridgeResult.data);
     }
 
     return success(requestId, {
@@ -61,7 +76,10 @@ export async function executeBridgeCommand(
       ...bridgeResult.data
     });
   } catch (error) {
-    return failure(requestId, "BRIDGE_CONNECTION_FAILED", error instanceof Error ? error.message : String(error), ["Check Unity Bridge endpoint and logs."]);
+    if (command === "code.exec" && isAbortLikeError(error)) {
+      return liveCodeTimeoutFailure(requestId, endpoint, args, { cause: errorMessage(error) });
+    }
+    return failure(requestId, "BRIDGE_CONNECTION_FAILED", errorMessage(error), ["Check Unity Bridge endpoint and logs."]);
   }
 }
 
@@ -128,6 +146,9 @@ export function bridgeCommandName(group: string | undefined, command: string | u
   }
   if (group === "screenshot" && command === "capture") {
     return "screenshot.capture";
+  }
+  if (group === "code" && command === "exec") {
+    return "code.exec";
   }
   return undefined;
 }
@@ -455,6 +476,20 @@ async function commandArgs(command: string, flags: Record<string, string | boole
     return screenshotArgs(flags, positionalTarget);
   }
 
+  if (command === "code.exec") {
+    return compactArgs({
+      sourcePath: stringFlag(flags, "file"),
+      sourceText: stringFlag(flags, "code"),
+      sourceKind: stringFlag(flags, "file") ? "file" : stringFlag(flags, "code") ? "inline" : boolFlag(flags, "stdin") ? "stdin" : undefined,
+      channel: stringFlag(flags, "channel"),
+      timeoutMs: numberFlag(flags, "timeout-ms"),
+      artifactDir: stringFlag(flags, "artifact-dir"),
+      argsJson: stringFlag(flags, "args"),
+      refs: stringFlag(flags, "refs"),
+      defines: stringFlag(flags, "define")
+    });
+  }
+
   return {};
 }
 
@@ -524,7 +559,7 @@ function looksLikeUiAssetPath(value: string | undefined): boolean {
 
 async function postBridgeExecute(endpoint: string, payload: BridgeRequest): Promise<BridgeResponse> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 10_000);
+  const timeout = setTimeout(() => controller.abort(), bridgeHttpTimeoutMs(payload));
   try {
     const response = await fetch(new URL("/bridge/execute", endpoint), {
       method: "POST",
@@ -545,8 +580,62 @@ function bridgeErrorDetails(error: BridgeError | undefined): Record<string, unkn
   if (!error) {
     return {};
   }
-  const { code: _code, message: _message, ...details } = error;
-  return details;
+  const { code: _code, message: _message, details, ...rest } = error;
+  if (details !== undefined && typeof details === "object" && !Array.isArray(details) && Object.keys(rest).length === 0) {
+    return details as Record<string, unknown>;
+  }
+  return details === undefined ? rest : { ...rest, details };
+}
+
+function bridgeHttpTimeoutMs(payload: BridgeRequest): number {
+  if (payload.command === "code.exec" && typeof payload.args.timeoutMs === "number" && Number.isFinite(payload.args.timeoutMs) && payload.args.timeoutMs > 0) {
+    return payload.args.timeoutMs + 5000;
+  }
+  return 10_000;
+}
+
+function liveCodeBusyDetails(requestId: string, endpoint: string | undefined, args: Record<string, unknown>, details: Record<string, unknown>): Record<string, unknown> {
+  const timeoutMs = typeof args.timeoutMs === "number" && Number.isFinite(args.timeoutMs) ? args.timeoutMs : null;
+  const logPath = typeof details.logPath === "string" ? details.logPath : "Unity project Logs/AlpsUnityBridge.log";
+  return {
+    requestId,
+    command: "code.exec",
+    channel: "live",
+    timeoutMs,
+    bridgeEndpoint: endpoint ?? null,
+    audit: { requestId, command: "code.exec", channel: "live", timeoutMs },
+    logs: { bridge: logPath },
+    ...details
+  };
+}
+
+function liveCodeTimeoutFailure(requestId: string, endpoint: string | undefined, args: Record<string, unknown>, details: Record<string, unknown>): CliResult {
+  const timeoutMs = typeof args.timeoutMs === "number" && Number.isFinite(args.timeoutMs) ? args.timeoutMs : null;
+  const logPath = typeof details.logPath === "string" ? details.logPath : "Unity project Logs/AlpsUnityBridge.log";
+  return failure(requestId, "E_EXECUTION_TIMEOUT", timeoutMs === null ? "Runtime Code live execution did not complete before the bridge HTTP timeout." : `Runtime Code live execution did not complete within ${timeoutMs}ms.`, [
+    "Inspect the Unity Editor for a long-running script or busy dialog.",
+    "Inspect the Unity project Logs/AlpsUnityBridge.log for bridge_request_timeout_started and requestId.",
+    "Retry after Unity is responsive, or increase --timeout-ms for intentionally long-running code."
+  ], {
+    requestId,
+    command: "code.exec",
+    channel: "live",
+    timeoutMs,
+    bridgeEndpoint: endpoint ?? null,
+    audit: { requestId, command: "code.exec", channel: "live", timeoutMs },
+    logs: { bridge: logPath },
+    ...details
+  });
+}
+
+function isAbortLikeError(error: unknown): boolean {
+  const name = error instanceof Error ? error.name : "";
+  const message = errorMessage(error);
+  return name === "AbortError" || /\b(abort|aborted|timed? out|timeout)\b/i.test(message);
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function queryArgs(flags: Record<string, string | boolean>): Record<string, unknown> {

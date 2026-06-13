@@ -6,6 +6,7 @@ import { parseArgs, getBoolean, getNumber, getString } from "./args.js";
 import { batchJsonSchema, runBatch } from "./batch.js";
 import { bridgeCommandName, executeBridgeCommand, type BridgeRuntime } from "./bridge-commands.js";
 import { JobRunner } from "./job-runner.js";
+import { handleCode } from "./runtime-code.js";
 import { JobStore } from "./job-store.js";
 import { createRequestId, failure, printJson, success } from "./output.js";
 import { defaultDataDir, discoverUnity, ensureWindows } from "./platform.js";
@@ -45,6 +46,10 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
 
     if (group === "batch") {
       return handleBatch(command, parsed.positional[2], parsed.flags, runtime, requestId);
+    }
+
+    if (group === "code") {
+      return handleCode(command, parsed.flags, runtime, requestId);
     }
 
     const bridgeCommand = bridgeCommandName(group, command);
@@ -173,11 +178,7 @@ async function handleJob(command: string | undefined, flags: Record<string, stri
 }
 
 function refreshArgs(flags: Record<string, string | boolean>): string[] {
-  const args = ["-executeMethod", "AlpsUnityCli.Batch.Refresh"];
-  if (getBoolean(flags, "compile")) {
-    args[1] = "AlpsUnityCli.Batch.RefreshAndCompile";
-  }
-  return args;
+  return ["-executeMethod", getBoolean(flags, "compile") ? "AlpsUnityCli.Batch.ResolvePackages" : "AlpsUnityCli.Batch.Refresh"];
 }
 
 async function handlePackage(command: string | undefined, args: string[], flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult> {
@@ -300,10 +301,18 @@ async function startUnityJob(kind: JobKind, flags: Record<string, string | boole
   const waitTimeoutMs = getNumber(flags, "wait-timeout-ms") ?? timeoutMs ?? 600000;
   const waited = await runtime.runner.wait(job.id, waitTimeoutMs);
   if (!terminalStatuses.has(waited.status)) {
-    return failure(requestId, "WAIT_TIMEOUT", `Job did not reach a terminal state within ${waitTimeoutMs}ms.`, [
+    return failure(requestId, "E_EXECUTION_TIMEOUT", `Job did not reach a terminal state within ${waitTimeoutMs}ms.`, [
       `Run alps-unity job status --id ${job.id}.`,
-      `Run alps-unity job logs --id ${job.id}.`
-    ]);
+      `Run alps-unity job logs --id ${job.id}.`,
+      `Run alps-unity job cancel --id ${job.id} if the Unity process should be stopped.`
+    ], {
+      jobId: job.id,
+      timeoutMs: waitTimeoutMs,
+      cancelAttempted: false,
+      cancelled: false,
+      processKilled: false,
+      domainReloadObserved: false
+    });
   }
   return success(requestId, summarizeJob(waited));
 }
@@ -350,6 +359,7 @@ function help(): Record<string, unknown> {
       "package scoped-registry list|add|remove --name <name> --url <url> --scope <scope>",
       "batch schema",
       "batch run <file.json> [--preflight] [--fail-fast true|false] [--parallel 1]",
+      "code exec (--file <path>|--stdin|--code <text>) [--channel live|batchmode] [--refs <list>] [--define <symbol>] [--args <json>] [--timeout-ms <n>] [--job] [--artifact-dir <path>]",
       "scene hierarchy [--page-size 100] [--bridge-endpoint <url>]",
       "scene screenshot <path> [--width 1280 --height 720 --format png --overwrite] [--bridge-endpoint <url>]",
       "prefab info <path> [--bridge-endpoint <url>]",

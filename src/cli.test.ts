@@ -136,7 +136,26 @@ test("wait timeout returns structured error while job keeps running", async () =
 
   const result = await execute(["editor", "refresh", "--compile", "--wait", "--wait-timeout-ms", "10", "--unity", unity, "--project", runtime.dataDir], runtime);
   assert.equal(result.ok, false);
-  assert.equal(result.error?.code, "WAIT_TIMEOUT");
+  assert.equal(result.error?.code, "E_EXECUTION_TIMEOUT");
+  assert.deepEqual(result.error?.details, {
+    jobId: (result.error?.details as { jobId: string }).jobId,
+    timeoutMs: 10,
+    cancelAttempted: false,
+    cancelled: false,
+    processKilled: false,
+    domainReloadObserved: false
+  });
+});
+
+test("editor refresh compile uses existing batch resolve method", async () => {
+  const runtime = await makeRuntime();
+  const unity = await makeFakeUnity(`process.exit(0);`);
+
+  const compile = await execute(["editor", "refresh", "--compile", "--unity", unity, "--project", runtime.dataDir], runtime);
+  const refresh = await execute(["editor", "refresh", "--unity", unity, "--project", runtime.dataDir], runtime);
+
+  assert.equal((compile.data as { command: string[] }).command[(compile.data as { command: string[] }).command.indexOf("-executeMethod") + 1], "AlpsUnityCli.Batch.ResolvePackages");
+  assert.equal((refresh.data as { command: string[] }).command[(refresh.data as { command: string[] }).command.indexOf("-executeMethod") + 1], "AlpsUnityCli.Batch.Refresh");
 });
 
 test("cancel marks running job as cancelled", async () => {
@@ -251,7 +270,13 @@ test("process timeout marks job as timeout", async () => {
   const waited = await runtime.runner.wait(jobId, 3000);
 
   assert.equal(waited.status, "timeout");
-  assert.equal(waited.error?.code, "JOB_TIMEOUT");
+  assert.equal(waited.error?.code, "E_EXECUTION_TIMEOUT");
+  assert.deepEqual(waited.error?.details, {
+    cancelAttempted: true,
+    cancelled: false,
+    processKilled: true,
+    domainReloadObserved: false
+  });
 });
 
 async function makeUnityProject(): Promise<string> {
@@ -287,6 +312,23 @@ test("package list and info read manifest and lock data", async () => {
   assert.equal(data.packages[0].lockedVersion, "1.2.3");
 
   const info = await execute(["package", "info", "com.example.tool", "--project", project], runtime);
+  assert.equal(info.ok, true);
+  assert.equal(((info.data as { package: { dependencies: Record<string, string> } }).package.dependencies)["com.unity.textmeshpro"], "3.0.6");
+});
+
+test("package list and info accept UTF-8 BOM manifest and lock", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+  const packages = join(project, "Packages");
+  const manifest = await readFile(join(packages, "manifest.json"), "utf8");
+  const lock = await readFile(join(packages, "packages-lock.json"), "utf8");
+  await writeFile(join(packages, "manifest.json"), `\ufeff${manifest}`, "utf8");
+  await writeFile(join(packages, "packages-lock.json"), `\ufeff${lock}`, "utf8");
+
+  const list = await execute(["package", "list", "--project", project], runtime);
+  const info = await execute(["package", "info", "com.example.tool", "--project", project], runtime);
+
+  assert.equal(list.ok, true);
   assert.equal(info.ok, true);
   assert.equal(((info.data as { package: { dependencies: Record<string, string> } }).package.dependencies)["com.unity.textmeshpro"], "3.0.6");
 });

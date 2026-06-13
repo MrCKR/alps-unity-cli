@@ -105,6 +105,7 @@ test("batch preflight accepts query edit test and screenshot example", async () 
       { id: "query", command: ["asset", "search"], args: ["--query", "Player", "--type", "Prefab"] },
       { id: "edit", command: ["script", "edit", "Assets/Scripts/Player.cs"], args: ["--find", "speed = 1", "--replace", "speed = 2"], dependsOn: ["query"] },
       { id: "test", command: ["test", "run"], args: ["--platform", "EditMode"], dependsOn: ["edit"] },
+      { id: "code", command: ["code", "exec"], args: ["--code", "return 1;"], dependsOn: ["edit"] },
       { id: "camera", command: ["camera", "info", "Main Camera"] },
       { id: "shader", command: ["shader", "read", "Assets/Shaders/Unlit.shader"] },
       { id: "texture", command: ["texture", "import-settings", "Assets/Textures/Icon.png"], args: ["--readable", "false"], dependsOn: ["shader"] },
@@ -117,7 +118,8 @@ test("batch preflight accepts query edit test and screenshot example", async () 
   assert.equal(result.ok, true);
   const data = result.data as { preflight: Array<{ code: string }>; steps: Array<{ id: string; parallelSafe: boolean }> };
   assert.deepEqual(data.preflight.map((item) => item.code), ["BATCH_PREFLIGHT_OK"]);
-  assert.deepEqual(data.steps.map((step) => step.id), ["query", "edit", "test", "camera", "shader", "texture", "screenshot"]);
+  assert.deepEqual(data.steps.map((step) => step.id), ["query", "edit", "test", "code", "camera", "shader", "texture", "screenshot"]);
+  assert.equal(data.steps.find((step) => step.id === "code")?.parallelSafe, false);
   assert.equal(data.steps.find((step) => step.id === "shader")?.parallelSafe, true);
   assert.equal(data.steps.find((step) => step.id === "texture")?.parallelSafe, false);
 });
