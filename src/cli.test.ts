@@ -346,7 +346,7 @@ test("init deploys bundled bridge into Unity project without requiring Unity", a
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
 
-  const initialized = await execute(["init", "--project", project], runtime);
+  const initialized = await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
   assert.equal(initialized.ok, true);
   const data = initialized.data as { action: string; status: string; bridge: { dependencyName: string; bridgePath: string; buildStampPath: string; buildStamp: string }; liveRefresh: { status: string }; resolve: string };
   assert.equal(data.action, "init");
