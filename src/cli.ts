@@ -4,7 +4,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs, getBoolean, getNumber, getString } from "./args.js";
 import { batchJsonSchema, runBatch } from "./batch.js";
-import { bridgeCommandName, executeBridgeCommand, type BridgeRuntime } from "./bridge-commands.js";
+import { bridgeCommandName, executeBridgeCommand, executeBridgePayload, type BridgeRuntime } from "./bridge-commands.js";
 import { JobRunner } from "./job-runner.js";
 import { handleCode } from "./runtime-code.js";
 import { JobStore } from "./job-store.js";
@@ -189,12 +189,41 @@ async function handleInit(flags: Record<string, string | boolean>, runtime: Runt
   const projectPath = resolve(getString(flags, "project") ?? process.cwd());
   const { ensurePackageBridge } = await import("./package-manager.js");
   const bridge = await ensurePackageBridge(projectPath);
+  const liveRefresh = await refreshOpenEditor(requestId, flags, runtime);
   return maybeResolvePackage("init", flags, runtime, requestId, projectPath, {
     action: "init",
     status: "bridge_installed",
     bridge,
-    nextActions: ["Open the Unity project or run alps-unity package resolve --project <path> --unity <Unity.exe> --wait to refresh packages."]
+    liveRefresh,
+    nextActions: liveRefresh.status === "triggered"
+      ? ["Wait for Unity to finish compiling/importing, then retry /health and Bridge commands against the live endpoint."]
+      : ["Open the Unity project or run alps-unity package resolve --project <path> --unity <Unity.exe> --wait to refresh packages."]
   });
+}
+
+async function refreshOpenEditor(requestId: string, flags: Record<string, string | boolean>, runtime: Runtime): Promise<Record<string, unknown>> {
+  const endpoint = getString(flags, "bridge-endpoint") ?? runtime.bridgeEndpoint ?? process.env.ALPS_UNITY_BRIDGE_ENDPOINT ?? "http://127.0.0.1:47392";
+  if (!runtime.bridgeExecute && !(await isBridgeReachable(endpoint))) {
+    return { status: "skipped", reason: "bridge_endpoint_absent", endpoint };
+  }
+  const result = await executeBridgePayload(`${requestId}_refresh`, "editor.menu", { path: "Assets/Refresh", timeoutMs: 7000 }, { ...flags, "bridge-endpoint": endpoint }, runtime);
+  if (result.ok) {
+    return { status: "triggered", command: "editor.menu", path: "Assets/Refresh", endpoint };
+  }
+  return { status: "failed", command: "editor.menu", path: "Assets/Refresh", endpoint, code: result.error?.code, message: result.error?.message };
+}
+
+async function isBridgeReachable(endpoint: string): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 1500);
+  try {
+    const response = await fetch(new URL("/health", endpoint), { signal: controller.signal });
+    return response.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 async function handlePackage(command: string | undefined, args: string[], flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult> {
@@ -287,7 +316,7 @@ async function handlePackage(command: string | undefined, args: string[], flags:
 async function maybeResolvePackage(command: string, flags: Record<string, string | boolean>, runtime: Runtime, requestId: string, projectPath: string, result: Record<string, unknown>): Promise<CliResult> {
   const unityPath = getString(flags, "unity") ?? discoverUnity();
   if (!unityPath && !getBoolean(flags, "job")) {
-    return success(requestId, { ...result, projectPath, status: result.status ?? "manifest_updated", resolve: "skipped", nextActions: ["Pass --unity <path-to-Unity.exe> or set UNITY_EXE to run Unity PackageManager resolve as a job."] });
+    return success(requestId, { ...result, projectPath, status: result.status ?? "manifest_updated", resolve: "skipped", nextActions: result.nextActions ?? ["Pass --unity <path-to-Unity.exe> or set UNITY_EXE to run Unity PackageManager resolve as a job."] });
   }
   if (!unityPath) {
     return failure(requestId, "UNITY_NOT_FOUND", "Unity.exe was not found.", ["Pass --unity <path-to-Unity.exe> or set UNITY_EXE."]);

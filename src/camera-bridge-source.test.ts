@@ -559,6 +559,11 @@ test("Unity Bridge editor commands expose state, play/pause/stop, menu execution
   assert.match(source, /private static string EditorPauseJson\(BridgeRequest request\)/);
   assert.match(source, /private static string EditorStopJson\(BridgeRequest request\)/);
   assert.match(source, /private static string EditorMenuJson\(BridgeRequest request\)/);
+  assert.match(source, /private static string EditorConsole\(BridgeRequest request\)/);
+  assert.match(source, /private static string BridgeBuildStamp\(\)/);
+  assert.match(source, /private static void StopStaleBridgeListeners\(\)/);
+  assert.match(source, /stale_bridge_listener_stopped/);
+  assert.match(source, /buildStamp/);
   assert.match(source, /EditorApplication\.ExecuteMenuItem\(path\)/);
   assert.match(source, /EditorApplication\.isPlaying/);
   assert.match(source, /EditorApplication\.isPaused/);
@@ -574,6 +579,7 @@ test("Unity Bridge editor commands expose state, play/pause/stop, menu execution
   assert.match(readme, /`editor state` returns playMode, pause, busy, activeScene and Prefab Stage status/);
   assert.match(readme, /`editor play`, `editor pause` and `editor stop` control Editor PlayMode/);
   assert.match(readme, /`editor menu <path>` executes a Unity Editor menu item/);
+  assert.match(readme, /`editor console --count <n>` returns recent Unity Console entries/);
   assert.match(readme, /E_UNITY_BUSY/);
   assert.match(readme, /E_PLAYMODE_TIMEOUT/);
   assert.match(readme, /E_MENU_NOT_FOUND/);
