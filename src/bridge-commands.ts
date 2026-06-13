@@ -93,6 +93,12 @@ export function bridgeCommandName(group: string | undefined, command: string | u
   if (group === "physics" && ["settings", "raycast", "simulation"].includes(command ?? "")) {
     return `physics.${command}`;
   }
+  if (group === "shader" && ["info", "read", "create", "update"].includes(command ?? "")) {
+    return `shader.${command}`;
+  }
+  if (group === "texture" && ["info", "create", "sprite", "import-settings"].includes(command ?? "")) {
+    return `texture.${command}`;
+  }
   if (group === "ui" && ["canvas/create", "text/create", "button/create", "image/create", "document/info", "document/create", "hierarchy"].includes(command ?? "")) {
     return `ui.${command?.replaceAll("/", ".")}`;
   }
@@ -300,6 +306,41 @@ async function commandArgs(command: string, flags: Record<string, string | boole
       queriesHitBackfaces: boolFlag(flags, "queries-hit-backfaces"),
       queriesStartInColliders: boolFlag(flags, "queries-start-in-colliders"),
       autoSimulation: boolFlag(flags, "auto-simulation")
+    });
+  }
+
+  if (command.startsWith("shader.")) {
+    return compactArgs({
+      path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "shader"),
+      target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "path") ?? stringFlag(flags, "shader"),
+      name: stringFlag(flags, "name"),
+      content: await contentFlag(flags),
+      overwrite: boolFlag(flags, "overwrite")
+    });
+  }
+
+  if (command.startsWith("texture.")) {
+    return compactArgs({
+      path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "texture"),
+      target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "path") ?? stringFlag(flags, "texture"),
+      source: stringFlag(flags, "source") ?? stringFlag(flags, "input"),
+      overwrite: boolFlag(flags, "overwrite"),
+      width: numberFlag(flags, "width"),
+      height: numberFlag(flags, "height"),
+      color: stringFlag(flags, "color"),
+      textureType: stringFlag(flags, "texture-type") ?? stringFlag(flags, "type"),
+      spriteMode: stringFlag(flags, "sprite-mode") ?? stringFlag(flags, "mode"),
+      pixelsPerUnit: numberFlag(flags, "pixels-per-unit") ?? numberFlag(flags, "ppu"),
+      pivotX: stringFlag(flags, "pivot-x"),
+      pivotY: stringFlag(flags, "pivot-y"),
+      readable: boolFlag(flags, "readable"),
+      mipmap: boolFlag(flags, "mipmap"),
+      sRGB: boolFlag(flags, "srgb"),
+      alphaIsTransparency: boolFlag(flags, "alpha-is-transparency"),
+      wrapMode: stringFlag(flags, "wrap-mode"),
+      filterMode: stringFlag(flags, "filter-mode"),
+      maxTextureSize: numberFlag(flags, "max-texture-size"),
+      compression: stringFlag(flags, "compression")
     });
   }
 

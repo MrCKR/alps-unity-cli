@@ -249,6 +249,78 @@ test("physics commands forward settings, raycast and simulation inputs", async (
   assert.deepEqual(requests[2].args, { steps: 3, deltaTime: 0.016, simulate: true });
 });
 
+test("shader commands forward paths, content and overwrite", async () => {
+  const runtime = await makeRuntime();
+  const contentFile = join(runtime.dataDir, "Unlit.shader");
+  await writeFile(contentFile, "Shader \"Alps/Test\" {}\n", "utf8");
+  const requests: BridgeRequest[] = [];
+  const bridgeExecute = async (payload: BridgeRequest) => {
+    requests.push(payload);
+    return { ok: true, data: { shader: { path: payload.args.path }, plannedEffects: payload.command.startsWith("shader.") ? [{ type: payload.command, path: payload.args.path }] : [] } };
+  };
+
+  const info = await execute(["shader", "info", "Assets/Shaders/Unlit.shader"], { ...runtime, bridgeExecute });
+  const read = await execute(["shader", "read", "Assets/Shaders/Unlit.shader"], { ...runtime, bridgeExecute });
+  const create = await execute(["shader", "create", "Assets/Shaders/Created.shader", "--content-file", contentFile, "--overwrite"], { ...runtime, bridgeExecute });
+  const update = await execute(["shader", "update", "Assets/Shaders/Unlit.shader", "--content", "Shader X {}"], { ...runtime, bridgeExecute });
+
+  assert.equal(info.ok, true);
+  assert.equal(read.ok, true);
+  assert.equal(create.ok, true);
+  assert.equal(update.ok, true);
+  assert.deepEqual(requests.map((request) => request.command), ["shader.info", "shader.read", "shader.create", "shader.update"]);
+  assert.deepEqual(requests[0].args, { path: "Assets/Shaders/Unlit.shader", target: "Assets/Shaders/Unlit.shader" });
+  assert.equal(requests[2].args.content, "Shader \"Alps/Test\" {}\n");
+  assert.equal(requests[2].args.overwrite, true);
+  assert.equal(requests[3].args.content, "Shader X {}");
+});
+
+test("texture commands forward importer, sprite and creation options", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+  const bridgeExecute = async (payload: BridgeRequest) => {
+    requests.push(payload);
+    return { ok: true, data: { texture: { path: payload.args.path }, importSettings: { textureType: payload.args.textureType }, plannedEffects: [{ type: payload.command, path: payload.args.path }] } };
+  };
+
+  const info = await execute(["texture", "info", "Assets/Textures/Icon.png"], { ...runtime, bridgeExecute });
+  const create = await execute(["texture", "create", "Assets/Textures/Icon.png", "--source", "C:/tmp/icon.png", "--overwrite", "--texture-type", "Sprite"], { ...runtime, bridgeExecute });
+  const sprite = await execute(["texture", "sprite", "Assets/Textures/Icon.png", "--pixels-per-unit", "128", "--pivot-x", "0.25", "--pivot-y", "0.75", "--sprite-mode", "single"], { ...runtime, bridgeExecute });
+  const importSettings = await execute(["texture", "import-settings", "Assets/Textures/Icon.png", "--readable", "false", "--mipmap", "false", "--srgb", "true", "--alpha-is-transparency", "--wrap-mode", "Clamp", "--filter-mode", "Point", "--max-texture-size", "512", "--compression", "Uncompressed"], { ...runtime, bridgeExecute });
+
+  assert.equal(info.ok, true);
+  assert.equal(create.ok, true);
+  assert.equal(sprite.ok, true);
+  assert.equal(importSettings.ok, true);
+  assert.deepEqual(requests.map((request) => request.command), ["texture.info", "texture.create", "texture.sprite", "texture.import-settings"]);
+  assert.deepEqual(requests[1].args, { path: "Assets/Textures/Icon.png", target: "Assets/Textures/Icon.png", source: "C:/tmp/icon.png", overwrite: true, textureType: "Sprite" });
+  assert.deepEqual(requests[2].args, { path: "Assets/Textures/Icon.png", target: "Assets/Textures/Icon.png", spriteMode: "single", pixelsPerUnit: 128, pivotX: "0.25", pivotY: "0.75" });
+  assert.equal(requests[3].args.readable, false);
+  assert.equal(requests[3].args.mipmap, false);
+  assert.equal(requests[3].args.sRGB, true);
+  assert.equal(requests[3].args.alphaIsTransparency, true);
+  assert.equal(requests[3].args.maxTextureSize, 512);
+});
+
+test("shader and texture bridge errors preserve structured diagnostics", async () => {
+  const runtime = await makeRuntime();
+  const shader = await execute(["shader", "info", "Assets/Shaders/Missing.shader"], {
+    ...runtime,
+    bridgeExecute: async () => ({ ok: false, error: { code: "E_SHADER_NOT_FOUND", message: "Shader asset not found." }, nextActions: ["Check the path."] })
+  });
+  const texture = await execute(["texture", "import-settings", "Assets/Textures/Missing.png"], {
+    ...runtime,
+    bridgeExecute: async () => ({ ok: false, error: { code: "E_IMPORT_FAILED", message: "Failed to apply texture import settings." }, nextActions: ["Check Unity Console."] })
+  });
+
+  assert.equal(shader.ok, false);
+  assert.equal(shader.error?.code, "E_SHADER_NOT_FOUND");
+  assert.deepEqual(shader.error?.next_actions, ["Check the path."]);
+  assert.equal(texture.ok, false);
+  assert.equal(texture.error?.code, "E_IMPORT_FAILED");
+  assert.deepEqual(texture.error?.next_actions, ["Check Unity Console."]);
+});
+
 test("ui commands forward creation, document and hierarchy arguments", async () => {
   const runtime = await makeRuntime();
   const requests: BridgeRequest[] = [];
