@@ -113,6 +113,17 @@ test("wait timeout returns structured error while job keeps running", async () =
   });
 });
 
+test("editor refresh compile uses existing batch resolve method", async () => {
+  const runtime = await makeRuntime();
+  const unity = await makeFakeUnity(`process.exit(0);`);
+
+  const compile = await execute(["editor", "refresh", "--compile", "--unity", unity, "--project", runtime.dataDir], runtime);
+  const refresh = await execute(["editor", "refresh", "--unity", unity, "--project", runtime.dataDir], runtime);
+
+  assert.equal((compile.data as { command: string[] }).command[(compile.data as { command: string[] }).command.indexOf("-executeMethod") + 1], "AlpsUnityCli.Batch.ResolvePackages");
+  assert.equal((refresh.data as { command: string[] }).command[(refresh.data as { command: string[] }).command.indexOf("-executeMethod") + 1], "AlpsUnityCli.Batch.Refresh");
+});
+
 test("cancel marks running job as cancelled", async () => {
   const runtime = await makeRuntime();
   const unity = await makeFakeUnity(`setTimeout(() => process.exit(0), 5000);`);
