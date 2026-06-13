@@ -9,6 +9,7 @@ import { execute, isCliEntryPoint } from "./cli.js";
 import { failure, printJson } from "./output.js";
 import { JobRunner } from "./job-runner.js";
 import { JobStore } from "./job-store.js";
+import { defaultDataDir } from "./platform.js";
 
 process.env.ALPS_UNITY_ALLOW_NON_WINDOWS = "1";
 
@@ -255,6 +256,7 @@ test("build run forwards output path to batch method", async () => {
 
 test("non-wait CLI exits quickly and worker persists terminal status", async () => {
   const dataDir = await mkdtemp(join(tmpdir(), "alps-unity-cli-process-"));
+  assert.equal(defaultDataDir({ ALPS_UNITY_DATA_DIR: dataDir, LOCALAPPDATA: join("C:\\", "Users", "tester", "AppData", "Local") }, "win32"), dataDir);
   const unity = await makeFakeUnity(`setTimeout(() => process.exit(0), 2000);`);
 
   const created = await runCli(["editor", "refresh", "--compile", "--unity", unity, "--project", dataDir], { ALPS_UNITY_DATA_DIR: dataDir });
