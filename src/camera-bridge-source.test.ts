@@ -55,6 +55,8 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /CapabilityJson\("shader", ShaderCommands\)/);
   assert.match(source, /CapabilityJson\("texture", TextureCommands\)/);
   assert.match(source, /CapabilityJson\("code", CodeCommands\)/);
+  assert.match(source, /CapabilityJson\("custom-tool", CustomToolCommands\)/);
+  assert.match(source, /AssemblyReloadEvents\.beforeAssemblyReload \+= StopListener/);
   assert.match(source, /private static readonly string\[\] CameraCommands = \{ "camera\.list", "camera\.info", "camera\.screenshot" \}/);
   assert.match(source, /private static readonly string\[\] PrefabCommands = \{ "prefab\.info", "prefab\.create", "prefab\.stage-open", "prefab\.stage-save", "prefab\.stage-close", "prefab\.hierarchy" \}/);
   assert.match(source, /private static readonly string\[\] UiCommands = \{ "ui\.canvas\.create", "ui\.text\.create", "ui\.button\.create", "ui\.image\.create", "ui\.document\.info", "ui\.document\.create", "ui\.hierarchy" \}/);
@@ -66,6 +68,7 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /private static readonly string\[\] ShaderCommands = \{ "shader\.info", "shader\.read", "shader\.create", "shader\.update" \}/);
   assert.match(source, /private static readonly string\[\] TextureCommands = \{ "texture\.info", "texture\.create", "texture\.sprite", "texture\.import-settings" \}/);
   assert.match(source, /private static readonly string\[\] CodeCommands = \{ "code\.exec" \}/);
+  assert.match(source, /private static readonly string\[\] CustomToolCommands = \{ "custom-tool\.list", "custom-tool\.run" \}/);
   assert.match(source, /case "camera\.list"/);
   assert.match(source, /case "camera\.info"/);
   assert.match(source, /case "camera\.screenshot"/);
@@ -114,7 +117,9 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /case "editor\.stop"/);
   assert.match(source, /case "editor\.menu"/);
   assert.match(source, /case "code\.exec"/);
-  assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.screenshot`, `screenshot\.capture`, `prefab\.info`, `prefab\.create`, `prefab\.stage-open`, `prefab\.stage-save`, `prefab\.stage-close`, `prefab\.hierarchy`, `ui\.canvas\.create`, `ui\.text\.create`, `ui\.button\.create`, `ui\.image\.create`, `ui\.document\.info`, `ui\.document\.create`, `ui\.hierarchy`, `material\.info`, `material\.create`, `material\.assign`, `material\.set`, `graphics\.quality`, `graphics\.settings`, `graphics\.screenshot`, `physics\.settings`, `physics\.raycast`, `physics\.simulation`, `animation\.clip`, `animation\.state`, `animation\.play`, `animation\.stop`, `vfx\.graph`, `vfx\.effect`, `shader\.info`, `shader\.read`, `shader\.create`, `shader\.update`, `texture\.info`, `texture\.create`, `texture\.sprite`, `texture\.import-settings`, `editor\.state`, `editor\.play`, `editor\.pause`, `editor\.stop`, `editor\.menu` and `code\.exec`/);
+  assert.match(source, /case "custom-tool\.list"/);
+  assert.match(source, /case "custom-tool\.run"/);
+  assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.screenshot`, `screenshot\.capture`, `prefab\.info`, `prefab\.create`, `prefab\.stage-open`, `prefab\.stage-save`, `prefab\.stage-close`, `prefab\.hierarchy`, `ui\.canvas\.create`, `ui\.text\.create`, `ui\.button\.create`, `ui\.image\.create`, `ui\.document\.info`, `ui\.document\.create`, `ui\.hierarchy`, `material\.info`, `material\.create`, `material\.assign`, `material\.set`, `graphics\.quality`, `graphics\.settings`, `graphics\.screenshot`, `physics\.settings`, `physics\.raycast`, `physics\.simulation`, `animation\.clip`, `animation\.state`, `animation\.play`, `animation\.stop`, `vfx\.graph`, `vfx\.effect`, `shader\.info`, `shader\.read`, `shader\.create`, `shader\.update`, `texture\.info`, `texture\.create`, `texture\.sprite`, `texture\.import-settings`, `editor\.state`, `editor\.play`, `editor\.pause`, `editor\.stop`, `editor\.menu`, `code\.exec`, `custom-tool\.list` and `custom-tool\.run`/);
   assert.doesNotMatch(bridgeSection, /live query\/edit\/screenshot/);
   assert.match(bridgeSection, /`scene hierarchy`, `go find`, `component set` and `script edit` are not routed by this package yet/);
 });
