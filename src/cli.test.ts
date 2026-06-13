@@ -2,13 +2,14 @@ import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
 import test from "node:test";
 import { execute, isCliEntryPoint } from "./cli.js";
 import { failure, printJson } from "./output.js";
 import { JobRunner } from "./job-runner.js";
 import { JobStore } from "./job-store.js";
+import { defaultDataDir } from "./platform.js";
 
 process.env.ALPS_UNITY_ALLOW_NON_WINDOWS = "1";
 
@@ -20,13 +21,20 @@ async function makeRuntime() {
 
 async function makeFakeUnity(body: string): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "fake-unity-"));
+  if (process.platform === "win32") {
+    const script = join(dir, "UnityFake.js");
+    const path = join(dir, "Unity.cmd");
+    await writeFile(script, body, "utf8");
+    await writeFile(path, `@echo off\r\n"${process.execPath}" "%~dp0UnityFake.js" %*\r\nif errorlevel 1 exit /b %errorlevel%\r\n`, "utf8");
+    return path;
+  }
   const path = join(dir, "Unity.exe");
   await writeFile(path, `#!/usr/bin/env node\n${body}\n`, { mode: 0o755 });
   return path;
 }
 
 async function runCli(args: string[], env: NodeJS.ProcessEnv = {}): Promise<{ code: number | null; stdout: string; stderr: string }> {
-  const child = spawn(process.execPath, [new URL("cli.js", import.meta.url).pathname, ...args], {
+  const child = spawn(process.execPath, [fileURLToPath(new URL("cli.js", import.meta.url)), ...args], {
     env: { ...process.env, ALPS_UNITY_ALLOW_NON_WINDOWS: "1", ...env },
     stdio: ["ignore", "pipe", "pipe"]
   });
@@ -47,7 +55,7 @@ async function runCli(args: string[], env: NodeJS.ProcessEnv = {}): Promise<{ co
 }
 
 test("CLI entrypoint detection handles normalized file paths", () => {
-  const cliPath = new URL("cli.js", import.meta.url).pathname;
+  const cliPath = fileURLToPath(new URL("cli.js", import.meta.url));
   assert.equal(isCliEntryPoint(pathToFileURL(cliPath).href, cliPath), true);
   assert.equal(isCliEntryPoint(pathToFileURL(cliPath).href, join(cliPath, "..")), false);
 });
@@ -243,11 +251,12 @@ test("build run forwards output path to batch method", async () => {
   const command = (created.data as { command: string[] }).command;
 
   assert.ok(command.includes("-alpsBuildOutput"));
-  assert.equal(command[command.indexOf("-alpsBuildOutput") + 1].endsWith("Builds/App.exe"), true);
+  assert.equal(command[command.indexOf("-alpsBuildOutput") + 1].replace(/\\/g, "/").endsWith("Builds/App.exe"), true);
 });
 
 test("non-wait CLI exits quickly and worker persists terminal status", async () => {
   const dataDir = await mkdtemp(join(tmpdir(), "alps-unity-cli-process-"));
+  assert.equal(defaultDataDir({ ALPS_UNITY_DATA_DIR: dataDir, LOCALAPPDATA: join("C:\\", "Users", "tester", "AppData", "Local") }, "win32"), dataDir);
   const unity = await makeFakeUnity(`setTimeout(() => process.exit(0), 2000);`);
 
   const created = await runCli(["editor", "refresh", "--compile", "--unity", unity, "--project", dataDir], { ALPS_UNITY_DATA_DIR: dataDir });

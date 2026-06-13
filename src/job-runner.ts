@@ -124,7 +124,7 @@ export class JobRunner {
   }
 
   private async spawnJob(job: JobRecord): Promise<JobRecord> {
-    const child = spawn(job.unityPath, job.command.slice(1), { windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(job.unityPath, job.command.slice(1), { windowsHide: true, stdio: ["ignore", "pipe", "pipe"], shell: isWindowsCommandScript(job.unityPath) });
     const logStream = createWriteStream(job.logPath, { flags: "a" });
     child.stdout.pipe(logStream);
     child.stderr.pipe(logStream);
@@ -136,13 +136,21 @@ export class JobRunner {
     });
 
     let timeoutHandle: NodeJS.Timeout | undefined;
+    let didTimeout = false;
     if (job.timeoutMs && job.timeoutMs > 0) {
       timeoutHandle = setTimeout(() => {
-        try {
-          child.kill();
-        } catch {
-          // Ignore kill failures; close handler resolves final status.
-        }
+        didTimeout = true;
+        void (async () => {
+          const processKilled = await killProcessTree(child.pid);
+          try {
+            await this.store.markTerminal(job.id, "timeout", {
+              exitCode: null,
+              error: { code: "E_EXECUTION_TIMEOUT", message: "Unity batchmode job exceeded timeout.", details: timeoutDetails(true, false, processKilled, false) }
+            });
+          } catch {
+            // The close handler also resolves timeout if the state was not persisted yet.
+          }
+        })();
       }, job.timeoutMs);
     }
 
@@ -179,7 +187,7 @@ export class JobRunner {
             return;
           }
 
-          const timedOut = Boolean(job.timeoutMs && latest.startedAt && Date.now() - Date.parse(latest.startedAt) >= job.timeoutMs);
+          const timedOut = didTimeout || Boolean(job.timeoutMs && latest.startedAt && Date.now() - Date.parse(latest.startedAt) >= job.timeoutMs);
           if (timedOut) {
             const timedOutJob = await this.store.markTerminal(job.id, "timeout", {
               exitCode: code,
@@ -308,6 +316,29 @@ function artifactList(value: unknown): Record<string, unknown>[] {
 
 function normalizeRelativePath(path: string): string {
   return path.split("\\").join("/");
+}
+
+async function killProcessTree(pid: number | undefined): Promise<boolean> {
+  if (!pid) {
+    return false;
+  }
+  if (process.platform !== "win32") {
+    try {
+      process.kill(pid);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+  return new Promise((resolve) => {
+    const killer = spawn("taskkill", ["/pid", String(pid), "/t", "/f"], { windowsHide: true, stdio: "ignore" });
+    killer.on("error", () => resolve(false));
+    killer.on("close", (code) => resolve(code === 0));
+  });
+}
+
+function isWindowsCommandScript(path: string): boolean {
+  return process.platform === "win32" && /\.(?:cmd|bat)$/i.test(path);
 }
 
 function timeoutDetails(cancelAttempted: boolean, cancelled: boolean, processKilled: boolean, domainReloadObserved: boolean): Record<string, boolean> {
