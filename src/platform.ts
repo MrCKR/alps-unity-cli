@@ -6,11 +6,14 @@ export function isWindows(platform = process.platform): boolean {
 }
 
 export function defaultDataDir(env = process.env, platform = process.platform): string {
+  if (env.ALPS_UNITY_DATA_DIR) {
+    return env.ALPS_UNITY_DATA_DIR;
+  }
   if (isWindows(platform)) {
     return env.LOCALAPPDATA ? join(env.LOCALAPPDATA, "AlpsUnityCli") : join(process.cwd(), ".alps-unity");
   }
 
-  return env.ALPS_UNITY_DATA_DIR ?? join(process.cwd(), ".alps-unity");
+  return join(process.cwd(), ".alps-unity");
 }
 
 export function ensureWindows(platform = process.platform): void {
