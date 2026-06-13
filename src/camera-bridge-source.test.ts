@@ -111,17 +111,22 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /case "texture\.create"/);
   assert.match(source, /case "texture\.sprite"/);
   assert.match(source, /case "texture\.import-settings"/);
+  assert.match(source, /case "scene\.hierarchy"/);
+  assert.match(source, /case "go\.find"/);
+  assert.match(source, /case "asset\.search"/);
+  assert.match(source, /case "diagnose\.preflight"/);
   assert.match(source, /case "editor\.state"/);
   assert.match(source, /case "editor\.play"/);
   assert.match(source, /case "editor\.pause"/);
   assert.match(source, /case "editor\.stop"/);
   assert.match(source, /case "editor\.menu"/);
+  assert.match(source, /case "editor\.console"/);
   assert.match(source, /case "code\.exec"/);
   assert.match(source, /case "custom-tool\.list"/);
   assert.match(source, /case "custom-tool\.run"/);
-  assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.screenshot`, `screenshot\.capture`, `prefab\.info`, `prefab\.create`, `prefab\.stage-open`, `prefab\.stage-save`, `prefab\.stage-close`, `prefab\.hierarchy`, `ui\.canvas\.create`, `ui\.text\.create`, `ui\.button\.create`, `ui\.image\.create`, `ui\.document\.info`, `ui\.document\.create`, `ui\.hierarchy`, `material\.info`, `material\.create`, `material\.assign`, `material\.set`, `graphics\.quality`, `graphics\.settings`, `graphics\.screenshot`, `physics\.settings`, `physics\.raycast`, `physics\.simulation`, `animation\.clip`, `animation\.state`, `animation\.play`, `animation\.stop`, `vfx\.graph`, `vfx\.effect`, `shader\.info`, `shader\.read`, `shader\.create`, `shader\.update`, `texture\.info`, `texture\.create`, `texture\.sprite`, `texture\.import-settings`, `editor\.state`, `editor\.play`, `editor\.pause`, `editor\.stop`, `editor\.menu`, `code\.exec`, `custom-tool\.list` and `custom-tool\.run`/);
+  assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.hierarchy`, `scene\.screenshot`, `go\.find`, `asset\.search`, `diagnose\.preflight`, `screenshot\.capture`, `prefab\.info`, `prefab\.create`, `prefab\.stage-open`, `prefab\.stage-save`, `prefab\.stage-close`, `prefab\.hierarchy`, `ui\.canvas\.create`, `ui\.text\.create`, `ui\.button\.create`, `ui\.image\.create`, `ui\.document\.info`, `ui\.document\.create`, `ui\.hierarchy`, `material\.info`, `material\.create`, `material\.assign`, `material\.set`, `graphics\.quality`, `graphics\.settings`, `graphics\.screenshot`, `physics\.settings`, `physics\.raycast`, `physics\.simulation`, `animation\.clip`, `animation\.state`, `animation\.play`, `animation\.stop`, `vfx\.graph`, `vfx\.effect`, `shader\.info`, `shader\.read`, `shader\.create`, `shader\.update`, `texture\.info`, `texture\.create`, `texture\.sprite`, `texture\.import-settings`, `editor\.state`, `editor\.play`, `editor\.pause`, `editor\.stop`, `editor\.menu`, `editor\.console`, `code\.exec`, `custom-tool\.list` and `custom-tool\.run`/);
   assert.doesNotMatch(bridgeSection, /live query\/edit\/screenshot/);
-  assert.match(bridgeSection, /`scene hierarchy`, `go find`, `component set` and `script edit` are not routed by this package yet/);
+  assert.match(bridgeSection, /`component set` and `script edit` are not routed by this package yet/);
 });
 
 test("Unity Bridge animation and vfx commands expose assets, target resolver diagnostics and package checks", async () => {

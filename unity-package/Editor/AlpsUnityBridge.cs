@@ -91,7 +91,10 @@ namespace AlpsUnityCli
         private const int Port = 47392;
         private static readonly object QueueLock = new object();
         private static readonly string[] CameraCommands = { "camera.list", "camera.info", "camera.screenshot" };
-        private static readonly string[] SceneCommands = { "scene.screenshot" };
+        private static readonly string[] SceneCommands = { "scene.hierarchy", "scene.screenshot" };
+        private static readonly string[] GameObjectCommands = { "go.find" };
+        private static readonly string[] AssetCommands = { "asset.search" };
+        private static readonly string[] DiagnoseCommands = { "diagnose.preflight" };
         private static readonly string[] ScreenshotCommands = { "screenshot.capture" };
         private static readonly string[] PrefabCommands = { "prefab.info", "prefab.create", "prefab.stage-open", "prefab.stage-save", "prefab.stage-close", "prefab.hierarchy" };
         private static readonly string[] UiCommands = { "ui.canvas.create", "ui.text.create", "ui.button.create", "ui.image.create", "ui.document.info", "ui.document.create", "ui.hierarchy" };
@@ -102,6 +105,7 @@ namespace AlpsUnityCli
         private static readonly string[] VfxCommands = { "vfx.graph", "vfx.effect" };
         private static readonly string[] ShaderCommands = { "shader.info", "shader.read", "shader.create", "shader.update" };
         private static readonly string[] TextureCommands = { "texture.info", "texture.create", "texture.sprite", "texture.import-settings" };
+        private static readonly string[] EditorCommands = { "editor.state", "editor.play", "editor.pause", "editor.stop", "editor.menu", "editor.console" };
         private static readonly string[] CodeCommands = { "code.exec" };
         private static readonly string[] CustomToolCommands = { "custom-tool.list", "custom-tool.run" };
         private static readonly Dictionary<string, AlpsCustomToolDefinition> CustomTools = new Dictionary<string, AlpsCustomToolDefinition>(StringComparer.Ordinal);
@@ -289,6 +293,8 @@ namespace AlpsUnityCli
                     return CameraInfo(request);
                 case "camera.screenshot":
                     return CameraScreenshot(request);
+                case "scene.hierarchy":
+                    return SceneHierarchy(request);
                 case "scene.screenshot":
                 case "screenshot.capture":
                     return SceneScreenshot(request);
@@ -304,6 +310,10 @@ namespace AlpsUnityCli
                     return PrefabStageClose(request);
                 case "prefab.hierarchy":
                     return PrefabHierarchy(request);
+                case "go.find":
+                    return GameObjectFind(request);
+                case "asset.search":
+                    return AssetSearch(request);
                 case "ui.canvas.create":
                     return UiCanvasCreate(request);
                 case "ui.text.create":
@@ -376,6 +386,10 @@ namespace AlpsUnityCli
                     return SuccessJson(EditorStopJson(request));
                 case "editor.menu":
                     return SuccessJson(EditorMenuJson(request));
+                case "editor.console":
+                    return EditorConsole(request);
+                case "diagnose.preflight":
+                    return SuccessJson(DiagnosePreflightJson(request));
                 case "code.exec":
                     return CodeExec(request);
                 case "custom-tool.list":
@@ -1474,6 +1488,44 @@ namespace AlpsUnityCli
             return "{\"texture\":" + TextureAssetJson(path, texture) + ",\"importSettings\":" + TextureImporterJson(RequireTextureImporter(path)) + ",\"plannedEffects\":[{\"type\":" + Quote(type) + ",\"path\":" + Quote(path) + ",\"refresh\":true}],\"logPath\":" + Quote(LogPath()) + "}";
         }
 
+        private static string AssetSearch(BridgeRequest request)
+        {
+            var query = request.StringArg("query");
+            var type = request.StringArg("type");
+            var path = NormalizeAssetSearchPath(request.StringArg("path"));
+            var filterParts = new List<string>();
+            if (!string.IsNullOrEmpty(query))
+            {
+                filterParts.Add(query);
+            }
+            if (!string.IsNullOrEmpty(type))
+            {
+                filterParts.Add("t:" + type);
+            }
+            var guids = AssetDatabase.FindAssets(string.Join(" ", filterParts.ToArray()), string.IsNullOrEmpty(path) ? null : new[] { path });
+            var cursor = Math.Max(0, request.IntArg("cursor", 0));
+            var pageSize = Math.Max(1, Math.Min(request.IntArg("pageSize", 100), 500));
+            var items = new List<string>();
+            for (var index = cursor; index < guids.Length && items.Count < pageSize; index++)
+            {
+                var assetPath = NormalizeAssetPath(AssetDatabase.GUIDToAssetPath(guids[index]));
+                var assetType = AssetDatabase.GetMainAssetTypeAtPath(assetPath);
+                items.Add("{\"path\":" + Quote(assetPath) + ",\"guid\":" + Quote(guids[index]) + ",\"type\":" + Quote(assetType == null ? null : assetType.Name) + ",\"name\":" + Quote(Path.GetFileNameWithoutExtension(assetPath)) + "}");
+            }
+            var nextCursor = cursor + items.Count < guids.Length ? (cursor + items.Count).ToString(CultureInfo.InvariantCulture) : null;
+            return SuccessJson("{\"query\":" + Quote(query) + ",\"type\":" + Quote(type) + ",\"path\":" + Quote(path) + ",\"items\":[" + string.Join(",", items.ToArray()) + "],\"pageInfo\":{\"pageSize\":" + pageSize.ToString(CultureInfo.InvariantCulture) + ",\"cursor\":" + cursor.ToString(CultureInfo.InvariantCulture) + ",\"nextCursor\":" + Quote(nextCursor) + ",\"total\":" + guids.Length.ToString(CultureInfo.InvariantCulture) + "},\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string NormalizeAssetSearchPath(string path)
+        {
+            if (string.IsNullOrEmpty(path))
+            {
+                return null;
+            }
+            var normalized = NormalizeAssetPath(path);
+            return normalized.StartsWith("Assets", StringComparison.OrdinalIgnoreCase) || normalized.StartsWith("Packages", StringComparison.OrdinalIgnoreCase) ? normalized : null;
+        }
+
         private static string TextureAssetJson(string path, Texture2D texture)
         {
             var fileInfo = new FileInfo(AssetFullPath(path));
@@ -1511,6 +1563,9 @@ namespace AlpsUnityCli
             return "["
                 + CapabilityJson("camera", CameraCommands) + ","
                 + CapabilityJson("scene", SceneCommands) + ","
+                + CapabilityJson("go", GameObjectCommands) + ","
+                + CapabilityJson("asset", AssetCommands) + ","
+                + CapabilityJson("diagnose", DiagnoseCommands) + ","
                 + CapabilityJson("screenshot", ScreenshotCommands) + ","
                 + CapabilityJson("prefab", PrefabCommands) + ","
                 + CapabilityJson("ui", UiCommands) + ","
@@ -1521,6 +1576,7 @@ namespace AlpsUnityCli
                 + CapabilityJson("vfx", VfxCommands) + ","
                 + CapabilityJson("shader", ShaderCommands) + ","
                 + CapabilityJson("texture", TextureCommands) + ","
+                + CapabilityJson("editor", EditorCommands) + ","
                 + CapabilityJson("code", CodeCommands) + ","
                 + CapabilityJson("custom-tool", CustomToolCommands)
                 + "]";
@@ -3021,7 +3077,7 @@ namespace AlpsUnityCli
         {
             var scene = SceneManager.GetActiveScene();
             var prefabStage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
-            return $"\"playMode\":{{\"isPlaying\":{Bool(EditorApplication.isPlaying)},\"isPaused\":{Bool(EditorApplication.isPaused)},\"isPlayingOrWillChangePlaymode\":{Bool(EditorApplication.isPlayingOrWillChangePlaymode)}}},\"busy\":{{\"isBusy\":{Bool(EditorApplication.isCompiling || EditorApplication.isUpdating || EditorApplication.isPlayingOrWillChangePlaymode || BuildPipeline.isBuildingPlayer)},\"compiling\":{Bool(EditorApplication.isCompiling)},\"updating\":{Bool(EditorApplication.isUpdating)},\"building\":{Bool(BuildPipeline.isBuildingPlayer)},\"domainReloading\":{Bool(EditorApplication.isCompiling)},\"playModeChanging\":{Bool(EditorApplication.isPlayingOrWillChangePlaymode)}}},\"activeScene\":{{\"name\":{Quote(scene.name)},\"path\":{Quote(scene.path)},\"isLoaded\":{Bool(scene.isLoaded)},\"isDirty\":{Bool(scene.isDirty)}}},\"prefabStage\":{PrefabStageJson(prefabStage)},\"plannedEffects\":[]";
+            return $"{{\"playMode\":{{\"isPlaying\":{Bool(EditorApplication.isPlaying)},\"isPaused\":{Bool(EditorApplication.isPaused)},\"isPlayingOrWillChangePlaymode\":{Bool(EditorApplication.isPlayingOrWillChangePlaymode)}}},\"busy\":{{\"isBusy\":{Bool(EditorApplication.isCompiling || EditorApplication.isUpdating || EditorApplication.isPlayingOrWillChangePlaymode || BuildPipeline.isBuildingPlayer)},\"compiling\":{Bool(EditorApplication.isCompiling)},\"updating\":{Bool(EditorApplication.isUpdating)},\"building\":{Bool(BuildPipeline.isBuildingPlayer)},\"domainReloading\":{Bool(EditorApplication.isCompiling)},\"playModeChanging\":{Bool(EditorApplication.isPlayingOrWillChangePlaymode)}}},\"activeScene\":{{\"name\":{Quote(scene.name)},\"path\":{Quote(scene.path)},\"isLoaded\":{Bool(scene.isLoaded)},\"isDirty\":{Bool(scene.isDirty)}}},\"prefabStage\":{PrefabStageJson(prefabStage)},\"plannedEffects\":[]}}";
         }
 
         private static string EditorPlayJson(BridgeRequest request)
@@ -3031,7 +3087,7 @@ namespace AlpsUnityCli
             EditorApplication.isPaused = false;
             EditorApplication.isPlaying = true;
             WaitForPlayModeState(true, TimeoutMs(request));
-            return $"\"plannedEffects\":[{{\"type\":\"editor.play\",\"from\":{Bool(before)},\"to\":true}}],\"result\":{{\"requested\":\"play\",\"changed\":{Bool(before != EditorApplication.isPlaying)},\"isPlaying\":{Bool(EditorApplication.isPlaying)},\"isPaused\":{Bool(EditorApplication.isPaused)}}},\"state\":{{{EditorStateJson()}}}";
+            return $"{{\"plannedEffects\":[{{\"type\":\"editor.play\",\"from\":{Bool(before)},\"to\":true}}],\"result\":{{\"requested\":\"play\",\"changed\":{Bool(before != EditorApplication.isPlaying)},\"isPlaying\":{Bool(EditorApplication.isPlaying)},\"isPaused\":{Bool(EditorApplication.isPaused)}}},\"state\":{EditorStateJson()}}}";
         }
 
         private static string EditorPauseJson(BridgeRequest request)
@@ -3039,7 +3095,7 @@ namespace AlpsUnityCli
             EnsureEditorNotBusy("editor.pause");
             var before = EditorApplication.isPaused;
             EditorApplication.isPaused = !EditorApplication.isPaused;
-            return $"\"plannedEffects\":[{{\"type\":\"editor.pause\",\"from\":{Bool(before)},\"to\":{Bool(EditorApplication.isPaused)}}}],\"result\":{{\"requested\":\"pause\",\"changed\":{Bool(before != EditorApplication.isPaused)},\"isPlaying\":{Bool(EditorApplication.isPlaying)},\"isPaused\":{Bool(EditorApplication.isPaused)}}},\"state\":{{{EditorStateJson()}}}";
+            return $"{{\"plannedEffects\":[{{\"type\":\"editor.pause\",\"from\":{Bool(before)},\"to\":{Bool(EditorApplication.isPaused)}}}],\"result\":{{\"requested\":\"pause\",\"changed\":{Bool(before != EditorApplication.isPaused)},\"isPlaying\":{Bool(EditorApplication.isPlaying)},\"isPaused\":{Bool(EditorApplication.isPaused)}}},\"state\":{EditorStateJson()}}}";
         }
 
         private static string EditorStopJson(BridgeRequest request)
@@ -3049,7 +3105,7 @@ namespace AlpsUnityCli
             EditorApplication.isPaused = false;
             EditorApplication.isPlaying = false;
             WaitForPlayModeState(false, TimeoutMs(request));
-            return $"\"plannedEffects\":[{{\"type\":\"editor.stop\",\"from\":{Bool(before)},\"to\":false}}],\"result\":{{\"requested\":\"stop\",\"changed\":{Bool(before != EditorApplication.isPlaying)},\"isPlaying\":{Bool(EditorApplication.isPlaying)},\"isPaused\":{Bool(EditorApplication.isPaused)}}},\"state\":{{{EditorStateJson()}}}";
+            return $"{{\"plannedEffects\":[{{\"type\":\"editor.stop\",\"from\":{Bool(before)},\"to\":false}}],\"result\":{{\"requested\":\"stop\",\"changed\":{Bool(before != EditorApplication.isPlaying)},\"isPlaying\":{Bool(EditorApplication.isPlaying)},\"isPaused\":{Bool(EditorApplication.isPaused)}}},\"state\":{EditorStateJson()}}}";
         }
 
         private static string EditorMenuJson(BridgeRequest request)
@@ -3075,7 +3131,84 @@ namespace AlpsUnityCli
                 throw new BridgeCommandException("E_MENU_TIMEOUT", "Unity menu item execution exceeded the requested timeout.", "Check Unity Editor and Alps Bridge logs for long-running menu work.");
             }
 
-            return $"\"plannedEffects\":[{{\"type\":\"editor.menu\",\"path\":{Quote(path)}}}],\"result\":{{\"path\":{Quote(path)},\"executed\":true,\"elapsedMs\":{elapsedMs}}},\"summary\":{{\"affected\":\"Unity Editor menu item executed\"}},\"state\":{{{EditorStateJson()}}}";
+            return $"{{\"plannedEffects\":[{{\"type\":\"editor.menu\",\"path\":{Quote(path)}}}],\"result\":{{\"path\":{Quote(path)},\"executed\":true,\"elapsedMs\":{elapsedMs}}},\"summary\":{{\"affected\":\"Unity Editor menu item executed\"}},\"state\":{EditorStateJson()}}}";
+        }
+
+        private static string EditorConsole(BridgeRequest request)
+        {
+            var type = request.StringArg("type");
+            var count = Math.Max(1, Math.Min(request.IntArg("count", 50), 500));
+            var logEntries = LogEntriesType();
+            if (logEntries == null)
+            {
+                return SuccessJson("{\"cleared\":false,\"type\":" + Quote(type) + ",\"items\":[],\"pageInfo\":{\"pageSize\":" + count.ToString(CultureInfo.InvariantCulture) + ",\"cursor\":0,\"nextCursor\":null,\"total\":0},\"diagnostics\":[{\"level\":\"warning\",\"code\":\"E_CONSOLE_INTERNAL_API_UNAVAILABLE\",\"message\":\"Unity LogEntries internal API was not available.\"}],\"logPath\":" + Quote(LogPath()) + "}");
+            }
+            if (request.BoolArg("clear", false))
+            {
+                var clearMethod = logEntries.GetMethod("Clear", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+                if (clearMethod != null)
+                {
+                    clearMethod.Invoke(null, null);
+                }
+                return SuccessJson("{\"cleared\":true,\"items\":[],\"pageInfo\":{\"pageSize\":" + count.ToString(CultureInfo.InvariantCulture) + ",\"cursor\":0,\"nextCursor\":null,\"total\":0},\"logPath\":" + Quote(LogPath()) + "}");
+            }
+            return SuccessJson("{\"cleared\":false,\"type\":" + Quote(type) + ",\"items\":" + ConsoleItemsJson(type, count) + ",\"pageInfo\":{\"pageSize\":" + count.ToString(CultureInfo.InvariantCulture) + ",\"cursor\":0,\"nextCursor\":null,\"total\":" + ConsoleEntryCount().ToString(CultureInfo.InvariantCulture) + "},\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string DiagnosePreflightJson(BridgeRequest request)
+        {
+            return "{\"command\":\"diagnose.preflight\",\"targetCommand\":" + Quote(request.StringArg("command")) + ",\"project\":{\"path\":" + Quote(ProjectRoot()) + ",\"unityVersion\":" + Quote(Application.unityVersion) + ",\"activeScene\":" + Quote(SceneManager.GetActiveScene().path) + "},\"editor\":" + EditorStateJson() + ",\"bridge\":{\"port\":" + Port.ToString(CultureInfo.InvariantCulture) + ",\"logPath\":" + Quote(LogPath()) + ",\"capabilities\":" + CapabilitiesJson() + "},\"checks\":[" + DiagnoseCheckJson("unityNotBusy", !(EditorApplication.isCompiling || EditorApplication.isUpdating || BuildPipeline.isBuildingPlayer)) + "," + DiagnoseCheckJson("sceneLoaded", SceneManager.GetActiveScene().isLoaded) + "],\"logPath\":" + Quote(LogPath()) + "}";
+        }
+
+        private static string ConsoleItemsJson(string type, int count)
+        {
+            var entryType = FindType("UnityEditor.LogEntry");
+            var logEntries = LogEntriesType();
+            var getEntry = logEntries == null ? null : logEntries.GetMethod("GetEntryInternal", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            if (entryType == null || getEntry == null)
+            {
+                return "[]";
+            }
+            var entry = Activator.CreateInstance(entryType);
+            var items = new List<string>();
+            var total = ConsoleEntryCount();
+            for (var index = total - 1; index >= 0 && items.Count < count; index--)
+            {
+                getEntry.Invoke(null, new[] { (object)index, entry });
+                var mode = Convert.ToInt32(entryType.GetField("mode", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(entry), CultureInfo.InvariantCulture);
+                var level = ConsoleLevel(mode);
+                if (!string.IsNullOrEmpty(type) && !string.Equals(type, level, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+                items.Add("{\"index\":" + index.ToString(CultureInfo.InvariantCulture) + ",\"type\":" + Quote(level) + ",\"message\":" + Quote(Convert.ToString(entryType.GetField("message", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(entry), CultureInfo.InvariantCulture)) + ",\"file\":" + Quote(Convert.ToString(entryType.GetField("file", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(entry), CultureInfo.InvariantCulture)) + ",\"line\":" + Convert.ToInt32(entryType.GetField("line", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(entry), CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture) + "}");
+            }
+            return "[" + string.Join(",", items.ToArray()) + "]";
+        }
+
+        private static int ConsoleEntryCount()
+        {
+            var logEntries = LogEntriesType();
+            var method = logEntries == null ? null : logEntries.GetMethod("GetCount", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            return method == null ? 0 : Convert.ToInt32(method.Invoke(null, null), CultureInfo.InvariantCulture);
+        }
+
+        private static Type LogEntriesType()
+        {
+            return FindType("UnityEditor.LogEntries");
+        }
+
+        private static string ConsoleLevel(int mode)
+        {
+            if ((mode & 1) != 0) return "error";
+            if ((mode & 2) != 0) return "assert";
+            if ((mode & 4) != 0) return "warning";
+            return "log";
+        }
+
+        private static string DiagnoseCheckJson(string name, bool ok)
+        {
+            return "{\"name\":" + Quote(name) + ",\"ok\":" + Bool(ok) + "}";
         }
 
         private static string PrefabStageJson(object prefabStage)
@@ -3577,6 +3710,50 @@ namespace AlpsUnityCli
                 + "\"plannedEffects\":[{\"type\":\"material.assign\",\"target\":" + Quote(HierarchyPath(gameObject)) + ",\"material\":" + Quote(materialPath) + "}],"
                 + "\"logPath\":" + Quote(LogPath())
                 + "}";
+        }
+
+        private static string SceneHierarchy(BridgeRequest request)
+        {
+            var roots = SceneManager.GetActiveScene().GetRootGameObjects();
+            var total = 0;
+            foreach (var root in roots)
+            {
+                total += CountHierarchy(root.transform);
+            }
+            var cursor = Math.Max(0, request.IntArg("cursor", 0));
+            var pageSize = Math.Max(1, Math.Min(request.IntArg("pageSize", 100), 500));
+            var items = new List<string>();
+            var counter = new Counter();
+            foreach (var root in roots)
+            {
+                if (items.Count >= pageSize)
+                {
+                    break;
+                }
+                CollectHierarchy(root.transform, items, cursor, pageSize, counter);
+            }
+            var nextCursor = cursor + items.Count < total ? (cursor + items.Count).ToString(CultureInfo.InvariantCulture) : null;
+            return SuccessJson("{\"scene\":{\"name\":" + Quote(SceneManager.GetActiveScene().name) + ",\"path\":" + Quote(SceneManager.GetActiveScene().path) + "},\"items\":[" + string.Join(",", items.ToArray()) + "],\"pageInfo\":{\"pageSize\":" + pageSize.ToString(CultureInfo.InvariantCulture) + ",\"cursor\":" + cursor.ToString(CultureInfo.InvariantCulture) + ",\"nextCursor\":" + Quote(nextCursor) + ",\"total\":" + total.ToString(CultureInfo.InvariantCulture) + "},\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string GameObjectFind(BridgeRequest request)
+        {
+            var target = request.StringArg("target");
+            if (string.IsNullOrEmpty(target))
+            {
+                target = request.StringArg("name");
+            }
+            if (string.IsNullOrEmpty(target))
+            {
+                return ErrorJson("E_TARGET_NOT_FOUND", "GameObject find requires --name or a target.", "Pass alps-unity go find --name <name>, a hierarchy path, or an instance id.");
+            }
+            var resolution = ResolveGameObjectTarget(target);
+            var items = new List<string>();
+            foreach (var gameObject in resolution.Matches)
+            {
+                items.Add(HierarchyItemJson(gameObject.transform));
+            }
+            return SuccessJson("{\"query\":" + Quote(target) + ",\"matchCount\":" + resolution.Matches.Count.ToString(CultureInfo.InvariantCulture) + ",\"items\":[" + string.Join(",", items.ToArray()) + "],\"logPath\":" + Quote(LogPath()) + "}");
         }
 
         private static string HierarchyItemJson(Transform transform)

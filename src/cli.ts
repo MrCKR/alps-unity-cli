@@ -40,6 +40,10 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
       return handleJob(command, parsed.flags, runtime, requestId);
     }
 
+    if (group === "init") {
+      return handleInit(parsed.flags, runtime, requestId);
+    }
+
     if (group === "package") {
       return await handlePackage(command, parsed.positional.slice(2), parsed.flags, runtime, requestId);
     }
@@ -181,6 +185,18 @@ function refreshArgs(flags: Record<string, string | boolean>): string[] {
   return ["-executeMethod", getBoolean(flags, "compile") ? "AlpsUnityCli.Batch.ResolvePackages" : "AlpsUnityCli.Batch.Refresh"];
 }
 
+async function handleInit(flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult> {
+  const projectPath = resolve(getString(flags, "project") ?? process.cwd());
+  const { ensurePackageBridge } = await import("./package-manager.js");
+  const bridge = await ensurePackageBridge(projectPath);
+  return maybeResolvePackage("init", flags, runtime, requestId, projectPath, {
+    action: "init",
+    status: "bridge_installed",
+    bridge,
+    nextActions: ["Open the Unity project or run alps-unity package resolve --project <path> --unity <Unity.exe> --wait to refresh packages."]
+  });
+}
+
 async function handlePackage(command: string | undefined, args: string[], flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult> {
   const projectPath = resolve(getString(flags, "project") ?? process.cwd());
   const {
@@ -271,7 +287,7 @@ async function handlePackage(command: string | undefined, args: string[], flags:
 async function maybeResolvePackage(command: string, flags: Record<string, string | boolean>, runtime: Runtime, requestId: string, projectPath: string, result: Record<string, unknown>): Promise<CliResult> {
   const unityPath = getString(flags, "unity") ?? discoverUnity();
   if (!unityPath && !getBoolean(flags, "job")) {
-    return success(requestId, { ...result, projectPath, status: "manifest_updated", resolve: "skipped", nextActions: ["Pass --unity <path-to-Unity.exe> or set UNITY_EXE to run Unity PackageManager resolve as a job."] });
+    return success(requestId, { ...result, projectPath, status: result.status ?? "manifest_updated", resolve: "skipped", nextActions: ["Pass --unity <path-to-Unity.exe> or set UNITY_EXE to run Unity PackageManager resolve as a job."] });
   }
   if (!unityPath) {
     return failure(requestId, "UNITY_NOT_FOUND", "Unity.exe was not found.", ["Pass --unity <path-to-Unity.exe> or set UNITY_EXE."]);
@@ -349,6 +365,7 @@ function help(): Record<string, unknown> {
       "job status --id <jobId>",
       "job logs --id <jobId> [--tail 100]",
       "job cancel --id <jobId>",
+      "init [--project <path>] [--unity <Unity.exe>] [--wait]",
       "package list [--project <path>]",
       "package info <name> [--project <path>]",
       "package search <query> [--registry <url>]",
