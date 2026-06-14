@@ -52,7 +52,7 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
     }
 
     if (group === "init") {
-      return handleInit(parsed.flags, runtime, requestId);
+      return await handleInit(parsed.flags, runtime, requestId);
     }
 
     if (group === "package") {
@@ -252,12 +252,24 @@ function refreshArgs(flags: Record<string, string | boolean>): string[] {
 
 async function handleInit(flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult> {
   const projectPath = resolve(getString(flags, "project") ?? process.cwd());
-  const { ensurePackageBridge } = await import("./package-manager.js");
+  const { checkPackageBridge, ensurePackageBridge } = await import("./package-manager.js");
+
+  if (getBoolean(flags, "check")) {
+    const bridge = await checkPackageBridge(projectPath);
+    return success(requestId, {
+      action: "init_check",
+      status: "installed",
+      projectPath,
+      bridge,
+      nextActions: ["Unity package com.unity_cli is installed via a local manifest file: dependency."]
+    });
+  }
+
   const bridge = await ensurePackageBridge(projectPath);
   const liveRefresh = await refreshOpenEditor(requestId, flags, runtime);
   return maybeResolvePackage("init", flags, runtime, requestId, projectPath, {
     action: "init",
-    status: "bridge_installed",
+    status: "package_installed",
     bridge,
     liveRefresh,
     nextActions: liveRefresh.status === "triggered"
@@ -466,6 +478,7 @@ function help(): Record<string, unknown> {
       "job logs --id <jobId> [--tail 100]",
       "job cancel --id <jobId>",
       "init [--project <path>] [--unity <Unity.exe>] [--wait]",
+      "init --check [--project <path>]",
       "package list [--project <path>]",
       "package info <name> [--project <path>]",
       "package search <query> [--registry <url>]",

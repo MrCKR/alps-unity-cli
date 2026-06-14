@@ -156,7 +156,7 @@ test("code exec --channel batchmode creates Unity job and deploys bridge package
   assert.equal(data.result.command, "code.exec");
   assert.equal(data.result.execution.channel, "batchmode");
   assert.equal(data.result.execution.timeoutMs, 1234);
-  assert.equal(data.result.bridge.dependencyName, "com.alps.unity-cli.bridge");
+  assert.equal(data.result.bridge.dependencyName, "com.unity_cli");
   assert.ok(data.command.includes("AlpsUnityCli.Batch.ExecuteCode"));
   assert.ok(data.command.includes("-alpsCodeSource"));
   assert.ok(data.command.includes("-alpsTimeoutMs"));
