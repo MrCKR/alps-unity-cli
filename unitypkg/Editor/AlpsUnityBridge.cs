@@ -3638,7 +3638,12 @@ namespace AlpsUnityCli
             var before = EditorApplication.isPlaying;
             EditorApplication.isPaused = false;
             EditorApplication.isPlaying = false;
-            WaitForPlayModeState(false, TimeoutMs(request));
+            // Do not WaitForPlayModeState(false) here: ProcessQueuedWork runs on the
+            // main thread via EditorApplication.update, and the stop transition can only
+            // complete after the main thread yields back to Unity's event loop.  A
+            // synchronous wait for !isPlaying && !isPlayingOrWillChangePlaymode would
+            // deadlock (always timeout).  Return immediately — callers can poll
+            // editor.state to confirm the transition completed.
             return $"{{\"plannedEffects\":[{{\"type\":\"editor.stop\",\"from\":{Bool(before)},\"to\":false}}],\"result\":{{\"requested\":\"stop\",\"changed\":{Bool(before != EditorApplication.isPlaying)},\"isPlaying\":{Bool(EditorApplication.isPlaying)},\"isPaused\":{Bool(EditorApplication.isPaused)}}},\"state\":{EditorStateJson()}}}";
         }
 
