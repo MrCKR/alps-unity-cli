@@ -27,7 +27,7 @@ function instance(overrides: Record<string, unknown> = {}) {
     projectPath: "/tmp/project-one",
     projectHash: "hash-one",
     unityVersion: "2022.3.45f1",
-    packageVersion: "com.alps.unity-cli.bridge",
+    packageVersion: "com.unity_cli",
     pid: 1234,
     bridgeEndpoint: "http://127.0.0.1:47392",
     capabilitiesHash: "caps",

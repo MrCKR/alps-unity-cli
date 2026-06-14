@@ -283,7 +283,7 @@ namespace AlpsUnityCli
         {
             if (context.Request.HttpMethod == "GET" && context.Request.Url.AbsolutePath == "/health")
             {
-                WriteJson(context, "{\"ok\":true,\"data\":{\"bridge\":\"alps-unity-cli\",\"port\":" + port.ToString(CultureInfo.InvariantCulture) + ",\"route\":\"POST /bridge/execute\",\"buildStamp\":" + Quote(BridgeBuildStamp()) + ",\"capabilities\":" + CapabilitiesJson() + "}}", 200);
+                WriteJson(context, "{\"ok\":true,\"data\":{\"bridge\":\"unity_cli\",\"port\":" + port.ToString(CultureInfo.InvariantCulture) + ",\"route\":\"POST /bridge/execute\",\"buildStamp\":" + Quote(BridgeBuildStamp()) + ",\"capabilities\":" + CapabilitiesJson() + "}}", 200);
                 return;
             }
 
@@ -618,7 +618,7 @@ namespace AlpsUnityCli
             var camera = ResolveCamera(request.StringArg("target"));
             if (camera == null)
             {
-                return ErrorJson("E_CAMERA_NOT_FOUND", "Camera not found: " + request.StringArg("target"), "Run alps-unity camera list to inspect available cameras.");
+                return ErrorJson("E_CAMERA_NOT_FOUND", "Camera not found: " + request.StringArg("target"), "Run unity_cli camera list to inspect available cameras.");
             }
             return SuccessJson("{\"camera\":" + CameraJson(camera) + "}");
         }
@@ -628,13 +628,13 @@ namespace AlpsUnityCli
             var target = request.StringArg("target");
             if (string.IsNullOrEmpty(target))
             {
-                return ErrorJson("E_TARGET_NOT_FOUND", "Camera screenshot requires a target Camera.", "Pass a Camera name, hierarchy path or instance id. Run alps-unity camera list to inspect available cameras.");
+                return ErrorJson("E_TARGET_NOT_FOUND", "Camera screenshot requires a target Camera.", "Pass a Camera name, hierarchy path or instance id. Run unity_cli camera list to inspect available cameras.");
             }
 
             var camera = ResolveCamera(target);
             if (camera == null)
             {
-                return ErrorJson("E_TARGET_NOT_FOUND", "Camera not found: " + target, "Run alps-unity camera list to inspect available cameras.");
+                return ErrorJson("E_TARGET_NOT_FOUND", "Camera not found: " + target, "Run unity_cli camera list to inspect available cameras.");
             }
 
             var capture = CaptureCamera(camera, request);
@@ -746,7 +746,7 @@ namespace AlpsUnityCli
             var gameObject = ResolveGameObject(source);
             if (gameObject == null)
             {
-                return ErrorJson("E_TARGET_NOT_FOUND", "Source GameObject not found: " + source, "Run alps-unity scene hierarchy or pass a hierarchy path / instance id.");
+                return ErrorJson("E_TARGET_NOT_FOUND", "Source GameObject not found: " + source, "Run unity_cli scene hierarchy or pass a hierarchy path / instance id.");
             }
             if (AssetDatabase.LoadAssetAtPath<GameObject>(path) != null)
             {
@@ -769,7 +769,7 @@ namespace AlpsUnityCli
             var stage = CurrentPrefabStage();
             if (stage != null && StageIsDirty(stage) && !string.Equals(StageAssetPath(stage), path, StringComparison.OrdinalIgnoreCase))
             {
-                return ErrorJson("E_PREFAB_DIRTY_CONFLICT", "Current Prefab Stage has unsaved changes.", "Run alps-unity prefab stage-save, or close/save the current Prefab Stage in Unity before opening another Prefab.");
+                return ErrorJson("E_PREFAB_DIRTY_CONFLICT", "Current Prefab Stage has unsaved changes.", "Run unity_cli prefab stage-save, or close/save the current Prefab Stage in Unity before opening another Prefab.");
             }
 
             if (!OpenPrefabStage(path))
@@ -800,7 +800,7 @@ namespace AlpsUnityCli
             var save = request.BoolArg("save", false);
             if (StageIsDirty(stage) && !save)
             {
-                return ErrorJson("E_PREFAB_DIRTY_CONFLICT", "Prefab Stage has unsaved changes: " + path, "Run alps-unity prefab stage-close --save or alps-unity prefab stage-save before closing.");
+                return ErrorJson("E_PREFAB_DIRTY_CONFLICT", "Prefab Stage has unsaved changes: " + path, "Run unity_cli prefab stage-close --save or unity_cli prefab stage-save before closing.");
             }
             if (save && !SavePrefabStage(stage))
             {
@@ -930,11 +930,11 @@ namespace AlpsUnityCli
             var material = LoadMaterialAsset(path);
             if (string.IsNullOrEmpty(propertyName))
             {
-                return ErrorJson("E_MATERIAL_PROPERTY_REQUIRED", "Material set requires --property <name>.", "Run alps-unity material info <path> to inspect shader properties.");
+                return ErrorJson("E_MATERIAL_PROPERTY_REQUIRED", "Material set requires --property <name>.", "Run unity_cli material info <path> to inspect shader properties.");
             }
             if (!material.HasProperty(propertyName))
             {
-                return ErrorJson("E_MATERIAL_PROPERTY_NOT_FOUND", "Material property not found: " + propertyName, "Run alps-unity material info <path> to inspect shader properties.");
+                return ErrorJson("E_MATERIAL_PROPERTY_NOT_FOUND", "Material property not found: " + propertyName, "Run unity_cli material info <path> to inspect shader properties.");
             }
 
             var propertyType = MaterialPropertyType(material, propertyName);
@@ -945,7 +945,7 @@ namespace AlpsUnityCli
             }
             if (!TypesCompatible(propertyType, normalizedType))
             {
-                return ErrorJson("E_MATERIAL_PROPERTY_TYPE_MISMATCH", "Material property " + propertyName + " is " + propertyType + ", not " + requestedType + ".", "Use the property type reported by alps-unity material info <path>.");
+                return ErrorJson("E_MATERIAL_PROPERTY_TYPE_MISMATCH", "Material property " + propertyName + " is " + propertyType + ", not " + requestedType + ".", "Use the property type reported by unity_cli material info <path>.");
             }
 
             var appliedValue = ApplyMaterialValue(material, propertyName, normalizedType, value);
@@ -1363,7 +1363,7 @@ namespace AlpsUnityCli
         {
             if (!IsProBuilderInstalled())
             {
-                return ErrorJson("E_PROBUILDER_PACKAGE_NOT_FOUND", "Unity ProBuilder package is not installed.", "Install com.unity.probuilder with alps-unity package install com.unity.probuilder, or copy unity-package/OfflinePackages/com.unity.probuilder into the Unity project's Packages directory for offline validation.");
+                return ErrorJson("E_PROBUILDER_PACKAGE_NOT_FOUND", "Unity ProBuilder package is not installed.", "Install com.unity.probuilder with unity_cli package install com.unity.probuilder, or copy unity-package/OfflinePackages/com.unity.probuilder into the Unity project's Packages directory for offline validation.");
             }
 
             var shape = NormalizeProBuilderShape(request.StringArg("shape"));
@@ -1394,7 +1394,7 @@ namespace AlpsUnityCli
         {
             if (!IsProBuilderInstalled())
             {
-                return ErrorJson("E_PROBUILDER_PACKAGE_NOT_FOUND", "Unity ProBuilder package is not installed.", "Install com.unity.probuilder with alps-unity package install com.unity.probuilder, or copy unity-package/OfflinePackages/com.unity.probuilder into the Unity project's Packages directory for offline validation.");
+                return ErrorJson("E_PROBUILDER_PACKAGE_NOT_FOUND", "Unity ProBuilder package is not installed.", "Install com.unity.probuilder with unity_cli package install com.unity.probuilder, or copy unity-package/OfflinePackages/com.unity.probuilder into the Unity project's Packages directory for offline validation.");
             }
             var operation = request.StringArg("operation");
             if (string.IsNullOrEmpty(operation))
@@ -1412,7 +1412,7 @@ namespace AlpsUnityCli
         {
             if (!IsProBuilderInstalled())
             {
-                return ErrorJson("E_PROBUILDER_PACKAGE_NOT_FOUND", "Unity ProBuilder package is not installed.", "Install com.unity.probuilder with alps-unity package install com.unity.probuilder, or copy unity-package/OfflinePackages/com.unity.probuilder into the Unity project's Packages directory for offline validation.");
+                return ErrorJson("E_PROBUILDER_PACKAGE_NOT_FOUND", "Unity ProBuilder package is not installed.", "Install com.unity.probuilder with unity_cli package install com.unity.probuilder, or copy unity-package/OfflinePackages/com.unity.probuilder into the Unity project's Packages directory for offline validation.");
             }
             var target = ResolveRequiredProBuilderTarget(request.StringArg("target"));
             var operation = request.StringArg("operation");
@@ -1533,7 +1533,7 @@ namespace AlpsUnityCli
 
             if (string.IsNullOrEmpty(path))
             {
-                return ErrorJson("E_UI_DOCUMENT_PATH_REQUIRED", "UIDocument info requires a target or Assets/*.uxml path.", "Pass alps-unity ui document/info <UIDocument target> or --path Assets/UI/Layout.uxml.");
+                return ErrorJson("E_UI_DOCUMENT_PATH_REQUIRED", "UIDocument info requires a target or Assets/*.uxml path.", "Pass unity_cli ui document/info <UIDocument target> or --path Assets/UI/Layout.uxml.");
             }
 
             var visualTree = LoadVisualTreeAsset(path);
@@ -1630,7 +1630,7 @@ namespace AlpsUnityCli
             var path = NormalizeAssetPath(rawPath);
             if (string.IsNullOrEmpty(path))
             {
-                throw new BridgeCommandException("E_SHADER_PATH_REQUIRED", "Pass an Assets/*.shader or Assets/*.shadergraph path.", "Use alps-unity shader info <path> or pass --path Assets/Shaders/Example.shader.");
+                throw new BridgeCommandException("E_SHADER_PATH_REQUIRED", "Pass an Assets/*.shader or Assets/*.shadergraph path.", "Use unity_cli shader info <path> or pass --path Assets/Shaders/Example.shader.");
             }
             if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || (!path.EndsWith(".shader", StringComparison.OrdinalIgnoreCase) && !path.EndsWith(".shadergraph", StringComparison.OrdinalIgnoreCase)))
             {
@@ -1644,7 +1644,7 @@ namespace AlpsUnityCli
             var path = RequireShaderPath(rawPath);
             if (!AssetExists(path))
             {
-                throw new BridgeCommandException("E_SHADER_NOT_FOUND", "Shader asset not found: " + path, "Check the path or run alps-unity asset search --type shader.");
+                throw new BridgeCommandException("E_SHADER_NOT_FOUND", "Shader asset not found: " + path, "Check the path or run unity_cli asset search --type shader.");
             }
             return path;
         }
@@ -1654,7 +1654,7 @@ namespace AlpsUnityCli
             var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
             if (asset == null)
             {
-                throw new BridgeCommandException("E_SHADER_NOT_FOUND", "Shader asset not found: " + path, "Check the path or run alps-unity asset search --type shader.");
+                throw new BridgeCommandException("E_SHADER_NOT_FOUND", "Shader asset not found: " + path, "Check the path or run unity_cli asset search --type shader.");
             }
             return asset;
         }
@@ -1674,7 +1674,7 @@ namespace AlpsUnityCli
             var path = NormalizeAssetPath(rawPath);
             if (string.IsNullOrEmpty(path))
             {
-                throw new BridgeCommandException("E_TEXTURE_PATH_REQUIRED", "Pass a texture path under Assets/.", "Use alps-unity texture info <path> or pass --path Assets/Textures/Example.png.");
+                throw new BridgeCommandException("E_TEXTURE_PATH_REQUIRED", "Pass a texture path under Assets/.", "Use unity_cli texture info <path> or pass --path Assets/Textures/Example.png.");
             }
             if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || !IsTextureExtension(path))
             {
@@ -1688,7 +1688,7 @@ namespace AlpsUnityCli
             var path = RequireTexturePath(rawPath);
             if (!AssetExists(path))
             {
-                throw new BridgeCommandException("E_TEXTURE_NOT_FOUND", "Texture asset not found: " + path, "Check the path or run alps-unity asset search --type texture.");
+                throw new BridgeCommandException("E_TEXTURE_NOT_FOUND", "Texture asset not found: " + path, "Check the path or run unity_cli asset search --type texture.");
             }
             return path;
         }
@@ -2277,7 +2277,7 @@ namespace AlpsUnityCli
             var name = request.StringArg("name");
             if (string.IsNullOrEmpty(name) || !CustomTools.ContainsKey(name))
             {
-                return ErrorJson("E_TOOL_NOT_FOUND", "Tool not found: " + name, "Run alps-unity custom-tool list to inspect registered tools.");
+                return ErrorJson("E_TOOL_NOT_FOUND", "Tool not found: " + name, "Run unity_cli custom-tool list to inspect registered tools.");
             }
 
             var definition = CustomTools[name];
@@ -2296,7 +2296,7 @@ namespace AlpsUnityCli
             var schemaError = ValidateCustomToolInput(definition, inputJson);
             if (!string.IsNullOrEmpty(schemaError))
             {
-                return ErrorJson("E_TOOL_SCHEMA_INVALID", schemaError, "Run alps-unity custom-tool list to inspect the tool inputSchema.");
+                return ErrorJson("E_TOOL_SCHEMA_INVALID", schemaError, "Run unity_cli custom-tool list to inspect the tool inputSchema.");
             }
 
             var startedAt = DateTime.UtcNow;
@@ -2402,7 +2402,7 @@ namespace AlpsUnityCli
                 + "\"projectPath\":" + Quote(request.StringArg("projectPath") ?? ProjectRoot()) + ","
                 + "\"instanceId\":" + Quote(request.StringArg("instanceId")) + ","
                 + "\"unityVersion\":" + Quote(Application.unityVersion) + ","
-                + "\"bridgeVersion\":\"com.alps.unity-cli.bridge\","
+                + "\"bridgeVersion\":\"com.unity_cli\","
                 + "\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ","
                 + "\"endedAt\":" + Quote(endedAt.ToString("O", CultureInfo.InvariantCulture)) + ","
                 + "\"durationMs\":" + ((long)(endedAt - startedAt).TotalMilliseconds).ToString(CultureInfo.InvariantCulture) + ","
@@ -2763,7 +2763,7 @@ namespace AlpsUnityCli
             var path = NormalizeAssetPath(rawPath);
             if (string.IsNullOrEmpty(path))
             {
-                throw new BridgeCommandException("E_PREFAB_PATH_REQUIRED", "Pass an Assets/*.prefab path.", "Use alps-unity prefab info <path> or pass --path Assets/Example.prefab.");
+                throw new BridgeCommandException("E_PREFAB_PATH_REQUIRED", "Pass an Assets/*.prefab path.", "Use unity_cli prefab info <path> or pass --path Assets/Example.prefab.");
             }
             if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || !path.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
             {
@@ -2782,7 +2782,7 @@ namespace AlpsUnityCli
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
             if (prefab == null)
             {
-                throw new BridgeCommandException("E_PREFAB_NOT_FOUND", "Prefab asset not found: " + path, "Check the path or run alps-unity asset search --type prefab.");
+                throw new BridgeCommandException("E_PREFAB_NOT_FOUND", "Prefab asset not found: " + path, "Check the path or run unity_cli asset search --type prefab.");
             }
             if (PrefabUtility.GetPrefabAssetType(prefab) == PrefabAssetType.NotAPrefab)
             {
@@ -3039,7 +3039,7 @@ namespace AlpsUnityCli
             var layer = request.IntArg("layer", 0);
             if (layer < 0 || layer >= animator.layerCount)
             {
-                return ErrorJson("E_ANIMATION_LAYER_INVALID", "Animator layer is out of range: " + layer.ToString(CultureInfo.InvariantCulture), "Run alps-unity animation state --target <go> to inspect layer count.");
+                return ErrorJson("E_ANIMATION_LAYER_INVALID", "Animator layer is out of range: " + layer.ToString(CultureInfo.InvariantCulture), "Run unity_cli animation state --target <go> to inspect layer count.");
             }
             animator.Play(state, layer, request.FloatArg("normalizedTime", 0f));
             animator.Update(0f);
@@ -3091,7 +3091,7 @@ namespace AlpsUnityCli
             var asset = AssetDatabase.LoadAssetAtPath(path, assetType);
             if (asset == null)
             {
-                return ErrorJson("E_VFX_GRAPH_NOT_FOUND", "VFX Graph asset not found: " + path, "Check the path or create one with alps-unity vfx graph <path> --create.");
+                return ErrorJson("E_VFX_GRAPH_NOT_FOUND", "VFX Graph asset not found: " + path, "Check the path or create one with unity_cli vfx graph <path> --create.");
             }
             return SuccessJson("{\"graph\":" + VfxGraphJson(path, asset) + ",\"logPath\":" + Quote(LogPath()) + "}");
         }
@@ -3118,7 +3118,7 @@ namespace AlpsUnityCli
                 var graph = AssetDatabase.LoadAssetAtPath(NormalizeAssetPath(graphPath), assetType);
                 if (graph == null)
                 {
-                    return ErrorJson("E_VFX_GRAPH_NOT_FOUND", "VFX Graph asset not found: " + graphPath, "Pass an existing Assets/*.vfx path or create one with alps-unity vfx graph <path> --create.");
+                    return ErrorJson("E_VFX_GRAPH_NOT_FOUND", "VFX Graph asset not found: " + graphPath, "Pass an existing Assets/*.vfx path or create one with unity_cli vfx graph <path> --create.");
                 }
                 var property = visualEffectType.GetProperty("visualEffectAsset", BindingFlags.Instance | BindingFlags.Public);
                 if (property == null || !property.CanWrite)
@@ -3139,7 +3139,7 @@ namespace AlpsUnityCli
             var path = NormalizeAssetPath(rawPath);
             if (string.IsNullOrEmpty(path))
             {
-                throw new BridgeCommandException("E_ANIMATION_CLIP_PATH_REQUIRED", "Pass an Assets/*.anim path.", "Use alps-unity animation clip <path> or pass --path Assets/Animations/Example.anim.");
+                throw new BridgeCommandException("E_ANIMATION_CLIP_PATH_REQUIRED", "Pass an Assets/*.anim path.", "Use unity_cli animation clip <path> or pass --path Assets/Animations/Example.anim.");
             }
             if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || !path.EndsWith(".anim", StringComparison.OrdinalIgnoreCase))
             {
@@ -3153,7 +3153,7 @@ namespace AlpsUnityCli
             var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
             if (clip == null)
             {
-                throw new BridgeCommandException("E_ANIMATION_CLIP_NOT_FOUND", "AnimationClip asset not found: " + path, "Check the path or create one with alps-unity animation clip <path> --create.");
+                throw new BridgeCommandException("E_ANIMATION_CLIP_NOT_FOUND", "AnimationClip asset not found: " + path, "Check the path or create one with unity_cli animation clip <path> --create.");
             }
             return clip;
         }
@@ -3204,7 +3204,7 @@ namespace AlpsUnityCli
             var path = NormalizeAssetPath(rawPath);
             if (string.IsNullOrEmpty(path))
             {
-                throw new BridgeCommandException("E_VFX_GRAPH_PATH_REQUIRED", "Pass an Assets/*.vfx path.", "Use alps-unity vfx graph <path> or pass --path Assets/VFX/Effect.vfx.");
+                throw new BridgeCommandException("E_VFX_GRAPH_PATH_REQUIRED", "Pass an Assets/*.vfx path.", "Use unity_cli vfx graph <path> or pass --path Assets/VFX/Effect.vfx.");
             }
             if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || !path.EndsWith(".vfx", StringComparison.OrdinalIgnoreCase))
             {
@@ -3301,7 +3301,7 @@ namespace AlpsUnityCli
         {
             if (!PackageManifestContains("com.unity.visualeffectgraph") && !PackageLockContains("com.unity.visualeffectgraph"))
             {
-                throw new BridgeCommandException("E_VFX_PACKAGE_MISSING", "Visual Effect Graph package is not installed in this Unity project.", "Install com.unity.visualeffectgraph with alps-unity package install com.unity.visualeffectgraph, run package resolve, then retry.");
+                throw new BridgeCommandException("E_VFX_PACKAGE_MISSING", "Visual Effect Graph package is not installed in this Unity project.", "Install com.unity.visualeffectgraph with unity_cli package install com.unity.visualeffectgraph, run package resolve, then retry.");
             }
         }
 
@@ -3367,7 +3367,7 @@ namespace AlpsUnityCli
             }
             if (matches.Count == 0)
             {
-                throw new BridgeCommandException("E_TARGET_NOT_FOUND", "Target not found: " + target, "Run alps-unity scene hierarchy or pass a hierarchy path / instance id.");
+                throw new BridgeCommandException("E_TARGET_NOT_FOUND", "Target not found: " + target, "Run unity_cli scene hierarchy or pass a hierarchy path / instance id.");
             }
             return matches[0];
         }
@@ -3579,7 +3579,7 @@ namespace AlpsUnityCli
             var timeoutMs = request.OptionalIntArg("timeoutMs");
             var timeoutJson = timeoutMs.HasValue ? timeoutMs.Value.ToString(CultureInfo.InvariantCulture) : "null";
             var argsJson = request.StringArg("argsJson");
-            return "{\"command\":\"code.exec\",\"mode\":\"live\",\"execution\":{\"channel\":\"live\",\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"endedAt\":" + Quote(endedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"durationMs\":" + ((long)(endedAt - startedAt).TotalMilliseconds).ToString(CultureInfo.InvariantCulture) + ",\"timeoutMs\":" + timeoutJson + ",\"exitState\":\"completed\"},\"compile\":{\"ok\":true,\"diagnostics\":[]},\"runtime\":{\"ok\":true,\"returnValue\":" + ReturnValueJson(returnValue) + ",\"stdout\":" + Quote(stdout) + ",\"stderr\":" + Quote(stderr) + "},\"artifacts\":[],\"audit\":{\"requestId\":" + Quote(request.RequestId) + ",\"projectPath\":" + Quote(ProjectRoot()) + ",\"instanceId\":" + Quote(InstanceId()) + ",\"unityVersion\":" + Quote(Application.unityVersion) + ",\"bridgeVersion\":\"com.alps.unity-cli.bridge\",\"initiator\":\"cli.live\",\"input\":{\"sourceKind\":" + Quote(request.StringArg("sourceKind")) + ",\"sourcePath\":" + Quote(request.StringArg("sourcePath")) + ",\"sourceSha256\":" + Quote(request.StringArg("sourceSha256")) + ",\"args\":" + (string.IsNullOrEmpty(argsJson) ? "{}" : argsJson) + "},\"execution\":{\"timeoutMs\":" + timeoutJson + ",\"exitState\":\"completed\"},\"artifacts\":[],\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"endedAt\":" + Quote(endedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"durationMs\":" + ((long)(endedAt - startedAt).TotalMilliseconds).ToString(CultureInfo.InvariantCulture) + ",\"effects\":{\"fileWrites\":[],\"assetRefresh\":false,\"domainReload\":false,\"playModeChanged\":false,\"packagesChanged\":false}},\"logs\":{\"bridge\":" + Quote(LogPath()) + "},\"nextActions\":[]}";
+            return "{\"command\":\"code.exec\",\"mode\":\"live\",\"execution\":{\"channel\":\"live\",\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"endedAt\":" + Quote(endedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"durationMs\":" + ((long)(endedAt - startedAt).TotalMilliseconds).ToString(CultureInfo.InvariantCulture) + ",\"timeoutMs\":" + timeoutJson + ",\"exitState\":\"completed\"},\"compile\":{\"ok\":true,\"diagnostics\":[]},\"runtime\":{\"ok\":true,\"returnValue\":" + ReturnValueJson(returnValue) + ",\"stdout\":" + Quote(stdout) + ",\"stderr\":" + Quote(stderr) + "},\"artifacts\":[],\"audit\":{\"requestId\":" + Quote(request.RequestId) + ",\"projectPath\":" + Quote(ProjectRoot()) + ",\"instanceId\":" + Quote(InstanceId()) + ",\"unityVersion\":" + Quote(Application.unityVersion) + ",\"bridgeVersion\":\"com.unity_cli\",\"initiator\":\"cli.live\",\"input\":{\"sourceKind\":" + Quote(request.StringArg("sourceKind")) + ",\"sourcePath\":" + Quote(request.StringArg("sourcePath")) + ",\"sourceSha256\":" + Quote(request.StringArg("sourceSha256")) + ",\"args\":" + (string.IsNullOrEmpty(argsJson) ? "{}" : argsJson) + "},\"execution\":{\"timeoutMs\":" + timeoutJson + ",\"exitState\":\"completed\"},\"artifacts\":[],\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"endedAt\":" + Quote(endedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"durationMs\":" + ((long)(endedAt - startedAt).TotalMilliseconds).ToString(CultureInfo.InvariantCulture) + ",\"effects\":{\"fileWrites\":[],\"assetRefresh\":false,\"domainReload\":false,\"playModeChanged\":false,\"packagesChanged\":false}},\"logs\":{\"bridge\":" + Quote(LogPath()) + "},\"nextActions\":[]}";
         }
 
         private static string CodeDetailsJson(string diagnosticsJson, string exceptionTypeJson, string messageJson, string stackTraceJson, string stdout, string stderr)
@@ -3644,7 +3644,7 @@ namespace AlpsUnityCli
             var path = request.StringArg("path");
             if (string.IsNullOrWhiteSpace(path))
             {
-                throw new BridgeCommandException("E_SCHEMA_INVALID", "Editor menu path is required.", "Use alps-unity editor menu <path>, for example File/Save.");
+                throw new BridgeCommandException("E_SCHEMA_INVALID", "Editor menu path is required.", "Use unity_cli editor menu <path>, for example File/Save.");
             }
 
             var startedAt = DateTime.UtcNow;
@@ -3940,7 +3940,7 @@ namespace AlpsUnityCli
             var path = NormalizeAssetPath(rawPath);
             if (string.IsNullOrEmpty(path))
             {
-                throw new BridgeCommandException("E_MATERIAL_PATH_REQUIRED", "Pass an Assets/*.mat path.", "Use alps-unity material info <path> or pass --path Assets/Materials/Example.mat.");
+                throw new BridgeCommandException("E_MATERIAL_PATH_REQUIRED", "Pass an Assets/*.mat path.", "Use unity_cli material info <path> or pass --path Assets/Materials/Example.mat.");
             }
             if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || !path.EndsWith(".mat", StringComparison.OrdinalIgnoreCase))
             {
@@ -3954,7 +3954,7 @@ namespace AlpsUnityCli
             var material = AssetDatabase.LoadAssetAtPath<Material>(path);
             if (material == null)
             {
-                throw new BridgeCommandException("E_MATERIAL_NOT_FOUND", "Material asset not found: " + path, "Check the path or run alps-unity asset search --type Material.");
+                throw new BridgeCommandException("E_MATERIAL_NOT_FOUND", "Material asset not found: " + path, "Check the path or run unity_cli asset search --type Material.");
             }
             return material;
         }
@@ -4291,7 +4291,7 @@ namespace AlpsUnityCli
             }
             if (string.IsNullOrEmpty(target))
             {
-                return ErrorJson("E_TARGET_NOT_FOUND", "GameObject find requires --name or a target.", "Pass alps-unity go find --name <name>, a hierarchy path, or an instance id.");
+                return ErrorJson("E_TARGET_NOT_FOUND", "GameObject find requires --name or a target.", "Pass unity_cli go find --name <name>, a hierarchy path, or an instance id.");
             }
             var resolution = ResolveGameObjectTarget(target);
             var items = new List<string>();
@@ -4364,7 +4364,7 @@ namespace AlpsUnityCli
             var stage = CurrentPrefabStage();
             if (stage == null)
             {
-                throw new BridgeCommandException("E_PREFAB_STAGE_NOT_OPEN", "No Prefab Stage is currently open.", "Run alps-unity prefab stage-open <path> first.");
+                throw new BridgeCommandException("E_PREFAB_STAGE_NOT_OPEN", "No Prefab Stage is currently open.", "Run unity_cli prefab stage-open <path> first.");
             }
             var path = StageAssetPath(stage);
             if (!string.IsNullOrEmpty(requestedPath) && !string.Equals(NormalizeAssetPath(requestedPath), path, StringComparison.OrdinalIgnoreCase))
@@ -4600,7 +4600,7 @@ namespace AlpsUnityCli
                 + "\"projectPath\":" + Quote(ProjectRoot()) + ","
                 + "\"projectHash\":" + Quote(ProjectHash()) + ","
                 + "\"unityVersion\":" + Quote(Application.unityVersion) + ","
-                + "\"packageVersion\":\"com.alps.unity-cli.bridge\"," 
+                + "\"packageVersion\":\"com.unity_cli\"," 
                 + "\"pid\":" + System.Diagnostics.Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture) + ","
                 + "\"bridgeEndpoint\":" + Quote("http://127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture)) + ","
                 + "\"capabilitiesHash\":" + Quote(BridgeBuildStamp()) + ","
@@ -4950,7 +4950,7 @@ namespace AlpsUnityCli
         {
             if (level < 0 || level >= QualitySettings.names.Length)
             {
-                throw new BridgeCommandException("E_QUALITY_LEVEL_INVALID", "Quality level is out of range: " + level.ToString(CultureInfo.InvariantCulture), "Run alps-unity graphics quality to inspect available quality level names and indexes.");
+                throw new BridgeCommandException("E_QUALITY_LEVEL_INVALID", "Quality level is out of range: " + level.ToString(CultureInfo.InvariantCulture), "Run unity_cli graphics quality to inspect available quality level names and indexes.");
             }
             QualitySettings.SetQualityLevel(level, true);
             effects.Add(EffectJson("graphics.quality", "qualityLevel", level.ToString(CultureInfo.InvariantCulture)));

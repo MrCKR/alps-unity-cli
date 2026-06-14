@@ -361,23 +361,58 @@ test("package list and info accept UTF-8 BOM manifest and lock", async () => {
   assert.equal(((info.data as { package: { dependencies: Record<string, string> } }).package.dependencies)["com.unity.textmeshpro"], "3.0.6");
 });
 
-test("init deploys bundled bridge into Unity project without requiring Unity", async () => {
+test("init installs com.unity_cli as a local file dependency without requiring Unity", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
 
   const initialized = await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
   assert.equal(initialized.ok, true);
-  const data = initialized.data as { action: string; status: string; bridge: { dependencyName: string; bridgePath: string; buildStampPath: string; buildStamp: string }; liveRefresh: { status: string }; resolve: string };
+  const data = initialized.data as { action: string; status: string; bridge: { dependencyName: string; bridgePath: string; dependencySpec: string; packageVersion: string; projectHash: string; cliCompatibilityRange: string; installMetadataPath: string }; liveRefresh: { status: string }; resolve: string };
   assert.equal(data.action, "init");
-  assert.equal(data.status, "bridge_installed");
-  assert.equal(data.bridge.dependencyName, "com.alps.unity-cli.bridge");
+  assert.equal(data.status, "package_installed");
+  assert.equal(data.bridge.dependencyName, "com.unity_cli");
+  assert.equal(data.bridge.packageVersion, "0.1.0");
+  assert.equal(data.bridge.projectHash.length, 64);
+  assert.equal(data.bridge.cliCompatibilityRange, ">=0.1.0 <0.2.0");
   assert.equal(data.liveRefresh.status, "skipped");
   assert.equal(data.resolve, "skipped");
   assert.match(await readFile(join(data.bridge.bridgePath, "Editor", "AlpsUnityBridge.cs"), "utf8"), /class AlpsUnityBridge/);
-  assert.match(await readFile(data.bridge.buildStampPath, "utf8"), new RegExp(data.bridge.buildStamp));
 
-  const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string> };
-  assert.match(manifest.dependencies["com.alps.unity-cli.bridge"], /^file:/);
+  const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string>; scopedRegistries?: unknown[] };
+  assert.equal(manifest.dependencies["com.unity_cli"], data.bridge.dependencySpec);
+  assert.match(manifest.dependencies["com.unity_cli"], /^file:/);
+  assert.deepEqual(manifest.scopedRegistries, [{ name: "Example", url: "https://registry.example.com", scopes: ["com.example"] }]);
+
+  const metadata = JSON.parse(await readFile(data.bridge.installMetadataPath, "utf8")) as { packageName: string; packageVersion: string; dependencySpec: string; projectHash: string; cliCompatibilityRange: string };
+  assert.deepEqual(metadata, {
+    packageName: "com.unity_cli",
+    packageVersion: data.bridge.packageVersion,
+    dependencySpec: data.bridge.dependencySpec,
+    projectHash: data.bridge.projectHash,
+    cliCompatibilityRange: data.bridge.cliCompatibilityRange
+  });
+});
+
+test("init --check verifies local package install metadata", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  const missing = await execute(["init", "--check", "--project", project], runtime);
+  assert.equal(missing.ok, false);
+  assert.equal(missing.error?.code, "INIT_CHECK_FAILED");
+
+  await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
+  const checked = await execute(["init", "--check", "--project", project], runtime);
+
+  assert.equal(checked.ok, true);
+  const data = checked.data as { action: string; status: string; bridge: { dependencyName: string; dependencySpec: string; packageVersion: string; projectHash: string; cliCompatibilityRange: string } };
+  assert.equal(data.action, "init_check");
+  assert.equal(data.status, "installed");
+  assert.equal(data.bridge.dependencyName, "com.unity_cli");
+  assert.match(data.bridge.dependencySpec, /^file:/);
+  assert.equal(data.bridge.packageVersion, "0.1.0");
+  assert.equal(data.bridge.projectHash.length, 64);
+  assert.equal(data.bridge.cliCompatibilityRange, ">=0.1.0 <0.2.0");
 });
 
 test("init asks an already open bridge to refresh assets", async () => {
@@ -410,14 +445,14 @@ test("package install updates manifest, deploys bridge and can start package res
   assert.equal(jobData.result.action, "install");
   assert.equal(jobData.result.package, "com.acme.lib");
   assert.equal(jobData.result.installedVersion, "2.0.0");
-  assert.equal(jobData.result.bridge.dependencyName, "com.alps.unity-cli.bridge");
+  assert.equal(jobData.result.bridge.dependencyName, "com.unity_cli");
   assert.match(await readFile(join(jobData.result.bridge.bridgePath, "Editor", "AlpsUnityBatch.cs"), "utf8"), /ResolvePackages/);
   const bridgeManifest = JSON.parse(await readFile(join(jobData.result.bridge.bridgePath, "package.json"), "utf8")) as { name: string };
-  assert.equal(bridgeManifest.name, "com.alps.unity-cli.bridge");
+  assert.equal(bridgeManifest.name, "com.unity_cli");
 
   const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string> };
   assert.equal(manifest.dependencies["com.acme.lib"], "2.0.0");
-  assert.match(manifest.dependencies["com.alps.unity-cli.bridge"], /^file:/);
+  assert.match(manifest.dependencies["com.unity_cli"], /^file:/);
 });
 
 test("package remove returns structured diagnostic for missing package", async () => {
@@ -463,7 +498,7 @@ test("package resolve job maps bridge compile errors to compile diagnostics", as
   const unity = await makeFakeUnity(`
 const fs = require("node:fs");
 const logIndex = process.argv.indexOf("-logFile");
-if (logIndex >= 0) fs.appendFileSync(process.argv[logIndex + 1], "Packages\\\\com.alps.unity-cli.bridge\\\\Editor\\\\AlpsUnityBatch.cs(13,17): error CS0815: Cannot assign void to an implicitly-typed variable\\n[Package Manager] UpmClient::Connect -- IPC stream closed\\n");
+if (logIndex >= 0) fs.appendFileSync(process.argv[logIndex + 1], "Packages\\\\com.unity_cli\\\\Editor\\\\AlpsUnityBatch.cs(13,17): error CS0815: Cannot assign void to an implicitly-typed variable\\n[Package Manager] UpmClient::Connect -- IPC stream closed\\n");
 process.exit(1);
 `);
 
