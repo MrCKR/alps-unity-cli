@@ -138,7 +138,7 @@ export async function readInstances(dataDir = defaultDataDir(), now = Date.now()
 export async function writeInstances(dataDir: string, instances: UnityInstance[]): Promise<void> {
   const filePath = registryPath(dataDir);
   await mkdir(dirname(filePath), { recursive: true });
-  await writeFile(filePath, JSON.stringify({ version: 1, instances }, null, 2) + "\n", "utf8");
+  await writeFile(filePath, JSON.stringify({ version: 1, instances }) + "\n", "utf8");
 }
 
 export function normalizeInstances(instances: UnityInstance[], now = Date.now()): UnityInstance[] {
