@@ -324,7 +324,9 @@ namespace AlpsUnityCli
                 WriteJson(context, TransientErrorJson("E_UNITY_IMPORTING", "Unity Editor is importing assets.", "Wait for Unity to finish importing and retry.", 5000), 200);
                 return;
             }
-            if (cachedIsPlayingOrWillChangePlaymode)
+            if (cachedIsPlayingOrWillChangePlaymode
+                && request.Command != "editor.pause"
+                && request.Command != "editor.stop")
             {
                 WriteJson(context, TransientErrorJson("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode.", "Wait for Play mode transition to complete and retry.", 3000), 200);
                 return;
