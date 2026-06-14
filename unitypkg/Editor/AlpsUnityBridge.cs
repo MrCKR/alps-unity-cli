@@ -123,7 +123,9 @@ namespace AlpsUnityCli
         {
             EditorApplication.update += ProcessQueuedWork;
             AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
+            AssemblyReloadEvents.afterAssemblyReload += OnAfterAssemblyReload;
             EditorApplication.quitting += MarkStaleAndStop;
+            domainReloading = false;
             StopStaleBridgeListeners();
             StartListener();
         }
@@ -208,6 +210,14 @@ namespace AlpsUnityCli
             StopListener();
         }
 
+        private static void OnAfterAssemblyReload()
+        {
+            domainReloading = false;
+            WriteLog("bridge_after_assembly_reload restarting listener");
+            StopStaleBridgeListeners();
+            StartListener();
+        }
+
         private static void MarkStaleAndStop()
         {
             RegisterInstance("stale");
@@ -250,6 +260,19 @@ namespace AlpsUnityCli
 
         private static void HandleHttp(HttpListenerContext context)
         {
+            try
+            {
+                HandleHttpCore(context);
+            }
+            catch (Exception exception)
+            {
+                WriteLog("handle_http_unhandled " + exception.GetType().Name + ": " + exception.Message);
+                TryWriteErrorJson(context, "E_BRIDGE_INTERNAL_ERROR", "Unhandled bridge error: " + exception.Message, "Check AlpsUnityBridge.log for details.");
+            }
+        }
+
+        private static void HandleHttpCore(HttpListenerContext context)
+        {
             if (context.Request.HttpMethod == "GET" && context.Request.Url.AbsolutePath == "/health")
             {
                 WriteJson(context, "{\"ok\":true,\"data\":{\"bridge\":\"alps-unity-cli\",\"port\":" + port.ToString(CultureInfo.InvariantCulture) + ",\"route\":\"POST /bridge/execute\",\"buildStamp\":" + Quote(BridgeBuildStamp()) + ",\"capabilities\":" + CapabilitiesJson() + "}}", 200);
@@ -262,7 +285,17 @@ namespace AlpsUnityCli
                 return;
             }
 
-            var body = ReadBody(context.Request);
+            string body;
+            try
+            {
+                body = ReadBody(context.Request);
+            }
+            catch (Exception exception)
+            {
+                WriteLog("read_body_failed " + exception.GetType().Name + ": " + exception.Message);
+                WriteJson(context, ErrorJson("E_BRIDGE_READ_BODY_FAILED", "Failed to read request body: " + exception.Message, "The request stream may have been closed due to a domain reload. Retry the request."), 200);
+                return;
+            }
             var request = BridgeRequest.Parse(body);
 
             // Check for transient Unity state before queuing the request.
@@ -4577,7 +4610,8 @@ namespace AlpsUnityCli
 
         private static string ReadBody(HttpListenerRequest request)
         {
-            using (var reader = new StreamReader(request.InputStream, request.ContentEncoding ?? Encoding.UTF8))
+            using (var stream = request.InputStream)
+            using (var reader = new StreamReader(stream, request.ContentEncoding ?? Encoding.UTF8))
             {
                 return reader.ReadToEnd();
             }
@@ -4585,12 +4619,31 @@ namespace AlpsUnityCli
 
         private static void WriteJson(HttpListenerContext context, string json, int statusCode)
         {
-            var bytes = Encoding.UTF8.GetBytes(json);
-            context.Response.StatusCode = statusCode;
-            context.Response.ContentType = "application/json; charset=utf-8";
-            context.Response.ContentLength64 = bytes.Length;
-            context.Response.OutputStream.Write(bytes, 0, bytes.Length);
-            context.Response.OutputStream.Close();
+            try
+            {
+                var bytes = Encoding.UTF8.GetBytes(json);
+                context.Response.StatusCode = statusCode;
+                context.Response.ContentType = "application/json; charset=utf-8";
+                context.Response.ContentLength64 = bytes.Length;
+                context.Response.OutputStream.Write(bytes, 0, bytes.Length);
+                context.Response.OutputStream.Close();
+            }
+            catch (Exception exception)
+            {
+                WriteLog("write_json_failed " + exception.GetType().Name + ": " + exception.Message);
+            }
+        }
+
+        private static void TryWriteErrorJson(HttpListenerContext context, string code, string message, string nextAction)
+        {
+            try
+            {
+                WriteJson(context, ErrorJson(code, message, nextAction), 200);
+            }
+            catch (Exception exception)
+            {
+                WriteLog("try_write_error_json_failed " + exception.GetType().Name + ": " + exception.Message);
+            }
         }
 
         private static string SuccessJson(string dataJson)
