@@ -115,9 +115,17 @@ namespace AlpsUnityCli
         private static HttpListener listener;
         private static bool started;
         private static bool customToolsDiscovered;
-        private static bool domainReloading;
+        private static volatile bool domainReloading;
         private static int port;
         private static double nextHeartbeatAt;
+
+        // Cached EditorApplication state — updated on the main thread by ProcessQueuedWork,
+        // read by HandleHttpCore on background thread pool threads.
+        // volatile ensures the background thread sees the latest write.
+        private static volatile bool cachedIsCompiling;
+        private static volatile bool cachedIsUpdating;
+        private static volatile bool cachedIsPlayingOrWillChangePlaymode;
+        private static volatile bool cachedIsBuilding;
 
         static AlpsUnityBridge()
         {
@@ -306,17 +314,17 @@ namespace AlpsUnityCli
                 WriteJson(context, TransientErrorJson("E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", "Wait for domain reload to complete and retry.", 10000), 200);
                 return;
             }
-            if (EditorApplication.isCompiling)
+            if (cachedIsCompiling)
             {
                 WriteJson(context, TransientErrorJson("E_UNITY_COMPILING", "Unity Editor is compiling scripts.", "Wait for Unity to finish compiling and retry.", 5000), 200);
                 return;
             }
-            if (EditorApplication.isUpdating)
+            if (cachedIsUpdating)
             {
                 WriteJson(context, TransientErrorJson("E_UNITY_IMPORTING", "Unity Editor is importing assets.", "Wait for Unity to finish importing and retry.", 5000), 200);
                 return;
             }
-            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            if (cachedIsPlayingOrWillChangePlaymode)
             {
                 WriteJson(context, TransientErrorJson("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode.", "Wait for Play mode transition to complete and retry.", 3000), 200);
                 return;
@@ -361,6 +369,13 @@ namespace AlpsUnityCli
 
         private static void ProcessQueuedWork()
         {
+            // Cache Unity main-thread-only API values so HandleHttpCore can read them
+            // safely from a background thread pool thread.
+            cachedIsCompiling = EditorApplication.isCompiling;
+            cachedIsUpdating = EditorApplication.isUpdating;
+            cachedIsPlayingOrWillChangePlaymode = EditorApplication.isPlayingOrWillChangePlaymode;
+            cachedIsBuilding = BuildPipeline.isBuildingPlayer;
+
             if (started && EditorApplication.timeSinceStartup >= nextHeartbeatAt)
             {
                 RegisterInstance("healthy");
