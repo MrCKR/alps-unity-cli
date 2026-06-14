@@ -1,0 +1,104 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://alps.local/schemas/tool-metadata.schema.json",
+  "title": "Unity CLI Tool Metadata",
+  "description": "Describes a single tool exposed by the Alps Unity CLI, including identity, schemas, behavioral hints, permissions, examples and documentation references. Matches the frozen spec from ALP-164 v1.0.",
+  "type": "object",
+  "required": ["name", "title", "description", "group", "inputSchema", "readOnlyHint", "destructiveHint"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9-]*)+$",
+      "description": "Dotted tool identifier, e.g. 'scene.hierarchy'. Must be unique across the CLI."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable short title."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One-paragraph explanation of what the tool does."
+    },
+    "group": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Logical grouping, e.g. 'scene', 'camera', 'probuilder'."
+    },
+    "inputSchema": {
+      "type": "object",
+      "description": "JSON Schema for the tool's input parameters."
+    },
+    "outputSchema": {
+      "type": "object",
+      "description": "JSON Schema for the tool's successful output."
+    },
+    "readOnlyHint": {
+      "type": "boolean",
+      "default": false,
+      "description": "True if the tool never mutates Unity state."
+    },
+    "destructiveHint": {
+      "type": "boolean",
+      "default": false,
+      "description": "True if the tool may irreversibly modify or delete data."
+    },
+    "longRunning": {
+      "type": "boolean",
+      "default": false,
+      "description": "True if the tool typically takes more than a few seconds."
+    },
+    "requiresMainThread": {
+      "type": "boolean",
+      "default": true,
+      "description": "True if the tool must run on the Unity main thread."
+    },
+    "supportsDryRun": {
+      "type": "boolean",
+      "default": false,
+      "description": "True if the tool accepts a dry-run / preflight flag."
+    },
+    "timeoutMs": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "Suggested timeout in milliseconds."
+    },
+    "permissions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Permission tokens required, e.g. ['bridge:connect', 'file:write']."
+    },
+    "examples": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["description", "argv"],
+        "properties": {
+          "description": { "type": "string" },
+          "argv": {
+            "type": "array",
+            "items": { "type": "string" }
+          },
+          "output": { "description": "Expected partial output for documentation." }
+        }
+      },
+      "description": "Representative invocations."
+    },
+    "docsTopic": {
+      "type": "string",
+      "description": "Topic key for 'alps-unity docs <topic>'."
+    },
+    "handler": {
+      "type": "string",
+      "enum": ["bridge", "job", "offline", "hybrid"],
+      "description": "Execution mode: bridge (live Unity), job (batch mode), offline (no Unity), hybrid (bridge with job fallback)."
+    },
+    "cliCommand": {
+      "type": "string",
+      "description": "The CLI argv prefix, e.g. 'scene hierarchy'."
+    }
+  },
+  "additionalProperties": false
+}

@@ -5,15 +5,18 @@ import { fileURLToPath } from "node:url";
 import { parseArgs, getBoolean, getNumber, getString } from "./args.js";
 import { batchJsonSchema, runBatch } from "./batch.js";
 import { bridgeCommandName, executeBridgeCommand, executeBridgePayload, type BridgeRuntime } from "./bridge-commands.js";
+import { handleCapabilitiesCommand } from "./capabilities.js";
 import { handleDocsCommand, handleReflectCommand } from "./docs-reflect.js";
+import { handleDocsTopicCommand } from "./docs-topic.js";
 import { JobRunner } from "./job-runner.js";
 import { handleCode } from "./runtime-code.js";
 import { JobStore } from "./job-store.js";
 import { createRequestId, failure, printJson, success } from "./output.js";
 import { defaultDataDir, discoverUnity, ensureWindows } from "./platform.js";
+import { handleToolsCommand, type ToolsRuntime } from "./tools.js";
 import type { CliResult, JobKind, JobRecord } from "./types.js";
 
-interface Runtime extends BridgeRuntime {
+interface Runtime extends BridgeRuntime, ToolsRuntime {
   store: JobStore;
   runner: JobRunner;
   dataDir: string;
@@ -57,12 +60,24 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
       return handleCode(command, parsed.flags, runtime, requestId);
     }
 
+    if (group === "tools") {
+      return handleToolsCommand(command, parsed.positional.slice(2), parsed.flags, runtime, requestId);
+    }
+
+    if (group === "capabilities") {
+      return handleCapabilitiesCommand(parsed.flags, runtime, requestId);
+    }
+
     if (group === "docs") {
       return handleDocsCommand(command, parsed.positional.slice(2), parsed.flags, runtime.dataDir, requestId);
     }
 
     if (group === "reflect") {
       return handleReflectCommand(command, parsed.positional.slice(2), parsed.flags, runtime.dataDir, requestId);
+    }
+
+    if (group === "docs-topic") {
+      return handleDocsTopicCommand(command, parsed.flags, requestId);
     }
 
     const bridgeCommand = bridgeCommandName(group, command);
@@ -438,6 +453,12 @@ function help(): Record<string, unknown> {
       "reflect type <name> [--reflect-dir <path>] [--unity-version <version>] [--format json|text]",
       "reflect member <type.member> [--reflect-dir <path>] [--format json|text]",
       "reflect search <query> [--reflect-dir <path>] [--page-size 20 --cursor 0] [--format json|text]",
+      "tools list [--group <group>] [--include-custom] [--format json|text]",
+      "tools groups",
+      "tools search <keyword> [--format json|text]",
+      "tools describe <tool>",
+      "capabilities [--json] [--bridge-endpoint <url>]",
+      "docs-topic [topic] [--format json|text]",
       "code exec (--file <path>|--stdin|--code <text>) [--channel live|batchmode] [--refs <list>] [--define <symbol>] [--args <json>] [--timeout-ms <n>] [--job] [--artifact-dir <path>]",
       "custom-tool list [--project <path>] [--instance <id>] [--bridge-endpoint <url>]",
       "custom-tool run <name> [--project <path>] [--instance <id>] [--input <json>|--input-file <path>|--stdin] [--timeout-ms 30000] [--job] [--artifact-dir <path>] [--bridge-endpoint <url>]",
