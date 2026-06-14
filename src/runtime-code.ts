@@ -210,7 +210,7 @@ function manifestData(artifactDir: string, requestId: string, jobId: string | un
     jobId: jobId ?? null,
     command: "code.exec",
     createdAt: new Date().toISOString(),
-    producer: "alps-unity-cli",
+    producer: "unity_cli",
     projectPath,
     artifact: [sourceArtifact, ...extraArtifacts],
     artifacts: [sourceArtifact, ...extraArtifacts],
@@ -320,9 +320,9 @@ async function startBatchCodeJob(
   const waited = await runtime.runner.wait(job.id, waitTimeoutMs);
   if (!["succeeded", "failed", "cancelled", "timeout"].includes(waited.status)) {
     return failure(requestId, "E_EXECUTION_TIMEOUT", `Job did not reach a terminal state within ${waitTimeoutMs}ms.`, [
-      `Run alps-unity job status --id ${job.id}.`,
-      `Run alps-unity job logs --id ${job.id}.`,
-      `Run alps-unity job cancel --id ${job.id} if the Unity process should be stopped.`
+      `Run unity_cli job status --id ${job.id}.`,
+      `Run unity_cli job logs --id ${job.id}.`,
+      `Run unity_cli job cancel --id ${job.id} if the Unity process should be stopped.`
     ], {
       jobId: job.id,
       timeoutMs: waitTimeoutMs,

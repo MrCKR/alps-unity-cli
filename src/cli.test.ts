@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { access, mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
@@ -14,7 +14,7 @@ import { defaultDataDir } from "./platform.js";
 process.env.ALPS_UNITY_ALLOW_NON_WINDOWS = "1";
 
 async function makeRuntime() {
-  const dataDir = await mkdtemp(join(tmpdir(), "alps-unity-test-"));
+  const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-test-"));
   const store = new JobStore(dataDir);
   return { dataDir, store, runner: new JobRunner(store, dataDir) };
 }
@@ -54,9 +54,14 @@ async function runCli(args: string[], env: NodeJS.ProcessEnv = {}): Promise<{ co
   return { code, stdout, stderr };
 }
 
-test("CLI entrypoint detection handles normalized file paths", () => {
+test("CLI entrypoint detection handles normalized and linked file paths", async () => {
   const cliPath = fileURLToPath(new URL("cli.js", import.meta.url));
+  const dir = await mkdtemp(join(tmpdir(), "unity_cli-entrypoint-"));
+  const linkedPath = join(dir, "unity_cli");
+  await symlink(cliPath, linkedPath);
+
   assert.equal(isCliEntryPoint(pathToFileURL(cliPath).href, cliPath), true);
+  assert.equal(isCliEntryPoint(pathToFileURL(cliPath).href, linkedPath), true);
   assert.equal(isCliEntryPoint(pathToFileURL(cliPath).href, join(cliPath, "..")), false);
 });
 
@@ -65,7 +70,21 @@ test("node dist cli help prints an envelope", async () => {
   assert.equal(result.code, 0, result.stderr);
   const payload = JSON.parse(result.stdout) as { ok: boolean; data: { usage: string } };
   assert.equal(payload.ok, true);
-  assert.equal(payload.data.usage, "alps-unity <command> [options]");
+  assert.equal(payload.data.usage, "unity_cli <command> [options]");
+});
+
+test("node dist cli version prints package version", async () => {
+  const result = await runCli(["--version"]);
+  assert.equal(result.code, 0, result.stderr);
+  const payload = JSON.parse(result.stdout) as { ok: boolean; data: { version: string } };
+  assert.equal(payload.ok, true);
+  assert.equal(payload.data.version, "0.1.0");
+});
+
+test("frozen top-level directories exist", async () => {
+  for (const directory of ["cli", "unitypkg", "schemas", "skills", "docs", "tests"]) {
+    await access(new URL(`../${directory}/`, import.meta.url));
+  }
 });
 
 test("final CLI failure envelope preserves structured error details", () => {
@@ -255,7 +274,7 @@ test("build run forwards output path to batch method", async () => {
 });
 
 test("non-wait CLI exits quickly and worker persists terminal status", async () => {
-  const dataDir = await mkdtemp(join(tmpdir(), "alps-unity-cli-process-"));
+  const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-process-"));
   assert.equal(defaultDataDir({ ALPS_UNITY_DATA_DIR: dataDir, LOCALAPPDATA: join("C:\\", "Users", "tester", "AppData", "Local") }, "win32"), dataDir);
   const unity = await makeFakeUnity(`setTimeout(() => process.exit(0), 2000);`);
 
@@ -484,7 +503,7 @@ test("package resolve without Unity returns structured diagnostic when job reque
 });
 
 test("Unity package batch hook exposes PackageManager resolve API", async () => {
-  const source = await readFile(new URL("../unity-package/Editor/AlpsUnityBatch.cs", import.meta.url), "utf8");
+  const source = await readFile(new URL("../unitypkg/Editor/AlpsUnityBatch.cs", import.meta.url), "utf8");
 
   assert.match(source, /public static void ResolvePackages\(\)/);
   assert.match(source, /Client\.Resolve\(\)/);

@@ -11,7 +11,7 @@ import type { BridgeRequest } from "./bridge-commands.js";
 process.env.ALPS_UNITY_ALLOW_NON_WINDOWS = "1";
 
 async function makeRuntime() {
-  const dataDir = await mkdtemp(join(tmpdir(), "alps-unity-batch-"));
+  const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-batch-"));
   const store = new JobStore(dataDir);
   return { dataDir, store, runner: new JobRunner(store, dataDir) };
 }

@@ -1,11 +1,13 @@
 #!/usr/bin/env node
-import { mkdir } from "node:fs/promises";
+import { realpathSync } from "node:fs";
+import { mkdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs, getBoolean, getNumber, getString } from "./args.js";
 import { batchJsonSchema, runBatch } from "./batch.js";
 import { bridgeCommandName, executeBridgeCommand, executeBridgePayload, type BridgeRuntime } from "./bridge-commands.js";
 import { handleCapabilitiesCommand } from "./capabilities.js";
+import { handleInstancesCommand } from "./instances.js";
 import { handleDocsCommand, handleReflectCommand } from "./docs-reflect.js";
 import { handleDocsTopicCommand } from "./docs-topic.js";
 import { JobRunner } from "./job-runner.js";
@@ -34,11 +36,15 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
       return runJobWorker(parsed.flags, requestId);
     }
 
-    ensureWindows();
+    if (getBoolean(parsed.flags, "version")) {
+      return success(requestId, { version: await packageVersion() });
+    }
 
     if (!group || getBoolean(parsed.flags, "help")) {
       return success(requestId, help());
     }
+
+    ensureWindows();
 
     if (group === "job") {
       return handleJob(command, parsed.flags, runtime, requestId);
@@ -54,6 +60,10 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
 
     if (group === "batch") {
       return handleBatch(command, parsed.positional[2], parsed.flags, runtime, requestId);
+    }
+
+    if (group === "instances") {
+      return handleInstancesCommand(command, parsed.flags, runtime.dataDir, requestId);
     }
 
     if (group === "code") {
@@ -131,7 +141,7 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
       }
     }
 
-    return failure(requestId, "UNKNOWN_COMMAND", `Unknown command: ${argv.join(" ")}`, ["Run alps-unity --help."]);
+    return failure(requestId, "UNKNOWN_COMMAND", `Unknown command: ${argv.join(" ")}`, ["Run unity_cli --help."]);
   } catch (error) {
     if (isPackageManagerError(error)) {
       return failure(requestId, error.code, error.message, error.nextActions);
@@ -171,7 +181,7 @@ async function handleBatch(command: string | undefined, filePath: string | undef
   }
 
   if (!filePath) {
-    return failure(requestId, "BATCH_FILE_REQUIRED", "Pass a batch JSON file: alps-unity batch run <file>.");
+    return failure(requestId, "BATCH_FILE_REQUIRED", "Pass a batch JSON file: unity_cli batch run <file>.");
   }
 
   return runBatch({
@@ -240,7 +250,7 @@ async function handleInit(flags: Record<string, string | boolean>, runtime: Runt
     liveRefresh,
     nextActions: liveRefresh.status === "triggered"
       ? ["Wait for Unity to finish compiling/importing, then retry /health and Bridge commands against the live endpoint."]
-      : ["Open the Unity project or run alps-unity package resolve --project <path> --unity <Unity.exe> --wait to refresh packages."]
+      : ["Open the Unity project or run unity_cli package resolve --project <path> --unity <Unity.exe> --wait to refresh packages."]
   });
 }
 
@@ -294,7 +304,7 @@ async function handlePackage(command: string | undefined, args: string[], flags:
   if (command === "info") {
     const name = validatePackageName(args[0] ?? getString(flags, "name"));
     const info = await packageInfo(projectPath, name);
-    return info ? success(requestId, { projectPath, package: info }) : failure(requestId, "PACKAGE_NOT_FOUND", `Package not found: ${name}`, ["Run alps-unity package list to inspect installed packages."]);
+    return info ? success(requestId, { projectPath, package: info }) : failure(requestId, "PACKAGE_NOT_FOUND", `Package not found: ${name}`, ["Run unity_cli package list to inspect installed packages."]);
   }
 
   if (command === "search") {
@@ -390,9 +400,9 @@ async function startUnityJob(kind: JobKind, flags: Record<string, string | boole
   const waited = await runtime.runner.wait(job.id, waitTimeoutMs);
   if (!terminalStatuses.has(waited.status)) {
     return failure(requestId, "E_EXECUTION_TIMEOUT", `Job did not reach a terminal state within ${waitTimeoutMs}ms.`, [
-      `Run alps-unity job status --id ${job.id}.`,
-      `Run alps-unity job logs --id ${job.id}.`,
-      `Run alps-unity job cancel --id ${job.id} if the Unity process should be stopped.`
+      `Run unity_cli job status --id ${job.id}.`,
+      `Run unity_cli job logs --id ${job.id}.`,
+      `Run unity_cli job cancel --id ${job.id} if the Unity process should be stopped.`
     ], {
       jobId: job.id,
       timeoutMs: waitTimeoutMs,
@@ -430,9 +440,15 @@ function summarizeJob(job: JobRecord): Record<string, unknown> {
   };
 }
 
+async function packageVersion(): Promise<string> {
+  const packagePath = fileURLToPath(new URL("../package.json", import.meta.url));
+  const packageJson = JSON.parse(await readFile(packagePath, "utf8")) as { version?: string };
+  return packageJson.version ?? "0.0.0";
+}
+
 function help(): Record<string, unknown> {
   return {
-    usage: "alps-unity <command> [options]",
+    usage: "unity_cli <command> [options]",
     commands: [
       "job status --id <jobId>",
       "job logs --id <jobId> [--tail 100]",
@@ -448,6 +464,8 @@ function help(): Record<string, unknown> {
       "package scoped-registry list|add|remove --name <name> --url <url> --scope <scope>",
       "batch schema",
       "batch run <file.json> [--preflight] [--fail-fast true|false] [--parallel 1]",
+      "instances list",
+      "instances cleanup",
       "docs get <api> [--docs-dir <path>] [--unity-version <version>] [--format json|text]",
       "docs search <query> [--docs-dir <path>] [--page-size 20 --cursor 0] [--format json|text]",
       "reflect type <name> [--reflect-dir <path>] [--unity-version <version>] [--format json|text]",
@@ -522,7 +540,17 @@ export function isCliEntryPoint(metaUrl: string, argvPath: string | undefined): 
   if (!argvPath) {
     return false;
   }
-  return resolve(fileURLToPath(metaUrl)) === resolve(argvPath);
+  const modulePath = resolve(fileURLToPath(metaUrl));
+  const entryPath = resolve(argvPath);
+  return modulePath === entryPath || safeRealpath(modulePath) === safeRealpath(entryPath);
+}
+
+function safeRealpath(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch {
+    return path;
+  }
 }
 
 if (isCliEntryPoint(import.meta.url, process.argv[1])) {
