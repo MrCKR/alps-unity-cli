@@ -50,13 +50,22 @@ export async function handleInstancesCommand(
 
   if (command === "cleanup") {
     const before = await readInstances(dataDir);
+    const stale = before.filter((instance) => instance.status === "stale");
     const remaining = before.filter((instance) => instance.status !== "stale");
+
+    // Attempt to kill stale bridge processes to prevent zombie accumulation
+    const killResults = stale.map((instance) => {
+      const killed = attemptKillPid(instance.pid);
+      return { instanceId: instance.instanceId, pid: instance.pid ?? null, killed };
+    });
+
     await writeInstances(dataDir, remaining);
     return success(requestId, {
       registryPath: registryPath(dataDir),
       removed: before.length - remaining.length,
       remaining: remaining.length,
-      instances: remaining
+      instances: remaining,
+      staleCleaned: killResults
     });
   }
 
@@ -190,4 +199,17 @@ function normalizedPath(path: string): string {
 
 function stringFlag(flags: Record<string, string | boolean>, key: string): string | undefined {
   return typeof flags[key] === "string" ? flags[key] : undefined;
+}
+
+function attemptKillPid(pid: number | undefined): boolean {
+  if (!pid) {
+    return false;
+  }
+  try {
+    process.kill(pid);
+    return true;
+  } catch {
+    // Process may already be gone; that's fine.
+    return false;
+  }
 }

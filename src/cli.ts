@@ -7,6 +7,7 @@ import { parseArgs, getBoolean, getNumber, getString } from "./args.js";
 import { batchJsonSchema, runBatch } from "./batch.js";
 import { bridgeCommandName, executeBridgeCommand, executeBridgePayload, type BridgeRuntime } from "./bridge-commands.js";
 import { handleCapabilitiesCommand } from "./capabilities.js";
+import { handleDoctorCommand, type DoctorRuntime } from "./doctor.js";
 import { handleInstancesCommand } from "./instances.js";
 import { handleDocsCommand, handleReflectCommand } from "./docs-reflect.js";
 import { handleDocsTopicCommand } from "./docs-topic.js";
@@ -18,7 +19,7 @@ import { defaultDataDir, discoverUnity, ensureWindows } from "./platform.js";
 import { handleToolsCommand, type ToolsRuntime } from "./tools.js";
 import type { CliResult, JobKind, JobRecord } from "./types.js";
 
-interface Runtime extends BridgeRuntime, ToolsRuntime {
+interface Runtime extends BridgeRuntime, ToolsRuntime, DoctorRuntime {
   store: JobStore;
   runner: JobRunner;
   dataDir: string;
@@ -60,6 +61,10 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
 
     if (group === "batch") {
       return handleBatch(command, parsed.positional[2], parsed.flags, runtime, requestId);
+    }
+
+    if (group === "doctor") {
+      return handleDoctorCommand(parsed.flags, runtime, requestId);
     }
 
     if (group === "instances") {
@@ -208,8 +213,15 @@ async function handleJob(command: string | undefined, flags: Record<string, stri
 
   if (command === "logs") {
     const tail = getNumber(flags, "tail") ?? 100;
-    const logs = await runtime.runner.logs(id, tail);
-    return success(requestId, { jobId: id, ...logs });
+    try {
+      const logs = await runtime.runner.logs(id, tail);
+      return success(requestId, { jobId: id, ...logs });
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("Job not found")) {
+        return failure(requestId, "JOB_NOT_FOUND", `Job not found: ${id}`);
+      }
+      return failure(requestId, "JOB_LOGS_FAILED", error instanceof Error ? error.message : String(error));
+    }
   }
 
   if (command === "cancel") {
@@ -466,6 +478,7 @@ function help(): Record<string, unknown> {
       "batch run <file.json> [--preflight] [--fail-fast true|false] [--parallel 1]",
       "instances list",
       "instances cleanup",
+      "doctor [--bridge-endpoint <url>] [--json]",
       "docs get <api> [--docs-dir <path>] [--unity-version <version>] [--format json|text]",
       "docs search <query> [--docs-dir <path>] [--page-size 20 --cursor 0] [--format json|text]",
       "reflect type <name> [--reflect-dir <path>] [--unity-version <version>] [--format json|text]",
