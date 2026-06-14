@@ -1,14 +1,19 @@
 {
-  "name": "alps-unity-cli",
+  "name": "unity_cli",
   "version": "0.1.0",
   "description": "Windows-first CLI for Alps Unity automation.",
   "type": "module",
   "bin": {
-    "alps-unity": "dist/cli.js"
+    "unity_cli": "dist/cli.js"
   },
   "files": [
     "dist",
-    "unity-package",
+    "cli",
+    "unitypkg",
+    "schemas",
+    "skills",
+    "docs",
+    "tests",
     "README.md"
   ],
   "scripts": {

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://alps.local/schemas/request-envelope.schema.json",
+  "title": "Unity CLI Request Envelope",
+  "type": "object",
+  "required": ["requestId", "command"],
+  "properties": {
+    "requestId": { "type": "string", "minLength": 1 },
+    "command": { "type": "string", "minLength": 1 },
+    "args": { "type": "object", "default": {} }
+  },
+  "additionalProperties": false
+}

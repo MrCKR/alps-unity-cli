@@ -115,12 +115,15 @@ namespace AlpsUnityCli
         private static HttpListener listener;
         private static bool started;
         private static bool customToolsDiscovered;
+        private static bool domainReloading;
+        private static int port;
+        private static double nextHeartbeatAt;
 
         static AlpsUnityBridge()
         {
             EditorApplication.update += ProcessQueuedWork;
-            AssemblyReloadEvents.beforeAssemblyReload += StopListener;
-            EditorApplication.quitting += StopListener;
+            AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
+            EditorApplication.quitting += MarkStaleAndStop;
             StopStaleBridgeListeners();
             StartListener();
         }
@@ -135,11 +138,11 @@ namespace AlpsUnityCli
             try
             {
                 listener = new HttpListener();
-                listener.Prefixes.Add("http://127.0.0.1:" + Port + "/");
-                listener.Start();
+                port = StartHttpListener(listener);
                 started = true;
                 Task.Run(ListenLoop);
-                WriteLog("bridge_started port=" + Port);
+                RegisterInstance("healthy");
+                WriteLog("bridge_started port=" + port);
             }
             catch (Exception exception)
             {
@@ -176,6 +179,39 @@ namespace AlpsUnityCli
         private static string BridgeBuildStamp()
         {
             return typeof(AlpsUnityBridgeBuildInfo).GetField("BuildStamp", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).GetValue(null) as string ?? "unknown";
+        }
+
+        private static int StartHttpListener(HttpListener httpListener)
+        {
+            Exception lastException = null;
+            for (var candidate = Port; candidate < Port + 20; candidate++)
+            {
+                try
+                {
+                    httpListener.Prefixes.Clear();
+                    httpListener.Prefixes.Add("http://127.0.0.1:" + candidate.ToString(CultureInfo.InvariantCulture) + "/");
+                    httpListener.Start();
+                    return candidate;
+                }
+                catch (Exception exception)
+                {
+                    lastException = exception;
+                }
+            }
+            throw lastException ?? new InvalidOperationException("No loopback port available.");
+        }
+
+        private static void OnBeforeAssemblyReload()
+        {
+            domainReloading = true;
+            RegisterInstance("stale");
+            StopListener();
+        }
+
+        private static void MarkStaleAndStop()
+        {
+            RegisterInstance("stale");
+            StopListener();
         }
 
         private static void StopListener()
@@ -216,7 +252,7 @@ namespace AlpsUnityCli
         {
             if (context.Request.HttpMethod == "GET" && context.Request.Url.AbsolutePath == "/health")
             {
-                WriteJson(context, "{\"ok\":true,\"data\":{\"bridge\":\"alps-unity-cli\",\"port\":" + Port + ",\"route\":\"POST /bridge/execute\",\"buildStamp\":" + Quote(BridgeBuildStamp()) + ",\"capabilities\":" + CapabilitiesJson() + "}}", 200);
+                WriteJson(context, "{\"ok\":true,\"data\":{\"bridge\":\"alps-unity-cli\",\"port\":" + port.ToString(CultureInfo.InvariantCulture) + ",\"route\":\"POST /bridge/execute\",\"buildStamp\":" + Quote(BridgeBuildStamp()) + ",\"capabilities\":" + CapabilitiesJson() + "}}", 200);
                 return;
             }
 
@@ -267,6 +303,11 @@ namespace AlpsUnityCli
 
         private static void ProcessQueuedWork()
         {
+            if (started && EditorApplication.timeSinceStartup >= nextHeartbeatAt)
+            {
+                RegisterInstance("healthy");
+                nextHeartbeatAt = EditorApplication.timeSinceStartup + 5.0;
+            }
             while (true)
             {
                 BridgeWorkItem item;
@@ -3459,7 +3500,7 @@ namespace AlpsUnityCli
             var prefabStage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
             return "{"
                 + "\"playMode\":{\"isPlaying\":" + Bool(EditorApplication.isPlaying) + ",\"isPaused\":" + Bool(EditorApplication.isPaused) + ",\"isPlayingOrWillChangePlaymode\":" + Bool(EditorApplication.isPlayingOrWillChangePlaymode) + "},"
-                + "\"busy\":{\"isBusy\":" + Bool(EditorApplication.isCompiling || EditorApplication.isUpdating || EditorApplication.isPlayingOrWillChangePlaymode || BuildPipeline.isBuildingPlayer) + ",\"compiling\":" + Bool(EditorApplication.isCompiling) + ",\"updating\":" + Bool(EditorApplication.isUpdating) + ",\"building\":" + Bool(BuildPipeline.isBuildingPlayer) + ",\"domainReloading\":" + Bool(EditorApplication.isCompiling) + ",\"playModeChanging\":" + Bool(EditorApplication.isPlayingOrWillChangePlaymode) + "},"
+                + "\"busy\":{\"isBusy\":" + Bool(EditorApplication.isCompiling || EditorApplication.isUpdating || EditorApplication.isPlayingOrWillChangePlaymode || BuildPipeline.isBuildingPlayer || domainReloading) + ",\"compiling\":" + Bool(EditorApplication.isCompiling) + ",\"updating\":" + Bool(EditorApplication.isUpdating) + ",\"building\":" + Bool(BuildPipeline.isBuildingPlayer) + ",\"domainReloading\":" + Bool(domainReloading) + ",\"playModeChanging\":" + Bool(EditorApplication.isPlayingOrWillChangePlaymode) + "},"
                 + "\"activeScene\":{\"name\":" + Quote(scene.name) + ",\"path\":" + Quote(scene.path) + ",\"isLoaded\":" + Bool(scene.isLoaded) + ",\"isDirty\":" + Bool(scene.isDirty) + "},"
                 + "\"prefabStage\":" + PrefabStageJson(prefabStage) + ","
                 + "\"bridge\":{\"buildStamp\":" + Quote(BridgeBuildStamp()) + "},"
@@ -3544,7 +3585,7 @@ namespace AlpsUnityCli
 
         private static string DiagnosePreflightJson(BridgeRequest request)
         {
-            return "{\"command\":\"diagnose.preflight\",\"targetCommand\":" + Quote(request.StringArg("command")) + ",\"project\":{\"path\":" + Quote(ProjectRoot()) + ",\"unityVersion\":" + Quote(Application.unityVersion) + ",\"activeScene\":" + Quote(SceneManager.GetActiveScene().path) + "},\"editor\":" + EditorStateJson() + ",\"bridge\":{\"port\":" + Port.ToString(CultureInfo.InvariantCulture) + ",\"logPath\":" + Quote(LogPath()) + ",\"capabilities\":" + CapabilitiesJson() + "},\"checks\":[" + DiagnoseCheckJson("unityNotBusy", !(EditorApplication.isCompiling || EditorApplication.isUpdating || BuildPipeline.isBuildingPlayer)) + "," + DiagnoseCheckJson("sceneLoaded", SceneManager.GetActiveScene().isLoaded) + "],\"logPath\":" + Quote(LogPath()) + "}";
+            return "{\"command\":\"diagnose.preflight\",\"targetCommand\":" + Quote(request.StringArg("command")) + ",\"project\":{\"path\":" + Quote(ProjectRoot()) + ",\"unityVersion\":" + Quote(Application.unityVersion) + ",\"activeScene\":" + Quote(SceneManager.GetActiveScene().path) + "},\"editor\":" + EditorStateJson() + ",\"bridge\":{\"port\":" + port.ToString(CultureInfo.InvariantCulture) + ",\"logPath\":" + Quote(LogPath()) + ",\"capabilities\":" + CapabilitiesJson() + "},\"checks\":[" + DiagnoseCheckJson("unityNotBusy", !(EditorApplication.isCompiling || EditorApplication.isUpdating || BuildPipeline.isBuildingPlayer)) + "," + DiagnoseCheckJson("sceneLoaded", SceneManager.GetActiveScene().isLoaded) + "],\"logPath\":" + Quote(LogPath()) + "}";
         }
 
         private static string ConsoleItemsJson(string type, int count)
@@ -3561,7 +3602,7 @@ namespace AlpsUnityCli
             var total = ConsoleEntryCount();
             for (var index = total - 1; index >= 0 && items.Count < count; index--)
             {
-                getEntry.Invoke(null, new[] { (object)index, entry });
+                getEntry.Invoke(null, new object[] { index, entry });
                 var mode = Convert.ToInt32(entryType.GetField("mode", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(entry), CultureInfo.InvariantCulture);
                 var level = ConsoleLevel(mode);
                 if (!string.IsNullOrEmpty(type) && !string.Equals(type, level, StringComparison.OrdinalIgnoreCase))
@@ -4378,7 +4419,78 @@ namespace AlpsUnityCli
 
         private static string InstanceId()
         {
-            return ProjectRoot();
+            return ProjectHash();
+        }
+
+        private static string ProjectHash()
+        {
+            using (var sha = System.Security.Cryptography.SHA256.Create())
+            {
+                var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(ProjectRoot().ToLowerInvariant()));
+                return BitConverter.ToString(bytes).Replace("-", string.Empty).Substring(0, 12).ToLowerInvariant();
+            }
+        }
+
+        private static string DataDir()
+        {
+            var configured = Environment.GetEnvironmentVariable("ALPS_UNITY_DATA_DIR");
+            if (!string.IsNullOrEmpty(configured))
+            {
+                return configured;
+            }
+            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            return string.IsNullOrEmpty(localAppData) ? Path.Combine(ProjectRoot(), ".unity_cli") : Path.Combine(localAppData, "AlpsUnityCli");
+        }
+
+        private static string RegistryPath()
+        {
+            return Path.Combine(DataDir(), "instances.json");
+        }
+
+        private static void RegisterInstance(string status)
+        {
+            try
+            {
+                Directory.CreateDirectory(DataDir());
+                var existing = File.Exists(RegistryPath()) ? File.ReadAllText(RegistryPath()) : string.Empty;
+                var instanceJson = InstanceJson(status);
+                var marker = "\"instanceId\":" + Quote(InstanceId());
+                var items = new List<string>();
+                foreach (Match match in Regex.Matches(existing, "\\{\\s*\\\"instanceId\\\"[\\s\\S]*?\\\"lastHeartbeatAt\\\"\\s*:\\s*\\\"(?:\\\\.|[^\\\"])*\\\"\\s*\\}"))
+                {
+                    var item = match.Value;
+                    if (item.IndexOf(marker, StringComparison.Ordinal) < 0)
+                    {
+                        items.Add(item);
+                    }
+                }
+                items.Add(instanceJson);
+                File.WriteAllText(RegistryPath(), "{\"version\":1,\"instances\":[" + string.Join(",", items.ToArray()) + "]}");
+                WriteLog("instance_registered id=" + InstanceId() + " status=" + status + " endpoint=http://127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture));
+            }
+            catch (Exception exception)
+            {
+                WriteLog("instance_register_failed " + exception.GetType().Name + ": " + exception.Message);
+            }
+        }
+
+        private static string InstanceJson(string status)
+        {
+            var now = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
+            return "{"
+                + "\"instanceId\":" + Quote(InstanceId()) + ","
+                + "\"projectPath\":" + Quote(ProjectRoot()) + ","
+                + "\"projectHash\":" + Quote(ProjectHash()) + ","
+                + "\"unityVersion\":" + Quote(Application.unityVersion) + ","
+                + "\"packageVersion\":\"com.alps.unity-cli.bridge\"," 
+                + "\"pid\":" + System.Diagnostics.Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture) + ","
+                + "\"bridgeEndpoint\":" + Quote("http://127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture)) + ","
+                + "\"capabilitiesHash\":" + Quote(BridgeBuildStamp()) + ","
+                + "\"status\":" + Quote(status) + ","
+                + "\"editorState\":{\"playMode\":" + Bool(EditorApplication.isPlaying) + ",\"compiling\":" + Bool(EditorApplication.isCompiling) + ",\"domainReloading\":" + Bool(domainReloading) + "},"
+                + "\"registeredAt\":" + Quote(now) + ","
+                + "\"lastHeartbeatAt\":" + Quote(now)
+                + "}";
         }
 
         private static string HierarchyPath(GameObject gameObject)
@@ -4441,6 +4553,11 @@ namespace AlpsUnityCli
                 items.Add("{\"id\":" + gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) + ",\"name\":" + Quote(gameObject.name) + ",\"path\":" + Quote(HierarchyPath(gameObject)) + ",\"components\":" + ComponentNamesJson(gameObject) + "}");
             }
             return "[" + string.Join(",", items.ToArray()) + "]";
+        }
+
+        private static string QuotePair(string key, string value)
+        {
+            return "\"" + key + "\":\"" + (value ?? string.Empty).Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "\\r").Replace("\n", "\\n").Replace("\t", "\\t") + "\"";
         }
 
         private static string Quote(string value)
@@ -4915,6 +5032,24 @@ namespace AlpsUnityCli
                 throw new BridgeCommandException("E_SETTING_VALUE_INVALID", "Expected boolean for " + property + ": " + value, "Pass true or false.");
             }
             return parsed;
+        }
+
+        private static Type FindType(string fullName)
+        {
+            var type = Type.GetType(fullName);
+            if (type != null)
+            {
+                return type;
+            }
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                type = assembly.GetType(fullName);
+                if (type != null)
+                {
+                    return type;
+                }
+            }
+            return null;
         }
 
         private static string LogPath()

@@ -3,9 +3,11 @@ import { resolve } from "node:path";
 import { stdin } from "node:process";
 import type { CliResult } from "./types.js";
 import { failure, success } from "./output.js";
+import { instanceSelectionFailure, selectInstanceForFlags, type InstanceSelection } from "./instances.js";
 
 export interface BridgeRuntime {
   bridgeEndpoint?: string;
+  dataDir?: string;
   bridgeExecute?: (payload: BridgeRequest) => Promise<BridgeResponse>;
 }
 
@@ -58,7 +60,18 @@ export async function executeBridgePayload(
   flags: Record<string, string | boolean>,
   runtime: BridgeRuntime
 ): Promise<CliResult> {
-  const endpoint = bridgeEndpoint(flags, runtime);
+  let selectedInstance: InstanceSelection | undefined;
+  let endpoint: string | undefined;
+  try {
+    selectedInstance = command.startsWith("custom-tool.") ? undefined : await selectInstanceForFlags(flags, runtime.dataDir ?? process.cwd());
+    endpoint = bridgeEndpoint(flags, runtime, selectedInstance);
+  } catch (error) {
+    const result = instanceSelectionFailure(requestId, error);
+    if (result) {
+      return result;
+    }
+    throw error;
+  }
   if (!runtime.bridgeExecute && !endpoint) {
     if (command === "ui.document.info" && typeof args.path === "string") {
       return readUiDocumentOffline(requestId, command, args.path);
@@ -87,6 +100,7 @@ export async function executeBridgePayload(
     return success(requestId, {
       command,
       bridgeEndpoint: endpoint,
+      ...(selectedInstance ? { selectedInstance: selectedInstanceSummary(selectedInstance) } : {}),
       ...bridgeResult.data
     });
   } catch (error) {
@@ -574,8 +588,18 @@ function screenshotArgs(flags: Record<string, string | boolean>, positionalPath:
   });
 }
 
-function bridgeEndpoint(flags: Record<string, string | boolean>, runtime: BridgeRuntime): string | undefined {
-  return stringFlag(flags, "bridge-endpoint") ?? runtime.bridgeEndpoint ?? process.env.ALPS_UNITY_BRIDGE_ENDPOINT;
+function bridgeEndpoint(flags: Record<string, string | boolean>, runtime: BridgeRuntime, selectedInstance?: InstanceSelection): string | undefined {
+  return stringFlag(flags, "bridge-endpoint") ?? runtime.bridgeEndpoint ?? process.env.ALPS_UNITY_BRIDGE_ENDPOINT ?? selectedInstance?.instance.bridgeEndpoint;
+}
+
+function selectedInstanceSummary(selection: InstanceSelection): Record<string, string> {
+  return {
+    matchedBy: selection.matchedBy,
+    instanceId: selection.instance.instanceId,
+    projectPath: selection.instance.projectPath,
+    projectHash: selection.instance.projectHash,
+    bridgeEndpoint: selection.instance.bridgeEndpoint
+  };
 }
 
 async function readUiDocumentOffline(requestId: string, command: string, path: string): Promise<CliResult> {
@@ -760,7 +784,7 @@ async function customToolArgs(command: string, flags: Record<string, string | bo
 
   const name = positionalTarget ?? stringFlag(flags, "name");
   if (!name) {
-    throw new BridgeArgumentError("E_TOOL_NOT_FOUND", "Pass a custom tool name: alps-unity custom-tool run <name>.", ["Run alps-unity custom-tool list to inspect registered tools."]);
+    throw new BridgeArgumentError("E_TOOL_NOT_FOUND", "Pass a custom tool name: unity_cli custom-tool run <name>.", ["Run unity_cli custom-tool list to inspect registered tools."]);
   }
 
   const timeoutMs = timeoutFlag(flags, 30_000, 600_000);

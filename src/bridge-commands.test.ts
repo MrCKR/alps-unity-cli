@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
@@ -11,10 +11,114 @@ import type { BridgeRequest } from "./bridge-commands.js";
 process.env.ALPS_UNITY_ALLOW_NON_WINDOWS = "1";
 
 async function makeRuntime() {
-  const dataDir = await mkdtemp(join(tmpdir(), "alps-unity-bridge-"));
+  const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-bridge-"));
   const store = new JobStore(dataDir);
   return { dataDir, store, runner: new JobRunner(store, dataDir) };
 }
+
+async function writeRegistry(dataDir: string, instances: Array<Record<string, unknown>>) {
+  await mkdir(dataDir, { recursive: true });
+  await writeFile(join(dataDir, "instances.json"), JSON.stringify({ version: 1, instances }, null, 2), "utf8");
+}
+
+function instance(overrides: Record<string, unknown> = {}) {
+  return {
+    instanceId: "editor-1",
+    projectPath: "/tmp/project-one",
+    projectHash: "hash-one",
+    unityVersion: "2022.3.45f1",
+    packageVersion: "com.alps.unity-cli.bridge",
+    pid: 1234,
+    bridgeEndpoint: "http://127.0.0.1:47392",
+    capabilitiesHash: "caps",
+    status: "healthy",
+    editorState: { playMode: false, compiling: false, domainReloading: false },
+    registeredAt: new Date().toISOString(),
+    lastHeartbeatAt: new Date().toISOString(),
+    ...overrides
+  };
+}
+
+test("instances list and cleanup normalize stale registry entries", async () => {
+  const runtime = await makeRuntime();
+  await writeRegistry(runtime.dataDir, [
+    instance(),
+    instance({ instanceId: "editor-stale", projectHash: "hash-stale", status: "healthy", bridgeEndpoint: "http://127.0.0.1:47393", lastHeartbeatAt: new Date(Date.now() - 60_000).toISOString() })
+  ]);
+
+  const list = await execute(["instances", "list"], runtime);
+  assert.equal(list.ok, true);
+  assert.deepEqual((list.data as { instances: Array<{ status: string }> }).instances.map((item) => item.status), ["healthy", "stale"]);
+
+  const cleanup = await execute(["instances", "cleanup"], runtime);
+  assert.equal(cleanup.ok, true);
+  assert.equal((cleanup.data as { removed: number }).removed, 1);
+});
+
+test("bridge command routes --instance to the matching healthy endpoint", async () => {
+  const runtime = await makeRuntime();
+  await writeRegistry(runtime.dataDir, [
+    instance(),
+    instance({ instanceId: "editor-2", projectPath: "/tmp/project-two", projectHash: "hash-two", bridgeEndpoint: "http://127.0.0.1:47393" })
+  ]);
+  const requests: BridgeRequest[] = [];
+
+  const result = await execute(["scene", "hierarchy", "--instance", "editor-2"], {
+    ...runtime,
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { items: [] } };
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal((result.data as { bridgeEndpoint: string }).bridgeEndpoint, "http://127.0.0.1:47393");
+  assert.equal((result.data as { selectedInstance: { instanceId: string } }).selectedInstance.instanceId, "editor-2");
+  assert.equal(requests[0].command, "scene.hierarchy");
+});
+
+test("bridge command auto-selects by current project path", async () => {
+  const runtime = await makeRuntime();
+  await writeRegistry(runtime.dataDir, [instance({ projectPath: process.cwd() })]);
+
+  const result = await execute(["editor", "state"], {
+    ...runtime,
+    bridgeExecute: async () => ({ ok: true, data: { state: "ok" } })
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal((result.data as { selectedInstance: { matchedBy: string } }).selectedInstance.matchedBy, "cwd");
+});
+
+test("bridge command reports missing, stale and ambiguous instances", async () => {
+  const missingRuntime = await makeRuntime();
+  await writeRegistry(missingRuntime.dataDir, [instance()]);
+  const missing = await execute(["editor", "state", "--instance", "missing"], missingRuntime);
+  assert.equal(missing.ok, false);
+  assert.equal(missing.error?.code, "E_INSTANCE_NOT_FOUND");
+
+  const staleRuntime = await makeRuntime();
+  await writeRegistry(staleRuntime.dataDir, [instance({ status: "stale" })]);
+  const stale = await execute(["editor", "state", "--instance", "editor-1"], staleRuntime);
+  assert.equal(stale.ok, false);
+  assert.equal(stale.error?.code, "E_INSTANCE_STALE");
+
+  const ambiguousRuntime = await makeRuntime();
+  await writeRegistry(ambiguousRuntime.dataDir, [instance(), instance({ instanceId: "editor-2", projectPath: "/tmp/project-two", projectHash: "hash-two", bridgeEndpoint: "http://127.0.0.1:47393" })]);
+  const ambiguous = await execute(["editor", "state"], ambiguousRuntime);
+  assert.equal(ambiguous.ok, false);
+  assert.equal(ambiguous.error?.code, "E_INSTANCE_AMBIGUOUS");
+});
+
+test("bridge command marks expired healthy heartbeat as stale", async () => {
+  const runtime = await makeRuntime();
+  await writeRegistry(runtime.dataDir, [instance({ lastHeartbeatAt: new Date(Date.now() - 60_000).toISOString() })]);
+
+  const result = await execute(["editor", "state", "--instance", "editor-1"], runtime);
+
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_INSTANCE_STALE");
+});
 
 test("query command forwards stable bridge envelope", async () => {
   const runtime = await makeRuntime();
@@ -252,7 +356,7 @@ test("custom-tool input validation returns structured CLI diagnostics", async ()
   assert.equal(conflictingInput.error?.code, "E_SCHEMA_INVALID");
   assert.equal(missingName.ok, false);
   assert.equal(missingName.error?.code, "E_TOOL_NOT_FOUND");
-  assert.deepEqual(missingName.error?.next_actions, ["Run alps-unity custom-tool list to inspect registered tools."]);
+  assert.deepEqual(missingName.error?.next_actions, ["Run unity_cli custom-tool list to inspect registered tools."]);
   assert.equal(invalidTimeout.ok, false);
   assert.equal(invalidTimeout.error?.code, "E_SCHEMA_INVALID");
 });
@@ -282,12 +386,12 @@ test("material bridge errors preserve structured diagnostics", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["material", "set", "Assets/Materials/Player.mat", "--property", "_Missing", "--value", "1"], {
     ...runtime,
-    bridgeExecute: async () => ({ ok: false, error: { code: "E_MATERIAL_PROPERTY_NOT_FOUND", message: "Material property not found: _Missing" }, nextActions: ["Run alps-unity material info <path> to inspect shader properties."] })
+    bridgeExecute: async () => ({ ok: false, error: { code: "E_MATERIAL_PROPERTY_NOT_FOUND", message: "Material property not found: _Missing" }, nextActions: ["Run unity_cli material info <path> to inspect shader properties."] })
   });
 
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "E_MATERIAL_PROPERTY_NOT_FOUND");
-  assert.deepEqual(result.error?.next_actions, ["Run alps-unity material info <path> to inspect shader properties."]);
+  assert.deepEqual(result.error?.next_actions, ["Run unity_cli material info <path> to inspect shader properties."]);
 });
 
 test("graphics commands forward settings and screenshot diagnostics", async () => {
@@ -369,8 +473,8 @@ test("animation and vfx bridge errors preserve diagnostics", async () => {
   const runtime = await makeRuntime();
   const cases: Array<{ argv: string[]; code: string; message: string; nextActions: string[] }> = [
     { argv: ["animation", "play", "Player", "--state", "Missing"], code: "E_TARGET_AMBIGUOUS", message: "Multiple GameObjects matched: Player", nextActions: ["Pass a hierarchy path or instance id."] },
-    { argv: ["animation", "clip", "Assets/Animations/Missing.anim"], code: "E_ANIMATION_CLIP_NOT_FOUND", message: "AnimationClip asset not found", nextActions: ["Check the path or create one with alps-unity animation clip <path> --create."] },
-    { argv: ["vfx", "graph", "Assets/VFX/Explosion.vfx"], code: "E_VFX_PACKAGE_MISSING", message: "Visual Effect Graph package is not installed", nextActions: ["Install com.unity.visualeffectgraph with alps-unity package install com.unity.visualeffectgraph, run package resolve, then retry."] },
+    { argv: ["animation", "clip", "Assets/Animations/Missing.anim"], code: "E_ANIMATION_CLIP_NOT_FOUND", message: "AnimationClip asset not found", nextActions: ["Check the path or create one with unity_cli animation clip <path> --create."] },
+    { argv: ["vfx", "graph", "Assets/VFX/Explosion.vfx"], code: "E_VFX_PACKAGE_MISSING", message: "Visual Effect Graph package is not installed", nextActions: ["Install com.unity.visualeffectgraph with unity_cli package install com.unity.visualeffectgraph, run package resolve, then retry."] },
     { argv: ["vfx", "graph", "Assets/VFX/Explosion.vfx", "--create"], code: "E_VFX_GRAPH_CREATE_FAILED", message: "VFX Graph asset creation did not produce a readable VisualEffectAsset", nextActions: ["Check Unity Console and AlpsUnityBridge.log; the Visual Effect Graph package may have changed its internal authoring API."] },
     { argv: ["animation", "clip", "D:\\tmp\\Bad.anim"], code: "E_ANIMATION_CLIP_PATH_INVALID", message: "AnimationClip path must be under Assets/ and end with .anim: D:\\tmp\\Bad.anim", nextActions: ["Pass a Unity asset path such as Assets/Animations/Player.anim."] }
   ];
@@ -562,12 +666,12 @@ test("prefab bridge errors preserve structured diagnostics", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["prefab", "stage-close"], {
     ...runtime,
-    bridgeExecute: async () => ({ ok: false, error: { code: "E_PREFAB_DIRTY_CONFLICT", message: "Prefab Stage has unsaved changes." }, nextActions: ["Run alps-unity prefab stage-close --save."] })
+    bridgeExecute: async () => ({ ok: false, error: { code: "E_PREFAB_DIRTY_CONFLICT", message: "Prefab Stage has unsaved changes." }, nextActions: ["Run unity_cli prefab stage-close --save."] })
   });
 
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "E_PREFAB_DIRTY_CONFLICT");
-  assert.deepEqual(result.error?.next_actions, ["Run alps-unity prefab stage-close --save."]);
+  assert.deepEqual(result.error?.next_actions, ["Run unity_cli prefab stage-close --save."]);
 });
 
 test("bridge errors return CLI failure envelope", async () => {
@@ -586,7 +690,7 @@ test("camera screenshot bridge target and IO errors preserve protocol envelopes"
   const runtime = await makeRuntime();
   const cases: Array<{ name: string; response: { code: string; message: string }; nextActions: string[] }> = [
     { name: "empty target", response: { code: "E_TARGET_NOT_FOUND", message: "Camera screenshot requires a target Camera." }, nextActions: ["Pass a Camera name, hierarchy path or instance id."] },
-    { name: "missing camera", response: { code: "E_TARGET_NOT_FOUND", message: "Camera not found: Missing Camera" }, nextActions: ["Run alps-unity camera list to inspect available cameras."] },
+    { name: "missing camera", response: { code: "E_TARGET_NOT_FOUND", message: "Camera not found: Missing Camera" }, nextActions: ["Run unity_cli camera list to inspect available cameras."] },
     { name: "io failure", response: { code: "E_IO_ERROR", message: "Failed to write screenshot output." }, nextActions: ["Check output path, permissions, format parameters and AlpsUnityBridge.log."] }
   ];
 
