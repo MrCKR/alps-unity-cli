@@ -4555,6 +4555,11 @@ namespace AlpsUnityCli
             return "[" + string.Join(",", items.ToArray()) + "]";
         }
 
+        private static string QuotePair(string key, string value)
+        {
+            return "\"" + key + "\":\"" + (value ?? string.Empty).Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "\\r").Replace("\n", "\\n").Replace("\t", "\\t") + "\"";
+        }
+
         private static string Quote(string value)
         {
             if (value == null)
