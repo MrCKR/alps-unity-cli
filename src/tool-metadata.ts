@@ -1197,6 +1197,28 @@ const EDITOR_TOOLS: ToolMetadata[] = [
     handler: "bridge",
     cliCommand: "editor menu",
     docsTopic: "editor"
+  },
+  {
+    name: "editor.refresh",
+    title: "Refresh Editor Assets",
+    description: "Trigger asset refresh in the Unity Editor, optionally recompiling scripts. Runs as a Unity batch job.",
+    group: "editor",
+    inputSchema: objSchema({
+      compile: { type: "boolean", default: false },
+      project: { type: "string" },
+      unity: { type: "string" },
+      wait: { type: "boolean", default: true }
+    }),
+    readOnlyHint: false,
+    destructiveHint: false,
+    longRunning: true,
+    handler: "job",
+    cliCommand: "editor refresh",
+    docsTopic: "editor",
+    examples: [
+      { description: "Refresh assets without recompile", argv: ["editor", "refresh"] },
+      { description: "Refresh and recompile, then wait", argv: ["editor", "refresh", "--compile", "--wait"] }
+    ]
   }
 ];
 
@@ -1418,6 +1440,175 @@ const CLI_ONLY_TOOLS: ToolMetadata[] = [
     handler: "offline",
     cliCommand: "reflect search",
     docsTopic: "reflect"
+  },
+  {
+    name: "cli.package.resolve",
+    title: "Package Resolve",
+    description: "Resolve all packages in the project manifest by running Unity PackageManager. Runs as a batch job.",
+    group: "cli",
+    inputSchema: objSchema({
+      project: { type: "string" },
+      unity: { type: "string" },
+      wait: { type: "boolean", default: true }
+    }),
+    readOnlyHint: false,
+    destructiveHint: false,
+    longRunning: true,
+    handler: "hybrid",
+    cliCommand: "package resolve",
+    docsTopic: "package",
+    examples: [
+      { description: "Resolve packages and wait", argv: ["package", "resolve", "--project", "MyProject", "--unity", "Unity.exe", "--wait"] }
+    ]
+  },
+  {
+    name: "cli.package.registry",
+    title: "Package Registry",
+    description: "Get, set, or clear the primary registry URL in the project manifest.",
+    group: "cli",
+    inputSchema: objSchema({
+      action: { type: "string", enum: ["get", "set", "clear"] },
+      url: { type: "string" },
+      project: { type: "string" }
+    }, ["action"]),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "offline",
+    cliCommand: "package registry",
+    docsTopic: "package",
+    examples: [
+      { description: "Get current registry", argv: ["package", "registry", "get"] },
+      { description: "Set registry URL", argv: ["package", "registry", "set", "--url", "https://packages.unity.com"] }
+    ]
+  },
+  {
+    name: "cli.package.scoped-registry",
+    title: "Package Scoped Registry",
+    description: "List, add, or remove scoped registries in the project manifest.",
+    group: "cli",
+    inputSchema: objSchema({
+      action: { type: "string", enum: ["list", "add", "remove"] },
+      name: { type: "string" },
+      url: { type: "string" },
+      scope: { type: "string" },
+      scopes: { type: "string" },
+      project: { type: "string" }
+    }, ["action"]),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "offline",
+    cliCommand: "package scoped-registry",
+    docsTopic: "package",
+    examples: [
+      { description: "List scoped registries", argv: ["package", "scoped-registry", "list"] },
+      { description: "Add scoped registry", argv: ["package", "scoped-registry", "add", "--name", "MyRegistry", "--url", "https://my.registry.com", "--scope", "com.mycompany"] }
+    ]
+  },
+  {
+    name: "test.run",
+    title: "Test Run",
+    description: "Run Unity EditMode or PlayMode tests as a batch job. Returns a job ID that can be polled for status.",
+    group: "test",
+    inputSchema: objSchema({
+      platform: { type: "string", enum: ["EditMode", "PlayMode"], default: "EditMode" },
+      project: { type: "string" },
+      unity: { type: "string" },
+      wait: { type: "boolean" },
+      timeoutMs: { type: "integer" }
+    }),
+    readOnlyHint: false,
+    destructiveHint: false,
+    longRunning: true,
+    handler: "job",
+    cliCommand: "test run",
+    docsTopic: "test",
+    examples: [
+      { description: "Run EditMode tests as job", argv: ["test", "run"] },
+      { description: "Run PlayMode tests and wait", argv: ["test", "run", "--platform", "PlayMode", "--wait"] }
+    ]
+  },
+  {
+    name: "test.poll",
+    title: "Test Poll",
+    description: "Poll the status of a running test job. Equivalent to `job status --id <jobId>`.",
+    group: "test",
+    inputSchema: objSchema({ id: { type: "string" } }, ["id"]),
+    outputSchema: objSchema({
+      jobId: { type: "string" },
+      kind: { type: "string" },
+      status: { type: "string" },
+      exitCode: { type: "integer" },
+      logPath: { type: "string" }
+    }),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "offline",
+    cliCommand: "test poll",
+    docsTopic: "test",
+    examples: [
+      { description: "Poll test job status", argv: ["test", "poll", "--id", "job_abc123"] }
+    ]
+  },
+  {
+    name: "build.run",
+    title: "Build Run",
+    description: "Trigger a Unity project build as a batch job. Returns a job ID that can be polled for status.",
+    group: "build",
+    inputSchema: objSchema({
+      target: { type: "string", enum: ["StandaloneWindows64", "StandaloneWindows", "StandaloneOSX", "StandaloneLinux64", "WebGL", "iOS", "Android"], default: "StandaloneWindows64" },
+      output: { type: "string" },
+      project: { type: "string" },
+      unity: { type: "string" },
+      wait: { type: "boolean" },
+      timeoutMs: { type: "integer" }
+    }),
+    readOnlyHint: false,
+    destructiveHint: false,
+    longRunning: true,
+    handler: "job",
+    cliCommand: "build run",
+    docsTopic: "build",
+    examples: [
+      { description: "Build for Windows64 as job", argv: ["build", "run"] },
+      { description: "Build and wait for completion", argv: ["build", "run", "--target", "StandaloneWindows64", "--wait"] }
+    ]
+  },
+  {
+    name: "build.status",
+    title: "Build Status",
+    description: "Check the status of a running build job. Equivalent to `job status --id <jobId>`.",
+    group: "build",
+    inputSchema: objSchema({ id: { type: "string" } }, ["id"]),
+    outputSchema: objSchema({
+      jobId: { type: "string" },
+      kind: { type: "string" },
+      status: { type: "string" },
+      exitCode: { type: "integer" },
+      logPath: { type: "string" }
+    }),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "offline",
+    cliCommand: "build status",
+    docsTopic: "build",
+    examples: [
+      { description: "Check build job status", argv: ["build", "status", "--id", "job_abc123"] }
+    ]
+  },
+  {
+    name: "build.cancel",
+    title: "Build Cancel",
+    description: "Cancel a running build job. Equivalent to `job cancel --id <jobId>`.",
+    group: "build",
+    inputSchema: objSchema({ id: { type: "string" } }, ["id"]),
+    readOnlyHint: false,
+    destructiveHint: true,
+    handler: "offline",
+    cliCommand: "build cancel",
+    docsTopic: "build",
+    examples: [
+      { description: "Cancel a build job", argv: ["build", "cancel", "--id", "job_abc123"] }
+    ]
   }
 ];
 

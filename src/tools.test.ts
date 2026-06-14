@@ -219,6 +219,149 @@ test("tools describe for destructive tool shows destructiveHint", async () => {
   assert.equal(data.destructiveHint, true);
 });
 
+// ── S2.3 metadata: editor, package, test, build ────────────
+
+test("editor.refresh metadata exists with job handler and longRunning", () => {
+  const tool = findToolByName("editor.refresh");
+  assert.ok(tool, "editor.refresh should exist");
+  assert.equal(tool.group, "editor");
+  assert.equal(tool.handler, "job");
+  assert.equal(tool.longRunning, true);
+  assert.equal(tool.readOnlyHint, false);
+  assert.equal(tool.destructiveHint, false);
+  assert.ok(tool.examples && tool.examples.length > 0);
+});
+
+test("cli.package.resolve metadata exists with hybrid handler", () => {
+  const tool = findToolByName("cli.package.resolve");
+  assert.ok(tool, "cli.package.resolve should exist");
+  assert.equal(tool.group, "cli");
+  assert.equal(tool.handler, "hybrid");
+  assert.equal(tool.longRunning, true);
+  assert.equal(tool.readOnlyHint, false);
+});
+
+test("cli.package.registry metadata exists with offline handler", () => {
+  const tool = findToolByName("cli.package.registry");
+  assert.ok(tool, "cli.package.registry should exist");
+  assert.equal(tool.group, "cli");
+  assert.equal(tool.handler, "offline");
+  assert.equal(tool.readOnlyHint, false);
+});
+
+test("cli.package.scoped-registry metadata exists with offline handler", () => {
+  const tool = findToolByName("cli.package.scoped-registry");
+  assert.ok(tool, "cli.package.scoped-registry should exist");
+  assert.equal(tool.group, "cli");
+  assert.equal(tool.handler, "offline");
+  assert.equal(tool.readOnlyHint, false);
+});
+
+test("test.run metadata exists with job handler and longRunning", () => {
+  const tool = findToolByName("test.run");
+  assert.ok(tool, "test.run should exist");
+  assert.equal(tool.group, "test");
+  assert.equal(tool.handler, "job");
+  assert.equal(tool.longRunning, true);
+  assert.equal(tool.readOnlyHint, false);
+  assert.equal(tool.destructiveHint, false);
+  assert.ok(tool.examples && tool.examples.length > 0);
+});
+
+test("test.poll metadata exists with offline handler", () => {
+  const tool = findToolByName("test.poll");
+  assert.ok(tool, "test.poll should exist");
+  assert.equal(tool.group, "test");
+  assert.equal(tool.handler, "offline");
+  assert.equal(tool.readOnlyHint, true);
+  assert.ok(tool.outputSchema);
+});
+
+test("build.run metadata exists with job handler and longRunning", () => {
+  const tool = findToolByName("build.run");
+  assert.ok(tool, "build.run should exist");
+  assert.equal(tool.group, "build");
+  assert.equal(tool.handler, "job");
+  assert.equal(tool.longRunning, true);
+  assert.equal(tool.readOnlyHint, false);
+  assert.equal(tool.destructiveHint, false);
+  assert.ok(tool.examples && tool.examples.length > 0);
+});
+
+test("build.status metadata exists with offline handler", () => {
+  const tool = findToolByName("build.status");
+  assert.ok(tool, "build.status should exist");
+  assert.equal(tool.group, "build");
+  assert.equal(tool.handler, "offline");
+  assert.equal(tool.readOnlyHint, true);
+  assert.ok(tool.outputSchema);
+});
+
+test("build.cancel metadata exists with destructiveHint", () => {
+  const tool = findToolByName("build.cancel");
+  assert.ok(tool, "build.cancel should exist");
+  assert.equal(tool.group, "build");
+  assert.equal(tool.handler, "offline");
+  assert.equal(tool.readOnlyHint, false);
+  assert.equal(tool.destructiveHint, true);
+});
+
+test("S2.3 editor group has all required tools", () => {
+  const editorTools = filterToolsByGroup("editor");
+  const names = editorTools.map((t) => t.name);
+  assert.ok(names.includes("editor.state"));
+  assert.ok(names.includes("editor.play"));
+  assert.ok(names.includes("editor.pause"));
+  assert.ok(names.includes("editor.stop"));
+  assert.ok(names.includes("editor.menu"));
+  assert.ok(names.includes("editor.console"));
+  assert.ok(names.includes("editor.refresh"));
+});
+
+test("S2.3 test group has all required tools", () => {
+  const testTools = filterToolsByGroup("test");
+  const names = testTools.map((t) => t.name);
+  assert.ok(names.includes("test.run"));
+  assert.ok(names.includes("test.poll"));
+});
+
+test("S2.3 build group has all required tools", () => {
+  const buildTools = filterToolsByGroup("build");
+  const names = buildTools.map((t) => t.name);
+  assert.ok(names.includes("build.run"));
+  assert.ok(names.includes("build.status"));
+  assert.ok(names.includes("build.cancel"));
+});
+
+test("tools describe test.run returns full metadata", async () => {
+  const result = await handleToolsCommand("describe", ["test.run"], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.name, "test.run");
+  assert.equal(data.group, "test");
+  assert.equal(data.handler, "job");
+  assert.equal(data.longRunning, true);
+});
+
+test("tools describe build.run returns full metadata", async () => {
+  const result = await handleToolsCommand("describe", ["build.run"], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.name, "build.run");
+  assert.equal(data.group, "build");
+  assert.equal(data.handler, "job");
+  assert.equal(data.longRunning, true);
+});
+
+test("tools describe editor.refresh returns job metadata", async () => {
+  const result = await handleToolsCommand("describe", ["editor.refresh"], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.name, "editor.refresh");
+  assert.equal(data.handler, "job");
+  assert.equal(data.longRunning, true);
+});
+
 // ── tools unknown subcommand ───────────────────────────────
 
 test("tools unknown subcommand returns error", async () => {
