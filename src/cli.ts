@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs, getBoolean, getNumber, getString } from "./args.js";
 import { batchJsonSchema, runBatch } from "./batch.js";
 import { bridgeCommandName, executeBridgeCommand, executeBridgePayload, type BridgeRuntime } from "./bridge-commands.js";
+import { handleInstancesCommand } from "./instances.js";
 import { handleDocsCommand, handleReflectCommand } from "./docs-reflect.js";
 import { JobRunner } from "./job-runner.js";
 import { handleCode } from "./runtime-code.js";
@@ -56,6 +57,10 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
 
     if (group === "batch") {
       return handleBatch(command, parsed.positional[2], parsed.flags, runtime, requestId);
+    }
+
+    if (group === "instances") {
+      return handleInstancesCommand(command, parsed.flags, runtime.dataDir, requestId);
     }
 
     if (group === "code") {
@@ -444,6 +449,8 @@ function help(): Record<string, unknown> {
       "package scoped-registry list|add|remove --name <name> --url <url> --scope <scope>",
       "batch schema",
       "batch run <file.json> [--preflight] [--fail-fast true|false] [--parallel 1]",
+      "instances list",
+      "instances cleanup",
       "docs get <api> [--docs-dir <path>] [--unity-version <version>] [--format json|text]",
       "docs search <query> [--docs-dir <path>] [--page-size 20 --cursor 0] [--format json|text]",
       "reflect type <name> [--reflect-dir <path>] [--unity-version <version>] [--format json|text]",
