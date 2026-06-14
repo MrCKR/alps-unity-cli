@@ -47,9 +47,9 @@ export async function handleToolsCommand(
   }
 
   return failure(requestId, "UNKNOWN_TOOLS_COMMAND", "Expected tools list, tools groups, tools search <keyword> or tools describe <tool>.", [
-    "Run alps-unity tools list to see all available tools.",
-    "Run alps-unity tools groups to see tool categories.",
-    "Run alps-unity tools describe <tool> for full metadata."
+    "Run unity_cli tools list to see all available tools.",
+    "Run unity_cli tools groups to see tool categories.",
+    "Run unity_cli tools describe <tool> for full metadata."
   ]);
 }
 
@@ -129,8 +129,8 @@ function handleToolsSearch(
   requestId: string
 ): CliResult {
   if (!keyword) {
-    return failure(requestId, "TOOLS_SEARCH_KEYWORD_REQUIRED", "Pass a keyword: alps-unity tools search <keyword>.", [
-      "Run alps-unity tools list to see all available tools."
+    return failure(requestId, "TOOLS_SEARCH_KEYWORD_REQUIRED", "Pass a keyword: unity_cli tools search <keyword>.", [
+      "Run unity_cli tools list to see all available tools."
     ]);
   }
 
@@ -175,16 +175,16 @@ function handleToolsDescribe(
   requestId: string
 ): CliResult {
   if (!toolName) {
-    return failure(requestId, "TOOLS_DESCRIBE_NAME_REQUIRED", "Pass a tool name: alps-unity tools describe <tool>.", [
-      "Run alps-unity tools list to see all available tools."
+    return failure(requestId, "TOOLS_DESCRIBE_NAME_REQUIRED", "Pass a tool name: unity_cli tools describe <tool>.", [
+      "Run unity_cli tools list to see all available tools."
     ]);
   }
 
   const tool = findToolByName(toolName);
   if (!tool) {
     return failure(requestId, "TOOL_NOT_FOUND", `Tool not found: ${toolName}.`, [
-      "Run alps-unity tools list to see all available tools.",
-      "Run alps-unity tools search <keyword> to find related tools."
+      "Run unity_cli tools list to see all available tools.",
+      "Run unity_cli tools search <keyword> to find related tools."
     ]);
   }
 

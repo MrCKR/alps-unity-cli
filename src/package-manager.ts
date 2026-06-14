@@ -196,7 +196,6 @@ export async function ensurePackageBridge(projectPath: string): Promise<UnityCli
   const projectHash = await hashProjectPath(paths.projectPath);
   const installMetadataPath = join(paths.projectPath, "Packages", installMetadataFileName);
 
-  delete manifest.dependencies["com.alps.unity-cli.bridge"];
   manifest.dependencies[bridgePackageName] = dependencySpec;
   await writeManifest(paths.manifestPath, manifest);
   await writeInstallMetadata(installMetadataPath, {

@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 process.env.ALPS_UNITY_ALLOW_NON_WINDOWS = "1";
 
 async function makeRuntime() {
-  const dataDir = await mkdtemp(join(tmpdir(), "alps-unity-integ-"));
+  const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-integ-"));
   const store = new JobStore(dataDir);
   return { dataDir, store, runner: new JobRunner(store, dataDir) };
 }

@@ -308,7 +308,7 @@ export function handleDocsTopicCommand(
     const available = Object.keys(TOPIC_DOCS).sort();
     return failure(requestId, "DOCS_TOPIC_NOT_FOUND", `Documentation topic not found: ${topic}.`, [
       `Available topics: ${available.join(", ")}.`,
-      "Run alps-unity tools list to see tools grouped by topic."
+      "Run unity_cli tools list to see tools grouped by topic."
     ]);
   }
 
