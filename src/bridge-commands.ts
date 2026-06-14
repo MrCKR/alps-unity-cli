@@ -2,7 +2,8 @@ import { readFile, stat } from "node:fs/promises";
 import { resolve } from "node:path";
 import { stdin } from "node:process";
 import type { CliResult } from "./types.js";
-import { failure, success } from "./output.js";
+import { durationMsFrom, failure, success, TRANSIENT_ERROR_CODES, DEFAULT_RETRY_AFTER_MS } from "./output.js";
+import { withRetry, type RetryOptions } from "./envelope.js";
 import { instanceSelectionFailure, selectInstanceForFlags, type InstanceSelection } from "./instances.js";
 
 export interface BridgeRuntime {
@@ -60,6 +61,7 @@ export async function executeBridgePayload(
   flags: Record<string, string | boolean>,
   runtime: BridgeRuntime
 ): Promise<CliResult> {
+  const startMs = Date.now();
   let selectedInstance: InstanceSelection | undefined;
   let endpoint: string | undefined;
   try {
@@ -82,39 +84,50 @@ export async function executeBridgePayload(
     ]);
   }
 
-  try {
-    const bridgeResult = runtime.bridgeExecute
-      ? await runtime.bridgeExecute({ requestId, command, args })
-      : await postBridgeExecute(endpoint!, { requestId, command, args });
+  // Check if retry is enabled via --retry flag
+  const maxRetries = typeof flags["retry"] === "string" ? Number(flags["retry"]) : flags["retry"] === true ? 3 : 0;
+  const retryOptions: RetryOptions = { maxRetries, onRetry: (attempt, error, retryAfterMs) => {
+    process.stderr.write(`[retry] attempt ${attempt}/${maxRetries} after ${retryAfterMs}ms: ${error.error?.code} – ${error.error?.message}\n`);
+  } };
 
-    if (bridgeResult.ok === false) {
-      const code = bridgeResult.error?.code ?? "BRIDGE_COMMAND_FAILED";
-      const details = command === "code.exec" && code === "E_UNITY_BUSY" ? liveCodeBusyDetails(requestId, endpoint, args, bridgeErrorDetails(bridgeResult.error)) : bridgeErrorDetails(bridgeResult.error);
-      return failure(requestId, code, bridgeResult.error?.message ?? "Unity Bridge rejected the command.", bridgeResult.nextActions ?? [], details);
-    }
+  const result = await withRetry(async () => {
+    try {
+      const bridgeResult = runtime.bridgeExecute
+        ? await runtime.bridgeExecute({ requestId, command, args })
+        : await postBridgeExecute(endpoint!, { requestId, command, args });
 
-    if (command === "code.exec" && bridgeResult.data?.status === "running" && bridgeResult.data?.sideEffectSemantics === "started-before-http-timeout") {
-      return liveCodeTimeoutFailure(requestId, endpoint, args, bridgeResult.data);
-    }
+      if (bridgeResult.ok === false) {
+        const code = bridgeResult.error?.code ?? "BRIDGE_COMMAND_FAILED";
+        const details = command === "code.exec" && code === "E_UNITY_BUSY" ? liveCodeBusyDetails(requestId, endpoint, args, bridgeErrorDetails(bridgeResult.error)) : bridgeErrorDetails(bridgeResult.error);
+        return failure(requestId, code, bridgeResult.error?.message ?? "Unity Bridge rejected the command.", bridgeResult.nextActions ?? [], details);
+      }
 
-    return success(requestId, {
-      command,
-      bridgeEndpoint: endpoint,
-      ...(selectedInstance ? { selectedInstance: selectedInstanceSummary(selectedInstance) } : {}),
-      ...bridgeResult.data
-    });
-  } catch (error) {
-    if (command === "code.exec" && isAbortLikeError(error)) {
-      return liveCodeTimeoutFailure(requestId, endpoint, args, { cause: errorMessage(error) });
+      if (command === "code.exec" && bridgeResult.data?.status === "running" && bridgeResult.data?.sideEffectSemantics === "started-before-http-timeout") {
+        return liveCodeTimeoutFailure(requestId, endpoint, args, bridgeResult.data);
+      }
+
+      return success(requestId, {
+        command,
+        bridgeEndpoint: endpoint,
+        ...(selectedInstance ? { selectedInstance: selectedInstanceSummary(selectedInstance) } : {}),
+        ...bridgeResult.data
+      });
+    } catch (error) {
+      if (command === "code.exec" && isAbortLikeError(error)) {
+        return liveCodeTimeoutFailure(requestId, endpoint, args, { cause: errorMessage(error) });
+      }
+      if (command === "custom-tool.run" && isAbortLikeError(error)) {
+        return failure(requestId, "E_EXECUTION_TIMEOUT", "custom-tool.run exceeded the requested timeout before the Unity Bridge returned a response.", [
+          "Inspect AlpsUnityBridge.log and the requestId before retrying; the Editor may still be finishing a long-running tool.",
+          "Use --job only as a preference marker in this release; Local Agent asynchronous custom-tool jobs are not implemented yet."
+        ], { requestId, command, timeoutMs: typeof args.timeoutMs === "number" ? args.timeoutMs : 30_000, bridgeEndpoint: endpoint ?? null });
+      }
+      return failure(requestId, "BRIDGE_CONNECTION_FAILED", errorMessage(error), ["Check Unity Bridge endpoint and logs."]);
     }
-    if (command === "custom-tool.run" && isAbortLikeError(error)) {
-      return failure(requestId, "E_EXECUTION_TIMEOUT", "custom-tool.run exceeded the requested timeout before the Unity Bridge returned a response.", [
-        "Inspect AlpsUnityBridge.log and the requestId before retrying; the Editor may still be finishing a long-running tool.",
-        "Use --job only as a preference marker in this release; Local Agent asynchronous custom-tool jobs are not implemented yet."
-      ], { requestId, command, timeoutMs: typeof args.timeoutMs === "number" ? args.timeoutMs : 30_000, bridgeEndpoint: endpoint ?? null });
-    }
-    return failure(requestId, "BRIDGE_CONNECTION_FAILED", errorMessage(error), ["Check Unity Bridge endpoint and logs."]);
-  }
+  }, retryOptions);
+
+  result.durationMs = durationMsFrom(startMs);
+  return result;
 }
 
 export function bridgeCommandName(group: string | undefined, command: string | undefined): string | undefined {

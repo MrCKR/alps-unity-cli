@@ -1,15 +1,44 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://alps.local/schemas/error-code.schema.json",
-  "title": "Unity CLI Error",
+  "title": "Unity CLI Error Code",
+  "description": "Structured error object used in the response envelope. Matches ALP-164 frozen spec §安全、性能与生命周期 / error.code / error.message / details.",
   "type": "object",
   "required": ["code", "message"],
   "properties": {
-    "code": { "type": "string", "pattern": "^[A-Z0-9_]+$" },
-    "message": { "type": "string" },
+    "code": {
+      "type": "string",
+      "pattern": "^[A-Z][A-Z0-9_]*(\\.[A-Z][A-Z0-9_]*)?$",
+      "description": "Machine-readable error code from the taxonomy. Examples: E_UNITY_BUSY, E_EXECUTION_TIMEOUT, BRIDGE_CONNECTION_FAILED."
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable error description."
+    },
+    "details": {
+      "type": "object",
+      "description": "Additional structured context about the error (e.g. jobId, timeoutMs, bridgeEndpoint)."
+    },
     "next_actions": {
       "type": "array",
-      "items": { "type": "string" }
+      "items": { "type": "string" },
+      "default": [],
+      "description": "Suggested recovery actions the caller (Agent or user) can take."
+    },
+    "requestId": {
+      "type": "string",
+      "description": "Request identifier echoed in the error, for audit correlation."
+    },
+    "retry_after_ms": {
+      "type": "integer",
+      "minimum": 0,
+      "description": "When the error is transient (e.g. E_UNITY_BUSY), suggested minimum retry delay in milliseconds. 0 = no specific recommendation."
+    },
+    "transient": {
+      "type": "boolean",
+      "default": false,
+      "description": "True if the error is transient (compiling, domain reload, import) and the same request may succeed after retry."
     }
   },
   "additionalProperties": true
