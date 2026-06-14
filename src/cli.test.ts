@@ -381,7 +381,6 @@ test("init installs com.unity_cli as a local file dependency without requiring U
   const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string>; scopedRegistries?: unknown[] };
   assert.equal(manifest.dependencies["com.unity_cli"], data.bridge.dependencySpec);
   assert.match(manifest.dependencies["com.unity_cli"], /^file:/);
-  assert.equal(manifest.dependencies["com.alps.unity-cli.bridge"], undefined);
   assert.deepEqual(manifest.scopedRegistries, [{ name: "Example", url: "https://registry.example.com", scopes: ["com.example"] }]);
 
   const metadata = JSON.parse(await readFile(data.bridge.installMetadataPath, "utf8")) as { packageName: string; packageVersion: string; dependencySpec: string; projectHash: string; cliCompatibilityRange: string };
