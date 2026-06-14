@@ -4552,7 +4552,7 @@ namespace AlpsUnityCli
                 + "\"projectPath\":" + Quote(ProjectRoot()) + ","
                 + "\"projectHash\":" + Quote(ProjectHash()) + ","
                 + "\"unityVersion\":" + Quote(Application.unityVersion) + ","
-                + "\"packageVersion\":\"com.alps.unity-cli.bridge\"," 
+                + "\"packageVersion\":\"com.unity_cli\"," 
                 + "\"pid\":" + System.Diagnostics.Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture) + ","
                 + "\"bridgeEndpoint\":" + Quote("http://127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture)) + ","
                 + "\"capabilitiesHash\":" + Quote(BridgeBuildStamp()) + ","
