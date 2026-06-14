@@ -1,20 +1,19 @@
+import type { CliError } from "./output.js";
+
 export type JobKind = "refresh" | "test" | "build" | "package" | "code" | "profiler" | "probuilder";
 
 export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled" | "timeout";
 
-export interface CliError {
-  code: string;
-  message: string;
-  requestId: string;
-  details?: unknown;
-  next_actions?: string[];
-  [key: string]: unknown;
-}
+export type { CliError };
 
 export interface CliResult<T = unknown> {
   ok: boolean;
   requestId: string;
   data?: T;
+  warnings?: string[];
+  logsRef?: string;
+  jobId?: string;
+  durationMs?: number;
   error?: CliError;
 }
 

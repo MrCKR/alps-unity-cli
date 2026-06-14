@@ -264,6 +264,31 @@ namespace AlpsUnityCli
 
             var body = ReadBody(context.Request);
             var request = BridgeRequest.Parse(body);
+
+            // Check for transient Unity state before queuing the request.
+            // During compile/import/domain reload, immediately return a transient error
+            // so the CLI can retry-after instead of waiting 60s for a timeout.
+            if (domainReloading)
+            {
+                WriteJson(context, TransientErrorJson("E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", "Wait for domain reload to complete and retry.", 10000), 200);
+                return;
+            }
+            if (EditorApplication.isCompiling)
+            {
+                WriteJson(context, TransientErrorJson("E_UNITY_COMPILING", "Unity Editor is compiling scripts.", "Wait for Unity to finish compiling and retry.", 5000), 200);
+                return;
+            }
+            if (EditorApplication.isUpdating)
+            {
+                WriteJson(context, TransientErrorJson("E_UNITY_IMPORTING", "Unity Editor is importing assets.", "Wait for Unity to finish importing and retry.", 5000), 200);
+                return;
+            }
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                WriteJson(context, TransientErrorJson("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode.", "Wait for Play mode transition to complete and retry.", 3000), 200);
+                return;
+            }
+
             var item = new BridgeWorkItem(request);
             lock (QueueLock)
             {
@@ -276,13 +301,13 @@ namespace AlpsUnityCli
                 if (item.CancelBeforeStart())
                 {
                     WriteLog("bridge_request_timeout_cancelled requestId=" + request.RequestId + " command=" + request.Command);
-                    WriteJson(context, ErrorJson("E_UNITY_BUSY", "Unity Editor did not start the bridge request within 60 seconds; the request was cancelled before execution.", "No Unity side effects were applied. Wait for Unity to finish compiling/importing and retry."), 200);
+                    WriteJson(context, TransientErrorJson("E_UNITY_BUSY", "Unity Editor did not start the bridge request within 60 seconds; the request was cancelled before execution.", "No Unity side effects were applied. Wait for Unity to finish compiling/importing and retry.", 5000), 200);
                     return;
                 }
 
                 if (item.Completed.IsSet)
                 {
-                    WriteJson(context, item.Response ?? ErrorJson("E_UNITY_BUSY", "Unity Editor did not finish the bridge request within 60 seconds.", "Wait for Unity to finish compiling/importing and retry."), 200);
+                    WriteJson(context, item.Response ?? TransientErrorJson("E_UNITY_BUSY", "Unity Editor did not finish the bridge request within 60 seconds.", "Wait for Unity to finish compiling/importing and retry.", 5000), 200);
                     return;
                 }
 
@@ -294,11 +319,11 @@ namespace AlpsUnityCli
                     return;
                 }
 
-                WriteJson(context, ErrorJson("E_UNITY_BUSY", "Unity Editor started the bridge request but did not finish within 60 seconds.", "Wait for Unity to finish compiling/importing and retry."), 200);
+                WriteJson(context, TransientErrorJson("E_UNITY_BUSY", "Unity Editor started the bridge request but did not finish within 60 seconds.", "Wait for Unity to finish compiling/importing and retry.", 5000), 200);
                 return;
             }
 
-            WriteJson(context, item.Response ?? ErrorJson("E_UNITY_BUSY", "Unity Editor did not finish the bridge request within 60 seconds.", "Wait for Unity to finish compiling/importing and retry."), 200);
+            WriteJson(context, item.Response ?? TransientErrorJson("E_UNITY_BUSY", "Unity Editor did not finish the bridge request within 60 seconds.", "Wait for Unity to finish compiling/importing and retry.", 5000), 200);
         }
 
         private static void ProcessQueuedWork()
@@ -334,7 +359,14 @@ namespace AlpsUnityCli
                 }
                 catch (BridgeCommandException exception)
                 {
-                    item.Response = ErrorJson(exception.Code, exception.Message, exception.NextAction ?? "Check output path, permissions, format parameters and AlpsUnityBridge.log.");
+                    if (exception.Transient)
+                    {
+                        item.Response = TransientErrorJson(exception.Code, exception.Message, exception.NextAction ?? "Check output path, permissions, format parameters and AlpsUnityBridge.log.", exception.RetryAfterMs > 0 ? exception.RetryAfterMs : 5000);
+                    }
+                    else
+                    {
+                        item.Response = ErrorJson(exception.Code, exception.Message, exception.NextAction ?? "Check output path, permissions, format parameters and AlpsUnityBridge.log.");
+                    }
                 }
                 catch (Exception exception)
                 {
@@ -361,7 +393,14 @@ namespace AlpsUnityCli
             }
             catch (BridgeCommandException exception)
             {
-                response = ErrorJson(exception.Code, exception.Message, exception.NextAction ?? "Check output path, package availability and AlpsUnityBridge.log.");
+                if (exception.Transient)
+                {
+                    response = TransientErrorJson(exception.Code, exception.Message, exception.NextAction ?? "Check output path, package availability and AlpsUnityBridge.log.", exception.RetryAfterMs > 0 ? exception.RetryAfterMs : 5000);
+                }
+                else
+                {
+                    response = ErrorJson(exception.Code, exception.Message, exception.NextAction ?? "Check output path, package availability and AlpsUnityBridge.log.");
+                }
             }
             catch (Exception exception)
             {
@@ -375,9 +414,24 @@ namespace AlpsUnityCli
         {
             WriteLog("execute requestId=" + request.RequestId + " command=" + request.Command);
 
-            if (EditorApplication.isCompiling || EditorApplication.isUpdating)
+            if (domainReloading)
             {
-                return ErrorJson("E_UNITY_BUSY", "Unity Editor is compiling or importing assets.", "Wait for Unity to finish compiling/importing and retry.");
+                return TransientErrorJson("E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", "Wait for domain reload to complete and retry.", 10000);
+            }
+
+            if (EditorApplication.isCompiling)
+            {
+                return TransientErrorJson("E_UNITY_COMPILING", "Unity Editor is compiling scripts.", "Wait for Unity to finish compiling and retry.", 5000);
+            }
+
+            if (EditorApplication.isUpdating)
+            {
+                return TransientErrorJson("E_UNITY_IMPORTING", "Unity Editor is importing assets.", "Wait for Unity to finish importing and retry.", 5000);
+            }
+
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                return TransientErrorJson("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode.", "Wait for Play mode transition to complete and retry.", 3000);
             }
 
             switch (request.Command)
@@ -3660,9 +3714,25 @@ namespace AlpsUnityCli
 
         private static void EnsureEditorNotBusy(string command)
         {
-            if (EditorApplication.isCompiling || EditorApplication.isUpdating || BuildPipeline.isBuildingPlayer || EditorApplication.isPlayingOrWillChangePlaymode)
+            if (domainReloading)
             {
-                throw new BridgeCommandException("E_UNITY_BUSY", "Unity Editor is busy and cannot run this editor command right now.", "Wait for compiling, asset importing, build, PlayMode switching, or domain reload to complete, then retry.");
+                throw new BridgeCommandException("E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", "Wait for domain reload to complete and retry.", transient: true, retryAfterMs: 10000);
+            }
+            if (EditorApplication.isCompiling)
+            {
+                throw new BridgeCommandException("E_UNITY_COMPILING", "Unity Editor is compiling scripts.", "Wait for Unity to finish compiling and retry.", transient: true, retryAfterMs: 5000);
+            }
+            if (EditorApplication.isUpdating)
+            {
+                throw new BridgeCommandException("E_UNITY_IMPORTING", "Unity Editor is importing assets.", "Wait for Unity to finish importing and retry.", transient: true, retryAfterMs: 5000);
+            }
+            if (EditorApplication.isPlayingOrWillChangePlaymode)
+            {
+                throw new BridgeCommandException("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode.", "Wait for Play mode transition to complete and retry.", transient: true, retryAfterMs: 3000);
+            }
+            if (BuildPipeline.isBuildingPlayer)
+            {
+                throw new BridgeCommandException("E_UNITY_BUSY", "Unity Editor is building the player.", "Wait for the build to complete and retry.", transient: true, retryAfterMs: 10000);
             }
         }
 
@@ -4528,6 +4598,16 @@ namespace AlpsUnityCli
             return "{\"ok\":true,\"data\":" + dataJson + "}";
         }
 
+        /// <summary>
+        /// Transient error JSON with transient=true and retry_after_ms.
+        /// Used for compile, import, domain reload, and play mode states.
+        /// Matches ALP-164 frozen spec §安全、性能与生命周期 / transient 状态.
+        /// </summary>
+        private static string TransientErrorJson(string code, string message, string nextAction, int retryAfterMs)
+        {
+            return "{\"ok\":false,\"error\":{\"code\":" + Quote(code) + ",\"message\":" + Quote(message) + ",\"transient\":true,\"retry_after_ms\":" + retryAfterMs.ToString(CultureInfo.InvariantCulture) + "},\"nextActions\":[" + Quote(nextAction) + "]}";
+        }
+
         private static string ErrorJson(string code, string message, string nextAction)
         {
             return "{\"ok\":false,\"error\":{\"code\":" + Quote(code) + ",\"message\":" + Quote(message) + "},\"nextActions\":[" + Quote(nextAction) + "]}";
@@ -5343,14 +5423,18 @@ namespace AlpsUnityCli
 
         private sealed class BridgeCommandException : Exception
         {
-            public BridgeCommandException(string code, string message, string nextAction = null) : base(message)
+            public BridgeCommandException(string code, string message, string nextAction = null, bool transient = false, int retryAfterMs = 0) : base(message)
             {
                 Code = code;
                 NextAction = nextAction;
+                Transient = transient;
+                RetryAfterMs = retryAfterMs;
             }
 
             public string Code { get; private set; }
             public string NextAction { get; private set; }
+            public bool Transient { get; private set; }
+            public int RetryAfterMs { get; private set; }
         }
     }
 }

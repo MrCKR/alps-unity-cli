@@ -2,24 +2,57 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://alps.local/schemas/response-envelope.schema.json",
   "title": "Unity CLI Response Envelope",
+  "description": "Unified response envelope for all CLI commands. Matches ALP-164 frozen spec §安全、性能与生命周期 / 统一 envelope. Every CLI output follows this shape.",
   "oneOf": [
     {
+      "title": "Success Response",
       "type": "object",
       "required": ["ok", "requestId", "data"],
       "properties": {
-        "ok": { "const": true },
-        "requestId": { "type": "string" },
-        "data": { "type": "object" }
+        "ok": { "const": true, "description": "The command succeeded." },
+        "requestId": { "type": "string", "description": "Echoes the request requestId." },
+        "data": {
+          "type": "object",
+          "description": "Command-specific result payload."
+        },
+        "warnings": {
+          "type": "array",
+          "items": { "type": "string" },
+          "default": [],
+          "description": "Non-fatal warnings encountered during execution."
+        },
+        "logsRef": {
+          "type": "string",
+          "description": "Path or reference to the full execution log, when available."
+        },
+        "jobId": {
+          "type": "string",
+          "description": "Job identifier for async/long-running commands. Present when the command was dispatched as a job."
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Wall-clock execution time in milliseconds."
+        }
       },
       "additionalProperties": false
     },
     {
+      "title": "Error Response",
       "type": "object",
       "required": ["ok", "requestId", "error"],
       "properties": {
-        "ok": { "const": false },
-        "requestId": { "type": "string" },
-        "error": { "$ref": "./error-code.schema.json" }
+        "ok": { "const": false, "description": "The command failed." },
+        "requestId": { "type": "string", "description": "Echoes the request requestId." },
+        "error": {
+          "$ref": "./error-code.schema.json",
+          "description": "Structured error details."
+        },
+        "durationMs": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Wall-clock execution time in milliseconds (including time until error)."
+        }
       },
       "additionalProperties": false
     }
