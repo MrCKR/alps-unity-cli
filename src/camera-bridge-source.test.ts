@@ -58,7 +58,13 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /CapabilityJson\("texture", TextureCommands\)/);
   assert.match(source, /CapabilityJson\("code", CodeCommands\)/);
   assert.match(source, /CapabilityJson\("custom-tool", CustomToolCommands\)/);
-  assert.match(source, /AssemblyReloadEvents\.beforeAssemblyReload \+= StopListener/);
+  assert.match(source, /AssemblyReloadEvents\.beforeAssemblyReload \+= OnBeforeAssemblyReload/);
+  assert.match(source, /EditorApplication\.quitting \+= MarkStaleAndStop/);
+  assert.match(source, /RegisterInstance\("healthy"\)/);
+  assert.match(source, /RegisterInstance\("stale"\)/);
+  assert.match(source, /"instances\.json"/);
+  assert.match(source, /\\"domainReloading\\":\" \+ Bool\(domainReloading\)/);
+  assert.doesNotMatch(source, /\\"domainReloading\\":\" \+ Bool\(EditorApplication\.isCompiling\)/);
   assert.match(source, /private static readonly string\[\] CameraCommands = \{ "camera\.list", "camera\.info", "camera\.screenshot" \}/);
   assert.match(source, /private static readonly string\[\] PrefabCommands = \{ "prefab\.info", "prefab\.create", "prefab\.stage-open", "prefab\.stage-save", "prefab\.stage-close", "prefab\.hierarchy" \}/);
   assert.match(source, /private static readonly string\[\] UiCommands = \{ "ui\.canvas\.create", "ui\.text\.create", "ui\.button\.create", "ui\.image\.create", "ui\.document\.info", "ui\.document\.create", "ui\.hierarchy" \}/);
