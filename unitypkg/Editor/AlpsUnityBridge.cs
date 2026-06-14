@@ -3602,7 +3602,7 @@ namespace AlpsUnityCli
             var total = ConsoleEntryCount();
             for (var index = total - 1; index >= 0 && items.Count < count; index--)
             {
-                getEntry.Invoke(null, new[] { (object)index, entry });
+                getEntry.Invoke(null, new object[] { index, entry });
                 var mode = Convert.ToInt32(entryType.GetField("mode", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(entry), CultureInfo.InvariantCulture);
                 var level = ConsoleLevel(mode);
                 if (!string.IsNullOrEmpty(type) && !string.Equals(type, level, StringComparison.OrdinalIgnoreCase))
@@ -5027,6 +5027,24 @@ namespace AlpsUnityCli
                 throw new BridgeCommandException("E_SETTING_VALUE_INVALID", "Expected boolean for " + property + ": " + value, "Pass true or false.");
             }
             return parsed;
+        }
+
+        private static Type FindType(string fullName)
+        {
+            var type = Type.GetType(fullName);
+            if (type != null)
+            {
+                return type;
+            }
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                type = assembly.GetType(fullName);
+                if (type != null)
+                {
+                    return type;
+                }
+            }
+            return null;
         }
 
         private static string LogPath()
