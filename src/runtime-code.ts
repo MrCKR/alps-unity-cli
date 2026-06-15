@@ -7,9 +7,10 @@ import { getBoolean, getNumber, getString } from "./args.js";
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
 import { failure, success } from "./output.js";
 import { discoverUnity } from "./platform.js";
-import type { CliResult, JobRecord } from "./types.js";
+import type { CliResult } from "./types.js";
 import { ensurePackageBridge } from "./package-manager.js";
 import type { JobRunner } from "./job-runner.js";
+import { summarizeJob } from "./cli-commands/unity-job.js";
 
 interface RuntimeCodeRuntime extends BridgeRuntime {
   dataDir: string;
@@ -341,25 +342,4 @@ function normalizeRelativePath(path: string): string {
 
 function codeRefsArg(refs: unknown): string {
   return typeof refs === "string" && refs.length > 0 ? refs : "__UNITY_CLI_EMPTY__";
-}
-
-function summarizeJob(job: JobRecord): Record<string, unknown> {
-  return {
-    jobId: job.id,
-    kind: job.kind,
-    status: job.status,
-    requestId: job.requestId,
-    projectPath: job.projectPath,
-    unityPath: job.unityPath,
-    logPath: job.logPath,
-    pid: job.pid,
-    exitCode: job.exitCode,
-    createdAt: job.createdAt,
-    updatedAt: job.updatedAt,
-    startedAt: job.startedAt,
-    finishedAt: job.finishedAt,
-    command: job.command,
-    result: job.result,
-    ...(job.error ? { error: job.error } : {})
-  };
 }

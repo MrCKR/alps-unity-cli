@@ -61,6 +61,16 @@ export function summarizeJob(job: JobRecord): Record<string, unknown> {
     finishedAt: job.finishedAt,
     command: job.command,
     result: job.result,
+    cancellation: jobCancellationSemantics(job.kind),
     ...(job.error ? { error: job.error } : {})
+  };
+}
+
+export function jobCancellationSemantics(kind: JobKind): Record<string, unknown> {
+  return {
+    mode: "immediate",
+    description: `${kind} jobs run as external Unity batchmode processes. unity_cli job cancel attempts an immediate process-tree termination when a pid is known; if the process is still queued or the pid is unavailable, the job is marked cancelled and the underlying Unity operation is expected to finish or already be gone.`,
+    cancelCommand: "unity_cli job cancel --id <jobId>",
+    domainReloadObserved: false
   };
 }

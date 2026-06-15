@@ -98,6 +98,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     supportsDryRun: false,
     handler: "hybrid",
     cliCommand: "profiler capture",
+    cancellationSemantics: "Live bridge captures are cooperative and may finish before cancellation can take effect; --job captures can be cancelled with job cancel --id <jobId> using immediate Unity batchmode process termination semantics.",
     docsTopic: "profiler",
     examples: [
       { description: "Capture 1 second of profiler data", argv: ["profiler", "capture", "profile.json", "--duration-ms", "1000"] },
