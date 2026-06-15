@@ -1,13 +1,20 @@
 #!/usr/bin/env node
 import { realpathSync } from "node:fs";
-import { mkdir, readFile } from "node:fs/promises";
-import { dirname, resolve } from "node:path";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { parseArgs, getBoolean, getNumber, getString } from "./args.js";
-import { batchJsonSchema, runBatch } from "./batch.js";
-import { bridgeCommandRegistry, executeBridgeCommand, executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
+import { parseArgs, getBoolean, getString } from "./args.js";
+import { bridgeCommandRegistry, executeBridgeCommand, type BridgeRuntime } from "./bridge/index.js";
+import { handleBatch } from "./cli-commands/batch.js";
+import { handleBuild } from "./cli-commands/build.js";
+import { handleEditor } from "./cli-commands/editor.js";
+import { handleJob } from "./cli-commands/job.js";
+import { handleInit, handlePackage } from "./cli-commands/package.js";
+import { handleTest } from "./cli-commands/test.js";
+import type { CliCommandModule, Runtime } from "./cli-commands/types.js";
+import { startUnityJob, summarizeJob } from "./cli-commands/unity-job.js";
 import { handleCapabilitiesCommand } from "./capabilities.js";
-import { handleDoctorCommand, type DoctorRuntime } from "./doctor.js";
+import { handleDoctorCommand } from "./doctor.js";
 import { handleInstancesCommand } from "./instances.js";
 import { handleDocsCommand, handleReflectCommand } from "./docs-reflect.js";
 import { handleDocsTopicCommand } from "./docs-topic.js";
@@ -15,17 +22,27 @@ import { JobRunner } from "./job-runner.js";
 import { handleCode } from "./runtime-code.js";
 import { JobStore } from "./job-store.js";
 import { createRequestId, failure, printJson, success } from "./output.js";
-import { defaultDataDir, discoverUnity, ensureWindows } from "./platform.js";
-import { handleToolsCommand, type ToolsRuntime } from "./tools.js";
-import type { CliResult, JobKind, JobRecord } from "./types.js";
+import { defaultDataDir, ensureWindows } from "./platform.js";
+import { handleToolsCommand } from "./tools.js";
+import type { CliResult } from "./types.js";
 
-interface Runtime extends BridgeRuntime, ToolsRuntime, DoctorRuntime {
-  store: JobStore;
-  runner: JobRunner;
-  dataDir: string;
-}
-
-const terminalStatuses = new Set(["succeeded", "failed", "cancelled", "timeout"]);
+const CLI_COMMANDS = new Map<string, CliCommandModule>([
+  ["job", { run: ({ command, flags, runtime, requestId }) => handleJob(command, flags, runtime, requestId) }],
+  ["init", { run: ({ flags, runtime, requestId }) => handleInit(flags, runtime, requestId) }],
+  ["package", { run: ({ command, args, flags, runtime, requestId }) => handlePackage(command, args, flags, runtime, requestId) }],
+  ["batch", { run: ({ command, args, flags, runtime, requestId }) => handleBatch(command, args[0], flags, runtime, requestId) }],
+  ["doctor", { run: ({ flags, runtime, requestId }) => handleDoctorCommand(flags, runtime, requestId) }],
+  ["instances", { run: ({ command, flags, runtime, requestId }) => handleInstancesCommand(command, flags, runtime.dataDir, requestId) }],
+  ["code", { run: ({ command, flags, runtime, requestId }) => handleCode(command, flags, runtime, requestId) }],
+  ["tools", { run: ({ command, args, flags, runtime, requestId }) => handleToolsCommand(command, args, flags, runtime, requestId) }],
+  ["capabilities", { run: ({ flags, runtime, requestId }) => handleCapabilitiesCommand(flags, runtime, requestId) }],
+  ["docs", { run: ({ command, args, flags, runtime, requestId }) => handleDocsCommand(command, args, flags, runtime.dataDir, requestId) }],
+  ["reflect", { run: ({ command, args, flags, runtime, requestId }) => handleReflectCommand(command, args, flags, runtime.dataDir, requestId) }],
+  ["docs-topic", { run: ({ command, flags, requestId }) => handleDocsTopicCommand(command, flags, requestId) }],
+  ["editor", { run: ({ command, flags, runtime, requestId }) => handleEditor(command, flags, runtime, requestId) }],
+  ["test", { run: ({ command, flags, runtime, requestId }) => handleTest(command, flags, runtime, requestId) }],
+  ["build", { run: ({ command, flags, runtime, requestId }) => handleBuild(command, flags, runtime, requestId) }]
+]);
 
 export async function execute(argv: string[], runtime = createRuntime()): Promise<CliResult> {
   const requestId = createRequestId();
@@ -47,52 +64,16 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
 
     ensureWindows();
 
-    if (group === "job") {
-      return handleJob(command, parsed.flags, runtime, requestId);
-    }
-
-    if (group === "init") {
-      return await handleInit(parsed.flags, runtime, requestId);
-    }
-
-    if (group === "package") {
-      return await handlePackage(command, parsed.positional.slice(2), parsed.flags, runtime, requestId);
-    }
-
-    if (group === "batch") {
-      return handleBatch(command, parsed.positional[2], parsed.flags, runtime, requestId);
-    }
-
-    if (group === "doctor") {
-      return handleDoctorCommand(parsed.flags, runtime, requestId);
-    }
-
-    if (group === "instances") {
-      return handleInstancesCommand(command, parsed.flags, runtime.dataDir, requestId);
-    }
-
-    if (group === "code") {
-      return handleCode(command, parsed.flags, runtime, requestId);
-    }
-
-    if (group === "tools") {
-      return handleToolsCommand(command, parsed.positional.slice(2), parsed.flags, runtime, requestId);
-    }
-
-    if (group === "capabilities") {
-      return handleCapabilitiesCommand(parsed.flags, runtime, requestId);
-    }
-
-    if (group === "docs") {
-      return handleDocsCommand(command, parsed.positional.slice(2), parsed.flags, runtime.dataDir, requestId);
-    }
-
-    if (group === "reflect") {
-      return handleReflectCommand(command, parsed.positional.slice(2), parsed.flags, runtime.dataDir, requestId);
-    }
-
-    if (group === "docs-topic") {
-      return handleDocsTopicCommand(command, parsed.flags, requestId);
+    const cliModule = CLI_COMMANDS.get(group);
+    const cliResult = await cliModule?.run({
+      command,
+      args: parsed.positional.slice(2),
+      flags: parsed.flags,
+      runtime,
+      requestId
+    });
+    if (cliResult) {
+      return cliResult;
     }
 
     const bridgeSpec = bridgeCommandRegistry.lookup(group, command);
@@ -107,43 +88,6 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
         });
       }
       return executeBridgeCommand(requestId, bridgeSpec.bridgeCommand, parsed.flags, parsed.positional[2], runtime);
-    }
-
-    if (group === "editor" && command === "refresh") {
-      return startUnityJob("refresh", parsed.flags, runtime, requestId, refreshArgs(parsed.flags), { action: "refresh", compile: getBoolean(parsed.flags, "compile") });
-    }
-
-    if (group === "test") {
-      if (command === "run") {
-        const platform = getString(parsed.flags, "platform") ?? "EditMode";
-        const resultPath = resolve(runtime.dataDir, "results", `${requestId}-test-results.xml`);
-        return startUnityJob("test", parsed.flags, runtime, requestId, ["-runTests", "-testPlatform", platform, "-testResults", resultPath], {
-          action: "test",
-          platform,
-          resultPath
-        });
-      }
-      if (command === "poll") {
-        return handleJob("status", parsed.flags, runtime, requestId);
-      }
-    }
-
-    if (group === "build") {
-      if (command === "run") {
-        const target = getString(parsed.flags, "target") ?? "StandaloneWindows64";
-        const outputPath = resolve(getString(parsed.flags, "output") ?? "Builds/Windows/UnityCliBuild.exe");
-        return startUnityJob("build", parsed.flags, runtime, requestId, ["-buildTarget", target, "-executeMethod", "UnityCli.UnityCliBatch.BuildProject", "-unityCliBuildOutput", outputPath], {
-          action: "build",
-          target,
-          outputPath
-        });
-      }
-      if (command === "status") {
-        return handleJob("status", parsed.flags, runtime, requestId);
-      }
-      if (command === "cancel") {
-        return handleJob("cancel", parsed.flags, runtime, requestId);
-      }
     }
 
     return failure(requestId, "UNKNOWN_COMMAND", `Unknown command: ${argv.join(" ")}`, ["Run unity_cli --help."]);
@@ -176,66 +120,6 @@ async function runJobWorker(flags: Record<string, string | boolean>, requestId: 
   }
 }
 
-async function handleBatch(command: string | undefined, filePath: string | undefined, flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult> {
-  if (command === "schema") {
-    return success(requestId, batchJsonSchema());
-  }
-
-  if (command !== "run") {
-    return failure(requestId, "UNKNOWN_BATCH_COMMAND", "Expected batch run <file> or batch schema.");
-  }
-
-  if (!filePath) {
-    return failure(requestId, "BATCH_FILE_REQUIRED", "Pass a batch JSON file: unity_cli batch run <file>.");
-  }
-
-  return runBatch({
-    filePath,
-    requestId,
-    runtime,
-    failFast: flags["fail-fast"] === undefined ? undefined : getBoolean(flags, "fail-fast"),
-    parallel: getNumber(flags, "parallel"),
-    dryRun: getBoolean(flags, "preflight") || getBoolean(flags, "dry-run"),
-    executeStep: (stepArgv) => execute(stepArgv, runtime)
-  });
-}
-
-async function handleJob(command: string | undefined, flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult> {
-  const id = getString(flags, "id") ?? getString(flags, "job");
-  if (!id) {
-    return failure(requestId, "JOB_ID_REQUIRED", "Pass --id <jobId>.");
-  }
-
-  if (command === "status") {
-    const job = await runtime.store.get(id);
-    return job ? success(requestId, summarizeJob(job)) : failure(requestId, "JOB_NOT_FOUND", `Job not found: ${id}`);
-  }
-
-  if (command === "logs") {
-    const tail = getNumber(flags, "tail") ?? 100;
-    try {
-      const logs = await runtime.runner.logs(id, tail);
-      return success(requestId, { jobId: id, ...logs });
-    } catch (error) {
-      if (error instanceof Error && error.message.startsWith("Job not found")) {
-        return failure(requestId, "JOB_NOT_FOUND", `Job not found: ${id}`);
-      }
-      return failure(requestId, "JOB_LOGS_FAILED", error instanceof Error ? error.message : String(error));
-    }
-  }
-
-  if (command === "cancel") {
-    try {
-      const job = await runtime.runner.cancel(id);
-      return success(requestId, summarizeJob(job));
-    } catch (error) {
-      return failure(requestId, "JOB_CANCEL_FAILED", error instanceof Error ? error.message : String(error));
-    }
-  }
-
-  return failure(requestId, "UNKNOWN_JOB_COMMAND", "Expected job status, job logs or job cancel.");
-}
-
 async function bridgeJobArgs(command: string, flags: Record<string, string | boolean>, positionalTarget: string | undefined): Promise<Record<string, unknown>> {
   const runtime: BridgeRuntime = { bridgeExecute: async (payload) => ({ ok: true, data: { bridgeArgs: payload.args } }) };
   const result = await executeBridgeCommand("dry_run", command, flags, positionalTarget, runtime);
@@ -246,222 +130,8 @@ function shouldRunBridgeAsJob(group: string | undefined, command: string | undef
   return getBoolean(flags, "job") && ((group === "profiler" && command === "capture") || group === "probuilder");
 }
 
-function refreshArgs(flags: Record<string, string | boolean>): string[] {
-  return ["-executeMethod", getBoolean(flags, "compile") ? "UnityCli.UnityCliBatch.RefreshAndCompile" : "UnityCli.UnityCliBatch.Refresh"];
-}
-
-async function handleInit(flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult> {
-  const projectPath = resolve(getString(flags, "project") ?? process.cwd());
-  const { checkPackageBridge, ensurePackageBridge } = await import("./package-manager.js");
-
-  if (getBoolean(flags, "check")) {
-    const bridge = await checkPackageBridge(projectPath);
-    return success(requestId, {
-      action: "init_check",
-      status: "installed",
-      projectPath,
-      bridge,
-      nextActions: ["Unity package com.unity_cli is installed via a local manifest file: dependency."]
-    });
-  }
-
-  const bridge = await ensurePackageBridge(projectPath);
-  const liveRefresh = await refreshOpenEditor(requestId, flags, runtime);
-  return maybeResolvePackage("init", flags, runtime, requestId, projectPath, {
-    action: "init",
-    status: "package_installed",
-    bridge,
-    liveRefresh,
-    nextActions: liveRefresh.status === "triggered"
-      ? ["Wait for Unity to finish compiling/importing, then retry /health and Bridge commands against the live endpoint."]
-      : ["Open the Unity project or run unity_cli package resolve --project <path> --unity <Unity.exe> --wait to refresh packages."]
-  });
-}
-
-async function refreshOpenEditor(requestId: string, flags: Record<string, string | boolean>, runtime: Runtime): Promise<Record<string, unknown>> {
-  const endpoint = getString(flags, "bridge-endpoint") ?? runtime.bridgeEndpoint ?? process.env.UNITY_CLI_BRIDGE_ENDPOINT ?? "http://127.0.0.1:47392";
-  if (!runtime.bridgeExecute && !(await isBridgeReachable(endpoint))) {
-    return { status: "skipped", reason: "bridge_endpoint_absent", endpoint };
-  }
-  const result = await executeBridgePayload(`${requestId}_refresh`, "editor.menu", { path: "Assets/Refresh", timeoutMs: 7000 }, { ...flags, "bridge-endpoint": endpoint }, runtime);
-  if (result.ok) {
-    return { status: "triggered", command: "editor.menu", path: "Assets/Refresh", endpoint };
-  }
-  return { status: "failed", command: "editor.menu", path: "Assets/Refresh", endpoint, code: result.error?.code, message: result.error?.message };
-}
-
-async function isBridgeReachable(endpoint: string): Promise<boolean> {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 1500);
-  try {
-    const response = await fetch(new URL("/health", endpoint), { signal: controller.signal });
-    return response.ok;
-  } catch {
-    return false;
-  } finally {
-    clearTimeout(timeout);
-  }
-}
-
-async function handlePackage(command: string | undefined, args: string[], flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult> {
-  const projectPath = resolve(getString(flags, "project") ?? process.cwd());
-  const {
-    addScopedRegistry,
-    clearRegistry,
-    installPackage,
-    packageInfo,
-    parsePackageSpec,
-    parseScopes,
-    readSnapshot,
-    removePackage,
-    removeScopedRegistry,
-    searchRegistry,
-    setRegistry,
-    validatePackageName,
-    validateRegistryUrl
-  } = await import("./package-manager.js");
-
-  if (command === "list") {
-    return success(requestId, await readSnapshot(projectPath));
-  }
-
-  if (command === "info") {
-    const name = validatePackageName(args[0] ?? getString(flags, "name"));
-    const info = await packageInfo(projectPath, name);
-    return info ? success(requestId, { projectPath, package: info }) : failure(requestId, "PACKAGE_NOT_FOUND", `Package not found: ${name}`, ["Run unity_cli package list to inspect installed packages."]);
-  }
-
-  if (command === "search") {
-    const query = validatePackageName(args[0] ?? getString(flags, "query"));
-    const registry = validateRegistryUrl(getString(flags, "registry") ?? (await readSnapshot(projectPath)).registry ?? "https://packages.unity.com");
-    return success(requestId, { registry, query, packages: await searchRegistry(registry, query) });
-  }
-
-  if (command === "install") {
-    const spec = parsePackageSpec(validatePackageName(args[0] ?? getString(flags, "name")), getString(flags, "version"));
-    const manifest = await installPackage(projectPath, spec);
-    return maybeResolvePackage(command, flags, runtime, requestId, projectPath, { action: "install", package: spec.name, ...manifest });
-  }
-
-  if (command === "remove") {
-    const name = validatePackageName(args[0] ?? getString(flags, "name"));
-    const manifest = await removePackage(projectPath, name);
-    return maybeResolvePackage(command, flags, runtime, requestId, projectPath, { action: "remove", package: name, ...manifest });
-  }
-
-  if (command === "resolve") {
-    return maybeResolvePackage(command, flags, runtime, requestId, projectPath, { action: "resolve" });
-  }
-
-  if (command === "registry") {
-    const action = args[0] ?? getString(flags, "action") ?? "get";
-    if (action === "get") {
-      const snapshot = await readSnapshot(projectPath);
-      return success(requestId, { projectPath, manifestPath: snapshot.manifestPath, registry: snapshot.registry });
-    }
-    if (action === "set") {
-      return success(requestId, { projectPath, ...(await setRegistry(projectPath, validateRegistryUrl(getString(flags, "url") ?? args[1]))) });
-    }
-    if (action === "clear") {
-      return success(requestId, { projectPath, ...(await clearRegistry(projectPath)) });
-    }
-    return failure(requestId, "UNKNOWN_PACKAGE_REGISTRY_COMMAND", "Expected package registry get, set or clear.");
-  }
-
-  if (command === "scoped-registry") {
-    const action = args[0] ?? getString(flags, "action") ?? "list";
-    if (action === "list") {
-      const snapshot = await readSnapshot(projectPath);
-      return success(requestId, { projectPath, manifestPath: snapshot.manifestPath, scopedRegistries: snapshot.scopedRegistries });
-    }
-    if (action === "add") {
-      const name = validatePackageName(getString(flags, "name") ?? args[1]);
-      const url = validateRegistryUrl(getString(flags, "url"));
-      const scopes = parseScopes(getString(flags, "scope") ?? getString(flags, "scopes"));
-      return success(requestId, { projectPath, ...(await addScopedRegistry(projectPath, { name, url, scopes })) });
-    }
-    if (action === "remove") {
-      const name = validatePackageName(getString(flags, "name") ?? args[1]);
-      return success(requestId, { projectPath, ...(await removeScopedRegistry(projectPath, name)) });
-    }
-    return failure(requestId, "UNKNOWN_SCOPED_REGISTRY_COMMAND", "Expected package scoped-registry list, add or remove.");
-  }
-
-  return failure(requestId, "UNKNOWN_PACKAGE_COMMAND", "Expected package list, info, search, install, remove, resolve, registry or scoped-registry.");
-}
-
-async function maybeResolvePackage(command: string, flags: Record<string, string | boolean>, runtime: Runtime, requestId: string, projectPath: string, result: Record<string, unknown>): Promise<CliResult> {
-  const unityPath = getString(flags, "unity") ?? discoverUnity();
-  if (!unityPath && !getBoolean(flags, "job")) {
-    return success(requestId, { ...result, projectPath, status: result.status ?? "manifest_updated", resolve: "skipped", nextActions: result.nextActions ?? ["Pass --unity <path-to-Unity.exe> or set UNITY_EXE to run Unity PackageManager resolve as a job."] });
-  }
-  if (!unityPath) {
-    return failure(requestId, "UNITY_NOT_FOUND", "Unity.exe was not found.", ["Pass --unity <path-to-Unity.exe> or set UNITY_EXE."]);
-  }
-  const { ensurePackageBridge } = await import("./package-manager.js");
-  const bridge = await ensurePackageBridge(projectPath);
-  return startUnityJob("package", flags, runtime, requestId, ["-executeMethod", "UnityCli.UnityCliBatch.ResolvePackages", "-unityCliPackageAction", command], { ...result, bridge });
-}
-
-async function startUnityJob(kind: JobKind, flags: Record<string, string | boolean>, runtime: Runtime, requestId: string, unityArgs: string[], result: Record<string, unknown>): Promise<CliResult> {
-  const projectPath = resolve(getString(flags, "project") ?? process.cwd());
-  const unityPath = getString(flags, "unity") ?? discoverUnity();
-  if (!unityPath) {
-    return failure(requestId, "UNITY_NOT_FOUND", "Unity.exe was not found.", ["Pass --unity <path-to-Unity.exe> or set UNITY_EXE."]);
-  }
-
-  if (typeof result.resultPath === "string") {
-    await mkdir(dirname(result.resultPath), { recursive: true });
-  }
-
-  const timeoutMs = getNumber(flags, "timeout-ms");
-  const job = await runtime.runner.start({ kind, projectPath, unityPath, args: unityArgs, timeoutMs, requestId, result });
-  if (!getBoolean(flags, "wait")) {
-    return success(requestId, summarizeJob(job));
-  }
-
-  const waitTimeoutMs = getNumber(flags, "wait-timeout-ms") ?? timeoutMs ?? 600000;
-  const waited = await runtime.runner.wait(job.id, waitTimeoutMs);
-  if (!terminalStatuses.has(waited.status)) {
-    return failure(requestId, "E_EXECUTION_TIMEOUT", `Job did not reach a terminal state within ${waitTimeoutMs}ms.`, [
-      `Run unity_cli job status --id ${job.id}.`,
-      `Run unity_cli job logs --id ${job.id}.`,
-      `Run unity_cli job cancel --id ${job.id} if the Unity process should be stopped.`
-    ], {
-      jobId: job.id,
-      timeoutMs: waitTimeoutMs,
-      cancelAttempted: false,
-      cancelled: false,
-      processKilled: false,
-      domainReloadObserved: false
-    });
-  }
-  return success(requestId, summarizeJob(waited));
-}
-
 function isPackageManagerError(error: unknown): error is Error & { code: string; nextActions: string[] } {
   return error instanceof Error && typeof (error as { code?: unknown }).code === "string" && Array.isArray((error as { nextActions?: unknown }).nextActions);
-}
-
-function summarizeJob(job: JobRecord): Record<string, unknown> {
-  return {
-    jobId: job.id,
-    kind: job.kind,
-    status: job.status,
-    requestId: job.requestId,
-    projectPath: job.projectPath,
-    unityPath: job.unityPath,
-    logPath: job.logPath,
-    pid: job.pid,
-    exitCode: job.exitCode,
-    createdAt: job.createdAt,
-    updatedAt: job.updatedAt,
-    startedAt: job.startedAt,
-    finishedAt: job.finishedAt,
-    command: job.command,
-    result: job.result,
-    ...(job.error ? { error: job.error } : {})
-  };
 }
 
 async function packageVersion(): Promise<string> {
