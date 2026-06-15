@@ -520,6 +520,8 @@ function help(): Record<string, unknown> {
       "material set <path> --property <name> --value <value> [--type color|float|vector|texture] [--bridge-endpoint <url>]",
       "graphics quality [--quality-level <n>] [--v-sync-count <n>] [--bridge-endpoint <url>]",
       "graphics settings [--anti-aliasing <n>] [--shadow-distance <n>] [--bridge-endpoint <url>]",
+      "graphics pipeline [--bridge-endpoint <url>]",
+      "graphics volume [target] [--bridge-endpoint <url>]",
       "graphics screenshot <path> [--include-diagnostics] [--bridge-endpoint <url>]",
       "physics settings [--mode 3d|2d] [--gravity-y <n>] [--bridge-endpoint <url>]",
       "physics raycast [--origin-x 0 --origin-y 0 --origin-z 0 --direction-z 1 --distance 100] [--bridge-endpoint <url>]",

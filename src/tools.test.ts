@@ -393,6 +393,48 @@ test("tools describe editor.refresh returns job metadata", async () => {
   assert.equal(data.longRunning, true);
 });
 
+// ── S3.2 metadata: graphics, physics, animation, vfx ───────
+
+test("S3.2 graphics group has quality, pipeline, volume and screenshot tools", () => {
+  const names = filterToolsByGroup("graphics").map((t) => t.name);
+  assert.deepEqual(names, ["graphics.quality", "graphics.settings", "graphics.pipeline", "graphics.volume", "graphics.screenshot"]);
+  assert.equal(findToolByName("graphics.pipeline")?.readOnlyHint, true);
+  assert.equal(findToolByName("graphics.volume")?.readOnlyHint, true);
+});
+
+test("S3.2 physics group has settings, raycast and simulation tools", () => {
+  const names = filterToolsByGroup("physics").map((t) => t.name);
+  assert.deepEqual(names, ["physics.settings", "physics.raycast", "physics.simulation"]);
+  assert.equal(findToolByName("physics.raycast")?.readOnlyHint, true);
+  assert.equal(findToolByName("physics.simulation")?.handler, "bridge");
+});
+
+test("S3.2 animation and vfx groups have required tools", () => {
+  assert.deepEqual(filterToolsByGroup("animation").map((t) => t.name), ["animation.clip", "animation.state", "animation.play", "animation.stop"]);
+  assert.deepEqual(filterToolsByGroup("vfx").map((t) => t.name), ["vfx.graph", "vfx.effect"]);
+});
+
+test("tools describe graphics.volume returns bridge metadata", async () => {
+  const result = await handleToolsCommand("describe", ["graphics.volume"], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.name, "graphics.volume");
+  assert.equal(data.group, "graphics");
+  assert.equal(data.handler, "bridge");
+  assert.equal(data.readOnlyHint, true);
+  assert.equal(data.cliCommand, "graphics volume");
+});
+
+test("tools describe animation.play returns full bridge metadata", async () => {
+  const result = await handleToolsCommand("describe", ["animation.play"], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.name, "animation.play");
+  assert.equal(data.group, "animation");
+  assert.equal(data.handler, "bridge");
+  assert.equal(data.cliCommand, "animation play");
+});
+
 // ── tools unknown subcommand ───────────────────────────────
 
 test("tools unknown subcommand returns error", async () => {

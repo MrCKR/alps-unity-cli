@@ -443,15 +443,21 @@ test("graphics commands forward settings and screenshot diagnostics", async () =
 
   const quality = await execute(["graphics", "quality", "--quality-level", "2", "--v-sync-count", "1", "--shadow-distance", "75.5", "--soft-particles", "false"], { ...runtime, bridgeExecute });
   const settings = await execute(["graphics", "settings", "--render-pipeline", "Assets/Settings/URP.asset", "--anti-aliasing", "4"], { ...runtime, bridgeExecute });
+  const pipeline = await execute(["graphics", "pipeline"], { ...runtime, bridgeExecute });
+  const volume = await execute(["graphics", "volume", "Global Volume"], { ...runtime, bridgeExecute });
   const screenshot = await execute(["graphics", "screenshot", "Artifacts/graphics.png", "--width", "1024", "--height", "768", "--include-diagnostics", "--overwrite"], { ...runtime, bridgeExecute });
 
   assert.equal(quality.ok, true);
   assert.equal(settings.ok, true);
+  assert.equal(pipeline.ok, true);
+  assert.equal(volume.ok, true);
   assert.equal(screenshot.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["graphics.quality", "graphics.settings", "graphics.screenshot"]);
+  assert.deepEqual(requests.map((request) => request.command), ["graphics.quality", "graphics.settings", "graphics.pipeline", "graphics.volume", "graphics.screenshot"]);
   assert.deepEqual(requests[0].args, { qualityLevel: 2, vSyncCount: 1, shadowDistance: 75.5, softParticles: false });
   assert.deepEqual(requests[1].args, { antiAliasing: 4, renderPipeline: "Assets/Settings/URP.asset" });
-  assert.deepEqual(requests[2].args, { path: "Artifacts/graphics.png", width: 1024, height: 768, overwrite: true, includeDiagnostics: true });
+  assert.deepEqual(requests[2].args, {});
+  assert.deepEqual(requests[3].args, { target: "Global Volume" });
+  assert.deepEqual(requests[4].args, { path: "Artifacts/graphics.png", width: 1024, height: 768, overwrite: true, includeDiagnostics: true });
 });
 
 test("physics commands forward settings, raycast and simulation inputs", async () => {

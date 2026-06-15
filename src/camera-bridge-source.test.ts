@@ -72,7 +72,7 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /private static readonly string\[\] PrefabCommands = \{ "prefab\.info", "prefab\.hierarchy", "prefab\.create", "prefab\.modify", "prefab\.stage-open", "prefab\.stage-save", "prefab\.stage-close" \}/);
   assert.match(source, /private static readonly string\[\] UiCommands = \{ "ui\.canvas\.create", "ui\.text\.create", "ui\.button\.create", "ui\.image\.create", "ui\.document\.info", "ui\.document\.create", "ui\.hierarchy" \}/);
   assert.match(source, /private static readonly string\[\] MaterialCommands = \{ "material\.info", "material\.create", "material\.assign", "material\.set" \}/);
-  assert.match(source, /private static readonly string\[\] GraphicsCommands = \{ "graphics\.quality", "graphics\.settings", "graphics\.screenshot" \}/);
+  assert.match(source, /private static readonly string\[\] GraphicsCommands = \{ "graphics\.quality", "graphics\.settings", "graphics\.pipeline", "graphics\.volume", "graphics\.screenshot" \}/);
   assert.match(source, /private static readonly string\[\] PhysicsCommands = \{ "physics\.settings", "physics\.raycast", "physics\.simulation" \}/);
   assert.match(source, /private static readonly string\[\] ProfilerCommands = \{ "profiler\.start", "profiler\.stop", "profiler\.capture", "profiler\.status" \}/);
   assert.match(source, /private static readonly string\[\] ProBuilderCommands = \{ "probuilder\.shape", "probuilder\.create", "probuilder\.csg", "probuilder\.edit" \}/);
@@ -525,6 +525,9 @@ test("Unity Bridge graphics and physics commands expose settings, raycast and di
   assert.match(source, /QualitySettings\.SetQualityLevel/);
   assert.match(source, /GraphicsSettings\.defaultRenderPipeline/);
   assert.match(source, /RenderPipelineAsset/);
+  assert.match(source, /case "graphics\.pipeline":/);
+  assert.match(source, /case "graphics\.volume":/);
+  assert.match(source, /FindType\("UnityEngine\.Rendering\.Volume"\)/);
   assert.match(source, /Physics\.gravity/);
   assert.match(source, /Physics2D\.gravity/);
   assert.match(source, /Physics\.Raycast/);
