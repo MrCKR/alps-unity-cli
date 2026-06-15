@@ -42,7 +42,7 @@ namespace UnityCli
         private static readonly string[] MaterialCommands = { "material.info", "material.create", "material.assign", "material.set" };
         private static readonly string[] GraphicsCommands = { "graphics.quality", "graphics.settings", "graphics.pipeline", "graphics.volume", "graphics.screenshot" };
         private static readonly string[] PhysicsCommands = { "physics.settings", "physics.raycast", "physics.simulation" };
-        private static readonly string[] ProfilerCommands = { "profiler.start", "profiler.stop", "profiler.capture", "profiler.status" };
+        private static readonly string[] ProfilerCommands = { "profiler.start", "profiler.stop", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export", "profiler.status" };
         private static readonly string[] ProBuilderCommands = { "probuilder.shape", "probuilder.create", "probuilder.csg", "probuilder.edit" };
         private static readonly string[] AnimationCommands = { "animation.clip", "animation.state", "animation.play", "animation.stop" };
         private static readonly string[] VfxCommands = { "vfx.graph", "vfx.effect" };

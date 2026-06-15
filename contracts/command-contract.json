@@ -403,6 +403,16 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "diagnose.preflight",
+      "group": "preflight",
+      "command": "",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "editor.console",
       "group": "editor",
       "command": "console",
@@ -713,16 +723,6 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "diagnose.preflight",
-      "group": "preflight",
-      "command": "",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "readOnly": true,
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
       "bridgeCommand": "probuilder.create",
       "group": "probuilder",
       "command": "create",
@@ -768,7 +768,57 @@
       "command": "capture",
       "handler_type": "hybrid",
       "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "profiler.counter",
+      "group": "profiler",
+      "command": "counter",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
       "readOnly": true,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "profiler.export",
+      "group": "profiler",
+      "command": "export",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "profiler.frame",
+      "group": "profiler",
+      "command": "frame",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "profiler.memory",
+      "group": "profiler",
+      "command": "memory",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "profiler.pause",
+      "group": "profiler",
+      "command": "pause",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
       "destructive": false,
       "timeout": 30000
     },

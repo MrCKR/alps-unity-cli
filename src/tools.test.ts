@@ -427,6 +427,43 @@ test("S3.2 graphics group has quality, pipeline, volume and screenshot tools", (
   assert.equal(findToolByName("graphics.volume")?.readOnlyHint, true);
 });
 
+test("S3.4 profiler domain has frozen metadata coverage", () => {
+  const profilerTools = filterToolsByGroup("profiler");
+  const expectedNames = ["profiler.status", "profiler.start", "profiler.stop", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export"];
+  assert.deepEqual(profilerTools.map((tool) => tool.name), expectedNames);
+
+  for (const name of expectedNames) {
+    const tool = findToolByName(name);
+    assert.ok(tool, `${name} should exist`);
+    assert.equal(tool?.docsTopic, "profiler");
+    assert.ok(tool?.cliCommand, `${name} should expose a CLI command`);
+  }
+
+  for (const name of ["profiler.status", "profiler.counter", "profiler.memory", "profiler.frame"]) {
+    const tool = findToolByName(name);
+    assert.equal(tool?.readOnlyHint, true, `${name} should be read-only from Unity state perspective`);
+    assert.equal(tool?.destructiveHint, false, `${name} should not be destructive`);
+  }
+
+  for (const name of ["profiler.start", "profiler.stop", "profiler.pause", "profiler.capture", "profiler.export"]) {
+    const tool = findToolByName(name);
+    assert.equal(tool?.readOnlyHint, false, `${name} should change profiler session or write an artifact`);
+    assert.equal(tool?.destructiveHint, false, `${name} should not be destructive`);
+  }
+
+  assert.match(findToolByName("profiler.pause")?.description ?? "", /Profiler\.enabled/);
+});
+
+test("tools describe profiler.memory returns full metadata", async () => {
+  const result = await handleToolsCommand("describe", ["profiler.memory"], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.name, "profiler.memory");
+  assert.equal(data.group, "profiler");
+  assert.equal(data.readOnlyHint, true);
+  assert.equal(data.destructiveHint, false);
+});
+
 test("planned bridge contract tools expose planned support status", () => {
   const plannedNames = ["scene.active", "scene.build-settings", "scene.create", "scene.load", "scene.save", "go.inspect", "go.create", "go.modify", "go.delete", "component.add", "component.remove", "component.set", "script.create", "script.read", "script.edit", "script.validate"];
   for (const name of plannedNames) {

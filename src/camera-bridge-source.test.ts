@@ -79,7 +79,7 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /private static readonly string\[\] MaterialCommands = \{ "material\.info", "material\.create", "material\.assign", "material\.set" \}/);
   assert.match(source, /private static readonly string\[\] GraphicsCommands = \{ "graphics\.quality", "graphics\.settings", "graphics\.pipeline", "graphics\.volume", "graphics\.screenshot" \}/);
   assert.match(source, /private static readonly string\[\] PhysicsCommands = \{ "physics\.settings", "physics\.raycast", "physics\.simulation" \}/);
-  assert.match(source, /private static readonly string\[\] ProfilerCommands = \{ "profiler\.start", "profiler\.stop", "profiler\.capture", "profiler\.status" \}/);
+  assert.match(source, /private static readonly string\[\] ProfilerCommands = \{ "profiler\.start", "profiler\.stop", "profiler\.pause", "profiler\.counter", "profiler\.memory", "profiler\.frame", "profiler\.capture", "profiler\.export", "profiler\.status" \}/);
   assert.match(source, /private static readonly string\[\] ProBuilderCommands = \{ "probuilder\.shape", "probuilder\.create", "probuilder\.csg", "probuilder\.edit" \}/);
   assert.match(source, /private static readonly string\[\] AnimationCommands = \{ "animation\.clip", "animation\.state", "animation\.play", "animation\.stop" \}/);
   assert.match(source, /private static readonly string\[\] VfxCommands = \{ "vfx\.graph", "vfx\.effect" \}/);
@@ -124,7 +124,12 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /RegisterCommand\(registry, "physics\.simulation", "physics", true/);
   assert.match(source, /RegisterCommand\(registry, "profiler\.start", "profiler", true/);
   assert.match(source, /RegisterCommand\(registry, "profiler\.stop", "profiler", true/);
+  assert.match(source, /RegisterCommand\(registry, "profiler\.pause", "profiler", true/);
+  assert.match(source, /RegisterCommand\(registry, "profiler\.counter", "profiler", false/);
+  assert.match(source, /RegisterCommand\(registry, "profiler\.memory", "profiler", false/);
+  assert.match(source, /RegisterCommand\(registry, "profiler\.frame", "profiler", false/);
   assert.match(source, /RegisterCommand\(registry, "profiler\.capture", "profiler", true/);
+  assert.match(source, /RegisterCommand\(registry, "profiler\.export", "profiler", true/);
   assert.match(source, /RegisterCommand\(registry, "profiler\.status", "profiler", false/);
   assert.match(source, /RegisterCommand\(registry, "probuilder\.shape", "probuilder", true/);
   assert.match(source, /RegisterCommand\(registry, "probuilder\.create", "probuilder", true/);

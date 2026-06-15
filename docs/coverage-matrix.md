@@ -116,6 +116,20 @@
 | vfx.graph | `vfx graph <Assets/Effect.vfx> [--create]` | bridge (UnityCliBridge) | ✅ `vfx.graph` in VFX_TOOLS | bridge-commands.test.ts: vfx forwarding; tools.test.ts: S3.2 vfx group | ✅ |
 | vfx.effect | `vfx effect <target> [--graph] [--add]` | bridge (UnityCliBridge) | ✅ `vfx.effect` in VFX_TOOLS | bridge-commands.test.ts: vfx forwarding | ✅ |
 
+## Profiler 域
+
+| unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
+|---|---|---|---|---|---|
+| profiler.status | `profiler status` | bridge (UnityCliBridge) | ✅ `profiler.status` in PROFILER_TOOLS | bridge-commands.test.ts + contracts:validate | ✅ |
+| profiler.start | `profiler start [--deep-profiling]` | hybrid (live bridge + job path) | ✅ `profiler.start` in PROFILER_TOOLS | bridge-commands.test.ts + tools.test.ts | ✅ |
+| profiler.stop | `profiler stop` | bridge (UnityCliBridge) | ✅ `profiler.stop` in PROFILER_TOOLS | bridge-commands.test.ts + tools.test.ts | ✅ |
+| profiler.pause | `profiler pause [--paused true\|false]` | bridge (UnityCliBridge) | ✅ `profiler.pause` in PROFILER_TOOLS | bridge-commands.test.ts + tools.test.ts | ✅ |
+| profiler.counter | `profiler counter [--category] [--counter]` | bridge (UnityCliBridge) | ✅ `profiler.counter` in PROFILER_TOOLS | bridge-commands.test.ts + tools.test.ts | ✅ |
+| profiler.memory | `profiler memory` | bridge (UnityCliBridge) | ✅ `profiler.memory` in PROFILER_TOOLS | bridge-commands.test.ts + tools.test.ts | ✅ |
+| profiler.frame | `profiler frame [--module]` | bridge (UnityCliBridge) | ✅ `profiler.frame` in PROFILER_TOOLS | bridge-commands.test.ts + tools.test.ts | ✅ |
+| profiler.capture | `profiler capture <path> [--duration-ms] [--frames]` | hybrid (live bridge + job path) | ✅ `profiler.capture` in PROFILER_TOOLS | bridge-commands.test.ts + tools.test.ts | ✅ |
+| profiler.export | `profiler export <path>` | bridge (UnityCliBridge) | ✅ `profiler.export` in PROFILER_TOOLS | bridge-commands.test.ts + tools.test.ts | ✅ |
+
 ---
 
 ## Camera 域
@@ -198,6 +212,7 @@
 | graphics | `graphics quality` / `graphics pipeline` / `graphics volume` 返回设置、管线和 Volume 摘要 | `graphics settings --render-pipeline` 或 `graphics quality --quality-level` 修改项目设置 | 待验证 | 自动测试覆盖 CLI/handler/metadata；真实 Unity smoke 需 Windows + Unity Editor |
 | physics | `physics raycast` 执行 3D/2D 射线检测 | `physics settings --gravity-y` 或 `physics simulation --simulate` 修改/步进物理 | 待验证 | 自动测试覆盖 CLI/handler/metadata；真实 Unity smoke 需 Windows + Unity Editor |
 | animation/vfx | `animation state` / `vfx graph` 查询动画和 VFX 资源/组件 | `animation play <target> --state <name>` / `vfx effect <target> --add` 执行动画和 VFX 修改 | 待验证 | 自动测试覆盖 CLI/handler/metadata；真实 Unity smoke 需 Windows + Unity Editor |
+| profiler | `profiler status/counter/memory/frame` 返回状态、计数器、内存和帧诊断 | `profiler start/pause/stop` 控制 session，`profiler capture/export` 写 artifact | 2026-06-15 | 第三轮 Windows+Unity Editor Profiler smoke 通过；export artifact 1188 bytes；质量 PASS |
 
 ---
 
@@ -209,3 +224,4 @@
 - **S3.1** (2026-06-15): 补齐 camera、material、shader、texture、ui 创作域覆盖矩阵；新增 S3.1 metadata/write smoke 单测证据
 - **S3.2** (2026-06-15): 新增 Graphics/Physics/Animation/VFX 覆盖矩阵行；补 `graphics.pipeline`、`graphics.volume` 查询命令与 metadata/handler/test 证据
 - **ALP-306** (2026-06-15): 新增 `contracts/command-contract.json` 与 `npm run contracts:validate`；补齐 scene/go/component/script 16 个 C# bridge handler，使 TS registry、tool metadata 与 C# registry 统一校验通过。
+- **S3.4** (2026-06-15): 补齐 Profiler session/counter/memory/frame/export CLI、UnityPkg handler、metadata/describe 与自动化测试矩阵；质量 smoke PASS。
