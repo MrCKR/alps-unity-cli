@@ -67,6 +67,35 @@
 |---|---|---|---|---|---|
 | code.exec | `code exec (--file\|--code\|--stdin) [--channel live\|batchmode] [--job] [--artifact-dir]` | hybrid (bridge live + batch job) | ✅ `code.exec` in CODE_TOOLS, destructiveHint=true, permissions=["executes_code"] (S2.4 增强) | runtime-code.test.ts: live + batchmode + artifact + timeout | ✅ |
 
+## Graphics 域
+
+| unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
+|---|---|---|---|---|---|
+| graphics.quality | `graphics quality [--quality-level] [--v-sync-count]` | bridge (AlpsUnityBridge) | ✅ `graphics.quality` in GRAPHICS_TOOLS | bridge-commands.test.ts: graphics forwarding; tools.test.ts: S3.2 graphics group | ✅ |
+| graphics.settings | `graphics settings [--anti-aliasing] [--shadow-distance] [--render-pipeline]` | bridge (AlpsUnityBridge) | ✅ `graphics.settings` in GRAPHICS_TOOLS | bridge-commands.test.ts: renderPipeline forwarding | ✅ |
+| graphics.pipeline | `graphics pipeline` | bridge (AlpsUnityBridge) | ✅ `graphics.pipeline` in GRAPHICS_TOOLS | bridge-commands.test.ts: graphics.pipeline forwarding; camera-bridge-source.test.ts | ✅ |
+| graphics.volume | `graphics volume [target]` | bridge (AlpsUnityBridge) | ✅ `graphics.volume` in GRAPHICS_TOOLS | bridge-commands.test.ts: graphics.volume forwarding; camera-bridge-source.test.ts | ✅ |
+| graphics.screenshot | `graphics screenshot <path> [--include-diagnostics]` | bridge (AlpsUnityBridge) | ✅ `graphics.screenshot` in GRAPHICS_TOOLS | bridge-commands.test.ts: graphics screenshot forwarding | ✅ |
+
+## Physics 域
+
+| unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
+|---|---|---|---|---|---|
+| physics.settings | `physics settings [--mode 3d\|2d] [--gravity-y]` | bridge (AlpsUnityBridge) | ✅ `physics.settings` in PHYSICS_TOOLS | bridge-commands.test.ts: physics settings forwarding; tools.test.ts: S3.2 physics group | ✅ |
+| physics.raycast | `physics raycast [--origin-*] [--direction-*] [--distance]` | bridge (AlpsUnityBridge) | ✅ `physics.raycast` in PHYSICS_TOOLS | bridge-commands.test.ts: physics raycast forwarding | ✅ |
+| physics.simulation | `physics simulation [--steps] [--delta-time] [--simulate]` | bridge (AlpsUnityBridge) | ✅ `physics.simulation` in PHYSICS_TOOLS | bridge-commands.test.ts: physics simulation forwarding | ✅ |
+
+## Animation/VFX 域
+
+| unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
+|---|---|---|---|---|---|
+| animation.clip | `animation clip <Assets/Clip.anim> [--create]` | bridge (AlpsUnityBridge) | ✅ `animation.clip` in ANIMATION_TOOLS | bridge-commands.test.ts: animation forwarding; tools.test.ts: S3.2 animation group | ✅ |
+| animation.state | `animation state <target> [--layer]` | bridge (AlpsUnityBridge) | ✅ `animation.state` in ANIMATION_TOOLS | bridge-commands.test.ts: animation forwarding | ✅ |
+| animation.play | `animation play <target> --state <name>` | bridge (AlpsUnityBridge) | ✅ `animation.play` in ANIMATION_TOOLS | bridge-commands.test.ts: animation forwarding; tools.test.ts: describe animation.play | ✅ |
+| animation.stop | `animation stop <target>` | bridge (AlpsUnityBridge) | ✅ `animation.stop` in ANIMATION_TOOLS | bridge-commands.test.ts: animation forwarding | ✅ |
+| vfx.graph | `vfx graph <Assets/Effect.vfx> [--create]` | bridge (AlpsUnityBridge) | ✅ `vfx.graph` in VFX_TOOLS | bridge-commands.test.ts: vfx forwarding; tools.test.ts: S3.2 vfx group | ✅ |
+| vfx.effect | `vfx effect <target> [--graph] [--add]` | bridge (AlpsUnityBridge) | ✅ `vfx.effect` in VFX_TOOLS | bridge-commands.test.ts: vfx forwarding | ✅ |
+
 ---
 
 ## 真实 Unity 项目 smoke 验证状态
@@ -79,6 +108,9 @@
 | build | `build.status` 查询 job 状态 | `build run` 触发构建 | 待验证 | 需要 Unity 项目环境 |
 | script | `script read <path>` 返回内容 | `script create/delete` 创建/删除脚本 | 待验证 | 需要 Unity 项目环境 |
 | code | `code exec --code` 返回结果 | `code exec` 执行代码（destructiveHint） | 待验证 | 需要 Unity 项目环境 |
+| graphics | `graphics quality` / `graphics pipeline` / `graphics volume` 返回设置、管线和 Volume 摘要 | `graphics settings --render-pipeline` 或 `graphics quality --quality-level` 修改项目设置 | 待验证 | 自动测试覆盖 CLI/handler/metadata；真实 Unity smoke 需 Windows + Unity Editor |
+| physics | `physics raycast` 执行 3D/2D 射线检测 | `physics settings --gravity-y` 或 `physics simulation --simulate` 修改/步进物理 | 待验证 | 自动测试覆盖 CLI/handler/metadata；真实 Unity smoke 需 Windows + Unity Editor |
+| animation/vfx | `animation state` / `vfx graph` 查询动画和 VFX 资源/组件 | `animation play <target> --state <name>` / `vfx effect <target> --add` 执行动画和 VFX 修改 | 待验证 | 自动测试覆盖 CLI/handler/metadata；真实 Unity smoke 需 Windows + Unity Editor |
 
 ---
 
@@ -86,3 +118,4 @@
 
 - **S2.3** (2026-06-14): 新增 `editor.refresh`、`cli.package.resolve`、`cli.package.registry`、`cli.package.scoped-registry`、`test.run`、`test.poll`、`build.run`、`build.status`、`build.cancel` metadata 条目及覆盖矩阵行
 - **S2.4** (2026-06-14): 新增 `script.delete` metadata 条目 + bridge 路由；`code.exec` 增加 `permissions=["executes_code"]`、`outputSchema`、batchmode job 参数；script/code 覆盖矩阵行
+- **S3.2** (2026-06-15): 新增 Graphics/Physics/Animation/VFX 覆盖矩阵行；补 `graphics.pipeline`、`graphics.volume` 查询命令与 metadata/handler/test 证据

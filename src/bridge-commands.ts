@@ -152,7 +152,7 @@ export function bridgeCommandName(group: string | undefined, command: string | u
   if (group === "material" && ["info", "create", "assign", "set"].includes(command ?? "")) {
     return `material.${command}`;
   }
-  if (group === "graphics" && ["quality", "settings", "screenshot"].includes(command ?? "")) {
+  if (group === "graphics" && ["quality", "settings", "screenshot", "pipeline", "volume"].includes(command ?? "")) {
     return `graphics.${command}`;
   }
   if (group === "physics" && ["settings", "raycast", "simulation"].includes(command ?? "")) {
@@ -333,6 +333,12 @@ async function commandArgs(command: string, flags: Record<string, string | boole
   if (command.startsWith("graphics.")) {
     if (command === "graphics.screenshot") {
       return compactArgs({ ...screenshotArgs(flags, positionalTarget), includeDiagnostics: boolFlag(flags, "include-diagnostics") });
+    }
+    if (command === "graphics.pipeline") {
+      return queryArgs(flags);
+    }
+    if (command === "graphics.volume") {
+      return compactArgs({ ...queryArgs(flags), target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") });
     }
     return compactArgs({
       ...queryArgs(flags),
