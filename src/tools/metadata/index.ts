@@ -1,14 +1,14 @@
 /**
  * Static built-in tool metadata for the Unity CLI.
  *
- * Covers every live bridge handler registered in bridgeCommandName() plus
+ * Covers every live bridge handler registered in the bridge command registry plus
  * offline/job-only commands. This data is shipped with the CLI/UnityPkg
  * release so that `tools describe` works without a live Unity instance.
  *
  * The schema is /schemas/tool-metadata.schema.json (ALP-164 frozen v1.0).
  */
 
-import { bridgeCommandName } from "../../bridge-commands.js";
+import { bridgeCommandRegistry } from "../../bridge/index.js";
 import { SCENE_TOOLS } from "./groups/scene.js";
 import { CAMERA_TOOLS } from "./groups/camera.js";
 import { GO_TOOLS } from "./groups/game-object.js";
@@ -123,9 +123,9 @@ function validateBuiltinTools(tools: ToolMetadata[]): void {
     if (tool.handler === "bridge" && tool.cliCommand) {
       const [group, ...commandParts] = tool.cliCommand.split(" ");
       const command = commandParts.join(" ");
-      const bridgeName = bridgeCommandName(group, command);
-      if (bridgeName !== tool.name) {
-        throw new Error(`Bridge tool metadata mismatch: ${tool.name} uses cliCommand="${tool.cliCommand}" but bridge registry resolves ${bridgeName ?? "<none>"}`);
+      const spec = bridgeCommandRegistry.lookup(group, command);
+      if (!spec || spec.bridgeCommand !== tool.name) {
+        throw new Error(`Bridge tool metadata mismatch: ${tool.name} uses cliCommand="${tool.cliCommand}" but bridge registry resolves ${spec?.bridgeCommand ?? "<none>"}`);
       }
     }
   }
