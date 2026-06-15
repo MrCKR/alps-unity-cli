@@ -8,7 +8,8 @@
 
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
 import { getString } from "./args.js";
-import { builtinToolGroups, builtinToolMetadata } from "./tool-metadata.js";
+import { builtinToolGroups, builtinToolMetadata } from "./tools/metadata/index.js";
+import { supportStatusForTool } from "./tools/metadata/status.js";
 import { failure, success } from "./output.js";
 import type { CliResult } from "./types.js";
 
@@ -64,9 +65,14 @@ function buildStaticCapabilities(): Record<string, unknown> {
   const destructiveTools = tools.filter((t) => t.destructiveHint).map((t) => t.name);
   const readOnlyTools = tools.filter((t) => t.readOnlyHint).map((t) => t.name);
   const longRunningTools = tools.filter((t) => t.longRunning).map((t) => t.name);
-  const bridgeTools = tools.filter((t) => t.handler === "bridge" || t.handler === "hybrid").map((t) => t.name);
-  const offlineTools = tools.filter((t) => t.handler === "offline").map((t) => t.name);
-  const jobTools = tools.filter((t) => t.handler === "job" || t.handler === "hybrid").map((t) => t.name);
+  const liveBridgeTools = tools.filter((t) => supportStatusForTool(t) === "live-bridge").map((t) => t.name);
+  const hybridTools = tools.filter((t) => supportStatusForTool(t) === "bridge-job").map((t) => t.name);
+  const batchJobTools = tools.filter((t) => supportStatusForTool(t) === "batch-job").map((t) => t.name);
+  const cliOnlyTools = tools.filter((t) => supportStatusForTool(t) === "cli-only").map((t) => t.name);
+  const plannedTools = tools.filter((t) => supportStatusForTool(t) === "planned").map((t) => t.name);
+  const bridgeTools = liveBridgeTools;
+  const offlineTools = cliOnlyTools;
+  const jobTools = [...batchJobTools, ...hybridTools];
 
   const groupCounts: Record<string, number> = {};
   for (const group of groups) {
@@ -76,12 +82,23 @@ function buildStaticCapabilities(): Record<string, unknown> {
   return {
     toolCount: tools.length,
     groups: groupCounts,
+    liveBridgeTools,
+    hybridTools,
+    batchJobTools,
+    cliOnlyTools,
+    plannedTools,
     bridgeTools,
     offlineTools,
     jobTools,
     readOnlyTools,
     destructiveTools,
     longRunningTools,
+    handlerDefinitions: {
+      bridge: "Live Unity Editor Bridge /bridge/execute path.",
+      hybrid: "Command supports more than one channel, typically live Bridge plus batch/job execution.",
+      job: "Unity batchmode/job-runner path only.",
+      offline: "Local CLI execution without Unity connection."
+    },
     schemaFeatures: {
       toolMetadata: true,
       requestEnvelope: true,

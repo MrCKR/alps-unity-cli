@@ -1,9 +1,9 @@
 /**
  * Static built-in tool metadata for the Unity CLI.
  *
- * Covers every live bridge handler registered in the bridge command registry plus
- * offline/job-only commands. This data is shipped with the CLI/UnityPkg
- * release so that `tools describe` works without a live Unity instance.
+ * Covers every supported or declared CLI command, including live bridge, batch/job,
+ * CLI-only and planned command contract entries. This data is shipped with the
+ * CLI/UnityPkg release so that `tools describe` works without a live Unity instance.
  *
  * The schema is /schemas/tool-metadata.schema.json (ALP-164 frozen v1.0).
  */
@@ -34,7 +34,8 @@ import { CODE_TOOLS } from "./groups/code.js";
 import { CLI_ONLY_TOOLS } from "./groups/cli-only.js";
 import type { ToolMetadata } from "./types.js";
 
-export type { ToolExample, ToolMetadata } from "./types.js";
+export { supportStatusDescription, supportStatusForTool, supportStatusLabel } from "./status.js";
+export type { ToolExample, ToolHandler, ToolMetadata, ToolSupportStatus } from "./types.js";
 
 const BUILTIN_TOOLS: ToolMetadata[] = [
   ...SCENE_TOOLS,
@@ -120,7 +121,7 @@ function validateBuiltinTools(tools: ToolMetadata[]): void {
     }
     names.add(tool.name);
 
-    if (tool.handler === "bridge" && tool.cliCommand) {
+    if (tool.handler === "bridge" && tool.supportStatus !== "planned" && tool.cliCommand) {
       const [group, ...commandParts] = tool.cliCommand.split(" ");
       const command = commandParts.join(" ");
       const spec = bridgeCommandRegistry.lookup(group, command);

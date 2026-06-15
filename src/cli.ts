@@ -176,8 +176,13 @@ function help(): Record<string, unknown> {
       "code exec (--file <path>|--stdin|--code <text>) [--channel live|batchmode] [--refs <list>] [--define <symbol>] [--args <json>] [--timeout-ms <n>] [--job] [--artifact-dir <path>]",
       "custom-tool list [--project <path>] [--instance <id>] [--bridge-endpoint <url>]",
       "custom-tool run <name> [--project <path>] [--instance <id>] [--input <json>|--input-file <path>|--stdin] [--timeout-ms 30000] [--job] [--artifact-dir <path>] [--bridge-endpoint <url>]",
+      "scene active [规划中]",
       "scene hierarchy [--page-size 100] [--bridge-endpoint <url>]",
+      "scene build-settings [规划中]",
       "scene screenshot <path> [--width 1280 --height 720 --format png --overwrite] [--bridge-endpoint <url>]",
+      "scene create <path> [规划中]",
+      "scene load <path|build-index> [规划中]",
+      "scene save [--path <path>] [规划中]",
       "prefab info <path> [--bridge-endpoint <url>]",
       "prefab create <source> --path <Assets/Prefab.prefab> [--overwrite] [--bridge-endpoint <url>]",
       "prefab stage-open <path> [--bridge-endpoint <url>]",
@@ -221,8 +226,17 @@ function help(): Record<string, unknown> {
       "camera info <target> [--bridge-endpoint <url>]",
       "camera screenshot <target> --output <path> [--width 1280 --height 720 --format png --transparent --overwrite] [--bridge-endpoint <url>]",
       "go find --name <name> [--bridge-endpoint <url>]",
-      "component set <target> --component <type> --property <name> --value <value>",
-      "script create <path> --content-file <file>",
+      "go inspect <target> [规划中]",
+      "go create <name> [规划中]",
+      "go modify <target> [规划中]",
+      "go delete <target> [规划中]",
+      "component add <target> --component <type> [规划中]",
+      "component remove <target> --component <type> [规划中]",
+      "component set <target> --component <type> --property <name> --value <value> [规划中]",
+      "script create <path> --content-file <file> [规划中]",
+      "script read <path> [规划中]",
+      "script edit <path> [规划中]",
+      "script validate <path> [规划中]",
       "screenshot capture <path>",
       "editor refresh --compile [--wait] [--project <path>] [--unity <Unity.exe>]",
       "test run [--platform EditMode|PlayMode] [--wait]",
@@ -230,7 +244,14 @@ function help(): Record<string, unknown> {
       "build run [--target StandaloneWindows64] [--output <path>] [--wait]",
       "build status --id <jobId>",
       "build cancel --id <jobId>"
-    ]
+    ],
+    supportLegend: {
+      "已路由可执行": "通过 live Unity Editor Bridge /bridge/execute 执行。",
+      "已路由可执行 + 可 batch/job": "同时支持 live Unity Editor Bridge /bridge/execute 和 batchmode/job runner 两种执行通道。",
+      "仅 batch/job": "通过 Unity batchmode/job runner 执行，不等同于 live Bridge 路由。",
+      "仅 CLI 离线": "不需要 Unity 连接，在本地 CLI 完成。",
+      "规划中": "CLI 契约已声明，作为后续 bundled Unity Bridge handler 覆盖范围保留。"
+    }
   };
 }
 

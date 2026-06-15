@@ -95,6 +95,11 @@
       "enum": ["bridge", "job", "offline", "hybrid"],
       "description": "Execution mode: bridge (live Unity), job (batch mode), offline (no Unity), hybrid (bridge with job fallback)."
     },
+    "supportStatus": {
+      "type": "string",
+      "enum": ["live-bridge", "bridge-job", "batch-job", "cli-only", "planned"],
+      "description": "User-facing command support status: live Bridge executable, live Bridge plus batch/job executable, batch/job only, CLI-only offline, or declared/planned for future bundled Bridge handler coverage."
+    },
     "cliCommand": {
       "type": "string",
       "description": "The CLI argv prefix, e.g. 'scene hierarchy'."
