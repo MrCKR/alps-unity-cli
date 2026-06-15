@@ -244,7 +244,7 @@ test("scene screenshot forwards output path and overwrite", async () => {
   assert.deepEqual(requests[0].args, { path: "Artifacts/scene.jpg", format: "jpg", width: 800, height: 600, overwrite: true });
 });
 
-test("prefab commands forward paths, pagination and planned effects", async () => {
+test("prefab commands forward paths, pagination, modify args and planned effects", async () => {
   const runtime = await makeRuntime();
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
@@ -254,6 +254,7 @@ test("prefab commands forward paths, pagination and planned effects", async () =
 
   const info = await execute(["prefab", "info", "Assets/Prefabs/Player.prefab"], { ...runtime, bridgeExecute });
   const create = await execute(["prefab", "create", "Player", "--path", "Assets/Prefabs/Player.prefab", "--overwrite"], { ...runtime, bridgeExecute });
+  const modify = await execute(["prefab", "modify", "Assets/Prefabs/Player.prefab", "--name", "Hero", "--add-child", "Socket", "--remove-child", "OldSocket", "--overwrite"], { ...runtime, bridgeExecute });
   const open = await execute(["prefab", "stage-open", "Assets/Prefabs/Player.prefab"], { ...runtime, bridgeExecute });
   const hierarchy = await execute(["prefab", "hierarchy", "Assets/Prefabs/Player.prefab", "--page-size", "25", "--cursor", "50"], { ...runtime, bridgeExecute });
   const save = await execute(["prefab", "stage-save"], { ...runtime, bridgeExecute });
@@ -261,17 +262,55 @@ test("prefab commands forward paths, pagination and planned effects", async () =
 
   assert.equal(info.ok, true);
   assert.equal(create.ok, true);
+  assert.equal(modify.ok, true);
   assert.equal(open.ok, true);
   assert.equal(hierarchy.ok, true);
   assert.equal(save.ok, true);
   assert.equal(close.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["prefab.info", "prefab.create", "prefab.stage-open", "prefab.hierarchy", "prefab.stage-save", "prefab.stage-close"]);
+  assert.deepEqual(requests.map((request) => request.command), ["prefab.info", "prefab.create", "prefab.modify", "prefab.stage-open", "prefab.hierarchy", "prefab.stage-save", "prefab.stage-close"]);
   assert.deepEqual(requests[0].args, { path: "Assets/Prefabs/Player.prefab" });
   assert.deepEqual(requests[1].args, { source: "Player", path: "Assets/Prefabs/Player.prefab", overwrite: true });
-  assert.deepEqual(requests[3].args, { pageSize: 25, cursor: "50", path: "Assets/Prefabs/Player.prefab" });
-  assert.deepEqual(requests[4].args, {});
-  assert.deepEqual(requests[5].args, { save: true });
+  assert.deepEqual(requests[2].args, { path: "Assets/Prefabs/Player.prefab", name: "Hero", addChild: "Socket", removeChild: "OldSocket", overwrite: true });
+  assert.deepEqual(requests[4].args, { pageSize: 25, cursor: "50", path: "Assets/Prefabs/Player.prefab" });
+  assert.deepEqual(requests[5].args, {});
+  assert.deepEqual(requests[6].args, { save: true });
   assert.deepEqual((create.data as { plannedEffects: unknown[] }).plannedEffects, [{ type: "prefab.create", path: "Assets/Prefabs/Player.prefab" }]);
+});
+
+ test("asset commands forward CRUD and move-style envelopes", async () => {
+  const runtime = await makeRuntime();
+  const contentFile = join(runtime.dataDir, "asset.txt");
+  await writeFile(contentFile, "hello", "utf8");
+  const requests: BridgeRequest[] = [];
+  const bridgeExecute = async (payload: BridgeRequest) => {
+    requests.push(payload);
+    return { ok: true, data: { asset: { path: payload.args.path ?? payload.args.destination }, plannedEffects: [{ type: payload.command }] } };
+  };
+
+  const search = await execute(["asset", "search", "Player", "--type", "Prefab", "--page-size", "10"], { ...runtime, bridgeExecute });
+  const info = await execute(["asset", "info", "Assets/Prefabs/Player.prefab"], { ...runtime, bridgeExecute });
+  const create = await execute(["asset", "create", "Assets/Generated/config.json", "--content", "{}", "--overwrite"], { ...runtime, bridgeExecute });
+  const mkdir = await execute(["asset", "mkdir", "Assets/Generated"], { ...runtime, bridgeExecute });
+  const imported = await execute(["asset", "import", "Assets/Generated/asset.txt", "--source", contentFile, "--overwrite"], { ...runtime, bridgeExecute });
+  const modify = await execute(["asset", "modify", "Assets/Generated/config.json", "--content-file", contentFile], { ...runtime, bridgeExecute });
+  const duplicate = await execute(["asset", "duplicate", "Assets/Generated/config.json", "--to", "Assets/Generated/config-copy.json"], { ...runtime, bridgeExecute });
+  const move = await execute(["asset", "move", "Assets/Generated/config-copy.json", "--to", "Assets/Generated/config-moved.json"], { ...runtime, bridgeExecute });
+  const rename = await execute(["asset", "rename", "Assets/Generated/config-moved.json", "--name", "config-renamed.json"], { ...runtime, bridgeExecute });
+  const deleted = await execute(["asset", "delete", "Assets/Generated/config-renamed.json"], { ...runtime, bridgeExecute });
+
+  for (const result of [search, info, create, mkdir, imported, modify, duplicate, move, rename, deleted]) {
+    assert.equal(result.ok, true);
+  }
+  assert.deepEqual(requests.map((request) => request.command), ["asset.search", "asset.info", "asset.create", "asset.create", "asset.import", "asset.modify", "asset.duplicate", "asset.move", "asset.rename", "asset.delete"]);
+  assert.deepEqual(requests[0].args, { pageSize: 10, target: "Player", query: "Player", type: "Prefab" });
+  assert.deepEqual(requests[2].args, { path: "Assets/Generated/config.json", content: "{}", overwrite: true });
+  assert.deepEqual(requests[3].args, { path: "Assets/Generated" });
+  assert.deepEqual(requests[4].args, { path: "Assets/Generated/asset.txt", source: contentFile, overwrite: true });
+  assert.deepEqual(requests[5].args, { path: "Assets/Generated/config.json", content: "hello" });
+  assert.deepEqual(requests[6].args, { path: "Assets/Generated/config.json", destination: "Assets/Generated/config-copy.json" });
+  assert.deepEqual(requests[7].args, { path: "Assets/Generated/config-copy.json", destination: "Assets/Generated/config-moved.json" });
+  assert.deepEqual(requests[8].args, { path: "Assets/Generated/config-moved.json", name: "config-renamed.json" });
+  assert.deepEqual(requests[9].args, { path: "Assets/Generated/config-renamed.json" });
 });
 
 test("material commands forward asset paths, target, values and planned effects", async () => {

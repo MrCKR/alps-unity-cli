@@ -384,27 +384,63 @@ const ASSET_TOOLS: ToolMetadata[] = [
     docsTopic: "asset"
   },
   {
-    name: "asset.mkdir",
-    title: "Create Asset Folder",
-    description: "Create a folder inside the Assets directory.",
+    name: "asset.create",
+    title: "Create Asset",
+    description: "Create a folder or text asset inside the Assets directory.",
     group: "asset",
-    inputSchema: objSchema({ path: { type: "string" } }, ["path"]),
+    inputSchema: objSchema({ path: { type: "string" }, type: { type: "string", enum: ["file", "folder"] }, content: { type: "string" }, overwrite: { type: "boolean" } }, ["path"]),
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "asset mkdir",
+    cliCommand: "asset create",
     docsTopic: "asset"
   },
   {
     name: "asset.import",
     title: "Import Asset",
-    description: "Import a file into the Unity asset database.",
+    description: "Import an external file or supplied content into the Unity asset database.",
     group: "asset",
-    inputSchema: objSchema({ path: { type: "string" } }, ["path"]),
+    inputSchema: objSchema({ path: { type: "string" }, source: { type: "string" }, content: { type: "string" }, overwrite: { type: "boolean" } }, ["path"]),
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
     cliCommand: "asset import",
+    docsTopic: "asset"
+  },
+  {
+    name: "asset.modify",
+    title: "Modify Asset",
+    description: "Replace text-like asset file content and reimport it.",
+    group: "asset",
+    inputSchema: objSchema({ path: { type: "string" }, content: { type: "string" } }, ["path", "content"]),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "asset modify",
+    docsTopic: "asset"
+  },
+  {
+    name: "asset.delete",
+    title: "Delete Asset",
+    description: "Delete an asset permanently. Irreversible.",
+    group: "asset",
+    inputSchema: objSchema({ path: { type: "string" } }, ["path"]),
+    readOnlyHint: false,
+    destructiveHint: true,
+    handler: "bridge",
+    cliCommand: "asset delete",
+    docsTopic: "asset"
+  },
+  {
+    name: "asset.duplicate",
+    title: "Duplicate Asset",
+    description: "Copy an existing asset to a new Assets/* path.",
+    group: "asset",
+    inputSchema: objSchema({ source: { type: "string" }, destination: { type: "string" } }, ["source", "destination"]),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "asset duplicate",
     docsTopic: "asset"
   },
   {
@@ -420,15 +456,15 @@ const ASSET_TOOLS: ToolMetadata[] = [
     docsTopic: "asset"
   },
   {
-    name: "asset.delete",
-    title: "Delete Asset",
-    description: "Delete an asset permanently. Irreversible.",
+    name: "asset.rename",
+    title: "Rename Asset",
+    description: "Rename an asset within its current folder.",
     group: "asset",
-    inputSchema: objSchema({ path: { type: "string" } }, ["path"]),
+    inputSchema: objSchema({ path: { type: "string" }, name: { type: "string" } }, ["path", "name"]),
     readOnlyHint: false,
-    destructiveHint: true,
+    destructiveHint: false,
     handler: "bridge",
-    cliCommand: "asset delete",
+    cliCommand: "asset rename",
     docsTopic: "asset"
   }
 ];
@@ -462,6 +498,18 @@ const PREFAB_TOOLS: ToolMetadata[] = [
     examples: [
       { description: "Create prefab from Player", argv: ["prefab", "create", "Player", "--path", "Assets/Prefabs/Player.prefab"] }
     ]
+  },
+  {
+    name: "prefab.modify",
+    title: "Modify Prefab",
+    description: "Apply small prefab asset edits such as renaming the root or adding/removing direct children.",
+    group: "prefab",
+    inputSchema: objSchema({ path: { type: "string" }, name: { type: "string" }, addChild: { type: "string" }, removeChild: { type: "string" }, overwrite: { type: "boolean" } }, ["path"]),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "prefab modify",
+    docsTopic: "prefab"
   },
   {
     name: "prefab.stage-open",

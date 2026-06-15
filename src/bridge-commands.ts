@@ -143,10 +143,10 @@ export function bridgeCommandName(group: string | undefined, command: string | u
   if (group === "component" && ["add", "remove", "set"].includes(command ?? "")) {
     return `component.${command}`;
   }
-  if (group === "asset" && ["search", "info", "mkdir", "import", "move", "delete"].includes(command ?? "")) {
-    return `asset.${command}`;
+  if (group === "asset" && ["search", "info", "create", "mkdir", "import", "modify", "delete", "duplicate", "move", "rename"].includes(command ?? "")) {
+    return command === "mkdir" ? "asset.create" : `asset.${command}`;
   }
-  if (group === "prefab" && ["info", "create", "stage-open", "stage-save", "stage-close", "hierarchy"].includes(command ?? "")) {
+  if (group === "prefab" && ["info", "hierarchy", "create", "modify", "stage-open", "stage-save", "stage-close"].includes(command ?? "")) {
     return `prefab.${command}`;
   }
   if (group === "material" && ["info", "create", "assign", "set"].includes(command ?? "")) {
@@ -276,12 +276,7 @@ async function commandArgs(command: string, flags: Record<string, string | boole
   }
 
   if (command.startsWith("asset.")) {
-    return compactArgs({
-      path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "source"),
-      source: stringFlag(flags, "source"),
-      destination: stringFlag(flags, "destination") ?? stringFlag(flags, "to"),
-      type: stringFlag(flags, "type")
-    });
+    return assetArgs(command, flags, positionalTarget);
   }
 
   if (command.startsWith("prefab.")) {
@@ -289,6 +284,15 @@ async function commandArgs(command: string, flags: Record<string, string | boole
       return compactArgs({
         source: positionalTarget ?? stringFlag(flags, "source") ?? stringFlag(flags, "target"),
         path: stringFlag(flags, "path") ?? stringFlag(flags, "destination") ?? stringFlag(flags, "to"),
+        overwrite: boolFlag(flags, "overwrite")
+      });
+    }
+    if (command === "prefab.modify") {
+      return compactArgs({
+        path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "prefab"),
+        name: stringFlag(flags, "name"),
+        addChild: stringFlag(flags, "add-child"),
+        removeChild: stringFlag(flags, "remove-child"),
         overwrite: boolFlag(flags, "overwrite")
       });
     }
@@ -761,6 +765,32 @@ function targetArgs(flags: Record<string, string | boolean>, positionalTarget: s
     component: stringFlag(flags, "component"),
     path: stringFlag(flags, "path"),
     id: stringFlag(flags, "id")
+  });
+}
+
+async function assetArgs(command: string, flags: Record<string, string | boolean>, positionalTarget: string | undefined): Promise<Record<string, unknown>> {
+  if (command === "asset.rename") {
+    return compactArgs({
+      path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "source"),
+      name: stringFlag(flags, "name") ?? stringFlag(flags, "new-name")
+    });
+  }
+
+  if (command === "asset.duplicate" || command === "asset.move") {
+    return compactArgs({
+      path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "source"),
+      source: stringFlag(flags, "source"),
+      destination: stringFlag(flags, "destination") ?? stringFlag(flags, "to")
+    });
+  }
+
+  return compactArgs({
+    path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "source"),
+    source: stringFlag(flags, "source"),
+    destination: stringFlag(flags, "destination") ?? stringFlag(flags, "to"),
+    type: stringFlag(flags, "type"),
+    content: await contentFlag(flags),
+    overwrite: boolFlag(flags, "overwrite")
   });
 }
 
