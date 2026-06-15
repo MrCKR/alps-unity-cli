@@ -28,7 +28,7 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
-        private static void RegisterProbuilderCommands(BridgeCommandRegistry registry)
+        private static void RegisterProBuilderCommands(BridgeCommandRegistry registry)
         {
             RegisterCommand(registry, "probuilder.shape", "probuilder", true, ProBuilderCreate);
             RegisterCommand(registry, "probuilder.create", "probuilder", true, ProBuilderCreate);
