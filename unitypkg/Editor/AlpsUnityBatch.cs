@@ -12,6 +12,7 @@ using UnityEditor;
 using UnityEngine;
 using UnityEditor.PackageManager;
 using UnityEditor.PackageManager.Requests;
+using UnityEditor.Build.Reporting;
 
 namespace AlpsUnityCli
 {
@@ -92,6 +93,42 @@ namespace AlpsUnityCli
             AssetDatabase.Refresh();
             Console.WriteLine("Package resolve completed.");
             EditorApplication.Exit(0);
+        }
+
+        public static void BuildProject()
+        {
+            var outputPath = ArgValue("-alpsBuildOutput");
+            if (string.IsNullOrEmpty(outputPath))
+            {
+                Console.Error.WriteLine("E_BUILD_OUTPUT_REQUIRED: Missing -alpsBuildOutput.");
+                EditorApplication.Exit(1);
+                return;
+            }
+
+            var target = EditorUserBuildSettings.activeBuildTarget;
+            var targetArg = ArgValue("-buildTarget");
+            if (!string.IsNullOrEmpty(targetArg) && !Enum.TryParse(targetArg, true, out target))
+            {
+                Console.Error.WriteLine("E_BUILD_TARGET_INVALID: Unknown build target: " + targetArg);
+                EditorApplication.Exit(1);
+                return;
+            }
+
+            var scenes = EditorBuildSettings.scenes.Where(scene => scene.enabled).Select(scene => scene.path).ToArray();
+            if (scenes.Length == 0)
+            {
+                Console.Error.WriteLine("E_BUILD_SCENES_EMPTY: No enabled scenes in Build Settings.");
+                EditorApplication.Exit(1);
+                return;
+            }
+
+            var outputDirectory = Path.GetDirectoryName(outputPath);
+            if (!string.IsNullOrEmpty(outputDirectory)) Directory.CreateDirectory(outputDirectory);
+
+            var report = BuildPipeline.BuildPlayer(scenes, outputPath, target, BuildOptions.None);
+            var summary = report.summary;
+            Console.WriteLine("Build " + summary.result + ": " + outputPath + " (" + summary.totalErrors.ToString(CultureInfo.InvariantCulture) + " errors, " + summary.totalWarnings.ToString(CultureInfo.InvariantCulture) + " warnings)");
+            EditorApplication.Exit(summary.result == BuildResult.Succeeded ? 0 : 1);
         }
 
         private static string ArgValue(string name)

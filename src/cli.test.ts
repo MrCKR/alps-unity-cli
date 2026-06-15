@@ -546,3 +546,13 @@ test("Unity package batch hook exposes PackageManager resolve API", async () => 
   assert.doesNotMatch(source, /var\s+\w+\s*=\s*Client\.Resolve\(\)/);
   assert.match(source, /E_PACKAGE_RESOLVE_FAILED/);
 });
+
+test("Unity package batch hook exposes BuildProject executeMethod", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/AlpsUnityBatch.cs", import.meta.url), "utf8");
+
+  assert.match(source, /public static void BuildProject\(\)/);
+  assert.match(source, /ArgValue\("-alpsBuildOutput"\)/);
+  assert.match(source, /BuildPipeline\.BuildPlayer\(/);
+  assert.match(source, /BuildResult\.Succeeded/);
+  assert.match(source, /E_BUILD_OUTPUT_REQUIRED/);
+});
