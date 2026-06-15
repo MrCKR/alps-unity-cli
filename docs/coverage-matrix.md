@@ -137,12 +137,12 @@
 | profiler.status | `profiler status` | bridge (AlpsUnityBridge) | ✅ `profiler.status` in PROFILER_TOOLS | bridge-commands.test.ts: profiler commands forward session/counter/memory/frame/export args; tools.test.ts: S3.4 metadata coverage | ✅ keep |
 | profiler.start | `profiler start [--deep-profiling]` | bridge/hybrid (AlpsUnityBridge) | ✅ `profiler.start` in PROFILER_TOOLS | bridge-commands.test.ts; camera-bridge-source.test.ts source guard | ✅ keep |
 | profiler.stop | `profiler stop` | bridge (AlpsUnityBridge) | ✅ `profiler.stop` in PROFILER_TOOLS | bridge-commands.test.ts; camera-bridge-source.test.ts source guard | ✅ keep |
-| profiler.pause | `profiler pause [--paused true|false]` | bridge (AlpsUnityBridge) | ✅ `profiler.pause` in PROFILER_TOOLS | bridge-commands.test.ts; camera-bridge-source.test.ts source guard | ✅ keep |
+| profiler.pause | `profiler pause [--paused true|false]` | bridge (Profiler.enabled toggle) | ✅ `profiler.pause` in PROFILER_TOOLS, readOnlyHint=false | bridge-commands.test.ts; camera-bridge-source.test.ts source guard | ✅ keep |
 | profiler.counter | `profiler counter [--category --counter]` | bridge (ProfilerCountersJson) | ✅ `profiler.counter` in PROFILER_TOOLS | bridge-commands.test.ts; camera-bridge-source.test.ts source guard | ✅ keep |
 | profiler.memory | `profiler memory` | bridge (ProfilerMemoryJson) | ✅ `profiler.memory` in PROFILER_TOOLS | bridge-commands.test.ts; camera-bridge-source.test.ts source guard | ✅ keep |
 | profiler.frame | `profiler frame [--module]` | bridge (ProfilerFrameJson) | ✅ `profiler.frame` in PROFILER_TOOLS | bridge-commands.test.ts; camera-bridge-source.test.ts source guard | ✅ keep |
-| profiler.capture | `profiler capture <path>` | bridge/hybrid (ProfilerWriteArtifact) | ✅ `profiler.capture` in PROFILER_TOOLS | bridge-commands.test.ts; camera-bridge-source.test.ts source guard | ✅ keep |
-| profiler.export | `profiler export <path>` | bridge (ProfilerWriteArtifact) | ✅ `profiler.export` in PROFILER_TOOLS | bridge-commands.test.ts; camera-bridge-source.test.ts source guard | ✅ keep |
+| profiler.capture | `profiler capture <path>` | bridge/hybrid (ProfilerWriteArtifact) | ✅ `profiler.capture` in PROFILER_TOOLS, readOnlyHint=false | bridge-commands.test.ts; camera-bridge-source.test.ts source guard | ✅ keep |
+| profiler.export | `profiler export <path>` | bridge (ProfilerWriteArtifact) | ✅ `profiler.export` in PROFILER_TOOLS, readOnlyHint=false | bridge-commands.test.ts; camera-bridge-source.test.ts source guard | ✅ keep |
 
 ---
 
@@ -173,4 +173,4 @@
 - **S2.4** (2026-06-14): 新增 `script.delete` metadata 条目 + bridge 路由；`code.exec` 增加 `permissions=["executes_code"]`、`outputSchema`、batchmode job 参数；script/code 覆盖矩阵行
 - **S2.2** (2026-06-15): 补齐 asset create/modify/delete/duplicate/move/rename 与 prefab modify Bridge handler、metadata 和覆盖矩阵行
 - **S3.1** (2026-06-15): 补齐 camera、material、shader、texture、ui 创作域覆盖矩阵；新增 S3.1 metadata/write smoke 单测证据
-- **S3.4** (2026-06-15): 补齐 Profiler session/counter/memory/frame/export CLI、UnityPkg handler、metadata/describe 与自动化测试矩阵
+- **S3.4** (2026-06-15): 补齐 Profiler session/counter/memory/frame/export CLI、UnityPkg handler、metadata/describe 与自动化测试矩阵；返工修正 `profiler.pause` 采集暂停语义、counter 结构化过滤和 capture/export readOnlyHint

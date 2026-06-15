@@ -1068,40 +1068,40 @@ namespace AlpsUnityCli
 
         private static string ProfilerCountersJson(string category, string counter)
         {
+            var samples = new List<ProfilerCounterSample>();
+            AddProfilerCounter(samples, "memory", "MonoUsedSizeLong", UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong(), "bytes");
+            AddProfilerCounter(samples, "memory", "MonoHeapSizeLong", UnityEngine.Profiling.Profiler.GetMonoHeapSizeLong(), "bytes");
+            AddProfilerCounter(samples, "memory", "TotalAllocatedMemoryLong", UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong(), "bytes");
+            AddProfilerCounter(samples, "memory", "TotalReservedMemoryLong", UnityEngine.Profiling.Profiler.GetTotalReservedMemoryLong(), "bytes");
+            AddProfilerCounter(samples, "memory", "TotalUnusedReservedMemoryLong", UnityEngine.Profiling.Profiler.GetTotalUnusedReservedMemoryLong(), "bytes");
+            AddProfilerCounter(samples, "frame", "TimeFrameCount", Time.frameCount, "frames");
+            AddProfilerCounter(samples, "frame", "RealtimeSinceStartup", Time.realtimeSinceStartup, "seconds");
+            var categoryFilter = string.IsNullOrEmpty(category) ? null : category.Trim();
+            var counterFilter = string.IsNullOrEmpty(counter) ? null : counter.Trim();
             var items = new List<string>();
-            AddProfilerCounter(items, "memory", "MonoUsedSizeLong", UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong(), "bytes");
-            AddProfilerCounter(items, "memory", "MonoHeapSizeLong", UnityEngine.Profiling.Profiler.GetMonoHeapSizeLong(), "bytes");
-            AddProfilerCounter(items, "memory", "TotalAllocatedMemoryLong", UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong(), "bytes");
-            AddProfilerCounter(items, "memory", "TotalReservedMemoryLong", UnityEngine.Profiling.Profiler.GetTotalReservedMemoryLong(), "bytes");
-            AddProfilerCounter(items, "memory", "TotalUnusedReservedMemoryLong", UnityEngine.Profiling.Profiler.GetTotalUnusedReservedMemoryLong(), "bytes");
-            AddProfilerCounter(items, "frame", "TimeFrameCount", Time.frameCount, "frames");
-            AddProfilerCounter(items, "frame", "RealtimeSinceStartup", Time.realtimeSinceStartup, "seconds");
-            var categoryFilter = string.IsNullOrEmpty(category) ? null : category.ToLowerInvariant();
-            var counterFilter = string.IsNullOrEmpty(counter) ? null : counter.ToLowerInvariant();
-            if (categoryFilter == null && counterFilter == null)
+            foreach (var sample in samples)
             {
-                return "[" + string.Join(",", items.ToArray()) + "]";
-            }
-            var filtered = new List<string>();
-            foreach (var item in items)
-            {
-                var lower = item.ToLowerInvariant();
-                if ((categoryFilter == null || lower.Contains("\"category\":\"" + categoryFilter)) && (counterFilter == null || lower.Contains(counterFilter)))
+                if (categoryFilter != null && !sample.Category.Equals(categoryFilter, StringComparison.OrdinalIgnoreCase))
                 {
-                    filtered.Add(item);
+                    continue;
                 }
+                if (counterFilter != null && !sample.Name.Equals(counterFilter, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+                items.Add(sample.ToJson());
             }
-            return "[" + string.Join(",", filtered.ToArray()) + "]";
+            return "[" + string.Join(",", items.ToArray()) + "]";
         }
 
-        private static void AddProfilerCounter(List<string> items, string category, string name, long value, string unit)
+        private static void AddProfilerCounter(List<ProfilerCounterSample> items, string category, string name, long value, string unit)
         {
-            items.Add("{\"category\":" + Quote(category) + ",\"name\":" + Quote(name) + ",\"value\":" + value.ToString(CultureInfo.InvariantCulture) + ",\"unit\":" + Quote(unit) + "}");
+            items.Add(new ProfilerCounterSample(category, name, value.ToString(CultureInfo.InvariantCulture), unit));
         }
 
-        private static void AddProfilerCounter(List<string> items, string category, string name, float value, string unit)
+        private static void AddProfilerCounter(List<ProfilerCounterSample> items, string category, string name, float value, string unit)
         {
-            items.Add("{\"category\":" + Quote(category) + ",\"name\":" + Quote(name) + ",\"value\":" + Number(value) + ",\"unit\":" + Quote(unit) + "}");
+            items.Add(new ProfilerCounterSample(category, name, Number(value), unit));
         }
 
         private static string ProfilerMemoryJson()
@@ -1471,11 +1471,15 @@ namespace AlpsUnityCli
 
         private static string ProfilerPause(BridgeRequest request)
         {
-            var before = EditorApplication.isPaused;
-            var paused = request.BoolArg("paused", !before);
-            EditorApplication.isPaused = paused;
-            WriteLog("profiler_pause paused=" + Bool(paused));
-            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"plannedEffects\":[{\"type\":\"profiler.pause\",\"from\":" + Bool(before) + ",\"to\":" + Bool(paused) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+            var wasEnabled = UnityEngine.Profiling.Profiler.enabled;
+            var paused = request.BoolArg("paused", wasEnabled);
+            UnityEngine.Profiling.Profiler.enabled = !paused;
+            if (!paused)
+            {
+                UnityEngine.Profiling.Profiler.enableBinaryLog = true;
+            }
+            WriteLog("profiler_pause paused=" + Bool(paused) + " profilerEnabled=" + Bool(UnityEngine.Profiling.Profiler.enabled));
+            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"paused\":" + Bool(paused) + ",\"plannedEffects\":[{\"type\":\"profiler.pause\",\"profilerEnabledFrom\":" + Bool(wasEnabled) + ",\"profilerEnabledTo\":" + Bool(UnityEngine.Profiling.Profiler.enabled) + "}],\"logPath\":" + Quote(LogPath()) + "}");
         }
 
         private static string ProfilerStatus(BridgeRequest request)
@@ -5629,6 +5633,27 @@ namespace AlpsUnityCli
             }
             catch
             {
+            }
+        }
+
+        private sealed class ProfilerCounterSample
+        {
+            public ProfilerCounterSample(string category, string name, string value, string unit)
+            {
+                Category = category;
+                Name = name;
+                Value = value;
+                Unit = unit;
+            }
+
+            public string Category { get; private set; }
+            public string Name { get; private set; }
+            public string Value { get; private set; }
+            public string Unit { get; private set; }
+
+            public string ToJson()
+            {
+                return "{\"category\":" + Quote(Category) + ",\"name\":" + Quote(Name) + ",\"value\":" + Value + ",\"unit\":" + Quote(Unit) + "}";
             }
         }
 

@@ -376,17 +376,19 @@ test("S3.4 profiler domain has frozen metadata coverage", () => {
     assert.ok(tool?.cliCommand, `${name} should expose a CLI command`);
   }
 
-  for (const name of ["profiler.status", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export"]) {
+  for (const name of ["profiler.status", "profiler.counter", "profiler.memory", "profiler.frame"]) {
     const tool = findToolByName(name);
     assert.equal(tool?.readOnlyHint, true, `${name} should be read-only from Unity state perspective`);
     assert.equal(tool?.destructiveHint, false, `${name} should not be destructive`);
   }
 
-  for (const name of ["profiler.start", "profiler.stop", "profiler.pause"]) {
+  for (const name of ["profiler.start", "profiler.stop", "profiler.pause", "profiler.capture", "profiler.export"]) {
     const tool = findToolByName(name);
-    assert.equal(tool?.readOnlyHint, false, `${name} should control profiler session state`);
+    assert.equal(tool?.readOnlyHint, false, `${name} should change profiler session or write an artifact`);
     assert.equal(tool?.destructiveHint, false, `${name} should not be destructive`);
   }
+
+  assert.match(findToolByName("profiler.pause")?.description ?? "", /Profiler\.enabled/);
 });
 
 test("tools describe profiler.memory returns full metadata", async () => {
