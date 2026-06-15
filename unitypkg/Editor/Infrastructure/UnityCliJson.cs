@@ -49,6 +49,7 @@ namespace UnityCli
                 + CapabilityJson("shader", ShaderCommands) + ","
                 + CapabilityJson("texture", TextureCommands) + ","
                 + CapabilityJson("editor", EditorCommands) + ","
+                + CapabilityJson("script", ScriptCommands) + ","
                 + CapabilityJson("code", CodeCommands) + ","
                 + CapabilityJson("custom-tool", CustomToolCommands)
                 + "]";

@@ -10,6 +10,7 @@
     "dist",
     "cli",
     "unitypkg",
+    "contracts",
     "schemas",
     "skills",
     "docs",
@@ -18,8 +19,9 @@
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "test": "node --test dist/**/*.test.js",
-    "pretest": "npm run build"
+    "test": "node --test \"dist/**/*.test.js\"",
+    "pretest": "npm run build",
+    "contracts:validate": "npm run build && node dist/contracts/validate-command-contract.js"
   },
   "engines": {
     "node": ">=20.0.0"
