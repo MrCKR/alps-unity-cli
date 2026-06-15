@@ -5,7 +5,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs, getBoolean, getNumber, getString } from "./args.js";
 import { batchJsonSchema, runBatch } from "./batch.js";
-import { bridgeCommandName, executeBridgeCommand, executeBridgePayload, type BridgeRuntime } from "./bridge-commands.js";
+import { bridgeCommandRegistry, executeBridgeCommand, executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
 import { handleCapabilitiesCommand } from "./capabilities.js";
 import { handleDoctorCommand, type DoctorRuntime } from "./doctor.js";
 import { handleInstancesCommand } from "./instances.js";
@@ -95,18 +95,18 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
       return handleDocsTopicCommand(command, parsed.flags, requestId);
     }
 
-    const bridgeCommand = bridgeCommandName(group, command);
-    if (bridgeCommand) {
+    const bridgeSpec = bridgeCommandRegistry.lookup(group, command);
+    if (bridgeSpec) {
       if (shouldRunBridgeAsJob(group, command, parsed.flags)) {
-        const args = await bridgeJobArgs(bridgeCommand, parsed.flags, parsed.positional[2]);
-        const jobArgs = ["-executeMethod", "UnityCli.UnityCliBatch.RunBridgeCommand", "-unityCliBridgeCommand", bridgeCommand, "-unityCliBridgeRequestId", requestId, "-unityCliBridgeArgs", JSON.stringify(args)];
+        const args = await bridgeJobArgs(bridgeSpec.bridgeCommand, parsed.flags, parsed.positional[2]);
+        const jobArgs = ["-executeMethod", "UnityCli.UnityCliBatch.RunBridgeCommand", "-unityCliBridgeCommand", bridgeSpec.bridgeCommand, "-unityCliBridgeRequestId", requestId, "-unityCliBridgeArgs", JSON.stringify(args)];
         return startUnityJob(group === "profiler" ? "profiler" : "probuilder", parsed.flags, runtime, requestId, jobArgs, {
-          action: bridgeCommand,
-          bridgeCommand,
+          action: bridgeSpec.bridgeCommand,
+          bridgeCommand: bridgeSpec.bridgeCommand,
           args
         });
       }
-      return executeBridgeCommand(requestId, bridgeCommand, parsed.flags, parsed.positional[2], runtime);
+      return executeBridgeCommand(requestId, bridgeSpec.bridgeCommand, parsed.flags, parsed.positional[2], runtime);
     }
 
     if (group === "editor" && command === "refresh") {

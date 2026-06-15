@@ -1,7 +1,7 @@
 /**
  * Static built-in tool metadata for the Unity CLI.
  *
- * Covers every handler registered in bridgeCommandName() plus the
+ * Covers every handler registered in the bridge command registry plus the
  * offline/job-only commands.  This data is shipped with the CLI/UnityPkg
  * release so that `tools describe` works without a live Unity instance.
  *

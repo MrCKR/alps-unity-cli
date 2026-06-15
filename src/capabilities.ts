@@ -6,7 +6,7 @@
  * - Runtime capabilities from the connected Unity instance (if bridge is reachable)
  */
 
-import { executeBridgePayload, type BridgeRuntime } from "./bridge-commands.js";
+import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
 import { getString } from "./args.js";
 import { builtinToolGroups, builtinToolMetadata } from "./tool-metadata.js";
 import { failure, success } from "./output.js";
