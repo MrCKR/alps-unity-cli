@@ -101,7 +101,7 @@ namespace AlpsUnityCli
         private static readonly string[] MaterialCommands = { "material.info", "material.create", "material.assign", "material.set" };
         private static readonly string[] GraphicsCommands = { "graphics.quality", "graphics.settings", "graphics.screenshot" };
         private static readonly string[] PhysicsCommands = { "physics.settings", "physics.raycast", "physics.simulation" };
-        private static readonly string[] ProfilerCommands = { "profiler.start", "profiler.stop", "profiler.capture", "profiler.status" };
+        private static readonly string[] ProfilerCommands = { "profiler.start", "profiler.stop", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export", "profiler.status" };
         private static readonly string[] ProBuilderCommands = { "probuilder.shape", "probuilder.create", "probuilder.csg", "probuilder.edit" };
         private static readonly string[] AnimationCommands = { "animation.clip", "animation.state", "animation.play", "animation.stop" };
         private static readonly string[] VfxCommands = { "vfx.graph", "vfx.effect" };
@@ -571,8 +571,18 @@ namespace AlpsUnityCli
                     return ProfilerStart(request);
                 case "profiler.stop":
                     return ProfilerStop(request);
+                case "profiler.pause":
+                    return ProfilerPause(request);
+                case "profiler.counter":
+                    return ProfilerCounter(request);
+                case "profiler.memory":
+                    return ProfilerMemory(request);
+                case "profiler.frame":
+                    return ProfilerFrame(request);
                 case "profiler.capture":
                     return ProfilerCapture(request);
+                case "profiler.export":
+                    return ProfilerExport(request);
                 case "profiler.status":
                     return ProfilerStatus(request);
                 case "probuilder.shape":
@@ -1048,7 +1058,66 @@ namespace AlpsUnityCli
 
         private static string ProfilerStateJson()
         {
-            return "{\"enabled\":" + Bool(UnityEngine.Profiling.Profiler.enabled) + ",\"enableBinaryLog\":" + Bool(UnityEngine.Profiling.Profiler.enableBinaryLog) + ",\"supported\":true}";
+            return "{\"enabled\":" + Bool(UnityEngine.Profiling.Profiler.enabled) + ",\"enableBinaryLog\":" + Bool(UnityEngine.Profiling.Profiler.enableBinaryLog) + ",\"isPaused\":" + Bool(EditorApplication.isPaused) + ",\"supported\":true}";
+        }
+
+        private static string ProfilerModulesJson()
+        {
+            return "[\"CPU Usage\",\"Rendering\",\"Memory\",\"Audio\",\"Physics\",\"UI\",\"Global Illumination\"]";
+        }
+
+        private static string ProfilerCountersJson(string category, string counter)
+        {
+            var items = new List<string>();
+            AddProfilerCounter(items, "memory", "MonoUsedSizeLong", UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong(), "bytes");
+            AddProfilerCounter(items, "memory", "MonoHeapSizeLong", UnityEngine.Profiling.Profiler.GetMonoHeapSizeLong(), "bytes");
+            AddProfilerCounter(items, "memory", "TotalAllocatedMemoryLong", UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong(), "bytes");
+            AddProfilerCounter(items, "memory", "TotalReservedMemoryLong", UnityEngine.Profiling.Profiler.GetTotalReservedMemoryLong(), "bytes");
+            AddProfilerCounter(items, "memory", "TotalUnusedReservedMemoryLong", UnityEngine.Profiling.Profiler.GetTotalUnusedReservedMemoryLong(), "bytes");
+            AddProfilerCounter(items, "frame", "TimeFrameCount", Time.frameCount, "frames");
+            AddProfilerCounter(items, "frame", "RealtimeSinceStartup", Time.realtimeSinceStartup, "seconds");
+            var categoryFilter = string.IsNullOrEmpty(category) ? null : category.ToLowerInvariant();
+            var counterFilter = string.IsNullOrEmpty(counter) ? null : counter.ToLowerInvariant();
+            if (categoryFilter == null && counterFilter == null)
+            {
+                return "[" + string.Join(",", items.ToArray()) + "]";
+            }
+            var filtered = new List<string>();
+            foreach (var item in items)
+            {
+                var lower = item.ToLowerInvariant();
+                if ((categoryFilter == null || lower.Contains("\"category\":\"" + categoryFilter)) && (counterFilter == null || lower.Contains(counterFilter)))
+                {
+                    filtered.Add(item);
+                }
+            }
+            return "[" + string.Join(",", filtered.ToArray()) + "]";
+        }
+
+        private static void AddProfilerCounter(List<string> items, string category, string name, long value, string unit)
+        {
+            items.Add("{\"category\":" + Quote(category) + ",\"name\":" + Quote(name) + ",\"value\":" + value.ToString(CultureInfo.InvariantCulture) + ",\"unit\":" + Quote(unit) + "}");
+        }
+
+        private static void AddProfilerCounter(List<string> items, string category, string name, float value, string unit)
+        {
+            items.Add("{\"category\":" + Quote(category) + ",\"name\":" + Quote(name) + ",\"value\":" + Number(value) + ",\"unit\":" + Quote(unit) + "}");
+        }
+
+        private static string ProfilerMemoryJson()
+        {
+            return "{"
+                + "\"monoUsedBytes\":" + UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong().ToString(CultureInfo.InvariantCulture) + ","
+                + "\"monoHeapBytes\":" + UnityEngine.Profiling.Profiler.GetMonoHeapSizeLong().ToString(CultureInfo.InvariantCulture) + ","
+                + "\"totalAllocatedBytes\":" + UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong().ToString(CultureInfo.InvariantCulture) + ","
+                + "\"totalReservedBytes\":" + UnityEngine.Profiling.Profiler.GetTotalReservedMemoryLong().ToString(CultureInfo.InvariantCulture) + ","
+                + "\"totalUnusedReservedBytes\":" + UnityEngine.Profiling.Profiler.GetTotalUnusedReservedMemoryLong().ToString(CultureInfo.InvariantCulture)
+                + "}";
+        }
+
+        private static string ProfilerFrameJson(string module)
+        {
+            return "{\"frameCount\":" + Time.frameCount.ToString(CultureInfo.InvariantCulture) + ",\"renderedFrameCount\":" + Time.renderedFrameCount.ToString(CultureInfo.InvariantCulture) + ",\"realtimeSinceStartup\":" + Number(Time.realtimeSinceStartup) + ",\"deltaTime\":" + Number(Time.deltaTime) + ",\"module\":" + Quote(module) + ",\"modules\":" + ProfilerModulesJson() + "}";
         }
 
         private static string NormalizeProfilerFormat(string rawFormat, string outputPath)
@@ -1108,7 +1177,10 @@ namespace AlpsUnityCli
                 + "\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ","
                 + "\"durationMs\":" + durationMs.ToString(CultureInfo.InvariantCulture) + ","
                 + "\"frames\":" + frames.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"profiler\":" + ProfilerStateJson()
+                + "\"profiler\":" + ProfilerStateJson() + ","
+                + "\"memory\":" + ProfilerMemoryJson() + ","
+                + "\"frame\":" + ProfilerFrameJson("CPU Usage") + ","
+                + "\"counters\":" + ProfilerCountersJson(null, null)
                 + "}";
         }
 
@@ -1397,12 +1469,51 @@ namespace AlpsUnityCli
             return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"plannedEffects\":[{" + QuotePair("type", "profiler.stop") + "}],\"logPath\":" + Quote(LogPath()) + "}");
         }
 
+        private static string ProfilerPause(BridgeRequest request)
+        {
+            var before = EditorApplication.isPaused;
+            var paused = request.BoolArg("paused", !before);
+            EditorApplication.isPaused = paused;
+            WriteLog("profiler_pause paused=" + Bool(paused));
+            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"plannedEffects\":[{\"type\":\"profiler.pause\",\"from\":" + Bool(before) + ",\"to\":" + Bool(paused) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
         private static string ProfilerStatus(BridgeRequest request)
         {
-            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"modules\":[\"CPU Usage\",\"Rendering\",\"Memory\",\"Audio\",\"Physics\",\"UI\",\"Global Illumination\"],\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"modules\":" + ProfilerModulesJson() + ",\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string ProfilerCounter(BridgeRequest request)
+        {
+            var category = request.StringArg("category");
+            var counter = request.StringArg("counter");
+            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"query\":{\"category\":" + Quote(category) + ",\"counter\":" + Quote(counter) + "},\"counters\":" + ProfilerCountersJson(category, counter) + ",\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string ProfilerMemory(BridgeRequest request)
+        {
+            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"memory\":" + ProfilerMemoryJson() + ",\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string ProfilerFrame(BridgeRequest request)
+        {
+            var module = request.StringArg("module") ?? "CPU Usage";
+            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"frame\":" + ProfilerFrameJson(module) + ",\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string ProfilerExport(BridgeRequest request)
+        {
+            return ProfilerWriteArtifact(request, "profiler.export", 0, 1);
         }
 
         private static string ProfilerCapture(BridgeRequest request)
+        {
+            var durationMs = Math.Max(0, request.IntArg("durationMs", 0));
+            var frames = Math.Max(0, request.IntArg("frames", 1));
+            return ProfilerWriteArtifact(request, "profiler.capture", durationMs, frames);
+        }
+
+        private static string ProfilerWriteArtifact(BridgeRequest request, string effectType, int durationMs, int frames)
         {
             var outputPath = ResolveOutputPath(request.StringArg("path"));
             var overwrite = request.BoolArg("overwrite", false);
@@ -1415,8 +1526,6 @@ namespace AlpsUnityCli
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(outputPath));
                 var startedAt = DateTime.UtcNow;
-                var durationMs = Math.Max(0, request.IntArg("durationMs", 0));
-                var frames = Math.Max(0, request.IntArg("frames", 1));
                 var format = NormalizeProfilerFormat(request.StringArg("format"), outputPath);
                 if (format == "raw")
                 {
@@ -1428,8 +1537,8 @@ namespace AlpsUnityCli
                 }
                 var finishedAt = DateTime.UtcNow;
                 var elapsedMs = (long)(finishedAt - startedAt).TotalMilliseconds;
-                WriteLog("profiler_capture artifactPath=" + outputPath + " durationMs=" + elapsedMs.ToString(CultureInfo.InvariantCulture));
-                return SuccessJson("{\"artifactPath\":" + Quote(outputPath) + ",\"profilerPath\":" + Quote(outputPath) + ",\"format\":" + Quote(format) + ",\"durationMs\":" + elapsedMs.ToString(CultureInfo.InvariantCulture) + ",\"requestedDurationMs\":" + durationMs.ToString(CultureInfo.InvariantCulture) + ",\"frames\":" + frames.ToString(CultureInfo.InvariantCulture) + ",\"profiler\":" + ProfilerStateJson() + ",\"plannedEffects\":[{\"type\":\"profiler.capture\",\"path\":" + Quote(outputPath) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+                WriteLog(effectType.Replace('.', '_') + " artifactPath=" + outputPath + " durationMs=" + elapsedMs.ToString(CultureInfo.InvariantCulture));
+                return SuccessJson("{\"artifactPath\":" + Quote(outputPath) + ",\"profilerPath\":" + Quote(outputPath) + ",\"format\":" + Quote(format) + ",\"durationMs\":" + elapsedMs.ToString(CultureInfo.InvariantCulture) + ",\"requestedDurationMs\":" + durationMs.ToString(CultureInfo.InvariantCulture) + ",\"frames\":" + frames.ToString(CultureInfo.InvariantCulture) + ",\"profiler\":" + ProfilerStateJson() + ",\"plannedEffects\":[{\"type\":" + Quote(effectType) + ",\"path\":" + Quote(outputPath) + "}],\"logPath\":" + Quote(LogPath()) + "}");
             }
             catch (BridgeCommandException)
             {
@@ -1437,7 +1546,7 @@ namespace AlpsUnityCli
             }
             catch (Exception exception)
             {
-                return ErrorJson("E_PROFILER_CAPTURE_FAILED", "Profiler capture failed: " + exception.Message, "Check output path permissions and Unity Profiler availability, then retry.");
+                return ErrorJson("E_PROFILER_CAPTURE_FAILED", "Profiler artifact write failed: " + exception.Message, "Check output path permissions and Unity Profiler availability, then retry.");
             }
         }
 
