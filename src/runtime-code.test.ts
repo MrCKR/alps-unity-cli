@@ -6,7 +6,7 @@ import test from "node:test";
 import { execute } from "./cli.js";
 import { JobRunner } from "./job-runner.js";
 import { JobStore } from "./job-store.js";
-import type { BridgeRequest } from "./bridge-commands.js";
+import type { BridgeRequest } from "./bridge/index.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 

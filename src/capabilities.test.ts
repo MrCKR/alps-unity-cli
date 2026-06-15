@@ -5,7 +5,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { handleCapabilitiesCommand } from "./capabilities.js";
-import type { BridgeRuntime } from "./bridge-commands.js";
+import type { BridgeRuntime } from "./bridge/index.js";
 
 const requestId = "test_req_caps_001";
 
