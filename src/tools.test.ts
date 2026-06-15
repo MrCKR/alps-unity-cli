@@ -4,6 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { bridgeCommandRegistry } from "./bridge/index.js";
 import { handleToolsCommand, type ToolsRuntime } from "./tools.js";
 import { builtinToolMetadata, builtinToolGroups, findToolByName, filterToolsByGroup, searchTools } from "./tool-metadata.js";
 
@@ -44,6 +45,18 @@ test("every built-in tool declares an explicit handler", () => {
   for (const tool of tools) {
     assert.ok(tool.handler, `${tool.name} should declare handler`);
     assert.ok(validHandlers.has(tool.handler), `${tool.name} has unknown handler ${tool.handler}`);
+  }
+});
+
+test("bridge tool metadata resolves through BridgeCommandRegistry", () => {
+  const tools = builtinToolMetadata().filter((tool) => tool.handler === "bridge");
+  assert.ok(tools.length > 0);
+  for (const tool of tools) {
+    assert.ok(tool.cliCommand, `${tool.name} is missing cliCommand`);
+    const [group, ...commandParts] = tool.cliCommand.split(" ");
+    const spec = bridgeCommandRegistry.lookup(group, commandParts.join(" "));
+    assert.ok(spec, `${tool.name} cliCommand is missing from BridgeCommandRegistry: ${tool.cliCommand}`);
+    assert.equal(spec.bridgeCommand, tool.name);
   }
 });
 

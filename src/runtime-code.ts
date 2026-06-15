@@ -4,7 +4,7 @@ import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import { stdin } from "node:process";
 import { getBoolean, getNumber, getString } from "./args.js";
-import { executeBridgePayload, type BridgeRuntime } from "./bridge-commands.js";
+import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
 import { failure, success } from "./output.js";
 import { discoverUnity } from "./platform.js";
 import type { CliResult, JobRecord } from "./types.js";

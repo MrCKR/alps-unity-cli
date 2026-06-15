@@ -15,7 +15,7 @@
 
 import { getString, getBoolean } from "./args.js";
 import { readInstances, type UnityInstance } from "./instances.js";
-import { executeBridgePayload, type BridgeRuntime } from "./bridge-commands.js";
+import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
 import { failure, success } from "./output.js";
 import type { CliResult } from "./types.js";
 
