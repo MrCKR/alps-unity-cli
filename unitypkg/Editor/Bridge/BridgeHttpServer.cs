@@ -74,7 +74,12 @@ namespace UnityCli
                 + "\"location\":" + Quote(AssemblyLocation(typeof(UnityCliBridge).Assembly)) + ","
                 + "\"moduleVersionId\":" + Quote(AssemblyMvid())
                 + "},"
-                + "\"diagnostics\":{\"executeStageLogs\":true,\"contentLengthBoundedRead\":true},"
+                + "\"package\":{"
+                + "\"name\":" + Quote(BridgePackageName()) + ","
+                + "\"assetPath\":" + Quote(BridgePackageAssetPath()) + ","
+                + "\"resolvedPath\":" + Quote(BridgePackageResolvedPath())
+                + "},"
+                + "\"diagnostics\":{\"executeStageLogs\":true,\"contentLengthBoundedRead\":true,\"runtimeLoadFile\":" + Quote(RuntimeDiagnosticsPath()) + "},"
                 + "\"capabilities\":" + CapabilitiesJson()
                 + "}}";
         }
@@ -105,6 +110,35 @@ namespace UnityCli
             catch
             {
                 return string.Empty;
+            }
+        }
+
+        private static string BridgePackageAssetPath()
+        {
+            return "Packages/com.unity_cli/Editor/UnityCliBridge.cs";
+        }
+
+        private static string BridgePackageName()
+        {
+            var package = BridgePackageInfo();
+            return package == null ? "unknown" : package.name;
+        }
+
+        private static string BridgePackageResolvedPath()
+        {
+            var package = BridgePackageInfo();
+            return package == null ? string.Empty : package.resolvedPath;
+        }
+
+        private static UnityEditor.PackageManager.PackageInfo BridgePackageInfo()
+        {
+            try
+            {
+                return UnityEditor.PackageManager.PackageInfo.FindForAssetPath(BridgePackageAssetPath());
+            }
+            catch
+            {
+                return null;
             }
         }
 

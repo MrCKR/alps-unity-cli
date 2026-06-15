@@ -73,6 +73,7 @@ namespace UnityCli
 
         static UnityCliBridge()
         {
+            WriteRuntimeLoadDiagnostics("static_constructor");
             EditorApplication.update += ProcessQueuedWork;
             AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
             AssemblyReloadEvents.afterAssemblyReload += OnAfterAssemblyReload;
@@ -96,11 +97,13 @@ namespace UnityCli
                 started = true;
                 Task.Run(ListenLoop);
                 RegisterInstance("healthy");
-                WriteLog("bridge_started port=" + port + " listenerId=" + ListenerId + " diagnosticsFingerprint=" + BridgeDiagnosticsFingerprint + " assemblyMvid=" + AssemblyMvid());
+                WriteRuntimeLoadDiagnostics("listener_started");
+                WriteLog("bridge_started port=" + port + " listenerId=" + ListenerId + " diagnosticsFingerprint=" + BridgeDiagnosticsFingerprint + " assemblyMvid=" + AssemblyMvid() + " packageName=" + BridgePackageName() + " packageAssetPath=" + BridgePackageAssetPath() + " packageResolvedPath=" + BridgePackageResolvedPath());
             }
             catch (Exception exception)
             {
-                WriteLog("bridge_start_failed " + exception.GetType().Name + ": " + exception.Message);
+                WriteRuntimeLoadDiagnostics("listener_start_failed");
+                WriteLog("bridge_start_failed " + exception.GetType().Name + ": " + exception.Message + " listenerId=" + ListenerId + " diagnosticsFingerprint=" + BridgeDiagnosticsFingerprint + " assemblyMvid=" + AssemblyMvid() + " packageName=" + BridgePackageName() + " packageAssetPath=" + BridgePackageAssetPath() + " packageResolvedPath=" + BridgePackageResolvedPath());
             }
         }
 

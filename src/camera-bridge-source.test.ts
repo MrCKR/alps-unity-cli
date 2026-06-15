@@ -650,6 +650,16 @@ test("Unity Bridge editor commands expose state, play/pause/stop, menu execution
   assert.match(source, /private static readonly DateTime BridgeLoadedAtUtc = DateTime\.UtcNow/);
   assert.match(source, /private static string AssemblyMvid\(Assembly assembly\)/);
   assert.match(source, /private static string AssemblyLocation\(Assembly assembly\)/);
+  assert.match(source, /private static string RuntimeDiagnosticsPath\(\)/);
+  assert.match(source, /private static void WriteRuntimeLoadDiagnostics\(string phase\)/);
+  assert.match(source, /private static string RuntimeDiagnosticsJson\(string phase\)/);
+  assert.match(source, /UnityCliBridgeRuntime\.json/);
+  assert.match(source, /bridge_runtime_loaded phase=/);
+  assert.match(source, /BridgePackageAssetPath\(\)/);
+  assert.match(source, /BridgePackageName\(\)/);
+  assert.match(source, /BridgePackageResolvedPath\(\)/);
+  assert.match(source, /PackageInfo\.FindForAssetPath\(BridgePackageAssetPath\(\)\)/);
+  assert.match(source, /Packages\/com\.unity_cli\/Editor\/UnityCliBridge\.cs/);
   assert.match(source, /private static void StopStaleBridgeListeners\(\)/);
   assert.match(source, /stale_bridge_listener_stopped/);
   assert.match(source, /diagnosticsFingerprint/);
@@ -657,6 +667,10 @@ test("Unity Bridge editor commands expose state, play/pause/stop, menu execution
   assert.match(source, /bridgeDiagnosticsFingerprint/);
   assert.match(source, /bridgeListenerId/);
   assert.match(source, /bridgeAssemblyMvid/);
+  assert.match(source, /packageName/);
+  assert.match(source, /packageAssetPath/);
+  assert.match(source, /packageResolvedPath/);
+  assert.match(source, /runtimeLoadFile/);
   assert.match(source, /buildStamp/);
   assert.match(source, /EditorApplication\.ExecuteMenuItem\(path\)/);
   assert.match(source, /EditorApplication\.isPlaying/);
