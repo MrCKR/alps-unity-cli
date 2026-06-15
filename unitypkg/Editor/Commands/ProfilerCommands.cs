@@ -32,7 +32,12 @@ namespace UnityCli
         {
             RegisterCommand(registry, "profiler.start", "profiler", true, ProfilerStart);
             RegisterCommand(registry, "profiler.stop", "profiler", true, ProfilerStop);
+            RegisterCommand(registry, "profiler.pause", "profiler", true, ProfilerPause);
+            RegisterCommand(registry, "profiler.counter", "profiler", false, ProfilerCounter);
+            RegisterCommand(registry, "profiler.memory", "profiler", false, ProfilerMemory);
+            RegisterCommand(registry, "profiler.frame", "profiler", false, ProfilerFrame);
             RegisterCommand(registry, "profiler.capture", "profiler", true, ProfilerCapture);
+            RegisterCommand(registry, "profiler.export", "profiler", true, ProfilerExport);
             RegisterCommand(registry, "profiler.status", "profiler", false, ProfilerStatus);
         }
 
@@ -47,7 +52,66 @@ namespace UnityCli
 
         private static string ProfilerStateJson()
         {
-            return "{\"enabled\":" + Bool(UnityEngine.Profiling.Profiler.enabled) + ",\"enableBinaryLog\":" + Bool(UnityEngine.Profiling.Profiler.enableBinaryLog) + ",\"supported\":true}";
+            return "{\"enabled\":" + Bool(UnityEngine.Profiling.Profiler.enabled) + ",\"enableBinaryLog\":" + Bool(UnityEngine.Profiling.Profiler.enableBinaryLog) + ",\"isPaused\":" + Bool(EditorApplication.isPaused) + ",\"supported\":true}";
+        }
+
+        private static string ProfilerModulesJson()
+        {
+            return "[\"CPU Usage\",\"Rendering\",\"Memory\",\"Audio\",\"Physics\",\"UI\",\"Global Illumination\"]";
+        }
+
+        private static string ProfilerCountersJson(string category, string counter)
+        {
+            var samples = new List<ProfilerCounterSample>();
+            AddProfilerCounter(samples, "memory", "MonoUsedSizeLong", UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong(), "bytes");
+            AddProfilerCounter(samples, "memory", "MonoHeapSizeLong", UnityEngine.Profiling.Profiler.GetMonoHeapSizeLong(), "bytes");
+            AddProfilerCounter(samples, "memory", "TotalAllocatedMemoryLong", UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong(), "bytes");
+            AddProfilerCounter(samples, "memory", "TotalReservedMemoryLong", UnityEngine.Profiling.Profiler.GetTotalReservedMemoryLong(), "bytes");
+            AddProfilerCounter(samples, "memory", "TotalUnusedReservedMemoryLong", UnityEngine.Profiling.Profiler.GetTotalUnusedReservedMemoryLong(), "bytes");
+            AddProfilerCounter(samples, "frame", "TimeFrameCount", Time.frameCount, "frames");
+            AddProfilerCounter(samples, "frame", "RealtimeSinceStartup", Time.realtimeSinceStartup, "seconds");
+            var categoryFilter = string.IsNullOrEmpty(category) ? null : category.Trim();
+            var counterFilter = string.IsNullOrEmpty(counter) ? null : counter.Trim();
+            var items = new List<string>();
+            foreach (var item in samples)
+            {
+                if (!string.IsNullOrEmpty(categoryFilter) && !string.Equals(item.Category, categoryFilter, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+                if (!string.IsNullOrEmpty(counterFilter) && item.Name.IndexOf(counterFilter, StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    continue;
+                }
+                items.Add("{\"category\":" + Quote(item.Category) + ",\"name\":" + Quote(item.Name) + ",\"value\":" + Quote(item.Value) + ",\"unit\":" + Quote(item.Unit) + "}");
+            }
+            return "[" + string.Join(",", items.ToArray()) + "]";
+        }
+
+        private static void AddProfilerCounter(List<ProfilerCounterSample> items, string category, string name, long value, string unit)
+        {
+            items.Add(new ProfilerCounterSample(category, name, value.ToString(CultureInfo.InvariantCulture), unit));
+        }
+
+        private static void AddProfilerCounter(List<ProfilerCounterSample> items, string category, string name, float value, string unit)
+        {
+            items.Add(new ProfilerCounterSample(category, name, Number(value), unit));
+        }
+
+        private static string ProfilerMemoryJson()
+        {
+            return "{"
+                + "\"monoUsedBytes\":" + UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong().ToString(CultureInfo.InvariantCulture) + ","
+                + "\"monoHeapBytes\":" + UnityEngine.Profiling.Profiler.GetMonoHeapSizeLong().ToString(CultureInfo.InvariantCulture) + ","
+                + "\"totalAllocatedBytes\":" + UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong().ToString(CultureInfo.InvariantCulture) + ","
+                + "\"totalReservedBytes\":" + UnityEngine.Profiling.Profiler.GetTotalReservedMemoryLong().ToString(CultureInfo.InvariantCulture) + ","
+                + "\"totalUnusedReservedBytes\":" + UnityEngine.Profiling.Profiler.GetTotalUnusedReservedMemoryLong().ToString(CultureInfo.InvariantCulture)
+                + "}";
+        }
+
+        private static string ProfilerFrameJson(string module)
+        {
+            return "{\"frameCount\":" + Time.frameCount.ToString(CultureInfo.InvariantCulture) + ",\"renderedFrameCount\":" + Time.renderedFrameCount.ToString(CultureInfo.InvariantCulture) + ",\"realtimeSinceStartup\":" + Number(Time.realtimeSinceStartup) + ",\"deltaTime\":" + Number(Time.deltaTime) + ",\"module\":" + Quote(module) + ",\"modules\":" + ProfilerModulesJson() + "}";
         }
 
         private static string NormalizeProfilerFormat(string rawFormat, string outputPath)
@@ -107,7 +171,10 @@ namespace UnityCli
                 + "\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ","
                 + "\"durationMs\":" + durationMs.ToString(CultureInfo.InvariantCulture) + ","
                 + "\"frames\":" + frames.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"profiler\":" + ProfilerStateJson()
+                + "\"profiler\":" + ProfilerStateJson() + ","
+                + "\"memory\":" + ProfilerMemoryJson() + ","
+                + "\"frame\":" + ProfilerFrameJson("CPU Usage") + ","
+                + "\"counters\":" + ProfilerCountersJson(null, null)
                 + "}";
         }
 
@@ -129,12 +196,55 @@ namespace UnityCli
             return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"plannedEffects\":[{" + QuotePair("type", "profiler.stop") + "}],\"logPath\":" + Quote(LogPath()) + "}");
         }
 
+        private static string ProfilerPause(BridgeRequest request)
+        {
+            var wasEnabled = UnityEngine.Profiling.Profiler.enabled;
+            var paused = request.BoolArg("paused", wasEnabled);
+            UnityEngine.Profiling.Profiler.enabled = !paused;
+            if (!paused)
+            {
+                UnityEngine.Profiling.Profiler.enableBinaryLog = true;
+            }
+            WriteLog("profiler_pause paused=" + Bool(paused) + " profilerEnabled=" + Bool(UnityEngine.Profiling.Profiler.enabled));
+            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"paused\":" + Bool(paused) + ",\"plannedEffects\":[{\"type\":\"profiler.pause\",\"profilerEnabledFrom\":" + Bool(wasEnabled) + ",\"profilerEnabledTo\":" + Bool(UnityEngine.Profiling.Profiler.enabled) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
         private static string ProfilerStatus(BridgeRequest request)
         {
-            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"modules\":[\"CPU Usage\",\"Rendering\",\"Memory\",\"Audio\",\"Physics\",\"UI\",\"Global Illumination\"],\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"modules\":" + ProfilerModulesJson() + ",\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string ProfilerCounter(BridgeRequest request)
+        {
+            var category = request.StringArg("category");
+            var counter = request.StringArg("counter");
+            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"query\":{\"category\":" + Quote(category) + ",\"counter\":" + Quote(counter) + "},\"counters\":" + ProfilerCountersJson(category, counter) + ",\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string ProfilerMemory(BridgeRequest request)
+        {
+            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"memory\":" + ProfilerMemoryJson() + ",\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string ProfilerFrame(BridgeRequest request)
+        {
+            var module = request.StringArg("module") ?? "CPU Usage";
+            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"frame\":" + ProfilerFrameJson(module) + ",\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string ProfilerExport(BridgeRequest request)
+        {
+            return ProfilerWriteArtifact(request, "profiler.export", 0, 1);
         }
 
         private static string ProfilerCapture(BridgeRequest request)
+        {
+            var durationMs = Math.Max(0, request.IntArg("durationMs", 0));
+            var frames = Math.Max(0, request.IntArg("frames", 1));
+            return ProfilerWriteArtifact(request, "profiler.capture", durationMs, frames);
+        }
+
+        private static string ProfilerWriteArtifact(BridgeRequest request, string effectType, int durationMs, int frames)
         {
             var outputPath = ResolveOutputPath(request.StringArg("path"));
             var overwrite = request.BoolArg("overwrite", false);
@@ -147,8 +257,6 @@ namespace UnityCli
             {
                 Directory.CreateDirectory(Path.GetDirectoryName(outputPath));
                 var startedAt = DateTime.UtcNow;
-                var durationMs = Math.Max(0, request.IntArg("durationMs", 0));
-                var frames = Math.Max(0, request.IntArg("frames", 1));
                 var format = NormalizeProfilerFormat(request.StringArg("format"), outputPath);
                 if (format == "raw")
                 {
@@ -160,8 +268,8 @@ namespace UnityCli
                 }
                 var finishedAt = DateTime.UtcNow;
                 var elapsedMs = (long)(finishedAt - startedAt).TotalMilliseconds;
-                WriteLog("profiler_capture artifactPath=" + outputPath + " durationMs=" + elapsedMs.ToString(CultureInfo.InvariantCulture));
-                return SuccessJson("{\"artifactPath\":" + Quote(outputPath) + ",\"profilerPath\":" + Quote(outputPath) + ",\"format\":" + Quote(format) + ",\"durationMs\":" + elapsedMs.ToString(CultureInfo.InvariantCulture) + ",\"requestedDurationMs\":" + durationMs.ToString(CultureInfo.InvariantCulture) + ",\"frames\":" + frames.ToString(CultureInfo.InvariantCulture) + ",\"profiler\":" + ProfilerStateJson() + ",\"plannedEffects\":[{\"type\":\"profiler.capture\",\"path\":" + Quote(outputPath) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+                WriteLog(effectType.Replace('.', '_') + " artifactPath=" + outputPath + " durationMs=" + elapsedMs.ToString(CultureInfo.InvariantCulture));
+                return SuccessJson("{\"artifactPath\":" + Quote(outputPath) + ",\"profilerPath\":" + Quote(outputPath) + ",\"format\":" + Quote(format) + ",\"durationMs\":" + elapsedMs.ToString(CultureInfo.InvariantCulture) + ",\"requestedDurationMs\":" + durationMs.ToString(CultureInfo.InvariantCulture) + ",\"frames\":" + frames.ToString(CultureInfo.InvariantCulture) + ",\"profiler\":" + ProfilerStateJson() + ",\"plannedEffects\":[{\"type\":" + Quote(effectType) + ",\"path\":" + Quote(outputPath) + "}],\"logPath\":" + Quote(LogPath()) + "}");
             }
             catch (BridgeCommandException)
             {
@@ -169,8 +277,24 @@ namespace UnityCli
             }
             catch (Exception exception)
             {
-                return ErrorJson("E_PROFILER_CAPTURE_FAILED", "Profiler capture failed: " + exception.Message, "Check output path permissions and Unity Profiler availability, then retry.");
+                return ErrorJson("E_PROFILER_CAPTURE_FAILED", "Profiler artifact write failed: " + exception.Message, "Check output path permissions and Unity Profiler availability, then retry.");
             }
+        }
+
+        private sealed class ProfilerCounterSample
+        {
+            public ProfilerCounterSample(string category, string name, string value, string unit)
+            {
+                Category = category;
+                Name = name;
+                Value = value;
+                Unit = unit;
+            }
+
+            public string Category { get; private set; }
+            public string Name { get; private set; }
+            public string Value { get; private set; }
+            public string Unit { get; private set; }
         }
     }
 }
