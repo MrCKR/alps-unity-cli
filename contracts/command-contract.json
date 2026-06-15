@@ -143,6 +143,16 @@
       "timeout": 60000
     },
     {
+      "bridgeCommand": "build.logs",
+      "group": "build",
+      "command": "logs",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "build.run",
       "group": "build",
       "command": "run",
@@ -201,6 +211,16 @@
       "readOnly": false,
       "destructive": true,
       "timeout": 60000
+    },
+    {
+      "bridgeCommand": "cli.batch.schema",
+      "group": "cli",
+      "command": "schema",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000
     },
     {
       "bridgeCommand": "cli.docs.get",
@@ -1009,6 +1029,26 @@
       "handler_type": "bridge",
       "csharp_handler": "present",
       "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "test.cancel",
+      "group": "test",
+      "command": "cancel",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": false,
+      "destructive": true,
+      "timeout": 60000
+    },
+    {
+      "bridgeCommand": "test.logs",
+      "group": "test",
+      "command": "logs",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": true,
       "destructive": false,
       "timeout": 30000
     },

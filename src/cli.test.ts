@@ -155,6 +155,9 @@ process.exit(0);
 
   const logs = await execute(["job", "logs", "--id", jobId, "--tail", "2"], runtime);
   assert.deepEqual((logs.data as { lines: string[] }).lines, ["two", "three"]);
+
+  const buildLogs = await execute(["build", "logs", "--id", jobId, "--tail", "1"], runtime);
+  assert.deepEqual((buildLogs.data as { lines: string[] }).lines, ["three"]);
 });
 
 test("wait timeout returns structured error while job keeps running", async () => {
@@ -193,9 +196,14 @@ test("cancel marks running job as cancelled", async () => {
   const jobId = (created.data as { jobId: string }).jobId;
   await runtime.runner.wait(jobId, 100);
 
+  const described = await execute(["job", "describe", "--id", jobId], runtime);
+  assert.equal(described.ok, true);
+  assert.equal((described.data as { cancellation: { mode: string } }).cancellation.mode, "immediate");
+
   const cancelled = await execute(["build", "cancel", "--id", jobId], runtime);
   assert.equal(cancelled.ok, true);
   assert.equal((cancelled.data as { status: string }).status, "cancelled");
+  assert.equal((cancelled.data as { cancellation: { mode: string } }).cancellation.mode, "immediate");
 });
 
 test("failed Unity exit is captured with summary", async () => {

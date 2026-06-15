@@ -40,16 +40,19 @@
 
 | unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
 |---|---|---|---|---|---|
-| test.run | `test run [--platform EditMode/PlayMode]` | job (Unity -runTests) | ✅ `test.run` in CLI_ONLY_TOOLS (S2.3 新增) | tools.test.ts: test.run metadata | ✅ |
-| test.poll | `test poll --id <jobId>` | offline (job status) | ✅ `test.poll` in CLI_ONLY_TOOLS (S2.3 新增) | tools.test.ts: test.poll metadata | ✅ |
+| test.run | `test run [--platform EditMode/PlayMode]` | job (Unity -runTests) | ✅ `test.run` in CLI_ONLY_TOOLS (S2.3 新增); describe includes cancel semantics (S3.5) | tools.test.ts: test.run metadata | ✅ |
+| test.poll | `test poll --id <jobId>` / `test status --id <jobId>` | offline (job status) | ✅ `test.poll` in CLI_ONLY_TOOLS (S2.3 新增) | tools.test.ts: test.poll metadata | ✅ |
+| test.logs | `test logs --id <jobId>` | offline (job logs) | ✅ `test.logs` in CLI_ONLY_TOOLS (S3.5 新增) | tools.test.ts: test/build status logs cancel metadata | ✅ |
+| test.cancel | `test cancel --id <jobId>` | offline (job cancel) | ✅ `test.cancel` in CLI_ONLY_TOOLS; describe includes cancel semantics (S3.5 新增) | tools.test.ts: test/build status logs cancel metadata | ✅ |
 
 ## Build 域
 
 | unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
 |---|---|---|---|---|---|
-| build.run | `build run [--target] [--output]` | job (UnityCli.UnityCliBatch.BuildProject) | ✅ `build.run` in CLI_ONLY_TOOLS (S2.3 新增) | tools.test.ts: build.run metadata | ✅ |
+| build.run | `build run [--target] [--output]` | job (UnityCli.UnityCliBatch.BuildProject) | ✅ `build.run` in CLI_ONLY_TOOLS (S2.3 新增); describe includes cancel semantics (S3.5) | tools.test.ts: build.run metadata | ✅ |
 | build.status | `build status --id <jobId>` | offline (job status) | ✅ `build.status` in CLI_ONLY_TOOLS (S2.3 新增) | tools.test.ts: build.status metadata | ✅ |
-| build.cancel | `build cancel --id <jobId>` | offline (job cancel) | ✅ `build.cancel` in CLI_ONLY_TOOLS (S2.3 新增) | tools.test.ts: build.cancel metadata | ✅ |
+| build.logs | `build logs --id <jobId>` | offline (job logs) | ✅ `build.logs` in CLI_ONLY_TOOLS (S3.5 新增) | tools.test.ts: test/build status logs cancel metadata | ✅ |
+| build.cancel | `build cancel --id <jobId>` | offline (job cancel) | ✅ `build.cancel` in CLI_ONLY_TOOLS; describe includes cancel semantics (S2.3/S3.5) | tools.test.ts: test/build status logs cancel metadata | ✅ |
 
 ## Asset + Prefab 域
 
@@ -85,7 +88,7 @@
 
 | unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
 |---|---|---|---|---|---|
-| code.exec | `code exec (--file\|--code\|--stdin) [--channel live\|batchmode] [--job] [--artifact-dir]` | hybrid (bridge live + batch job) | ✅ `code.exec` in CODE_TOOLS, destructiveHint=true, permissions=["executes_code"] (S2.4 增强) | runtime-code.test.ts: live + batchmode + artifact + timeout | ✅ |
+| code.exec | `code exec (--file\|--code\|--stdin) [--channel live\|batchmode] [--job] [--artifact-dir]` | hybrid (bridge live + batch job) | ✅ `code.exec` in CODE_TOOLS, destructiveHint=true, permissions=["executes_code"], describe includes live/job cancel semantics (S2.4/S3.5 增强) | runtime-code.test.ts: live + batchmode + artifact + timeout | ✅ |
 
 ## Graphics 域
 
@@ -127,7 +130,7 @@
 | profiler.counter | `profiler counter [--category] [--counter]` | bridge (UnityCliBridge) | ✅ `profiler.counter` in PROFILER_TOOLS | bridge-commands.test.ts + tools.test.ts | ✅ |
 | profiler.memory | `profiler memory` | bridge (UnityCliBridge) | ✅ `profiler.memory` in PROFILER_TOOLS | bridge-commands.test.ts + tools.test.ts | ✅ |
 | profiler.frame | `profiler frame [--module]` | bridge (UnityCliBridge) | ✅ `profiler.frame` in PROFILER_TOOLS | bridge-commands.test.ts + tools.test.ts | ✅ |
-| profiler.capture | `profiler capture <path> [--duration-ms] [--frames]` | hybrid (live bridge + job path) | ✅ `profiler.capture` in PROFILER_TOOLS | bridge-commands.test.ts + tools.test.ts | ✅ |
+| profiler.capture | `profiler capture <path> [--duration-ms] [--frames]` | hybrid (live bridge + job path) | ✅ `profiler.capture` in PROFILER_TOOLS; describe includes live/job cancel semantics (S3.5) | bridge-commands.test.ts + tools.test.ts | ✅ |
 | profiler.export | `profiler export <path>` | bridge (UnityCliBridge) | ✅ `profiler.export` in PROFILER_TOOLS | bridge-commands.test.ts + tools.test.ts | ✅ |
 
 ---
@@ -225,3 +228,4 @@
 - **S3.2** (2026-06-15): 新增 Graphics/Physics/Animation/VFX 覆盖矩阵行；补 `graphics.pipeline`、`graphics.volume` 查询命令与 metadata/handler/test 证据
 - **ALP-306** (2026-06-15): 新增 `contracts/command-contract.json` 与 `npm run contracts:validate`；补齐 scene/go/component/script 16 个 C# bridge handler，使 TS registry、tool metadata 与 C# registry 统一校验通过。
 - **S3.4** (2026-06-15): 补齐 Profiler session/counter/memory/frame/export CLI、UnityPkg handler、metadata/describe 与自动化测试矩阵；质量 smoke PASS。
+- **S3.5** (2026-06-16): 补齐 `cli.batch.schema` metadata、`test.logs`/`test.cancel`、`build.logs`、job describe/cancellation semantics 字段，并新增 batch→build status/logs/cancel 自动化链路测试。

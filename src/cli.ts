@@ -146,6 +146,7 @@ function help(): Record<string, unknown> {
     commands: [
       "job status --id <jobId>",
       "job logs --id <jobId> [--tail 100]",
+      "job describe --id <jobId>",
       "job cancel --id <jobId>",
       "init [--project <path>] [--unity <Unity.exe>] [--wait]",
       "init --check [--project <path>]",
@@ -245,9 +246,12 @@ function help(): Record<string, unknown> {
       "screenshot capture <path>",
       "editor refresh --compile [--wait] [--project <path>] [--unity <Unity.exe>]",
       "test run [--platform EditMode|PlayMode] [--wait]",
-      "test poll --id <jobId>",
+      "test poll|status --id <jobId>",
+      "test logs --id <jobId> [--tail 100]",
+      "test cancel --id <jobId>",
       "build run [--target StandaloneWindows64] [--output <path>] [--wait]",
       "build status --id <jobId>",
+      "build logs --id <jobId> [--tail 100]",
       "build cancel --id <jobId>"
     ],
     supportLegend: {
