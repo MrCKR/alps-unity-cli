@@ -156,7 +156,9 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /case "custom-tool\.run"/);
   assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.hierarchy`, `scene\.screenshot`, `go\.find`, `asset\.search`, `asset\.info`, `asset\.create`, `asset\.import`, `asset\.modify`, `asset\.delete`, `asset\.duplicate`, `asset\.move`, `asset\.rename`, `diagnose\.preflight`, `screenshot\.capture`, `prefab\.info`, `prefab\.hierarchy`, `prefab\.create`, `prefab\.modify`, `prefab\.stage-open`, `prefab\.stage-save`, `prefab\.stage-close`, `ui\.canvas\.create`, `ui\.text\.create`, `ui\.button\.create`, `ui\.image\.create`, `ui\.document\.info`, `ui\.document\.create`, `ui\.hierarchy`, `material\.info`, `material\.create`, `material\.assign`, `material\.set`, `graphics\.quality`, `graphics\.settings`, `graphics\.screenshot`, `physics\.settings`, `physics\.raycast`, `physics\.simulation`, `profiler\.start`, `profiler\.stop`, `profiler\.capture`, `profiler\.status`, `probuilder\.shape`, `probuilder\.create`, `probuilder\.csg`, `probuilder\.edit`, `animation\.clip`, `animation\.state`, `animation\.play`, `animation\.stop`, `vfx\.graph`, `vfx\.effect`, `shader\.info`, `shader\.read`, `shader\.create`, `shader\.update`, `texture\.info`, `texture\.create`, `texture\.sprite`, `texture\.import-settings`, `editor\.state`, `editor\.play`, `editor\.pause`, `editor\.stop`, `editor\.menu`, `editor\.console`, `code\.exec`, `custom-tool\.list` and `custom-tool\.run`/);
   assert.doesNotMatch(bridgeSection, /live query\/edit\/screenshot/);
-  assert.match(bridgeSection, /`component set` and `script edit` are not routed by this package yet/);
+  assert.match(bridgeSection, /Declared planning commands remain visible in CLI help and tool metadata with the `规划中` support status as future bundled Bridge handler coverage/);
+  assert.doesNotMatch(bridgeSection, /not routed by this package yet/);
+  assert.doesNotMatch(bridgeSection, /E_BRIDGE_COMMAND_UNSUPPORTED/);
 });
 
 test("Unity Bridge animation and vfx commands expose assets, target resolver diagnostics and package checks", async () => {
