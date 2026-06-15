@@ -93,10 +93,10 @@ namespace AlpsUnityCli
         private static readonly string[] CameraCommands = { "camera.list", "camera.info", "camera.screenshot" };
         private static readonly string[] SceneCommands = { "scene.hierarchy", "scene.screenshot" };
         private static readonly string[] GameObjectCommands = { "go.find" };
-        private static readonly string[] AssetCommands = { "asset.search" };
+        private static readonly string[] AssetCommands = { "asset.search", "asset.info", "asset.create", "asset.import", "asset.modify", "asset.delete", "asset.duplicate", "asset.move", "asset.rename" };
         private static readonly string[] DiagnoseCommands = { "diagnose.preflight" };
         private static readonly string[] ScreenshotCommands = { "screenshot.capture" };
-        private static readonly string[] PrefabCommands = { "prefab.info", "prefab.create", "prefab.stage-open", "prefab.stage-save", "prefab.stage-close", "prefab.hierarchy" };
+        private static readonly string[] PrefabCommands = { "prefab.info", "prefab.hierarchy", "prefab.create", "prefab.modify", "prefab.stage-open", "prefab.stage-save", "prefab.stage-close" };
         private static readonly string[] UiCommands = { "ui.canvas.create", "ui.text.create", "ui.button.create", "ui.image.create", "ui.document.info", "ui.document.create", "ui.hierarchy" };
         private static readonly string[] MaterialCommands = { "material.info", "material.create", "material.assign", "material.set" };
         private static readonly string[] GraphicsCommands = { "graphics.quality", "graphics.settings", "graphics.screenshot" };
@@ -503,6 +503,8 @@ namespace AlpsUnityCli
                     return PrefabInfo(request);
                 case "prefab.create":
                     return PrefabCreate(request);
+                case "prefab.modify":
+                    return PrefabModify(request);
                 case "prefab.stage-open":
                     return PrefabStageOpen(request);
                 case "prefab.stage-save":
@@ -515,6 +517,22 @@ namespace AlpsUnityCli
                     return GameObjectFind(request);
                 case "asset.search":
                     return AssetSearch(request);
+                case "asset.info":
+                    return AssetInfo(request);
+                case "asset.create":
+                    return AssetCreate(request);
+                case "asset.import":
+                    return AssetImport(request);
+                case "asset.modify":
+                    return AssetModify(request);
+                case "asset.delete":
+                    return AssetDelete(request);
+                case "asset.duplicate":
+                    return AssetDuplicate(request);
+                case "asset.move":
+                    return AssetMove(request);
+                case "asset.rename":
+                    return AssetRename(request);
                 case "ui.canvas.create":
                     return UiCanvasCreate(request);
                 case "ui.text.create":
@@ -764,6 +782,66 @@ namespace AlpsUnityCli
             AssetDatabase.SaveAssets();
             WriteLog("prefab_created source=" + source + " path=" + path + " mode=scene");
             return SuccessJson(PrefabCreateJson(source, path, "scene"));
+        }
+
+        private static string PrefabModify(BridgeRequest request)
+        {
+            var path = RequirePrefabPath(request.StringArg("path"));
+            LoadPrefabAsset(path);
+            var root = PrefabUtility.LoadPrefabContents(path);
+            var effects = new List<string>();
+            try
+            {
+                var name = request.StringArg("name");
+                if (!string.IsNullOrEmpty(name) && root.name != name)
+                {
+                    root.name = name;
+                    effects.Add("{\"type\":\"prefab.modify\",\"path\":" + Quote(path) + ",\"property\":\"name\"}");
+                }
+
+                var addChild = request.StringArg("addChild");
+                if (!string.IsNullOrEmpty(addChild))
+                {
+                    var existing = root.transform.Find(addChild);
+                    if (existing != null && !request.BoolArg("overwrite", false))
+                    {
+                        throw new BridgeCommandException("E_PREFAB_CHILD_EXISTS", "Prefab child already exists: " + addChild, "Pass --overwrite or choose another child name.");
+                    }
+                    if (existing != null)
+                    {
+                        UnityEngine.Object.DestroyImmediate(existing.gameObject);
+                    }
+                    var child = new GameObject(addChild);
+                    child.transform.SetParent(root.transform, false);
+                    effects.Add("{\"type\":\"prefab.modify\",\"path\":" + Quote(path) + ",\"addChild\":" + Quote(addChild) + "}");
+                }
+
+                var removeChild = request.StringArg("removeChild");
+                if (!string.IsNullOrEmpty(removeChild))
+                {
+                    var child = root.transform.Find(removeChild);
+                    if (child == null)
+                    {
+                        throw new BridgeCommandException("E_PREFAB_CHILD_NOT_FOUND", "Prefab child not found: " + removeChild, "Run unity_cli prefab hierarchy <path> to inspect child paths.");
+                    }
+                    UnityEngine.Object.DestroyImmediate(child.gameObject);
+                    effects.Add("{\"type\":\"prefab.modify\",\"path\":" + Quote(path) + ",\"removeChild\":" + Quote(removeChild) + "}");
+                }
+
+                if (effects.Count == 0)
+                {
+                    throw new BridgeCommandException("E_PREFAB_MODIFY_NOOP", "No Prefab modifications were requested.", "Pass --name, --add-child or --remove-child.");
+                }
+
+                PrefabUtility.SaveAsPrefabAsset(root, path);
+                AssetDatabase.SaveAssets();
+                AssetDatabase.Refresh();
+                return SuccessJson("{\"prefab\":" + PrefabAssetJson(path, root, root) + ",\"plannedEffects\":[" + string.Join(",", effects.ToArray()) + "],\"logPath\":" + Quote(LogPath()) + "}");
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(root);
+            }
         }
 
         private static string PrefabStageOpen(BridgeRequest request)
@@ -2040,10 +2118,145 @@ namespace AlpsUnityCli
             {
                 var assetPath = NormalizeAssetPath(AssetDatabase.GUIDToAssetPath(guids[index]));
                 var assetType = AssetDatabase.GetMainAssetTypeAtPath(assetPath);
-                items.Add("{\"path\":" + Quote(assetPath) + ",\"guid\":" + Quote(guids[index]) + ",\"type\":" + Quote(assetType == null ? null : assetType.Name) + ",\"name\":" + Quote(Path.GetFileNameWithoutExtension(assetPath)) + "}");
+                items.Add(AssetSummaryJson(assetPath, assetType));
             }
             var nextCursor = cursor + items.Count < guids.Length ? (cursor + items.Count).ToString(CultureInfo.InvariantCulture) : null;
             return SuccessJson("{\"query\":" + Quote(query) + ",\"type\":" + Quote(type) + ",\"path\":" + Quote(path) + ",\"items\":[" + string.Join(",", items.ToArray()) + "],\"pageInfo\":{\"pageSize\":" + pageSize.ToString(CultureInfo.InvariantCulture) + ",\"cursor\":" + cursor.ToString(CultureInfo.InvariantCulture) + ",\"nextCursor\":" + Quote(nextCursor) + ",\"total\":" + guids.Length.ToString(CultureInfo.InvariantCulture) + "},\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string AssetInfo(BridgeRequest request)
+        {
+            var path = RequireAssetPath(request.StringArg("path") ?? request.StringArg("target"));
+            if (!AssetExists(path))
+            {
+                throw new BridgeCommandException("E_ASSET_NOT_FOUND", "Asset not found: " + path, "Run unity_cli asset search <keyword> or pass an existing Assets/* path.");
+            }
+            return SuccessJson("{\"asset\":" + AssetDetailJson(path) + ",\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string AssetCreate(BridgeRequest request)
+        {
+            var path = RequireAssetPath(request.StringArg("path"));
+            var type = request.StringArg("type") ?? "file";
+            var overwrite = request.BoolArg("overwrite", false);
+            if (string.Equals(type, "folder", StringComparison.OrdinalIgnoreCase) || string.Equals(type, "directory", StringComparison.OrdinalIgnoreCase) || string.IsNullOrEmpty(Path.GetExtension(path)))
+            {
+                CreateAssetFolder(path);
+                return SuccessJson(AssetMutationJson("asset.create", path, null));
+            }
+            WriteTextAsset(path, request.StringArg("content") ?? string.Empty, overwrite);
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            return SuccessJson(AssetMutationJson("asset.create", path, null));
+        }
+
+        private static string AssetImport(BridgeRequest request)
+        {
+            var path = RequireAssetPath(request.StringArg("path") ?? request.StringArg("destination"));
+            var source = request.StringArg("source");
+            var overwrite = request.BoolArg("overwrite", false);
+            if (!string.IsNullOrEmpty(source))
+            {
+                var fullSource = source.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) ? AssetFullPath(NormalizeAssetPath(source)) : Path.GetFullPath(source.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar));
+                if (!File.Exists(fullSource))
+                {
+                    throw new BridgeCommandException("E_ASSET_SOURCE_NOT_FOUND", "Source file not found: " + source, "Pass an existing file path or Assets/* source asset.");
+                }
+                CreateAssetDirectory(path);
+                var fullDestination = AssetFullPath(path);
+                if (File.Exists(fullDestination) && !overwrite)
+                {
+                    throw new BridgeCommandException("E_ASSET_OUTPUT_EXISTS", "Asset already exists: " + path, "Pass --overwrite or choose another destination.");
+                }
+                File.Copy(fullSource, fullDestination, true);
+            }
+            else
+            {
+                WriteTextAsset(path, request.StringArg("content") ?? string.Empty, overwrite);
+            }
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            return SuccessJson(AssetMutationJson("asset.import", path, source));
+        }
+
+        private static string AssetModify(BridgeRequest request)
+        {
+            var path = RequireExistingAssetPath(request.StringArg("path"));
+            var content = request.StringArg("content");
+            if (content == null)
+            {
+                throw new BridgeCommandException("E_ASSET_CONTENT_REQUIRED", "Asset modify requires --content or --content-file.", "Pass text content for a text-like asset file.");
+            }
+            WriteTextAsset(path, content, true);
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+            return SuccessJson(AssetMutationJson("asset.modify", path, null));
+        }
+
+        private static string AssetDelete(BridgeRequest request)
+        {
+            var path = RequireExistingAssetPath(request.StringArg("path"));
+            if (!AssetDatabase.DeleteAsset(path))
+            {
+                throw new BridgeCommandException("E_ASSET_DELETE_FAILED", "Failed to delete asset: " + path, "Check Unity Console and file permissions.");
+            }
+            AssetDatabase.Refresh();
+            return SuccessJson("{\"asset\":{\"path\":" + Quote(path) + ",\"exists\":false},\"plannedEffects\":[{\"type\":\"asset.delete\",\"path\":" + Quote(path) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string AssetDuplicate(BridgeRequest request)
+        {
+            var source = RequireExistingAssetPath(request.StringArg("source") ?? request.StringArg("path"));
+            var destination = RequireAssetPath(request.StringArg("destination"));
+            CreateAssetDirectory(destination);
+            if (AssetExists(destination))
+            {
+                throw new BridgeCommandException("E_ASSET_OUTPUT_EXISTS", "Destination asset already exists: " + destination, "Choose another destination path.");
+            }
+            if (!AssetDatabase.CopyAsset(source, destination))
+            {
+                throw new BridgeCommandException("E_ASSET_DUPLICATE_FAILED", "Failed to duplicate asset: " + source, "Check destination path and Unity Console diagnostics.");
+            }
+            AssetDatabase.Refresh();
+            return SuccessJson(AssetMutationJson("asset.duplicate", destination, source));
+        }
+
+        private static string AssetMove(BridgeRequest request)
+        {
+            var source = RequireExistingAssetPath(request.StringArg("source") ?? request.StringArg("path"));
+            var destination = RequireAssetPath(request.StringArg("destination"));
+            CreateAssetDirectory(destination);
+            var error = AssetDatabase.MoveAsset(source, destination);
+            if (!string.IsNullOrEmpty(error))
+            {
+                throw new BridgeCommandException("E_ASSET_MOVE_FAILED", "Failed to move asset: " + error, "Check source, destination and Unity Console diagnostics.");
+            }
+            AssetDatabase.Refresh();
+            return SuccessJson(AssetMutationJson("asset.move", destination, source));
+        }
+
+        private static string AssetRename(BridgeRequest request)
+        {
+            var path = RequireExistingAssetPath(request.StringArg("path"));
+            var name = request.StringArg("name");
+            if (string.IsNullOrEmpty(name))
+            {
+                throw new BridgeCommandException("E_ASSET_NAME_REQUIRED", "Asset rename requires --name <newName>.", "Pass a filename without path separators.");
+            }
+            if (name.IndexOf('/') >= 0 || name.IndexOf('\\') >= 0)
+            {
+                throw new BridgeCommandException("E_ASSET_NAME_INVALID", "Asset rename name must not include path separators: " + name, "Use asset move for changing directories.");
+            }
+            var guid = AssetDatabase.AssetPathToGUID(path);
+            var error = AssetDatabase.RenameAsset(path, name);
+            if (!string.IsNullOrEmpty(error))
+            {
+                throw new BridgeCommandException("E_ASSET_RENAME_FAILED", "Failed to rename asset: " + error, "Check name validity and Unity Console diagnostics.");
+            }
+            AssetDatabase.Refresh();
+            var renamedPath = NormalizeAssetPath(AssetDatabase.GUIDToAssetPath(guid));
+            if (string.IsNullOrEmpty(renamedPath))
+            {
+                renamedPath = NormalizeAssetPath(Path.Combine(Path.GetDirectoryName(path) ?? "Assets", name));
+            }
+            return SuccessJson(AssetMutationJson("asset.rename", renamedPath, path));
         }
 
         private static string NormalizeAssetSearchPath(string path)
@@ -2054,6 +2267,87 @@ namespace AlpsUnityCli
             }
             var normalized = NormalizeAssetPath(path);
             return normalized.StartsWith("Assets", StringComparison.OrdinalIgnoreCase) || normalized.StartsWith("Packages", StringComparison.OrdinalIgnoreCase) ? normalized : null;
+        }
+
+        private static string RequireAssetPath(string rawPath)
+        {
+            var path = NormalizeAssetPath(rawPath);
+            if (string.IsNullOrEmpty(path))
+            {
+                throw new BridgeCommandException("E_ASSET_PATH_REQUIRED", "Pass an Assets/* asset path.", "Use unity_cli asset info <path> or pass --path Assets/Example.asset.");
+            }
+            if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) && !string.Equals(path, "Assets", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new BridgeCommandException("E_ASSET_PATH_INVALID", "Asset path must be under Assets/: " + path, "Pass a Unity project asset path such as Assets/Textures/Icon.png.");
+            }
+            return path;
+        }
+
+        private static string RequireExistingAssetPath(string rawPath)
+        {
+            var path = RequireAssetPath(rawPath);
+            if (!AssetExists(path))
+            {
+                throw new BridgeCommandException("E_ASSET_NOT_FOUND", "Asset not found: " + path, "Run unity_cli asset search <keyword> or pass an existing Assets/* path.");
+            }
+            return path;
+        }
+
+        private static void CreateAssetFolder(string path)
+        {
+            if (AssetDatabase.IsValidFolder(path))
+            {
+                return;
+            }
+            if (AssetExists(path))
+            {
+                throw new BridgeCommandException("E_ASSET_OUTPUT_EXISTS", "Asset already exists and is not a folder: " + path, "Choose another Assets/* folder path.");
+            }
+            var segments = path.Split(new[] { '/' }, StringSplitOptions.RemoveEmptyEntries);
+            var current = segments.Length > 0 && string.Equals(segments[0], "Assets", StringComparison.OrdinalIgnoreCase) ? "Assets" : null;
+            if (current == null)
+            {
+                throw new BridgeCommandException("E_ASSET_PATH_INVALID", "Asset folder must be under Assets/: " + path, "Pass a path such as Assets/Generated.");
+            }
+            for (var index = 1; index < segments.Length; index++)
+            {
+                var next = current + "/" + segments[index];
+                if (!AssetDatabase.IsValidFolder(next))
+                {
+                    AssetDatabase.CreateFolder(current, segments[index]);
+                }
+                current = next;
+            }
+            AssetDatabase.Refresh();
+        }
+
+        private static string AssetMutationJson(string type, string path, string source)
+        {
+            return "{\"asset\":" + AssetDetailJson(path) + ",\"source\":" + Quote(source) + ",\"plannedEffects\":[{\"type\":" + Quote(type) + ",\"path\":" + Quote(path) + (string.IsNullOrEmpty(source) ? "" : ",\"source\":" + Quote(source)) + "}],\"logPath\":" + Quote(LogPath()) + "}";
+        }
+
+        private static string AssetDetailJson(string path)
+        {
+            var asset = AssetDatabase.LoadMainAssetAtPath(path);
+            var type = AssetDatabase.GetMainAssetTypeAtPath(path);
+            var fullPath = AssetFullPath(path);
+            var fileInfo = new FileInfo(fullPath);
+            var isFolder = AssetDatabase.IsValidFolder(path) || Directory.Exists(fullPath);
+            return "{"
+                + "\"path\":" + Quote(path) + ","
+                + "\"guid\":" + Quote(AssetDatabase.AssetPathToGUID(path)) + ","
+                + "\"name\":" + Quote(asset == null ? Path.GetFileNameWithoutExtension(path) : asset.name) + ","
+                + "\"type\":" + Quote(type == null ? (isFolder ? "Folder" : null) : type.Name) + ","
+                + "\"extension\":" + Quote(Path.GetExtension(path)) + ","
+                + "\"isFolder\":" + Bool(isFolder) + ","
+                + "\"exists\":" + Bool(AssetExists(path)) + ","
+                + "\"sizeBytes\":" + (fileInfo.Exists ? fileInfo.Length.ToString(CultureInfo.InvariantCulture) : "0")
+                + "}";
+        }
+
+        private static string AssetSummaryJson(string path, Type assetType)
+        {
+            return "{\"path\":" + Quote(path) + ",\"guid\":" + Quote(AssetDatabase.AssetPathToGUID(path)) + ",\"type\":" + Quote(assetType == null ? null : assetType.Name) + ",\"name\":" + Quote(Path.GetFileNameWithoutExtension(path)) + "}";
         }
 
         private static string TextureAssetJson(string path, Texture2D texture)

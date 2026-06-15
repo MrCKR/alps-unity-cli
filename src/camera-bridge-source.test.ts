@@ -69,7 +69,7 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /private static string QuotePair\(string key, string value\)/);
   assert.doesNotMatch(source, /new\[\] \{ \(object\)/);
   assert.match(source, /private static readonly string\[\] CameraCommands = \{ "camera\.list", "camera\.info", "camera\.screenshot" \}/);
-  assert.match(source, /private static readonly string\[\] PrefabCommands = \{ "prefab\.info", "prefab\.create", "prefab\.stage-open", "prefab\.stage-save", "prefab\.stage-close", "prefab\.hierarchy" \}/);
+  assert.match(source, /private static readonly string\[\] PrefabCommands = \{ "prefab\.info", "prefab\.hierarchy", "prefab\.create", "prefab\.modify", "prefab\.stage-open", "prefab\.stage-save", "prefab\.stage-close" \}/);
   assert.match(source, /private static readonly string\[\] UiCommands = \{ "ui\.canvas\.create", "ui\.text\.create", "ui\.button\.create", "ui\.image\.create", "ui\.document\.info", "ui\.document\.create", "ui\.hierarchy" \}/);
   assert.match(source, /private static readonly string\[\] MaterialCommands = \{ "material\.info", "material\.create", "material\.assign", "material\.set" \}/);
   assert.match(source, /private static readonly string\[\] GraphicsCommands = \{ "graphics\.quality", "graphics\.settings", "graphics\.screenshot" \}/);
@@ -89,6 +89,7 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /case "screenshot\.capture"/);
   assert.match(source, /case "prefab\.info"/);
   assert.match(source, /case "prefab\.create"/);
+  assert.match(source, /case "prefab\.modify"/);
   assert.match(source, /case "prefab\.stage-open"/);
   assert.match(source, /case "prefab\.stage-save"/);
   assert.match(source, /case "prefab\.stage-close"/);
@@ -135,6 +136,14 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /case "scene\.hierarchy"/);
   assert.match(source, /case "go\.find"/);
   assert.match(source, /case "asset\.search"/);
+  assert.match(source, /case "asset\.info"/);
+  assert.match(source, /case "asset\.create"/);
+  assert.match(source, /case "asset\.import"/);
+  assert.match(source, /case "asset\.modify"/);
+  assert.match(source, /case "asset\.delete"/);
+  assert.match(source, /case "asset\.duplicate"/);
+  assert.match(source, /case "asset\.move"/);
+  assert.match(source, /case "asset\.rename"/);
   assert.match(source, /case "diagnose\.preflight"/);
   assert.match(source, /case "editor\.state"/);
   assert.match(source, /case "editor\.play"/);
@@ -145,7 +154,7 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /case "code\.exec"/);
   assert.match(source, /case "custom-tool\.list"/);
   assert.match(source, /case "custom-tool\.run"/);
-  assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.hierarchy`, `scene\.screenshot`, `go\.find`, `asset\.search`, `diagnose\.preflight`, `screenshot\.capture`, `prefab\.info`, `prefab\.create`, `prefab\.stage-open`, `prefab\.stage-save`, `prefab\.stage-close`, `prefab\.hierarchy`, `ui\.canvas\.create`, `ui\.text\.create`, `ui\.button\.create`, `ui\.image\.create`, `ui\.document\.info`, `ui\.document\.create`, `ui\.hierarchy`, `material\.info`, `material\.create`, `material\.assign`, `material\.set`, `graphics\.quality`, `graphics\.settings`, `graphics\.screenshot`, `physics\.settings`, `physics\.raycast`, `physics\.simulation`, `profiler\.start`, `profiler\.stop`, `profiler\.capture`, `profiler\.status`, `probuilder\.shape`, `probuilder\.create`, `probuilder\.csg`, `probuilder\.edit`, `animation\.clip`, `animation\.state`, `animation\.play`, `animation\.stop`, `vfx\.graph`, `vfx\.effect`, `shader\.info`, `shader\.read`, `shader\.create`, `shader\.update`, `texture\.info`, `texture\.create`, `texture\.sprite`, `texture\.import-settings`, `editor\.state`, `editor\.play`, `editor\.pause`, `editor\.stop`, `editor\.menu`, `editor\.console`, `code\.exec`, `custom-tool\.list` and `custom-tool\.run`/);
+  assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.hierarchy`, `scene\.screenshot`, `go\.find`, `asset\.search`, `asset\.info`, `asset\.create`, `asset\.import`, `asset\.modify`, `asset\.delete`, `asset\.duplicate`, `asset\.move`, `asset\.rename`, `diagnose\.preflight`, `screenshot\.capture`, `prefab\.info`, `prefab\.hierarchy`, `prefab\.create`, `prefab\.modify`, `prefab\.stage-open`, `prefab\.stage-save`, `prefab\.stage-close`, `ui\.canvas\.create`, `ui\.text\.create`, `ui\.button\.create`, `ui\.image\.create`, `ui\.document\.info`, `ui\.document\.create`, `ui\.hierarchy`, `material\.info`, `material\.create`, `material\.assign`, `material\.set`, `graphics\.quality`, `graphics\.settings`, `graphics\.screenshot`, `physics\.settings`, `physics\.raycast`, `physics\.simulation`, `profiler\.start`, `profiler\.stop`, `profiler\.capture`, `profiler\.status`, `probuilder\.shape`, `probuilder\.create`, `probuilder\.csg`, `probuilder\.edit`, `animation\.clip`, `animation\.state`, `animation\.play`, `animation\.stop`, `vfx\.graph`, `vfx\.effect`, `shader\.info`, `shader\.read`, `shader\.create`, `shader\.update`, `texture\.info`, `texture\.create`, `texture\.sprite`, `texture\.import-settings`, `editor\.state`, `editor\.play`, `editor\.pause`, `editor\.stop`, `editor\.menu`, `editor\.console`, `code\.exec`, `custom-tool\.list` and `custom-tool\.run`/);
   assert.doesNotMatch(bridgeSection, /live query\/edit\/screenshot/);
   assert.match(bridgeSection, /`component set` and `script edit` are not routed by this package yet/);
 });
