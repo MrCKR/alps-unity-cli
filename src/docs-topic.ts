@@ -116,7 +116,7 @@ const TOPIC_DOCS: Record<string, DocTopic> = {
       "profiler.status — Check if profiler is active",
       "profiler.start — Begin profiling",
       "profiler.stop — Stop profiling",
-      "profiler.pause — Pause or resume the Editor while profiling",
+      "profiler.pause — Pause or resume Profiler data collection",
       "profiler.counter — Read available profiler counters",
       "profiler.memory — Query memory usage",
       "profiler.frame — Read current frame diagnostics",

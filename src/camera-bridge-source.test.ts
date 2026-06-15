@@ -121,8 +121,13 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /case "profiler\.export"/);
   assert.match(source, /case "profiler\.status"/);
   assert.match(source, /ProfilerCountersJson/);
+  assert.match(source, /ProfilerCounterSample/);
+  assert.match(source, /sample\.Category\.Equals\(categoryFilter, StringComparison\.OrdinalIgnoreCase\)/);
+  assert.match(source, /sample\.Name\.Equals\(counterFilter, StringComparison\.OrdinalIgnoreCase\)/);
   assert.match(source, /ProfilerMemoryJson/);
   assert.match(source, /ProfilerFrameJson/);
+  assert.match(source, /UnityEngine\.Profiling\.Profiler\.enabled = !paused/);
+  assert.doesNotMatch(source, /EditorApplication\.isPaused = paused/);
   assert.match(source, /case "probuilder\.shape"/);
   assert.match(source, /case "probuilder\.create"/);
   assert.match(source, /case "probuilder\.csg"/);
