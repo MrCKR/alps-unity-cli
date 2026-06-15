@@ -33,6 +33,49 @@ namespace UnityCli
             return Path.Combine(ProjectRoot(), "Logs", "UnityCliBridge.log");
         }
 
+        private static string RuntimeDiagnosticsPath()
+        {
+            return Path.Combine(ProjectRoot(), "Logs", "UnityCliBridgeRuntime.json");
+        }
+
+        private static void WriteRuntimeLoadDiagnostics(string phase)
+        {
+            try
+            {
+                var path = RuntimeDiagnosticsPath();
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                File.WriteAllText(path, RuntimeDiagnosticsJson(phase));
+                WriteLog("bridge_runtime_loaded phase=" + phase + " listenerId=" + ListenerId + " diagnosticsFingerprint=" + BridgeDiagnosticsFingerprint + " assemblyMvid=" + AssemblyMvid() + " packageName=" + BridgePackageName() + " packageAssetPath=" + BridgePackageAssetPath() + " packageResolvedPath=" + BridgePackageResolvedPath());
+            }
+            catch (Exception exception)
+            {
+                WriteLog("bridge_runtime_diagnostics_failed " + exception.GetType().Name + ": " + exception.Message);
+            }
+        }
+
+        private static string RuntimeDiagnosticsJson(string phase)
+        {
+            return "{"
+                + "\"ok\":true,"
+                + "\"phase\":" + Quote(phase) + ","
+                + "\"diagnosticsFingerprint\":" + Quote(BridgeDiagnosticsFingerprint) + ","
+                + "\"listenerId\":" + Quote(ListenerId) + ","
+                + "\"loadedAt\":" + Quote(BridgeLoadedAtUtc.ToString("O", CultureInfo.InvariantCulture)) + ","
+                + "\"bridgeLogPath\":" + Quote(LogPath()) + ","
+                + "\"port\":" + port.ToString(CultureInfo.InvariantCulture) + ","
+                + "\"assembly\":{"
+                + "\"fullName\":" + Quote(typeof(UnityCliBridge).Assembly.FullName) + ","
+                + "\"location\":" + Quote(AssemblyLocation(typeof(UnityCliBridge).Assembly)) + ","
+                + "\"moduleVersionId\":" + Quote(AssemblyMvid())
+                + "},"
+                + "\"package\":{"
+                + "\"name\":" + Quote(BridgePackageName()) + ","
+                + "\"assetPath\":" + Quote(BridgePackageAssetPath()) + ","
+                + "\"resolvedPath\":" + Quote(BridgePackageResolvedPath())
+                + "}"
+                + "}";
+        }
+
         private static void WriteLog(string line)
         {
             try

@@ -82,7 +82,7 @@ namespace UnityCli
                 }
                 items.Add(instanceJson);
                 File.WriteAllText(RegistryPath(), "{\"version\":1,\"instances\":[" + string.Join(",", items.ToArray()) + "]}");
-                WriteLog("instance_registered id=" + InstanceId() + " status=" + status + " endpoint=http://127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture) + " listenerId=" + ListenerId + " diagnosticsFingerprint=" + BridgeDiagnosticsFingerprint + " assemblyMvid=" + AssemblyMvid());
+                WriteLog("instance_registered id=" + InstanceId() + " status=" + status + " endpoint=http://127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture) + " listenerId=" + ListenerId + " diagnosticsFingerprint=" + BridgeDiagnosticsFingerprint + " assemblyMvid=" + AssemblyMvid() + " packageName=" + BridgePackageName() + " packageAssetPath=" + BridgePackageAssetPath() + " packageResolvedPath=" + BridgePackageResolvedPath());
             }
             catch (Exception exception)
             {
@@ -99,6 +99,9 @@ namespace UnityCli
                 + "\"projectHash\":" + Quote(ProjectHash()) + ","
                 + "\"unityVersion\":" + Quote(Application.unityVersion) + ","
                 + "\"packageVersion\":\"com.unity_cli\"," 
+                + "\"packageName\":" + Quote(BridgePackageName()) + ","
+                + "\"packageAssetPath\":" + Quote(BridgePackageAssetPath()) + ","
+                + "\"packageResolvedPath\":" + Quote(BridgePackageResolvedPath()) + ","
                 + "\"pid\":" + System.Diagnostics.Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture) + ","
                 + "\"bridgeEndpoint\":" + Quote("http://127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture)) + ","
                 + "\"capabilitiesHash\":" + Quote(BridgeBuildStamp()) + ","
