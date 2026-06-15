@@ -32,8 +32,8 @@ namespace UnityCli
         private const int Port = 47392;
         private static readonly object QueueLock = new object();
         private static readonly string[] CameraCommands = { "camera.list", "camera.info", "camera.screenshot" };
-        private static readonly string[] SceneCommands = { "scene.hierarchy", "scene.screenshot" };
-        private static readonly string[] GameObjectCommands = { "go.find" };
+        private static readonly string[] SceneCommands = { "scene.active", "scene.hierarchy", "scene.build-settings", "scene.screenshot", "scene.create", "scene.load", "scene.save" };
+        private static readonly string[] GameObjectCommands = { "go.find", "go.inspect", "go.create", "go.modify", "go.delete", "component.add", "component.remove", "component.set" };
         private static readonly string[] AssetCommands = { "asset.search", "asset.info", "asset.create", "asset.import", "asset.modify", "asset.delete", "asset.duplicate", "asset.move", "asset.rename" };
         private static readonly string[] DiagnoseCommands = { "diagnose.preflight" };
         private static readonly string[] ScreenshotCommands = { "screenshot.capture" };
@@ -49,6 +49,7 @@ namespace UnityCli
         private static readonly string[] ShaderCommands = { "shader.info", "shader.read", "shader.create", "shader.update" };
         private static readonly string[] TextureCommands = { "texture.info", "texture.create", "texture.sprite", "texture.import-settings" };
         private static readonly string[] EditorCommands = { "editor.state", "editor.play", "editor.pause", "editor.stop", "editor.menu", "editor.console" };
+        private static readonly string[] ScriptCommands = { "script.create", "script.read", "script.edit", "script.validate" };
         private static readonly string[] CodeCommands = { "code.exec" };
         private static readonly string[] CustomToolCommands = { "custom-tool.list", "custom-tool.run" };
         private static readonly BridgeCommandRegistry CommandRegistry = CreateCommandRegistry();

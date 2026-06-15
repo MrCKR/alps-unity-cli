@@ -58,6 +58,7 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /CapabilityJson\("physics", PhysicsCommands\) \+ ","\s+\+ CapabilityJson\("profiler", ProfilerCommands\) \+ ","\s+\+ CapabilityJson\("probuilder", ProBuilderCommands\) \+ ","\s+\+ CapabilityJson\("animation", AnimationCommands\) \+ ","\s+\+ CapabilityJson\("vfx", VfxCommands\) \+ ","\s+\+ CapabilityJson\("shader", ShaderCommands\) \+ ","/);
   assert.match(source, /CapabilityJson\("shader", ShaderCommands\)/);
   assert.match(source, /CapabilityJson\("texture", TextureCommands\)/);
+  assert.match(source, /CapabilityJson\("script", ScriptCommands\)/);
   assert.match(source, /CapabilityJson\("code", CodeCommands\)/);
   assert.match(source, /CapabilityJson\("custom-tool", CustomToolCommands\)/);
   assert.match(source, /AssemblyReloadEvents\.beforeAssemblyReload \+= OnBeforeAssemblyReload/);
@@ -71,6 +72,8 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /private static string QuotePair\(string key, string value\)/);
   assert.doesNotMatch(source, /new\[\] \{ \(object\)/);
   assert.match(source, /private static readonly string\[\] CameraCommands = \{ "camera\.list", "camera\.info", "camera\.screenshot" \}/);
+  assert.match(source, /private static readonly string\[\] SceneCommands = \{ "scene\.active", "scene\.hierarchy", "scene\.build-settings", "scene\.screenshot", "scene\.create", "scene\.load", "scene\.save" \}/);
+  assert.match(source, /private static readonly string\[\] GameObjectCommands = \{ "go\.find", "go\.inspect", "go\.create", "go\.modify", "go\.delete", "component\.add", "component\.remove", "component\.set" \}/);
   assert.match(source, /private static readonly string\[\] PrefabCommands = \{ "prefab\.info", "prefab\.hierarchy", "prefab\.create", "prefab\.modify", "prefab\.stage-open", "prefab\.stage-save", "prefab\.stage-close" \}/);
   assert.match(source, /private static readonly string\[\] UiCommands = \{ "ui\.canvas\.create", "ui\.text\.create", "ui\.button\.create", "ui\.image\.create", "ui\.document\.info", "ui\.document\.create", "ui\.hierarchy" \}/);
   assert.match(source, /private static readonly string\[\] MaterialCommands = \{ "material\.info", "material\.create", "material\.assign", "material\.set" \}/);
@@ -82,12 +85,18 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /private static readonly string\[\] VfxCommands = \{ "vfx\.graph", "vfx\.effect" \}/);
   assert.match(source, /private static readonly string\[\] ShaderCommands = \{ "shader\.info", "shader\.read", "shader\.create", "shader\.update" \}/);
   assert.match(source, /private static readonly string\[\] TextureCommands = \{ "texture\.info", "texture\.create", "texture\.sprite", "texture\.import-settings" \}/);
+  assert.match(source, /private static readonly string\[\] ScriptCommands = \{ "script\.create", "script\.read", "script\.edit", "script\.validate" \}/);
   assert.match(source, /private static readonly string\[\] CodeCommands = \{ "code\.exec" \}/);
   assert.match(source, /private static readonly string\[\] CustomToolCommands = \{ "custom-tool\.list", "custom-tool\.run" \}/);
   assert.match(source, /RegisterCommand\(registry, "camera\.list", "camera", false/);
   assert.match(source, /RegisterCommand\(registry, "camera\.info", "camera", false/);
   assert.match(source, /RegisterCommand\(registry, "camera\.screenshot", "camera", true/);
+  assert.match(source, /RegisterCommand\(registry, "scene\.active", "scene", false/);
+  assert.match(source, /RegisterCommand\(registry, "scene\.build-settings", "scene", false/);
   assert.match(source, /RegisterCommand\(registry, "scene\.screenshot", "scene", true/);
+  assert.match(source, /RegisterCommand\(registry, "scene\.create", "scene", true/);
+  assert.match(source, /RegisterCommand\(registry, "scene\.load", "scene", true/);
+  assert.match(source, /RegisterCommand\(registry, "scene\.save", "scene", true/);
   assert.match(source, /RegisterCommand\(registry, "screenshot\.capture", "scene", true/);
   assert.match(source, /RegisterCommand\(registry, "prefab\.info", "prefab", false/);
   assert.match(source, /RegisterCommand\(registry, "prefab\.create", "prefab", true/);
@@ -137,6 +146,13 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /RegisterCommand\(registry, "texture\.import-settings", "texture", true/);
   assert.match(source, /RegisterCommand\(registry, "scene\.hierarchy", "scene", false/);
   assert.match(source, /RegisterCommand\(registry, "go\.find", "go", false/);
+  assert.match(source, /RegisterCommand\(registry, "go\.inspect", "go", false/);
+  assert.match(source, /RegisterCommand\(registry, "go\.create", "go", true/);
+  assert.match(source, /RegisterCommand\(registry, "go\.modify", "go", true/);
+  assert.match(source, /RegisterCommand\(registry, "go\.delete", "go", true/);
+  assert.match(source, /RegisterCommand\(registry, "component\.add", "component", true/);
+  assert.match(source, /RegisterCommand\(registry, "component\.remove", "component", true/);
+  assert.match(source, /RegisterCommand\(registry, "component\.set", "component", true/);
   assert.match(source, /RegisterCommand\(registry, "asset\.search", "asset", false/);
   assert.match(source, /RegisterCommand\(registry, "asset\.info", "asset", false/);
   assert.match(source, /RegisterCommand\(registry, "asset\.create", "asset", false/);
@@ -153,12 +169,16 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /RegisterCommand\(registry, "editor\.stop", "editor", false/);
   assert.match(source, /RegisterCommand\(registry, "editor\.menu", "editor", false/);
   assert.match(source, /RegisterCommand\(registry, "editor\.console", "editor", false/);
+  assert.match(source, /RegisterCommand\(registry, "script\.create", "script", true/);
+  assert.match(source, /RegisterCommand\(registry, "script\.read", "script", false/);
+  assert.match(source, /RegisterCommand\(registry, "script\.edit", "script", true/);
+  assert.match(source, /RegisterCommand\(registry, "script\.validate", "script", false/);
   assert.match(source, /RegisterCommand\(registry, "code\.exec", "code", true/);
   assert.match(source, /RegisterCommand\(registry, "custom-tool\.list", "custom-tool", false/);
   assert.match(source, /RegisterCommand\(registry, "custom-tool\.run", "custom-tool", true/);
-  assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.hierarchy`, `scene\.screenshot`, `go\.find`, `asset\.search`, `asset\.info`, `asset\.create`, `asset\.import`, `asset\.modify`, `asset\.delete`, `asset\.duplicate`, `asset\.move`, `asset\.rename`, `diagnose\.preflight`, `screenshot\.capture`, `prefab\.info`, `prefab\.hierarchy`, `prefab\.create`, `prefab\.modify`, `prefab\.stage-open`, `prefab\.stage-save`, `prefab\.stage-close`, `ui\.canvas\.create`, `ui\.text\.create`, `ui\.button\.create`, `ui\.image\.create`, `ui\.document\.info`, `ui\.document\.create`, `ui\.hierarchy`, `material\.info`, `material\.create`, `material\.assign`, `material\.set`, `graphics\.quality`, `graphics\.settings`, `graphics\.screenshot`, `physics\.settings`, `physics\.raycast`, `physics\.simulation`, `profiler\.start`, `profiler\.stop`, `profiler\.capture`, `profiler\.status`, `probuilder\.shape`, `probuilder\.create`, `probuilder\.csg`, `probuilder\.edit`, `animation\.clip`, `animation\.state`, `animation\.play`, `animation\.stop`, `vfx\.graph`, `vfx\.effect`, `shader\.info`, `shader\.read`, `shader\.create`, `shader\.update`, `texture\.info`, `texture\.create`, `texture\.sprite`, `texture\.import-settings`, `editor\.state`, `editor\.play`, `editor\.pause`, `editor\.stop`, `editor\.menu`, `editor\.console`, `code\.exec`, `custom-tool\.list` and `custom-tool\.run`/);
-  assert.doesNotMatch(bridgeSection, /live query\/edit\/screenshot/);
-  assert.match(bridgeSection, /`component set` and `script edit` are not routed by this package yet/);
+  assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.active`, `scene\.hierarchy`, `scene\.build-settings`, `scene\.screenshot`, `scene\.create`, `scene\.load`, `scene\.save`, `go\.find`, `go\.inspect`, `go\.create`, `go\.modify`, `go\.delete`, `component\.add`, `component\.remove`, `component\.set`/);
+  assert.match(bridgeSection, /`script\.create`, `script\.read`, `script\.edit`, `script\.validate`, `code\.exec`, `custom-tool\.list` and `custom-tool\.run`/);
+  assert.doesNotMatch(bridgeSection, /not routed by this package yet/);
 });
 
 test("Unity Bridge animation and vfx commands expose assets, target resolver diagnostics and package checks", async () => {

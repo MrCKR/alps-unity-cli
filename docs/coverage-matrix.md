@@ -76,11 +76,10 @@
 
 | unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
 |---|---|---|---|---|---|
-| script.create | `script create <path> --content-file <file>` | bridge (UnityCliBridge) | ✅ `script.create` in SCRIPT_TOOLS | bridge-commands.test.ts | ✅ |
-| script.read | `script read <path>` | bridge (UnityCliBridge) | ✅ `script.read` in SCRIPT_TOOLS | bridge-commands.test.ts | ✅ |
-| script.edit | `script edit <path> [--patch/--find/--replace]` | bridge (UnityCliBridge) | ✅ `script.edit` in SCRIPT_TOOLS | bridge-commands.test.ts | ✅ |
-| script.delete | `script delete <path>` | bridge (UnityCliBridge) | ✅ `script.delete` in SCRIPT_TOOLS (S2.4 新增) | tools.test.ts: script.delete metadata | ✅ |
-| script.validate | `script validate <path>` | bridge (UnityCliBridge) | ✅ `script.validate` in SCRIPT_TOOLS | bridge-commands.test.ts | ✅ |
+| script.create | `script create <path> --content-file <file>` | bridge (UnityCliBridge) | ✅ `script.create` in SCRIPT_TOOLS | bridge-commands.test.ts + contracts:validate | ✅ |
+| script.read | `script read <path>` | bridge (UnityCliBridge) | ✅ `script.read` in SCRIPT_TOOLS | bridge-commands.test.ts + contracts:validate | ✅ |
+| script.edit | `script edit <path> [--patch/--find/--replace]` | bridge (UnityCliBridge) | ✅ `script.edit` in SCRIPT_TOOLS | bridge-commands.test.ts + contracts:validate | ✅ |
+| script.validate | `script validate <path>` | bridge (UnityCliBridge) | ✅ `script.validate` in SCRIPT_TOOLS | bridge-commands.test.ts + contracts:validate | ✅ |
 
 ## Code 域
 
@@ -127,6 +126,12 @@
 | camera.info | `camera info <target>` | bridge (UnityCliBridge) | ✅ `camera.info` in CAMERA_TOOLS | bridge-commands.test.ts: camera commands forward target and screenshot options; tools.test.ts: S3.1 metadata coverage | ✅ |
 | camera.screenshot | `camera screenshot <target> --output <path>` | bridge (UnityCliBridge) | ✅ `camera.screenshot` in CAMERA_TOOLS | bridge-commands.test.ts: camera commands forward target and screenshot options; tools.test.ts: S3.1 write metadata | ✅ |
 | scene.screenshot | `scene screenshot <path>` | bridge (UnityCliBridge) | ✅ `scene.screenshot` in SCENE_TOOLS | bridge-commands.test.ts: scene screenshot forwards output path and overwrite | ✅ |
+| scene.active | `scene active` | bridge (UnityCliBridge) | ✅ `scene.active` in SCENE_TOOLS | contracts:validate + camera-bridge-source.test.ts | ✅ |
+| scene.hierarchy | `scene hierarchy` | bridge (UnityCliBridge) | ✅ `scene.hierarchy` in SCENE_TOOLS | bridge-commands.test.ts + contracts:validate | ✅ |
+| scene.build-settings | `scene build-settings` | bridge (UnityCliBridge) | ✅ `scene.build-settings` in SCENE_TOOLS | contracts:validate + camera-bridge-source.test.ts | ✅ |
+| scene.create | `scene create <path>` | bridge (UnityCliBridge) | ✅ `scene.create` in SCENE_TOOLS | contracts:validate + camera-bridge-source.test.ts | ✅ |
+| scene.load | `scene load <path>` | bridge (UnityCliBridge) | ✅ `scene.load` in SCENE_TOOLS | contracts:validate + camera-bridge-source.test.ts | ✅ |
+| scene.save | `scene save [path]` | bridge (UnityCliBridge) | ✅ `scene.save` in SCENE_TOOLS | contracts:validate + camera-bridge-source.test.ts | ✅ |
 
 ## Material / Shader / Texture 域
 
@@ -144,6 +149,19 @@
 | texture.create | `texture create <path> [--source <file>]` | bridge (UnityCliBridge) | ✅ `texture.create` in TEXTURE_TOOLS | bridge-commands.test.ts: texture commands forward importer, sprite and creation options; tools.test.ts: S3.1 write metadata | ✅ |
 | texture.sprite | `texture sprite <path>` | bridge (UnityCliBridge) | ✅ `texture.sprite` in TEXTURE_TOOLS | bridge-commands.test.ts: texture commands forward importer, sprite and creation options | ✅ |
 | texture.import-settings | `texture import-settings <path>` | bridge (UnityCliBridge) | ✅ `texture.import-settings` in TEXTURE_TOOLS | bridge-commands.test.ts: texture commands forward importer, sprite and creation options | ✅ |
+
+## GameObject / Component 域
+
+| unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
+|---|---|---|---|---|---|
+| go.find | `go find --name <name>` | bridge (UnityCliBridge) | ✅ `go.find` in GO_TOOLS | bridge-commands.test.ts + contracts:validate | ✅ |
+| go.inspect | `go inspect <target>` | bridge (UnityCliBridge) | ✅ `go.inspect` in GO_TOOLS | contracts:validate + camera-bridge-source.test.ts | ✅ |
+| go.create | `go create [--name] [--parent]` | bridge (UnityCliBridge) | ✅ `go.create` in GO_TOOLS | contracts:validate + camera-bridge-source.test.ts | ✅ |
+| go.modify | `go modify <target> [--set-name] [--x]` | bridge (UnityCliBridge) | ✅ `go.modify` in GO_TOOLS | contracts:validate + camera-bridge-source.test.ts | ✅ |
+| go.delete | `go delete <target>` | bridge (UnityCliBridge) | ✅ `go.delete` in GO_TOOLS | contracts:validate + camera-bridge-source.test.ts | ✅ |
+| component.add | `component add <target> --component <type>` | bridge (UnityCliBridge) | ✅ `component.add` in COMPONENT_TOOLS | contracts:validate + camera-bridge-source.test.ts | ✅ |
+| component.remove | `component remove <target> --component <type>` | bridge (UnityCliBridge) | ✅ `component.remove` in COMPONENT_TOOLS | contracts:validate + camera-bridge-source.test.ts | ✅ |
+| component.set | `component set <target> --component <type> --property <name> --value <value>` | bridge (UnityCliBridge) | ✅ `component.set` in COMPONENT_TOOLS | bridge-commands.test.ts + contracts:validate | ✅ |
 
 ## UI 域
 
@@ -172,7 +190,8 @@
 | package | `package list` 返回列表 | `package install/remove` 修改 manifest | 待验证 | 需要 Unity 项目环境 |
 | test | `test.poll` 查询 job 状态 | `test run` 触发测试 | 待验证 | 需要 Unity 项目环境 |
 | build | `build.status` 查询 job 状态 | `build run` 触发构建 | 待验证 | 需要 Unity 项目环境 |
-| script | `script read <path>` 返回内容 | `script create/delete` 创建/删除脚本 | 待验证 | 需要 Unity 项目环境 |
+| script | `script read/validate <path>` 返回内容和静态诊断 | `script create/edit` 创建或编辑脚本 | 待验证 | 自动测试覆盖契约/metadata/CLI 转发；真实 Unity smoke 需 Windows + Unity Editor |
+| go/component | `go find/inspect` 返回对象和组件摘要 | `go create/modify/delete`、`component add/remove/set` 修改场景对象 | 待验证 | 自动测试覆盖契约/metadata/CLI 转发；真实 Unity smoke 需 Windows + Unity Editor |
 | asset | `asset search/info` 返回资源列表与 metadata | `asset create/modify/duplicate/move/rename/delete` 修改 AssetDatabase | 待验证 | 需要 Unity 项目环境 |
 | prefab | `prefab info/hierarchy` 返回 prefab 摘要与层级 | `prefab create/modify/stage-open/stage-save/stage-close` 管理 prefab 生命周期 | 待验证 | 需要 Unity 项目环境 |
 | code | `code exec --code` 返回结果 | `code exec` 执行代码（destructiveHint） | 待验证 | 需要 Unity 项目环境 |
@@ -189,3 +208,4 @@
 - **S2.2** (2026-06-15): 补齐 asset create/modify/delete/duplicate/move/rename 与 prefab modify Bridge handler、metadata 和覆盖矩阵行
 - **S3.1** (2026-06-15): 补齐 camera、material、shader、texture、ui 创作域覆盖矩阵；新增 S3.1 metadata/write smoke 单测证据
 - **S3.2** (2026-06-15): 新增 Graphics/Physics/Animation/VFX 覆盖矩阵行；补 `graphics.pipeline`、`graphics.volume` 查询命令与 metadata/handler/test 证据
+- **ALP-306** (2026-06-15): 新增 `contracts/command-contract.json` 与 `npm run contracts:validate`；补齐 scene/go/component/script 16 个 C# bridge handler，使 TS registry、tool metadata 与 C# registry 统一校验通过。
