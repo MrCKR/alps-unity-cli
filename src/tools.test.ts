@@ -261,6 +261,7 @@ test("cli.package.resolve metadata exists with hybrid handler", () => {
   assert.ok(tool, "cli.package.resolve should exist");
   assert.equal(tool.group, "cli");
   assert.equal(tool.handler, "hybrid");
+  assert.equal(supportStatusForTool(tool), "bridge-job");
   assert.equal(tool.longRunning, true);
   assert.equal(tool.readOnlyHint, false);
 });
@@ -433,6 +434,16 @@ test("planned bridge contract tools expose planned support status", () => {
     assert.ok(tool, `${name} should exist`);
     assert.equal(tool.handler, "bridge", `${name} keeps bridge handler contract classification`);
     assert.equal(supportStatusForTool(tool), "planned", `${name} should be user-facing planned`);
+  }
+});
+
+test("hybrid tools expose bridge plus job support status", () => {
+  const hybridNames = ["cli.package.install", "cli.package.remove", "cli.package.resolve", "code.exec", "profiler.start", "profiler.capture", "probuilder.shape", "probuilder.create", "probuilder.edit", "probuilder.csg"];
+  for (const name of hybridNames) {
+    const tool = findToolByName(name);
+    assert.ok(tool, `${name} should exist`);
+    assert.equal(tool.handler, "hybrid", `${name} should keep hybrid handler classification`);
+    assert.equal(supportStatusForTool(tool), "bridge-job", `${name} should be user-facing bridge plus job`);
   }
 });
 

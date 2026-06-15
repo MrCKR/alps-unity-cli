@@ -66,12 +66,13 @@ function buildStaticCapabilities(): Record<string, unknown> {
   const readOnlyTools = tools.filter((t) => t.readOnlyHint).map((t) => t.name);
   const longRunningTools = tools.filter((t) => t.longRunning).map((t) => t.name);
   const liveBridgeTools = tools.filter((t) => supportStatusForTool(t) === "live-bridge").map((t) => t.name);
+  const hybridTools = tools.filter((t) => supportStatusForTool(t) === "bridge-job").map((t) => t.name);
   const batchJobTools = tools.filter((t) => supportStatusForTool(t) === "batch-job").map((t) => t.name);
   const cliOnlyTools = tools.filter((t) => supportStatusForTool(t) === "cli-only").map((t) => t.name);
   const plannedTools = tools.filter((t) => supportStatusForTool(t) === "planned").map((t) => t.name);
   const bridgeTools = liveBridgeTools;
   const offlineTools = cliOnlyTools;
-  const jobTools = batchJobTools;
+  const jobTools = [...batchJobTools, ...hybridTools];
 
   const groupCounts: Record<string, number> = {};
   for (const group of groups) {
@@ -82,6 +83,7 @@ function buildStaticCapabilities(): Record<string, unknown> {
     toolCount: tools.length,
     groups: groupCounts,
     liveBridgeTools,
+    hybridTools,
     batchJobTools,
     cliOnlyTools,
     plannedTools,
