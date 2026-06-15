@@ -4,6 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { bridgeCommandRegistry } from "./bridge/index.js";
 import { handleToolsCommand, type ToolsRuntime } from "./tools.js";
 import { builtinToolMetadata, builtinToolGroups, findToolByName, filterToolsByGroup, searchTools } from "./tool-metadata.js";
 
@@ -36,6 +37,18 @@ test("tool names are unique", () => {
   const names = tools.map((t) => t.name);
   const unique = new Set(names);
   assert.equal(names.length, unique.size, "Duplicate tool names found");
+});
+
+test("bridge tool metadata resolves through BridgeCommandRegistry", () => {
+  const tools = builtinToolMetadata().filter((tool) => tool.handler === "bridge");
+  assert.ok(tools.length > 0);
+  for (const tool of tools) {
+    assert.ok(tool.cliCommand, `${tool.name} is missing cliCommand`);
+    const [group, ...commandParts] = tool.cliCommand.split(" ");
+    const spec = bridgeCommandRegistry.lookup(group, commandParts.join(" "));
+    assert.ok(spec, `${tool.name} cliCommand is missing from BridgeCommandRegistry: ${tool.cliCommand}`);
+    assert.equal(spec.bridgeCommand, tool.name);
+  }
 });
 
 test("builtinToolGroups returns sorted groups", () => {
