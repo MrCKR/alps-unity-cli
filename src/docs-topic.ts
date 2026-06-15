@@ -7,7 +7,7 @@
  */
 
 import { getString } from "./args.js";
-import { builtinToolGroups, builtinToolMetadata } from "./tool-metadata.js";
+import { builtinToolGroups, builtinToolMetadata } from "./tools/metadata/index.js";
 import { failure, success } from "./output.js";
 import type { CliResult } from "./types.js";
 
@@ -17,14 +17,14 @@ const TOPIC_DOCS: Record<string, DocTopic> = {
     summary: "Query and modify Unity scenes: hierarchy, active scene, build settings, screenshots, create/load/save.",
     tools: [
       "scene.hierarchy — List root GameObjects in the active scene",
-      "scene.active — Get name, path and build index of the active scene",
-      "scene.build-settings — List scenes in build settings",
       "scene.screenshot — Capture viewport screenshot to file",
-      "scene.create — Create a new empty scene",
-      "scene.load — Load a scene by path or build index",
-      "scene.save — Save the active scene (destructive: overwrites file)"
+      "scene.active — 规划中: get name, path and build index of the active scene",
+      "scene.build-settings — 规划中: list scenes in build settings",
+      "scene.create — 规划中: create a new empty scene",
+      "scene.load — 规划中: load a scene by path or build index",
+      "scene.save — 规划中: save the active scene (destructive: overwrites file)"
     ],
-    guide: "Start with `scene active` to confirm the current scene, then `scene hierarchy` to list objects. Use `scene screenshot` for visual verification."
+    guide: "Start with `scene hierarchy` to list objects. Use `scene screenshot` for visual verification."
   },
   camera: {
     title: "Camera Commands",
@@ -41,20 +41,20 @@ const TOPIC_DOCS: Record<string, DocTopic> = {
     summary: "Find, inspect, create, modify and delete GameObjects in the scene hierarchy.",
     tools: [
       "go.find — Find a GameObject by name",
-      "go.inspect — Get components and transform data",
-      "go.create — Create a new empty GameObject",
-      "go.modify — Modify transform or properties",
-      "go.delete — Delete a GameObject (⚠ destructive)"
+      "go.inspect — 规划中: get components and transform data",
+      "go.create — 规划中: create a new empty GameObject",
+      "go.modify — 规划中: modify transform or properties",
+      "go.delete — 规划中: delete a GameObject (⚠ destructive)"
     ],
-    guide: "Use `go find --name <name>` to locate objects, then `go inspect <target>` for details."
+    guide: "Use `go find --name <name>` to locate objects in the active scene hierarchy."
   },
   component: {
     title: "Component Commands",
     summary: "Add, remove and set properties on Unity components.",
     tools: [
-      "component.add — Add a component to a GameObject",
-      "component.remove — Remove a component (⚠ destructive)",
-      "component.set — Set a component property value"
+      "component.add — 规划中: add a component to a GameObject",
+      "component.remove — 规划中: remove a component (⚠ destructive)",
+      "component.set — 规划中: set a component property value"
     ]
   },
   asset: {
@@ -194,10 +194,10 @@ const TOPIC_DOCS: Record<string, DocTopic> = {
     title: "Script Commands",
     summary: "Create, read, edit and validate C# script files.",
     tools: [
-      "script.create — Create a C# script",
-      "script.read — Read script content",
-      "script.edit — Edit a script (⚠ destructive)",
-      "script.validate — Validate script syntax"
+      "script.create — 规划中: create a C# script",
+      "script.read — 规划中: read script content",
+      "script.edit — 规划中: edit a script (⚠ destructive)",
+      "script.validate — 规划中: validate script syntax"
     ]
   },
   editor: {

@@ -6,7 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { bridgeCommandRegistry } from "./bridge/index.js";
 import { handleToolsCommand, type ToolsRuntime } from "./tools.js";
-import { builtinToolMetadata, builtinToolGroups, findToolByName, filterToolsByGroup, searchTools } from "./tool-metadata.js";
+import { builtinToolMetadata, builtinToolGroups, findToolByName, filterToolsByGroup, searchTools, supportStatusForTool } from "./tools/metadata/index.js";
 
 const requestId = "test_req_tools_001";
 const emptyRuntime: ToolsRuntime = {};
@@ -48,8 +48,8 @@ test("every built-in tool declares an explicit handler", () => {
   }
 });
 
-test("bridge tool metadata resolves through BridgeCommandRegistry", () => {
-  const tools = builtinToolMetadata().filter((tool) => tool.handler === "bridge");
+test("live bridge tool metadata resolves through BridgeCommandRegistry", () => {
+  const tools = builtinToolMetadata().filter((tool) => tool.handler === "bridge" && supportStatusForTool(tool) === "live-bridge");
   assert.ok(tools.length > 0);
   for (const tool of tools) {
     assert.ok(tool.cliCommand, `${tool.name} is missing cliCommand`);
@@ -75,10 +75,11 @@ test("scene.hierarchy is in the built-in tools", () => {
   assert.equal(tool.destructiveHint, false);
 });
 
-test("scene.save is marked destructive", () => {
+test("scene.save is marked destructive and planned", () => {
   const tool = findToolByName("scene.save");
   assert.ok(tool, "scene.save should exist");
   assert.equal(tool.destructiveHint, true);
+  assert.equal(tool.supportStatus, "planned");
 });
 
 test("findToolByName returns undefined for unknown tool", () => {
@@ -122,6 +123,7 @@ test("tools list returns all built-in tools", async () => {
   const data = result.data as { count: number; tools: Array<{ name: string }> };
   assert.ok(data.count > 0);
   assert.ok(data.tools.length > 0);
+  assert.equal((data.tools as Array<{ name: string; supportStatus: string }>).find((t) => t.name === "scene.active")?.supportStatus, "planned");
   const names = data.tools.map((t) => t.name);
   assert.ok(names.includes("scene.hierarchy"), "scene.hierarchy should be in list");
 });
@@ -259,6 +261,7 @@ test("cli.package.resolve metadata exists with hybrid handler", () => {
   assert.ok(tool, "cli.package.resolve should exist");
   assert.equal(tool.group, "cli");
   assert.equal(tool.handler, "hybrid");
+  assert.equal(supportStatusForTool(tool), "bridge-job");
   assert.equal(tool.longRunning, true);
   assert.equal(tool.readOnlyHint, false);
 });
@@ -422,6 +425,26 @@ test("S3.2 graphics group has quality, pipeline, volume and screenshot tools", (
   assert.deepEqual(names, ["graphics.quality", "graphics.settings", "graphics.pipeline", "graphics.volume", "graphics.screenshot"]);
   assert.equal(findToolByName("graphics.pipeline")?.readOnlyHint, true);
   assert.equal(findToolByName("graphics.volume")?.readOnlyHint, true);
+});
+
+test("planned bridge contract tools expose planned support status", () => {
+  const plannedNames = ["scene.active", "scene.build-settings", "scene.create", "scene.load", "scene.save", "go.inspect", "go.create", "go.modify", "go.delete", "component.add", "component.remove", "component.set", "script.create", "script.read", "script.edit", "script.validate"];
+  for (const name of plannedNames) {
+    const tool = findToolByName(name);
+    assert.ok(tool, `${name} should exist`);
+    assert.equal(tool.handler, "bridge", `${name} keeps bridge handler contract classification`);
+    assert.equal(supportStatusForTool(tool), "planned", `${name} should be user-facing planned`);
+  }
+});
+
+test("hybrid tools expose bridge plus job support status", () => {
+  const hybridNames = ["cli.package.install", "cli.package.remove", "cli.package.resolve", "code.exec", "profiler.start", "profiler.capture", "probuilder.shape", "probuilder.create", "probuilder.edit", "probuilder.csg"];
+  for (const name of hybridNames) {
+    const tool = findToolByName(name);
+    assert.ok(tool, `${name} should exist`);
+    assert.equal(tool.handler, "hybrid", `${name} should keep hybrid handler classification`);
+    assert.equal(supportStatusForTool(tool), "bridge-job", `${name} should be user-facing bridge plus job`);
+  }
 });
 
 test("S3.2 physics group has settings, raycast and simulation tools", () => {

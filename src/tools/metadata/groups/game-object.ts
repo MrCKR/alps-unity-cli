@@ -26,6 +26,7 @@ export const GO_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
+    supportStatus: "planned",
     cliCommand: "go inspect",
     docsTopic: "go"
   },
@@ -38,6 +39,7 @@ export const GO_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
+    supportStatus: "planned",
     cliCommand: "go create",
     docsTopic: "go"
   },
@@ -50,6 +52,7 @@ export const GO_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
+    supportStatus: "planned",
     cliCommand: "go modify",
     docsTopic: "go"
   },
@@ -62,6 +65,7 @@ export const GO_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: true,
     handler: "bridge",
+    supportStatus: "planned",
     cliCommand: "go delete",
     docsTopic: "go"
   }
@@ -77,6 +81,7 @@ export const COMPONENT_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
+    supportStatus: "planned",
     cliCommand: "component add",
     docsTopic: "component"
   },
@@ -89,6 +94,7 @@ export const COMPONENT_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: true,
     handler: "bridge",
+    supportStatus: "planned",
     cliCommand: "component remove",
     docsTopic: "component"
   },
@@ -101,6 +107,7 @@ export const COMPONENT_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
+    supportStatus: "planned",
     cliCommand: "component set",
     docsTopic: "component"
   }
