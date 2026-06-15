@@ -99,7 +99,7 @@ namespace AlpsUnityCli
         private static readonly string[] PrefabCommands = { "prefab.info", "prefab.hierarchy", "prefab.create", "prefab.modify", "prefab.stage-open", "prefab.stage-save", "prefab.stage-close" };
         private static readonly string[] UiCommands = { "ui.canvas.create", "ui.text.create", "ui.button.create", "ui.image.create", "ui.document.info", "ui.document.create", "ui.hierarchy" };
         private static readonly string[] MaterialCommands = { "material.info", "material.create", "material.assign", "material.set" };
-        private static readonly string[] GraphicsCommands = { "graphics.quality", "graphics.settings", "graphics.screenshot" };
+        private static readonly string[] GraphicsCommands = { "graphics.quality", "graphics.settings", "graphics.pipeline", "graphics.volume", "graphics.screenshot" };
         private static readonly string[] PhysicsCommands = { "physics.settings", "physics.raycast", "physics.simulation" };
         private static readonly string[] ProfilerCommands = { "profiler.start", "profiler.stop", "profiler.capture", "profiler.status" };
         private static readonly string[] ProBuilderCommands = { "probuilder.shape", "probuilder.create", "probuilder.csg", "probuilder.edit" };
@@ -559,6 +559,10 @@ namespace AlpsUnityCli
                     return GraphicsQuality(request);
                 case "graphics.settings":
                     return GraphicsSettingsCommand(request);
+                case "graphics.pipeline":
+                    return GraphicsPipeline(request);
+                case "graphics.volume":
+                    return GraphicsVolume(request);
                 case "graphics.screenshot":
                     return GraphicsScreenshot(request);
                 case "physics.settings":
@@ -3194,6 +3198,17 @@ namespace AlpsUnityCli
             return SuccessJson("{\"graphics\":" + GraphicsSummaryJson() + ",\"qualitySettings\":" + QualitySettingsJson() + ",\"plannedEffects\":[" + string.Join(",", effects.ToArray()) + "],\"logPath\":" + Quote(LogPath()) + "}");
         }
 
+        private static string GraphicsPipeline(BridgeRequest request)
+        {
+            return SuccessJson("{\"graphics\":" + GraphicsSummaryJson() + ",\"qualitySettings\":" + QualitySettingsJson() + ",\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
+        private static string GraphicsVolume(BridgeRequest request)
+        {
+            var target = request.StringArg("target");
+            return SuccessJson("{\"volumes\":" + GraphicsVolumesJson(target) + ",\"logPath\":" + Quote(LogPath()) + "}");
+        }
+
         private static string GraphicsScreenshot(BridgeRequest request)
         {
             var camera = SceneView.lastActiveSceneView != null ? SceneView.lastActiveSceneView.camera : ResolveCamera(null);
@@ -5218,6 +5233,65 @@ namespace AlpsUnityCli
         private static string EffectJson(string type, string property, string value)
         {
             return "{\"type\":" + Quote(type) + ",\"property\":" + Quote(property) + ",\"value\":" + Quote(value) + "}";
+        }
+
+        private static string GraphicsVolumesJson(string target)
+        {
+            var components = new List<Component>();
+            var volumeType = FindType("UnityEngine.Rendering.Volume");
+            if (volumeType == null)
+            {
+                return "[]";
+            }
+            foreach (var component in Resources.FindObjectsOfTypeAll(volumeType))
+            {
+                var typed = component as Component;
+                if (typed == null || typed.gameObject == null) continue;
+                if (EditorUtility.IsPersistent(typed.gameObject)) continue;
+                if (!string.IsNullOrEmpty(target) && !HierarchyPath(typed.gameObject).Equals(target, StringComparison.OrdinalIgnoreCase) && !typed.gameObject.name.Equals(target, StringComparison.OrdinalIgnoreCase)) continue;
+                components.Add(typed);
+            }
+            components.Sort(delegate(Component left, Component right) { return string.Compare(HierarchyPath(left.gameObject), HierarchyPath(right.gameObject), StringComparison.OrdinalIgnoreCase); });
+            var items = new List<string>();
+            foreach (var component in components)
+            {
+                items.Add(GraphicsVolumeJson(component));
+            }
+            return "[" + string.Join(",", items.ToArray()) + "]";
+        }
+
+        private static string GraphicsVolumeJson(Component component)
+        {
+            var type = component.GetType();
+            var enabledProperty = type.GetProperty("enabled", BindingFlags.Instance | BindingFlags.Public);
+            var isGlobalField = type.GetField("isGlobal", BindingFlags.Instance | BindingFlags.Public);
+            var priorityField = type.GetField("priority", BindingFlags.Instance | BindingFlags.Public);
+            var weightField = type.GetField("weight", BindingFlags.Instance | BindingFlags.Public);
+            var profile = MemberValue(type, component, "profile") as UnityEngine.Object;
+            var sharedProfile = MemberValue(type, component, "sharedProfile") as UnityEngine.Object;
+            var effectiveProfile = profile ?? sharedProfile;
+            return "{\"target\":" + GameObjectTargetJson(component.gameObject)
+                + ",\"enabled\":" + Bool(enabledProperty == null || Convert.ToBoolean(enabledProperty.GetValue(component, null), CultureInfo.InvariantCulture))
+                + ",\"isGlobal\":" + Bool(isGlobalField != null && Convert.ToBoolean(isGlobalField.GetValue(component), CultureInfo.InvariantCulture))
+                + ",\"priority\":" + Number(priorityField == null ? 0f : Convert.ToSingle(priorityField.GetValue(component), CultureInfo.InvariantCulture))
+                + ",\"weight\":" + Number(weightField == null ? 0f : Convert.ToSingle(weightField.GetValue(component), CultureInfo.InvariantCulture))
+                + ",\"profile\":" + AssetReferenceJson(effectiveProfile)
+                + "}";
+        }
+
+        private static object MemberValue(Type type, object instance, string name)
+        {
+            var property = type.GetProperty(name, BindingFlags.Instance | BindingFlags.Public);
+            if (property != null) return property.GetValue(instance, null);
+            var field = type.GetField(name, BindingFlags.Instance | BindingFlags.Public);
+            return field == null ? null : field.GetValue(instance);
+        }
+
+        private static string AssetReferenceJson(UnityEngine.Object asset)
+        {
+            if (asset == null) return "null";
+            var path = NormalizeAssetPath(AssetDatabase.GetAssetPath(asset));
+            return "{\"name\":" + Quote(asset.name) + ",\"path\":" + Quote(path) + ",\"guid\":" + Quote(string.IsNullOrEmpty(path) ? null : AssetDatabase.AssetPathToGUID(path)) + "}";
         }
 
         private static string GraphicsSummaryJson()
