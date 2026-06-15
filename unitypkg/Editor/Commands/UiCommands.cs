@@ -444,6 +444,18 @@ namespace UnityCli
         }
 
         private static void CollectUiHierarchy(Transform transform, List<string> items)
+        {
+            var gameObject = transform.gameObject;
+            if (gameObject.GetComponent<Canvas>() != null || gameObject.GetComponent<RectTransform>() != null || gameObject.GetComponent<UIDocument>() != null)
+            {
+                var kind = gameObject.GetComponent<UIDocument>() != null ? "UIDocument" : gameObject.GetComponent<Canvas>() != null ? "Canvas" : "RectTransform";
+                items.Add("{\"item\":" + UiGameObjectJson(gameObject, kind) + ",\"rectTransform\":" + RectTransformJson(gameObject.GetComponent<RectTransform>()) + ",\"document\":" + (gameObject.GetComponent<UIDocument>() == null ? "null" : UiDocumentJson(gameObject.GetComponent<UIDocument>())) + "}");
+            }
+            foreach (Transform child in transform)
+            {
+                CollectUiHierarchy(child, items);
+            }
+        }
 
         private static Component FindUiGraphic(GameObject gameObject)
         {

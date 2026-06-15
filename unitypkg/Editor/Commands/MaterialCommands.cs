@@ -438,6 +438,16 @@ namespace UnityCli
         }
 
         private static string MaterialAssignJson(GameObject gameObject, string materialPath, string componentType, int slot)
+        {
+            return "{"
+                + "\"target\":{\"id\":" + gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) + ",\"name\":" + Quote(gameObject.name) + ",\"path\":" + Quote(HierarchyPath(gameObject)) + "},"
+                + "\"material\":{\"path\":" + Quote(materialPath) + ",\"guid\":" + Quote(AssetDatabase.AssetPathToGUID(materialPath)) + "},"
+                + "\"componentType\":" + Quote(componentType) + ","
+                + "\"slot\":" + slot.ToString(CultureInfo.InvariantCulture) + ","
+                + "\"plannedEffects\":[{\"type\":\"material.assign\",\"target\":" + Quote(HierarchyPath(gameObject)) + ",\"material\":" + Quote(materialPath) + "}],"
+                + "\"logPath\":" + Quote(LogPath())
+                + "}";
+        }
     }
 }
 #endif

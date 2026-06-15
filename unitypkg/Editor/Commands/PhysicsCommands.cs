@@ -245,6 +245,14 @@ namespace UnityCli
         }
 
         private static bool ParseBool(string value, string property)
+        {
+            bool parsed;
+            if (!bool.TryParse(value, out parsed))
+            {
+                throw new BridgeCommandException("E_SETTING_VALUE_INVALID", "Expected boolean for " + property + ": " + value, "Pass true or false.");
+            }
+            return parsed;
+        }
     }
 }
 #endif
