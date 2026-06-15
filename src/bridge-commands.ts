@@ -92,9 +92,10 @@ export async function executeBridgePayload(
 
   const result = await withRetry(async () => {
     try {
+      const payload = bridgeRequestPayload(requestId, command, args);
       const bridgeResult = runtime.bridgeExecute
-        ? await runtime.bridgeExecute({ requestId, command, args })
-        : await postBridgeExecute(endpoint!, { requestId, command, args });
+        ? await runtime.bridgeExecute(payload)
+        : await postBridgeExecute(endpoint!, payload);
 
       if (bridgeResult.ok === false) {
         const code = bridgeResult.error?.code ?? "BRIDGE_COMMAND_FAILED";
@@ -128,6 +129,10 @@ export async function executeBridgePayload(
 
   result.durationMs = durationMsFrom(startMs);
   return result;
+}
+
+function bridgeRequestPayload(requestId: string, command: string, args: Record<string, unknown>): BridgeRequest {
+  return { ...args, requestId, command, args } as BridgeRequest;
 }
 
 export function bridgeCommandName(group: string | undefined, command: string | undefined): string | undefined {

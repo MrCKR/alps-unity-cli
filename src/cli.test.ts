@@ -10,6 +10,7 @@ import { failure, printJson } from "./output.js";
 import { JobRunner } from "./job-runner.js";
 import { JobStore } from "./job-store.js";
 import { defaultDataDir } from "./platform.js";
+import { fileDependencySpec } from "./package-manager.js";
 
 process.env.ALPS_UNITY_ALLOW_NON_WINDOWS = "1";
 
@@ -79,6 +80,15 @@ test("node dist cli version prints package version", async () => {
   const payload = JSON.parse(result.stdout) as { ok: boolean; data: { version: string } };
   assert.equal(payload.ok, true);
   assert.equal(payload.data.version, "0.1.0");
+});
+
+test("node dist cli profiler bridge command routes instead of printing help", async () => {
+  const result = await runCli(["profiler", "status", "--bridge-endpoint", "http://127.0.0.1:9"]);
+  assert.equal(result.code, 1, result.stderr);
+  const payload = JSON.parse(result.stdout) as { ok: boolean; error: { code: string }; data?: { commands?: string[] } };
+  assert.equal(payload.ok, false);
+  assert.equal(payload.error.code, "BRIDGE_CONNECTION_FAILED");
+  assert.equal(payload.data, undefined);
 });
 
 test("frozen top-level directories exist", async () => {
@@ -391,6 +401,12 @@ test("init installs com.unity_cli as a local file dependency without requiring U
     projectHash: data.bridge.projectHash,
     cliCompatibilityRange: data.bridge.cliCompatibilityRange
   });
+});
+
+test("init local package dependency uses absolute Windows file spec for Windows paths", () => {
+  const spec = fileDependencySpec("D:\\workspace\\alps-unity-cli\\Dev\\UnityProject", "C:\\Users\\runner\\workdir\\alps-unity-cli\\unitypkg");
+  assert.equal(spec, "file:C:/Users/runner/workdir/alps-unity-cli/unitypkg");
+  assert.doesNotMatch(spec, /^file:\.\/[A-Za-z]:\//);
 });
 
 test("init --check verifies local package install metadata", async () => {
