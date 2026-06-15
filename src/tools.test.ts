@@ -333,6 +333,37 @@ test("S2.3 build group has all required tools", () => {
   assert.ok(names.includes("build.cancel"));
 });
 
+test("S3.1 creation domains have frozen metadata coverage", () => {
+  const expectedByGroup = new Map([
+    ["camera", ["camera.list", "camera.info", "camera.screenshot"]],
+    ["material", ["material.info", "material.create", "material.assign", "material.set"]],
+    ["shader", ["shader.info", "shader.read", "shader.create", "shader.update"]],
+    ["texture", ["texture.info", "texture.create", "texture.sprite", "texture.import-settings"]],
+    ["ui", ["ui.canvas.create", "ui.text.create", "ui.button.create", "ui.image.create", "ui.document.info", "ui.document.create", "ui.hierarchy"]]
+  ]);
+
+  for (const [group, expectedNames] of expectedByGroup) {
+    const tools = filterToolsByGroup(group);
+    assert.deepEqual(tools.map((tool) => tool.name), expectedNames);
+    for (const tool of tools) {
+      assert.equal(tool.handler, "bridge", `${tool.name} should be a live bridge handler`);
+      assert.equal(tool.docsTopic, group, `${tool.name} should be discoverable from its docs topic`);
+      assert.ok(tool.cliCommand, `${tool.name} should expose a CLI command`);
+    }
+  }
+});
+
+test("S3.1 creation-domain write tools are marked mutating but non-destructive", () => {
+  const writeTools = ["camera.screenshot", "material.create", "material.assign", "material.set", "shader.create", "shader.update", "texture.create", "texture.sprite", "texture.import-settings", "ui.canvas.create", "ui.text.create", "ui.button.create", "ui.image.create", "ui.document.create"];
+
+  for (const name of writeTools) {
+    const tool = findToolByName(name);
+    assert.ok(tool, `${name} should exist`);
+    assert.equal(tool.readOnlyHint, false, `${name} should be marked as mutating`);
+    assert.equal(tool.destructiveHint, false, `${name} should not be marked destructive`);
+  }
+});
+
 test("tools describe test.run returns full metadata", async () => {
   const result = await handleToolsCommand("describe", ["test.run"], {}, emptyRuntime, requestId);
   assert.equal(result.ok, true);
