@@ -13,8 +13,9 @@ import {
   filterToolsByGroup,
   searchTools,
   type ToolMetadata
-} from "./tool-metadata.js";
+} from "./tools/metadata/index.js";
 import { failure, success } from "./output.js";
+import { supportStatusDescription, supportStatusForTool, supportStatusLabel } from "./tools/metadata/status.js";
 import type { CliResult } from "./types.js";
 
 export interface ToolsRuntime {
@@ -73,16 +74,21 @@ function handleToolsList(
 
   const format = getString(flags, "format");
 
-  const summaries = tools.map((t) => ({
-    name: t.name,
-    title: t.title,
-    description: t.description,
-    group: t.group,
-    readOnlyHint: t.readOnlyHint,
-    destructiveHint: t.destructiveHint,
-    handler: t.handler,
-    cliCommand: t.cliCommand
-  }));
+  const summaries = tools.map((t) => {
+    const supportStatus = supportStatusForTool(t);
+    return {
+      name: t.name,
+      title: t.title,
+      description: t.description,
+      group: t.group,
+      readOnlyHint: t.readOnlyHint,
+      destructiveHint: t.destructiveHint,
+      handler: t.handler,
+      supportStatus,
+      supportStatusLabel: supportStatusLabel(supportStatus),
+      cliCommand: t.cliCommand
+    };
+  });
 
   const data: Record<string, unknown> = {
     command: "tools.list",
@@ -91,7 +97,7 @@ function handleToolsList(
   };
 
   if (format === "text") {
-    const lines = summaries.map((s) => `${s.name} [${s.group}] ${s.readOnlyHint ? "read-only" : "write"} ${s.destructiveHint ? "⚠ destructive" : ""} — ${s.title}`);
+    const lines = summaries.map((s) => `${s.name} [${s.group}] ${s.supportStatusLabel} ${s.readOnlyHint ? "read-only" : "write"} ${s.destructiveHint ? "⚠ destructive" : ""} — ${s.title}`);
     data.text = lines.join("\n");
   }
 
@@ -145,14 +151,19 @@ function handleToolsSearch(
 
   const results = [...builtinResults, ...customResults];
 
-  const summaries = results.map((t) => ({
-    name: t.name,
-    title: t.title,
-    group: t.group,
-    readOnlyHint: t.readOnlyHint,
-    destructiveHint: t.destructiveHint,
-    cliCommand: t.cliCommand
-  }));
+  const summaries = results.map((t) => {
+    const supportStatus = supportStatusForTool(t);
+    return {
+      name: t.name,
+      title: t.title,
+      group: t.group,
+      readOnlyHint: t.readOnlyHint,
+      destructiveHint: t.destructiveHint,
+      supportStatus,
+      supportStatusLabel: supportStatusLabel(supportStatus),
+      cliCommand: t.cliCommand
+    };
+  });
 
   const format = getString(flags, "format");
   const data: Record<string, unknown> = {
@@ -163,7 +174,7 @@ function handleToolsSearch(
   };
 
   if (format === "text") {
-    const lines = summaries.map((s) => `${s.name} [${s.group}] — ${s.title}`);
+    const lines = summaries.map((s) => `${s.name} [${s.group}] ${s.supportStatusLabel} — ${s.title}`);
     data.text = lines.join("\n");
   }
 
@@ -188,11 +199,15 @@ function handleToolsDescribe(
     ]);
   }
 
+  const supportStatus = supportStatusForTool(tool);
   const data: Record<string, unknown> = {
     command: "tools.describe",
     mode: "offline",
     requiresUnity: false,
-    ...tool
+    ...tool,
+    supportStatus,
+    supportStatusLabel: supportStatusLabel(supportStatus),
+    supportStatusDescription: supportStatusDescription(supportStatus)
   };
 
   return success(requestId, data);

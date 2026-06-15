@@ -4,6 +4,9 @@ export interface ToolExample {
   output?: string;
 }
 
+export type ToolHandler = "bridge" | "job" | "offline" | "hybrid";
+export type ToolSupportStatus = "live-bridge" | "batch-job" | "cli-only" | "planned";
+
 export interface ToolMetadata {
   name: string;
   title: string;
@@ -20,6 +23,7 @@ export interface ToolMetadata {
   permissions?: string[];
   examples?: ToolExample[];
   docsTopic?: string;
-  handler?: "bridge" | "job" | "offline" | "hybrid";
+  handler?: ToolHandler;
+  supportStatus?: ToolSupportStatus;
   cliCommand?: string;
 }
