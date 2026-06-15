@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { createServer, type Server } from "node:http";
+import type { AddressInfo } from "node:net";
 import { access, mkdir, mkdtemp, readFile, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -55,6 +57,33 @@ async function runCli(args: string[], env: NodeJS.ProcessEnv = {}): Promise<{ co
   return { code, stdout, stderr };
 }
 
+async function withBridgeServer<T>(handler: (endpoint: string, requests: unknown[]) => Promise<T>): Promise<T> {
+  const requests: unknown[] = [];
+  const server = createServer((request, response) => {
+    let body = "";
+    request.on("data", (chunk) => {
+      body += String(chunk);
+    });
+    request.on("end", () => {
+      requests.push(body ? JSON.parse(body) : null);
+      response.setHeader("content-type", "application/json");
+      response.end(JSON.stringify({ ok: true, data: { status: "ok" } }));
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  assert.equal(typeof address, "object");
+  assert.notEqual(address, null);
+  const port = (address as AddressInfo).port;
+  try {
+    return await handler(`http://127.0.0.1:${port}`, requests);
+  } finally {
+    await new Promise<void>((resolve, reject) => {
+      (server as Server).close((error) => error ? reject(error) : resolve());
+    });
+  }
+}
+
 test("CLI entrypoint detection handles normalized and linked file paths", async () => {
   const cliPath = fileURLToPath(new URL("cli.js", import.meta.url));
   const dir = await mkdtemp(join(tmpdir(), "unity_cli-entrypoint-"));
@@ -82,13 +111,35 @@ test("node dist cli version prints package version", async () => {
   assert.equal(payload.data.version, "0.1.0");
 });
 
-test("node dist cli profiler bridge command routes instead of printing help", async () => {
-  const result = await runCli(["profiler", "status", "--bridge-endpoint", "http://127.0.0.1:9"]);
-  assert.equal(result.code, 1, result.stderr);
-  const payload = JSON.parse(result.stdout) as { ok: boolean; error: { code: string }; data?: { commands?: string[] } };
-  assert.equal(payload.ok, false);
-  assert.equal(payload.error.code, "BRIDGE_CONNECTION_FAILED");
-  assert.equal(payload.data, undefined);
+test("node dist cli profiler bridge commands honor post-command --bridge-endpoint", async () => {
+  await withBridgeServer(async (endpoint, requests) => {
+    const commands = [
+      ["profiler", "status", "--bridge-endpoint", endpoint],
+      ["profiler", "start", "--bridge-endpoint", endpoint],
+      ["profiler", "counter", "--bridge-endpoint", endpoint],
+      ["profiler", "memory", "--bridge-endpoint", endpoint],
+      ["profiler", "export", "Artifacts/profiler-export.json", "--bridge-endpoint", endpoint, "--format", "json", "--overwrite"],
+      ["profiler", "stop", "--bridge-endpoint", endpoint]
+    ];
+
+    for (const args of commands) {
+      const result = await runCli(args);
+      assert.equal(result.code, 0, `${args.join(" ")}\n${result.stderr}\n${result.stdout}`);
+      const payload = JSON.parse(result.stdout) as { ok: boolean; data: { commands?: string[]; command?: string } };
+      assert.equal(payload.ok, true);
+      assert.equal(payload.data.commands, undefined);
+    }
+
+    assert.deepEqual(requests.map((request) => (request as { command: string }).command), [
+      "profiler.status",
+      "profiler.start",
+      "profiler.counter",
+      "profiler.memory",
+      "profiler.export",
+      "profiler.stop"
+    ]);
+    assert.equal((requests[4] as { path: string }).path, "Artifacts/profiler-export.json");
+  });
 });
 
 test("frozen top-level directories exist", async () => {

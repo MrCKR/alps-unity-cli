@@ -30,119 +30,120 @@ const terminalStatuses = new Set(["succeeded", "failed", "cancelled", "timeout"]
 export async function execute(argv: string[], runtime = createRuntime()): Promise<CliResult> {
   const requestId = createRequestId();
   const parsed = parseArgs(argv);
+  const flags = { ...parsed.flags, ...extractGlobalFlags(argv) };
   const [group, command] = parsed.positional;
 
   try {
     if (group === "__run-job") {
-      return runJobWorker(parsed.flags, requestId);
+      return runJobWorker(flags, requestId);
     }
 
-    if (getBoolean(parsed.flags, "version")) {
+    if (getBoolean(flags, "version")) {
       return success(requestId, { version: await packageVersion() });
     }
 
-    if (!group || getBoolean(parsed.flags, "help")) {
+    if (!group || getBoolean(flags, "help")) {
       return success(requestId, help());
     }
 
     ensureWindows();
 
     if (group === "job") {
-      return handleJob(command, parsed.flags, runtime, requestId);
+      return handleJob(command, flags, runtime, requestId);
     }
 
     if (group === "init") {
-      return await handleInit(parsed.flags, runtime, requestId);
+      return await handleInit(flags, runtime, requestId);
     }
 
     if (group === "package") {
-      return await handlePackage(command, parsed.positional.slice(2), parsed.flags, runtime, requestId);
+      return await handlePackage(command, parsed.positional.slice(2), flags, runtime, requestId);
     }
 
     if (group === "batch") {
-      return handleBatch(command, parsed.positional[2], parsed.flags, runtime, requestId);
+      return handleBatch(command, parsed.positional[2], flags, runtime, requestId);
     }
 
     if (group === "doctor") {
-      return handleDoctorCommand(parsed.flags, runtime, requestId);
+      return handleDoctorCommand(flags, runtime, requestId);
     }
 
     if (group === "instances") {
-      return handleInstancesCommand(command, parsed.flags, runtime.dataDir, requestId);
+      return handleInstancesCommand(command, flags, runtime.dataDir, requestId);
     }
 
     if (group === "code") {
-      return handleCode(command, parsed.flags, runtime, requestId);
+      return handleCode(command, flags, runtime, requestId);
     }
 
     if (group === "tools") {
-      return handleToolsCommand(command, parsed.positional.slice(2), parsed.flags, runtime, requestId);
+      return handleToolsCommand(command, parsed.positional.slice(2), flags, runtime, requestId);
     }
 
     if (group === "capabilities") {
-      return handleCapabilitiesCommand(parsed.flags, runtime, requestId);
+      return handleCapabilitiesCommand(flags, runtime, requestId);
     }
 
     if (group === "docs") {
-      return handleDocsCommand(command, parsed.positional.slice(2), parsed.flags, runtime.dataDir, requestId);
+      return handleDocsCommand(command, parsed.positional.slice(2), flags, runtime.dataDir, requestId);
     }
 
     if (group === "reflect") {
-      return handleReflectCommand(command, parsed.positional.slice(2), parsed.flags, runtime.dataDir, requestId);
+      return handleReflectCommand(command, parsed.positional.slice(2), flags, runtime.dataDir, requestId);
     }
 
     if (group === "docs-topic") {
-      return handleDocsTopicCommand(command, parsed.flags, requestId);
+      return handleDocsTopicCommand(command, flags, requestId);
     }
 
     const bridgeCommand = bridgeCommandName(group, command);
     if (bridgeCommand) {
-      if (shouldRunBridgeAsJob(group, command, parsed.flags)) {
-        const args = await bridgeJobArgs(bridgeCommand, parsed.flags, parsed.positional[2]);
+      if (shouldRunBridgeAsJob(group, command, flags)) {
+        const args = await bridgeJobArgs(bridgeCommand, flags, parsed.positional[2]);
         const jobArgs = ["-executeMethod", "AlpsUnityCli.Batch.RunBridgeCommand", "-alpsBridgeCommand", bridgeCommand, "-alpsBridgeRequestId", requestId, "-alpsBridgeArgs", JSON.stringify(args)];
-        return startUnityJob(group === "profiler" ? "profiler" : "probuilder", parsed.flags, runtime, requestId, jobArgs, {
+        return startUnityJob(group === "profiler" ? "profiler" : "probuilder", flags, runtime, requestId, jobArgs, {
           action: bridgeCommand,
           bridgeCommand,
           args
         });
       }
-      return executeBridgeCommand(requestId, bridgeCommand, parsed.flags, parsed.positional[2], runtime);
+      return executeBridgeCommand(requestId, bridgeCommand, flags, parsed.positional[2], runtime);
     }
 
     if (group === "editor" && command === "refresh") {
-      return startUnityJob("refresh", parsed.flags, runtime, requestId, refreshArgs(parsed.flags), { action: "refresh", compile: getBoolean(parsed.flags, "compile") });
+      return startUnityJob("refresh", flags, runtime, requestId, refreshArgs(flags), { action: "refresh", compile: getBoolean(flags, "compile") });
     }
 
     if (group === "test") {
       if (command === "run") {
-        const platform = getString(parsed.flags, "platform") ?? "EditMode";
+        const platform = getString(flags, "platform") ?? "EditMode";
         const resultPath = resolve(runtime.dataDir, "results", `${requestId}-test-results.xml`);
-        return startUnityJob("test", parsed.flags, runtime, requestId, ["-runTests", "-testPlatform", platform, "-testResults", resultPath], {
+        return startUnityJob("test", flags, runtime, requestId, ["-runTests", "-testPlatform", platform, "-testResults", resultPath], {
           action: "test",
           platform,
           resultPath
         });
       }
       if (command === "poll") {
-        return handleJob("status", parsed.flags, runtime, requestId);
+        return handleJob("status", flags, runtime, requestId);
       }
     }
 
     if (group === "build") {
       if (command === "run") {
-        const target = getString(parsed.flags, "target") ?? "StandaloneWindows64";
-        const outputPath = resolve(getString(parsed.flags, "output") ?? "Builds/Windows/AlpsUnityBuild.exe");
-        return startUnityJob("build", parsed.flags, runtime, requestId, ["-buildTarget", target, "-executeMethod", "AlpsUnityCli.Batch.BuildProject", "-alpsBuildOutput", outputPath], {
+        const target = getString(flags, "target") ?? "StandaloneWindows64";
+        const outputPath = resolve(getString(flags, "output") ?? "Builds/Windows/AlpsUnityBuild.exe");
+        return startUnityJob("build", flags, runtime, requestId, ["-buildTarget", target, "-executeMethod", "AlpsUnityCli.Batch.BuildProject", "-alpsBuildOutput", outputPath], {
           action: "build",
           target,
           outputPath
         });
       }
       if (command === "status") {
-        return handleJob("status", parsed.flags, runtime, requestId);
+        return handleJob("status", flags, runtime, requestId);
       }
       if (command === "cancel") {
-        return handleJob("cancel", parsed.flags, runtime, requestId);
+        return handleJob("cancel", flags, runtime, requestId);
       }
     }
 
@@ -153,6 +154,22 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
     }
     return failure(requestId, "COMMAND_FAILED", error instanceof Error ? error.message : String(error));
   }
+}
+
+function extractGlobalFlags(argv: string[]): Record<string, string | boolean> {
+  const flags: Record<string, string | boolean> = {};
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index];
+    if (token === "--bridge-endpoint") {
+      const value = argv[index + 1];
+      flags["bridge-endpoint"] = value && !value.startsWith("--") ? value : true;
+      continue;
+    }
+    if (token.startsWith("--bridge-endpoint=")) {
+      flags["bridge-endpoint"] = token.slice("--bridge-endpoint=".length);
+    }
+  }
+  return flags;
 }
 
 function createRuntime(dataDir = defaultDataDir()): Runtime {
