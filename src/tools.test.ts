@@ -38,6 +38,15 @@ test("tool names are unique", () => {
   assert.equal(names.length, unique.size, "Duplicate tool names found");
 });
 
+test("every built-in tool declares an explicit handler", () => {
+  const validHandlers = new Set(["bridge", "job", "offline", "hybrid"]);
+  const tools = builtinToolMetadata();
+  for (const tool of tools) {
+    assert.ok(tool.handler, `${tool.name} should declare handler`);
+    assert.ok(validHandlers.has(tool.handler), `${tool.name} has unknown handler ${tool.handler}`);
+  }
+});
+
 test("builtinToolGroups returns sorted groups", () => {
   const groups = builtinToolGroups();
   assert.ok(groups.length > 0);
