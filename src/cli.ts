@@ -247,6 +247,7 @@ function help(): Record<string, unknown> {
     ],
     supportLegend: {
       "已路由可执行": "通过 live Unity Editor Bridge /bridge/execute 执行。",
+      "已路由可执行 + 可 batch/job": "同时支持 live Unity Editor Bridge /bridge/execute 和 batchmode/job runner 两种执行通道。",
       "仅 batch/job": "通过 Unity batchmode/job runner 执行，不等同于 live Bridge 路由。",
       "仅 CLI 离线": "不需要 Unity 连接，在本地 CLI 完成。",
       "规划中": "CLI 契约已声明，作为后续 bundled Unity Bridge handler 覆盖范围保留。"

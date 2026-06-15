@@ -5,7 +5,7 @@ export interface ToolExample {
 }
 
 export type ToolHandler = "bridge" | "job" | "offline" | "hybrid";
-export type ToolSupportStatus = "live-bridge" | "batch-job" | "cli-only" | "planned";
+export type ToolSupportStatus = "live-bridge" | "bridge-job" | "batch-job" | "cli-only" | "planned";
 
 export interface ToolMetadata {
   name: string;

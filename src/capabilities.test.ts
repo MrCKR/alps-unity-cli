@@ -27,6 +27,7 @@ test("capabilities without bridge returns static-only result", async () => {
   assert.ok(groups.scene > 0, "scene group should have tools");
 
   assert.ok(Array.isArray(staticData.liveBridgeTools));
+  assert.ok(Array.isArray(staticData.hybridTools));
   assert.ok(Array.isArray(staticData.batchJobTools));
   assert.ok(Array.isArray(staticData.cliOnlyTools));
   assert.ok(Array.isArray(staticData.plannedTools));
@@ -85,7 +86,7 @@ test("capabilities static data includes destructive tools list", async () => {
   assert.ok(destructiveTools.includes("go.delete"), "go.delete should be in destructive list");
 });
 
-test("capabilities static data separates live bridge and planned tools", async () => {
+test("capabilities static data separates live bridge, hybrid and planned tools", async () => {
   const runtime: BridgeRuntime = {};
   const result = await handleCapabilitiesCommand({}, runtime, requestId);
   assert.equal(result.ok, true);
@@ -93,7 +94,10 @@ test("capabilities static data separates live bridge and planned tools", async (
   const data = result.data as Record<string, unknown>;
   const staticData = data.static as Record<string, unknown>;
   const liveBridgeTools = staticData.liveBridgeTools as string[];
+  const hybridTools = staticData.hybridTools as string[];
+  const batchJobTools = staticData.batchJobTools as string[];
   const bridgeTools = staticData.bridgeTools as string[];
+  const jobTools = staticData.jobTools as string[];
   const plannedTools = staticData.plannedTools as string[];
 
   assert.ok(liveBridgeTools.includes("scene.hierarchy"));
@@ -101,6 +105,12 @@ test("capabilities static data separates live bridge and planned tools", async (
   assert.ok(plannedTools.includes("component.set"));
   assert.equal(liveBridgeTools.includes("component.set"), false);
   assert.equal(bridgeTools.includes("component.set"), false);
+
+  for (const name of ["probuilder.shape", "probuilder.create", "probuilder.edit", "probuilder.csg", "profiler.start", "profiler.capture"]) {
+    assert.ok(hybridTools.includes(name), `${name} should be listed as hybrid`);
+    assert.equal(batchJobTools.includes(name), false, `${name} should not be listed as batch-only`);
+    assert.ok(jobTools.includes(name), `${name} should remain job-capable for compatibility`);
+  }
 });
 
 test("capabilities static data includes schemaFeatures", async () => {

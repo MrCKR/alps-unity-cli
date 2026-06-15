@@ -77,11 +77,12 @@ Job statuses:
 | 状态 | 含义 |
 |---|---|
 | 已路由可执行 | The bundled Unity Editor Bridge handles the command through `POST /bridge/execute`. |
+| 已路由可执行 + 可 batch/job | The command supports both live Bridge `/bridge/execute` and batch/job runner channels. |
 | 仅 batch/job | The command runs through Unity batchmode/job execution rather than the live Bridge request path. |
 | 仅 CLI 离线 | The command runs locally without a Unity Editor Bridge connection. |
 | 规划中 | The CLI contract is declared and reserved for future bundled Unity Bridge handler coverage. |
 
-Current live Bridge commands are listed in the Unity Editor Bridge section. Current batch/job commands are `editor refresh`, `test run`, `build run`, ProBuilder commands with `--job`, `profiler capture --job`, `code exec --channel batchmode`/`--job`, and `package install/remove/resolve` when Unity resolve is requested. CLI-only commands include `doctor`, `instances`, `tools`, `capabilities`, `docs`, `reflect`, local package manifest reads/edits, job status/log/cancel and batch orchestration.
+Current live Bridge commands are listed in the Unity Editor Bridge section. Hybrid live Bridge plus batch/job commands are ProBuilder commands with optional `--job`, `profiler capture --job`, `code exec --channel batchmode`/`--job`, and `package install/remove/resolve` when Unity resolve is requested. Pure batch/job commands are `editor refresh`, `test run` and `build run`. CLI-only commands include `doctor`, `instances`, `tools`, `capabilities`, `docs`, `reflect`, local package manifest reads/edits, job status/log/cancel and batch orchestration.
 
 The currently declared planning contract is: `scene active`, `scene build-settings`, `scene create`, `scene load`, `scene save`, `go inspect`, `go create`, `go modify`, `go delete`, `component add`, `component remove`, `component set`, `script create`, `script read`, `script edit` and `script validate`.
 
