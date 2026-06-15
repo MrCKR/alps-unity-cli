@@ -256,6 +256,23 @@ test("editor.refresh metadata exists with job handler and longRunning", () => {
   assert.ok(tool.examples && tool.examples.length > 0);
 });
 
+test("cli.batch schema and run metadata cover S3.5 orchestration", () => {
+  const schema = findToolByName("cli.batch.schema");
+  assert.ok(schema, "cli.batch.schema should exist");
+  assert.equal(schema.group, "cli");
+  assert.equal(schema.handler, "offline");
+  assert.equal(schema.readOnlyHint, true);
+  assert.equal(schema.destructiveHint, false);
+  assert.ok(schema.outputSchema);
+
+  const run = findToolByName("cli.batch.run");
+  assert.ok(run, "cli.batch.run should exist");
+  assert.equal(run.handler, "offline");
+  assert.equal(run.supportsDryRun, true);
+  assert.ok(run.outputSchema);
+  assert.match(run.cancellationSemantics ?? "", /child jobs/i);
+});
+
 test("cli.package.resolve metadata exists with hybrid handler", () => {
   const tool = findToolByName("cli.package.resolve");
   assert.ok(tool, "cli.package.resolve should exist");
@@ -322,13 +339,23 @@ test("build.status metadata exists with offline handler", () => {
   assert.ok(tool.outputSchema);
 });
 
-test("build.cancel metadata exists with destructiveHint", () => {
-  const tool = findToolByName("build.cancel");
-  assert.ok(tool, "build.cancel should exist");
-  assert.equal(tool.group, "build");
-  assert.equal(tool.handler, "offline");
-  assert.equal(tool.readOnlyHint, false);
-  assert.equal(tool.destructiveHint, true);
+test("test and build job domains expose status logs and cancel metadata", () => {
+  for (const name of ["test.poll", "test.logs", "build.status", "build.logs"]) {
+    const tool = findToolByName(name);
+    assert.ok(tool, `${name} should exist`);
+    assert.equal(tool?.handler, "offline");
+    assert.equal(tool?.readOnlyHint, true);
+    assert.ok(tool?.outputSchema);
+  }
+
+  for (const name of ["test.cancel", "build.cancel"]) {
+    const tool = findToolByName(name);
+    assert.ok(tool, `${name} should exist`);
+    assert.equal(tool?.handler, "offline");
+    assert.equal(tool?.readOnlyHint, false);
+    assert.equal(tool?.destructiveHint, true);
+    assert.match(tool?.cancellationSemantics ?? "", /job cancel/i);
+  }
 });
 
 test("S2.3 editor group has all required tools", () => {
@@ -348,6 +375,8 @@ test("S2.3 test group has all required tools", () => {
   const names = testTools.map((t) => t.name);
   assert.ok(names.includes("test.run"));
   assert.ok(names.includes("test.poll"));
+  assert.ok(names.includes("test.logs"));
+  assert.ok(names.includes("test.cancel"));
 });
 
 test("S2.3 build group has all required tools", () => {
@@ -355,6 +384,7 @@ test("S2.3 build group has all required tools", () => {
   const names = buildTools.map((t) => t.name);
   assert.ok(names.includes("build.run"));
   assert.ok(names.includes("build.status"));
+  assert.ok(names.includes("build.logs"));
   assert.ok(names.includes("build.cancel"));
 });
 

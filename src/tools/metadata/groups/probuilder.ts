@@ -13,6 +13,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     longRunning: true,
     handler: "hybrid",
     cliCommand: "probuilder shape",
+    cancellationSemantics: "Live bridge execution is cooperative and usually short; --job execution can be cancelled with job cancel --id <jobId> using immediate Unity batchmode process termination semantics.",
     docsTopic: "probuilder",
     examples: [
       { description: "Create a ProBuilder cube", argv: ["probuilder", "shape", "cube"] }
@@ -28,6 +29,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "hybrid",
     cliCommand: "probuilder create",
+    cancellationSemantics: "Live bridge execution is cooperative and usually short; --job execution can be cancelled with job cancel --id <jobId> using immediate Unity batchmode process termination semantics.",
     docsTopic: "probuilder"
   },
   {
@@ -40,6 +42,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "hybrid",
     cliCommand: "probuilder edit",
+    cancellationSemantics: "Live bridge execution is cooperative and usually short; --job execution can be cancelled with job cancel --id <jobId> using immediate Unity batchmode process termination semantics.",
     docsTopic: "probuilder"
   },
   {
@@ -52,6 +55,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     destructiveHint: true,
     handler: "hybrid",
     cliCommand: "probuilder csg",
+    cancellationSemantics: "Live bridge execution is cooperative and may leave scene changes if already applied; --job execution can be cancelled with job cancel --id <jobId> using immediate Unity batchmode process termination semantics.",
     docsTopic: "probuilder"
   }
 ];

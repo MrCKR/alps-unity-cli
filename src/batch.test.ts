@@ -55,6 +55,43 @@ test("batch run orders steps by dependsOn and aggregates envelopes", async () =>
   assert.equal(data.logIndex.steps.every((step) => typeof step.logPath === "string"), true);
 });
 
+test("batch can orchestrate long job status logs and cancel chain", async () => {
+  const runtime = await makeRuntime();
+  const unity = await writeFakeUnity(runtime.dataDir, `
+const fs = require("node:fs");
+const logIndex = process.argv.indexOf("-logFile");
+if (logIndex >= 0) fs.appendFileSync(process.argv[logIndex + 1], "build started\\n");
+setTimeout(() => process.exit(0), 5000);
+`);
+  const created = await execute(["build", "run", "--unity", unity, "--project", runtime.dataDir], runtime);
+  const jobId = (created.data as { jobId: string }).jobId;
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const job = await runtime.store.get(jobId);
+    const logs = await runtime.runner.logs(jobId);
+    if (job?.status === "running" && logs.lines.includes("build started")) {
+      break;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  const batch = await writeBatch(runtime.dataDir, {
+    steps: [
+      { id: "status", command: ["build", "status"], args: ["--id", jobId] },
+      { id: "logs", command: ["build", "logs"], args: ["--id", jobId, "--tail", "10"], dependsOn: ["status"] },
+      { id: "cancel", command: ["build", "cancel"], args: ["--id", jobId], dependsOn: ["logs"] }
+    ]
+  });
+
+  const result = await execute(["batch", "run", batch, "--fail-fast", "true"], runtime);
+
+  assert.equal(result.ok, true);
+  const data = result.data as { summary: { succeeded: number }; steps: Array<{ id: string; envelope: { data: { status?: string; lines?: string[]; cancellation?: { mode: string } } } }> };
+  assert.equal(data.summary.succeeded, 3);
+  assert.equal(data.steps.find((step) => step.id === "status")?.envelope.data.status, "running");
+  assert.deepEqual(data.steps.find((step) => step.id === "logs")?.envelope.data.lines, ["build started"]);
+  assert.equal(data.steps.find((step) => step.id === "cancel")?.envelope.data.status, "cancelled");
+  assert.equal(data.steps.find((step) => step.id === "cancel")?.envelope.data.cancellation?.mode, "immediate");
+});
+
 test("batch runs query edit test and screenshot commands from one TS registry", async () => {
   const runtime = await makeRuntime();
   const bridgeRequests: BridgeRequest[] = [];

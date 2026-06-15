@@ -38,7 +38,8 @@ unity_cli --version
     "commands": [
       "job status --id <jobId>",
       "job logs --id <jobId> [--tail 100]",
-      "job cancel --id <jobId>"
+      "job describe --id <jobId>",
+      "job cancel --id <jobId>"},{
     ]
   }
 }
@@ -158,11 +159,15 @@ unity_cli code exec --code "return UnityEditor.EditorApplication.isPlaying;" --c
 unity_cli editor refresh --compile --wait --project C:\path\UnityProject --unity "C:\Program Files\Unity\Hub\Editor\2022.3.45f1\Editor\Unity.exe"
 unity_cli test run --platform EditMode --wait --project C:\path\UnityProject --unity "C:\Program Files\Unity\Hub\Editor\2022.3.45f1\Editor\Unity.exe"
 unity_cli test poll --id <jobId>
+unity_cli test logs --id <jobId> --tail 100
+unity_cli test cancel --id <jobId>
 unity_cli build run --target StandaloneWindows64 --output Builds\Windows\Game.exe --wait
 unity_cli build status --id <jobId>
+unity_cli build logs --id <jobId> --tail 100
 unity_cli build cancel --id <jobId>
 unity_cli job status --id <jobId>
 unity_cli job logs --id <jobId> --tail 100
+unity_cli job describe --id <jobId>
 unity_cli job cancel --id <jobId>
 ```
 
@@ -261,7 +266,9 @@ Example `camera-test-screenshot.json`:
 }
 ```
 
-Batch output includes a batch requestId, each step requestId/envelope, summary counts, aggregated `plannedEffects`, and a `logIndex` that links batch record path, step requestIds, jobIds, and Unity log paths.
+Batch output includes a batch requestId, each step requestId/envelope, summary counts, aggregated `plannedEffects`, and a `logIndex` that links batch record path, step requestIds, jobIds, and Unity log paths. `batch schema` is also exposed through `tools describe cli.batch.schema`, while `batch run` describe output includes the batch output shape and child-job cancellation guidance.
+
+Job cancellation semantics are visible through `tools describe` for long-running/job-capable commands and through `job describe --id <jobId>` for a concrete job. Current Unity batchmode jobs use immediate process cancellation when a pid is known; if a job is still queued or Unity is already cleaning up, the CLI records the job as cancelled and callers should inspect `job logs` for the final filesystem/project state. Live bridge work that has already started is cooperative and may finish before cancellation can take effect.
 
 `--parallel` is intentionally restricted to commands declared parallel-safe. `material info`, `shader info`, `shader read`, `texture info`, `ui document/info`, `ui hierarchy`, `animation state`, `physics raycast`, `profiler status`, `profiler counter`, `profiler memory` and `profiler frame` are parallel-safe. Mutating/artifact commands such as `screenshot capture`, `camera screenshot`, `scene screenshot`, `prefab create`, `prefab stage-open`, `prefab stage-save`, `prefab stage-close`, `graphics quality`, `graphics settings`, `graphics screenshot`, `physics settings`, `physics simulation`, `profiler start`, `profiler stop`, `profiler pause`, `profiler capture`, `profiler export`, `probuilder shape`, `probuilder create`, `probuilder csg`, `probuilder edit`, `material create`, `material assign`, `material set`, `animation clip`, `animation play`, `animation stop`, `vfx graph`, `vfx effect`, `shader create`, `shader update`, `texture create`, `texture sprite`, `texture import-settings`, `ui canvas/create`, `ui text/create`, `ui button/create`, `ui image/create`, `ui document/create`, `code exec`, `editor refresh`, `test run`, and `build run` must run serially; preflight returns a structured `BATCH_PARALLEL_CONFLICT` if a batch requests unsafe parallelism.
 

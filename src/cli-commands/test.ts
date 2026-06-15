@@ -16,8 +16,16 @@ export function handleTest(command: string | undefined, flags: Record<string, st
     });
   }
 
-  if (command === "poll") {
+  if (command === "poll" || command === "status") {
     return Promise.resolve(handleJob("status", flags, runtime, requestId));
+  }
+
+  if (command === "logs") {
+    return Promise.resolve(handleJob("logs", flags, runtime, requestId));
+  }
+
+  if (command === "cancel") {
+    return Promise.resolve(handleJob("cancel", flags, runtime, requestId));
   }
 
   return undefined;
