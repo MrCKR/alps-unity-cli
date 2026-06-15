@@ -1,6 +1,6 @@
 import { realpath, readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { join, relative, resolve } from "node:path";
+import { join, relative, resolve, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export interface UnityManifest {
@@ -342,7 +342,10 @@ async function readPackageManifest(packagePath: string): Promise<{ name: string;
   }
 }
 
-function fileDependencySpec(projectPath: string, packagePath: string): string {
+export function fileDependencySpec(projectPath: string, packagePath: string): string {
+  if (isWindowsAbsolutePath(packagePath)) {
+    return `file:${normalizeRelativePath(packagePath)}`;
+  }
   const dependencyPath = normalizeRelativePath(relative(join(projectPath, "Packages"), packagePath));
   const normalized = dependencyPath.startsWith(".") ? dependencyPath : `./${dependencyPath}`;
   return `file:${normalized}`;
@@ -350,6 +353,9 @@ function fileDependencySpec(projectPath: string, packagePath: string): string {
 
 function resolveFileDependency(projectPath: string, spec: string): string {
   const dependencyPath = spec.slice("file:".length);
+  if (isWindowsAbsolutePath(dependencyPath)) {
+    return dependencyPath;
+  }
   return resolve(join(projectPath, "Packages"), dependencyPath);
 }
 
@@ -442,6 +448,10 @@ function normalizeScopedRegistries(scopedRegistries: unknown): ScopedRegistry[] 
 
 function uniqueScopes(scopes: string[]): string[] {
   return [...new Set(scopes.map((scope) => scope.trim()).filter(Boolean))];
+}
+
+function isWindowsAbsolutePath(path: string): boolean {
+  return win32.isAbsolute(path) || /^[A-Za-z]:[\\/]/.test(path);
 }
 
 function normalizeRelativePath(path: string): string {

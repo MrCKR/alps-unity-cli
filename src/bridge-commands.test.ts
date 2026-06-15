@@ -510,6 +510,9 @@ test("profiler commands forward session, counter, memory, frame and export args"
   assert.deepEqual(requests[5].args, { module: "CPU Usage" });
   assert.deepEqual(requests[6].args, { path: "Artifacts/profile.json", format: "json", durationMs: 100, frames: 2, overwrite: true });
   assert.deepEqual(requests[7].args, { path: "Artifacts/profile-export.json", format: "json", overwrite: true });
+  assert.equal((requests[7] as unknown as { path: string }).path, "Artifacts/profile-export.json");
+  assert.equal((requests[7] as unknown as { format: string }).format, "json");
+  assert.equal((requests[7] as unknown as { overwrite: boolean }).overwrite, true);
 });
 
 test("animation and vfx commands forward Windows paths, targets and effects", async () => {
