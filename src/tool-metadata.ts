@@ -736,6 +736,54 @@ const PROFILER_TOOLS: ToolMetadata[] = [
     docsTopic: "profiler"
   },
   {
+    name: "profiler.pause",
+    title: "Pause Profiler Session",
+    description: "Pause or resume the Unity Editor while a profiling session is active.",
+    group: "profiler",
+    inputSchema: objSchema({ paused: { type: "boolean" } }),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "profiler pause",
+    docsTopic: "profiler"
+  },
+  {
+    name: "profiler.counter",
+    title: "Profiler Counters",
+    description: "Read current profiler counter values and available counter metadata.",
+    group: "profiler",
+    inputSchema: objSchema({ category: { type: "string" }, counter: { type: "string" } }),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "profiler counter",
+    docsTopic: "profiler"
+  },
+  {
+    name: "profiler.memory",
+    title: "Profiler Memory",
+    description: "Query Unity memory usage from the live Editor.",
+    group: "profiler",
+    inputSchema: objSchema({}),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "profiler memory",
+    docsTopic: "profiler"
+  },
+  {
+    name: "profiler.frame",
+    title: "Profiler Frame Diagnostics",
+    description: "Read current frame count, timing and selected profiler module diagnostics.",
+    group: "profiler",
+    inputSchema: objSchema({ module: { type: "string" } }),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "profiler frame",
+    docsTopic: "profiler"
+  },
+  {
     name: "profiler.capture",
     title: "Capture Profiler Data",
     description: "Capture profiler frame data to a file. Can run as a long job.",
@@ -751,6 +799,22 @@ const PROFILER_TOOLS: ToolMetadata[] = [
     examples: [
       { description: "Capture 1 second of profiler data", argv: ["profiler", "capture", "profile.json", "--duration-ms", "1000"] },
       { description: "Capture as job with wait", argv: ["profiler", "capture", "profile.json", "--job", "--wait"] }
+    ]
+  },
+  {
+    name: "profiler.export",
+    title: "Export Profiler Data",
+    description: "Export a profiler snapshot artifact in JSON or raw profiler format.",
+    group: "profiler",
+    inputSchema: objSchema({ path: { type: "string" }, format: { type: "string", enum: ["json", "raw"] }, overwrite: { type: "boolean" } }, ["path"]),
+    readOnlyHint: true,
+    destructiveHint: false,
+    longRunning: true,
+    handler: "bridge",
+    cliCommand: "profiler export",
+    docsTopic: "profiler",
+    examples: [
+      { description: "Export profiler JSON", argv: ["profiler", "export", "profile.json", "--overwrite"] }
     ]
   }
 ];

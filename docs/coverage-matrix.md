@@ -130,6 +130,22 @@
 
 ---
 
+## Profiler 域
+
+| unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
+|---|---|---|---|---|---|
+| profiler.status | `profiler status` | bridge (AlpsUnityBridge) | ✅ `profiler.status` in PROFILER_TOOLS | bridge-commands.test.ts: profiler commands forward session/counter/memory/frame/export args; tools.test.ts: S3.4 metadata coverage | ✅ keep |
+| profiler.start | `profiler start [--deep-profiling]` | bridge/hybrid (AlpsUnityBridge) | ✅ `profiler.start` in PROFILER_TOOLS | bridge-commands.test.ts; camera-bridge-source.test.ts source guard | ✅ keep |
+| profiler.stop | `profiler stop` | bridge (AlpsUnityBridge) | ✅ `profiler.stop` in PROFILER_TOOLS | bridge-commands.test.ts; camera-bridge-source.test.ts source guard | ✅ keep |
+| profiler.pause | `profiler pause [--paused true|false]` | bridge (AlpsUnityBridge) | ✅ `profiler.pause` in PROFILER_TOOLS | bridge-commands.test.ts; camera-bridge-source.test.ts source guard | ✅ keep |
+| profiler.counter | `profiler counter [--category --counter]` | bridge (ProfilerCountersJson) | ✅ `profiler.counter` in PROFILER_TOOLS | bridge-commands.test.ts; camera-bridge-source.test.ts source guard | ✅ keep |
+| profiler.memory | `profiler memory` | bridge (ProfilerMemoryJson) | ✅ `profiler.memory` in PROFILER_TOOLS | bridge-commands.test.ts; camera-bridge-source.test.ts source guard | ✅ keep |
+| profiler.frame | `profiler frame [--module]` | bridge (ProfilerFrameJson) | ✅ `profiler.frame` in PROFILER_TOOLS | bridge-commands.test.ts; camera-bridge-source.test.ts source guard | ✅ keep |
+| profiler.capture | `profiler capture <path>` | bridge/hybrid (ProfilerWriteArtifact) | ✅ `profiler.capture` in PROFILER_TOOLS | bridge-commands.test.ts; camera-bridge-source.test.ts source guard | ✅ keep |
+| profiler.export | `profiler export <path>` | bridge (ProfilerWriteArtifact) | ✅ `profiler.export` in PROFILER_TOOLS | bridge-commands.test.ts; camera-bridge-source.test.ts source guard | ✅ keep |
+
+---
+
 ## 真实 Unity 项目 smoke 验证状态
 
 | 功能域 | read 操作 | write/modify 操作 | 验证日期 | 备注 |
@@ -147,6 +163,7 @@
 | asset | `asset search/info` 返回资源列表与 metadata | `asset create/modify/duplicate/move/rename/delete` 修改 AssetDatabase | 待验证 | 需要 Unity 项目环境 |
 | prefab | `prefab info/hierarchy` 返回 prefab 摘要与层级 | `prefab create/modify/stage-open/stage-save/stage-close` 管理 prefab 生命周期 | 待验证 | 需要 Unity 项目环境 |
 | code | `code exec --code` 返回结果 | `code exec` 执行代码（destructiveHint） | 待验证 | 需要 Unity 项目环境 |
+| profiler | `profiler status/counter/memory/frame` 返回 session、counter、memory、frame 数据 | `profiler start/pause/stop/export` 控制 session 并导出 artifact | 待实机验证 | CLI/handler/metadata 单测已覆盖；需要 Windows + Unity Editor 项目 smoke |
 
 ---
 
@@ -156,3 +173,4 @@
 - **S2.4** (2026-06-14): 新增 `script.delete` metadata 条目 + bridge 路由；`code.exec` 增加 `permissions=["executes_code"]`、`outputSchema`、batchmode job 参数；script/code 覆盖矩阵行
 - **S2.2** (2026-06-15): 补齐 asset create/modify/delete/duplicate/move/rename 与 prefab modify Bridge handler、metadata 和覆盖矩阵行
 - **S3.1** (2026-06-15): 补齐 camera、material、shader、texture、ui 创作域覆盖矩阵；新增 S3.1 metadata/write smoke 单测证据
+- **S3.4** (2026-06-15): 补齐 Profiler session/counter/memory/frame/export CLI、UnityPkg handler、metadata/describe 与自动化测试矩阵

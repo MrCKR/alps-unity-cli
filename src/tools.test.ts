@@ -364,6 +364,41 @@ test("S3.1 creation-domain write tools are marked mutating but non-destructive",
   }
 });
 
+test("S3.4 profiler domain has frozen metadata coverage", () => {
+  const profilerTools = filterToolsByGroup("profiler");
+  const expectedNames = ["profiler.status", "profiler.start", "profiler.stop", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export"];
+  assert.deepEqual(profilerTools.map((tool) => tool.name), expectedNames);
+
+  for (const name of expectedNames) {
+    const tool = findToolByName(name);
+    assert.ok(tool, `${name} should exist`);
+    assert.equal(tool?.docsTopic, "profiler");
+    assert.ok(tool?.cliCommand, `${name} should expose a CLI command`);
+  }
+
+  for (const name of ["profiler.status", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export"]) {
+    const tool = findToolByName(name);
+    assert.equal(tool?.readOnlyHint, true, `${name} should be read-only from Unity state perspective`);
+    assert.equal(tool?.destructiveHint, false, `${name} should not be destructive`);
+  }
+
+  for (const name of ["profiler.start", "profiler.stop", "profiler.pause"]) {
+    const tool = findToolByName(name);
+    assert.equal(tool?.readOnlyHint, false, `${name} should control profiler session state`);
+    assert.equal(tool?.destructiveHint, false, `${name} should not be destructive`);
+  }
+});
+
+test("tools describe profiler.memory returns full metadata", async () => {
+  const result = await handleToolsCommand("describe", ["profiler.memory"], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.name, "profiler.memory");
+  assert.equal(data.group, "profiler");
+  assert.equal(data.readOnlyHint, true);
+  assert.equal(data.destructiveHint, false);
+});
+
 test("tools describe test.run returns full metadata", async () => {
   const result = await handleToolsCommand("describe", ["test.run"], {}, emptyRuntime, requestId);
   assert.equal(result.ok, true);

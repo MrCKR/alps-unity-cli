@@ -111,14 +111,19 @@ const TOPIC_DOCS: Record<string, DocTopic> = {
   },
   profiler: {
     title: "Profiler Commands",
-    summary: "Control the Unity profiler: start, stop, capture frame data.",
+    summary: "Control the Unity profiler, read counters, query memory and export frame data.",
     tools: [
       "profiler.status — Check if profiler is active",
       "profiler.start — Begin profiling",
       "profiler.stop — Stop profiling",
-      "profiler.capture — Capture profiler data to file (long-running)"
+      "profiler.pause — Pause or resume the Editor while profiling",
+      "profiler.counter — Read available profiler counters",
+      "profiler.memory — Query memory usage",
+      "profiler.frame — Read current frame diagnostics",
+      "profiler.capture — Capture profiler data to file (long-running)",
+      "profiler.export — Export profiler data to file"
     ],
-    guide: "Start with `profiler status`, then `profiler start`, run your workload, and `profiler capture <path>`."
+    guide: "Start with `profiler status`, then `profiler start`, run your workload, inspect `profiler counter` / `profiler memory`, and `profiler export <path>`."
   },
   probuilder: {
     title: "ProBuilder Commands",

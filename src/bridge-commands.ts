@@ -158,7 +158,7 @@ export function bridgeCommandName(group: string | undefined, command: string | u
   if (group === "physics" && ["settings", "raycast", "simulation"].includes(command ?? "")) {
     return `physics.${command}`;
   }
-  if (group === "profiler" && ["start", "stop", "capture", "status"].includes(command ?? "")) {
+  if (group === "profiler" && ["start", "stop", "pause", "counter", "memory", "frame", "capture", "export", "status"].includes(command ?? "")) {
     return `profiler.${command}`;
   }
   if (group === "probuilder" && ["shape", "create", "csg", "edit"].includes(command ?? "")) {
@@ -401,6 +401,9 @@ async function commandArgs(command: string, flags: Record<string, string | boole
       ...queryArgs(flags),
       path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "output"),
       module: stringFlag(flags, "module"),
+      counter: stringFlag(flags, "counter") ?? stringFlag(flags, "name"),
+      category: stringFlag(flags, "category"),
+      paused: boolFlag(flags, "paused"),
       format: stringFlag(flags, "format"),
       durationMs: numberFlag(flags, "duration-ms"),
       frames: numberFlag(flags, "frames"),

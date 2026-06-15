@@ -475,6 +475,43 @@ test("physics commands forward settings, raycast and simulation inputs", async (
   assert.deepEqual(requests[2].args, { steps: 3, deltaTime: 0.016, simulate: true });
 });
 
+test("profiler commands forward session, counter, memory, frame and export args", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+  const bridgeExecute = async (payload: BridgeRequest) => {
+    requests.push(payload);
+    return { ok: true, data: { profiler: { enabled: payload.command === "profiler.start" }, counters: [], memory: {}, frame: {}, artifactPath: payload.args.path, plannedEffects: [{ type: payload.command }] } };
+  };
+
+  const status = await execute(["profiler", "status"], { ...runtime, bridgeExecute });
+  const start = await execute(["profiler", "start", "--deep-profiling"], { ...runtime, bridgeExecute });
+  const pause = await execute(["profiler", "pause", "--paused", "true"], { ...runtime, bridgeExecute });
+  const counter = await execute(["profiler", "counter", "--category", "memory", "--counter", "MonoUsedSizeLong"], { ...runtime, bridgeExecute });
+  const memory = await execute(["profiler", "memory"], { ...runtime, bridgeExecute });
+  const frame = await execute(["profiler", "frame", "--module", "CPU Usage"], { ...runtime, bridgeExecute });
+  const capture = await execute(["profiler", "capture", "Artifacts/profile.json", "--duration-ms", "100", "--frames", "2", "--format", "json", "--overwrite"], { ...runtime, bridgeExecute });
+  const exportResult = await execute(["profiler", "export", "Artifacts/profile-export.json", "--format", "json", "--overwrite"], { ...runtime, bridgeExecute });
+  const stop = await execute(["profiler", "stop"], { ...runtime, bridgeExecute });
+
+  assert.equal(status.ok, true);
+  assert.equal(start.ok, true);
+  assert.equal(pause.ok, true);
+  assert.equal(counter.ok, true);
+  assert.equal(memory.ok, true);
+  assert.equal(frame.ok, true);
+  assert.equal(capture.ok, true);
+  assert.equal(exportResult.ok, true);
+  assert.equal(stop.ok, true);
+  assert.deepEqual(requests.map((request) => request.command), ["profiler.status", "profiler.start", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export", "profiler.stop"]);
+  assert.deepEqual(requests[1].args, { deepProfiling: true });
+  assert.deepEqual(requests[2].args, { paused: true });
+  assert.deepEqual(requests[3].args, { counter: "MonoUsedSizeLong", category: "memory" });
+  assert.deepEqual(requests[4].args, {});
+  assert.deepEqual(requests[5].args, { module: "CPU Usage" });
+  assert.deepEqual(requests[6].args, { path: "Artifacts/profile.json", format: "json", durationMs: 100, frames: 2, overwrite: true });
+  assert.deepEqual(requests[7].args, { path: "Artifacts/profile-export.json", format: "json", overwrite: true });
+});
+
 test("animation and vfx commands forward Windows paths, targets and effects", async () => {
   const runtime = await makeRuntime();
   const requests: BridgeRequest[] = [];
