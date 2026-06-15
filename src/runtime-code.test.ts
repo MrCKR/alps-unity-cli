@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readdir, readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
@@ -9,6 +9,25 @@ import { JobStore } from "./job-store.js";
 import type { BridgeRequest } from "./bridge/index.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
+
+const editorUrl = new URL("../unitypkg/Editor/", import.meta.url);
+
+async function readUnityBridgeSources(): Promise<string> {
+  const files = await listCSharpFiles(editorUrl);
+  return (await Promise.all(files.map(async (url) => readFile(url, "utf8")))).join("\n");
+}
+
+async function listCSharpFiles(directory: URL): Promise<URL[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const urls = await Promise.all(entries.map(async (entry) => {
+    const child = new URL(`${entry.name}${entry.isDirectory() ? "/" : ""}`, directory);
+    if (entry.isDirectory()) {
+      return listCSharpFiles(child);
+    }
+    return entry.isFile() && entry.name.endsWith(".cs") ? [child] : [];
+  }));
+  return urls.flat().sort((left, right) => left.pathname.localeCompare(right.pathname));
+}
 
 async function makeRuntime() {
   const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-code-"));
@@ -229,14 +248,14 @@ test("code wait timeout returns execution timeout details while job continues", 
 });
 
 test("Unity bridge and batch source expose Runtime Code diagnostics", async () => {
-  const bridge = await readFile(new URL("../unitypkg/Editor/UnityCliBridge.cs", import.meta.url), "utf8");
+  const bridge = await readUnityBridgeSources();
   const batch = await readFile(new URL("../unitypkg/Editor/UnityCliBatch.cs", import.meta.url), "utf8");
 
   assert.match(bridge, /private static HttpListener listener/);
   assert.match(bridge, /private static readonly Queue<BridgeWorkItem> WorkQueue/);
   assert.match(bridge, /using System\.Linq/);
   assert.match(bridge, /private static readonly string\[\] CodeCommands = \{ "code\.exec" \}/);
-  assert.match(bridge, /case "code\.exec"/);
+  assert.match(bridge, /RegisterCommand\(registry, "code\.exec", "code", true/);
   assert.match(bridge, /E_CODE_COMPILE_FAILED/);
   assert.match(bridge, /E_CODE_RUNTIME_EXCEPTION/);
   assert.match(bridge, /E_REFERENCE_RESOLUTION_FAILED/);

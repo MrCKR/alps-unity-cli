@@ -1,47 +1,49 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
+import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
 
-const sourceUrl = new URL("../unitypkg/Editor/UnityCliBridge.cs", import.meta.url);
+const editorUrl = new URL("../unitypkg/Editor/", import.meta.url);
+const sourceUrl = new URL("UnityCliBridge.cs", editorUrl);
 const readmeUrl = new URL("../README.md", import.meta.url);
 
-test("Unity Bridge source keeps top-level C# methods structurally balanced", async () => {
-  const source = await readFile(sourceUrl, "utf8");
-  const strippedSource = stripCSharpTrivia(source);
-  const topLevelSource = strippedSource.slice(0, strippedSource.indexOf("        private sealed class BridgeWorkItem"));
-  let braceDepth = 0;
+test("Unity Bridge source keeps C# files structurally balanced", async () => {
+  const files = await listCSharpFiles(editorUrl);
 
-  for (const [index, line] of topLevelSource.split("\n").entries()) {
-    assert.ok(braceDepth >= 0, `C# brace depth went negative before line ${index + 1}`);
+  for (const file of files) {
+    const source = await readFile(file, "utf8");
+    const strippedSource = stripCSharpTrivia(source);
+    let braceDepth = 0;
 
-    if (/^\s+private static (?!readonly\b).*\)\s*(?:where\b.*)?$/.test(line)) {
-      assert.equal(braceDepth, 2, `Top-level C# method declaration is nested at line ${index + 1}: ${line.trim()}`);
-    }
-
-    for (const character of line) {
-      if (character === "{") {
-        braceDepth += 1;
-      } else if (character === "}") {
-        braceDepth -= 1;
+    for (const [index, line] of strippedSource.split("\n").entries()) {
+      for (const character of line) {
+        if (character === "{") {
+          braceDepth += 1;
+        } else if (character === "}") {
+          braceDepth -= 1;
+        }
       }
+      assert.ok(braceDepth >= 0, `C# brace depth went negative before ${file.pathname}:${index + 1}`);
     }
-  }
 
-  assert.equal(braceDepth, 2);
+    assert.equal(braceDepth, 0, `C# brace depth did not return to zero for ${file.pathname}`);
+  }
 });
 
 test("Unity Bridge source does not duplicate C# method signatures", async () => {
-  const source = await readFile(sourceUrl, "utf8");
+  const source = await readUnityBridgeSources();
 
   assert.deepEqual(duplicateCSharpMethodSignatures(source), []);
 });
 
 test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, graphics, physics, profiler, probuilder, animation, vfx, shader, texture and editor commands", async () => {
-  const source = await readFile(sourceUrl, "utf8");
+  const source = await readUnityBridgeSources();
+  const bridgeSource = await readFile(sourceUrl, "utf8");
   const readme = await readFile(readmeUrl, "utf8");
   const bridgeSection = readme.slice(readme.indexOf("## Unity Editor Bridge"), readme.indexOf("## Batch Automation"));
 
   assert.match(source, /HttpListener/);
+  assert.doesNotMatch(bridgeSource, /switch \(request\.Command\)/);
+  assert.match(source, /private static readonly BridgeCommandRegistry CommandRegistry = CreateCommandRegistry\(\)/);
   assert.match(source, /POST" \|\| context\.Request\.Url\.AbsolutePath != "\/bridge\/execute"/);
   assert.match(source, /CapabilityJson\("camera", CameraCommands\)/);
   assert.match(source, /CapabilityJson\("prefab", PrefabCommands\)/);
@@ -82,85 +84,85 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /private static readonly string\[\] TextureCommands = \{ "texture\.info", "texture\.create", "texture\.sprite", "texture\.import-settings" \}/);
   assert.match(source, /private static readonly string\[\] CodeCommands = \{ "code\.exec" \}/);
   assert.match(source, /private static readonly string\[\] CustomToolCommands = \{ "custom-tool\.list", "custom-tool\.run" \}/);
-  assert.match(source, /case "camera\.list"/);
-  assert.match(source, /case "camera\.info"/);
-  assert.match(source, /case "camera\.screenshot"/);
-  assert.match(source, /case "scene\.screenshot"/);
-  assert.match(source, /case "screenshot\.capture"/);
-  assert.match(source, /case "prefab\.info"/);
-  assert.match(source, /case "prefab\.create"/);
-  assert.match(source, /case "prefab\.modify"/);
-  assert.match(source, /case "prefab\.stage-open"/);
-  assert.match(source, /case "prefab\.stage-save"/);
-  assert.match(source, /case "prefab\.stage-close"/);
-  assert.match(source, /case "prefab\.hierarchy"/);
-  assert.match(source, /case "ui\.canvas\.create"/);
-  assert.match(source, /case "ui\.text\.create"/);
-  assert.match(source, /case "ui\.button\.create"/);
-  assert.match(source, /case "ui\.image\.create"/);
-  assert.match(source, /case "ui\.document\.info"/);
-  assert.match(source, /case "ui\.document\.create"/);
-  assert.match(source, /case "ui\.hierarchy"/);
-  assert.match(source, /case "material\.info"/);
-  assert.match(source, /case "material\.create"/);
-  assert.match(source, /case "material\.assign"/);
-  assert.match(source, /case "material\.set"/);
-  assert.match(source, /case "graphics\.quality"/);
-  assert.match(source, /case "graphics\.settings"/);
-  assert.match(source, /case "graphics\.screenshot"/);
-  assert.match(source, /case "physics\.settings"/);
-  assert.match(source, /case "physics\.raycast"/);
-  assert.match(source, /case "physics\.simulation"/);
-  assert.match(source, /case "profiler\.start"/);
-  assert.match(source, /case "profiler\.stop"/);
-  assert.match(source, /case "profiler\.capture"/);
-  assert.match(source, /case "profiler\.status"/);
-  assert.match(source, /case "probuilder\.shape"/);
-  assert.match(source, /case "probuilder\.create"/);
-  assert.match(source, /case "probuilder\.csg"/);
-  assert.match(source, /case "probuilder\.edit"/);
-  assert.match(source, /case "animation\.clip"/);
-  assert.match(source, /case "animation\.state"/);
-  assert.match(source, /case "animation\.play"/);
-  assert.match(source, /case "animation\.stop"/);
-  assert.match(source, /case "vfx\.graph"/);
-  assert.match(source, /case "vfx\.effect"/);
-  assert.match(source, /case "shader\.info"/);
-  assert.match(source, /case "shader\.read"/);
-  assert.match(source, /case "shader\.create"/);
-  assert.match(source, /case "shader\.update"/);
-  assert.match(source, /case "texture\.info"/);
-  assert.match(source, /case "texture\.create"/);
-  assert.match(source, /case "texture\.sprite"/);
-  assert.match(source, /case "texture\.import-settings"/);
-  assert.match(source, /case "scene\.hierarchy"/);
-  assert.match(source, /case "go\.find"/);
-  assert.match(source, /case "asset\.search"/);
-  assert.match(source, /case "asset\.info"/);
-  assert.match(source, /case "asset\.create"/);
-  assert.match(source, /case "asset\.import"/);
-  assert.match(source, /case "asset\.modify"/);
-  assert.match(source, /case "asset\.delete"/);
-  assert.match(source, /case "asset\.duplicate"/);
-  assert.match(source, /case "asset\.move"/);
-  assert.match(source, /case "asset\.rename"/);
-  assert.match(source, /case "diagnose\.preflight"/);
-  assert.match(source, /case "editor\.state"/);
-  assert.match(source, /case "editor\.play"/);
-  assert.match(source, /case "editor\.pause"/);
-  assert.match(source, /case "editor\.stop"/);
-  assert.match(source, /case "editor\.menu"/);
-  assert.match(source, /case "editor\.console"/);
-  assert.match(source, /case "code\.exec"/);
-  assert.match(source, /case "custom-tool\.list"/);
-  assert.match(source, /case "custom-tool\.run"/);
+  assert.match(source, /RegisterCommand\(registry, "camera\.list", "camera", false/);
+  assert.match(source, /RegisterCommand\(registry, "camera\.info", "camera", false/);
+  assert.match(source, /RegisterCommand\(registry, "camera\.screenshot", "camera", true/);
+  assert.match(source, /RegisterCommand\(registry, "scene\.screenshot", "scene", true/);
+  assert.match(source, /RegisterCommand\(registry, "screenshot\.capture", "scene", true/);
+  assert.match(source, /RegisterCommand\(registry, "prefab\.info", "prefab", false/);
+  assert.match(source, /RegisterCommand\(registry, "prefab\.create", "prefab", true/);
+  assert.match(source, /RegisterCommand\(registry, "prefab\.modify", "prefab", false/);
+  assert.match(source, /RegisterCommand\(registry, "prefab\.stage-open", "prefab", true/);
+  assert.match(source, /RegisterCommand\(registry, "prefab\.stage-save", "prefab", true/);
+  assert.match(source, /RegisterCommand\(registry, "prefab\.stage-close", "prefab", true/);
+  assert.match(source, /RegisterCommand\(registry, "prefab\.hierarchy", "prefab", false/);
+  assert.match(source, /RegisterCommand\(registry, "ui\.canvas\.create", "ui", true/);
+  assert.match(source, /RegisterCommand\(registry, "ui\.text\.create", "ui", true/);
+  assert.match(source, /RegisterCommand\(registry, "ui\.button\.create", "ui", true/);
+  assert.match(source, /RegisterCommand\(registry, "ui\.image\.create", "ui", true/);
+  assert.match(source, /RegisterCommand\(registry, "ui\.document\.info", "ui", false/);
+  assert.match(source, /RegisterCommand\(registry, "ui\.document\.create", "ui", true/);
+  assert.match(source, /RegisterCommand\(registry, "ui\.hierarchy", "ui", false/);
+  assert.match(source, /RegisterCommand\(registry, "material\.info", "material", false/);
+  assert.match(source, /RegisterCommand\(registry, "material\.create", "material", true/);
+  assert.match(source, /RegisterCommand\(registry, "material\.assign", "material", true/);
+  assert.match(source, /RegisterCommand\(registry, "material\.set", "material", true/);
+  assert.match(source, /RegisterCommand\(registry, "graphics\.quality", "graphics", true/);
+  assert.match(source, /RegisterCommand\(registry, "graphics\.settings", "graphics", true/);
+  assert.match(source, /RegisterCommand\(registry, "graphics\.screenshot", "graphics", true/);
+  assert.match(source, /RegisterCommand\(registry, "physics\.settings", "physics", true/);
+  assert.match(source, /RegisterCommand\(registry, "physics\.raycast", "physics", false/);
+  assert.match(source, /RegisterCommand\(registry, "physics\.simulation", "physics", true/);
+  assert.match(source, /RegisterCommand\(registry, "profiler\.start", "profiler", true/);
+  assert.match(source, /RegisterCommand\(registry, "profiler\.stop", "profiler", true/);
+  assert.match(source, /RegisterCommand\(registry, "profiler\.capture", "profiler", true/);
+  assert.match(source, /RegisterCommand\(registry, "profiler\.status", "profiler", false/);
+  assert.match(source, /RegisterCommand\(registry, "probuilder\.shape", "probuilder", true/);
+  assert.match(source, /RegisterCommand\(registry, "probuilder\.create", "probuilder", true/);
+  assert.match(source, /RegisterCommand\(registry, "probuilder\.csg", "probuilder", true/);
+  assert.match(source, /RegisterCommand\(registry, "probuilder\.edit", "probuilder", true/);
+  assert.match(source, /RegisterCommand\(registry, "animation\.clip", "animation", true/);
+  assert.match(source, /RegisterCommand\(registry, "animation\.state", "animation", false/);
+  assert.match(source, /RegisterCommand\(registry, "animation\.play", "animation", true/);
+  assert.match(source, /RegisterCommand\(registry, "animation\.stop", "animation", true/);
+  assert.match(source, /RegisterCommand\(registry, "vfx\.graph", "vfx", true/);
+  assert.match(source, /RegisterCommand\(registry, "vfx\.effect", "vfx", true/);
+  assert.match(source, /RegisterCommand\(registry, "shader\.info", "shader", false/);
+  assert.match(source, /RegisterCommand\(registry, "shader\.read", "shader", false/);
+  assert.match(source, /RegisterCommand\(registry, "shader\.create", "shader", true/);
+  assert.match(source, /RegisterCommand\(registry, "shader\.update", "shader", true/);
+  assert.match(source, /RegisterCommand\(registry, "texture\.info", "texture", false/);
+  assert.match(source, /RegisterCommand\(registry, "texture\.create", "texture", true/);
+  assert.match(source, /RegisterCommand\(registry, "texture\.sprite", "texture", true/);
+  assert.match(source, /RegisterCommand\(registry, "texture\.import-settings", "texture", true/);
+  assert.match(source, /RegisterCommand\(registry, "scene\.hierarchy", "scene", false/);
+  assert.match(source, /RegisterCommand\(registry, "go\.find", "go", false/);
+  assert.match(source, /RegisterCommand\(registry, "asset\.search", "asset", false/);
+  assert.match(source, /RegisterCommand\(registry, "asset\.info", "asset", false/);
+  assert.match(source, /RegisterCommand\(registry, "asset\.create", "asset", false/);
+  assert.match(source, /RegisterCommand\(registry, "asset\.import", "asset", false/);
+  assert.match(source, /RegisterCommand\(registry, "asset\.modify", "asset", false/);
+  assert.match(source, /RegisterCommand\(registry, "asset\.delete", "asset", false/);
+  assert.match(source, /RegisterCommand\(registry, "asset\.duplicate", "asset", false/);
+  assert.match(source, /RegisterCommand\(registry, "asset\.move", "asset", false/);
+  assert.match(source, /RegisterCommand\(registry, "asset\.rename", "asset", false/);
+  assert.match(source, /RegisterCommand\(registry, "diagnose\.preflight", "diagnose", false/);
+  assert.match(source, /RegisterCommand\(registry, "editor\.state", "editor", false/);
+  assert.match(source, /RegisterCommand\(registry, "editor\.play", "editor", false/);
+  assert.match(source, /RegisterCommand\(registry, "editor\.pause", "editor", false/);
+  assert.match(source, /RegisterCommand\(registry, "editor\.stop", "editor", false/);
+  assert.match(source, /RegisterCommand\(registry, "editor\.menu", "editor", false/);
+  assert.match(source, /RegisterCommand\(registry, "editor\.console", "editor", false/);
+  assert.match(source, /RegisterCommand\(registry, "code\.exec", "code", true/);
+  assert.match(source, /RegisterCommand\(registry, "custom-tool\.list", "custom-tool", false/);
+  assert.match(source, /RegisterCommand\(registry, "custom-tool\.run", "custom-tool", true/);
   assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.hierarchy`, `scene\.screenshot`, `go\.find`, `asset\.search`, `asset\.info`, `asset\.create`, `asset\.import`, `asset\.modify`, `asset\.delete`, `asset\.duplicate`, `asset\.move`, `asset\.rename`, `diagnose\.preflight`, `screenshot\.capture`, `prefab\.info`, `prefab\.hierarchy`, `prefab\.create`, `prefab\.modify`, `prefab\.stage-open`, `prefab\.stage-save`, `prefab\.stage-close`, `ui\.canvas\.create`, `ui\.text\.create`, `ui\.button\.create`, `ui\.image\.create`, `ui\.document\.info`, `ui\.document\.create`, `ui\.hierarchy`, `material\.info`, `material\.create`, `material\.assign`, `material\.set`, `graphics\.quality`, `graphics\.settings`, `graphics\.screenshot`, `physics\.settings`, `physics\.raycast`, `physics\.simulation`, `profiler\.start`, `profiler\.stop`, `profiler\.capture`, `profiler\.status`, `probuilder\.shape`, `probuilder\.create`, `probuilder\.csg`, `probuilder\.edit`, `animation\.clip`, `animation\.state`, `animation\.play`, `animation\.stop`, `vfx\.graph`, `vfx\.effect`, `shader\.info`, `shader\.read`, `shader\.create`, `shader\.update`, `texture\.info`, `texture\.create`, `texture\.sprite`, `texture\.import-settings`, `editor\.state`, `editor\.play`, `editor\.pause`, `editor\.stop`, `editor\.menu`, `editor\.console`, `code\.exec`, `custom-tool\.list` and `custom-tool\.run`/);
   assert.doesNotMatch(bridgeSection, /live query\/edit\/screenshot/);
   assert.match(bridgeSection, /`component set` and `script edit` are not routed by this package yet/);
 });
 
 test("Unity Bridge animation and vfx commands expose assets, target resolver diagnostics and package checks", async () => {
-  const source = await readFile(sourceUrl, "utf8");
+  const source = await readUnityBridgeSources();
   const readme = await readFile(readmeUrl, "utf8");
 
   assert.match(source, /RequireAnimationClipPath/);
@@ -191,6 +193,23 @@ test("Unity Bridge animation and vfx commands expose assets, target resolver dia
   assert.match(readme, /`E_VFX_PACKAGE_MISSING`/);
   assert.match(readme, /`E_VFX_GRAPH_NOT_FOUND`/);
 });
+
+async function readUnityBridgeSources(): Promise<string> {
+  const files = await listCSharpFiles(editorUrl);
+  return (await Promise.all(files.map(async (url) => readFile(url, "utf8")))).join("\n");
+}
+
+async function listCSharpFiles(directory: URL): Promise<URL[]> {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const urls = await Promise.all(entries.map(async (entry) => {
+    const child = new URL(`${entry.name}${entry.isDirectory() ? "/" : ""}`, directory);
+    if (entry.isDirectory()) {
+      return listCSharpFiles(child);
+    }
+    return entry.isFile() && entry.name.endsWith(".cs") ? [child] : [];
+  }));
+  return urls.flat().sort((left, right) => left.pathname.localeCompare(right.pathname));
+}
 
 function stripCSharpTrivia(source: string): string {
   let output = "";
@@ -367,7 +386,7 @@ function splitTopLevelCommas(value: string): string[] {
 }
 
 test("Unity Bridge camera screenshot captures render texture and returns artifact metadata", async () => {
-  const source = await readFile(sourceUrl, "utf8");
+  const source = await readUnityBridgeSources();
 
   assert.match(source, /Camera\.allCameras/);
   assert.match(source, /SceneView\.lastActiveSceneView/);
@@ -382,7 +401,7 @@ test("Unity Bridge camera screenshot captures render texture and returns artifac
 });
 
 test("Unity Bridge prefab operations expose structured diagnostics", async () => {
-  const source = await readFile(sourceUrl, "utf8");
+  const source = await readUnityBridgeSources();
   const readme = await readFile(readmeUrl, "utf8");
 
   assert.match(source, /PrefabUtility\.SaveAsPrefabAssetAndConnect/);
@@ -408,7 +427,7 @@ test("Unity Bridge prefab operations expose structured diagnostics", async () =>
 
 
 test("Unity Bridge shader and texture operations expose diagnostics", async () => {
-  const source = await readFile(sourceUrl, "utf8");
+  const source = await readUnityBridgeSources();
   const readme = await readFile(readmeUrl, "utf8");
 
   assert.match(source, /ShaderUtil,UnityEditor/);
@@ -433,7 +452,7 @@ test("Unity Bridge shader and texture operations expose diagnostics", async () =
 });
 
 test("Unity Bridge material commands expose shader properties, assignment and diagnostics", async () => {
-  const source = await readFile(sourceUrl, "utf8");
+  const source = await readUnityBridgeSources();
   const readme = await readFile(readmeUrl, "utf8");
 
   assert.match(source, /ShaderUtil\.GetPropertyCount/);
@@ -456,7 +475,7 @@ test("Unity Bridge material commands expose shader properties, assignment and di
 });
 
 test("Unity Bridge UI operations expose uGUI and UI Toolkit diagnostics", async () => {
-  const source = await readFile(sourceUrl, "utf8");
+  const source = await readUnityBridgeSources();
   const readme = await readFile(readmeUrl, "utf8");
 
   assert.match(source, /using UiCanvasScaler = UnityEngine\.UI\.CanvasScaler;/);
@@ -497,7 +516,7 @@ test("Unity Bridge UI operations expose uGUI and UI Toolkit diagnostics", async 
 });
 
 test("Unity Bridge C# string literals stay balanced", async () => {
-  const source = await readFile(sourceUrl, "utf8");
+  const source = await readUnityBridgeSources();
   for (const [index, line] of source.split(/\r?\n/).entries()) {
     let inString = false;
     let escaped = false;
@@ -519,14 +538,14 @@ test("Unity Bridge C# string literals stay balanced", async () => {
 });
 
 test("Unity Bridge graphics and physics commands expose settings, raycast and diagnostics", async () => {
-  const source = await readFile(sourceUrl, "utf8");
+  const source = await readUnityBridgeSources();
   const readme = await readFile(readmeUrl, "utf8");
 
   assert.match(source, /QualitySettings\.SetQualityLevel/);
   assert.match(source, /GraphicsSettings\.defaultRenderPipeline/);
   assert.match(source, /RenderPipelineAsset/);
-  assert.match(source, /case "graphics\.pipeline":/);
-  assert.match(source, /case "graphics\.volume":/);
+  assert.match(source, /RegisterCommand\(registry, "graphics\.pipeline", "graphics", false/);
+  assert.match(source, /RegisterCommand\(registry, "graphics\.volume", "graphics", false/);
   assert.match(source, /FindType\("UnityEngine\.Rendering\.Volume"\)/);
   assert.match(source, /Physics\.gravity/);
   assert.match(source, /Physics2D\.gravity/);
@@ -544,7 +563,7 @@ test("Unity Bridge graphics and physics commands expose settings, raycast and di
 });
 
 test("Unity Bridge HTTP timeout prevents queued side effects from stale requests", async () => {
-  const source = await readFile(sourceUrl, "utf8");
+  const source = await readUnityBridgeSources();
   const readme = await readFile(readmeUrl, "utf8");
 
   assert.match(source, /CancelBeforeStart/);
@@ -562,7 +581,7 @@ test("Unity Bridge HTTP timeout prevents queued side effects from stale requests
 });
 
 test("Unity Bridge screenshot validates path, format, overwrite and busy diagnostics", async () => {
-  const source = await readFile(sourceUrl, "utf8");
+  const source = await readUnityBridgeSources();
   const readme = await readFile(readmeUrl, "utf8");
 
   assert.match(source, /E_UNITY_BUSY/);
@@ -584,7 +603,7 @@ test("Unity Bridge screenshot validates path, format, overwrite and busy diagnos
 });
 
 test("Unity Bridge editor commands expose state, play/pause/stop, menu execution and busy diagnostics", async () => {
-  const source = await readFile(sourceUrl, "utf8");
+  const source = await readUnityBridgeSources();
   const readme = await readFile(readmeUrl, "utf8");
 
   assert.match(source, /private static string EditorStateJson\(\)/);
@@ -620,7 +639,7 @@ test("Unity Bridge editor commands expose state, play/pause/stop, menu execution
 });
 
 test("Unity Bridge treats PlayMode switching as editor-command busy state", async () => {
-  const source = await readFile(sourceUrl, "utf8");
+  const source = await readUnityBridgeSources();
   const busyStart = source.indexOf("private static void EnsureEditorNotBusy");
   const busyEnd = source.indexOf("private static void WaitForPlayModeState", busyStart);
   const busyBlock = source.slice(busyStart, busyEnd);
