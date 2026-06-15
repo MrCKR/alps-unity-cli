@@ -28,7 +28,7 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
-        private static void RegisterGoCommands(BridgeCommandRegistry registry)
+        private static void RegisterGameObjectCommands(BridgeCommandRegistry registry)
         {
             RegisterCommand(registry, "go.find", "go", false, GameObjectFind);
         }
@@ -101,6 +101,61 @@ namespace UnityCli
             }
             return SuccessJson("{\"query\":" + Quote(target) + ",\"matchCount\":" + resolution.Matches.Count.ToString(CultureInfo.InvariantCulture) + ",\"items\":[" + string.Join(",", items.ToArray()) + "],\"logPath\":" + Quote(LogPath()) + "}");
         }
+
+        private static string HierarchyItemJson(Transform transform)
+        {
+            var componentNames = new List<string>();
+            foreach (var component in transform.GetComponents<Component>())
+            {
+                componentNames.Add(Quote(component != null ? component.GetType().Name : "MissingScript"));
+            }
+            var gameObject = transform.gameObject;
+            return "{"
+                + "\"id\":" + gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) + ","
+                + "\"name\":" + Quote(gameObject.name) + ","
+                + "\"path\":" + Quote(HierarchyPath(gameObject)) + ","
+                + "\"activeSelf\":" + Bool(gameObject.activeSelf) + ","
+                + "\"activeInHierarchy\":" + Bool(gameObject.activeInHierarchy) + ","
+                + "\"tag\":" + Quote(gameObject.tag) + ","
+                + "\"layer\":" + gameObject.layer.ToString(CultureInfo.InvariantCulture) + ","
+                + "\"componentCount\":" + componentNames.Count.ToString(CultureInfo.InvariantCulture) + ","
+                + "\"components\":[" + string.Join(",", componentNames.ToArray()) + "]"
+                + "}";
+        }
+
+        private static int CountHierarchy(Transform transform)
+        {
+            var count = 1;
+            foreach (Transform child in transform)
+            {
+                count += CountHierarchy(child);
+            }
+            return count;
+        }
+
+        private static void CollectHierarchy(Transform transform, List<string> items, int cursor, int pageSize, Counter counter)
+        {
+            if (counter.Value >= cursor && items.Count < pageSize)
+            {
+                items.Add(HierarchyItemJson(transform));
+            }
+            counter.Value++;
+            foreach (Transform child in transform)
+            {
+                if (items.Count >= pageSize)
+                {
+                    return;
+                }
+                CollectHierarchy(child, items, cursor, pageSize, counter);
+            }
+        }
+
+        private static bool ComponentEnabled(Component component)
+        {
+            var property = component.GetType().GetProperty("enabled", BindingFlags.Instance | BindingFlags.Public);
+            return property == null || (bool)property.GetValue(component, null);
+        }
+
         private sealed class Counter
         {
             public int Value;

@@ -240,6 +240,12 @@ namespace UnityCli
         }
 
         private static string VfxEffectJson(Component component)
+        {
+            var property = component.GetType().GetProperty("visualEffectAsset", BindingFlags.Instance | BindingFlags.Public);
+            var graph = property == null ? null : property.GetValue(component, null) as UnityEngine.Object;
+            var graphPath = graph == null ? null : NormalizeAssetPath(AssetDatabase.GetAssetPath(graph));
+            return "{\"componentType\":" + Quote(component.GetType().FullName) + ",\"enabled\":" + Bool(ComponentEnabled(component)) + ",\"graph\":{\"name\":" + Quote(graph == null ? null : graph.name) + ",\"path\":" + Quote(graphPath) + ",\"guid\":" + Quote(string.IsNullOrEmpty(graphPath) ? null : AssetDatabase.AssetPathToGUID(graphPath)) + "}}";
+        }
     }
 }
 #endif
