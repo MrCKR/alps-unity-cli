@@ -70,6 +70,10 @@
       "items": { "type": "string" },
       "description": "Permission tokens required, e.g. ['bridge:connect', 'file:write']."
     },
+    "cancellationSemantics": {
+      "type": "string",
+      "description": "How cancellation behaves for long-running commands: immediate process kill, cooperative cancellation, or marker-only waiting for the underlying operation to finish."
+    },
     "examples": {
       "type": "array",
       "items": {

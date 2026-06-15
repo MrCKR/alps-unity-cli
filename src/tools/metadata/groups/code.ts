@@ -22,6 +22,7 @@ export const CODE_TOOLS: ToolMetadata[] = [
     longRunning: true,
     handler: "hybrid",
     cliCommand: "code exec",
+    cancellationSemantics: "Live channel cannot be externally interrupted once Unity starts executing user code; batchmode/job channel can be cancelled with job cancel --id <jobId>, which attempts process-tree termination and records cancellation details.",
     docsTopic: "code",
     examples: [
       { description: "Execute a code file", argv: ["code", "exec", "--file", "script.cs"] },

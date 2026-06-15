@@ -173,9 +173,13 @@ const commandRegistry = new Map<string, { parallelSafe: boolean }>([
   ["screenshot capture", { parallelSafe: false }],
   ["test run", { parallelSafe: false }],
   ["test poll", { parallelSafe: true }],
+  ["test status", { parallelSafe: true }],
+  ["test logs", { parallelSafe: true }],
+  ["test cancel", { parallelSafe: false }],
   ["code exec", { parallelSafe: false }],
   ["build run", { parallelSafe: false }],
   ["build status", { parallelSafe: true }],
+  ["build logs", { parallelSafe: true }],
   ["build cancel", { parallelSafe: false }]
 ]);
 

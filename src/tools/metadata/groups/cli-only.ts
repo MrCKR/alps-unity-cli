@@ -78,19 +78,38 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     docsTopic: "package"
   },
   {
+    name: "cli.batch.schema",
+    title: "Batch Schema",
+    description: "Print the JSON Schema for first-class CLI batch orchestration files.",
+    group: "cli",
+    inputSchema: objSchema({}),
+    outputSchema: objSchema({ properties: { type: "object" }, required: { type: "array", items: { type: "string" } } }),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "offline",
+    cliCommand: "batch schema",
+    docsTopic: "batch",
+    examples: [
+      { description: "Print batch JSON schema", argv: ["batch", "schema"] }
+    ]
+  },
+  {
     name: "cli.batch.run",
     title: "Batch Run",
     description: "Execute a JSON batch file containing multiple CLI commands.",
     group: "cli",
     inputSchema: objSchema({ file: { type: "string" }, preflight: { type: "boolean" }, failFast: { type: "boolean" }, parallel: { type: "integer" } }, ["file"]),
+    outputSchema: objSchema({ batchRequestId: { type: "string" }, summary: { type: "object" }, logIndex: { type: "object" }, steps: { type: "array" } }),
     readOnlyHint: false,
     destructiveHint: true,
     supportsDryRun: true,
     handler: "offline",
     cliCommand: "batch run",
     docsTopic: "batch",
+    cancellationSemantics: "Batch orchestration itself is synchronous CLI work. Long-running steps return jobId/logPath entries; cancel those child jobs with job cancel --id <jobId>. Already completed or skipped steps are not rolled back.",
     examples: [
-      { description: "Run batch with preflight", argv: ["batch", "run", "batch.json", "--preflight"] }
+      { description: "Run batch with preflight", argv: ["batch", "run", "batch.json", "--preflight"] },
+      { description: "Run batch and inspect child jobs", argv: ["batch", "run", "batch.json", "--fail-fast", "true", "--parallel", "1"] }
     ]
   },
   {
@@ -234,6 +253,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     handler: "job",
     cliCommand: "test run",
     docsTopic: "test",
+    cancellationSemantics: "Immediate process cancellation when a Unity batchmode pid is known; queued or pid-less jobs are marked cancelled and may already have finished or be waiting for Unity cleanup.",
     examples: [
       { description: "Run EditMode tests as job", argv: ["test", "run"] },
       { description: "Run PlayMode tests and wait", argv: ["test", "run", "--platform", "PlayMode", "--wait"] }
@@ -262,6 +282,38 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     ]
   },
   {
+    name: "test.logs",
+    title: "Test Logs",
+    description: "Read tail lines from a Unity test job log. Equivalent to `job logs --id <jobId>`.",
+    group: "test",
+    inputSchema: objSchema({ id: { type: "string" }, tail: { type: "integer" } }, ["id"]),
+    outputSchema: objSchema({ jobId: { type: "string" }, logPath: { type: "string" }, lines: { type: "array", items: { type: "string" } } }),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "offline",
+    cliCommand: "test logs",
+    docsTopic: "test",
+    examples: [
+      { description: "Tail test job logs", argv: ["test", "logs", "--id", "job_abc123", "--tail", "100"] }
+    ]
+  },
+  {
+    name: "test.cancel",
+    title: "Test Cancel",
+    description: "Cancel a running Unity test job. Equivalent to `job cancel --id <jobId>`.",
+    group: "test",
+    inputSchema: objSchema({ id: { type: "string" } }, ["id"]),
+    readOnlyHint: false,
+    destructiveHint: true,
+    handler: "offline",
+    cliCommand: "test cancel",
+    docsTopic: "test",
+    cancellationSemantics: "Delegates to job cancel --id <jobId>; attempts immediate process-tree termination when possible, otherwise records cancellation intent in the job store.",
+    examples: [
+      { description: "Cancel a test job", argv: ["test", "cancel", "--id", "job_abc123"] }
+    ]
+  },
+  {
     name: "build.run",
     title: "Build Run",
     description: "Trigger a Unity project build as a batch job. Returns a job ID that can be polled for status.",
@@ -280,6 +332,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     handler: "job",
     cliCommand: "build run",
     docsTopic: "build",
+    cancellationSemantics: "Immediate process cancellation when a Unity batchmode pid is known; if Unity is already inside build cleanup, the job is marked cancelled and callers should inspect job logs for final filesystem state.",
     examples: [
       { description: "Build for Windows64 as job", argv: ["build", "run"] },
       { description: "Build and wait for completion", argv: ["build", "run", "--target", "StandaloneWindows64", "--wait"] }
@@ -308,6 +361,22 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     ]
   },
   {
+    name: "build.logs",
+    title: "Build Logs",
+    description: "Read tail lines from a Unity build job log. Equivalent to `job logs --id <jobId>`.",
+    group: "build",
+    inputSchema: objSchema({ id: { type: "string" }, tail: { type: "integer" } }, ["id"]),
+    outputSchema: objSchema({ jobId: { type: "string" }, logPath: { type: "string" }, lines: { type: "array", items: { type: "string" } } }),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "offline",
+    cliCommand: "build logs",
+    docsTopic: "build",
+    examples: [
+      { description: "Tail build job logs", argv: ["build", "logs", "--id", "job_abc123", "--tail", "100"] }
+    ]
+  },
+  {
     name: "build.cancel",
     title: "Build Cancel",
     description: "Cancel a running build job. Equivalent to `job cancel --id <jobId>`.",
@@ -318,6 +387,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     handler: "offline",
     cliCommand: "build cancel",
     docsTopic: "build",
+    cancellationSemantics: "Delegates to job cancel --id <jobId>; attempts immediate process-tree termination when possible, otherwise records cancellation intent in the job store.",
     examples: [
       { description: "Cancel a build job", argv: ["build", "cancel", "--id", "job_abc123"] }
     ]
