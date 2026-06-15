@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://alps.local/schemas/response-envelope.schema.json",
+  "$id": "https://unity-cli.local/schemas/response-envelope.schema.json",
   "title": "Unity CLI Response Envelope",
   "description": "Unified response envelope for all CLI commands. Matches ALP-164 frozen spec §安全、性能与生命周期 / 统一 envelope. Every CLI output follows this shape.",
   "oneOf": [

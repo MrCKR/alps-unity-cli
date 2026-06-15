@@ -22,7 +22,7 @@ export async function handleCapabilitiesCommand(
   const staticCapabilities = buildStaticCapabilities();
 
   let runtimeCapabilities: Record<string, unknown> | undefined;
-  const endpoint = getString(flags, "bridge-endpoint") ?? runtime.bridgeEndpoint ?? process.env.ALPS_UNITY_BRIDGE_ENDPOINT;
+  const endpoint = getString(flags, "bridge-endpoint") ?? runtime.bridgeEndpoint ?? process.env.UNITY_CLI_BRIDGE_ENDPOINT;
 
   if (runtime.bridgeExecute || endpoint) {
     try {

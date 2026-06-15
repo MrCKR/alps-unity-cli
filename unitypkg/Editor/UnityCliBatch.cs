@@ -14,26 +14,26 @@ using UnityEditor.PackageManager;
 using UnityEditor.PackageManager.Requests;
 using UnityEditor.Build.Reporting;
 
-namespace AlpsUnityCli
+namespace UnityCli
 {
-    public static class Batch
+    public static class UnityCliBatch
     {
         public static void RunBridgeCommand()
         {
-            var command = ArgValue("-alpsBridgeCommand");
-            var requestId = ArgValue("-alpsBridgeRequestId") ?? Guid.NewGuid().ToString("N");
-            var args = ArgValue("-alpsBridgeArgs") ?? "{}";
-            var exitCode = AlpsUnityBridge.ExecuteBatchCommand(requestId, command, args);
+            var command = ArgValue("-unityCliBridgeCommand");
+            var requestId = ArgValue("-unityCliBridgeRequestId") ?? Guid.NewGuid().ToString("N");
+            var args = ArgValue("-unityCliBridgeArgs") ?? "{}";
+            var exitCode = UnityCliBridge.ExecuteBatchCommand(requestId, command, args);
             EditorApplication.Exit(exitCode);
         }
 
         public static void ExecuteCode()
         {
-            var requestId = ArgValue("-alpsRequestId") ?? Guid.NewGuid().ToString("N");
-            var sourcePath = ArgValue("-alpsCodeSource");
-            var resultPath = ArgValue("-alpsCodeResult");
-            var artifactDir = ArgValue("-alpsArtifactDir");
-            var argsJson = ArgValue("-alpsCodeArgs") ?? "{}";
+            var requestId = ArgValue("-unityCliRequestId") ?? Guid.NewGuid().ToString("N");
+            var sourcePath = ArgValue("-unityCliCodeSource");
+            var resultPath = ArgValue("-unityCliCodeResult");
+            var artifactDir = ArgValue("-unityCliArtifactDir");
+            var argsJson = ArgValue("-unityCliCodeArgs") ?? "{}";
             var startedAt = DateTime.UtcNow;
             try
             {
@@ -45,7 +45,7 @@ namespace AlpsUnityCli
                 }
                 Directory.CreateDirectory(string.IsNullOrEmpty(artifactDir) ? Path.GetDirectoryName(resultPath) : artifactDir);
                 var source = File.ReadAllText(sourcePath, Encoding.UTF8);
-                var result = ExecuteCodeSource(requestId, source, argsJson, ArgValue("-alpsCodeRefs"), ArgValue("-alpsCodeDefines"), startedAt);
+                var result = ExecuteCodeSource(requestId, source, argsJson, ArgValue("-unityCliCodeRefs"), ArgValue("-unityCliCodeDefines"), startedAt);
                 var json = result.Ok ? SuccessEnvelope(requestId, result.DataJson) : ErrorEnvelope(requestId, result.ErrorCode, result.ErrorMessage, result.DetailsJson, result.NextActionsJson);
                 WriteCodeResult(resultPath, json);
                 if (!result.Ok)
@@ -97,10 +97,10 @@ namespace AlpsUnityCli
 
         public static void BuildProject()
         {
-            var outputPath = ArgValue("-alpsBuildOutput");
+            var outputPath = ArgValue("-unityCliBuildOutput");
             if (string.IsNullOrEmpty(outputPath))
             {
-                Console.Error.WriteLine("E_BUILD_OUTPUT_REQUIRED: Missing -alpsBuildOutput.");
+                Console.Error.WriteLine("E_BUILD_OUTPUT_REQUIRED: Missing -unityCliBuildOutput.");
                 EditorApplication.Exit(1);
                 return;
             }
@@ -139,7 +139,7 @@ namespace AlpsUnityCli
                 if (args[index] == name)
                 {
                     var value = args[index + 1];
-                    if (value == "__ALPS_EMPTY__" || value.StartsWith("-", StringComparison.Ordinal)) return string.Empty;
+                    if (value == "__UNITY_CLI_EMPTY__" || value.StartsWith("-", StringComparison.Ordinal)) return string.Empty;
                     return value;
                 }
             }
@@ -179,7 +179,7 @@ namespace AlpsUnityCli
             {
                 Console.SetOut(stdout);
                 Console.SetError(stderr);
-                var type = compiled.CompiledAssembly.GetType("AlpsUnityCli.RuntimeCode.Script", true);
+                var type = compiled.CompiledAssembly.GetType("UnityCli.RuntimeCode.Script", true);
                 var method = type.GetMethod("Run", BindingFlags.Public | BindingFlags.Static);
                 var returnValue = method.Invoke(null, new object[] { argsJson ?? "{}" });
                 Console.SetOut(previousOut);
@@ -206,9 +206,9 @@ namespace AlpsUnityCli
         {
             if (System.Text.RegularExpressions.Regex.IsMatch(source, "\\bpublic\\s+static\\s+object\\s+Run\\s*\\("))
             {
-                return "using System; using System.IO; using System.Linq; using System.Collections.Generic; using UnityEngine; using UnityEditor; namespace AlpsUnityCli.RuntimeCode { public static class Script { " + source + " } }";
+                return "using System; using System.IO; using System.Linq; using System.Collections.Generic; using UnityEngine; using UnityEditor; namespace UnityCli.RuntimeCode { public static class Script { " + source + " } }";
             }
-            return "using System; using System.IO; using System.Linq; using System.Collections.Generic; using UnityEngine; using UnityEditor; namespace AlpsUnityCli.RuntimeCode { public static class Script { public static object Run(string argsJson) { " + source + " } } }";
+            return "using System; using System.IO; using System.Linq; using System.Collections.Generic; using UnityEngine; using UnityEditor; namespace UnityCli.RuntimeCode { public static class Script { public static object Run(string argsJson) { " + source + " } } }";
         }
 
         private static IEnumerable<string> DefaultReferences(string refsCsv)
@@ -307,19 +307,19 @@ namespace AlpsUnityCli
 
         private static string CodeSuccessDataJson(string requestId, DateTime startedAt, DateTime endedAt, string stdout, string stderr, object returnValue, string argsJson)
         {
-            return "{\"command\":\"code.exec\",\"mode\":\"batchmode\",\"execution\":{\"channel\":\"batchmode\",\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"endedAt\":" + Quote(endedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"durationMs\":" + ((long)(endedAt - startedAt).TotalMilliseconds).ToString(CultureInfo.InvariantCulture) + ",\"timeoutMs\":" + TimeoutMsJson() + ",\"exitState\":\"completed\"},\"compile\":{\"ok\":true,\"diagnostics\":[]},\"runtime\":{\"ok\":true,\"returnValue\":" + ReturnValueJson(returnValue) + ",\"stdout\":" + Quote(stdout) + ",\"stderr\":" + Quote(stderr) + "},\"artifacts\":[],\"audit\":{\"requestId\":" + Quote(requestId) + ",\"projectPath\":" + Quote(ProjectPath()) + ",\"instanceId\":" + Quote(InstanceId()) + ",\"unityVersion\":" + Quote(Application.unityVersion) + ",\"bridgeVersion\":\"com.unity_cli\",\"initiator\":\"cli.batchmode\",\"input\":{\"sourcePath\":" + Quote(ArgValue("-alpsCodeSource")) + ",\"args\":" + (string.IsNullOrEmpty(argsJson) ? "{}" : argsJson) + "},\"execution\":{\"timeoutMs\":" + TimeoutMsJson() + ",\"exitState\":\"completed\"},\"artifacts\":[],\"effects\":{\"fileWrites\":[],\"assetRefresh\":false,\"domainReload\":false,\"playModeChanged\":false,\"packagesChanged\":false}}}";
+            return "{\"command\":\"code.exec\",\"mode\":\"batchmode\",\"execution\":{\"channel\":\"batchmode\",\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"endedAt\":" + Quote(endedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"durationMs\":" + ((long)(endedAt - startedAt).TotalMilliseconds).ToString(CultureInfo.InvariantCulture) + ",\"timeoutMs\":" + TimeoutMsJson() + ",\"exitState\":\"completed\"},\"compile\":{\"ok\":true,\"diagnostics\":[]},\"runtime\":{\"ok\":true,\"returnValue\":" + ReturnValueJson(returnValue) + ",\"stdout\":" + Quote(stdout) + ",\"stderr\":" + Quote(stderr) + "},\"artifacts\":[],\"audit\":{\"requestId\":" + Quote(requestId) + ",\"projectPath\":" + Quote(ProjectPath()) + ",\"instanceId\":" + Quote(InstanceId()) + ",\"unityVersion\":" + Quote(Application.unityVersion) + ",\"bridgeVersion\":\"com.unity_cli\",\"initiator\":\"cli.batchmode\",\"input\":{\"sourcePath\":" + Quote(ArgValue("-unityCliCodeSource")) + ",\"args\":" + (string.IsNullOrEmpty(argsJson) ? "{}" : argsJson) + "},\"execution\":{\"timeoutMs\":" + TimeoutMsJson() + ",\"exitState\":\"completed\"},\"artifacts\":[],\"effects\":{\"fileWrites\":[],\"assetRefresh\":false,\"domainReload\":false,\"playModeChanged\":false,\"packagesChanged\":false}}}";
         }
 
         private static string TimeoutMsJson()
         {
-            var value = ArgValue("-alpsTimeoutMs");
+            var value = ArgValue("-unityCliTimeoutMs");
             long parsed;
             return long.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed) ? parsed.ToString(CultureInfo.InvariantCulture) : "null";
         }
 
         private static string ProjectPath()
         {
-            var projectPath = ArgValue("-alpsProjectPath");
+            var projectPath = ArgValue("-unityCliProjectPath");
             if (!string.IsNullOrEmpty(projectPath)) return projectPath;
             return Directory.GetParent(Application.dataPath).FullName;
         }

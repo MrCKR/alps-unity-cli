@@ -7,7 +7,7 @@ import { execute } from "./cli.js";
 import { JobRunner } from "./job-runner.js";
 import { JobStore } from "./job-store.js";
 
-process.env.ALPS_UNITY_ALLOW_NON_WINDOWS = "1";
+process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
 async function makeRuntime() {
   const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-docs-reflect-"));

@@ -1,7 +1,7 @@
 #if UNITY_EDITOR
-namespace AlpsUnityCli
+namespace UnityCli
 {
-    internal static class AlpsUnityBridgeBuildInfo
+    internal static class UnityCliBridgeBuildInfo
     {
         public const string BuildStamp = "source";
     }

@@ -99,7 +99,7 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
     if (bridgeCommand) {
       if (shouldRunBridgeAsJob(group, command, parsed.flags)) {
         const args = await bridgeJobArgs(bridgeCommand, parsed.flags, parsed.positional[2]);
-        const jobArgs = ["-executeMethod", "AlpsUnityCli.Batch.RunBridgeCommand", "-alpsBridgeCommand", bridgeCommand, "-alpsBridgeRequestId", requestId, "-alpsBridgeArgs", JSON.stringify(args)];
+        const jobArgs = ["-executeMethod", "UnityCli.UnityCliBatch.RunBridgeCommand", "-unityCliBridgeCommand", bridgeCommand, "-unityCliBridgeRequestId", requestId, "-unityCliBridgeArgs", JSON.stringify(args)];
         return startUnityJob(group === "profiler" ? "profiler" : "probuilder", parsed.flags, runtime, requestId, jobArgs, {
           action: bridgeCommand,
           bridgeCommand,
@@ -131,8 +131,8 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
     if (group === "build") {
       if (command === "run") {
         const target = getString(parsed.flags, "target") ?? "StandaloneWindows64";
-        const outputPath = resolve(getString(parsed.flags, "output") ?? "Builds/Windows/AlpsUnityBuild.exe");
-        return startUnityJob("build", parsed.flags, runtime, requestId, ["-buildTarget", target, "-executeMethod", "AlpsUnityCli.Batch.BuildProject", "-alpsBuildOutput", outputPath], {
+        const outputPath = resolve(getString(parsed.flags, "output") ?? "Builds/Windows/UnityCliBuild.exe");
+        return startUnityJob("build", parsed.flags, runtime, requestId, ["-buildTarget", target, "-executeMethod", "UnityCli.UnityCliBatch.BuildProject", "-unityCliBuildOutput", outputPath], {
           action: "build",
           target,
           outputPath
@@ -247,7 +247,7 @@ function shouldRunBridgeAsJob(group: string | undefined, command: string | undef
 }
 
 function refreshArgs(flags: Record<string, string | boolean>): string[] {
-  return ["-executeMethod", getBoolean(flags, "compile") ? "AlpsUnityCli.Batch.RefreshAndCompile" : "AlpsUnityCli.Batch.Refresh"];
+  return ["-executeMethod", getBoolean(flags, "compile") ? "UnityCli.UnityCliBatch.RefreshAndCompile" : "UnityCli.UnityCliBatch.Refresh"];
 }
 
 async function handleInit(flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult> {
@@ -279,7 +279,7 @@ async function handleInit(flags: Record<string, string | boolean>, runtime: Runt
 }
 
 async function refreshOpenEditor(requestId: string, flags: Record<string, string | boolean>, runtime: Runtime): Promise<Record<string, unknown>> {
-  const endpoint = getString(flags, "bridge-endpoint") ?? runtime.bridgeEndpoint ?? process.env.ALPS_UNITY_BRIDGE_ENDPOINT ?? "http://127.0.0.1:47392";
+  const endpoint = getString(flags, "bridge-endpoint") ?? runtime.bridgeEndpoint ?? process.env.UNITY_CLI_BRIDGE_ENDPOINT ?? "http://127.0.0.1:47392";
   if (!runtime.bridgeExecute && !(await isBridgeReachable(endpoint))) {
     return { status: "skipped", reason: "bridge_endpoint_absent", endpoint };
   }
@@ -400,7 +400,7 @@ async function maybeResolvePackage(command: string, flags: Record<string, string
   }
   const { ensurePackageBridge } = await import("./package-manager.js");
   const bridge = await ensurePackageBridge(projectPath);
-  return startUnityJob("package", flags, runtime, requestId, ["-executeMethod", "AlpsUnityCli.Batch.ResolvePackages", "-alpsPackageAction", command], { ...result, bridge });
+  return startUnityJob("package", flags, runtime, requestId, ["-executeMethod", "UnityCli.UnityCliBatch.ResolvePackages", "-unityCliPackageAction", command], { ...result, bridge });
 }
 
 async function startUnityJob(kind: JobKind, flags: Record<string, string | boolean>, runtime: Runtime, requestId: string, unityArgs: string[], result: Record<string, unknown>): Promise<CliResult> {

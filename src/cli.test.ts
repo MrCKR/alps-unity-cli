@@ -11,7 +11,7 @@ import { JobRunner } from "./job-runner.js";
 import { JobStore } from "./job-store.js";
 import { defaultDataDir } from "./platform.js";
 
-process.env.ALPS_UNITY_ALLOW_NON_WINDOWS = "1";
+process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
 async function makeRuntime() {
   const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-test-"));
@@ -35,7 +35,7 @@ async function makeFakeUnity(body: string): Promise<string> {
 
 async function runCli(args: string[], env: NodeJS.ProcessEnv = {}): Promise<{ code: number | null; stdout: string; stderr: string }> {
   const child = spawn(process.execPath, [fileURLToPath(new URL("cli.js", import.meta.url)), ...args], {
-    env: { ...process.env, ALPS_UNITY_ALLOW_NON_WINDOWS: "1", ...env },
+    env: { ...process.env, UNITY_CLI_ALLOW_NON_WINDOWS: "1", ...env },
     stdio: ["ignore", "pipe", "pipe"]
   });
 
@@ -181,8 +181,8 @@ test("editor refresh compile uses batch refresh-and-compile method", async () =>
   const compile = await execute(["editor", "refresh", "--compile", "--unity", unity, "--project", runtime.dataDir], runtime);
   const refresh = await execute(["editor", "refresh", "--unity", unity, "--project", runtime.dataDir], runtime);
 
-  assert.equal((compile.data as { command: string[] }).command[(compile.data as { command: string[] }).command.indexOf("-executeMethod") + 1], "AlpsUnityCli.Batch.RefreshAndCompile");
-  assert.equal((refresh.data as { command: string[] }).command[(refresh.data as { command: string[] }).command.indexOf("-executeMethod") + 1], "AlpsUnityCli.Batch.Refresh");
+  assert.equal((compile.data as { command: string[] }).command[(compile.data as { command: string[] }).command.indexOf("-executeMethod") + 1], "UnityCli.UnityCliBatch.RefreshAndCompile");
+  assert.equal((refresh.data as { command: string[] }).command[(refresh.data as { command: string[] }).command.indexOf("-executeMethod") + 1], "UnityCli.UnityCliBatch.Refresh");
 });
 
 test("cancel marks running job as cancelled", async () => {
@@ -269,16 +269,16 @@ test("build run forwards output path to batch method", async () => {
   const created = await execute(["build", "run", "--unity", unity, "--project", runtime.dataDir, "--output", "Builds/App.exe"], runtime);
   const command = (created.data as { command: string[] }).command;
 
-  assert.ok(command.includes("-alpsBuildOutput"));
-  assert.equal(command[command.indexOf("-alpsBuildOutput") + 1].replace(/\\/g, "/").endsWith("Builds/App.exe"), true);
+  assert.ok(command.includes("-unityCliBuildOutput"));
+  assert.equal(command[command.indexOf("-unityCliBuildOutput") + 1].replace(/\\/g, "/").endsWith("Builds/App.exe"), true);
 });
 
 test("non-wait CLI exits quickly and worker persists terminal status", async () => {
   const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-process-"));
-  assert.equal(defaultDataDir({ ALPS_UNITY_DATA_DIR: dataDir, LOCALAPPDATA: join("C:\\", "Users", "tester", "AppData", "Local") }, "win32"), dataDir);
+  assert.equal(defaultDataDir({ UNITY_CLI_DATA_DIR: dataDir, LOCALAPPDATA: join("C:\\", "Users", "tester", "AppData", "Local") }, "win32"), dataDir);
   const unity = await makeFakeUnity(`setTimeout(() => process.exit(0), 2000);`);
 
-  const created = await runCli(["editor", "refresh", "--compile", "--unity", unity, "--project", dataDir], { ALPS_UNITY_DATA_DIR: dataDir });
+  const created = await runCli(["editor", "refresh", "--compile", "--unity", unity, "--project", dataDir], { UNITY_CLI_DATA_DIR: dataDir });
   assert.equal(created.code, 0, created.stderr);
   const payload = JSON.parse(created.stdout) as { ok: boolean; data: { jobId: string; status: string } };
   assert.equal(payload.ok, true);
@@ -376,7 +376,7 @@ test("init installs com.unity_cli as a local file dependency without requiring U
   assert.equal(data.bridge.cliCompatibilityRange, ">=0.1.0 <0.2.0");
   assert.equal(data.liveRefresh.status, "skipped");
   assert.equal(data.resolve, "skipped");
-  assert.match(await readFile(join(data.bridge.bridgePath, "Editor", "AlpsUnityBridge.cs"), "utf8"), /class AlpsUnityBridge/);
+  assert.match(await readFile(join(data.bridge.bridgePath, "Editor", "UnityCliBridge.cs"), "utf8"), /class UnityCliBridge/);
 
   const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string>; scopedRegistries?: unknown[] };
   assert.equal(manifest.dependencies["com.unity_cli"], data.bridge.dependencySpec);
@@ -446,7 +446,7 @@ test("package install updates manifest, deploys bridge and can start package res
   assert.equal(jobData.result.package, "com.acme.lib");
   assert.equal(jobData.result.installedVersion, "2.0.0");
   assert.equal(jobData.result.bridge.dependencyName, "com.unity_cli");
-  assert.match(await readFile(join(jobData.result.bridge.bridgePath, "Editor", "AlpsUnityBatch.cs"), "utf8"), /ResolvePackages/);
+  assert.match(await readFile(join(jobData.result.bridge.bridgePath, "Editor", "UnityCliBatch.cs"), "utf8"), /ResolvePackages/);
   const bridgeManifest = JSON.parse(await readFile(join(jobData.result.bridge.bridgePath, "package.json"), "utf8")) as { name: string };
   assert.equal(bridgeManifest.name, "com.unity_cli");
 
@@ -498,7 +498,7 @@ test("package resolve job maps bridge compile errors to compile diagnostics", as
   const unity = await makeFakeUnity(`
 const fs = require("node:fs");
 const logIndex = process.argv.indexOf("-logFile");
-if (logIndex >= 0) fs.appendFileSync(process.argv[logIndex + 1], "Packages\\\\com.unity_cli\\\\Editor\\\\AlpsUnityBatch.cs(13,17): error CS0815: Cannot assign void to an implicitly-typed variable\\n[Package Manager] UpmClient::Connect -- IPC stream closed\\n");
+if (logIndex >= 0) fs.appendFileSync(process.argv[logIndex + 1], "Packages\\\\com.unity_cli\\\\Editor\\\\UnityCliBatch.cs(13,17): error CS0815: Cannot assign void to an implicitly-typed variable\\n[Package Manager] UpmClient::Connect -- IPC stream closed\\n");
 process.exit(1);
 `);
 
@@ -538,7 +538,7 @@ test("package resolve without Unity returns structured diagnostic when job reque
 });
 
 test("Unity package batch hook exposes PackageManager resolve API", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/AlpsUnityBatch.cs", import.meta.url), "utf8");
+  const source = await readFile(new URL("../unitypkg/Editor/UnityCliBatch.cs", import.meta.url), "utf8");
 
   assert.match(source, /public static void ResolvePackages\(\)/);
   assert.match(source, /Client\.Resolve\(\)/);
@@ -548,10 +548,10 @@ test("Unity package batch hook exposes PackageManager resolve API", async () => 
 });
 
 test("Unity package batch hook exposes BuildProject executeMethod", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/AlpsUnityBatch.cs", import.meta.url), "utf8");
+  const source = await readFile(new URL("../unitypkg/Editor/UnityCliBatch.cs", import.meta.url), "utf8");
 
   assert.match(source, /public static void BuildProject\(\)/);
-  assert.match(source, /ArgValue\("-alpsBuildOutput"\)/);
+  assert.match(source, /ArgValue\("-unityCliBuildOutput"\)/);
   assert.match(source, /BuildPipeline\.BuildPlayer\(/);
   assert.match(source, /BuildResult\.Succeeded/);
   assert.match(source, /E_BUILD_OUTPUT_REQUIRED/);

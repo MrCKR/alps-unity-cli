@@ -1,7 +1,7 @@
 {
   "name": "com.unity_cli",
   "version": "0.1.0",
-  "displayName": "Alps Unity CLI",
-  "description": "Editor package used by Alps Unity CLI commands.",
+  "displayName": "Unity CLI",
+  "description": "Editor package used by Unity CLI commands.",
   "unity": "2022.3"
 }

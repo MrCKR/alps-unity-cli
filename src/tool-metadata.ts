@@ -1,5 +1,5 @@
 /**
- * Static built-in tool metadata for the Alps Unity CLI.
+ * Static built-in tool metadata for the Unity CLI.
  *
  * Covers every handler registered in bridgeCommandName() plus the
  * offline/job-only commands.  This data is shipped with the CLI/UnityPkg

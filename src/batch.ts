@@ -177,7 +177,7 @@ const commandRegistry = new Map<string, { parallelSafe: boolean }>([
 export function batchJsonSchema(): Record<string, unknown> {
   return {
     $schema: "https://json-schema.org/draft/2020-12/schema",
-    title: "Alps Unity CLI batch file",
+    title: "Unity CLI batch file",
     type: "object",
     additionalProperties: false,
     required: ["steps"],
@@ -364,7 +364,7 @@ function validateBatch(batch: BatchDefinition, normalized: { steps: NormalizedSt
       diagnostics.push({
         level: "error",
         code: "BATCH_COMMAND_NOT_ALLOWED",
-        message: `Batch step must call a registered Alps Unity CLI command, got: ${step.commandKey || step.argv.join(" ")}.`,
+        message: `Batch step must call a registered Unity CLI command, got: ${step.commandKey || step.argv.join(" ")}.`,
         stepId: step.id,
         command: step.commandKey
       });

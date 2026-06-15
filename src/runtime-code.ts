@@ -159,7 +159,7 @@ function normalizeTimeout(value: number | undefined, channel: "live" | "batchmod
 }
 
 function runtimeArtifactDir(dataDir: string, requestId: string): string {
-  return resolve(process.env.ALPS_UNITY_HOME ?? dataDir, "artifacts", requestId);
+  return resolve(process.env.UNITY_CLI_HOME ?? dataDir, "artifacts", requestId);
 }
 
 function parseJsonObject(value: string): { ok: true; value: Record<string, unknown> } | { ok: false; message: string } {
@@ -285,16 +285,16 @@ async function startBatchCodeJob(
     timeoutMs,
     requestId,
     args: [
-      "-executeMethod", "AlpsUnityCli.Batch.ExecuteCode",
-      "-alpsRequestId", requestId,
-      "-alpsCodeSource", sourcePath,
-      "-alpsCodeArgs", String(payload.argsJson ?? "{}"),
-      "-alpsCodeDefines", String(payload.defines ?? ""),
-      "-alpsCodeRefs", codeRefsArg(payload.refs),
-      "-alpsArtifactDir", artifactDir,
-      "-alpsTimeoutMs", String(timeoutMs),
-      "-alpsProjectPath", projectPath,
-      "-alpsCodeResult", resultPath
+      "-executeMethod", "UnityCli.UnityCliBatch.ExecuteCode",
+      "-unityCliRequestId", requestId,
+      "-unityCliCodeSource", sourcePath,
+      "-unityCliCodeArgs", String(payload.argsJson ?? "{}"),
+      "-unityCliCodeDefines", String(payload.defines ?? ""),
+      "-unityCliCodeRefs", codeRefsArg(payload.refs),
+      "-unityCliArtifactDir", artifactDir,
+      "-unityCliTimeoutMs", String(timeoutMs),
+      "-unityCliProjectPath", projectPath,
+      "-unityCliCodeResult", resultPath
     ],
     result
   });
@@ -340,7 +340,7 @@ function normalizeRelativePath(path: string): string {
 }
 
 function codeRefsArg(refs: unknown): string {
-  return typeof refs === "string" && refs.length > 0 ? refs : "__ALPS_EMPTY__";
+  return typeof refs === "string" && refs.length > 0 ? refs : "__UNITY_CLI_EMPTY__";
 }
 
 function summarizeJob(job: JobRecord): Record<string, unknown> {

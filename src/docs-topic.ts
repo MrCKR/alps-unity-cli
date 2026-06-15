@@ -133,7 +133,7 @@ const TOPIC_DOCS: Record<string, DocTopic> = {
   },
   "custom-tool": {
     title: "Custom Tool Commands",
-    summary: "List and run project-specific custom tools registered with the Alps Unity Bridge.",
+    summary: "List and run project-specific custom tools registered with the Unity CLI Bridge.",
     tools: [
       "custom-tool.list — List custom tools",
       "custom-tool.run — Execute a custom tool"
@@ -247,7 +247,7 @@ const TOPIC_DOCS: Record<string, DocTopic> = {
   },
   init: {
     title: "Project Initialization",
-    summary: "Deploy the Alps Unity Bridge package into a project.",
+    summary: "Deploy the Unity CLI Bridge package into a project.",
     tools: ["init — Initialize a project with the bridge package"]
   },
   package: {

@@ -53,7 +53,7 @@ export async function handleDoctorCommand(
   }
 
   // Check 3: Bridge connectivity
-  const endpoint = getString(flags, "bridge-endpoint") ?? runtime.bridgeEndpoint ?? process.env.ALPS_UNITY_BRIDGE_ENDPOINT;
+  const endpoint = getString(flags, "bridge-endpoint") ?? runtime.bridgeEndpoint ?? process.env.UNITY_CLI_BRIDGE_ENDPOINT;
   if (healthyInstances.length > 0 && !endpoint) {
     checks.push(await checkBridgeConnectivity(healthyInstances[0].bridgeEndpoint, requestId, runtime));
   } else if (endpoint) {
@@ -300,7 +300,7 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
       switch (check.name) {
         case "instance_registry":
           if (check.status === "warn") {
-            suggestions.push("Open a Unity project with the Alps Unity Bridge package installed.");
+            suggestions.push("Open a Unity project with the Unity CLI Bridge package installed.");
             suggestions.push("Run unity_cli init --project <path> to set up the bridge.");
           }
           break;
@@ -311,8 +311,8 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
           }
           break;
         case "bridge_connectivity":
-          suggestions.push("Ensure Unity Editor is running with the Alps Unity Bridge package.");
-          suggestions.push("Check --bridge-endpoint or ALPS_UNITY_BRIDGE_ENDPOINT.");
+          suggestions.push("Ensure Unity Editor is running with the Unity CLI Bridge package.");
+          suggestions.push("Check --bridge-endpoint or UNITY_CLI_BRIDGE_ENDPOINT.");
           break;
         case "data_directory":
           suggestions.push("Run any unity_cli command to auto-create the data directory.");

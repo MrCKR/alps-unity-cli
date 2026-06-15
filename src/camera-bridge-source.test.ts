@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
 
-const sourceUrl = new URL("../unitypkg/Editor/AlpsUnityBridge.cs", import.meta.url);
+const sourceUrl = new URL("../unitypkg/Editor/UnityCliBridge.cs", import.meta.url);
 const readmeUrl = new URL("../README.md", import.meta.url);
 
 test("Unity Bridge source keeps top-level C# methods structurally balanced", async () => {
@@ -514,7 +514,7 @@ test("Unity Bridge C# string literals stay balanced", async () => {
         inString = !inString;
       }
     }
-    assert.equal(inString, false, `unterminated string literal on AlpsUnityBridge.cs:${index + 1}`);
+    assert.equal(inString, false, `unterminated string literal on UnityCliBridge.cs:${index + 1}`);
   }
 });
 

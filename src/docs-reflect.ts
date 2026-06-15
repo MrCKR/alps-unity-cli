@@ -133,7 +133,7 @@ async function docsGet(api: string | undefined, flags: Record<string, string | b
   if (matches.length === 0) {
     return failure(requestId, "DOCS_API_NOT_FOUND", `Unity API documentation was not found in the offline cache: ${api}.`, [
       "Run unity_cli docs search <query> to inspect cached APIs.",
-      "Pass --docs-dir <path> or set ALPS_UNITY_DOCS_DIR to a populated cache."
+      "Pass --docs-dir <path> or set UNITY_CLI_DOCS_DIR to a populated cache."
     ]);
   }
   if (matches.length > 1) {
@@ -289,16 +289,16 @@ function reflectSearch(query: string | undefined, flags: Record<string, string |
 }
 
 function docsCacheDir(flags: Record<string, string | boolean>, dataDir: string): string {
-  return resolve(getString(flags, "docs-dir") ?? getString(flags, "cache") ?? process.env.ALPS_UNITY_DOCS_DIR ?? join(dataDir, "docs"));
+  return resolve(getString(flags, "docs-dir") ?? getString(flags, "cache") ?? process.env.UNITY_CLI_DOCS_DIR ?? join(dataDir, "docs"));
 }
 
 function reflectCacheDir(flags: Record<string, string | boolean>, dataDir: string): string {
-  return resolve(getString(flags, "reflect-dir") ?? getString(flags, "cache") ?? process.env.ALPS_UNITY_REFLECT_DIR ?? join(dataDir, "reflect"));
+  return resolve(getString(flags, "reflect-dir") ?? getString(flags, "cache") ?? process.env.UNITY_CLI_REFLECT_DIR ?? join(dataDir, "reflect"));
 }
 
 async function loadDocsCache(root: string): Promise<CacheIndex> {
   await assertDirectory(root, "DOCS_CACHE_MISSING", "Unity documentation cache was not found.", [
-    "Pass --docs-dir <path> or set ALPS_UNITY_DOCS_DIR.",
+    "Pass --docs-dir <path> or set UNITY_CLI_DOCS_DIR.",
     "Populate the cache with index.json/docs.json or Markdown files before running offline docs queries."
   ]);
   const json = await readFirstJson(root, docsIndexCandidates);
@@ -318,7 +318,7 @@ async function loadDocsCache(root: string): Promise<CacheIndex> {
 
 async function loadReflectCache(root: string): Promise<CacheIndex> {
   await assertDirectory(root, "REFLECT_CACHE_MISSING", "Unity reflection cache was not found.", [
-    "Pass --reflect-dir <path> or set ALPS_UNITY_REFLECT_DIR.",
+    "Pass --reflect-dir <path> or set UNITY_CLI_REFLECT_DIR.",
     "Generate a reflection index from Unity batchmode or a live bridge context."
   ]);
   const json = await readFirstJson(root, reflectIndexCandidates);

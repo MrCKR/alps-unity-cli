@@ -6,7 +6,7 @@ import test from "node:test";
 import { handleDoctorCommand, type DoctorRuntime, type DoctorCheck } from "./doctor.js";
 import { readInstances, writeInstances, type UnityInstance } from "./instances.js";
 
-process.env.ALPS_UNITY_ALLOW_NON_WINDOWS = "1";
+process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
 async function makeDataDir(): Promise<string> {
   return mkdtemp(join(tmpdir(), "unity_cli-doctor-test-"));

@@ -251,7 +251,6 @@ export class JobRunner {
 
     const log = await this.readLog(job.logPath);
     const message = firstMatchingLine(log, /([^\r\n]*Packages[\\/]com\.unity_cli[^\r\n]*error CS\d+:[^\r\n]*)/i)
-      ?? firstMatchingLine(log, /([^\r\n]*Packages[\\/]com\.alps\.unity-cli\.bridge[^\r\n]*error CS\d+:[^\r\n]*)/i)
       ?? firstMatchingLine(log, /([^\r\n]*error CS\d+:[^\r\n]*)/i)
       ?? firstMatchingLine(log, /E_PACKAGE_RESOLVE_FAILED:\s*(.+)/i)
       ?? firstMatchingLine(log, /(Another Unity instance is running[^\r\n]*|project is already open[^\r\n]*|AssetDatabase is busy[^\r\n]*|Refresh busy[^\r\n]*)/i)
@@ -366,7 +365,7 @@ function codeDiagnosticCode(log: string): string {
 }
 
 function packageDiagnosticCode(log: string): string {
-  if (/Packages[\\/](?:com\.unity_cli|com\.alps\.unity-cli\.bridge)[^\r\n]*error CS\d+|error CS\d+/i.test(log)) {
+  if (/Packages[\\/]com\.unity_cli[^\r\n]*error CS\d+|error CS\d+/i.test(log)) {
     return "BRIDGE_COMPILE_FAILED";
   }
   if (/version conflict|dependency conflict|conflict/i.test(log)) {

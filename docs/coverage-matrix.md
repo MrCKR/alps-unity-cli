@@ -1,4 +1,4 @@
-# Alps Unity CLI — 功能域覆盖矩阵
+# Unity CLI — 功能域覆盖矩阵
 
 > 格式：unity-mcp 功能域/action → unity_cli 命令 → UnityPkg handler → metadata/describe → 测试证据 → 状态
 
@@ -15,13 +15,13 @@
 
 | unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
 |---|---|---|---|---|---|
-| editor.state | `editor state` | bridge (AlpsUnityBridge) | ✅ `editor.state` in EDITOR_TOOLS | tools.test.ts: editor group has all required tools | ✅ |
-| editor.play | `editor play` | bridge (AlpsUnityBridge) | ✅ `editor.play` in EDITOR_TOOLS | bridge-commands.test.ts | ✅ |
-| editor.pause | `editor pause` | bridge (AlpsUnityBridge) | ✅ `editor.pause` in EDITOR_TOOLS | bridge-commands.test.ts | ✅ |
-| editor.stop | `editor stop` | bridge (AlpsUnityBridge) | ✅ `editor.stop` in EDITOR_TOOLS | bridge-commands.test.ts | ✅ |
-| editor.menu | `editor menu` | bridge (AlpsUnityBridge) | ✅ `editor.menu` in EDITOR_TOOLS | bridge-commands.test.ts | ✅ |
-| editor.console | `editor console` | bridge (AlpsUnityBridge) | ✅ `editor.console` in EDITOR_TOOLS | bridge-commands.test.ts | ✅ |
-| editor.refresh | `editor refresh [--compile]` | job (AlpsUnityCli.Batch.Refresh) | ✅ `editor.refresh` in EDITOR_TOOLS (S2.3 新增) | tools.test.ts: editor.refresh metadata | ✅ |
+| editor.state | `editor state` | bridge (UnityCliBridge) | ✅ `editor.state` in EDITOR_TOOLS | tools.test.ts: editor group has all required tools | ✅ |
+| editor.play | `editor play` | bridge (UnityCliBridge) | ✅ `editor.play` in EDITOR_TOOLS | bridge-commands.test.ts | ✅ |
+| editor.pause | `editor pause` | bridge (UnityCliBridge) | ✅ `editor.pause` in EDITOR_TOOLS | bridge-commands.test.ts | ✅ |
+| editor.stop | `editor stop` | bridge (UnityCliBridge) | ✅ `editor.stop` in EDITOR_TOOLS | bridge-commands.test.ts | ✅ |
+| editor.menu | `editor menu` | bridge (UnityCliBridge) | ✅ `editor.menu` in EDITOR_TOOLS | bridge-commands.test.ts | ✅ |
+| editor.console | `editor console` | bridge (UnityCliBridge) | ✅ `editor.console` in EDITOR_TOOLS | bridge-commands.test.ts | ✅ |
+| editor.refresh | `editor refresh [--compile]` | job (UnityCli.UnityCliBatch.Refresh) | ✅ `editor.refresh` in EDITOR_TOOLS (S2.3 新增) | tools.test.ts: editor.refresh metadata | ✅ |
 
 ## Package 域
 
@@ -47,7 +47,7 @@
 
 | unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
 |---|---|---|---|---|---|
-| build.run | `build run [--target] [--output]` | job (AlpsUnityCli.Batch.BuildProject) | ✅ `build.run` in CLI_ONLY_TOOLS (S2.3 新增) | tools.test.ts: build.run metadata | ✅ |
+| build.run | `build run [--target] [--output]` | job (UnityCli.UnityCliBatch.BuildProject) | ✅ `build.run` in CLI_ONLY_TOOLS (S2.3 新增) | tools.test.ts: build.run metadata | ✅ |
 | build.status | `build status --id <jobId>` | offline (job status) | ✅ `build.status` in CLI_ONLY_TOOLS (S2.3 新增) | tools.test.ts: build.status metadata | ✅ |
 | build.cancel | `build cancel --id <jobId>` | offline (job cancel) | ✅ `build.cancel` in CLI_ONLY_TOOLS (S2.3 新增) | tools.test.ts: build.cancel metadata | ✅ |
 
@@ -55,32 +55,32 @@
 
 | unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
 |---|---|---|---|---|---|
-| asset.search | `asset search <keyword>` | bridge (AlpsUnityBridge) | ✅ `asset.search` in ASSET_TOOLS | bridge-commands.test.ts | ✅ keep |
-| asset.info | `asset info <path>` | bridge (AlpsUnityBridge) | ✅ `asset.info` in ASSET_TOOLS | bridge-commands.test.ts | ✅ keep |
-| asset.create | `asset create <path> [--type folder\|file]` / `asset mkdir <path>` | bridge (AlpsUnityBridge) | ✅ `asset.create` in ASSET_TOOLS | bridge-commands.test.ts | ✅ merge |
-| asset.import | `asset import <path> [--source file]` | bridge (AlpsUnityBridge) | ✅ `asset.import` in ASSET_TOOLS | bridge-commands.test.ts | ✅ keep |
-| asset.modify | `asset modify <path> --content-file <file>` | bridge (AlpsUnityBridge) | ✅ `asset.modify` in ASSET_TOOLS | bridge-commands.test.ts | ✅ keep |
-| asset.delete | `asset delete <path>` | bridge (AlpsUnityBridge) | ✅ `asset.delete` in ASSET_TOOLS | bridge-commands.test.ts | ✅ keep |
-| asset.duplicate | `asset duplicate <path> --to <path>` | bridge (AlpsUnityBridge) | ✅ `asset.duplicate` in ASSET_TOOLS | bridge-commands.test.ts | ✅ keep |
-| asset.move | `asset move <path> --to <path>` | bridge (AlpsUnityBridge) | ✅ `asset.move` in ASSET_TOOLS | bridge-commands.test.ts | ✅ keep |
-| asset.rename | `asset rename <path> --name <name>` | bridge (AlpsUnityBridge) | ✅ `asset.rename` in ASSET_TOOLS | bridge-commands.test.ts | ✅ rename |
-| prefab.info | `prefab info <path>` | bridge (AlpsUnityBridge) | ✅ `prefab.info` in PREFAB_TOOLS | bridge-commands.test.ts | ✅ keep |
-| prefab.hierarchy | `prefab hierarchy <path>` | bridge (AlpsUnityBridge) | ✅ `prefab.hierarchy` in PREFAB_TOOLS | bridge-commands.test.ts | ✅ keep |
-| prefab.create | `prefab create <source> --path <path>` | bridge (AlpsUnityBridge) | ✅ `prefab.create` in PREFAB_TOOLS | bridge-commands.test.ts | ✅ keep |
-| prefab.modify | `prefab modify <path> [--name] [--add-child] [--remove-child]` | bridge (AlpsUnityBridge) | ✅ `prefab.modify` in PREFAB_TOOLS | bridge-commands.test.ts | ✅ merge |
-| prefab.stage-open | `prefab stage-open <path>` | bridge (AlpsUnityBridge) | ✅ `prefab.stage-open` in PREFAB_TOOLS | bridge-commands.test.ts | ✅ keep |
-| prefab.stage-save | `prefab stage-save [path]` | bridge (AlpsUnityBridge) | ✅ `prefab.stage-save` in PREFAB_TOOLS | bridge-commands.test.ts | ✅ keep |
-| prefab.stage-close | `prefab stage-close [--save]` | bridge (AlpsUnityBridge) | ✅ `prefab.stage-close` in PREFAB_TOOLS | bridge-commands.test.ts | ✅ keep |
+| asset.search | `asset search <keyword>` | bridge (UnityCliBridge) | ✅ `asset.search` in ASSET_TOOLS | bridge-commands.test.ts | ✅ keep |
+| asset.info | `asset info <path>` | bridge (UnityCliBridge) | ✅ `asset.info` in ASSET_TOOLS | bridge-commands.test.ts | ✅ keep |
+| asset.create | `asset create <path> [--type folder\|file]` / `asset mkdir <path>` | bridge (UnityCliBridge) | ✅ `asset.create` in ASSET_TOOLS | bridge-commands.test.ts | ✅ merge |
+| asset.import | `asset import <path> [--source file]` | bridge (UnityCliBridge) | ✅ `asset.import` in ASSET_TOOLS | bridge-commands.test.ts | ✅ keep |
+| asset.modify | `asset modify <path> --content-file <file>` | bridge (UnityCliBridge) | ✅ `asset.modify` in ASSET_TOOLS | bridge-commands.test.ts | ✅ keep |
+| asset.delete | `asset delete <path>` | bridge (UnityCliBridge) | ✅ `asset.delete` in ASSET_TOOLS | bridge-commands.test.ts | ✅ keep |
+| asset.duplicate | `asset duplicate <path> --to <path>` | bridge (UnityCliBridge) | ✅ `asset.duplicate` in ASSET_TOOLS | bridge-commands.test.ts | ✅ keep |
+| asset.move | `asset move <path> --to <path>` | bridge (UnityCliBridge) | ✅ `asset.move` in ASSET_TOOLS | bridge-commands.test.ts | ✅ keep |
+| asset.rename | `asset rename <path> --name <name>` | bridge (UnityCliBridge) | ✅ `asset.rename` in ASSET_TOOLS | bridge-commands.test.ts | ✅ rename |
+| prefab.info | `prefab info <path>` | bridge (UnityCliBridge) | ✅ `prefab.info` in PREFAB_TOOLS | bridge-commands.test.ts | ✅ keep |
+| prefab.hierarchy | `prefab hierarchy <path>` | bridge (UnityCliBridge) | ✅ `prefab.hierarchy` in PREFAB_TOOLS | bridge-commands.test.ts | ✅ keep |
+| prefab.create | `prefab create <source> --path <path>` | bridge (UnityCliBridge) | ✅ `prefab.create` in PREFAB_TOOLS | bridge-commands.test.ts | ✅ keep |
+| prefab.modify | `prefab modify <path> [--name] [--add-child] [--remove-child]` | bridge (UnityCliBridge) | ✅ `prefab.modify` in PREFAB_TOOLS | bridge-commands.test.ts | ✅ merge |
+| prefab.stage-open | `prefab stage-open <path>` | bridge (UnityCliBridge) | ✅ `prefab.stage-open` in PREFAB_TOOLS | bridge-commands.test.ts | ✅ keep |
+| prefab.stage-save | `prefab stage-save [path]` | bridge (UnityCliBridge) | ✅ `prefab.stage-save` in PREFAB_TOOLS | bridge-commands.test.ts | ✅ keep |
+| prefab.stage-close | `prefab stage-close [--save]` | bridge (UnityCliBridge) | ✅ `prefab.stage-close` in PREFAB_TOOLS | bridge-commands.test.ts | ✅ keep |
 
 ## Script 域
 
 | unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
 |---|---|---|---|---|---|
-| script.create | `script create <path> --content-file <file>` | bridge (AlpsUnityBridge) | ✅ `script.create` in SCRIPT_TOOLS | bridge-commands.test.ts | ✅ |
-| script.read | `script read <path>` | bridge (AlpsUnityBridge) | ✅ `script.read` in SCRIPT_TOOLS | bridge-commands.test.ts | ✅ |
-| script.edit | `script edit <path> [--patch/--find/--replace]` | bridge (AlpsUnityBridge) | ✅ `script.edit` in SCRIPT_TOOLS | bridge-commands.test.ts | ✅ |
-| script.delete | `script delete <path>` | bridge (AlpsUnityBridge) | ✅ `script.delete` in SCRIPT_TOOLS (S2.4 新增) | tools.test.ts: script.delete metadata | ✅ |
-| script.validate | `script validate <path>` | bridge (AlpsUnityBridge) | ✅ `script.validate` in SCRIPT_TOOLS | bridge-commands.test.ts | ✅ |
+| script.create | `script create <path> --content-file <file>` | bridge (UnityCliBridge) | ✅ `script.create` in SCRIPT_TOOLS | bridge-commands.test.ts | ✅ |
+| script.read | `script read <path>` | bridge (UnityCliBridge) | ✅ `script.read` in SCRIPT_TOOLS | bridge-commands.test.ts | ✅ |
+| script.edit | `script edit <path> [--patch/--find/--replace]` | bridge (UnityCliBridge) | ✅ `script.edit` in SCRIPT_TOOLS | bridge-commands.test.ts | ✅ |
+| script.delete | `script delete <path>` | bridge (UnityCliBridge) | ✅ `script.delete` in SCRIPT_TOOLS (S2.4 新增) | tools.test.ts: script.delete metadata | ✅ |
+| script.validate | `script validate <path>` | bridge (UnityCliBridge) | ✅ `script.validate` in SCRIPT_TOOLS | bridge-commands.test.ts | ✅ |
 
 ## Code 域
 
@@ -92,30 +92,30 @@
 
 | unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
 |---|---|---|---|---|---|
-| graphics.quality | `graphics quality [--quality-level] [--v-sync-count]` | bridge (AlpsUnityBridge) | ✅ `graphics.quality` in GRAPHICS_TOOLS | bridge-commands.test.ts: graphics forwarding; tools.test.ts: S3.2 graphics group | ✅ |
-| graphics.settings | `graphics settings [--anti-aliasing] [--shadow-distance] [--render-pipeline]` | bridge (AlpsUnityBridge) | ✅ `graphics.settings` in GRAPHICS_TOOLS | bridge-commands.test.ts: renderPipeline forwarding | ✅ |
-| graphics.pipeline | `graphics pipeline` | bridge (AlpsUnityBridge) | ✅ `graphics.pipeline` in GRAPHICS_TOOLS | bridge-commands.test.ts: graphics.pipeline forwarding; camera-bridge-source.test.ts | ✅ |
-| graphics.volume | `graphics volume [target]` | bridge (AlpsUnityBridge) | ✅ `graphics.volume` in GRAPHICS_TOOLS | bridge-commands.test.ts: graphics.volume forwarding; camera-bridge-source.test.ts | ✅ |
-| graphics.screenshot | `graphics screenshot <path> [--include-diagnostics]` | bridge (AlpsUnityBridge) | ✅ `graphics.screenshot` in GRAPHICS_TOOLS | bridge-commands.test.ts: graphics screenshot forwarding | ✅ |
+| graphics.quality | `graphics quality [--quality-level] [--v-sync-count]` | bridge (UnityCliBridge) | ✅ `graphics.quality` in GRAPHICS_TOOLS | bridge-commands.test.ts: graphics forwarding; tools.test.ts: S3.2 graphics group | ✅ |
+| graphics.settings | `graphics settings [--anti-aliasing] [--shadow-distance] [--render-pipeline]` | bridge (UnityCliBridge) | ✅ `graphics.settings` in GRAPHICS_TOOLS | bridge-commands.test.ts: renderPipeline forwarding | ✅ |
+| graphics.pipeline | `graphics pipeline` | bridge (UnityCliBridge) | ✅ `graphics.pipeline` in GRAPHICS_TOOLS | bridge-commands.test.ts: graphics.pipeline forwarding; camera-bridge-source.test.ts | ✅ |
+| graphics.volume | `graphics volume [target]` | bridge (UnityCliBridge) | ✅ `graphics.volume` in GRAPHICS_TOOLS | bridge-commands.test.ts: graphics.volume forwarding; camera-bridge-source.test.ts | ✅ |
+| graphics.screenshot | `graphics screenshot <path> [--include-diagnostics]` | bridge (UnityCliBridge) | ✅ `graphics.screenshot` in GRAPHICS_TOOLS | bridge-commands.test.ts: graphics screenshot forwarding | ✅ |
 
 ## Physics 域
 
 | unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
 |---|---|---|---|---|---|
-| physics.settings | `physics settings [--mode 3d\|2d] [--gravity-y]` | bridge (AlpsUnityBridge) | ✅ `physics.settings` in PHYSICS_TOOLS | bridge-commands.test.ts: physics settings forwarding; tools.test.ts: S3.2 physics group | ✅ |
-| physics.raycast | `physics raycast [--origin-*] [--direction-*] [--distance]` | bridge (AlpsUnityBridge) | ✅ `physics.raycast` in PHYSICS_TOOLS | bridge-commands.test.ts: physics raycast forwarding | ✅ |
-| physics.simulation | `physics simulation [--steps] [--delta-time] [--simulate]` | bridge (AlpsUnityBridge) | ✅ `physics.simulation` in PHYSICS_TOOLS | bridge-commands.test.ts: physics simulation forwarding | ✅ |
+| physics.settings | `physics settings [--mode 3d\|2d] [--gravity-y]` | bridge (UnityCliBridge) | ✅ `physics.settings` in PHYSICS_TOOLS | bridge-commands.test.ts: physics settings forwarding; tools.test.ts: S3.2 physics group | ✅ |
+| physics.raycast | `physics raycast [--origin-*] [--direction-*] [--distance]` | bridge (UnityCliBridge) | ✅ `physics.raycast` in PHYSICS_TOOLS | bridge-commands.test.ts: physics raycast forwarding | ✅ |
+| physics.simulation | `physics simulation [--steps] [--delta-time] [--simulate]` | bridge (UnityCliBridge) | ✅ `physics.simulation` in PHYSICS_TOOLS | bridge-commands.test.ts: physics simulation forwarding | ✅ |
 
 ## Animation/VFX 域
 
 | unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
 |---|---|---|---|---|---|
-| animation.clip | `animation clip <Assets/Clip.anim> [--create]` | bridge (AlpsUnityBridge) | ✅ `animation.clip` in ANIMATION_TOOLS | bridge-commands.test.ts: animation forwarding; tools.test.ts: S3.2 animation group | ✅ |
-| animation.state | `animation state <target> [--layer]` | bridge (AlpsUnityBridge) | ✅ `animation.state` in ANIMATION_TOOLS | bridge-commands.test.ts: animation forwarding | ✅ |
-| animation.play | `animation play <target> --state <name>` | bridge (AlpsUnityBridge) | ✅ `animation.play` in ANIMATION_TOOLS | bridge-commands.test.ts: animation forwarding; tools.test.ts: describe animation.play | ✅ |
-| animation.stop | `animation stop <target>` | bridge (AlpsUnityBridge) | ✅ `animation.stop` in ANIMATION_TOOLS | bridge-commands.test.ts: animation forwarding | ✅ |
-| vfx.graph | `vfx graph <Assets/Effect.vfx> [--create]` | bridge (AlpsUnityBridge) | ✅ `vfx.graph` in VFX_TOOLS | bridge-commands.test.ts: vfx forwarding; tools.test.ts: S3.2 vfx group | ✅ |
-| vfx.effect | `vfx effect <target> [--graph] [--add]` | bridge (AlpsUnityBridge) | ✅ `vfx.effect` in VFX_TOOLS | bridge-commands.test.ts: vfx forwarding | ✅ |
+| animation.clip | `animation clip <Assets/Clip.anim> [--create]` | bridge (UnityCliBridge) | ✅ `animation.clip` in ANIMATION_TOOLS | bridge-commands.test.ts: animation forwarding; tools.test.ts: S3.2 animation group | ✅ |
+| animation.state | `animation state <target> [--layer]` | bridge (UnityCliBridge) | ✅ `animation.state` in ANIMATION_TOOLS | bridge-commands.test.ts: animation forwarding | ✅ |
+| animation.play | `animation play <target> --state <name>` | bridge (UnityCliBridge) | ✅ `animation.play` in ANIMATION_TOOLS | bridge-commands.test.ts: animation forwarding; tools.test.ts: describe animation.play | ✅ |
+| animation.stop | `animation stop <target>` | bridge (UnityCliBridge) | ✅ `animation.stop` in ANIMATION_TOOLS | bridge-commands.test.ts: animation forwarding | ✅ |
+| vfx.graph | `vfx graph <Assets/Effect.vfx> [--create]` | bridge (UnityCliBridge) | ✅ `vfx.graph` in VFX_TOOLS | bridge-commands.test.ts: vfx forwarding; tools.test.ts: S3.2 vfx group | ✅ |
+| vfx.effect | `vfx effect <target> [--graph] [--add]` | bridge (UnityCliBridge) | ✅ `vfx.effect` in VFX_TOOLS | bridge-commands.test.ts: vfx forwarding | ✅ |
 
 ---
 
@@ -123,39 +123,39 @@
 
 | unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
 |---|---|---|---|---|---|
-| camera.list | `camera list` | bridge (AlpsUnityBridge) | ✅ `camera.list` in CAMERA_TOOLS | bridge-commands.test.ts: camera commands forward target and screenshot options; tools.test.ts: S3.1 metadata coverage | ✅ |
-| camera.info | `camera info <target>` | bridge (AlpsUnityBridge) | ✅ `camera.info` in CAMERA_TOOLS | bridge-commands.test.ts: camera commands forward target and screenshot options; tools.test.ts: S3.1 metadata coverage | ✅ |
-| camera.screenshot | `camera screenshot <target> --output <path>` | bridge (AlpsUnityBridge) | ✅ `camera.screenshot` in CAMERA_TOOLS | bridge-commands.test.ts: camera commands forward target and screenshot options; tools.test.ts: S3.1 write metadata | ✅ |
-| scene.screenshot | `scene screenshot <path>` | bridge (AlpsUnityBridge) | ✅ `scene.screenshot` in SCENE_TOOLS | bridge-commands.test.ts: scene screenshot forwards output path and overwrite | ✅ |
+| camera.list | `camera list` | bridge (UnityCliBridge) | ✅ `camera.list` in CAMERA_TOOLS | bridge-commands.test.ts: camera commands forward target and screenshot options; tools.test.ts: S3.1 metadata coverage | ✅ |
+| camera.info | `camera info <target>` | bridge (UnityCliBridge) | ✅ `camera.info` in CAMERA_TOOLS | bridge-commands.test.ts: camera commands forward target and screenshot options; tools.test.ts: S3.1 metadata coverage | ✅ |
+| camera.screenshot | `camera screenshot <target> --output <path>` | bridge (UnityCliBridge) | ✅ `camera.screenshot` in CAMERA_TOOLS | bridge-commands.test.ts: camera commands forward target and screenshot options; tools.test.ts: S3.1 write metadata | ✅ |
+| scene.screenshot | `scene screenshot <path>` | bridge (UnityCliBridge) | ✅ `scene.screenshot` in SCENE_TOOLS | bridge-commands.test.ts: scene screenshot forwards output path and overwrite | ✅ |
 
 ## Material / Shader / Texture 域
 
 | unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
 |---|---|---|---|---|---|
-| material.info | `material info <path>` | bridge (AlpsUnityBridge) | ✅ `material.info` in MATERIAL_TOOLS | bridge-commands.test.ts: material commands forward asset paths, target, values and planned effects; tools.test.ts: S3.1 metadata coverage | ✅ |
-| material.create | `material create <path> --shader <name>` | bridge (AlpsUnityBridge) | ✅ `material.create` in MATERIAL_TOOLS | bridge-commands.test.ts: material commands forward asset paths, target, values and planned effects; tools.test.ts: S3.1 write metadata | ✅ |
-| material.assign | `material assign --target <go> --material <path>` | bridge (AlpsUnityBridge) | ✅ `material.assign` in MATERIAL_TOOLS | bridge-commands.test.ts: material commands forward asset paths, target, values and planned effects | ✅ |
-| material.set | `material set <path> --property <name> --value <value>` | bridge (AlpsUnityBridge) | ✅ `material.set` in MATERIAL_TOOLS | bridge-commands.test.ts: material commands forward asset paths, target, values and planned effects | ✅ |
-| shader.info | `shader info <path>` | bridge (AlpsUnityBridge) | ✅ `shader.info` in SHADER_TOOLS | bridge-commands.test.ts: shader commands forward paths, content and overwrite; tools.test.ts: S3.1 metadata coverage | ✅ |
-| shader.read | `shader read <path>` | bridge (AlpsUnityBridge) | ✅ `shader.read` in SHADER_TOOLS | bridge-commands.test.ts: shader commands forward paths, content and overwrite | ✅ |
-| shader.create | `shader create <path> --content-file <file>` | bridge (AlpsUnityBridge) | ✅ `shader.create` in SHADER_TOOLS | bridge-commands.test.ts: shader commands forward paths, content and overwrite; tools.test.ts: S3.1 write metadata | ✅ |
-| shader.update | `shader update <path> --content-file <file>` | bridge (AlpsUnityBridge) | ✅ `shader.update` in SHADER_TOOLS | bridge-commands.test.ts: shader commands forward paths, content and overwrite | ✅ |
-| texture.info | `texture info <path>` | bridge (AlpsUnityBridge) | ✅ `texture.info` in TEXTURE_TOOLS | bridge-commands.test.ts: texture commands forward importer, sprite and creation options; tools.test.ts: S3.1 metadata coverage | ✅ |
-| texture.create | `texture create <path> [--source <file>]` | bridge (AlpsUnityBridge) | ✅ `texture.create` in TEXTURE_TOOLS | bridge-commands.test.ts: texture commands forward importer, sprite and creation options; tools.test.ts: S3.1 write metadata | ✅ |
-| texture.sprite | `texture sprite <path>` | bridge (AlpsUnityBridge) | ✅ `texture.sprite` in TEXTURE_TOOLS | bridge-commands.test.ts: texture commands forward importer, sprite and creation options | ✅ |
-| texture.import-settings | `texture import-settings <path>` | bridge (AlpsUnityBridge) | ✅ `texture.import-settings` in TEXTURE_TOOLS | bridge-commands.test.ts: texture commands forward importer, sprite and creation options | ✅ |
+| material.info | `material info <path>` | bridge (UnityCliBridge) | ✅ `material.info` in MATERIAL_TOOLS | bridge-commands.test.ts: material commands forward asset paths, target, values and planned effects; tools.test.ts: S3.1 metadata coverage | ✅ |
+| material.create | `material create <path> --shader <name>` | bridge (UnityCliBridge) | ✅ `material.create` in MATERIAL_TOOLS | bridge-commands.test.ts: material commands forward asset paths, target, values and planned effects; tools.test.ts: S3.1 write metadata | ✅ |
+| material.assign | `material assign --target <go> --material <path>` | bridge (UnityCliBridge) | ✅ `material.assign` in MATERIAL_TOOLS | bridge-commands.test.ts: material commands forward asset paths, target, values and planned effects | ✅ |
+| material.set | `material set <path> --property <name> --value <value>` | bridge (UnityCliBridge) | ✅ `material.set` in MATERIAL_TOOLS | bridge-commands.test.ts: material commands forward asset paths, target, values and planned effects | ✅ |
+| shader.info | `shader info <path>` | bridge (UnityCliBridge) | ✅ `shader.info` in SHADER_TOOLS | bridge-commands.test.ts: shader commands forward paths, content and overwrite; tools.test.ts: S3.1 metadata coverage | ✅ |
+| shader.read | `shader read <path>` | bridge (UnityCliBridge) | ✅ `shader.read` in SHADER_TOOLS | bridge-commands.test.ts: shader commands forward paths, content and overwrite | ✅ |
+| shader.create | `shader create <path> --content-file <file>` | bridge (UnityCliBridge) | ✅ `shader.create` in SHADER_TOOLS | bridge-commands.test.ts: shader commands forward paths, content and overwrite; tools.test.ts: S3.1 write metadata | ✅ |
+| shader.update | `shader update <path> --content-file <file>` | bridge (UnityCliBridge) | ✅ `shader.update` in SHADER_TOOLS | bridge-commands.test.ts: shader commands forward paths, content and overwrite | ✅ |
+| texture.info | `texture info <path>` | bridge (UnityCliBridge) | ✅ `texture.info` in TEXTURE_TOOLS | bridge-commands.test.ts: texture commands forward importer, sprite and creation options; tools.test.ts: S3.1 metadata coverage | ✅ |
+| texture.create | `texture create <path> [--source <file>]` | bridge (UnityCliBridge) | ✅ `texture.create` in TEXTURE_TOOLS | bridge-commands.test.ts: texture commands forward importer, sprite and creation options; tools.test.ts: S3.1 write metadata | ✅ |
+| texture.sprite | `texture sprite <path>` | bridge (UnityCliBridge) | ✅ `texture.sprite` in TEXTURE_TOOLS | bridge-commands.test.ts: texture commands forward importer, sprite and creation options | ✅ |
+| texture.import-settings | `texture import-settings <path>` | bridge (UnityCliBridge) | ✅ `texture.import-settings` in TEXTURE_TOOLS | bridge-commands.test.ts: texture commands forward importer, sprite and creation options | ✅ |
 
 ## UI 域
 
 | unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
 |---|---|---|---|---|---|
-| ui.canvas.create | `ui canvas/create <name>` | bridge (AlpsUnityBridge) | ✅ `ui.canvas.create` in UI_TOOLS | bridge-commands.test.ts: ui commands forward creation, document and hierarchy arguments; tools.test.ts: S3.1 write metadata | ✅ |
-| ui.text.create | `ui text/create <name>` | bridge (AlpsUnityBridge) | ✅ `ui.text.create` in UI_TOOLS | bridge-commands.test.ts: ui commands forward creation, document and hierarchy arguments | ✅ |
-| ui.button.create | `ui button/create <name>` | bridge (AlpsUnityBridge) | ✅ `ui.button.create` in UI_TOOLS | bridge-commands.test.ts: ui commands forward creation, document and hierarchy arguments | ✅ |
-| ui.image.create | `ui image/create <name>` | bridge (AlpsUnityBridge) | ✅ `ui.image.create` in UI_TOOLS | bridge-commands.test.ts: ui commands forward creation, document and hierarchy arguments | ✅ |
+| ui.canvas.create | `ui canvas/create <name>` | bridge (UnityCliBridge) | ✅ `ui.canvas.create` in UI_TOOLS | bridge-commands.test.ts: ui commands forward creation, document and hierarchy arguments; tools.test.ts: S3.1 write metadata | ✅ |
+| ui.text.create | `ui text/create <name>` | bridge (UnityCliBridge) | ✅ `ui.text.create` in UI_TOOLS | bridge-commands.test.ts: ui commands forward creation, document and hierarchy arguments | ✅ |
+| ui.button.create | `ui button/create <name>` | bridge (UnityCliBridge) | ✅ `ui.button.create` in UI_TOOLS | bridge-commands.test.ts: ui commands forward creation, document and hierarchy arguments | ✅ |
+| ui.image.create | `ui image/create <name>` | bridge (UnityCliBridge) | ✅ `ui.image.create` in UI_TOOLS | bridge-commands.test.ts: ui commands forward creation, document and hierarchy arguments | ✅ |
 | ui.document.info | `ui document/info <target|path>` | bridge/offline reader | ✅ `ui.document.info` in UI_TOOLS | bridge-commands.test.ts: ui document info reads UXML offline when bridge endpoint is absent | ✅ |
-| ui.document.create | `ui document/create --uxml <path>` | bridge (AlpsUnityBridge) | ✅ `ui.document.create` in UI_TOOLS | bridge-commands.test.ts: ui commands forward creation, document and hierarchy arguments | ✅ |
-| ui.hierarchy | `ui hierarchy [target]` | bridge (AlpsUnityBridge) | ✅ `ui.hierarchy` in UI_TOOLS | bridge-commands.test.ts: ui commands forward creation, document and hierarchy arguments | ✅ |
+| ui.document.create | `ui document/create --uxml <path>` | bridge (UnityCliBridge) | ✅ `ui.document.create` in UI_TOOLS | bridge-commands.test.ts: ui commands forward creation, document and hierarchy arguments | ✅ |
+| ui.hierarchy | `ui hierarchy [target]` | bridge (UnityCliBridge) | ✅ `ui.hierarchy` in UI_TOOLS | bridge-commands.test.ts: ui commands forward creation, document and hierarchy arguments | ✅ |
 
 ---
 
