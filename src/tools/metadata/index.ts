@@ -9,6 +9,7 @@
  */
 
 import { bridgeCommandRegistry } from "../../bridge/index.js";
+import { validateBridgeRegistryContracts, validateToolMetadataContracts } from "../../contracts/command-contract.js";
 import { SCENE_TOOLS } from "./groups/scene.js";
 import { CAMERA_TOOLS } from "./groups/camera.js";
 import { GO_TOOLS } from "./groups/game-object.js";
@@ -62,7 +63,9 @@ const BUILTIN_TOOLS: ToolMetadata[] = [
   ...CLI_ONLY_TOOLS,
 ];
 
+validateBridgeRegistryContracts(bridgeCommandRegistry);
 validateBuiltinTools(BUILTIN_TOOLS);
+validateToolMetadataContracts(BUILTIN_TOOLS, bridgeCommandRegistry);
 
 /** Return all built-in tool metadata entries. */
 export function builtinToolMetadata(): ToolMetadata[] {
