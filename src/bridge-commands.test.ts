@@ -8,7 +8,7 @@ import { JobRunner } from "./job-runner.js";
 import { JobStore } from "./job-store.js";
 import type { BridgeRequest } from "./bridge-commands.js";
 
-process.env.ALPS_UNITY_ALLOW_NON_WINDOWS = "1";
+process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
 async function makeRuntime() {
   const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-bridge-"));
@@ -413,7 +413,7 @@ test("custom-tool bridge errors preserve ALP-52 diagnostics", async () => {
   for (const [code, message] of cases) {
     const result = await execute(["custom-tool", "run", "Project.Tools.GenerateLevel", "--input", "{}"], {
       ...runtime,
-      bridgeExecute: async () => ({ ok: false, error: { code, message }, nextActions: ["Inspect AlpsUnityBridge.log."] })
+      bridgeExecute: async () => ({ ok: false, error: { code, message }, nextActions: ["Inspect UnityCliBridge.log."] })
     });
     assert.equal(result.ok, false, code);
     assert.equal(result.error?.code, code, code);
@@ -520,7 +520,7 @@ test("animation and vfx bridge errors preserve diagnostics", async () => {
     { argv: ["animation", "play", "Player", "--state", "Missing"], code: "E_TARGET_AMBIGUOUS", message: "Multiple GameObjects matched: Player", nextActions: ["Pass a hierarchy path or instance id."] },
     { argv: ["animation", "clip", "Assets/Animations/Missing.anim"], code: "E_ANIMATION_CLIP_NOT_FOUND", message: "AnimationClip asset not found", nextActions: ["Check the path or create one with unity_cli animation clip <path> --create."] },
     { argv: ["vfx", "graph", "Assets/VFX/Explosion.vfx"], code: "E_VFX_PACKAGE_MISSING", message: "Visual Effect Graph package is not installed", nextActions: ["Install com.unity.visualeffectgraph with unity_cli package install com.unity.visualeffectgraph, run package resolve, then retry."] },
-    { argv: ["vfx", "graph", "Assets/VFX/Explosion.vfx", "--create"], code: "E_VFX_GRAPH_CREATE_FAILED", message: "VFX Graph asset creation did not produce a readable VisualEffectAsset", nextActions: ["Check Unity Console and AlpsUnityBridge.log; the Visual Effect Graph package may have changed its internal authoring API."] },
+    { argv: ["vfx", "graph", "Assets/VFX/Explosion.vfx", "--create"], code: "E_VFX_GRAPH_CREATE_FAILED", message: "VFX Graph asset creation did not produce a readable VisualEffectAsset", nextActions: ["Check Unity Console and UnityCliBridge.log; the Visual Effect Graph package may have changed its internal authoring API."] },
     { argv: ["animation", "clip", "D:\\tmp\\Bad.anim"], code: "E_ANIMATION_CLIP_PATH_INVALID", message: "AnimationClip path must be under Assets/ and end with .anim: D:\\tmp\\Bad.anim", nextActions: ["Pass a Unity asset path such as Assets/Animations/Player.anim."] }
   ];
 
@@ -540,7 +540,7 @@ test("animation and vfx bridge errors preserve diagnostics", async () => {
 test("shader commands forward paths, content and overwrite", async () => {
   const runtime = await makeRuntime();
   const contentFile = join(runtime.dataDir, "Unlit.shader");
-  await writeFile(contentFile, "Shader \"Alps/Test\" {}\n", "utf8");
+  await writeFile(contentFile, "Shader \"UnityCli/Test\" {}\n", "utf8");
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
     requests.push(payload);
@@ -558,7 +558,7 @@ test("shader commands forward paths, content and overwrite", async () => {
   assert.equal(update.ok, true);
   assert.deepEqual(requests.map((request) => request.command), ["shader.info", "shader.read", "shader.create", "shader.update"]);
   assert.deepEqual(requests[0].args, { path: "Assets/Shaders/Unlit.shader", target: "Assets/Shaders/Unlit.shader" });
-  assert.equal(requests[2].args.content, "Shader \"Alps/Test\" {}\n");
+  assert.equal(requests[2].args.content, "Shader \"UnityCli/Test\" {}\n");
   assert.equal(requests[2].args.overwrite, true);
   assert.equal(requests[3].args.content, "Shader X {}");
 });
@@ -736,7 +736,7 @@ test("camera screenshot bridge target and IO errors preserve protocol envelopes"
   const cases: Array<{ name: string; response: { code: string; message: string }; nextActions: string[] }> = [
     { name: "empty target", response: { code: "E_TARGET_NOT_FOUND", message: "Camera screenshot requires a target Camera." }, nextActions: ["Pass a Camera name, hierarchy path or instance id."] },
     { name: "missing camera", response: { code: "E_TARGET_NOT_FOUND", message: "Camera not found: Missing Camera" }, nextActions: ["Run unity_cli camera list to inspect available cameras."] },
-    { name: "io failure", response: { code: "E_IO_ERROR", message: "Failed to write screenshot output." }, nextActions: ["Check output path, permissions, format parameters and AlpsUnityBridge.log."] }
+    { name: "io failure", response: { code: "E_IO_ERROR", message: "Failed to write screenshot output." }, nextActions: ["Check output path, permissions, format parameters and UnityCliBridge.log."] }
   ];
 
   for (const item of cases) {
@@ -790,7 +790,7 @@ test("editor bridge errors preserve structured diagnostics", async () => {
     { name: "busy", args: ["editor", "menu", "File/Save"], response: { code: "E_UNITY_BUSY", message: "Unity Editor is busy and cannot run this editor command right now." }, nextActions: ["Wait for compiling, asset importing, build, PlayMode switching, or domain reload to complete, then retry."] },
     { name: "playmode timeout", args: ["editor", "stop"], response: { code: "E_PLAYMODE_TIMEOUT", message: "Unity PlayMode did not reach the requested state before the timeout." }, nextActions: ["Wait for PlayMode switching or domain reload to finish, then retry."] },
     { name: "menu not found", args: ["editor", "menu", "Tools/Missing"], response: { code: "E_MENU_NOT_FOUND", message: "Unity menu item was not found or could not be executed." }, nextActions: ["Use the exact Unity Editor menu path, such as File/Save or Assets/Refresh."] },
-    { name: "menu timeout", args: ["editor", "menu", "Tools/Slow"], response: { code: "E_MENU_TIMEOUT", message: "Unity menu item execution exceeded the requested timeout." }, nextActions: ["Check Unity Editor and Alps Bridge logs for long-running menu work."] }
+    { name: "menu timeout", args: ["editor", "menu", "Tools/Slow"], response: { code: "E_MENU_TIMEOUT", message: "Unity menu item execution exceeded the requested timeout." }, nextActions: ["Check Unity Editor and Unity CLI Bridge logs for long-running menu work."] }
   ];
 
   for (const item of cases) {

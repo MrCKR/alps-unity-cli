@@ -1,10 +1,10 @@
 {
   "name": "com.unity.probuilder",
-  "version": "0.0.0-alps-offline-validation",
+  "version": "0.0.0-unity-cli-offline-validation",
   "displayName": "ProBuilder Offline Validation Stub",
-  "description": "Minimal offline ProBuilder-compatible types for Alps Unity CLI validation when Unity Package Manager cannot download com.unity.probuilder. This package is for ALP-50 test validation only and is not a replacement for Unity ProBuilder.",
+  "description": "Minimal offline ProBuilder-compatible types for Unity CLI validation when Unity Package Manager cannot download com.unity.probuilder. This package is for ALP-50 test validation only and is not a replacement for Unity ProBuilder.",
   "unity": "2022.3",
   "author": {
-    "name": "Alps Unity CLI"
+    "name": "Unity CLI"
   }
 }

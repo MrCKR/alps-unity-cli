@@ -78,8 +78,8 @@ export async function executeBridgePayload(
     if (command === "ui.document.info" && typeof args.path === "string") {
       return readUiDocumentOffline(requestId, command, args.path);
     }
-    return failure(requestId, "BRIDGE_ENDPOINT_REQUIRED", "Pass --bridge-endpoint <url> or set ALPS_UNITY_BRIDGE_ENDPOINT for live query/edit/screenshot/code commands.", [
-      "Open Unity with the Alps Unity Bridge package installed.",
+    return failure(requestId, "BRIDGE_ENDPOINT_REQUIRED", "Pass --bridge-endpoint <url> or set UNITY_CLI_BRIDGE_ENDPOINT for live query/edit/screenshot/code commands.", [
+      "Open Unity with the Unity CLI Bridge package installed.",
       "Pass --bridge-endpoint http://127.0.0.1:<port>."
     ]);
   }
@@ -118,7 +118,7 @@ export async function executeBridgePayload(
       }
       if (command === "custom-tool.run" && isAbortLikeError(error)) {
         return failure(requestId, "E_EXECUTION_TIMEOUT", "custom-tool.run exceeded the requested timeout before the Unity Bridge returned a response.", [
-          "Inspect AlpsUnityBridge.log and the requestId before retrying; the Editor may still be finishing a long-running tool.",
+          "Inspect UnityCliBridge.log and the requestId before retrying; the Editor may still be finishing a long-running tool.",
           "Use --job only as a preference marker in this release; Local Agent asynchronous custom-tool jobs are not implemented yet."
         ], { requestId, command, timeoutMs: typeof args.timeoutMs === "number" ? args.timeoutMs : 30_000, bridgeEndpoint: endpoint ?? null });
       }
@@ -612,7 +612,7 @@ function screenshotArgs(flags: Record<string, string | boolean>, positionalPath:
 }
 
 function bridgeEndpoint(flags: Record<string, string | boolean>, runtime: BridgeRuntime, selectedInstance?: InstanceSelection): string | undefined {
-  return stringFlag(flags, "bridge-endpoint") ?? runtime.bridgeEndpoint ?? process.env.ALPS_UNITY_BRIDGE_ENDPOINT ?? selectedInstance?.instance.bridgeEndpoint;
+  return stringFlag(flags, "bridge-endpoint") ?? runtime.bridgeEndpoint ?? process.env.UNITY_CLI_BRIDGE_ENDPOINT ?? selectedInstance?.instance.bridgeEndpoint;
 }
 
 function selectedInstanceSummary(selection: InstanceSelection): Record<string, string> {
@@ -715,7 +715,7 @@ function bridgeHttpTimeoutMs(payload: BridgeRequest): number {
 
 function liveCodeBusyDetails(requestId: string, endpoint: string | undefined, args: Record<string, unknown>, details: Record<string, unknown>): Record<string, unknown> {
   const timeoutMs = typeof args.timeoutMs === "number" && Number.isFinite(args.timeoutMs) ? args.timeoutMs : null;
-  const logPath = typeof details.logPath === "string" ? details.logPath : "Unity project Logs/AlpsUnityBridge.log";
+  const logPath = typeof details.logPath === "string" ? details.logPath : "Unity project Logs/UnityCliBridge.log";
   return {
     requestId,
     command: "code.exec",
@@ -730,10 +730,10 @@ function liveCodeBusyDetails(requestId: string, endpoint: string | undefined, ar
 
 function liveCodeTimeoutFailure(requestId: string, endpoint: string | undefined, args: Record<string, unknown>, details: Record<string, unknown>): CliResult {
   const timeoutMs = typeof args.timeoutMs === "number" && Number.isFinite(args.timeoutMs) ? args.timeoutMs : null;
-  const logPath = typeof details.logPath === "string" ? details.logPath : "Unity project Logs/AlpsUnityBridge.log";
+  const logPath = typeof details.logPath === "string" ? details.logPath : "Unity project Logs/UnityCliBridge.log";
   return failure(requestId, "E_EXECUTION_TIMEOUT", timeoutMs === null ? "Runtime Code live execution did not complete before the bridge HTTP timeout." : `Runtime Code live execution did not complete within ${timeoutMs}ms.`, [
     "Inspect the Unity Editor for a long-running script or busy dialog.",
-    "Inspect the Unity project Logs/AlpsUnityBridge.log for bridge_request_timeout_started and requestId.",
+    "Inspect the Unity project Logs/UnityCliBridge.log for bridge_request_timeout_started and requestId.",
     "Retry after Unity is responsive, or increase --timeout-ms for intentionally long-running code."
   ], {
     requestId,

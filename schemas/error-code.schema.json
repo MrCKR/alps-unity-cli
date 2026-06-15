@@ -1,6 +1,6 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://alps.local/schemas/error-code.schema.json",
+  "$id": "https://unity-cli.local/schemas/error-code.schema.json",
   "title": "Unity CLI Error Code",
   "description": "Structured error object used in the response envelope. Matches ALP-164 frozen spec §安全、性能与生命周期 / error.code / error.message / details.",
   "type": "object",

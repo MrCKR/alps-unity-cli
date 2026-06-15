@@ -11,7 +11,7 @@ import { mkdtemp } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
-process.env.ALPS_UNITY_ALLOW_NON_WINDOWS = "1";
+process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
 async function makeRuntime() {
   const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-integ-"));

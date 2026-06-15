@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://alps.local/schemas/tool-metadata.schema.json",
+  "$id": "https://unity-cli.local/schemas/tool-metadata.schema.json",
   "title": "Unity CLI Tool Metadata",
-  "description": "Describes a single tool exposed by the Alps Unity CLI, including identity, schemas, behavioral hints, permissions, examples and documentation references. Matches the frozen spec from ALP-164 v1.0.",
+  "description": "Describes a single tool exposed by the Unity CLI, including identity, schemas, behavioral hints, permissions, examples and documentation references. Matches the frozen spec from ALP-164 v1.0.",
   "type": "object",
   "required": ["name", "title", "description", "group", "inputSchema", "readOnlyHint", "destructiveHint"],
   "properties": {

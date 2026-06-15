@@ -24,12 +24,12 @@ using UiGraphicRaycaster = UnityEngine.UI.GraphicRaycaster;
 using UiImage = UnityEngine.UI.Image;
 using UiText = UnityEngine.UI.Text;
 
-namespace AlpsUnityCli
+namespace UnityCli
 {
     [AttributeUsage(AttributeTargets.Method)]
-    public sealed class AlpsCustomToolAttribute : Attribute
+    public sealed class UnityCliCustomToolAttribute : Attribute
     {
-        public AlpsCustomToolAttribute(string name)
+        public UnityCliCustomToolAttribute(string name)
         {
             Name = name;
             Version = "1.0.0";
@@ -56,7 +56,7 @@ namespace AlpsUnityCli
         public string RequiredInput { get; set; }
     }
 
-    public sealed class AlpsCustomToolContext
+    public sealed class UnityCliCustomToolContext
     {
         public string RequestId { get; set; }
         public string ProjectPath { get; set; }
@@ -65,7 +65,7 @@ namespace AlpsUnityCli
         public string LogPath { get; set; }
     }
 
-    public sealed class AlpsCustomToolDefinition
+    public sealed class UnityCliCustomToolDefinition
     {
         public string Name { get; set; }
         public string DisplayName { get; set; }
@@ -82,11 +82,11 @@ namespace AlpsUnityCli
         public string RegisteredBy { get; set; }
         public string Assembly { get; set; }
         public string Method { get; set; }
-        public Func<AlpsCustomToolContext, string> Execute { get; set; }
+        public Func<UnityCliCustomToolContext, string> Execute { get; set; }
     }
 
     [InitializeOnLoad]
-    public static class AlpsUnityBridge
+    public static class UnityCliBridge
     {
         private const int Port = 47392;
         private static readonly object QueueLock = new object();
@@ -110,7 +110,7 @@ namespace AlpsUnityCli
         private static readonly string[] EditorCommands = { "editor.state", "editor.play", "editor.pause", "editor.stop", "editor.menu", "editor.console" };
         private static readonly string[] CodeCommands = { "code.exec" };
         private static readonly string[] CustomToolCommands = { "custom-tool.list", "custom-tool.run" };
-        private static readonly Dictionary<string, AlpsCustomToolDefinition> CustomTools = new Dictionary<string, AlpsCustomToolDefinition>(StringComparer.Ordinal);
+        private static readonly Dictionary<string, UnityCliCustomToolDefinition> CustomTools = new Dictionary<string, UnityCliCustomToolDefinition>(StringComparer.Ordinal);
         private static readonly Queue<BridgeWorkItem> WorkQueue = new Queue<BridgeWorkItem>();
         private static HttpListener listener;
         private static bool started;
@@ -127,7 +127,7 @@ namespace AlpsUnityCli
         private static volatile bool cachedIsPlayingOrWillChangePlaymode;
         private static volatile bool cachedIsBuilding;
 
-        static AlpsUnityBridge()
+        static UnityCliBridge()
         {
             EditorApplication.update += ProcessQueuedWork;
             AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
@@ -164,8 +164,8 @@ namespace AlpsUnityCli
         {
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
-                var type = assembly.GetType("AlpsUnityCli.AlpsUnityBridge", false);
-                if (type == null || type == typeof(AlpsUnityBridge))
+                var type = assembly.GetType("UnityCli.UnityCliBridge", false);
+                if (type == null || type == typeof(UnityCliBridge))
                 {
                     continue;
                 }
@@ -188,7 +188,7 @@ namespace AlpsUnityCli
 
         private static string BridgeBuildStamp()
         {
-            return typeof(AlpsUnityBridgeBuildInfo).GetField("BuildStamp", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).GetValue(null) as string ?? "unknown";
+            return typeof(UnityCliBridgeBuildInfo).GetField("BuildStamp", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).GetValue(null) as string ?? "unknown";
         }
 
         private static int StartHttpListener(HttpListener httpListener)
@@ -275,7 +275,7 @@ namespace AlpsUnityCli
             catch (Exception exception)
             {
                 WriteLog("handle_http_unhandled " + exception.GetType().Name + ": " + exception.Message);
-                TryWriteErrorJson(context, "E_BRIDGE_INTERNAL_ERROR", "Unhandled bridge error: " + exception.Message, "Check AlpsUnityBridge.log for details.");
+                TryWriteErrorJson(context, "E_BRIDGE_INTERNAL_ERROR", "Unhandled bridge error: " + exception.Message, "Check UnityCliBridge.log for details.");
             }
         }
 
@@ -411,16 +411,16 @@ namespace AlpsUnityCli
                 {
                     if (exception.Transient)
                     {
-                        item.Response = TransientErrorJson(exception.Code, exception.Message, exception.NextAction ?? "Check output path, permissions, format parameters and AlpsUnityBridge.log.", exception.RetryAfterMs > 0 ? exception.RetryAfterMs : 5000);
+                        item.Response = TransientErrorJson(exception.Code, exception.Message, exception.NextAction ?? "Check output path, permissions, format parameters and UnityCliBridge.log.", exception.RetryAfterMs > 0 ? exception.RetryAfterMs : 5000);
                     }
                     else
                     {
-                        item.Response = ErrorJson(exception.Code, exception.Message, exception.NextAction ?? "Check output path, permissions, format parameters and AlpsUnityBridge.log.");
+                        item.Response = ErrorJson(exception.Code, exception.Message, exception.NextAction ?? "Check output path, permissions, format parameters and UnityCliBridge.log.");
                     }
                 }
                 catch (Exception exception)
                 {
-                    item.Response = ErrorJson("E_BRIDGE_COMMAND_FAILED", exception.Message, "Check Unity Console and AlpsUnityBridge.log.");
+                    item.Response = ErrorJson("E_BRIDGE_COMMAND_FAILED", exception.Message, "Check Unity Console and UnityCliBridge.log.");
                 }
                 finally
                 {
@@ -445,18 +445,18 @@ namespace AlpsUnityCli
             {
                 if (exception.Transient)
                 {
-                    response = TransientErrorJson(exception.Code, exception.Message, exception.NextAction ?? "Check output path, package availability and AlpsUnityBridge.log.", exception.RetryAfterMs > 0 ? exception.RetryAfterMs : 5000);
+                    response = TransientErrorJson(exception.Code, exception.Message, exception.NextAction ?? "Check output path, package availability and UnityCliBridge.log.", exception.RetryAfterMs > 0 ? exception.RetryAfterMs : 5000);
                 }
                 else
                 {
-                    response = ErrorJson(exception.Code, exception.Message, exception.NextAction ?? "Check output path, package availability and AlpsUnityBridge.log.");
+                    response = ErrorJson(exception.Code, exception.Message, exception.NextAction ?? "Check output path, package availability and UnityCliBridge.log.");
                 }
             }
             catch (Exception exception)
             {
-                response = ErrorJson("E_BRIDGE_COMMAND_FAILED", exception.Message, "Check Unity Console and AlpsUnityBridge.log.");
+                response = ErrorJson("E_BRIDGE_COMMAND_FAILED", exception.Message, "Check Unity Console and UnityCliBridge.log.");
             }
-            Console.WriteLine("ALPS_BRIDGE_RESULT " + response);
+            Console.WriteLine("UNITY_CLI_BRIDGE_RESULT " + response);
             return response.Contains("\"ok\":true") ? 0 : 1;
         }
 
@@ -635,7 +635,7 @@ namespace AlpsUnityCli
                 case "custom-tool.run":
                     return CustomToolRun(request);
                 default:
-                    return ErrorJson("E_BRIDGE_COMMAND_UNSUPPORTED", "Unsupported bridge command: " + request.Command, "Upgrade the Alps Unity Bridge package or use a registered CLI command.");
+                    return ErrorJson("E_BRIDGE_COMMAND_UNSUPPORTED", "Unsupported bridge command: " + request.Command, "Upgrade the Unity CLI Bridge package or use a registered CLI command.");
             }
         }
 
@@ -860,7 +860,7 @@ namespace AlpsUnityCli
 
             if (!OpenPrefabStage(path))
             {
-                return ErrorJson("E_PREFAB_STAGE_OPEN_FAILED", "Failed to open Prefab Stage: " + path, "Check Unity Console and AlpsUnityBridge.log.");
+                return ErrorJson("E_PREFAB_STAGE_OPEN_FAILED", "Failed to open Prefab Stage: " + path, "Check Unity Console and UnityCliBridge.log.");
             }
             WriteLog("prefab_stage_open path=" + path);
             return SuccessJson(PrefabStageJson("open", path, false));
@@ -872,7 +872,7 @@ namespace AlpsUnityCli
             var path = StageAssetPath(stage);
             if (!SavePrefabStage(stage))
             {
-                return ErrorJson("E_PREFAB_STAGE_SAVE_FAILED", "Failed to save Prefab Stage: " + path, "Check Unity Console and AlpsUnityBridge.log.");
+                return ErrorJson("E_PREFAB_STAGE_SAVE_FAILED", "Failed to save Prefab Stage: " + path, "Check Unity Console and UnityCliBridge.log.");
             }
             AssetDatabase.SaveAssets();
             WriteLog("prefab_stage_save path=" + path);
@@ -890,11 +890,11 @@ namespace AlpsUnityCli
             }
             if (save && !SavePrefabStage(stage))
             {
-                return ErrorJson("E_PREFAB_STAGE_SAVE_FAILED", "Failed to save Prefab Stage before close: " + path, "Check Unity Console and AlpsUnityBridge.log.");
+                return ErrorJson("E_PREFAB_STAGE_SAVE_FAILED", "Failed to save Prefab Stage before close: " + path, "Check Unity Console and UnityCliBridge.log.");
             }
             if (!ClosePrefabStage())
             {
-                return ErrorJson("E_PREFAB_STAGE_CLOSE_FAILED", "Failed to close Prefab Stage: " + path, "Close the Prefab Stage in Unity or check AlpsUnityBridge.log.");
+                return ErrorJson("E_PREFAB_STAGE_CLOSE_FAILED", "Failed to close Prefab Stage: " + path, "Close the Prefab Stage in Unity or check UnityCliBridge.log.");
             }
             WriteLog("prefab_stage_close path=" + path + " save=" + save);
             return SuccessJson(PrefabStageJson("close", path, false));
@@ -1085,7 +1085,7 @@ namespace AlpsUnityCli
                 UnityEngine.Profiling.Profiler.enabled = true;
                 for (var i = 0; i < Math.Max(1, frames); i++)
                 {
-                    UnityEngine.Profiling.Profiler.BeginSample("AlpsUnityProfilerCapture");
+                    UnityEngine.Profiling.Profiler.BeginSample("UnityCliProfilerCapture");
                     UnityEngine.Profiling.Profiler.EndSample();
                     if (durationMs > 0)
                     {
@@ -1456,7 +1456,7 @@ namespace AlpsUnityCli
             var name = request.StringArg("name");
             if (string.IsNullOrEmpty(name))
             {
-                name = "Alps_ProBuilder_" + shape;
+                name = "UnityCli_ProBuilder_" + shape;
             }
             var gameObject = CreateProBuilderShape(shape, name, request);
             var parent = request.StringArg("parent");
@@ -1470,7 +1470,7 @@ namespace AlpsUnityCli
                 gameObject.transform.SetParent(parentObject.transform, false);
             }
             gameObject.transform.position = new Vector3(request.FloatArg("x", gameObject.transform.position.x), request.FloatArg("y", gameObject.transform.position.y), request.FloatArg("z", gameObject.transform.position.z));
-            Undo.RegisterCreatedObjectUndo(gameObject, "Alps ProBuilder Create");
+            Undo.RegisterCreatedObjectUndo(gameObject, "UnityCli ProBuilder Create");
             EditorSceneManager.MarkSceneDirty(gameObject.scene);
             WriteLog("probuilder_shape_created shape=" + shape + " path=" + HierarchyPath(gameObject));
             return SuccessJson("{\"probuilder\":" + ProBuilderPackageJson() + ",\"object\":" + ProBuilderObjectJson(gameObject, shape) + ",\"plannedEffects\":[{\"type\":\"probuilder.create\",\"shape\":" + Quote(shape) + ",\"path\":" + Quote(HierarchyPath(gameObject)) + "}],\"logPath\":" + Quote(LogPath()) + "}");
@@ -1784,7 +1784,7 @@ namespace AlpsUnityCli
             var texture = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
             if (texture == null)
             {
-                throw new BridgeCommandException("E_TEXTURE_NOT_FOUND", "Texture asset not found or failed to import: " + path, "Check importer diagnostics in Unity Console and AlpsUnityBridge.log.");
+                throw new BridgeCommandException("E_TEXTURE_NOT_FOUND", "Texture asset not found or failed to import: " + path, "Check importer diagnostics in Unity Console and UnityCliBridge.log.");
             }
             return texture;
         }
@@ -1837,7 +1837,7 @@ namespace AlpsUnityCli
         private static string DefaultShaderContent(string rawName, string path)
         {
             var name = string.IsNullOrEmpty(rawName) ? Path.GetFileNameWithoutExtension(path) : rawName;
-            return "Shader \"Alps/" + EscapeShaderName(name) + "\" {\n    Properties {\n        _Color (\"Color\", Color) = (1,1,1,1)\n    }\n    SubShader {\n        Tags { \"RenderType\"=\"Opaque\" }\n        Pass {\n            CGPROGRAM\n            #include \"UnityCG.cginc\"\n            #pragma vertex vert\n            #pragma fragment frag\n            struct appdata { float4 vertex : POSITION; };\n            struct v2f { float4 vertex : SV_POSITION; };\n            fixed4 _Color;\n            v2f vert (appdata v) { v2f o; o.vertex = UnityObjectToClipPos(v.vertex); return o; }\n            fixed4 frag (v2f i) : SV_Target { return _Color; }\n            ENDCG\n        }\n    }\n}\n";
+            return "Shader \"UnityCli/" + EscapeShaderName(name) + "\" {\n    Properties {\n        _Color (\"Color\", Color) = (1,1,1,1)\n    }\n    SubShader {\n        Tags { \"RenderType\"=\"Opaque\" }\n        Pass {\n            CGPROGRAM\n            #include \"UnityCG.cginc\"\n            #pragma vertex vert\n            #pragma fragment frag\n            struct appdata { float4 vertex : POSITION; };\n            struct v2f { float4 vertex : SV_POSITION; };\n            fixed4 _Color;\n            v2f vert (appdata v) { v2f o; o.vertex = UnityObjectToClipPos(v.vertex); return o; }\n            fixed4 frag (v2f i) : SV_Target { return _Color; }\n            ENDCG\n        }\n    }\n}\n";
         }
 
         private static string EscapeShaderName(string name)
@@ -2465,7 +2465,7 @@ namespace AlpsUnityCli
             return "{\"domain\":" + Quote(domain) + ",\"route\":\"POST /bridge/execute\",\"commands\":[" + string.Join(",", quotedCommands.ToArray()) + "]}";
         }
 
-        public static void RegisterCustomTool(AlpsCustomToolDefinition definition)
+        public static void RegisterCustomTool(UnityCliCustomToolDefinition definition)
         {
             if (definition == null || string.IsNullOrEmpty(definition.Name) || definition.Execute == null)
             {
@@ -2519,7 +2519,7 @@ namespace AlpsUnityCli
                     if (type == null) continue;
                     foreach (var method in type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
                     {
-                        var attribute = Attribute.GetCustomAttribute(method, typeof(AlpsCustomToolAttribute)) as AlpsCustomToolAttribute;
+                        var attribute = Attribute.GetCustomAttribute(method, typeof(UnityCliCustomToolAttribute)) as UnityCliCustomToolAttribute;
                         if (attribute == null) continue;
                         TryRegisterAttributedCustomTool(assembly, type, method, attribute);
                     }
@@ -2527,16 +2527,16 @@ namespace AlpsUnityCli
             }
         }
 
-        private static void TryRegisterAttributedCustomTool(Assembly assembly, Type type, MethodInfo method, AlpsCustomToolAttribute attribute)
+        private static void TryRegisterAttributedCustomTool(Assembly assembly, Type type, MethodInfo method, UnityCliCustomToolAttribute attribute)
         {
             var parameters = method.GetParameters();
-            if (method.ReturnType != typeof(string) || parameters.Length > 1 || (parameters.Length == 1 && parameters[0].ParameterType != typeof(AlpsCustomToolContext)))
+            if (method.ReturnType != typeof(string) || parameters.Length > 1 || (parameters.Length == 1 && parameters[0].ParameterType != typeof(UnityCliCustomToolContext)))
             {
                 WriteLog("custom_tool_registration_skipped name=" + attribute.Name + " reason=signature");
                 return;
             }
 
-            RegisterCustomTool(new AlpsCustomToolDefinition
+            RegisterCustomTool(new UnityCliCustomToolDefinition
             {
                 Name = attribute.Name,
                 DisplayName = attribute.DisplayName,
@@ -2553,7 +2553,7 @@ namespace AlpsUnityCli
                 RegisteredBy = "unity-editor-package",
                 Assembly = assembly.GetName().Name,
                 Method = type.FullName + "." + method.Name,
-                Execute = delegate(AlpsCustomToolContext context)
+                Execute = delegate(UnityCliCustomToolContext context)
                 {
                     var result = parameters.Length == 0 ? method.Invoke(null, null) : method.Invoke(null, new object[] { context });
                     return result == null ? "null" : (string)result;
@@ -2616,7 +2616,7 @@ namespace AlpsUnityCli
             try
             {
                 WriteLog("custom_tool_run requestId=" + request.RequestId + " name=" + name + " timeoutMs=" + timeoutMs.ToString(CultureInfo.InvariantCulture));
-                resultJson = definition.Execute(new AlpsCustomToolContext
+                resultJson = definition.Execute(new UnityCliCustomToolContext
                 {
                     RequestId = request.RequestId,
                     ProjectPath = request.StringArg("projectPath") ?? ProjectRoot(),
@@ -2628,11 +2628,11 @@ namespace AlpsUnityCli
             catch (TargetInvocationException exception)
             {
                 var inner = exception.InnerException ?? exception;
-                return ErrorJson("E_TOOL_EXECUTION_FAILED", inner.GetType().Name + ": " + inner.Message, "Check Unity Console and AlpsUnityBridge.log with the returned requestId.");
+                return ErrorJson("E_TOOL_EXECUTION_FAILED", inner.GetType().Name + ": " + inner.Message, "Check Unity Console and UnityCliBridge.log with the returned requestId.");
             }
             catch (Exception exception)
             {
-                return ErrorJson("E_TOOL_EXECUTION_FAILED", exception.GetType().Name + ": " + exception.Message, "Check Unity Console and AlpsUnityBridge.log with the returned requestId.");
+                return ErrorJson("E_TOOL_EXECUTION_FAILED", exception.GetType().Name + ": " + exception.Message, "Check Unity Console and UnityCliBridge.log with the returned requestId.");
             }
 
             var endedAt = DateTime.UtcNow;
@@ -2663,7 +2663,7 @@ namespace AlpsUnityCli
                 + "}");
         }
 
-        private static string CustomToolDefinitionJson(AlpsCustomToolDefinition definition)
+        private static string CustomToolDefinitionJson(UnityCliCustomToolDefinition definition)
         {
             return "{"
                 + "\"name\":" + Quote(definition.Name) + ","
@@ -2683,7 +2683,7 @@ namespace AlpsUnityCli
                 + "}";
         }
 
-        private static string CustomToolManifestJson(string requestId, AlpsCustomToolDefinition definition, string artifactDir, DateTime startedAt, DateTime endedAt)
+        private static string CustomToolManifestJson(string requestId, UnityCliCustomToolDefinition definition, string artifactDir, DateTime startedAt, DateTime endedAt)
         {
             return "{"
                 + "\"requestId\":" + Quote(requestId) + ","
@@ -2696,7 +2696,7 @@ namespace AlpsUnityCli
                 + "}";
         }
 
-        private static string CustomToolAuditJson(BridgeRequest request, AlpsCustomToolDefinition definition, string artifactDir, string inputJson, int timeoutMs, DateTime startedAt, DateTime endedAt, string exitState)
+        private static string CustomToolAuditJson(BridgeRequest request, UnityCliCustomToolDefinition definition, string artifactDir, string inputJson, int timeoutMs, DateTime startedAt, DateTime endedAt, string exitState)
         {
             return "{"
                 + "\"requestId\":" + Quote(request.RequestId) + ","
@@ -2717,7 +2717,7 @@ namespace AlpsUnityCli
                 + "}";
         }
 
-        private static string ValidateCustomToolInput(AlpsCustomToolDefinition definition, string inputJson)
+        private static string ValidateCustomToolInput(UnityCliCustomToolDefinition definition, string inputJson)
         {
             var schemaJson = definition.InputSchema;
             if (!string.IsNullOrEmpty(schemaJson) && schemaJson.Trim() != "{}")
@@ -3396,7 +3396,7 @@ namespace AlpsUnityCli
                 var created = CreateVfxGraphAsset(path, assetType);
                 if (created == null)
                 {
-                    return ErrorJson("E_VFX_GRAPH_CREATE_FAILED", "VFX Graph asset creation did not produce a readable VisualEffectAsset: " + path, "Check Unity Console and AlpsUnityBridge.log; the Visual Effect Graph package may have changed its internal authoring API.");
+                    return ErrorJson("E_VFX_GRAPH_CREATE_FAILED", "VFX Graph asset creation did not produce a readable VisualEffectAsset: " + path, "Check Unity Console and UnityCliBridge.log; the Visual Effect Graph package may have changed its internal authoring API.");
                 }
                 WriteLog("vfx_graph_created path=" + path);
                 return SuccessJson("{\"graph\":" + VfxGraphJson(path, created) + ",\"plannedEffects\":[{\"type\":\"vfx.graph.create\",\"path\":" + Quote(path) + "}],\"logPath\":" + Quote(LogPath()) + "}");
@@ -3547,7 +3547,7 @@ namespace AlpsUnityCli
             }
             catch (Exception exception)
             {
-                throw new BridgeCommandException("E_VFX_GRAPH_CREATE_FAILED", "Failed to create VFX Graph asset: " + exception.GetType().Name + ": " + exception.Message, "Check Unity Console and AlpsUnityBridge.log; the Visual Effect Graph package import pipeline may have changed.");
+                throw new BridgeCommandException("E_VFX_GRAPH_CREATE_FAILED", "Failed to create VFX Graph asset: " + exception.GetType().Name + ": " + exception.Message, "Check Unity Console and UnityCliBridge.log; the Visual Effect Graph package import pipeline may have changed.");
             }
         }
 
@@ -3771,7 +3771,7 @@ namespace AlpsUnityCli
             {
                 Console.SetOut(stdout);
                 Console.SetError(stderr);
-                var type = compiled.CompiledAssembly.GetType("AlpsUnityCli.RuntimeCode.Script", true);
+                var type = compiled.CompiledAssembly.GetType("UnityCli.RuntimeCode.Script", true);
                 var method = type.GetMethod("Run", BindingFlags.Public | BindingFlags.Static);
                 var returnValue = method.Invoke(null, new object[] { argsJson ?? "{}" });
                 Console.SetOut(previousOut);
@@ -3799,9 +3799,9 @@ namespace AlpsUnityCli
         {
             if (Regex.IsMatch(source, "\\bpublic\\s+static\\s+object\\s+Run\\s*\\("))
             {
-                return "using System; using System.IO; using System.Linq; using System.Collections.Generic; using UnityEngine; using UnityEditor; namespace AlpsUnityCli.RuntimeCode { public static class Script { " + source + " } }";
+                return "using System; using System.IO; using System.Linq; using System.Collections.Generic; using UnityEngine; using UnityEditor; namespace UnityCli.RuntimeCode { public static class Script { " + source + " } }";
             }
-            return "using System; using System.IO; using System.Linq; using System.Collections.Generic; using UnityEngine; using UnityEditor; namespace AlpsUnityCli.RuntimeCode { public static class Script { public static object Run(string argsJson) { " + source + " } } }";
+            return "using System; using System.IO; using System.Linq; using System.Collections.Generic; using UnityEngine; using UnityEditor; namespace UnityCli.RuntimeCode { public static class Script { public static object Run(string argsJson) { " + source + " } } }";
         }
 
         private static IEnumerable<string> DefaultCodeReferences(string refsCsv)
@@ -3976,7 +3976,7 @@ namespace AlpsUnityCli
             var timeoutMs = TimeoutMs(request);
             if (elapsedMs > timeoutMs)
             {
-                throw new BridgeCommandException("E_MENU_TIMEOUT", "Unity menu item execution exceeded the requested timeout.", "Check Unity Editor and Alps Bridge logs for long-running menu work.");
+                throw new BridgeCommandException("E_MENU_TIMEOUT", "Unity menu item execution exceeded the requested timeout.", "Check Unity Editor and Unity CLI Bridge logs for long-running menu work.");
             }
 
             return $"{{\"plannedEffects\":[{{\"type\":\"editor.menu\",\"path\":{Quote(path)}}}],\"result\":{{\"path\":{Quote(path)},\"executed\":true,\"elapsedMs\":{elapsedMs}}},\"summary\":{{\"affected\":\"Unity Editor menu item executed\"}},\"state\":{EditorStateJson()}}}";
@@ -4871,13 +4871,13 @@ namespace AlpsUnityCli
 
         private static string DataDir()
         {
-            var configured = Environment.GetEnvironmentVariable("ALPS_UNITY_DATA_DIR");
+            var configured = Environment.GetEnvironmentVariable("UNITY_CLI_DATA_DIR");
             if (!string.IsNullOrEmpty(configured))
             {
                 return configured;
             }
             var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            return string.IsNullOrEmpty(localAppData) ? Path.Combine(ProjectRoot(), ".unity_cli") : Path.Combine(localAppData, "AlpsUnityCli");
+            return string.IsNullOrEmpty(localAppData) ? Path.Combine(ProjectRoot(), ".unity_cli") : Path.Combine(localAppData, "UnityCli");
         }
 
         private static string RegistryPath()
@@ -5205,9 +5205,9 @@ namespace AlpsUnityCli
             var root = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
             if (string.IsNullOrEmpty(root))
             {
-                root = Path.Combine(ProjectRoot(), "Library", "AlpsUnityCLI");
+                root = Path.Combine(ProjectRoot(), "Library", "UnityCli");
             }
-            return Path.Combine(root, "AlpsUnityCLI", "artifacts", requestId ?? Guid.NewGuid().ToString("N"));
+            return Path.Combine(root, "UnityCli", "artifacts", requestId ?? Guid.NewGuid().ToString("N"));
         }
 
         private static string Bool(bool value)
@@ -5581,7 +5581,7 @@ namespace AlpsUnityCli
 
         private static string LogPath()
         {
-            return Path.Combine(ProjectRoot(), "Logs", "AlpsUnityBridge.log");
+            return Path.Combine(ProjectRoot(), "Logs", "UnityCliBridge.log");
         }
 
         private static void WriteLog(string line)
