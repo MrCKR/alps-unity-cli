@@ -84,10 +84,34 @@ namespace UnityCli
 
         private static string ReadBody(HttpListenerRequest request)
         {
+            var encoding = request.ContentEncoding ?? Encoding.UTF8;
             using (var stream = request.InputStream)
-            using (var reader = new StreamReader(stream, request.ContentEncoding ?? Encoding.UTF8))
             {
-                return reader.ReadToEnd();
+                if (request.ContentLength64 >= 0)
+                {
+                    var length = request.ContentLength64;
+                    if (length > 1024 * 1024)
+                    {
+                        throw new InvalidOperationException("Bridge request body is too large.");
+                    }
+                    var bytes = new byte[(int)length];
+                    var offset = 0;
+                    while (offset < bytes.Length)
+                    {
+                        var read = stream.Read(bytes, offset, bytes.Length - offset);
+                        if (read <= 0)
+                        {
+                            throw new EndOfStreamException("Request body ended before Content-Length bytes were read.");
+                        }
+                        offset += read;
+                    }
+                    return encoding.GetString(bytes, 0, bytes.Length);
+                }
+
+                using (var reader = new StreamReader(stream, encoding))
+                {
+                    return reader.ReadToEnd();
+                }
             }
         }
 

@@ -47,6 +47,7 @@ namespace UnityCli
             while (true)
             {
                 BridgeWorkItem item;
+                var queueDepth = 0;
                 lock (QueueLock)
                 {
                     if (WorkQueue.Count == 0)
@@ -54,7 +55,9 @@ namespace UnityCli
                         return;
                     }
                     item = WorkQueue.Dequeue();
+                    queueDepth = WorkQueue.Count;
                 }
+                WriteLog("bridge_request_dequeued requestId=" + item.Request.RequestId + " command=" + item.Request.Command + " queueDepth=" + queueDepth.ToString(CultureInfo.InvariantCulture));
 
                 if (!item.TryStart())
                 {
@@ -66,7 +69,9 @@ namespace UnityCli
 
                 try
                 {
+                    WriteLog("bridge_request_started requestId=" + item.Request.RequestId + " command=" + item.Request.Command);
                     item.Response = Execute(item.Request);
+                    WriteLog("bridge_request_finished requestId=" + item.Request.RequestId + " command=" + item.Request.Command + " ok=" + Bool(item.Response != null && item.Response.Contains("\"ok\":true")));
                 }
                 catch (BridgeCommandException exception)
                 {

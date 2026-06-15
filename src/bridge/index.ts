@@ -192,7 +192,7 @@ function bridgeErrorDetails(error: BridgeError | undefined): Record<string, unkn
   return details === undefined ? rest : { ...rest, details };
 }
 
-function bridgeHttpTimeoutMs(payload: BridgeRequest): number {
+export function bridgeHttpTimeoutMs(payload: BridgeRequest): number {
   if (payload.command === "code.exec" && typeof payload.args.timeoutMs === "number" && Number.isFinite(payload.args.timeoutMs) && payload.args.timeoutMs > 0) {
     return payload.args.timeoutMs + 5000;
   }
@@ -200,7 +200,7 @@ function bridgeHttpTimeoutMs(payload: BridgeRequest): number {
     const timeoutMs = typeof payload.args.timeoutMs === "number" && Number.isFinite(payload.args.timeoutMs) ? payload.args.timeoutMs : 30_000;
     return Math.max(timeoutMs + 5000, 65_000);
   }
-  return 10_000;
+  return 65_000;
 }
 
 function liveCodeBusyDetails(requestId: string, endpoint: string | undefined, args: Record<string, unknown>, details: Record<string, unknown>): Record<string, unknown> {

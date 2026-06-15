@@ -82,7 +82,7 @@ namespace UnityCli
                 }
                 items.Add(instanceJson);
                 File.WriteAllText(RegistryPath(), "{\"version\":1,\"instances\":[" + string.Join(",", items.ToArray()) + "]}");
-                WriteLog("instance_registered id=" + InstanceId() + " status=" + status + " endpoint=http://127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture));
+                WriteLog("instance_registered id=" + InstanceId() + " status=" + status + " endpoint=http://127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture) + " listenerId=" + ListenerId + " diagnosticsFingerprint=" + BridgeDiagnosticsFingerprint + " assemblyMvid=" + AssemblyMvid());
             }
             catch (Exception exception)
             {
@@ -102,6 +102,9 @@ namespace UnityCli
                 + "\"pid\":" + System.Diagnostics.Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture) + ","
                 + "\"bridgeEndpoint\":" + Quote("http://127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture)) + ","
                 + "\"capabilitiesHash\":" + Quote(BridgeBuildStamp()) + ","
+                + "\"bridgeDiagnosticsFingerprint\":" + Quote(BridgeDiagnosticsFingerprint) + ","
+                + "\"bridgeListenerId\":" + Quote(ListenerId) + ","
+                + "\"bridgeAssemblyMvid\":" + Quote(AssemblyMvid()) + ","
                 + "\"status\":" + Quote(status) + ","
                 + "\"editorState\":{\"playMode\":" + Bool(EditorApplication.isPlaying) + ",\"compiling\":" + Bool(EditorApplication.isCompiling) + ",\"domainReloading\":" + Bool(domainReloading) + "},"
                 + "\"registeredAt\":" + Quote(now) + ","

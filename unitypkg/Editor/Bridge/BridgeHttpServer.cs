@@ -45,7 +45,7 @@ namespace UnityCli
                 try
                 {
                     method.Invoke(null, null);
-                    WriteLog("stale_bridge_listener_stopped assembly=" + assembly.GetName().Name);
+                    WriteLog("stale_bridge_listener_stopped assembly=" + assembly.GetName().Name + " mvid=" + AssemblyMvid(assembly));
                 }
                 catch (Exception exception)
                 {
@@ -57,6 +57,55 @@ namespace UnityCli
         private static string BridgeBuildStamp()
         {
             return typeof(UnityCliBridgeBuildInfo).GetField("BuildStamp", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic).GetValue(null) as string ?? "unknown";
+        }
+
+        private static string BridgeHealthJson()
+        {
+            return "{\"ok\":true,\"data\":{"
+                + "\"bridge\":\"unity_cli\","
+                + "\"port\":" + port.ToString(CultureInfo.InvariantCulture) + ","
+                + "\"route\":\"POST /bridge/execute\","
+                + "\"buildStamp\":" + Quote(BridgeBuildStamp()) + ","
+                + "\"diagnosticsFingerprint\":" + Quote(BridgeDiagnosticsFingerprint) + ","
+                + "\"listenerId\":" + Quote(ListenerId) + ","
+                + "\"loadedAt\":" + Quote(BridgeLoadedAtUtc.ToString("O", CultureInfo.InvariantCulture)) + ","
+                + "\"assembly\":{"
+                + "\"fullName\":" + Quote(typeof(UnityCliBridge).Assembly.FullName) + ","
+                + "\"location\":" + Quote(AssemblyLocation(typeof(UnityCliBridge).Assembly)) + ","
+                + "\"moduleVersionId\":" + Quote(AssemblyMvid())
+                + "},"
+                + "\"diagnostics\":{\"executeStageLogs\":true,\"contentLengthBoundedRead\":true},"
+                + "\"capabilities\":" + CapabilitiesJson()
+                + "}}";
+        }
+
+        private static string AssemblyMvid()
+        {
+            return AssemblyMvid(typeof(UnityCliBridge).Assembly);
+        }
+
+        private static string AssemblyMvid(Assembly assembly)
+        {
+            try
+            {
+                return assembly.ManifestModule.ModuleVersionId.ToString("N");
+            }
+            catch
+            {
+                return "unknown";
+            }
+        }
+
+        private static string AssemblyLocation(Assembly assembly)
+        {
+            try
+            {
+                return assembly.Location;
+            }
+            catch
+            {
+                return string.Empty;
+            }
         }
 
         private static int StartHttpListener(HttpListener httpListener)
@@ -112,7 +161,7 @@ namespace UnityCli
         {
             if (context.Request.HttpMethod == "GET" && context.Request.Url.AbsolutePath == "/health")
             {
-                WriteJson(context, "{\"ok\":true,\"data\":{\"bridge\":\"unity_cli\",\"port\":" + port.ToString(CultureInfo.InvariantCulture) + ",\"route\":\"POST /bridge/execute\",\"buildStamp\":" + Quote(BridgeBuildStamp()) + ",\"capabilities\":" + CapabilitiesJson() + "}}", 200);
+                WriteJson(context, BridgeHealthJson(), 200);
                 return;
             }
 
@@ -121,6 +170,8 @@ namespace UnityCli
                 WriteJson(context, "{\"ok\":false,\"error\":{\"code\":\"E_BRIDGE_ROUTE_NOT_FOUND\",\"message\":\"Expected POST /bridge/execute.\"}}", 404);
                 return;
             }
+
+            WriteLog("bridge_execute_accepted method=" + context.Request.HttpMethod + " path=" + context.Request.Url.AbsolutePath + " contentLength=" + context.Request.ContentLength64.ToString(CultureInfo.InvariantCulture));
 
             string body;
             try
@@ -134,6 +185,7 @@ namespace UnityCli
                 return;
             }
             var request = BridgeRequest.Parse(body);
+            WriteLog("bridge_request_body_read requestId=" + request.RequestId + " command=" + request.Command + " bytes=" + Encoding.UTF8.GetByteCount(body ?? string.Empty).ToString(CultureInfo.InvariantCulture));
 
             // Check for transient Unity state before queuing the request.
             // During compile/import/domain reload, immediately return a transient error
@@ -162,10 +214,13 @@ namespace UnityCli
             }
 
             var item = new BridgeWorkItem(request);
+            var queueDepth = 0;
             lock (QueueLock)
             {
                 WorkQueue.Enqueue(item);
+                queueDepth = WorkQueue.Count;
             }
+            WriteLog("bridge_request_enqueued requestId=" + request.RequestId + " command=" + request.Command + " queueDepth=" + queueDepth.ToString(CultureInfo.InvariantCulture));
 
             var timeout = TimeSpan.FromSeconds(60);
             if (!item.Completed.Wait(timeout))

@@ -52,7 +52,10 @@ namespace UnityCli
         private static readonly string[] ScriptCommands = { "script.create", "script.read", "script.edit", "script.validate" };
         private static readonly string[] CodeCommands = { "code.exec" };
         private static readonly string[] CustomToolCommands = { "custom-tool.list", "custom-tool.run" };
+        private const string BridgeDiagnosticsFingerprint = "alp276-health-fingerprint-20260615-execute-stage-v1";
         private static readonly BridgeCommandRegistry CommandRegistry = CreateCommandRegistry();
+        private static readonly string ListenerId = Guid.NewGuid().ToString("N");
+        private static readonly DateTime BridgeLoadedAtUtc = DateTime.UtcNow;
         private static HttpListener listener;
         private static bool started;
         private static bool customToolsDiscovered;
@@ -93,7 +96,7 @@ namespace UnityCli
                 started = true;
                 Task.Run(ListenLoop);
                 RegisterInstance("healthy");
-                WriteLog("bridge_started port=" + port);
+                WriteLog("bridge_started port=" + port + " listenerId=" + ListenerId + " diagnosticsFingerprint=" + BridgeDiagnosticsFingerprint + " assemblyMvid=" + AssemblyMvid());
             }
             catch (Exception exception)
             {

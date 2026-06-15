@@ -6,7 +6,7 @@ import test from "node:test";
 import { execute } from "./cli.js";
 import { JobRunner } from "./job-runner.js";
 import { JobStore } from "./job-store.js";
-import type { BridgeRequest } from "./bridge/index.js";
+import { bridgeHttpTimeoutMs, type BridgeRequest } from "./bridge/index.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
@@ -20,6 +20,11 @@ async function writeRegistry(dataDir: string, instances: Array<Record<string, un
   await mkdir(dataDir, { recursive: true });
   await writeFile(join(dataDir, "instances.json"), JSON.stringify({ version: 1, instances }, null, 2), "utf8");
 }
+
+test("bridge HTTP timeout matches Unity queue window for regular commands", () => {
+  assert.equal(bridgeHttpTimeoutMs({ requestId: "req", command: "editor.state", args: {} }), 65_000);
+  assert.equal(bridgeHttpTimeoutMs({ requestId: "req", command: "scene.hierarchy", args: {} }), 65_000);
+});
 
 function instance(overrides: Record<string, unknown> = {}) {
   return {
