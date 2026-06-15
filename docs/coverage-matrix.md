@@ -90,10 +90,55 @@
 
 ---
 
+## Camera 域
+
+| unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
+|---|---|---|---|---|---|
+| camera.list | `camera list` | bridge (AlpsUnityBridge) | ✅ `camera.list` in CAMERA_TOOLS | bridge-commands.test.ts: camera commands forward target and screenshot options; tools.test.ts: S3.1 metadata coverage | ✅ |
+| camera.info | `camera info <target>` | bridge (AlpsUnityBridge) | ✅ `camera.info` in CAMERA_TOOLS | bridge-commands.test.ts: camera commands forward target and screenshot options; tools.test.ts: S3.1 metadata coverage | ✅ |
+| camera.screenshot | `camera screenshot <target> --output <path>` | bridge (AlpsUnityBridge) | ✅ `camera.screenshot` in CAMERA_TOOLS | bridge-commands.test.ts: camera commands forward target and screenshot options; tools.test.ts: S3.1 write metadata | ✅ |
+| scene.screenshot | `scene screenshot <path>` | bridge (AlpsUnityBridge) | ✅ `scene.screenshot` in SCENE_TOOLS | bridge-commands.test.ts: scene screenshot forwards output path and overwrite | ✅ |
+
+## Material / Shader / Texture 域
+
+| unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
+|---|---|---|---|---|---|
+| material.info | `material info <path>` | bridge (AlpsUnityBridge) | ✅ `material.info` in MATERIAL_TOOLS | bridge-commands.test.ts: material commands forward asset paths, target, values and planned effects; tools.test.ts: S3.1 metadata coverage | ✅ |
+| material.create | `material create <path> --shader <name>` | bridge (AlpsUnityBridge) | ✅ `material.create` in MATERIAL_TOOLS | bridge-commands.test.ts: material commands forward asset paths, target, values and planned effects; tools.test.ts: S3.1 write metadata | ✅ |
+| material.assign | `material assign --target <go> --material <path>` | bridge (AlpsUnityBridge) | ✅ `material.assign` in MATERIAL_TOOLS | bridge-commands.test.ts: material commands forward asset paths, target, values and planned effects | ✅ |
+| material.set | `material set <path> --property <name> --value <value>` | bridge (AlpsUnityBridge) | ✅ `material.set` in MATERIAL_TOOLS | bridge-commands.test.ts: material commands forward asset paths, target, values and planned effects | ✅ |
+| shader.info | `shader info <path>` | bridge (AlpsUnityBridge) | ✅ `shader.info` in SHADER_TOOLS | bridge-commands.test.ts: shader commands forward paths, content and overwrite; tools.test.ts: S3.1 metadata coverage | ✅ |
+| shader.read | `shader read <path>` | bridge (AlpsUnityBridge) | ✅ `shader.read` in SHADER_TOOLS | bridge-commands.test.ts: shader commands forward paths, content and overwrite | ✅ |
+| shader.create | `shader create <path> --content-file <file>` | bridge (AlpsUnityBridge) | ✅ `shader.create` in SHADER_TOOLS | bridge-commands.test.ts: shader commands forward paths, content and overwrite; tools.test.ts: S3.1 write metadata | ✅ |
+| shader.update | `shader update <path> --content-file <file>` | bridge (AlpsUnityBridge) | ✅ `shader.update` in SHADER_TOOLS | bridge-commands.test.ts: shader commands forward paths, content and overwrite | ✅ |
+| texture.info | `texture info <path>` | bridge (AlpsUnityBridge) | ✅ `texture.info` in TEXTURE_TOOLS | bridge-commands.test.ts: texture commands forward importer, sprite and creation options; tools.test.ts: S3.1 metadata coverage | ✅ |
+| texture.create | `texture create <path> [--source <file>]` | bridge (AlpsUnityBridge) | ✅ `texture.create` in TEXTURE_TOOLS | bridge-commands.test.ts: texture commands forward importer, sprite and creation options; tools.test.ts: S3.1 write metadata | ✅ |
+| texture.sprite | `texture sprite <path>` | bridge (AlpsUnityBridge) | ✅ `texture.sprite` in TEXTURE_TOOLS | bridge-commands.test.ts: texture commands forward importer, sprite and creation options | ✅ |
+| texture.import-settings | `texture import-settings <path>` | bridge (AlpsUnityBridge) | ✅ `texture.import-settings` in TEXTURE_TOOLS | bridge-commands.test.ts: texture commands forward importer, sprite and creation options | ✅ |
+
+## UI 域
+
+| unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
+|---|---|---|---|---|---|
+| ui.canvas.create | `ui canvas/create <name>` | bridge (AlpsUnityBridge) | ✅ `ui.canvas.create` in UI_TOOLS | bridge-commands.test.ts: ui commands forward creation, document and hierarchy arguments; tools.test.ts: S3.1 write metadata | ✅ |
+| ui.text.create | `ui text/create <name>` | bridge (AlpsUnityBridge) | ✅ `ui.text.create` in UI_TOOLS | bridge-commands.test.ts: ui commands forward creation, document and hierarchy arguments | ✅ |
+| ui.button.create | `ui button/create <name>` | bridge (AlpsUnityBridge) | ✅ `ui.button.create` in UI_TOOLS | bridge-commands.test.ts: ui commands forward creation, document and hierarchy arguments | ✅ |
+| ui.image.create | `ui image/create <name>` | bridge (AlpsUnityBridge) | ✅ `ui.image.create` in UI_TOOLS | bridge-commands.test.ts: ui commands forward creation, document and hierarchy arguments | ✅ |
+| ui.document.info | `ui document/info <target|path>` | bridge/offline reader | ✅ `ui.document.info` in UI_TOOLS | bridge-commands.test.ts: ui document info reads UXML offline when bridge endpoint is absent | ✅ |
+| ui.document.create | `ui document/create --uxml <path>` | bridge (AlpsUnityBridge) | ✅ `ui.document.create` in UI_TOOLS | bridge-commands.test.ts: ui commands forward creation, document and hierarchy arguments | ✅ |
+| ui.hierarchy | `ui hierarchy [target]` | bridge (AlpsUnityBridge) | ✅ `ui.hierarchy` in UI_TOOLS | bridge-commands.test.ts: ui commands forward creation, document and hierarchy arguments | ✅ |
+
+---
+
 ## 真实 Unity 项目 smoke 验证状态
 
 | 功能域 | read 操作 | write/modify 操作 | 验证日期 | 备注 |
 |---|---|---|---|---|
+| camera | `camera info <target>` | `camera screenshot <target> --output <path>` | 待实机验证 | CLI/handler/metadata 单测已覆盖；需要 Unity 项目环境 |
+| material | `material info <path>` | `material create <path> --shader <name>` | 待实机验证 | CLI/handler/metadata 单测已覆盖；需要 Unity 项目环境 |
+| shader | `shader info <path>` | `shader create <path> --content-file <file>` | 待实机验证 | CLI/handler/metadata 单测已覆盖；需要 Unity 项目环境 |
+| texture | `texture info <path>` | `texture create <path> [--source <file>]` | 待实机验证 | CLI/handler/metadata 单测已覆盖；需要 Unity 项目环境 |
+| ui | `ui document/info <target|path>` / `ui hierarchy [target]` | `ui canvas/create <name>` | 待实机验证 | CLI/handler/metadata 单测已覆盖；需要 Unity 项目环境 |
 | editor | `editor state` 返回当前状态 | `editor play/pause/stop` 控制 play mode | 待验证 | 需要 Unity 项目环境 |
 | package | `package list` 返回列表 | `package install/remove` 修改 manifest | 待验证 | 需要 Unity 项目环境 |
 | test | `test.poll` 查询 job 状态 | `test run` 触发测试 | 待验证 | 需要 Unity 项目环境 |
@@ -110,3 +155,4 @@
 - **S2.3** (2026-06-14): 新增 `editor.refresh`、`cli.package.resolve`、`cli.package.registry`、`cli.package.scoped-registry`、`test.run`、`test.poll`、`build.run`、`build.status`、`build.cancel` metadata 条目及覆盖矩阵行
 - **S2.4** (2026-06-14): 新增 `script.delete` metadata 条目 + bridge 路由；`code.exec` 增加 `permissions=["executes_code"]`、`outputSchema`、batchmode job 参数；script/code 覆盖矩阵行
 - **S2.2** (2026-06-15): 补齐 asset create/modify/delete/duplicate/move/rename 与 prefab modify Bridge handler、metadata 和覆盖矩阵行
+- **S3.1** (2026-06-15): 补齐 camera、material、shader、texture、ui 创作域覆盖矩阵；新增 S3.1 metadata/write smoke 单测证据
