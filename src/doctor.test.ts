@@ -169,6 +169,32 @@ test("doctor config integrity check warns on missing bridgeEndpoint", async () =
   assert.ok(details.issues.some((i) => i.includes("missing bridgeEndpoint")));
 });
 
+test("doctor surfaces bridge custom tool fingerprint summary", async () => {
+  const dataDir = await makeDataDir();
+  await writeInstances(dataDir, [makeInstance()]);
+
+  const runtime = makeRuntime(dataDir, async (payload) => {
+    return {
+      ok: true,
+      data: {
+        command: payload.command,
+        status: "ok",
+        customTools: { fingerprint: { algorithm: "sha256-handler-code-plus-descriptor-v1", mode: "block", toolCount: 1, blockedCount: 1, warnCount: 0, tools: [] } }
+      }
+    };
+  });
+
+  const result = await handleDoctorCommand({}, runtime, "req_doctor_fingerprint");
+  assert.equal(result.ok, true);
+  const data = result.data as { summary: string; checks: DoctorCheck[]; suggestions: string[] };
+  assert.equal(data.summary, "fail");
+
+  const fingerprintCheck = data.checks.find((c) => c.name === "custom_tool_fingerprint");
+  assert.equal(fingerprintCheck?.status, "fail");
+  assert.ok(fingerprintCheck?.message.includes("1 blocked"));
+  assert.ok(data.suggestions.some((s) => s.includes("fingerprint")));
+});
+
 test("doctor uses --bridge-endpoint flag when provided", async () => {
   const dataDir = await makeDataDir();
   let capturedEndpoint = "";

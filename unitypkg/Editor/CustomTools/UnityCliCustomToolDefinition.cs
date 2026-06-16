@@ -8,6 +8,7 @@ using System.Linq;
 using System.Net;
 using System.Reflection;
 using System.Text;
+using System.Security.Cryptography;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
@@ -51,6 +52,13 @@ namespace UnityCli
         public string DescriptorSource { get; set; }
         public string Assembly { get; set; }
         public string Method { get; set; }
+        public string Fingerprint { get; set; }
+        public string FingerprintStatus { get; set; }
+        public string FingerprintMode { get; set; }
+        public string ExpectedFingerprint { get; set; }
+        public string FingerprintMessage { get; set; }
+        public string DescriptorSha256 { get; set; }
+        public string HandlerSha256 { get; set; }
         public Func<UnityCliCustomToolContext, string> Execute { get; set; }
     }
 }

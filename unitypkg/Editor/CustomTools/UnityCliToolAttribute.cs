@@ -45,6 +45,12 @@ namespace UnityCli
         public bool ArchitectureSensitive { get; set; }
         public string FrozenDecision { get; set; }
         public string CoverageScope { get; set; }
+        /// <summary>
+        /// Optional pinned fingerprint for tamper detection. When omitted, the
+        /// first computed handler-code + descriptor fingerprint is treated as
+        /// the runtime baseline for this Editor session.
+        /// </summary>
+        public string Fingerprint { get; set; }
     }
 }
 #endif

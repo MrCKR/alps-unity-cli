@@ -357,7 +357,7 @@ test("custom-tool list and run forward schema, execution and audit envelope", as
   };
 
   const list = await execute(["custom-tool", "list", "--project", runtime.dataDir, "--instance", "editor-1"], { ...runtime, bridgeExecute });
-  const run = await execute(["custom-tool", "run", "Project.Tools.GenerateLevel", "--project", runtime.dataDir, "--input-file", inputFile, "--timeout-ms", "12000", "--artifact-dir", "Artifacts"], { ...runtime, bridgeExecute });
+  const run = await execute(["custom-tool", "run", "Project.Tools.GenerateLevel", "--project", runtime.dataDir, "--input-file", inputFile, "--timeout-ms", "12000", "--fingerprint-mode", "warn", "--artifact-dir", "Artifacts"], { ...runtime, bridgeExecute });
 
   assert.equal(list.ok, true);
   assert.equal(run.ok, true);
@@ -368,6 +368,7 @@ test("custom-tool list and run forward schema, execution and audit envelope", as
   assert.deepEqual(requests[1].args.input, { seed: 7, execution: { preferJob: true } });
   assert.deepEqual(requests[1].args.execution, { preferJob: false });
   assert.equal(requests[1].args.timeoutMs, 12000);
+  assert.equal(requests[1].args.fingerprintMode, "warn");
 });
 
 test("custom-tool --job is explicit preference and preserves unsupported job diagnostics", async () => {

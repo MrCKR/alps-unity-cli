@@ -71,6 +71,11 @@ export async function handleDoctorCommand(
   // Check 6: Configuration integrity
   checks.push(await checkConfigIntegrity(healthyInstances));
 
+  const fingerprintCheck = checkBridgeFingerprintStatus(checks);
+  if (fingerprintCheck) {
+    checks.push(fingerprintCheck);
+  }
+
   const allPassed = checks.every((c) => c.status === "pass");
   const hasWarnings = checks.some((c) => c.status === "warn");
   const hasFailures = checks.some((c) => c.status === "fail");
@@ -189,6 +194,42 @@ async function checkBridgeConnectivity(
       details: { endpoint, error: error instanceof Error ? error.message : String(error) }
     };
   }
+}
+
+function checkBridgeFingerprintStatus(checks: DoctorCheck[]): DoctorCheck | undefined {
+  const bridgeCheck = checks.find((check) => check.name === "bridge_connectivity" && check.status === "pass");
+  const bridgeResponse = (bridgeCheck?.details as { bridgeResponse?: unknown } | undefined)?.bridgeResponse;
+  if (!bridgeResponse || typeof bridgeResponse !== "object") {
+    return undefined;
+  }
+  const customTools = (bridgeResponse as { customTools?: unknown }).customTools;
+  const fingerprint = customTools && typeof customTools === "object" ? (customTools as { fingerprint?: unknown }).fingerprint : undefined;
+  if (!fingerprint || typeof fingerprint !== "object") {
+    return undefined;
+  }
+  const blockedCount = numberProp(fingerprint, "blockedCount") ?? 0;
+  const warnCount = numberProp(fingerprint, "warnCount") ?? 0;
+  const toolCount = numberProp(fingerprint, "toolCount") ?? 0;
+  const mode = stringProp(fingerprint, "mode") ?? "unknown";
+  const status: DoctorCheck["status"] = blockedCount > 0 ? "fail" : warnCount > 0 ? "warn" : "pass";
+  return {
+    name: "custom_tool_fingerprint",
+    status,
+    message: status === "pass"
+      ? `Custom tool fingerprints match for ${toolCount} tool(s) (mode: ${mode}).`
+      : `Custom tool fingerprint issues: ${blockedCount} blocked, ${warnCount} warning(s) (mode: ${mode}).`,
+    details: { fingerprint }
+  };
+}
+
+function numberProp(value: unknown, key: string): number | undefined {
+  const raw = value && typeof value === "object" ? (value as Record<string, unknown>)[key] : undefined;
+  return typeof raw === "number" && Number.isFinite(raw) ? raw : undefined;
+}
+
+function stringProp(value: unknown, key: string): string | undefined {
+  const raw = value && typeof value === "object" ? (value as Record<string, unknown>)[key] : undefined;
+  return typeof raw === "string" ? raw : undefined;
 }
 
 async function checkDataDirectory(dataDir: string): Promise<DoctorCheck> {
@@ -313,6 +354,10 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
         case "bridge_connectivity":
           suggestions.push("Ensure Unity Editor is running with the Unity CLI Bridge package.");
           suggestions.push("Check --bridge-endpoint or UNITY_CLI_BRIDGE_ENDPOINT.");
+          break;
+        case "custom_tool_fingerprint":
+          suggestions.push("Inspect unity_cli doctor fingerprint details, then review custom tool descriptor/handler code changes.");
+          suggestions.push("Use custom-tool run --fingerprint-mode warn only for an intentional, audited mismatch.");
           break;
         case "data_directory":
           suggestions.push("Run any unity_cli command to auto-create the data directory.");

@@ -87,6 +87,7 @@ export async function customToolArgs(command: string, flags: BridgeFlags, positi
     input: await customToolInput(flags),
     timeoutMs,
     artifactDir: artifactDir ? resolve(artifactDir) : undefined,
+    fingerprintMode: stringFlag(flags, "fingerprint-mode"),
     execution: { preferJob: boolFlag(flags, "job") === true }
   });
 }
