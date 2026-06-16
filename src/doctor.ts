@@ -14,7 +14,7 @@
  */
 
 import { getString, getBoolean } from "./args.js";
-import { discoverCustomTools, type CustomToolRuntime } from "./custom-tool-discovery.js";
+import { discoverCustomTools, shouldDiscoverCustomTools, type CustomToolRuntime } from "./custom-tool-discovery.js";
 import { readInstances, type UnityInstance } from "./instances.js";
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
 import { builtinToolMetadata } from "./tools/metadata/index.js";
@@ -303,7 +303,8 @@ async function checkJobStore(dataDir: string): Promise<DoctorCheck> {
 
 async function checkUnifiedDiscovery(flags: Record<string, string | boolean>, runtime: DoctorRuntime, requestId: string): Promise<DoctorCheck> {
   const builtinCount = builtinToolMetadata().length;
-  const discovery = await discoverCustomTools(flags, runtime, `${requestId}_custom_tools`);
+  const includeCustom = shouldDiscoverCustomTools(flags, runtime);
+  const discovery = includeCustom ? await discoverCustomTools(flags, runtime, `${requestId}_custom_tools`) : { ok: true as const, tools: [], mode: "skipped" as const };
   if (!discovery.ok) {
     return {
       name: "unified_tool_discovery",

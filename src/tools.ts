@@ -107,7 +107,8 @@ async function handleToolsList(
 
 async function handleToolsGroups(flags: Record<string, string | boolean>, runtime: ToolsRuntime, requestId: string): Promise<CliResult> {
   const builtinGroups = builtinToolGroups();
-  const customDiscovery = await discoverCustomTools(flags, runtime, requestId);
+  const includeCustom = shouldDiscoverCustomTools(flags, runtime);
+  const customDiscovery = includeCustom ? await discoverCustomTools(flags, runtime, requestId) : { ok: true as const, tools: [], mode: "skipped" as const };
   if (customDiscovery.ok === false) return customDiscovery;
   const customGroups: string[] = [];
   const seen = new Set(builtinGroups);

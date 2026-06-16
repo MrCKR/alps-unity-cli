@@ -183,6 +183,14 @@ test("tools groups returns group names", async () => {
   assert.ok(data.groups.includes("camera"));
 });
 
+test("tools groups keeps built-in groups without custom context", async () => {
+  const result = await handleToolsCommand("groups", [], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as { groups: string[] };
+  assert.ok(data.groups.includes("scene"));
+  assert.equal(data.groups.includes("project"), false);
+});
+
 test("tools groups includes runtime custom tool groups", async () => {
   const runtime: ToolsRuntime = { customTools: [{
     name: "project.bake",
