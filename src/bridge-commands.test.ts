@@ -133,6 +133,25 @@ test("target commands manage active target and aliases", async () => {
   assert.equal((get.data as { target: { id: string } }).target.id, "editor-2");
 });
 
+test("target alias set requires --force to overwrite another target", async () => {
+  const runtime = await makeRuntime();
+  await writeRegistry(runtime.dataDir, [instance(), instance({ instanceId: "editor-2", projectPath: "/tmp/project-two", projectHash: "hash-two", bridgeEndpoint: "http://127.0.0.1:47393" })]);
+
+  const first = await execute(["target", "alias", "set", "editor-1", "main"], runtime);
+  const conflict = await execute(["target", "alias", "set", "editor-2", "main"], runtime);
+  const forced = await execute(["target", "alias", "set", "editor-2", "main", "--force"], runtime);
+  const set = await execute(["target", "set", "main"], runtime);
+
+  assert.equal(first.ok, true);
+  assert.equal(conflict.ok, false);
+  assert.equal(conflict.error?.code, "E_TARGET_ALIAS_CONFLICT");
+  assert.equal(forced.ok, true);
+  assert.equal((forced.data as { replacedInstanceId: string }).replacedInstanceId, "editor-1");
+  assert.equal(set.ok, true);
+  assert.equal((set.data as { target: { id: string; alias: string } }).target.id, "editor-2");
+  assert.equal((set.data as { target: { id: string; alias: string } }).target.alias, "main");
+});
+
 test("bridge command auto-selects by current project path", async () => {
   const runtime = await makeRuntime();
   await writeRegistry(runtime.dataDir, [instance({ projectPath: process.cwd() })]);

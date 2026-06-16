@@ -42,7 +42,7 @@ namespace UnityCli
             if (started && EditorApplication.timeSinceStartup >= nextHeartbeatAt)
             {
                 RegisterInstance("healthy");
-                nextHeartbeatAt = EditorApplication.timeSinceStartup + 5.0;
+                nextHeartbeatAt = EditorApplication.timeSinceStartup + 2.0;
             }
             while (true)
             {
