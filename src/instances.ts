@@ -4,7 +4,7 @@ import { defaultDataDir } from "./platform.js";
 import type { CliResult } from "./types.js";
 import { failure, success } from "./output.js";
 
-export const STALE_AFTER_MS = 30_000;
+export const STALE_AFTER_MS = 10_000;
 
 export interface UnityInstance {
   instanceId: string;
@@ -162,9 +162,16 @@ async function handleTargetAliasCommand(
     if (!instance) {
       return failure(requestId, "E_TARGET_NOT_FOUND", `Unity target not found: ${instanceId}.`, ["Run unity_cli instances list to inspect registered targets."]);
     }
+    const existingInstanceId = aliases[alias];
+    if (existingInstanceId && existingInstanceId !== instance.instanceId && !booleanFlag(flags, "force")) {
+      return failure(requestId, "E_TARGET_ALIAS_CONFLICT", `Target alias already points to another instance: ${alias}.`, [
+        "Run unity_cli target alias unset <alias> before assigning it to another instance.",
+        "Run unity_cli target alias set <instanceId> <alias> --force to overwrite the existing alias."
+      ], { alias, existingInstanceId, requestedInstanceId: instance.instanceId });
+    }
     aliases[alias] = instance.instanceId;
     await writeAliases(dataDir, aliases);
-    return success(requestId, { command: "target.alias.set", alias, target: targetSummary(instance, aliases) });
+    return success(requestId, { command: "target.alias.set", alias, target: targetSummary(instance, aliases), replacedInstanceId: existingInstanceId && existingInstanceId !== instance.instanceId ? existingInstanceId : null });
   }
 
   if (command === "unset") {
@@ -479,6 +486,10 @@ function normalizedPath(path: string): string {
 
 function stringFlag(flags: Record<string, string | boolean>, key: string): string | undefined {
   return typeof flags[key] === "string" ? flags[key] : undefined;
+}
+
+function booleanFlag(flags: Record<string, string | boolean>, key: string): boolean {
+  return flags[key] === true || flags[key] === "true";
 }
 
 function attemptKillPid(pid: number | undefined): boolean {

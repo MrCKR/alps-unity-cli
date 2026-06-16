@@ -184,7 +184,7 @@ function help(): Record<string, unknown> {
       "target get",
       "target set <id|alias>",
       "target clear",
-      "target alias set <instanceId> <alias>",
+      "target alias set <instanceId> <alias> [--force]",
       "target alias unset <alias>",
       "target alias list",
       "doctor [--bridge-endpoint <url>] [--json]",
