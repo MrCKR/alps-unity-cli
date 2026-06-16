@@ -16,6 +16,7 @@ import {
   type ToolMetadata
 } from "./tools/metadata/index.js";
 import { failure, success } from "./output.js";
+import { instanceSelectionFailure, selectInstanceForFlags, targetSummary } from "./instances.js";
 import { supportStatusDescription, supportStatusForTool, supportStatusLabel } from "./tools/metadata/status.js";
 import type { CliResult } from "./types.js";
 
@@ -30,6 +31,13 @@ export async function handleToolsCommand(
 ): Promise<CliResult> {
   if (!command || command === "list") {
     return handleToolsList(flags, runtime, requestId);
+  }
+
+  if (command === "run") {
+    return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", "tools run is reserved for the unified tools contract and is not implemented in P1.", [
+      "Use the domain CLI command shown by tools describe.",
+      "Use custom-tool run <name> for Unity project custom tools until P3 implements unified tools run."
+    ]);
   }
 
   if (command === "groups") {
@@ -93,6 +101,7 @@ async function handleToolsList(
 
   const data: Record<string, unknown> = {
     command: "tools.list",
+    target: await optionalTargetSummary(flags, runtime),
     count: summaries.length,
     tools: summaries
   };
@@ -174,6 +183,7 @@ async function handleToolsSearch(
   const format = getString(flags, "format");
   const data: Record<string, unknown> = {
     command: "tools.search",
+    target: await optionalTargetSummary(flags, runtime),
     keyword,
     count: summaries.length,
     tools: summaries
@@ -202,7 +212,7 @@ async function handleToolsDescribe(
   const builtinTool = findToolByName(toolName);
   const tool = builtinTool ?? await findCustomToolByName(toolName, flags, runtime, requestId);
   if (!tool) {
-    return failure(requestId, "TOOL_NOT_FOUND", `Tool not found: ${toolName}.`, [
+    return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Tool not found for target: ${toolName}.`, [
       "Run unity_cli tools list to see all available tools.",
       "Run unity_cli tools list --include-custom to discover Unity project Editor custom tools.",
       "Run unity_cli tools search <keyword> to find related tools."
@@ -213,6 +223,7 @@ async function handleToolsDescribe(
   const supportStatus = supportStatusForTool(tool);
   const data: Record<string, unknown> = {
     command: "tools.describe",
+    target: await optionalTargetSummary(flags, runtime),
     mode: isCustomTool ? "bridge" : "offline",
     requiresUnity: isCustomTool,
     ...tool,
@@ -222,6 +233,19 @@ async function handleToolsDescribe(
   };
 
   return success(requestId, data);
+}
+
+async function optionalTargetSummary(flags: Record<string, string | boolean>, runtime: ToolsRuntime): Promise<Record<string, unknown> | null> {
+  try {
+    const selection = await selectInstanceForFlags(flags, runtime.dataDir ?? process.cwd());
+    return selection ? targetSummary(selection.instance) : null;
+  } catch (error) {
+    const result = instanceSelectionFailure("tools_target_probe", error);
+    if (result) {
+      return null;
+    }
+    throw error;
+  }
 }
 
 async function findCustomToolByName(

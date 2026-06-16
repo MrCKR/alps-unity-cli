@@ -17,8 +17,9 @@ async function makeRuntime() {
 }
 
 async function writeRegistry(dataDir: string, instances: Array<Record<string, unknown>>) {
-  await mkdir(dataDir, { recursive: true });
-  await writeFile(join(dataDir, "instances.json"), JSON.stringify({ version: 1, instances }, null, 2), "utf8");
+  const registryDir = join(dataDir, "instances");
+  await mkdir(registryDir, { recursive: true });
+  await Promise.all(instances.map((item) => writeFile(join(registryDir, `${item.instanceId}.json`), JSON.stringify(item, null, 2), "utf8")));
 }
 
 test("bridge HTTP timeout matches Unity queue window for regular commands", () => {
@@ -36,7 +37,7 @@ function instance(overrides: Record<string, unknown> = {}) {
     pid: 1234,
     bridgeEndpoint: "http://127.0.0.1:47392",
     capabilitiesHash: "caps",
-    status: "healthy",
+    status: "ready",
     editorState: { playMode: false, compiling: false, domainReloading: false },
     registeredAt: new Date().toISOString(),
     lastHeartbeatAt: new Date().toISOString(),
@@ -44,18 +45,18 @@ function instance(overrides: Record<string, unknown> = {}) {
   };
 }
 
-test("instances list and cleanup normalize stale registry entries", async () => {
+test("instances list and prune normalize stale registry entries", async () => {
   const runtime = await makeRuntime();
   await writeRegistry(runtime.dataDir, [
     instance(),
-    instance({ instanceId: "editor-stale", projectHash: "hash-stale", status: "healthy", bridgeEndpoint: "http://127.0.0.1:47393", lastHeartbeatAt: new Date(Date.now() - 60_000).toISOString() })
+    instance({ instanceId: "editor-stale", projectHash: "hash-stale", status: "ready", bridgeEndpoint: "http://127.0.0.1:47393", lastHeartbeatAt: new Date(Date.now() - 60_000).toISOString() })
   ]);
 
   const list = await execute(["instances", "list"], runtime);
   assert.equal(list.ok, true);
-  assert.deepEqual((list.data as { instances: Array<{ status: string }> }).instances.map((item) => item.status), ["healthy", "stale"]);
+  assert.deepEqual((list.data as { instances: Array<{ state: string }> }).instances.map((item) => item.state), ["ready", "stale"]);
 
-  const cleanup = await execute(["instances", "cleanup"], runtime);
+  const cleanup = await execute(["instances", "prune"], runtime);
   assert.equal(cleanup.ok, true);
   assert.equal((cleanup.data as { removed: number }).removed, 1);
 });
@@ -66,16 +67,16 @@ test("instances list keeps latest endpoint for the same instance", async () => {
   const newHeartbeat = new Date().toISOString();
   await writeRegistry(runtime.dataDir, [
     instance({ status: "stale", bridgeEndpoint: "http://127.0.0.1:47392", lastHeartbeatAt: oldHeartbeat }),
-    instance({ status: "healthy", bridgeEndpoint: "http://127.0.0.1:47393", lastHeartbeatAt: newHeartbeat })
+    instance({ status: "ready", bridgeEndpoint: "http://127.0.0.1:47393", lastHeartbeatAt: newHeartbeat })
   ]);
 
   const list = await execute(["instances", "list"], runtime);
 
   assert.equal(list.ok, true);
-  const instances = (list.data as { instances: Array<{ status: string; bridgeEndpoint: string }> }).instances;
+  const instances = (list.data as { instances: Array<{ state: string; endpoint: string }> }).instances;
   assert.equal(instances.length, 1);
-  assert.equal(instances[0].status, "healthy");
-  assert.equal(instances[0].bridgeEndpoint, "http://127.0.0.1:47393");
+  assert.equal(instances[0].state, "ready");
+  assert.equal(instances[0].endpoint, "http://127.0.0.1:47393");
 });
 
 test("bridge command does not select superseded healthy endpoint during reload", async () => {
@@ -83,17 +84,17 @@ test("bridge command does not select superseded healthy endpoint during reload",
   const oldHeartbeat = new Date(Date.now() - 10_000).toISOString();
   const newHeartbeat = new Date().toISOString();
   await writeRegistry(runtime.dataDir, [
-    instance({ status: "healthy", bridgeEndpoint: "http://127.0.0.1:47392", lastHeartbeatAt: oldHeartbeat }),
+    instance({ status: "ready", bridgeEndpoint: "http://127.0.0.1:47392", lastHeartbeatAt: oldHeartbeat }),
     instance({ status: "stale", bridgeEndpoint: "http://127.0.0.1:47392", lastHeartbeatAt: newHeartbeat })
   ]);
 
   const result = await execute(["editor", "state", "--instance", "editor-1"], runtime);
 
   assert.equal(result.ok, false);
-  assert.equal(result.error?.code, "E_INSTANCE_STALE");
+  assert.equal(result.error?.code, "E_TARGET_STALE");
 });
 
-test("bridge command routes --instance to the matching healthy endpoint", async () => {
+test("bridge command routes --instance to the matching ready endpoint", async () => {
   const runtime = await makeRuntime();
   await writeRegistry(runtime.dataDir, [
     instance(),
@@ -112,7 +113,24 @@ test("bridge command routes --instance to the matching healthy endpoint", async 
   assert.equal(result.ok, true);
   assert.equal((result.data as { bridgeEndpoint: string }).bridgeEndpoint, "http://127.0.0.1:47393");
   assert.equal((result.data as { selectedInstance: { instanceId: string } }).selectedInstance.instanceId, "editor-2");
+  assert.equal((result.data as { target: { id: string } }).target.id, "editor-2");
   assert.equal(requests[0].command, "scene.hierarchy");
+});
+
+test("target commands manage active target and aliases", async () => {
+  const runtime = await makeRuntime();
+  await writeRegistry(runtime.dataDir, [instance(), instance({ instanceId: "editor-2", projectPath: "/tmp/project-two", projectHash: "hash-two", bridgeEndpoint: "http://127.0.0.1:47393" })]);
+
+  const alias = await execute(["target", "alias", "set", "editor-2", "main"], runtime);
+  const set = await execute(["target", "set", "main"], runtime);
+  const get = await execute(["target", "get"], runtime);
+
+  assert.equal(alias.ok, true);
+  assert.equal(set.ok, true);
+  assert.equal((set.data as { target: { id: string; alias: string } }).target.id, "editor-2");
+  assert.equal((set.data as { target: { id: string; alias: string } }).target.alias, "main");
+  assert.equal(get.ok, true);
+  assert.equal((get.data as { target: { id: string } }).target.id, "editor-2");
 });
 
 test("bridge command auto-selects by current project path", async () => {
@@ -133,19 +151,19 @@ test("bridge command reports missing, stale and ambiguous instances", async () =
   await writeRegistry(missingRuntime.dataDir, [instance()]);
   const missing = await execute(["editor", "state", "--instance", "missing"], missingRuntime);
   assert.equal(missing.ok, false);
-  assert.equal(missing.error?.code, "E_INSTANCE_NOT_FOUND");
+  assert.equal(missing.error?.code, "E_TARGET_NOT_FOUND");
 
   const staleRuntime = await makeRuntime();
   await writeRegistry(staleRuntime.dataDir, [instance({ status: "stale" })]);
   const stale = await execute(["editor", "state", "--instance", "editor-1"], staleRuntime);
   assert.equal(stale.ok, false);
-  assert.equal(stale.error?.code, "E_INSTANCE_STALE");
+  assert.equal(stale.error?.code, "E_TARGET_STALE");
 
   const ambiguousRuntime = await makeRuntime();
   await writeRegistry(ambiguousRuntime.dataDir, [instance(), instance({ instanceId: "editor-2", projectPath: "/tmp/project-two", projectHash: "hash-two", bridgeEndpoint: "http://127.0.0.1:47393" })]);
   const ambiguous = await execute(["editor", "state"], ambiguousRuntime);
   assert.equal(ambiguous.ok, false);
-  assert.equal(ambiguous.error?.code, "E_INSTANCE_AMBIGUOUS");
+  assert.equal(ambiguous.error?.code, "E_TARGET_AMBIGUOUS");
 });
 
 test("bridge command marks expired healthy heartbeat as stale", async () => {
@@ -155,7 +173,7 @@ test("bridge command marks expired healthy heartbeat as stale", async () => {
   const result = await execute(["editor", "state", "--instance", "editor-1"], runtime);
 
   assert.equal(result.ok, false);
-  assert.equal(result.error?.code, "E_INSTANCE_STALE");
+  assert.equal(result.error?.code, "E_TARGET_STALE");
 });
 
 test("query command forwards stable bridge envelope", async () => {
@@ -423,6 +441,7 @@ test("material commands forward asset paths, target, values and planned effects"
 
 test("custom-tool list and run forward schema, execution and audit envelope", async () => {
   const runtime = await makeRuntime();
+  await writeRegistry(runtime.dataDir, [instance()]);
   const inputFile = join(runtime.dataDir, "custom-tool-input.json");
   await writeFile(inputFile, "{\"seed\":7,\"execution\":{\"preferJob\":true}}", "utf8");
   const requests: BridgeRequest[] = [];

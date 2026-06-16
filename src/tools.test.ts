@@ -248,10 +248,10 @@ test("tools describe scene.hierarchy returns full metadata", async () => {
   assert.equal((data as { requiresUnity: boolean }).requiresUnity, false);
 });
 
-test("tools describe for unknown tool returns TOOL_NOT_FOUND", async () => {
+test("tools describe for unknown tool returns E_TOOL_NOT_FOUND_FOR_TARGET", async () => {
   const result = await handleToolsCommand("describe", ["nonexistent.tool"], {}, emptyRuntime, requestId);
   assert.equal(result.ok, false);
-  assert.equal(result.error?.code, "TOOL_NOT_FOUND");
+  assert.equal(result.error?.code, "E_TOOL_NOT_FOUND_FOR_TARGET");
 });
 
 test("tools describe without name returns error", async () => {

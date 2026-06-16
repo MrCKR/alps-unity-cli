@@ -15,7 +15,7 @@ import type { CliCommandModule, Runtime } from "./cli-commands/types.js";
 import { startUnityJob, summarizeJob } from "./cli-commands/unity-job.js";
 import { handleCapabilitiesCommand } from "./capabilities.js";
 import { handleDoctorCommand } from "./doctor.js";
-import { handleInstancesCommand } from "./instances.js";
+import { handleInstancesCommand, handleTargetCommand } from "./instances.js";
 import { handleDocsCommand, handleReflectCommand } from "./docs-reflect.js";
 import { handleDocsTopicCommand } from "./docs-topic.js";
 import { JobRunner } from "./job-runner.js";
@@ -35,6 +35,7 @@ const CLI_COMMANDS = new Map<string, CliCommandModule>([
   ["batch", { run: ({ command, args, flags, runtime, requestId }) => handleBatch(command, args[0], flags, runtime, requestId) }],
   ["doctor", { run: ({ flags, runtime, requestId }) => handleDoctorCommand(flags, runtime, requestId) }],
   ["instances", { run: ({ command, flags, runtime, requestId }) => handleInstancesCommand(command, flags, runtime.dataDir, requestId) }],
+  ["target", { run: ({ command, args, flags, runtime, requestId }) => handleTargetCommand(command, args, flags, runtime.dataDir, requestId) }],
   ["code", { run: ({ command, flags, runtime, requestId }) => handleCode(command, flags, runtime, requestId) }],
   ["tools", { run: ({ command, args, flags, runtime, requestId }) => handleToolsCommand(command, args, flags, runtime, requestId) }],
   ["capabilities", { run: ({ flags, runtime, requestId }) => handleCapabilitiesCommand(flags, runtime, requestId) }],
@@ -179,7 +180,13 @@ function help(): Record<string, unknown> {
       "batch schema",
       "batch run <file.json> [--preflight] [--fail-fast true|false] [--parallel 1]",
       "instances list",
-      "instances cleanup",
+      "instances prune",
+      "target get",
+      "target set <id|alias>",
+      "target clear",
+      "target alias set <instanceId> <alias>",
+      "target alias unset <alias>",
+      "target alias list",
       "doctor [--bridge-endpoint <url>] [--json]",
       "docs [--format json|text]",
       "docs topic <topic> [--format json|text]",
@@ -195,8 +202,8 @@ function help(): Record<string, unknown> {
       "capabilities [--json] [--bridge-endpoint <url>]",
       "docs-topic [topic] [--format json|text]",
       "code exec (--file <path>|--stdin|--code <text>) [--channel live|batchmode] [--refs <list>] [--define <symbol>] [--args <json>] [--timeout-ms <n>] [--job] [--artifact-dir <path>]",
-      "custom-tool list [--project <path>] [--instance <id>] [--bridge-endpoint <url>]",
-      "custom-tool run <name> [--project <path>] [--instance <id>] [--input <json>|--input-file <path>|--stdin] [--timeout-ms 30000] [--fingerprint-mode warn|block] [--job] [--artifact-dir <path>] [--bridge-endpoint <url>]",
+      "custom-tool list [--project <path>] [--target <id|alias>] [--bridge-endpoint <url>]",
+      "custom-tool run <name> [--project <path>] [--target <id|alias>] [--input <json>|--input-file <path>|--stdin] [--timeout-ms 30000] [--fingerprint-mode warn|block] [--job] [--artifact-dir <path>] [--bridge-endpoint <url>]",
       "scene active [规划中]",
       "scene hierarchy [--page-size 100] [--bridge-endpoint <url>]",
       "scene build-settings [规划中]",

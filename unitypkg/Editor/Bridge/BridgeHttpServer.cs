@@ -63,6 +63,7 @@ namespace UnityCli
         {
             return "{\"ok\":true,\"data\":{"
                 + "\"bridge\":\"unity_cli\","
+                + "\"target\":" + TargetContextJson() + ","
                 + "\"port\":" + port.ToString(CultureInfo.InvariantCulture) + ","
                 + "\"route\":\"POST /bridge/execute\","
                 + "\"buildStamp\":" + Quote(BridgeBuildStamp()) + ","
