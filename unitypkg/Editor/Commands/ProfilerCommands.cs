@@ -191,7 +191,6 @@ namespace UnityCli
         private static string ProfilerStart(BridgeRequest request)
         {
             var deepProfiling = request.BoolArg("deepProfiling", false);
-            UnityEngine.Profiling.Profiler.enableBinaryLog = true;
             UnityEngine.Profiling.Profiler.enabled = true;
             SetProfilerDeepProfiling(deepProfiling);
             WriteLog("profiler_started deepProfiling=" + Bool(deepProfiling));
@@ -211,10 +210,6 @@ namespace UnityCli
             var wasEnabled = UnityEngine.Profiling.Profiler.enabled;
             var paused = request.BoolArg("paused", wasEnabled);
             UnityEngine.Profiling.Profiler.enabled = !paused;
-            if (!paused)
-            {
-                UnityEngine.Profiling.Profiler.enableBinaryLog = true;
-            }
             WriteLog("profiler_pause paused=" + Bool(paused) + " profilerEnabled=" + Bool(UnityEngine.Profiling.Profiler.enabled));
             return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"paused\":" + Bool(paused) + ",\"plannedEffects\":[{\"type\":\"profiler.pause\",\"profilerEnabledFrom\":" + Bool(wasEnabled) + ",\"profilerEnabledTo\":" + Bool(UnityEngine.Profiling.Profiler.enabled) + "}],\"logPath\":" + Quote(LogPath()) + "}");
         }
