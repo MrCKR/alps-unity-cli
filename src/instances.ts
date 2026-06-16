@@ -142,12 +142,21 @@ export async function writeInstances(dataDir: string, instances: UnityInstance[]
 }
 
 export function normalizeInstances(instances: UnityInstance[], now = Date.now()): UnityInstance[] {
-  return instances
+  const normalized = instances
     .filter((instance) => typeof instance.instanceId === "string" && typeof instance.bridgeEndpoint === "string")
     .map((instance) => ({
       ...instance,
-      status: isHeartbeatStale(instance.lastHeartbeatAt, now) ? "stale" : instance.status === "stale" ? "stale" : "healthy"
+      status: isHeartbeatStale(instance.lastHeartbeatAt, now) ? "stale" as const : instance.status === "stale" ? "stale" as const : "healthy" as const
     }));
+
+  const byInstanceId = new Map<string, UnityInstance>();
+  for (const instance of normalized) {
+    const current = byInstanceId.get(instance.instanceId);
+    if (!current || isNewerInstance(instance, current)) {
+      byInstanceId.set(instance.instanceId, instance);
+    }
+  }
+  return [...byInstanceId.values()];
 }
 
 function selectExplicitInstance(instances: UnityInstance[], selector: string): InstanceSelection {
@@ -177,6 +186,24 @@ function selectExplicitInstance(instances: UnityInstance[], selector: string): I
   if (instance.instanceId === selector) return { instance, matchedBy: "instanceId" };
   if (instance.projectHash === selector || instance.projectHash.startsWith(selector)) return { instance, matchedBy: "projectHash" };
   return { instance, matchedBy: "projectPathPrefix" };
+}
+
+function isNewerInstance(candidate: UnityInstance, current: UnityInstance): boolean {
+  const candidateTime = instanceTimestamp(candidate);
+  const currentTime = instanceTimestamp(current);
+  if (candidateTime !== currentTime) {
+    return candidateTime > currentTime;
+  }
+  return current.status === "stale" && candidate.status === "healthy";
+}
+
+function instanceTimestamp(instance: UnityInstance): number {
+  const heartbeat = Date.parse(instance.lastHeartbeatAt);
+  if (Number.isFinite(heartbeat)) {
+    return heartbeat;
+  }
+  const registered = Date.parse(instance.registeredAt);
+  return Number.isFinite(registered) ? registered : 0;
 }
 
 function isHeartbeatStale(value: string | undefined, now: number): boolean {
