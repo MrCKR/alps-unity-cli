@@ -21,6 +21,9 @@ export interface ToolMetadata {
   supportsDryRun?: boolean;
   timeoutMs?: number;
   permissions?: string[];
+  architectureSensitive?: boolean;
+  frozenDecision?: string;
+  coverageScope?: readonly string[];
   cancellationSemantics?: string;
   examples?: ToolExample[];
   docsTopic?: string;

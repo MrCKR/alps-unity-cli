@@ -790,7 +790,16 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 30000,
+      "architectureSensitive": true,
+      "frozenDecision": "ALP-165-Q4",
+      "coverageScope": [
+        "session",
+        "counter",
+        "memory",
+        "frame-debugger",
+        "export"
+      ]
     },
     {
       "bridgeCommand": "profiler.counter",
@@ -800,7 +809,16 @@
       "csharp_handler": "present",
       "readOnly": true,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 30000,
+      "architectureSensitive": true,
+      "frozenDecision": "ALP-165-Q4",
+      "coverageScope": [
+        "session",
+        "counter",
+        "memory",
+        "frame-debugger",
+        "export"
+      ]
     },
     {
       "bridgeCommand": "profiler.export",
@@ -810,7 +828,16 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 30000,
+      "architectureSensitive": true,
+      "frozenDecision": "ALP-165-Q4",
+      "coverageScope": [
+        "session",
+        "counter",
+        "memory",
+        "frame-debugger",
+        "export"
+      ]
     },
     {
       "bridgeCommand": "profiler.frame",
@@ -820,7 +847,16 @@
       "csharp_handler": "present",
       "readOnly": true,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 30000,
+      "architectureSensitive": true,
+      "frozenDecision": "ALP-165-Q4",
+      "coverageScope": [
+        "session",
+        "counter",
+        "memory",
+        "frame-debugger",
+        "export"
+      ]
     },
     {
       "bridgeCommand": "profiler.memory",
@@ -830,7 +866,16 @@
       "csharp_handler": "present",
       "readOnly": true,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 30000,
+      "architectureSensitive": true,
+      "frozenDecision": "ALP-165-Q4",
+      "coverageScope": [
+        "session",
+        "counter",
+        "memory",
+        "frame-debugger",
+        "export"
+      ]
     },
     {
       "bridgeCommand": "profiler.pause",
@@ -840,7 +885,16 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 30000,
+      "architectureSensitive": true,
+      "frozenDecision": "ALP-165-Q4",
+      "coverageScope": [
+        "session",
+        "counter",
+        "memory",
+        "frame-debugger",
+        "export"
+      ]
     },
     {
       "bridgeCommand": "profiler.start",
@@ -850,7 +904,16 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 30000,
+      "architectureSensitive": true,
+      "frozenDecision": "ALP-165-Q4",
+      "coverageScope": [
+        "session",
+        "counter",
+        "memory",
+        "frame-debugger",
+        "export"
+      ]
     },
     {
       "bridgeCommand": "profiler.status",
@@ -860,7 +923,16 @@
       "csharp_handler": "present",
       "readOnly": true,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 30000,
+      "architectureSensitive": true,
+      "frozenDecision": "ALP-165-Q4",
+      "coverageScope": [
+        "session",
+        "counter",
+        "memory",
+        "frame-debugger",
+        "export"
+      ]
     },
     {
       "bridgeCommand": "profiler.stop",
@@ -870,7 +942,16 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 30000,
+      "architectureSensitive": true,
+      "frozenDecision": "ALP-165-Q4",
+      "coverageScope": [
+        "session",
+        "counter",
+        "memory",
+        "frame-debugger",
+        "export"
+      ]
     },
     {
       "bridgeCommand": "scene.active",

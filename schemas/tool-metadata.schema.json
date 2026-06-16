@@ -70,6 +70,20 @@
       "items": { "type": "string" },
       "description": "Permission tokens required, e.g. ['bridge:connect', 'file:write']."
     },
+    "architectureSensitive": {
+      "type": "boolean",
+      "default": false,
+      "description": "True when the command is tied to an explicitly frozen architecture/product decision and changes need architecture review."
+    },
+    "frozenDecision": {
+      "type": "string",
+      "description": "Frozen decision reference that governs this tool, e.g. 'ALP-165-Q4'."
+    },
+    "coverageScope": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Frozen coverage facets that this tool contributes to."
+    },
     "cancellationSemantics": {
       "type": "string",
       "description": "How cancellation behaves for long-running commands: immediate process kill, cooperative cancellation, or marker-only waiting for the underlying operation to finish."

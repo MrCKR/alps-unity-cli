@@ -121,17 +121,19 @@
 
 ## Profiler 域
 
+> 架构敏感：Profiler 受 ALP-165 Q4 冻结口径约束，必须完整覆盖 session / counter / memory / frame debugger / export，不可降级为可选 capability；涉及命令契约、metadata 安全标记或 handler 行为变更时需按架构敏感改动复核。
+
 | unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
 |---|---|---|---|---|---|
-| profiler.status | `profiler status` | bridge (UnityCliBridge) | ✅ `profiler.status` in PROFILER_TOOLS | bridge-commands.test.ts + contracts:validate | ✅ |
-| profiler.start | `profiler start [--deep-profiling]` | hybrid (live bridge + job path) | ✅ `profiler.start` in PROFILER_TOOLS | bridge-commands.test.ts + tools.test.ts | ✅ |
-| profiler.stop | `profiler stop` | bridge (UnityCliBridge) | ✅ `profiler.stop` in PROFILER_TOOLS | bridge-commands.test.ts + tools.test.ts | ✅ |
-| profiler.pause | `profiler pause [--paused true\|false]` | bridge (UnityCliBridge) | ✅ `profiler.pause` in PROFILER_TOOLS | bridge-commands.test.ts + tools.test.ts | ✅ |
-| profiler.counter | `profiler counter [--category] [--counter]` | bridge (UnityCliBridge) | ✅ `profiler.counter` in PROFILER_TOOLS | bridge-commands.test.ts + tools.test.ts | ✅ |
-| profiler.memory | `profiler memory` | bridge (UnityCliBridge) | ✅ `profiler.memory` in PROFILER_TOOLS | bridge-commands.test.ts + tools.test.ts | ✅ |
-| profiler.frame | `profiler frame [--module]` | bridge (UnityCliBridge) | ✅ `profiler.frame` in PROFILER_TOOLS | bridge-commands.test.ts + tools.test.ts | ✅ |
-| profiler.capture | `profiler capture <path> [--duration-ms] [--frames]` | hybrid (live bridge + job path) | ✅ `profiler.capture` in PROFILER_TOOLS; describe includes live/job cancel semantics (S3.5) | bridge-commands.test.ts + tools.test.ts | ✅ |
-| profiler.export | `profiler export <path>` | bridge (UnityCliBridge) | ✅ `profiler.export` in PROFILER_TOOLS | bridge-commands.test.ts + tools.test.ts | ✅ |
+| profiler.status | `profiler status` | bridge (UnityCliBridge) | ✅ `profiler.status` in PROFILER_TOOLS; `architectureSensitive=true`, `frozenDecision=ALP-165-Q4` | bridge-commands.test.ts + contracts:validate + contract architecture-sensitive test | ✅ |
+| profiler.start | `profiler start [--deep-profiling]` | hybrid (live bridge + job path) | ✅ `profiler.start` in PROFILER_TOOLS; `architectureSensitive=true`, `frozenDecision=ALP-165-Q4` | bridge-commands.test.ts + tools.test.ts | ✅ |
+| profiler.stop | `profiler stop` | bridge (UnityCliBridge) | ✅ `profiler.stop` in PROFILER_TOOLS; `architectureSensitive=true`, `frozenDecision=ALP-165-Q4` | bridge-commands.test.ts + tools.test.ts | ✅ |
+| profiler.pause | `profiler pause [--paused true\|false]` | bridge (UnityCliBridge) | ✅ `profiler.pause` in PROFILER_TOOLS; `architectureSensitive=true`, `frozenDecision=ALP-165-Q4` | bridge-commands.test.ts + tools.test.ts | ✅ |
+| profiler.counter | `profiler counter [--category] [--counter]` | bridge (UnityCliBridge) | ✅ `profiler.counter` in PROFILER_TOOLS; `coverageScope` includes counter | bridge-commands.test.ts + tools.test.ts | ✅ |
+| profiler.memory | `profiler memory` | bridge (UnityCliBridge) | ✅ `profiler.memory` in PROFILER_TOOLS; `coverageScope` includes memory | bridge-commands.test.ts + tools.test.ts | ✅ |
+| profiler.frame | `profiler frame [--module]` | bridge (UnityCliBridge) | ✅ `profiler.frame` in PROFILER_TOOLS; `coverageScope` includes frame-debugger | bridge-commands.test.ts + tools.test.ts | ✅ |
+| profiler.capture | `profiler capture <path> [--duration-ms] [--frames]` | hybrid (live bridge + job path) | ✅ `profiler.capture` in PROFILER_TOOLS; describe includes live/job cancel semantics (S3.5); `coverageScope` includes export | bridge-commands.test.ts + tools.test.ts | ✅ |
+| profiler.export | `profiler export <path>` | bridge (UnityCliBridge) | ✅ `profiler.export` in PROFILER_TOOLS; `coverageScope` includes export | bridge-commands.test.ts + tools.test.ts | ✅ |
 
 ---
 
@@ -228,4 +230,5 @@
 - **S3.2** (2026-06-15): 新增 Graphics/Physics/Animation/VFX 覆盖矩阵行；补 `graphics.pipeline`、`graphics.volume` 查询命令与 metadata/handler/test 证据
 - **ALP-306** (2026-06-15): 新增 `contracts/command-contract.json` 与 `npm run contracts:validate`；补齐 scene/go/component/script 16 个 C# bridge handler，使 TS registry、tool metadata 与 C# registry 统一校验通过。
 - **S3.4** (2026-06-15): 补齐 Profiler session/counter/memory/frame/export CLI、UnityPkg handler、metadata/describe 与自动化测试矩阵；质量 smoke PASS。
+- **P1-1 Profiler 迁移重做** (2026-06-16): 在新结构 contract/metadata/handler/docs 中显式标记 `architectureSensitive=true`、`frozenDecision=ALP-165-Q4`、完整 `coverageScope`，用于防止冻结口径被误降级。
 - **S3.5** (2026-06-16): 补齐 `cli.batch.schema` metadata、`test.logs`/`test.cancel`、`build.logs`、job describe/cancellation semantics 字段，并新增 batch→build status/logs/cancel 自动化链路测试。

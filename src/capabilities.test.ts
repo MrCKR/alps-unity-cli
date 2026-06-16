@@ -35,6 +35,7 @@ test("capabilities without bridge returns static-only result", async () => {
   assert.ok(Array.isArray(staticData.offlineTools));
   assert.ok(Array.isArray(staticData.readOnlyTools));
   assert.ok(Array.isArray(staticData.destructiveTools));
+  assert.ok(Array.isArray(staticData.architectureSensitiveTools));
 
   // No runtime section since bridge not reachable
   assert.equal(data.runtime, undefined);
@@ -110,6 +111,23 @@ test("capabilities static data separates live bridge, hybrid and planned tools",
     assert.ok(hybridTools.includes(name), `${name} should be listed as hybrid`);
     assert.equal(batchJobTools.includes(name), false, `${name} should not be listed as batch-only`);
     assert.ok(jobTools.includes(name), `${name} should remain job-capable for compatibility`);
+  }
+});
+
+test("capabilities static data marks Profiler as architecture sensitive", async () => {
+  const runtime: BridgeRuntime = {};
+  const result = await handleCapabilitiesCommand({}, runtime, requestId);
+  assert.equal(result.ok, true);
+
+  const data = result.data as Record<string, unknown>;
+  const staticData = data.static as Record<string, unknown>;
+  const architectureSensitiveTools = staticData.architectureSensitiveTools as Array<{ name: string; frozenDecision: string; coverageScope: string[] }>;
+  const profilerTools = architectureSensitiveTools.filter((tool) => tool.name.startsWith("profiler."));
+
+  assert.equal(profilerTools.length, 9);
+  for (const tool of profilerTools) {
+    assert.equal(tool.frozenDecision, "ALP-165-Q4");
+    assert.deepEqual(tool.coverageScope, ["session", "counter", "memory", "frame-debugger", "export"]);
   }
 });
 

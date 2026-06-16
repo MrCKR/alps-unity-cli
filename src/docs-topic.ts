@@ -111,7 +111,7 @@ const TOPIC_DOCS: Record<string, DocTopic> = {
   },
   profiler: {
     title: "Profiler Commands",
-    summary: "Control the Unity profiler, read counters, query memory and export frame data.",
+    summary: "Control the Unity profiler, read counters, query memory and export frame data. Architecture-sensitive ALP-165-Q4 frozen scope: session, counter, memory, frame debugger and export must remain fully covered.",
     tools: [
       "profiler.status — Check if profiler is active",
       "profiler.start — Begin profiling",
@@ -123,7 +123,7 @@ const TOPIC_DOCS: Record<string, DocTopic> = {
       "profiler.capture — Capture profiler data to file (long-running)",
       "profiler.export — Export profiler data to file"
     ],
-    guide: "Start with `profiler status`, then `profiler start`, run your workload, inspect `profiler counter` / `profiler memory`, and `profiler export <path>`."
+    guide: "Start with `profiler status`, then `profiler start`, run your workload, inspect `profiler counter` / `profiler memory`, and `profiler export <path>`. Do not downgrade this domain to optional without architecture review because ALP-165-Q4 freezes Profiler as complete coverage."
   },
   probuilder: {
     title: "ProBuilder Commands",

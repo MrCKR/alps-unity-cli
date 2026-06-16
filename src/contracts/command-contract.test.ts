@@ -32,6 +32,16 @@ test("command contract validates bridge registry and metadata", () => {
   assert.equal(new Set(bridgeCommandRegistry.specs().map((spec) => spec.bridgeCommand)).size, 95);
 });
 
+test("command contract marks Profiler frozen coverage as architecture-sensitive", () => {
+  const contracts = commandContracts().filter((entry) => entry.group === "profiler");
+  assert.deepEqual(contracts.map((entry) => entry.bridgeCommand), ["profiler.capture", "profiler.counter", "profiler.export", "profiler.frame", "profiler.memory", "profiler.pause", "profiler.start", "profiler.status", "profiler.stop"]);
+  for (const contract of contracts) {
+    assert.equal(contract.architectureSensitive, true, `${contract.bridgeCommand} should be architecture sensitive`);
+    assert.equal(contract.frozenDecision, "ALP-165-Q4", `${contract.bridgeCommand} should reference Q4 frozen decision`);
+    assert.deepEqual(contract.coverageScope, ["session", "counter", "memory", "frame-debugger", "export"], `${contract.bridgeCommand} should declare frozen Profiler scope`);
+  }
+});
+
 test("command contract marks ALP-306 C# handler gaps as present", async () => {
   const contracts = new Map(commandContracts().map((entry) => [entry.bridgeCommand, entry]));
   const csharpCommands = await registeredCsharpCommands();

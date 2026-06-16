@@ -467,6 +467,9 @@ test("S3.4 profiler domain has frozen metadata coverage", () => {
     assert.ok(tool, `${name} should exist`);
     assert.equal(tool?.docsTopic, "profiler");
     assert.ok(tool?.cliCommand, `${name} should expose a CLI command`);
+    assert.equal(tool?.architectureSensitive, true, `${name} should be marked architecture sensitive`);
+    assert.equal(tool?.frozenDecision, "ALP-165-Q4", `${name} should reference the Profiler frozen decision`);
+    assert.deepEqual(tool?.coverageScope, ["session", "counter", "memory", "frame-debugger", "export"], `${name} should declare full frozen coverage scope`);
   }
 
   for (const name of ["profiler.status", "profiler.counter", "profiler.memory", "profiler.frame"]) {
@@ -492,6 +495,9 @@ test("tools describe profiler.memory returns full metadata", async () => {
   assert.equal(data.group, "profiler");
   assert.equal(data.readOnlyHint, true);
   assert.equal(data.destructiveHint, false);
+  assert.equal(data.architectureSensitive, true);
+  assert.equal(data.frozenDecision, "ALP-165-Q4");
+  assert.deepEqual(data.coverageScope, ["session", "counter", "memory", "frame-debugger", "export"]);
 });
 
 test("planned bridge contract tools expose planned support status", () => {
