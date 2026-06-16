@@ -200,7 +200,7 @@ test("cancel marks running job as cancelled", async () => {
   assert.equal(described.ok, true);
   assert.equal((described.data as { cancellation: { mode: string } }).cancellation.mode, "immediate");
 
-  const cancelled = await execute(["build", "cancel", "--id", jobId], runtime);
+  const cancelled = await execute(["build", "cancel", "--id", jobId, "--yes"], runtime);
   assert.equal(cancelled.ok, true);
   assert.equal((cancelled.data as { status: string }).status, "cancelled");
   assert.equal((cancelled.data as { cancellation: { mode: string } }).cancellation.mode, "immediate");

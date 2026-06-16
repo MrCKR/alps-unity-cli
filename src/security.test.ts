@@ -29,6 +29,18 @@ test("bridge registry marks destructive commands from security policy", () => {
   assert.equal(sceneSave?.supportsDryRun, true);
 });
 
+test("security policy covers all 12 destructive commands including CLI-only", async () => {
+  const { destructiveCommands } = await import("./security-policy.js");
+  const policyCommands = destructiveCommands().map((e: { command: string }) => e.command);
+  const expected = [
+    "asset.delete", "go.delete", "scene.save", "code.exec", "component.remove",
+    "probuilder.csg", "editor.menu", "script.edit", "cli.package.remove",
+    "cli.batch.run", "test.cancel", "build.cancel"
+  ];
+  assert.deepEqual(policyCommands.sort(), expected.sort());
+  assert.equal(destructiveCommands().length, 12);
+});
+
 test("destructive dry-run forwards envelope preview without --yes", async () => {
   const runtime = await makeRuntime();
   const requests: BridgeRequest[] = [];
