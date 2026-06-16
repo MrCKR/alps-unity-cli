@@ -60,6 +60,39 @@ test("instances list and cleanup normalize stale registry entries", async () => 
   assert.equal((cleanup.data as { removed: number }).removed, 1);
 });
 
+test("instances list keeps latest endpoint for the same instance", async () => {
+  const runtime = await makeRuntime();
+  const oldHeartbeat = new Date(Date.now() - 10_000).toISOString();
+  const newHeartbeat = new Date().toISOString();
+  await writeRegistry(runtime.dataDir, [
+    instance({ status: "stale", bridgeEndpoint: "http://127.0.0.1:47392", lastHeartbeatAt: oldHeartbeat }),
+    instance({ status: "healthy", bridgeEndpoint: "http://127.0.0.1:47393", lastHeartbeatAt: newHeartbeat })
+  ]);
+
+  const list = await execute(["instances", "list"], runtime);
+
+  assert.equal(list.ok, true);
+  const instances = (list.data as { instances: Array<{ status: string; bridgeEndpoint: string }> }).instances;
+  assert.equal(instances.length, 1);
+  assert.equal(instances[0].status, "healthy");
+  assert.equal(instances[0].bridgeEndpoint, "http://127.0.0.1:47393");
+});
+
+test("bridge command does not select superseded healthy endpoint during reload", async () => {
+  const runtime = await makeRuntime();
+  const oldHeartbeat = new Date(Date.now() - 10_000).toISOString();
+  const newHeartbeat = new Date().toISOString();
+  await writeRegistry(runtime.dataDir, [
+    instance({ status: "healthy", bridgeEndpoint: "http://127.0.0.1:47392", lastHeartbeatAt: oldHeartbeat }),
+    instance({ status: "stale", bridgeEndpoint: "http://127.0.0.1:47392", lastHeartbeatAt: newHeartbeat })
+  ]);
+
+  const result = await execute(["editor", "state", "--instance", "editor-1"], runtime);
+
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_INSTANCE_STALE");
+});
+
 test("bridge command routes --instance to the matching healthy endpoint", async () => {
   const runtime = await makeRuntime();
   await writeRegistry(runtime.dataDir, [
