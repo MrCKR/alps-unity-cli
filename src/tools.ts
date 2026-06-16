@@ -86,7 +86,10 @@ function handleToolsList(
       handler: t.handler,
       supportStatus,
       supportStatusLabel: supportStatusLabel(supportStatus),
-      cliCommand: t.cliCommand
+      cliCommand: t.cliCommand,
+      architectureSensitive: t.architectureSensitive,
+      frozenDecision: t.frozenDecision,
+      coverageScope: t.coverageScope
     };
   });
 
@@ -161,7 +164,10 @@ function handleToolsSearch(
       destructiveHint: t.destructiveHint,
       supportStatus,
       supportStatusLabel: supportStatusLabel(supportStatus),
-      cliCommand: t.cliCommand
+      cliCommand: t.cliCommand,
+      architectureSensitive: t.architectureSensitive,
+      frozenDecision: t.frozenDecision,
+      coverageScope: t.coverageScope
     };
   });
 

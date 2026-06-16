@@ -131,6 +131,11 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /RegisterCommand\(registry, "profiler\.capture", "profiler", true/);
   assert.match(source, /RegisterCommand\(registry, "profiler\.export", "profiler", true/);
   assert.match(source, /RegisterCommand\(registry, "profiler\.status", "profiler", false/);
+  assert.match(source, /private const string ProfilerFrozenDecision = "ALP-165-Q4"/);
+  assert.match(source, /private const string ProfilerCoverageScopeJson = "\[\\"session\\",\\"counter\\",\\"memory\\",\\"frame-debugger\\",\\"export\\"\]"/);
+  assert.match(source, /\\"architectureSensitive\\":true/);
+  assert.match(source, /\\"frozenDecision\\":/);
+  assert.match(source, /\\"coverageScope\\":/);
   assert.match(source, /RegisterCommand\(registry, "probuilder\.shape", "probuilder", true/);
   assert.match(source, /RegisterCommand\(registry, "probuilder\.create", "probuilder", true/);
   assert.match(source, /RegisterCommand\(registry, "probuilder\.csg", "probuilder", true/);

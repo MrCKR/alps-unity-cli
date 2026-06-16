@@ -50,9 +50,19 @@ namespace UnityCli
             }
         }
 
+        private const string ProfilerFrozenDecision = "ALP-165-Q4";
+        private const string ProfilerCoverageScopeJson = "[\"session\",\"counter\",\"memory\",\"frame-debugger\",\"export\"]";
+
         private static string ProfilerStateJson()
         {
-            return "{\"enabled\":" + Bool(UnityEngine.Profiling.Profiler.enabled) + ",\"enableBinaryLog\":" + Bool(UnityEngine.Profiling.Profiler.enableBinaryLog) + ",\"isPaused\":" + Bool(EditorApplication.isPaused) + ",\"supported\":true}";
+            return "{\"enabled\":" + Bool(UnityEngine.Profiling.Profiler.enabled)
+                + ",\"enableBinaryLog\":" + Bool(UnityEngine.Profiling.Profiler.enableBinaryLog)
+                + ",\"isPaused\":" + Bool(EditorApplication.isPaused)
+                + ",\"supported\":true"
+                + ",\"architectureSensitive\":true"
+                + ",\"frozenDecision\":" + Quote(ProfilerFrozenDecision)
+                + ",\"coverageScope\":" + ProfilerCoverageScopeJson
+                + "}";
         }
 
         private static string ProfilerModulesJson()

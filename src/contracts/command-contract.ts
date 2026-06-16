@@ -14,6 +14,9 @@ export interface CommandContractEntry {
   readOnly: boolean;
   destructive: boolean;
   timeout: number;
+  architectureSensitive?: boolean;
+  frozenDecision?: string;
+  coverageScope?: string[];
 }
 
 interface CommandContractFile {
@@ -69,6 +72,15 @@ export function validateToolMetadataContracts(tools: ToolMetadata[], registry: B
     }
     if (contract.readOnly !== tool.readOnlyHint || contract.destructive !== tool.destructiveHint) {
       throw new Error(`Tool metadata safety hint mismatch for ${tool.name}`);
+    }
+    if ((contract.architectureSensitive ?? false) !== (tool.architectureSensitive ?? false)) {
+      throw new Error(`Tool metadata architecture sensitivity mismatch for ${tool.name}`);
+    }
+    if (contract.frozenDecision !== tool.frozenDecision) {
+      throw new Error(`Tool metadata frozen decision mismatch for ${tool.name}`);
+    }
+    if (JSON.stringify(contract.coverageScope ?? []) !== JSON.stringify(tool.coverageScope ?? [])) {
+      throw new Error(`Tool metadata coverage scope mismatch for ${tool.name}`);
     }
     if (tool.cliCommand && (tool.handler === "bridge" || tool.handler === "hybrid")) {
       const [group, ...commandParts] = tool.cliCommand.split(" ");
