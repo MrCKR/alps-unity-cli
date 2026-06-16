@@ -45,13 +45,17 @@ namespace UnityCli
                 definition.RequiredInput = new string[0];
             }
             definition.DisplayName = string.IsNullOrEmpty(definition.DisplayName) ? definition.Name : definition.DisplayName;
+            definition.Title = string.IsNullOrEmpty(definition.Title) ? definition.DisplayName : definition.Title;
+            definition.Group = string.IsNullOrEmpty(definition.Group) ? CustomToolGroupFromName(definition.Name) : definition.Group;
             definition.Version = string.IsNullOrEmpty(definition.Version) ? "1.0.0" : definition.Version;
             definition.InputSchema = string.IsNullOrEmpty(definition.InputSchema) ? "{}" : definition.InputSchema;
             definition.OutputSchema = string.IsNullOrEmpty(definition.OutputSchema) ? "{}" : definition.OutputSchema;
             definition.CapabilityType = string.IsNullOrEmpty(definition.CapabilityType) ? "project-write" : definition.CapabilityType;
+            definition.CoverageScope = definition.CoverageScope ?? new string[0];
             definition.DefaultTimeoutMs = definition.DefaultTimeoutMs <= 0 ? 30000 : definition.DefaultTimeoutMs;
             definition.MaxTimeoutMs = definition.MaxTimeoutMs <= 0 ? 600000 : definition.MaxTimeoutMs;
             definition.RegisteredBy = string.IsNullOrEmpty(definition.RegisteredBy) ? "unity-editor-package" : definition.RegisteredBy;
+            definition.DescriptorSource = string.IsNullOrEmpty(definition.DescriptorSource) ? "runtime-registration" : definition.DescriptorSource;
             CustomTools[definition.Name] = definition;
         }
 
@@ -82,14 +86,76 @@ namespace UnityCli
                 foreach (var type in types)
                 {
                     if (type == null) continue;
+                    var classAttribute = Attribute.GetCustomAttribute(type, typeof(UnityCliToolAttribute)) as UnityCliToolAttribute;
+                    if (classAttribute != null)
+                    {
+                        TryRegisterAttributedCustomTool(assembly, type, null, classAttribute);
+                    }
+
                     foreach (var method in type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
                     {
-                        var attribute = Attribute.GetCustomAttribute(method, typeof(UnityCliCustomToolAttribute)) as UnityCliCustomToolAttribute;
-                        if (attribute == null) continue;
-                        TryRegisterAttributedCustomTool(assembly, type, method, attribute);
+                        var toolAttribute = Attribute.GetCustomAttribute(method, typeof(UnityCliToolAttribute)) as UnityCliToolAttribute;
+                        if (toolAttribute != null)
+                        {
+                            TryRegisterAttributedCustomTool(assembly, type, method, toolAttribute);
+                            continue;
+                        }
+
+                        var legacyAttribute = Attribute.GetCustomAttribute(method, typeof(UnityCliCustomToolAttribute)) as UnityCliCustomToolAttribute;
+                        if (legacyAttribute == null) continue;
+                        TryRegisterAttributedCustomTool(assembly, type, method, legacyAttribute);
                     }
                 }
             }
+        }
+
+        private static void TryRegisterAttributedCustomTool(Assembly assembly, Type type, MethodInfo method, UnityCliToolAttribute attribute)
+        {
+            var executeMethod = method ?? ResolveClassAttributedToolMethod(type, attribute.Name);
+            if (executeMethod == null)
+            {
+                WriteLog("custom_tool_registration_skipped name=" + attribute.Name + " reason=missing_execute_method");
+                return;
+            }
+
+            var parameters = executeMethod.GetParameters();
+            if (executeMethod.ReturnType != typeof(string) || parameters.Length > 1 || (parameters.Length == 1 && parameters[0].ParameterType != typeof(UnityCliCustomToolContext)))
+            {
+                WriteLog("custom_tool_registration_skipped name=" + attribute.Name + " reason=signature");
+                return;
+            }
+
+            RegisterCustomTool(new UnityCliCustomToolDefinition
+            {
+                Name = attribute.Name,
+                DisplayName = string.IsNullOrEmpty(attribute.DisplayName) ? attribute.Title : attribute.DisplayName,
+                Title = string.IsNullOrEmpty(attribute.Title) ? attribute.DisplayName : attribute.Title,
+                Description = attribute.Description,
+                Group = attribute.Group,
+                Version = attribute.Version,
+                InputSchema = attribute.InputSchema,
+                OutputSchema = attribute.OutputSchema,
+                CapabilityType = attribute.CapabilityType,
+                ReadOnlyHint = attribute.ReadOnlyHint,
+                DestructiveHint = attribute.DestructiveHint,
+                ArchitectureSensitive = attribute.ArchitectureSensitive,
+                FrozenDecision = attribute.FrozenDecision,
+                CoverageScope = SplitCsv(attribute.CoverageScope).ToArray(),
+                DefaultTimeoutMs = attribute.DefaultTimeoutMs,
+                MaxTimeoutMs = attribute.MaxTimeoutMs,
+                SupportsJob = attribute.SupportsJob,
+                ArtifactKinds = SplitCsv(attribute.ArtifactKinds).ToArray(),
+                RequiredInput = SplitCsv(attribute.RequiredInput).ToArray(),
+                RegisteredBy = "unity-editor-package",
+                DescriptorSource = "UnityCliToolAttribute",
+                Assembly = assembly.GetName().Name,
+                Method = type.FullName + "." + executeMethod.Name,
+                Execute = delegate(UnityCliCustomToolContext context)
+                {
+                    var result = parameters.Length == 0 ? executeMethod.Invoke(null, null) : executeMethod.Invoke(null, new object[] { context });
+                    return result == null ? "null" : (string)result;
+                }
+            });
         }
 
         private static void TryRegisterAttributedCustomTool(Assembly assembly, Type type, MethodInfo method, UnityCliCustomToolAttribute attribute)
@@ -105,7 +171,9 @@ namespace UnityCli
             {
                 Name = attribute.Name,
                 DisplayName = attribute.DisplayName,
+                Title = attribute.DisplayName,
                 Description = attribute.Description,
+                Group = CustomToolGroupFromName(attribute.Name),
                 Version = attribute.Version,
                 InputSchema = attribute.InputSchema,
                 OutputSchema = attribute.OutputSchema,
@@ -116,6 +184,7 @@ namespace UnityCli
                 ArtifactKinds = SplitCsv(attribute.ArtifactKinds).ToArray(),
                 RequiredInput = SplitCsv(attribute.RequiredInput).ToArray(),
                 RegisteredBy = "unity-editor-package",
+                DescriptorSource = "UnityCliCustomToolAttribute",
                 Assembly = assembly.GetName().Name,
                 Method = type.FullName + "." + method.Name,
                 Execute = delegate(UnityCliCustomToolContext context)
@@ -124,6 +193,28 @@ namespace UnityCli
                     return result == null ? "null" : (string)result;
                 }
             });
+        }
+
+        private static MethodInfo ResolveClassAttributedToolMethod(Type type, string toolName)
+        {
+            // Class-level [UnityCliTool] is intentionally conservative: the class must
+            // expose exactly one static Execute/Run candidate. Put [UnityCliTool] on a
+            // specific method when multiple candidates exist.
+            var flags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+            var methods = type.GetMethods(flags).Where(m => m.Name == "Execute" || m.Name == "Run").ToArray();
+            if (methods.Length == 1)
+            {
+                return methods[0];
+            }
+            WriteLog("custom_tool_registration_skipped name=" + toolName + " reason=ambiguous_class_level_execute_method type=" + type.FullName + " candidateCount=" + methods.Length.ToString(CultureInfo.InvariantCulture));
+            return null;
+        }
+
+        private static string CustomToolGroupFromName(string name)
+        {
+            if (string.IsNullOrEmpty(name)) return "custom";
+            var dot = name.IndexOf('.');
+            return dot > 0 ? name.Substring(0, dot) : "custom";
         }
 
         private static string CustomToolList(BridgeRequest request)
@@ -233,15 +324,27 @@ namespace UnityCli
             return "{"
                 + "\"name\":" + Quote(definition.Name) + ","
                 + "\"displayName\":" + Quote(definition.DisplayName) + ","
+                + "\"title\":" + Quote(definition.Title) + ","
                 + "\"description\":" + Quote(definition.Description) + ","
+                + "\"group\":" + Quote(definition.Group) + ","
                 + "\"version\":" + Quote(definition.Version) + ","
                 + "\"inputSchema\":" + JsonLiteralOrString(definition.InputSchema) + ","
                 + "\"outputSchema\":" + JsonLiteralOrString(definition.OutputSchema) + ","
                 + "\"capabilityType\":" + Quote(definition.CapabilityType) + ","
+                + "\"readOnlyHint\":" + Bool(definition.ReadOnlyHint) + ","
+                + "\"destructiveHint\":" + Bool(definition.DestructiveHint) + ","
                 + "\"defaultTimeoutMs\":" + definition.DefaultTimeoutMs.ToString(CultureInfo.InvariantCulture) + ","
                 + "\"maxTimeoutMs\":" + definition.MaxTimeoutMs.ToString(CultureInfo.InvariantCulture) + ","
                 + "\"supportsJob\":" + Bool(definition.SupportsJob) + ","
                 + "\"artifactKinds\":" + StringArrayJson(definition.ArtifactKinds) + ","
+                + "\"architectureSensitive\":" + Bool(definition.ArchitectureSensitive) + ","
+                + "\"frozenDecision\":" + Quote(definition.FrozenDecision) + ","
+                + "\"coverageScope\":" + StringArrayJson(definition.CoverageScope) + ","
+                + "\"handler\":\"bridge\","
+                + "\"supportStatus\":\"live-bridge\","
+                + "\"cliCommand\":" + Quote("custom-tool run " + definition.Name) + ","
+                + "\"docsTopic\":\"custom-tool\","
+                + "\"descriptorSource\":" + Quote(definition.DescriptorSource) + ","
                 + "\"registeredBy\":" + Quote(definition.RegisteredBy) + ","
                 + "\"assembly\":" + Quote(definition.Assembly) + ","
                 + "\"method\":" + Quote(definition.Method)

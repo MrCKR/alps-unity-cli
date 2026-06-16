@@ -30,17 +30,25 @@ namespace UnityCli
     {
         public string Name { get; set; }
         public string DisplayName { get; set; }
+        public string Title { get; set; }
         public string Description { get; set; }
+        public string Group { get; set; }
         public string Version { get; set; }
         public string InputSchema { get; set; }
         public string OutputSchema { get; set; }
         public string CapabilityType { get; set; }
+        public bool ReadOnlyHint { get; set; }
+        public bool DestructiveHint { get; set; }
+        public bool ArchitectureSensitive { get; set; }
+        public string FrozenDecision { get; set; }
+        public string[] CoverageScope { get; set; }
         public int DefaultTimeoutMs { get; set; }
         public int MaxTimeoutMs { get; set; }
         public bool SupportsJob { get; set; }
         public string[] ArtifactKinds { get; set; }
         public string[] RequiredInput { get; set; }
         public string RegisteredBy { get; set; }
+        public string DescriptorSource { get; set; }
         public string Assembly { get; set; }
         public string Method { get; set; }
         public Func<UnityCliCustomToolContext, string> Execute { get; set; }
