@@ -198,6 +198,13 @@ describe("ERROR_CODES taxonomy", () => {
       assert.ok(!TRANSIENT_ERROR_CODES.has(code as string), `Non-transient code ${code} incorrectly in TRANSIENT_ERROR_CODES`);
     }
   });
+
+  it("includes P1 target/runtime placeholder codes", () => {
+    assert.equal(ERROR_CODES.E_TARGET_BUSY, "E_TARGET_BUSY");
+    assert.equal(ERROR_CODES.E_RUNTIME_SESSION_STALE, "E_RUNTIME_SESSION_STALE");
+    assert.equal(TRANSIENT_ERROR_CODES.has(ERROR_CODES.E_TARGET_BUSY), false);
+    assert.equal(TRANSIENT_ERROR_CODES.has(ERROR_CODES.E_RUNTIME_SESSION_STALE), false);
+  });
 });
 
 // ─── Timeout Defaults ───

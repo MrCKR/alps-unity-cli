@@ -5,6 +5,9 @@ import type { CliResult } from "./types.js";
 import { failure, success } from "./output.js";
 
 export const STALE_AFTER_MS = 10_000;
+export const HEALTH_CHECK_TIMEOUT_MS = 500;
+export const HEALTH_CHECK_RETRIES = 1;
+export const HEALTH_CHECK_TOTAL_BUDGET_MS = 1_200;
 
 export interface UnityInstance {
   instanceId: string;
@@ -23,6 +26,9 @@ export interface UnityInstance {
   status: "ready" | "healthy" | "stale" | "unreachable";
   editorState?: Record<string, unknown> | string;
   playModeState?: Record<string, unknown> | string;
+  runtimeSessionId?: string | null;
+  toolCatalogFingerprint?: string | null;
+  registryVersion?: string;
   registeredAt?: string;
   lastHeartbeatAt?: string;
   lastSeenAt?: string;
@@ -255,7 +261,7 @@ export function instancesDir(dataDir = defaultDataDir()): string {
 
 export async function readInstances(dataDir = defaultDataDir(), now = Date.now()): Promise<UnityInstance[]> {
   const [fileInstances, legacyInstances] = await Promise.all([readInstanceFiles(dataDir), readLegacyInstances(dataDir)]);
-  return normalizeInstances([...legacyInstances, ...fileInstances], now);
+  return checkInstanceHealth(normalizeInstances([...legacyInstances, ...fileInstances], now));
 }
 
 export async function writeInstances(dataDir: string, instances: UnityInstance[]): Promise<void> {
@@ -303,7 +309,11 @@ export function targetSummary(instance: UnityInstance, aliases: Record<string, s
     projectPath: instance.projectPath,
     processId: instance.processId ?? instance.pid ?? null,
     state: instance.status === "healthy" ? "ready" : instance.status,
-    endpoint: instance.bridgeEndpoint
+    endpoint: instance.bridgeEndpoint,
+    editorState: instance.editorState ?? null,
+    playModeState: instance.playModeState ?? null,
+    runtimeSessionId: instance.runtimeSessionId ?? null,
+    toolCatalogFingerprint: instance.toolCatalogFingerprint ?? null
   };
 }
 
@@ -464,6 +474,39 @@ function instanceTimestamp(instance: UnityInstance): number {
   }
   const registered = Date.parse(instance.registeredAt ?? "");
   return Number.isFinite(registered) ? registered : 0;
+}
+
+async function checkInstanceHealth(instances: UnityInstance[]): Promise<UnityInstance[]> {
+  return Promise.all(instances.map(async (instance) => {
+    if (instance.status === "stale" || instance.status === "unreachable") {
+      return instance;
+    }
+    return await isBridgeHealthReachable(instance.bridgeEndpoint)
+      ? instance
+      : { ...instance, status: "unreachable" as const };
+  }));
+}
+
+async function isBridgeHealthReachable(endpoint: string): Promise<boolean> {
+  const deadline = Date.now() + HEALTH_CHECK_TOTAL_BUDGET_MS;
+  for (let attempt = 0; attempt <= HEALTH_CHECK_RETRIES; attempt += 1) {
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      return false;
+    }
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), Math.min(HEALTH_CHECK_TIMEOUT_MS, remainingMs));
+    try {
+      const response = await fetch(new URL("/health", endpoint), { signal: controller.signal });
+      if (response.ok) {
+        return true;
+      }
+    } catch {
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  return false;
 }
 
 function isHeartbeatStale(value: string | undefined, now: number): boolean {

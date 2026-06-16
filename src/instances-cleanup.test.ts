@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdtemp } from "node:fs/promises";
+import { createServer, type Server } from "node:http";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
@@ -10,10 +11,37 @@ import { readInstances, writeInstances, type UnityInstance } from "./instances.j
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
+let healthEndpoint = "http://127.0.0.1:47392";
+let healthServer: Server | undefined;
+
+test.before(async () => {
+  healthEndpoint = await startHealthServer();
+});
+
+test.after(async () => {
+  await new Promise<void>((resolve) => healthServer?.close(() => resolve()) ?? resolve());
+});
+
 async function makeRuntime() {
   const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-instances-test-"));
   const store = new JobStore(dataDir);
   return { dataDir, store, runner: new JobRunner(store, dataDir) };
+}
+
+async function startHealthServer(): Promise<string> {
+  healthServer = createServer((request, response) => {
+    if (request.url === "/health") {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ ok: true, status: "healthy" }));
+      return;
+    }
+    response.writeHead(404);
+    response.end();
+  });
+  await new Promise<void>((resolve) => healthServer?.listen(0, "127.0.0.1", resolve));
+  const address = healthServer.address();
+  assert.ok(address && typeof address === "object");
+  return `http://127.0.0.1:${address.port}`;
 }
 
 function makeInstance(overrides: Partial<UnityInstance> = {}): UnityInstance {
@@ -22,7 +50,7 @@ function makeInstance(overrides: Partial<UnityInstance> = {}): UnityInstance {
     instanceId: overrides.instanceId ?? "inst_test001",
     projectPath: overrides.projectPath ?? "/tmp/test-project",
     projectHash: overrides.projectHash ?? "abc123",
-    bridgeEndpoint: overrides.bridgeEndpoint ?? "http://127.0.0.1:47392",
+    bridgeEndpoint: overrides.bridgeEndpoint ?? healthEndpoint,
     status: overrides.status ?? "healthy",
     registeredAt: overrides.registeredAt ?? now,
     lastHeartbeatAt: overrides.lastHeartbeatAt ?? now,
