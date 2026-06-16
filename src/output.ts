@@ -36,6 +36,10 @@ export const ERROR_CODES = {
   E_TARGET_UNREACHABLE: "E_TARGET_UNREACHABLE",
   E_TARGET_STALE: "E_TARGET_STALE",
   E_TARGET_ALIAS_CONFLICT: "E_TARGET_ALIAS_CONFLICT",
+  // Target preflight busy state; E_UNITY_BUSY remains the Bridge execution-layer busy signal.
+  E_TARGET_BUSY: "E_TARGET_BUSY",
+  // P5 runtime executor/session lifecycle placeholder.
+  E_RUNTIME_SESSION_STALE: "E_RUNTIME_SESSION_STALE",
 
   // ─── Job ───
   JOB_NOT_FOUND: "JOB_NOT_FOUND",

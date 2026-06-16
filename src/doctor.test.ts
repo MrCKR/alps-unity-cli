@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
+import { createServer, type Server } from "node:http";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
@@ -7,6 +8,17 @@ import { handleDoctorCommand, type DoctorRuntime, type DoctorCheck } from "./doc
 import { readInstances, writeInstances, type UnityInstance } from "./instances.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
+
+let healthEndpoint = "http://127.0.0.1:47392";
+let healthServer: Server | undefined;
+
+test.before(async () => {
+  healthEndpoint = await startHealthServer();
+});
+
+test.after(async () => {
+  await new Promise<void>((resolve) => healthServer?.close(() => resolve()) ?? resolve());
+});
 
 async function makeDataDir(): Promise<string> {
   return mkdtemp(join(tmpdir(), "unity_cli-doctor-test-"));
@@ -16,13 +28,29 @@ function makeRuntime(dataDir: string, bridgeExecute?: DoctorRuntime["bridgeExecu
   return { dataDir, bridgeExecute };
 }
 
+async function startHealthServer(): Promise<string> {
+  healthServer = createServer((request, response) => {
+    if (request.url === "/health") {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ ok: true, status: "healthy" }));
+      return;
+    }
+    response.writeHead(404);
+    response.end();
+  });
+  await new Promise<void>((resolve) => healthServer?.listen(0, "127.0.0.1", resolve));
+  const address = healthServer.address();
+  assert.ok(address && typeof address === "object");
+  return `http://127.0.0.1:${address.port}`;
+}
+
 function makeInstance(overrides: Partial<UnityInstance> = {}): UnityInstance {
   const now = new Date().toISOString();
   return {
     instanceId: "inst_test001",
     projectPath: "/tmp/test-project",
     projectHash: "abc123",
-    bridgeEndpoint: "http://127.0.0.1:47392",
+    bridgeEndpoint: healthEndpoint,
     status: "healthy",
     registeredAt: now,
     lastHeartbeatAt: now,
@@ -161,9 +189,9 @@ test("doctor returns pass for job store when jobs exist", async () => {
   assert.ok(jobStoreCheck?.message.includes("1 job"));
 });
 
-test("doctor config integrity check warns on missing bridgeEndpoint", async () => {
+test("doctor config integrity check warns on missing projectHash", async () => {
   const dataDir = await makeDataDir();
-  await writeInstances(dataDir, [makeInstance({ bridgeEndpoint: "" as unknown as string })]);
+  await writeInstances(dataDir, [makeInstance({ projectHash: "" })]);
 
   const runtime = makeRuntime(dataDir);
   const result = await handleDoctorCommand({}, runtime, "req_doctor_8");
@@ -173,7 +201,7 @@ test("doctor config integrity check warns on missing bridgeEndpoint", async () =
   const configCheck = data.checks.find((c) => c.name === "config_integrity");
   assert.equal(configCheck?.status, "warn");
   const details = configCheck?.details as { issues: string[] };
-  assert.ok(details.issues.some((i) => i.includes("missing bridgeEndpoint")));
+  assert.ok(details.issues.some((i) => i.includes("missing projectHash")));
 });
 
 test("doctor surfaces bridge custom tool fingerprint summary", async () => {

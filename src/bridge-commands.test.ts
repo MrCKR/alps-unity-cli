@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { createServer, type Server } from "node:http";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
@@ -9,6 +10,19 @@ import { JobStore } from "./job-store.js";
 import { bridgeHttpTimeoutMs, type BridgeRequest } from "./bridge/index.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
+
+let healthEndpoint1 = "http://127.0.0.1:47392";
+let healthEndpoint2 = "http://127.0.0.1:47393";
+const healthServers: Server[] = [];
+
+test.before(async () => {
+  healthEndpoint1 = await startHealthServer();
+  healthEndpoint2 = await startHealthServer();
+});
+
+test.after(async () => {
+  await Promise.all(healthServers.map((server) => new Promise<void>((resolve) => server.close(() => resolve()))));
+});
 
 async function makeRuntime() {
   const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-bridge-"));
@@ -20,6 +34,23 @@ async function writeRegistry(dataDir: string, instances: Array<Record<string, un
   const registryDir = join(dataDir, "instances");
   await mkdir(registryDir, { recursive: true });
   await Promise.all(instances.map((item) => writeFile(join(registryDir, `${item.instanceId}.json`), JSON.stringify(item, null, 2), "utf8")));
+}
+
+async function startHealthServer(): Promise<string> {
+  const server = createServer((request, response) => {
+    if (request.url === "/health") {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ ok: true, status: "healthy" }));
+      return;
+    }
+    response.writeHead(404);
+    response.end();
+  });
+  healthServers.push(server);
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  return `http://127.0.0.1:${address.port}`;
 }
 
 test("bridge HTTP timeout matches Unity queue window for regular commands", () => {
@@ -35,10 +66,13 @@ function instance(overrides: Record<string, unknown> = {}) {
     unityVersion: "2022.3.45f1",
     packageVersion: "com.unity_cli",
     pid: 1234,
-    bridgeEndpoint: "http://127.0.0.1:47392",
+    bridgeEndpoint: healthEndpoint1,
     capabilitiesHash: "caps",
     status: "ready",
     editorState: { playMode: false, compiling: false, domainReloading: false },
+    playModeState: { isPlaying: false, isPaused: false, isPlayingOrWillChangePlaymode: false },
+    runtimeSessionId: null,
+    toolCatalogFingerprint: null,
     registeredAt: new Date().toISOString(),
     lastHeartbeatAt: new Date().toISOString(),
     ...overrides
@@ -49,7 +83,7 @@ test("instances list and prune normalize stale registry entries", async () => {
   const runtime = await makeRuntime();
   await writeRegistry(runtime.dataDir, [
     instance(),
-    instance({ instanceId: "editor-stale", projectHash: "hash-stale", status: "ready", bridgeEndpoint: "http://127.0.0.1:47393", lastHeartbeatAt: new Date(Date.now() - 60_000).toISOString() })
+    instance({ instanceId: "editor-stale", projectHash: "hash-stale", status: "ready", bridgeEndpoint: healthEndpoint2, lastHeartbeatAt: new Date(Date.now() - 60_000).toISOString() })
   ]);
 
   const list = await execute(["instances", "list"], runtime);
@@ -66,8 +100,8 @@ test("instances list keeps latest endpoint for the same instance", async () => {
   const oldHeartbeat = new Date(Date.now() - 10_000).toISOString();
   const newHeartbeat = new Date().toISOString();
   await writeRegistry(runtime.dataDir, [
-    instance({ status: "stale", bridgeEndpoint: "http://127.0.0.1:47392", lastHeartbeatAt: oldHeartbeat }),
-    instance({ status: "ready", bridgeEndpoint: "http://127.0.0.1:47393", lastHeartbeatAt: newHeartbeat })
+    instance({ status: "stale", bridgeEndpoint: healthEndpoint1, lastHeartbeatAt: oldHeartbeat }),
+    instance({ status: "ready", bridgeEndpoint: healthEndpoint2, lastHeartbeatAt: newHeartbeat })
   ]);
 
   const list = await execute(["instances", "list"], runtime);
@@ -76,7 +110,7 @@ test("instances list keeps latest endpoint for the same instance", async () => {
   const instances = (list.data as { instances: Array<{ state: string; endpoint: string }> }).instances;
   assert.equal(instances.length, 1);
   assert.equal(instances[0].state, "ready");
-  assert.equal(instances[0].endpoint, "http://127.0.0.1:47393");
+  assert.equal(instances[0].endpoint, healthEndpoint2);
 });
 
 test("bridge command does not select superseded healthy endpoint during reload", async () => {
@@ -84,8 +118,8 @@ test("bridge command does not select superseded healthy endpoint during reload",
   const oldHeartbeat = new Date(Date.now() - 10_000).toISOString();
   const newHeartbeat = new Date().toISOString();
   await writeRegistry(runtime.dataDir, [
-    instance({ status: "ready", bridgeEndpoint: "http://127.0.0.1:47392", lastHeartbeatAt: oldHeartbeat }),
-    instance({ status: "stale", bridgeEndpoint: "http://127.0.0.1:47392", lastHeartbeatAt: newHeartbeat })
+    instance({ status: "ready", bridgeEndpoint: healthEndpoint1, lastHeartbeatAt: oldHeartbeat }),
+    instance({ status: "stale", bridgeEndpoint: healthEndpoint1, lastHeartbeatAt: newHeartbeat })
   ]);
 
   const result = await execute(["editor", "state", "--instance", "editor-1"], runtime);
@@ -98,7 +132,7 @@ test("bridge command routes --instance to the matching ready endpoint", async ()
   const runtime = await makeRuntime();
   await writeRegistry(runtime.dataDir, [
     instance(),
-    instance({ instanceId: "editor-2", projectPath: "/tmp/project-two", projectHash: "hash-two", bridgeEndpoint: "http://127.0.0.1:47393" })
+    instance({ instanceId: "editor-2", projectPath: "/tmp/project-two", projectHash: "hash-two", bridgeEndpoint: healthEndpoint2 })
   ]);
   const requests: BridgeRequest[] = [];
 
@@ -111,15 +145,36 @@ test("bridge command routes --instance to the matching ready endpoint", async ()
   });
 
   assert.equal(result.ok, true);
-  assert.equal((result.data as { bridgeEndpoint: string }).bridgeEndpoint, "http://127.0.0.1:47393");
+  assert.equal((result.data as { bridgeEndpoint: string }).bridgeEndpoint, healthEndpoint2);
   assert.equal((result.data as { selectedInstance: { instanceId: string } }).selectedInstance.instanceId, "editor-2");
-  assert.equal((result.data as { target: { id: string } }).target.id, "editor-2");
+  const target = (result.data as { target: { id: string; editorState: unknown; playModeState: unknown; runtimeSessionId: unknown; toolCatalogFingerprint: unknown } }).target;
+  assert.equal(target.id, "editor-2");
+  assert.deepEqual(target.editorState, { playMode: false, compiling: false, domainReloading: false });
+  assert.deepEqual(target.playModeState, { isPlaying: false, isPaused: false, isPlayingOrWillChangePlaymode: false });
+  assert.equal(target.runtimeSessionId, null);
+  assert.equal(target.toolCatalogFingerprint, null);
   assert.equal(requests[0].command, "scene.hierarchy");
+});
+
+
+test("instances list and target selection mark failed health checks unreachable", async () => {
+  const runtime = await makeRuntime();
+  await writeRegistry(runtime.dataDir, [instance({ bridgeEndpoint: "http://127.0.0.1:1" })]);
+
+  const list = await execute(["instances", "list"], runtime);
+  assert.equal(list.ok, true);
+  const instances = (list.data as { instances: Array<{ state: string; status: string }> }).instances;
+  assert.equal(instances[0].state, "unreachable");
+  assert.equal(instances[0].status, "unreachable");
+
+  const result = await execute(["editor", "state", "--instance", "editor-1"], runtime);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_TARGET_UNREACHABLE");
 });
 
 test("target commands manage active target and aliases", async () => {
   const runtime = await makeRuntime();
-  await writeRegistry(runtime.dataDir, [instance(), instance({ instanceId: "editor-2", projectPath: "/tmp/project-two", projectHash: "hash-two", bridgeEndpoint: "http://127.0.0.1:47393" })]);
+  await writeRegistry(runtime.dataDir, [instance(), instance({ instanceId: "editor-2", projectPath: "/tmp/project-two", projectHash: "hash-two", bridgeEndpoint: healthEndpoint2 })]);
 
   const alias = await execute(["target", "alias", "set", "editor-2", "main"], runtime);
   const set = await execute(["target", "set", "main"], runtime);
@@ -135,7 +190,7 @@ test("target commands manage active target and aliases", async () => {
 
 test("target alias set requires --force to overwrite another target", async () => {
   const runtime = await makeRuntime();
-  await writeRegistry(runtime.dataDir, [instance(), instance({ instanceId: "editor-2", projectPath: "/tmp/project-two", projectHash: "hash-two", bridgeEndpoint: "http://127.0.0.1:47393" })]);
+  await writeRegistry(runtime.dataDir, [instance(), instance({ instanceId: "editor-2", projectPath: "/tmp/project-two", projectHash: "hash-two", bridgeEndpoint: healthEndpoint2 })]);
 
   const first = await execute(["target", "alias", "set", "editor-1", "main"], runtime);
   const conflict = await execute(["target", "alias", "set", "editor-2", "main"], runtime);
@@ -179,7 +234,7 @@ test("bridge command reports missing, stale and ambiguous instances", async () =
   assert.equal(stale.error?.code, "E_TARGET_STALE");
 
   const ambiguousRuntime = await makeRuntime();
-  await writeRegistry(ambiguousRuntime.dataDir, [instance(), instance({ instanceId: "editor-2", projectPath: "/tmp/project-two", projectHash: "hash-two", bridgeEndpoint: "http://127.0.0.1:47393" })]);
+  await writeRegistry(ambiguousRuntime.dataDir, [instance(), instance({ instanceId: "editor-2", projectPath: "/tmp/project-two", projectHash: "hash-two", bridgeEndpoint: healthEndpoint2 })]);
   const ambiguous = await execute(["editor", "state"], ambiguousRuntime);
   assert.equal(ambiguous.ok, false);
   assert.equal(ambiguous.error?.code, "E_TARGET_AMBIGUOUS");
