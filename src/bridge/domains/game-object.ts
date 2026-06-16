@@ -29,7 +29,8 @@ function gameObjectArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpe
     rotationZ: stringFlag(flags, "rotation-z"),
     scaleX: stringFlag(flags, "scale-x"),
     scaleY: stringFlag(flags, "scale-y"),
-    scaleZ: stringFlag(flags, "scale-z")
+    scaleZ: stringFlag(flags, "scale-z"),
+    dryRun: boolFlag(flags, "dry-run") ?? boolFlag(flags, "preflight")
   });
 }
 
@@ -38,6 +39,7 @@ function componentArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec
     ...targetArgs(flags, positionalTarget),
     component: stringFlag(flags, "component") ?? stringFlag(flags, "type"),
     property: stringFlag(flags, "property"),
-    value: stringFlag(flags, "value")
+    value: stringFlag(flags, "value"),
+    dryRun: boolFlag(flags, "dry-run") ?? boolFlag(flags, "preflight")
   });
 }

@@ -1,6 +1,7 @@
 import { resolve } from "node:path";
 import { getBoolean, getString } from "../args.js";
 import { executeBridgePayload } from "../bridge/index.js";
+import { confirmDestructiveExecution } from "../security.js";
 import { failure, success } from "../output.js";
 import { handlePackageInfoCommand } from "../package-info.js";
 import { discoverUnity } from "../platform.js";
@@ -82,6 +83,15 @@ export async function handlePackage(command: string | undefined, args: string[],
 
   if (command === "remove") {
     const name = validatePackageName(args[0] ?? getString(flags, "name"));
+    const confirmation = await confirmDestructiveExecution(flags, {
+      command: "cli.package.remove",
+      title: "Package Remove",
+      destructiveHint: true,
+      requestId
+    });
+    if (confirmation) {
+      return confirmation;
+    }
     const manifest = await removePackage(projectPath, name);
     return maybeResolvePackage(command, flags, runtime, requestId, projectPath, { action: "remove", package: name, ...manifest });
   }
@@ -132,7 +142,7 @@ async function refreshOpenEditor(requestId: string, flags: Record<string, string
   if (!runtime.bridgeExecute && !(await isBridgeReachable(endpoint))) {
     return { status: "skipped", reason: "bridge_endpoint_absent", endpoint };
   }
-  const result = await executeBridgePayload(`${requestId}_refresh`, "editor.menu", { path: "Assets/Refresh", timeoutMs: 7000 }, { ...flags, "bridge-endpoint": endpoint }, runtime);
+  const result = await executeBridgePayload(`${requestId}_refresh`, "editor.menu", { path: "Assets/Refresh", timeoutMs: 7000 }, { ...flags, "bridge-endpoint": endpoint, __destructiveConfirmed: true }, runtime);
   if (result.ok) {
     return { status: "triggered", command: "editor.menu", path: "Assets/Refresh", endpoint };
   }

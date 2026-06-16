@@ -61,7 +61,8 @@ export async function assetArgs(command: string, flags: BridgeFlags, positionalT
     destination: stringFlag(flags, "destination") ?? stringFlag(flags, "to"),
     type: stringFlag(flags, "type"),
     content: await contentFlag(flags),
-    overwrite: boolFlag(flags, "overwrite")
+    overwrite: boolFlag(flags, "overwrite"),
+    dryRun: boolFlag(flags, "dry-run") ?? boolFlag(flags, "preflight")
   });
 }
 

@@ -5,6 +5,7 @@ import { dirname, relative, resolve } from "node:path";
 import { stdin } from "node:process";
 import { getBoolean, getNumber, getString } from "./args.js";
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
+import { confirmDestructiveExecution, isDryRunRequested } from "./security.js";
 import { failure, success } from "./output.js";
 import { discoverUnity } from "./platform.js";
 import type { CliResult } from "./types.js";
@@ -36,6 +37,17 @@ export async function handleCode(command: string | undefined, flags: Record<stri
   const source = await readCodeSource(flags, requestId);
   if (!source.ok) {
     return source.result;
+  }
+
+  const confirmation = await confirmDestructiveExecution(flags, {
+    command: "code.exec",
+    title: "Execute Live Code",
+    destructiveHint: true,
+    supportsDryRun: true,
+    requestId
+  });
+  if (confirmation) {
+    return confirmation;
   }
 
   const channel = normalizeChannel(getString(flags, "channel"));
@@ -72,6 +84,25 @@ export async function handleCode(command: string | undefined, flags: Record<stri
     defines: getString(flags, "define") ?? "",
     refs: refs.value
   };
+
+  if (isDryRunRequested(flags)) {
+    return success(requestId, {
+      command: "code.exec",
+      dryRun: true,
+      preview: {
+        sourceKind: source.value.kind,
+        sourcePath: source.value.path ?? null,
+        sourceSha256: source.value.sha256,
+        sourceSizeBytes: source.value.sizeBytes,
+        channel: channel.value,
+        timeoutMs,
+        artifactDir,
+        projectPath,
+        args: parsedArgs.value
+      },
+      plannedEffects: [{ type: "code.exec", channel: channel.value, artifactDir, sideEffects: "user-code-not-executed" }]
+    });
+  }
 
   const sourceArtifactResult = await writeSourceArtifact(artifactDir, source.value);
   if (!sourceArtifactResult.ok) {

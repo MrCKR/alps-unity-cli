@@ -6,6 +6,7 @@ import { withRetry, type RetryOptions } from "../envelope.js";
 import { instanceSelectionFailure, selectInstanceForFlags, type InstanceSelection } from "../instances.js";
 import { BridgeArgumentError } from "./args.js";
 import { bridgeCommandRegistry } from "./registry.js";
+import { confirmDestructiveExecution, destructiveSecurityProof, isDryRunRequested } from "../security.js";
 import type { BridgeError, BridgeFlags, BridgeRequest, BridgeResponse, BridgeRuntime } from "./types.js";
 
 export { BridgeCommandRegistry, bridgeCommandRegistry } from "./registry.js";
@@ -20,6 +21,16 @@ export async function executeBridgeCommand(
 ): Promise<CliResult> {
   try {
     const spec = bridgeCommandRegistry.lookupBridgeCommand(command);
+    const confirmation = await confirmDestructiveExecution(flags, {
+      command,
+      title: command,
+      destructiveHint: spec?.destructiveHint,
+      supportsDryRun: spec?.supportsDryRun,
+      requestId
+    });
+    if (confirmation) {
+      return confirmation;
+    }
     const args = spec ? await spec.buildArgs({ command, flags, positionalTarget }) : {};
     return executeBridgePayload(requestId, command, args, flags, runtime);
   } catch (error) {
@@ -67,9 +78,17 @@ export async function executeBridgePayload(
 
   const result = await withRetry(async () => {
     try {
+      const security = bridgeSecurity(command, flags);
+      const payload: BridgeRequest = {
+        requestId,
+        command,
+        args,
+        ...(isDryRunRequested(flags) ? { dryRun: true } : {}),
+        ...(security ? { security } : {})
+      };
       const bridgeResult = runtime.bridgeExecute
-        ? await runtime.bridgeExecute({ requestId, command, args })
-        : await postBridgeExecute(endpoint!, { requestId, command, args });
+        ? await runtime.bridgeExecute(payload)
+        : await postBridgeExecute(endpoint!, payload);
 
       if (bridgeResult.ok === false) {
         const code = bridgeResult.error?.code ?? "BRIDGE_COMMAND_FAILED";
@@ -103,6 +122,11 @@ export async function executeBridgePayload(
 
   result.durationMs = durationMsFrom(startMs);
   return result;
+}
+
+function bridgeSecurity(command: string, flags: BridgeFlags): Record<string, unknown> | undefined {
+  const spec = bridgeCommandRegistry.lookupBridgeCommand(command);
+  return spec?.destructiveHint ? destructiveSecurityProof(flags) : undefined;
 }
 
 function bridgeEndpoint(flags: BridgeFlags, runtime: BridgeRuntime, selectedInstance?: InstanceSelection): string | undefined {

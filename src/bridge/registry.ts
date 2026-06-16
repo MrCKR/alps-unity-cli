@@ -18,6 +18,7 @@ import { shaderBridgeSpecs } from "./domains/shader.js";
 import { textureBridgeSpecs } from "./domains/texture.js";
 import { uiBridgeSpecs } from "./domains/ui.js";
 import { vfxBridgeSpecs } from "./domains/vfx.js";
+import { securityPolicyForCommand } from "../security-policy.js";
 import type { BridgeCommandSpec } from "./types.js";
 
 const DOMAIN_SPECS: BridgeCommandSpec[] = [
@@ -49,6 +50,11 @@ export class BridgeCommandRegistry {
 
   public constructor(specs: BridgeCommandSpec[]) {
     for (const spec of specs) {
+      const policy = securityPolicyForCommand(spec.bridgeCommand);
+      if (policy) {
+        spec.destructiveHint = policy.destructiveHint;
+        spec.supportsDryRun = policy.supportsDryRun;
+      }
       const cliKey = BridgeCommandRegistry.cliKey(spec.group, spec.command);
       if (this.byCliCommand.has(cliKey)) {
         throw new Error(`Duplicate bridge CLI command registration: ${cliKey}`);

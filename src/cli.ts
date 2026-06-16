@@ -24,6 +24,8 @@ import { JobStore } from "./job-store.js";
 import { createRequestId, failure, printJson, success } from "./output.js";
 import { defaultDataDir, ensureWindows } from "./platform.js";
 import { handleToolsCommand } from "./tools.js";
+import { confirmDestructiveExecution } from "./security.js";
+import { securityPolicyForCommand } from "./security-policy.js";
 import type { CliResult } from "./types.js";
 
 const CLI_COMMANDS = new Map<string, CliCommandModule>([
@@ -79,6 +81,16 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
     const bridgeSpec = bridgeCommandRegistry.lookup(group, command);
     if (bridgeSpec) {
       if (shouldRunBridgeAsJob(group, command, parsed.flags)) {
+        const confirmation = await confirmDestructiveExecution(parsed.flags, {
+          command: bridgeSpec.bridgeCommand,
+          title: bridgeSpec.bridgeCommand,
+          destructiveHint: bridgeSpec.destructiveHint,
+          supportsDryRun: bridgeSpec.supportsDryRun,
+          requestId
+        });
+        if (confirmation) {
+          return confirmation;
+        }
         const args = await bridgeJobArgs(bridgeSpec.bridgeCommand, parsed.flags, parsed.positional[2]);
         const jobArgs = ["-executeMethod", "UnityCli.UnityCliBatch.RunBridgeCommand", "-unityCliBridgeCommand", bridgeSpec.bridgeCommand, "-unityCliBridgeRequestId", requestId, "-unityCliBridgeArgs", JSON.stringify(args)];
         return startUnityJob(group === "profiler" ? "profiler" : "probuilder", parsed.flags, runtime, requestId, jobArgs, {
@@ -121,13 +133,18 @@ async function runJobWorker(flags: Record<string, string | boolean>, requestId: 
 }
 
 async function bridgeJobArgs(command: string, flags: Record<string, string | boolean>, positionalTarget: string | undefined): Promise<Record<string, unknown>> {
-  const runtime: BridgeRuntime = { bridgeExecute: async (payload) => ({ ok: true, data: { bridgeArgs: payload.args } }) };
+  const runtime: BridgeRuntime = { bridgeExecute: async (payload) => ({ ok: true, data: { bridgeArgs: payload.args, dryRun: payload.dryRun, security: payload.security } }) };
   const result = await executeBridgeCommand("dry_run", command, flags, positionalTarget, runtime);
   return ((result.data as { bridgeArgs?: Record<string, unknown> } | undefined)?.bridgeArgs ?? {}) as Record<string, unknown>;
 }
 
 function shouldRunBridgeAsJob(group: string | undefined, command: string | undefined, flags: Record<string, string | boolean>): boolean {
   return getBoolean(flags, "job") && ((group === "profiler" && command === "capture") || group === "probuilder");
+}
+
+export function isDestructiveCliCommand(group: string | undefined, command: string | undefined): boolean {
+  const spec = bridgeCommandRegistry.lookup(group, command);
+  return spec?.destructiveHint === true || securityPolicyForCommand(spec?.bridgeCommand)?.destructiveHint === true;
 }
 
 function isPackageManagerError(error: unknown): error is Error & { code: string; nextActions: string[] } {

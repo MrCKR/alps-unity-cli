@@ -282,6 +282,50 @@ test("prefab commands forward paths, pagination, modify args and planned effects
   assert.deepEqual((create.data as { plannedEffects: unknown[] }).plannedEffects, [{ type: "prefab.create", path: "Assets/Prefabs/Player.prefab" }]);
 });
 
+test("destructive bridge commands require --yes before execution", async () => {
+  const runtime = await makeRuntime();
+  let called = false;
+
+  const result = await execute(["go", "delete", "Player"], {
+    ...runtime,
+    bridgeExecute: async () => {
+      called = true;
+      return { ok: true, data: {} };
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_DESTRUCTIVE_CONFIRMATION_REQUIRED");
+  assert.equal(called, false);
+});
+
+test("destructive bridge commands pass dryRun and security proof when explicitly allowed", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+
+  const confirmed = await execute(["go", "delete", "Player", "--yes"], {
+    ...runtime,
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { plannedEffects: [] } };
+    }
+  });
+  const dryRun = await execute(["go", "delete", "Player", "--dry-run"], {
+    ...runtime,
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { dryRun: payload.dryRun } };
+    }
+  });
+
+  assert.equal(confirmed.ok, true);
+  assert.equal(requests[0].security?.confirmed, true);
+  assert.equal(requests[0].security?.destructiveFingerprint, "alp332-destructive-safety-v1");
+  assert.equal(dryRun.ok, true);
+  assert.equal(requests[1].dryRun, true);
+  assert.equal(requests[1].args.dryRun, true);
+});
+
  test("asset commands forward CRUD and move-style envelopes", async () => {
   const runtime = await makeRuntime();
   const contentFile = join(runtime.dataDir, "asset.txt");
@@ -301,7 +345,7 @@ test("prefab commands forward paths, pagination, modify args and planned effects
   const duplicate = await execute(["asset", "duplicate", "Assets/Generated/config.json", "--to", "Assets/Generated/config-copy.json"], { ...runtime, bridgeExecute });
   const move = await execute(["asset", "move", "Assets/Generated/config-copy.json", "--to", "Assets/Generated/config-moved.json"], { ...runtime, bridgeExecute });
   const rename = await execute(["asset", "rename", "Assets/Generated/config-moved.json", "--name", "config-renamed.json"], { ...runtime, bridgeExecute });
-  const deleted = await execute(["asset", "delete", "Assets/Generated/config-renamed.json"], { ...runtime, bridgeExecute });
+  const deleted = await execute(["asset", "delete", "Assets/Generated/config-renamed.json", "--yes"], { ...runtime, bridgeExecute });
 
   for (const result of [search, info, create, mkdir, imported, modify, duplicate, move, rename, deleted]) {
     assert.equal(result.ok, true);
@@ -316,6 +360,7 @@ test("prefab commands forward paths, pagination, modify args and planned effects
   assert.deepEqual(requests[7].args, { path: "Assets/Generated/config-copy.json", destination: "Assets/Generated/config-moved.json" });
   assert.deepEqual(requests[8].args, { path: "Assets/Generated/config-moved.json", name: "config-renamed.json" });
   assert.deepEqual(requests[9].args, { path: "Assets/Generated/config-renamed.json" });
+  assert.equal(requests[9].security?.destructiveFingerprint, "alp332-destructive-safety-v1");
 });
 
 test("material commands forward asset paths, target, values and planned effects", async () => {
@@ -813,7 +858,7 @@ test("editor state/play/pause/stop/menu commands forward args and return envelop
   const play = await execute(["editor", "play", "--timeout-ms", "2500"], { ...runtime, bridgeExecute });
   const pause = await execute(["editor", "pause"], { ...runtime, bridgeExecute });
   const stop = await execute(["editor", "stop", "--timeout", "3000"], { ...runtime, bridgeExecute });
-  const menu = await execute(["editor", "menu", "File/Save", "--timeout-ms", "7000"], { ...runtime, bridgeExecute });
+  const menu = await execute(["editor", "menu", "File/Save", "--timeout-ms", "7000", "--yes"], { ...runtime, bridgeExecute });
 
   assert.equal(state.ok, true);
   assert.equal(play.ok, true);
@@ -830,10 +875,10 @@ test("editor state/play/pause/stop/menu commands forward args and return envelop
 test("editor bridge errors preserve structured diagnostics", async () => {
   const runtime = await makeRuntime();
   const cases: Array<{ name: string; args: string[]; response: { code: string; message: string }; nextActions: string[] }> = [
-    { name: "busy", args: ["editor", "menu", "File/Save"], response: { code: "E_UNITY_BUSY", message: "Unity Editor is busy and cannot run this editor command right now." }, nextActions: ["Wait for compiling, asset importing, build, PlayMode switching, or domain reload to complete, then retry."] },
+    { name: "busy", args: ["editor", "menu", "File/Save", "--yes"], response: { code: "E_UNITY_BUSY", message: "Unity Editor is busy and cannot run this editor command right now." }, nextActions: ["Wait for compiling, asset importing, build, PlayMode switching, or domain reload to complete, then retry."] },
     { name: "playmode timeout", args: ["editor", "stop"], response: { code: "E_PLAYMODE_TIMEOUT", message: "Unity PlayMode did not reach the requested state before the timeout." }, nextActions: ["Wait for PlayMode switching or domain reload to finish, then retry."] },
-    { name: "menu not found", args: ["editor", "menu", "Tools/Missing"], response: { code: "E_MENU_NOT_FOUND", message: "Unity menu item was not found or could not be executed." }, nextActions: ["Use the exact Unity Editor menu path, such as File/Save or Assets/Refresh."] },
-    { name: "menu timeout", args: ["editor", "menu", "Tools/Slow"], response: { code: "E_MENU_TIMEOUT", message: "Unity menu item execution exceeded the requested timeout." }, nextActions: ["Check Unity Editor and Unity CLI Bridge logs for long-running menu work."] }
+    { name: "menu not found", args: ["editor", "menu", "Tools/Missing", "--yes"], response: { code: "E_MENU_NOT_FOUND", message: "Unity menu item was not found or could not be executed." }, nextActions: ["Use the exact Unity Editor menu path, such as File/Save or Assets/Refresh."] },
+    { name: "menu timeout", args: ["editor", "menu", "Tools/Slow", "--yes"], response: { code: "E_MENU_TIMEOUT", message: "Unity menu item execution exceeded the requested timeout." }, nextActions: ["Check Unity Editor and Unity CLI Bridge logs for long-running menu work."] }
   ];
 
   for (const item of cases) {

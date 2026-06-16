@@ -98,6 +98,10 @@ namespace UnityCli
             {
                 throw new BridgeCommandException("E_SCENE_PATH_REQUIRED", "Scene save requires --path when the active scene has not been saved yet.", "Pass unity_cli scene save Assets/Scenes/Main.unity.");
             }
+            if (request.DryRun)
+            {
+                return SuccessJson("{\"command\":\"scene.save\",\"dryRun\":true,\"scene\":" + ActiveSceneJson() + ",\"path\":" + Quote(path) + ",\"plannedEffects\":[{\"type\":\"scene.save\",\"path\":" + Quote(path) + ",\"sideEffects\":\"none\"}],\"logPath\":" + Quote(LogPath()) + "}");
+            }
             CreateAssetDirectory(path);
             if (!EditorSceneManager.SaveScene(scene, path))
             {

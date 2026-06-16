@@ -467,7 +467,7 @@ test("package remove returns structured diagnostic for missing package", async (
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
 
-  const removed = await execute(["package", "remove", "com.missing", "--project", project], runtime);
+  const removed = await execute(["package", "remove", "com.missing", "--project", project, "--yes"], runtime);
   assert.equal(removed.ok, false);
   assert.equal(removed.error?.code, "PACKAGE_NOT_FOUND");
   assert.equal(removed.error?.next_actions?.[0].includes("package list"), true);

@@ -70,6 +70,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ path: { type: "string" } }, ["path"]),
     readOnlyHint: false,
     destructiveHint: true,
+    supportsDryRun: true,
     handler: "bridge",
     cliCommand: "asset delete",
     docsTopic: "asset"

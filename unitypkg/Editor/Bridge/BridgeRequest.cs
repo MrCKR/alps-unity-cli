@@ -41,6 +41,7 @@ namespace UnityCli
 
             public string RequestId { get; private set; }
             public string Command { get; private set; }
+            public bool DryRun { get { return BoolArg("dryRun", false); } }
 
             public static BridgeRequest Parse(string body)
             {
@@ -107,6 +108,27 @@ namespace UnityCli
             public bool HasArg(string name)
             {
                 return Regex.IsMatch(body ?? string.Empty, "\\\"" + Regex.Escape(name) + "\\\"\\s*:");
+            }
+
+            public bool SecurityConfirmed(string expectedFingerprint)
+            {
+                return BoolArgAtPath(new[] { "security", "confirmed" }, false)
+                    && string.Equals(StringArgAtPath(new[] { "security", "destructiveFingerprint" }), expectedFingerprint, StringComparison.Ordinal);
+            }
+
+            public string StringArgAtPath(string[] path)
+            {
+                var current = body;
+                foreach (var segment in path ?? new string[0])
+                {
+                    current = JsonRawProperty(current, segment);
+                    if (string.IsNullOrEmpty(current)) return null;
+                }
+                if (current.Length >= 2 && current[0] == (char)34 && current[current.Length - 1] == (char)34)
+                {
+                    return Unescape(current.Substring(1, current.Length - 2));
+                }
+                return null;
             }
 
             public string RawJsonArg(string name)

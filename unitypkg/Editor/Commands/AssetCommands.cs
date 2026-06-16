@@ -167,6 +167,10 @@ namespace UnityCli
         private static string AssetDelete(BridgeRequest request)
         {
             var path = RequireExistingAssetPath(request.StringArg("path"));
+            if (request.DryRun)
+            {
+                return SuccessJson("{\"command\":\"asset.delete\",\"dryRun\":true,\"asset\":" + AssetDetailJson(path) + ",\"plannedEffects\":[{\"type\":\"asset.delete\",\"path\":" + Quote(path) + ",\"sideEffects\":\"none\"}],\"logPath\":" + Quote(LogPath()) + "}");
+            }
             if (!AssetDatabase.DeleteAsset(path))
             {
                 throw new BridgeCommandException("E_ASSET_DELETE_FAILED", "Failed to delete asset: " + path, "Check Unity Console and file permissions.");

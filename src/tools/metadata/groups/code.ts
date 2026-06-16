@@ -19,6 +19,7 @@ export const CODE_TOOLS: ToolMetadata[] = [
     }),
     readOnlyHint: false,
     destructiveHint: true,
+    supportsDryRun: true,
     longRunning: true,
     handler: "hybrid",
     cliCommand: "code exec",

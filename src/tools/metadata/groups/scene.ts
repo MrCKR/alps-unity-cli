@@ -97,6 +97,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ path: { type: "string" }, name: { type: "string" } }),
     readOnlyHint: false,
     destructiveHint: true,
+    supportsDryRun: true,
     handler: "bridge",
     supportStatus: "planned",
     cliCommand: "scene save",
