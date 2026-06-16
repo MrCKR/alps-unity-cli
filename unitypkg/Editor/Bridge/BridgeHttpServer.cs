@@ -61,27 +61,36 @@ namespace UnityCli
 
         private static string BridgeHealthJson()
         {
-            return "{\"ok\":true,\"data\":{"
-                + "\"bridge\":\"unity_cli\","
-                + "\"port\":" + port.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"route\":\"POST /bridge/execute\","
-                + "\"buildStamp\":" + Quote(BridgeBuildStamp()) + ","
-                + "\"diagnosticsFingerprint\":" + Quote(BridgeDiagnosticsFingerprint) + ","
-                + "\"listenerId\":" + Quote(ListenerId) + ","
-                + "\"loadedAt\":" + Quote(BridgeLoadedAtUtc.ToString("O", CultureInfo.InvariantCulture)) + ","
-                + "\"assembly\":{"
-                + "\"fullName\":" + Quote(typeof(UnityCliBridge).Assembly.FullName) + ","
-                + "\"location\":" + Quote(AssemblyLocation(typeof(UnityCliBridge).Assembly)) + ","
-                + "\"moduleVersionId\":" + Quote(AssemblyMvid())
-                + "},"
-                + "\"package\":{"
-                + "\"name\":" + Quote(BridgePackageName()) + ","
-                + "\"assetPath\":" + Quote(BridgePackageAssetPath()) + ","
-                + "\"resolvedPath\":" + Quote(BridgePackageResolvedPath())
-                + "},"
-                + "\"diagnostics\":{\"executeStageLogs\":true,\"contentLengthBoundedRead\":true,\"runtimeLoadFile\":" + Quote(RuntimeDiagnosticsPath()) + "},"
-                + "\"capabilities\":" + CapabilitiesJson()
-                + "}}";
+            var data = new UnityCliJsonWriter().BeginObject()
+                .Prop("bridge", "unity_cli")
+                .Prop("port", port)
+                .Prop("route", "POST /bridge/execute")
+                .Prop("buildStamp", BridgeBuildStamp())
+                .Prop("diagnosticsFingerprint", BridgeDiagnosticsFingerprint)
+                .Prop("listenerId", ListenerId)
+                .Prop("loadedAt", BridgeLoadedAtUtc.ToString("O", CultureInfo.InvariantCulture))
+                .PropObject("assembly", assembly =>
+                {
+                    assembly.Prop("fullName", typeof(UnityCliBridge).Assembly.FullName)
+                        .Prop("location", AssemblyLocation(typeof(UnityCliBridge).Assembly))
+                        .Prop("moduleVersionId", AssemblyMvid());
+                })
+                .PropObject("package", package =>
+                {
+                    package.Prop("name", BridgePackageName())
+                        .Prop("assetPath", BridgePackageAssetPath())
+                        .Prop("resolvedPath", BridgePackageResolvedPath());
+                })
+                .PropObject("diagnostics", diagnostics =>
+                {
+                    diagnostics.Prop("executeStageLogs", true)
+                        .Prop("contentLengthBoundedRead", true)
+                        .Prop("runtimeLoadFile", RuntimeDiagnosticsPath());
+                })
+                .PropRaw("capabilities", CapabilitiesJson())
+                .EndObject()
+                .ToString();
+            return UnityCliEnvelope.Success(data);
         }
 
         private static string AssemblyMvid()
@@ -201,7 +210,7 @@ namespace UnityCli
 
             if (context.Request.HttpMethod != "POST" || context.Request.Url.AbsolutePath != "/bridge/execute")
             {
-                WriteJson(context, "{\"ok\":false,\"error\":{\"code\":\"E_BRIDGE_ROUTE_NOT_FOUND\",\"message\":\"Expected POST /bridge/execute.\"}}", 404);
+                WriteJson(context, UnityCliEnvelope.Error("E_BRIDGE_ROUTE_NOT_FOUND", "Expected POST /bridge/execute.", "Use POST /bridge/execute or GET /health."), 404);
                 return;
             }
 
@@ -276,7 +285,17 @@ namespace UnityCli
                 WriteLog("bridge_request_timeout_started requestId=" + request.RequestId + " command=" + request.Command + " mutating=" + IsMutatingCommand(request.Command));
                 if (IsMutatingCommand(request.Command))
                 {
-                    WriteJson(context, SuccessJson("{\"status\":\"running\",\"requestId\":" + Quote(request.RequestId) + ",\"command\":" + Quote(request.Command) + ",\"timeoutSeconds\":60,\"sideEffectSemantics\":\"started-before-http-timeout\",\"message\":\"Unity started this mutating request before the HTTP wait timeout; it may still complete. This is not a failure envelope. Inspect logPath and requestId before retrying.\",\"logPath\":" + Quote(LogPath()) + "}"), 200);
+                    var running = new UnityCliJsonWriter().BeginObject()
+                        .Prop("status", "running")
+                        .Prop("requestId", request.RequestId)
+                        .Prop("command", request.Command)
+                        .Prop("timeoutSeconds", 60)
+                        .Prop("sideEffectSemantics", "started-before-http-timeout")
+                        .Prop("message", "Unity started this mutating request before the HTTP wait timeout; it may still complete. This is not a failure envelope. Inspect logPath and requestId before retrying.")
+                        .Prop("logPath", LogPath())
+                        .EndObject()
+                        .ToString();
+                    WriteJson(context, SuccessJson(running), 200);
                     return;
                 }
 

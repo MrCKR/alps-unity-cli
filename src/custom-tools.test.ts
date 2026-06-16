@@ -110,9 +110,9 @@ test("Unity C# custom tool registry supports UnityCliToolAttribute descriptors a
   assert.match(registry, /UNITY_CLI_CUSTOM_TOOL_FINGERPRINT_MODE/);
   assert.match(registry, /UnityCliCustomToolFingerprints/);
   assert.match(registry, /sha256-handler-code-plus-descriptor-v1/);
-  assert.match(registry, /\\"descriptorSource\\"/);
-  assert.match(registry, /\\"fingerprint\\"/);
-  assert.match(registry, /\\"handler\\":\\"bridge\\"/);
+  assert.match(registry, /Prop\("descriptorSource", definition\.DescriptorSource\)/);
+  assert.match(registry, /PropRaw\("fingerprint", CustomToolFingerprintJson\(definition\)\)/);
+  assert.match(registry, /Prop\("handler", "bridge"\)/);
   assert.match(sample, /\[UnityCliTool\(\s*"sample\.echo"/);
   assert.doesNotMatch(sample, /manifest\.json|config\.json|\.yaml|\.yml/);
 });

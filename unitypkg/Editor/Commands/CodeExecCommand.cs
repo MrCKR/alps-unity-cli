@@ -78,7 +78,11 @@ namespace UnityCli
             var referenceError = ValidateCodeReferences(references);
             if (!string.IsNullOrEmpty(referenceError))
             {
-                return CodeExecutionResult.Fail("E_REFERENCE_RESOLUTION_FAILED", referenceError, "{\"referenceError\":" + Quote(referenceError) + "}", "Check Unity/Editor/project assembly references and --refs.");
+                var details = new UnityCliJsonWriter().BeginObject()
+                    .Prop("referenceError", referenceError)
+                    .EndObject()
+                    .ToString();
+                return CodeExecutionResult.Fail("E_REFERENCE_RESOLUTION_FAILED", referenceError, details, "Check Unity/Editor/project assembly references and --refs.");
             }
             foreach (var reference in references)
             {
@@ -102,7 +106,11 @@ namespace UnityCli
             if (compiled.Errors.HasErrors)
             {
                 var diagnostics = CompilerDiagnosticsJson(compiled.Errors);
-                return CodeExecutionResult.Fail("E_CODE_COMPILE_FAILED", "Runtime Code compilation failed.", "{\"diagnostics\":" + diagnostics + "}", "Fix compiler diagnostics and rerun code exec.");
+                var details = new UnityCliJsonWriter().BeginObject()
+                    .PropRaw("diagnostics", diagnostics)
+                    .EndObject()
+                    .ToString();
+                return CodeExecutionResult.Fail("E_CODE_COMPILE_FAILED", "Runtime Code compilation failed.", details, "Fix compiler diagnostics and rerun code exec.");
             }
 
             var stdout = new StringWriter(CultureInfo.InvariantCulture);
@@ -232,21 +240,92 @@ namespace UnityCli
         private static string CodeSuccessDataJson(BridgeRequest request, DateTime startedAt, DateTime endedAt, string stdout, string stderr, object returnValue)
         {
             var timeoutMs = request.OptionalIntArg("timeoutMs");
-            var timeoutJson = timeoutMs.HasValue ? timeoutMs.Value.ToString(CultureInfo.InvariantCulture) : "null";
             var argsJson = request.StringArg("argsJson");
-            return "{\"command\":\"code.exec\",\"mode\":\"live\",\"execution\":{\"channel\":\"live\",\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"endedAt\":" + Quote(endedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"durationMs\":" + ((long)(endedAt - startedAt).TotalMilliseconds).ToString(CultureInfo.InvariantCulture) + ",\"timeoutMs\":" + timeoutJson + ",\"exitState\":\"completed\"},\"compile\":{\"ok\":true,\"diagnostics\":[]},\"runtime\":{\"ok\":true,\"returnValue\":" + ReturnValueJson(returnValue) + ",\"stdout\":" + Quote(stdout) + ",\"stderr\":" + Quote(stderr) + "},\"artifacts\":[],\"audit\":{\"requestId\":" + Quote(request.RequestId) + ",\"projectPath\":" + Quote(ProjectRoot()) + ",\"instanceId\":" + Quote(InstanceId()) + ",\"unityVersion\":" + Quote(Application.unityVersion) + ",\"bridgeVersion\":\"com.unity_cli\",\"initiator\":\"cli.live\",\"input\":{\"sourceKind\":" + Quote(request.StringArg("sourceKind")) + ",\"sourcePath\":" + Quote(request.StringArg("sourcePath")) + ",\"sourceSha256\":" + Quote(request.StringArg("sourceSha256")) + ",\"args\":" + (string.IsNullOrEmpty(argsJson) ? "{}" : argsJson) + "},\"execution\":{\"timeoutMs\":" + timeoutJson + ",\"exitState\":\"completed\"},\"artifacts\":[],\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"endedAt\":" + Quote(endedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"durationMs\":" + ((long)(endedAt - startedAt).TotalMilliseconds).ToString(CultureInfo.InvariantCulture) + ",\"effects\":{\"fileWrites\":[],\"assetRefresh\":false,\"domainReload\":false,\"playModeChanged\":false,\"packagesChanged\":false}},\"logs\":{\"bridge\":" + Quote(LogPath()) + "},\"nextActions\":[]}";
+            var durationMs = (long)(endedAt - startedAt).TotalMilliseconds;
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("command", "code.exec")
+                .Prop("mode", "live")
+                .PropObject("execution", execution =>
+                {
+                    execution.Prop("channel", "live")
+                        .Prop("startedAt", startedAt.ToString("O", CultureInfo.InvariantCulture))
+                        .Prop("endedAt", endedAt.ToString("O", CultureInfo.InvariantCulture))
+                        .Prop("durationMs", durationMs);
+                    if (timeoutMs.HasValue) execution.Prop("timeoutMs", timeoutMs.Value); else execution.PropNull("timeoutMs");
+                    execution.Prop("exitState", "completed");
+                })
+                .PropObject("compile", compile =>
+                {
+                    compile.Prop("ok", true)
+                        .PropRaw("diagnostics", "[]");
+                })
+                .PropObject("runtime", runtime =>
+                {
+                    runtime.Prop("ok", true)
+                        .PropRaw("returnValue", ReturnValueJson(returnValue))
+                        .Prop("stdout", stdout)
+                        .Prop("stderr", stderr);
+                })
+                .PropRaw("artifacts", "[]")
+                .PropObject("audit", audit =>
+                {
+                    audit.Prop("requestId", request.RequestId)
+                        .Prop("projectPath", ProjectRoot())
+                        .Prop("instanceId", InstanceId())
+                        .Prop("unityVersion", Application.unityVersion)
+                        .Prop("bridgeVersion", "com.unity_cli")
+                        .Prop("initiator", "cli.live")
+                        .PropObject("input", input =>
+                        {
+                            input.Prop("sourceKind", request.StringArg("sourceKind"))
+                                .Prop("sourcePath", request.StringArg("sourcePath"))
+                                .Prop("sourceSha256", request.StringArg("sourceSha256"))
+                                .PropRaw("args", string.IsNullOrEmpty(argsJson) ? "{}" : argsJson);
+                        })
+                        .PropObject("execution", execution =>
+                        {
+                            if (timeoutMs.HasValue) execution.Prop("timeoutMs", timeoutMs.Value); else execution.PropNull("timeoutMs");
+                            execution.Prop("exitState", "completed");
+                        })
+                        .PropRaw("artifacts", "[]")
+                        .Prop("startedAt", startedAt.ToString("O", CultureInfo.InvariantCulture))
+                        .Prop("endedAt", endedAt.ToString("O", CultureInfo.InvariantCulture))
+                        .Prop("durationMs", durationMs)
+                        .PropObject("effects", effects =>
+                        {
+                            effects.PropRaw("fileWrites", "[]")
+                                .Prop("assetRefresh", false)
+                                .Prop("domainReload", false)
+                                .Prop("playModeChanged", false)
+                                .Prop("packagesChanged", false);
+                        });
+                })
+                .PropObject("logs", logs => logs.Prop("bridge", LogPath()))
+                .PropRaw("nextActions", "[]")
+                .EndObject()
+                .ToString();
         }
 
         private static string CodeDetailsJson(string diagnosticsJson, string exceptionTypeJson, string messageJson, string stackTraceJson, string stdout, string stderr)
         {
-            return "{\"diagnostics\":" + diagnosticsJson + ",\"exceptionType\":" + exceptionTypeJson + ",\"message\":" + messageJson + ",\"stackTrace\":" + stackTraceJson + ",\"stdout\":" + Quote(stdout) + ",\"stderr\":" + Quote(stderr) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropRaw("diagnostics", string.IsNullOrEmpty(diagnosticsJson) ? "[]" : diagnosticsJson)
+                .PropRaw("exceptionType", exceptionTypeJson)
+                .PropRaw("message", messageJson)
+                .PropRaw("stackTrace", stackTraceJson)
+                .Prop("stdout", stdout)
+                .Prop("stderr", stderr)
+                .EndObject()
+                .ToString();
         }
 
         private static string ReturnValueJson(object value)
         {
             if (value == null) return "null";
             if (value is bool) return Bool((bool)value);
-            if (value is int || value is long || value is float || value is double || value is decimal) return Convert.ToString(value, CultureInfo.InvariantCulture);
+            if (value is float) return UnityCliJsonWriter.Number((float)value);
+            if (value is double) return UnityCliJsonWriter.Number((double)value);
+            if (value is int || value is long || value is decimal) return Convert.ToString(value, CultureInfo.InvariantCulture);
             return Quote(Convert.ToString(value, CultureInfo.InvariantCulture));
         }
 

@@ -56,7 +56,12 @@ namespace UnityCli
             }
             catch (Exception exception)
             {
-                WriteCodeResult(resultPath, ErrorEnvelope(requestId, "E_CODE_RUNTIME_EXCEPTION", exception.Message, "{\"exceptionType\":" + Quote(exception.GetType().FullName) + ",\"stackTrace\":" + Quote(exception.StackTrace) + "}", NextActionsJson("Inspect batchmode log and result artifact for exception details.")));
+                var details = new UnityCliJsonWriter().BeginObject()
+                    .Prop("exceptionType", exception.GetType().FullName)
+                    .Prop("stackTrace", exception.StackTrace)
+                    .EndObject()
+                    .ToString();
+                WriteCodeResult(resultPath, ErrorEnvelope(requestId, "E_CODE_RUNTIME_EXCEPTION", exception.Message, details, NextActionsJson("Inspect batchmode log and result artifact for exception details.")));
                 Console.Error.WriteLine("E_CODE_RUNTIME_EXCEPTION: " + exception.Message);
                 EditorApplication.Exit(1);
             }
@@ -157,7 +162,11 @@ namespace UnityCli
                 var referenceError = ValidateReferences(references);
                 if (!string.IsNullOrEmpty(referenceError))
                 {
-                    return CodeExecutionResult.Fail("E_REFERENCE_RESOLUTION_FAILED", referenceError, "{\"referenceError\":" + Quote(referenceError) + "}", NextActionsJson("Check Unity/Editor/project assembly references and --refs."));
+                    var details = new UnityCliJsonWriter().BeginObject()
+                        .Prop("referenceError", referenceError)
+                        .EndObject()
+                        .ToString();
+                    return CodeExecutionResult.Fail("E_REFERENCE_RESOLUTION_FAILED", referenceError, details, NextActionsJson("Check Unity/Editor/project assembly references and --refs."));
                 }
                 foreach (var reference in references) parameters.ReferencedAssemblies.Add(reference);
                 foreach (var define in SplitCsv(definesCsv)) parameters.CompilerOptions += " /define:" + define;
@@ -165,11 +174,22 @@ namespace UnityCli
             }
             catch (Exception exception)
             {
-                return CodeExecutionResult.Fail("E_REFERENCE_RESOLUTION_FAILED", "Failed to compile Runtime Code: " + exception.Message, "{\"diagnostics\":[],\"exceptionType\":" + Quote(exception.GetType().FullName) + ",\"message\":" + Quote(exception.Message) + ",\"stackTrace\":" + Quote(exception.StackTrace) + "}", NextActionsJson("Check Unity/Editor/project assembly references and --refs."));
+                var details = new UnityCliJsonWriter().BeginObject()
+                    .PropRaw("diagnostics", "[]")
+                    .Prop("exceptionType", exception.GetType().FullName)
+                    .Prop("message", exception.Message)
+                    .Prop("stackTrace", exception.StackTrace)
+                    .EndObject()
+                    .ToString();
+                return CodeExecutionResult.Fail("E_REFERENCE_RESOLUTION_FAILED", "Failed to compile Runtime Code: " + exception.Message, details, NextActionsJson("Check Unity/Editor/project assembly references and --refs."));
             }
             if (compiled.Errors.HasErrors)
             {
-                return CodeExecutionResult.Fail("E_CODE_COMPILE_FAILED", "Runtime Code compilation failed.", "{\"diagnostics\":" + DiagnosticsJson(compiled.Errors) + "}", NextActionsJson("Fix compiler diagnostics and rerun code exec."));
+                var details = new UnityCliJsonWriter().BeginObject()
+                    .PropRaw("diagnostics", DiagnosticsJson(compiled.Errors))
+                    .EndObject()
+                    .ToString();
+                return CodeExecutionResult.Fail("E_CODE_COMPILE_FAILED", "Runtime Code compilation failed.", details, NextActionsJson("Fix compiler diagnostics and rerun code exec."));
             }
             var stdout = new StringWriter(CultureInfo.InvariantCulture);
             var stderr = new StringWriter(CultureInfo.InvariantCulture);
@@ -285,17 +305,25 @@ namespace UnityCli
 
         private static string DetailsJson(Exception exception, string stdout, string stderr)
         {
-            return "{\"exceptionType\":" + Quote(exception.GetType().FullName) + ",\"message\":" + Quote(exception.Message) + ",\"stackTrace\":" + Quote(exception.StackTrace) + ",\"stdout\":" + Quote(stdout) + ",\"stderr\":" + Quote(stderr) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("exceptionType", exception.GetType().FullName)
+                .Prop("message", exception.Message)
+                .Prop("stackTrace", exception.StackTrace)
+                .Prop("stdout", stdout)
+                .Prop("stderr", stderr)
+                .EndObject()
+                .ToString();
         }
 
         private static string SuccessEnvelope(string requestId, string dataJson)
         {
-            return "{\"ok\":true,\"requestId\":" + Quote(requestId) + ",\"data\":" + dataJson + "}";
+            return UnityCliEnvelope.Success(requestId, dataJson);
         }
 
         private static string ErrorEnvelope(string requestId, string code, string message, string detailsJson, string nextActionsJson)
         {
-            return "{\"ok\":false,\"requestId\":" + Quote(requestId) + ",\"error\":{\"code\":" + Quote(code) + ",\"message\":" + Quote(message) + ",\"details\":" + (string.IsNullOrEmpty(detailsJson) ? "{}" : detailsJson) + "},\"nextActions\":" + (string.IsNullOrEmpty(nextActionsJson) ? "[]" : nextActionsJson) + "}";
+            var actions = JsonStringArray(nextActionsJson);
+            return UnityCliEnvelope.Error(requestId, code, message, detailsJson, actions);
         }
 
         private static void WriteCodeResult(string resultPath, string json)
@@ -307,7 +335,63 @@ namespace UnityCli
 
         private static string CodeSuccessDataJson(string requestId, DateTime startedAt, DateTime endedAt, string stdout, string stderr, object returnValue, string argsJson)
         {
-            return "{\"command\":\"code.exec\",\"mode\":\"batchmode\",\"execution\":{\"channel\":\"batchmode\",\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"endedAt\":" + Quote(endedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"durationMs\":" + ((long)(endedAt - startedAt).TotalMilliseconds).ToString(CultureInfo.InvariantCulture) + ",\"timeoutMs\":" + TimeoutMsJson() + ",\"exitState\":\"completed\"},\"compile\":{\"ok\":true,\"diagnostics\":[]},\"runtime\":{\"ok\":true,\"returnValue\":" + ReturnValueJson(returnValue) + ",\"stdout\":" + Quote(stdout) + ",\"stderr\":" + Quote(stderr) + "},\"artifacts\":[],\"audit\":{\"requestId\":" + Quote(requestId) + ",\"projectPath\":" + Quote(ProjectPath()) + ",\"instanceId\":" + Quote(InstanceId()) + ",\"unityVersion\":" + Quote(Application.unityVersion) + ",\"bridgeVersion\":\"com.unity_cli\",\"initiator\":\"cli.batchmode\",\"input\":{\"sourcePath\":" + Quote(ArgValue("-unityCliCodeSource")) + ",\"args\":" + (string.IsNullOrEmpty(argsJson) ? "{}" : argsJson) + "},\"execution\":{\"timeoutMs\":" + TimeoutMsJson() + ",\"exitState\":\"completed\"},\"artifacts\":[],\"effects\":{\"fileWrites\":[],\"assetRefresh\":false,\"domainReload\":false,\"playModeChanged\":false,\"packagesChanged\":false}}}";
+            var durationMs = (long)(endedAt - startedAt).TotalMilliseconds;
+            var timeoutJson = TimeoutMsJson();
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("command", "code.exec")
+                .Prop("mode", "batchmode")
+                .PropObject("execution", execution =>
+                {
+                    execution.Prop("channel", "batchmode")
+                        .Prop("startedAt", startedAt.ToString("O", CultureInfo.InvariantCulture))
+                        .Prop("endedAt", endedAt.ToString("O", CultureInfo.InvariantCulture))
+                        .Prop("durationMs", durationMs)
+                        .PropRaw("timeoutMs", timeoutJson)
+                        .Prop("exitState", "completed");
+                })
+                .PropObject("compile", compile =>
+                {
+                    compile.Prop("ok", true)
+                        .PropRaw("diagnostics", "[]");
+                })
+                .PropObject("runtime", runtime =>
+                {
+                    runtime.Prop("ok", true)
+                        .PropRaw("returnValue", ReturnValueJson(returnValue))
+                        .Prop("stdout", stdout)
+                        .Prop("stderr", stderr);
+                })
+                .PropRaw("artifacts", "[]")
+                .PropObject("audit", audit =>
+                {
+                    audit.Prop("requestId", requestId)
+                        .Prop("projectPath", ProjectPath())
+                        .Prop("instanceId", InstanceId())
+                        .Prop("unityVersion", Application.unityVersion)
+                        .Prop("bridgeVersion", "com.unity_cli")
+                        .Prop("initiator", "cli.batchmode")
+                        .PropObject("input", input =>
+                        {
+                            input.Prop("sourcePath", ArgValue("-unityCliCodeSource"))
+                                .PropRaw("args", string.IsNullOrEmpty(argsJson) ? "{}" : argsJson);
+                        })
+                        .PropObject("execution", execution =>
+                        {
+                            execution.PropRaw("timeoutMs", timeoutJson)
+                                .Prop("exitState", "completed");
+                        })
+                        .PropRaw("artifacts", "[]")
+                        .PropObject("effects", effects =>
+                        {
+                            effects.PropRaw("fileWrites", "[]")
+                                .Prop("assetRefresh", false)
+                                .Prop("domainReload", false)
+                                .Prop("playModeChanged", false)
+                                .Prop("packagesChanged", false);
+                        });
+                })
+                .EndObject()
+                .ToString();
         }
 
         private static string TimeoutMsJson()
@@ -331,21 +415,33 @@ namespace UnityCli
 
         private static string NextActionsJson(string action)
         {
-            return "[" + Quote(action) + "]";
+            return new UnityCliJsonWriter().BeginArray().Value(action).EndArray().ToString();
         }
 
         private static string ReturnValueJson(object value)
         {
             if (value == null) return "null";
-            if (value is bool) return (bool)value ? "true" : "false";
-            if (value is int || value is long || value is float || value is double || value is decimal) return Convert.ToString(value, CultureInfo.InvariantCulture);
+            if (value is bool) return UnityCliJsonWriter.Bool((bool)value);
+            if (value is float) return UnityCliJsonWriter.Number((float)value);
+            if (value is double) return UnityCliJsonWriter.Number((double)value);
+            if (value is int || value is long || value is decimal) return Convert.ToString(value, CultureInfo.InvariantCulture);
             return Quote(Convert.ToString(value, CultureInfo.InvariantCulture));
         }
 
         private static string Quote(string value)
         {
-            if (value == null) return "null";
-            return "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "\\r").Replace("\n", "\\n") + "\"";
+            return UnityCliJsonWriter.Quote(value);
+        }
+
+        private static string[] JsonStringArray(string json)
+        {
+            if (string.IsNullOrEmpty(json)) return new string[0];
+            var values = new List<string>();
+            foreach (System.Text.RegularExpressions.Match match in System.Text.RegularExpressions.Regex.Matches(json, "\\\"((?:\\\\.|[^\\\"])*)\\\""))
+            {
+                values.Add(match.Groups[1].Value.Replace("\\\"", "\"").Replace("\\\\", "\\").Replace("\\/", "/").Replace("\\n", "\n").Replace("\\r", "\r").Replace("\\t", "\t"));
+            }
+            return values.ToArray();
         }
 
         private sealed class CodeExecutionResult
