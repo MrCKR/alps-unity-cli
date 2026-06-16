@@ -50,18 +50,47 @@ namespace UnityCli
             }
         }
 
+        private static bool GetProfilerSessionEnabled()
+        {
+            var property = ProfilerDriverEnabledProperty();
+            if (property != null && property.CanRead)
+            {
+                return (bool)property.GetValue(null, null);
+            }
+            return UnityEngine.Profiling.Profiler.enabled;
+        }
+
+        private static void SetProfilerSessionEnabled(bool enabled)
+        {
+            var property = ProfilerDriverEnabledProperty();
+            if (property != null && property.CanWrite)
+            {
+                property.SetValue(null, enabled, null);
+                return;
+            }
+            UnityEngine.Profiling.Profiler.enabled = enabled;
+        }
+
+        private static PropertyInfo ProfilerDriverEnabledProperty()
+        {
+            var type = FindType("UnityEditorInternal.ProfilerDriver");
+            return type == null ? null : type.GetProperty("enabled", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+        }
+
         private const string ProfilerFrozenDecision = "ALP-165-Q4";
         private const string ProfilerCoverageScopeJson = "[\"session\",\"counter\",\"memory\",\"frame-debugger\",\"export\"]";
+        private const string ProfilerHandlerFingerprint = "alp340-profiler-driver-session-v2";
 
         private static string ProfilerStateJson()
         {
-            return "{\"enabled\":" + Bool(UnityEngine.Profiling.Profiler.enabled)
+            return "{\"enabled\":" + Bool(GetProfilerSessionEnabled())
                 + ",\"enableBinaryLog\":" + Bool(UnityEngine.Profiling.Profiler.enableBinaryLog)
                 + ",\"isPaused\":" + Bool(EditorApplication.isPaused)
                 + ",\"supported\":true"
                 + ",\"architectureSensitive\":true"
                 + ",\"frozenDecision\":" + Quote(ProfilerFrozenDecision)
                 + ",\"coverageScope\":" + ProfilerCoverageScopeJson
+                + ",\"handlerFingerprint\":" + Quote(ProfilerHandlerFingerprint)
                 + "}";
         }
 
@@ -191,7 +220,7 @@ namespace UnityCli
         private static string ProfilerStart(BridgeRequest request)
         {
             var deepProfiling = request.BoolArg("deepProfiling", false);
-            UnityEngine.Profiling.Profiler.enabled = true;
+            SetProfilerSessionEnabled(true);
             SetProfilerDeepProfiling(deepProfiling);
             WriteLog("profiler_started deepProfiling=" + Bool(deepProfiling));
             return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"plannedEffects\":[{" + QuotePair("type", "profiler.start") + "}],\"logPath\":" + Quote(LogPath()) + "}");
@@ -199,7 +228,7 @@ namespace UnityCli
 
         private static string ProfilerStop(BridgeRequest request)
         {
-            UnityEngine.Profiling.Profiler.enabled = false;
+            SetProfilerSessionEnabled(false);
             UnityEngine.Profiling.Profiler.enableBinaryLog = false;
             WriteLog("profiler_stopped");
             return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"plannedEffects\":[{" + QuotePair("type", "profiler.stop") + "}],\"logPath\":" + Quote(LogPath()) + "}");
@@ -207,11 +236,12 @@ namespace UnityCli
 
         private static string ProfilerPause(BridgeRequest request)
         {
-            var wasEnabled = UnityEngine.Profiling.Profiler.enabled;
+            var wasEnabled = GetProfilerSessionEnabled();
             var paused = request.BoolArg("paused", wasEnabled);
-            UnityEngine.Profiling.Profiler.enabled = !paused;
-            WriteLog("profiler_pause paused=" + Bool(paused) + " profilerEnabled=" + Bool(UnityEngine.Profiling.Profiler.enabled));
-            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"paused\":" + Bool(paused) + ",\"plannedEffects\":[{\"type\":\"profiler.pause\",\"profilerEnabledFrom\":" + Bool(wasEnabled) + ",\"profilerEnabledTo\":" + Bool(UnityEngine.Profiling.Profiler.enabled) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+            SetProfilerSessionEnabled(!paused);
+            var isEnabled = GetProfilerSessionEnabled();
+            WriteLog("profiler_pause paused=" + Bool(paused) + " profilerEnabled=" + Bool(isEnabled));
+            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"paused\":" + Bool(paused) + ",\"plannedEffects\":[{\"type\":\"profiler.pause\",\"profilerEnabledFrom\":" + Bool(wasEnabled) + ",\"profilerEnabledTo\":" + Bool(isEnabled) + "}],\"logPath\":" + Quote(LogPath()) + "}");
         }
 
         private static string ProfilerStatus(BridgeRequest request)

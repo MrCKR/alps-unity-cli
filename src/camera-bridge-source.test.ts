@@ -133,9 +133,15 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /RegisterCommand\(registry, "profiler\.status", "profiler", false/);
   assert.match(source, /private const string ProfilerFrozenDecision = "ALP-165-Q4"/);
   assert.match(source, /private const string ProfilerCoverageScopeJson = "\[\\"session\\",\\"counter\\",\\"memory\\",\\"frame-debugger\\",\\"export\\"\]"/);
-  assert.match(source, /private static string ProfilerStart\(BridgeRequest request\)[\s\S]*?UnityEngine\.Profiling\.Profiler\.enabled = true;[\s\S]*?private static string ProfilerStop\(BridgeRequest request\)/);
+  assert.match(source, /private const string ProfilerHandlerFingerprint = "alp340-profiler-driver-session-v2"/);
+  assert.match(source, /FindType\("UnityEditorInternal\.ProfilerDriver"\)/);
+  assert.match(source, /private static string ProfilerStart\(BridgeRequest request\)[\s\S]*?SetProfilerSessionEnabled\(true\);[\s\S]*?private static string ProfilerStop\(BridgeRequest request\)/);
+  assert.match(source, /private static string ProfilerPause\(BridgeRequest request\)[\s\S]*?SetProfilerSessionEnabled\(!paused\);[\s\S]*?private static string ProfilerStatus\(BridgeRequest request\)/);
+  assert.doesNotMatch(source, /private static string ProfilerStart\(BridgeRequest request\)[\s\S]*?UnityEngine\.Profiling\.Profiler\.enabled = true;[\s\S]*?private static string ProfilerStop\(BridgeRequest request\)/);
   assert.doesNotMatch(source, /private static string ProfilerStart\(BridgeRequest request\)[\s\S]*?UnityEngine\.Profiling\.Profiler\.enableBinaryLog = true;[\s\S]*?private static string ProfilerStop\(BridgeRequest request\)/);
+  assert.doesNotMatch(source, /private static string ProfilerPause\(BridgeRequest request\)[\s\S]*?UnityEngine\.Profiling\.Profiler\.enabled = !paused;[\s\S]*?private static string ProfilerStatus\(BridgeRequest request\)/);
   assert.doesNotMatch(source, /private static string ProfilerPause\(BridgeRequest request\)[\s\S]*?UnityEngine\.Profiling\.Profiler\.enableBinaryLog = true;[\s\S]*?private static string ProfilerStatus\(BridgeRequest request\)/);
+  assert.match(source, /\\"handlerFingerprint\\":/);
   assert.match(source, /\\"architectureSensitive\\":true/);
   assert.match(source, /\\"frozenDecision\\":/);
   assert.match(source, /\\"coverageScope\\":/);
