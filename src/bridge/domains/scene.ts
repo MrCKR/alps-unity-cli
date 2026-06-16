@@ -1,4 +1,4 @@
-import { compactArgs, queryArgs, screenshotArgs, stringFlag } from "../args.js";
+import { boolFlag, compactArgs, queryArgs, screenshotArgs, stringFlag } from "../args.js";
 import type { BridgeCommandSpec } from "../types.js";
 
 export const sceneBridgeSpecs: BridgeCommandSpec[] = [
@@ -13,5 +13,5 @@ export const sceneBridgeSpecs: BridgeCommandSpec[] = [
 ];
 
 function sceneFileArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
-  return compactArgs({ path: positionalTarget ?? stringFlag(flags, "path"), name: stringFlag(flags, "name") });
+  return compactArgs({ path: positionalTarget ?? stringFlag(flags, "path"), name: stringFlag(flags, "name"), dryRun: boolFlag(flags, "dry-run") ?? boolFlag(flags, "preflight") });
 }

@@ -142,6 +142,10 @@ namespace UnityCli
             EnsureEditorNotBusy("go.delete");
             var gameObject = ResolveUniqueTarget(RequiredTarget(request, "GameObject delete requires a target."), "GameObject delete requires a target.");
             var targetJson = GameObjectTargetJson(gameObject);
+            if (request.DryRun)
+            {
+                return SuccessJson("{\"command\":\"go.delete\",\"dryRun\":true,\"target\":" + targetJson + ",\"plannedEffects\":[{\"type\":\"go.delete\",\"target\":" + targetJson + ",\"sideEffects\":\"none\"}],\"logPath\":" + Quote(LogPath()) + "}");
+            }
             var scene = gameObject.scene;
             Undo.DestroyObjectImmediate(gameObject);
             if (scene.IsValid())

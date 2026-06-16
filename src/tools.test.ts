@@ -289,6 +289,15 @@ test("cli.batch schema and run metadata cover S3.5 orchestration", () => {
   assert.match(run.cancellationSemantics ?? "", /child jobs/i);
 });
 
+test("representative destructive tools declare dry-run support", () => {
+  for (const name of ["asset.delete", "go.delete", "scene.save", "code.exec"]) {
+    const tool = findToolByName(name);
+    assert.ok(tool, `${name} should exist`);
+    assert.equal(tool.destructiveHint, true);
+    assert.equal(tool.supportsDryRun, true);
+  }
+});
+
 test("cli.package.resolve metadata exists with hybrid handler", () => {
   const tool = findToolByName("cli.package.resolve");
   assert.ok(tool, "cli.package.resolve should exist");

@@ -1,10 +1,11 @@
 import { getBoolean, getNumber } from "../args.js";
 import { batchJsonSchema, runBatch } from "../batch.js";
+import { confirmDestructiveExecution } from "../security.js";
 import { failure, success } from "../output.js";
 import type { CliResult } from "../types.js";
 import type { Runtime } from "./types.js";
 
-export function handleBatch(command: string | undefined, filePath: string | undefined, flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult> | CliResult {
+export async function handleBatch(command: string | undefined, filePath: string | undefined, flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult> {
   if (command === "schema") {
     return success(requestId, batchJsonSchema());
   }
@@ -15,6 +16,17 @@ export function handleBatch(command: string | undefined, filePath: string | unde
 
   if (!filePath) {
     return failure(requestId, "BATCH_FILE_REQUIRED", "Pass a batch JSON file: unity_cli batch run <file>.");
+  }
+
+  const confirmation = await confirmDestructiveExecution(flags, {
+    command: "cli.batch.run",
+    title: "Batch Run",
+    destructiveHint: true,
+    supportsDryRun: true,
+    requestId
+  });
+  if (confirmation) {
+    return confirmation;
   }
 
   return runBatch({

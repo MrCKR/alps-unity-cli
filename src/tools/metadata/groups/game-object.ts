@@ -64,6 +64,7 @@ export const GO_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ target: { type: "string" } }, ["target"]),
     readOnlyHint: false,
     destructiveHint: true,
+    supportsDryRun: true,
     handler: "bridge",
     supportStatus: "planned",
     cliCommand: "go delete",

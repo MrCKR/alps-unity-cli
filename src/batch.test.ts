@@ -44,7 +44,7 @@ test("batch run orders steps by dependsOn and aggregates envelopes", async () =>
     ]
   });
 
-  const result = await execute(["batch", "run", batch], runtime);
+  const result = await execute(["batch", "run", batch, "--yes"], runtime);
 
   assert.equal(result.ok, true);
   const data = result.data as { summary: { succeeded: number }; steps: Array<{ id: string; jobId?: string; logPath?: string; envelope: { ok: boolean } }>; logIndex: { steps: Array<{ jobId?: string; logPath?: string }> } };
@@ -81,7 +81,7 @@ setTimeout(() => process.exit(0), 5000);
     ]
   });
 
-  const result = await execute(["batch", "run", batch, "--fail-fast", "true"], runtime);
+  const result = await execute(["batch", "run", batch, "--fail-fast", "true", "--yes"], runtime);
 
   assert.equal(result.ok, true);
   const data = result.data as { summary: { succeeded: number }; steps: Array<{ id: string; envelope: { data: { status?: string; lines?: string[]; cancellation?: { mode: string } } } }> };
@@ -122,7 +122,7 @@ test("batch runs query edit test and screenshot commands from one TS registry", 
     }
   };
 
-  const result = await execute(["batch", "run", batch], bridgeRuntime);
+  const result = await execute(["batch", "run", batch, "--yes"], bridgeRuntime);
 
   assert.equal(result.ok, true);
   const data = result.data as { summary: { succeeded: number }; plannedEffects: Array<{ type: string }>; steps: Array<{ id: string; jobId?: string; envelope: { data: { command?: string } } }> };
@@ -230,7 +230,7 @@ test("batch fail-fast skips remaining ready steps after a failure", async () => 
     ]
   });
 
-  const result = await execute(["batch", "run", batch], runtime);
+  const result = await execute(["batch", "run", batch, "--yes"], runtime);
 
   assert.equal(result.ok, false);
   const data = result.data as { summary: { failed: number; skipped: number }; steps: Array<{ id: string; status: string; error?: { code: string } }> };
@@ -248,7 +248,7 @@ test("batch defaults cwd is used to resolve relative project paths", async () =>
     steps: [{ id: "refresh", command: ["editor", "refresh"], args: ["--compile"] }]
   });
 
-  const result = await execute(["batch", "run", batch], runtime);
+  const result = await execute(["batch", "run", batch, "--yes"], runtime);
 
   assert.equal(result.ok, true);
   const data = result.data as { steps: Array<{ envelope: { data: { projectPath: string } } }> };

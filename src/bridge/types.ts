@@ -8,6 +8,8 @@ export interface BridgeRequest {
   requestId: string;
   command: string;
   args: Record<string, unknown>;
+  dryRun?: boolean;
+  security?: Record<string, unknown>;
 }
 
 export interface BridgeError {
@@ -39,4 +41,6 @@ export interface BridgeCommandSpec {
   bridgeCommand: string;
   buildArgs: ArgBuilder;
   supportsJob?: boolean;
+  destructiveHint?: boolean;
+  supportsDryRun?: boolean;
 }

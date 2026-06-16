@@ -53,6 +53,7 @@ namespace UnityCli
         private static readonly string[] CodeCommands = { "code.exec" };
         private static readonly string[] CustomToolCommands = { "custom-tool.list", "custom-tool.run" };
         private const string BridgeDiagnosticsFingerprint = "alp276-health-fingerprint-20260615-execute-stage-v1";
+        private const string DestructiveCommandFingerprint = "alp332-destructive-safety-v1";
         private static readonly BridgeCommandRegistry CommandRegistry = CreateCommandRegistry();
         private static readonly string ListenerId = Guid.NewGuid().ToString("N");
         private static readonly DateTime BridgeLoadedAtUtc = DateTime.UtcNow;
@@ -148,7 +149,9 @@ namespace UnityCli
 
         public static int ExecuteBatchCommand(string requestId, string command, string argsJson)
         {
-            var body = "{\"requestId\":" + Quote(requestId) + ",\"command\":" + Quote(command) + ",\"args\":" + (string.IsNullOrEmpty(argsJson) ? "{}" : argsJson) + "}";
+            var rawArgs = string.IsNullOrEmpty(argsJson) ? "{}" : argsJson;
+            var dryRun = JsonRawProperty(rawArgs, "dryRun");
+            var body = "{\"requestId\":" + Quote(requestId) + ",\"command\":" + Quote(command) + ",\"args\":" + rawArgs + (string.IsNullOrEmpty(dryRun) ? string.Empty : ",\"dryRun\":" + dryRun) + "}";
             var response = string.Empty;
             try
             {
@@ -199,6 +202,11 @@ namespace UnityCli
                 return TransientErrorJson("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode.", "Wait for Play mode transition to complete and retry.", 3000);
             }
 
+            if (RequiresDestructiveSecurityProof(request.Command) && !request.DryRun && !request.SecurityConfirmed(DestructiveCommandFingerprint))
+            {
+                return ErrorJson("E_DESTRUCTIVE_CONFIRMATION_REQUIRED", "Destructive command requires CLI confirmation and fingerprint proof: " + request.Command, "Rerun through unity_cli with --yes so the request includes destructive security proof.");
+            }
+
             var response = CommandRegistry.Execute(request);
             if (response != null)
             {
@@ -206,6 +214,18 @@ namespace UnityCli
             }
 
             return ErrorJson("E_BRIDGE_COMMAND_UNSUPPORTED", "Unsupported bridge command: " + request.Command, "Upgrade the Unity CLI Bridge package or use a registered CLI command.");
+        }
+
+        private static bool RequiresDestructiveSecurityProof(string command)
+        {
+            return command == "asset.delete"
+                || command == "go.delete"
+                || command == "scene.save"
+                || command == "code.exec"
+                || command == "component.remove"
+                || command == "probuilder.csg"
+                || command == "editor.menu"
+                || command == "script.edit";
         }
     }
 }
