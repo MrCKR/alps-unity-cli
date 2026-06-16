@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import { getBoolean, getString } from "../args.js";
 import { executeBridgePayload } from "../bridge/index.js";
 import { failure, success } from "../output.js";
+import { handlePackageInfoCommand } from "../package-info.js";
 import { discoverUnity } from "../platform.js";
 import type { CliResult } from "../types.js";
 import type { Runtime } from "./types.js";
@@ -52,6 +53,10 @@ export async function handlePackage(command: string | undefined, args: string[],
     validatePackageName,
     validateRegistryUrl
   } = await import("../package-manager.js");
+
+  if (!command) {
+    return handlePackageInfoCommand(flags, requestId);
+  }
 
   if (command === "list") {
     return success(requestId, await readSnapshot(projectPath));
