@@ -227,7 +227,7 @@
 
 | 安全维度 | 实现状态 | 测试证据 | 状态 |
 |---|---|---|---|
-| destructiveHint + `--yes` 确认 | 9 个 destructive 命令均需 `--yes` 或 `--dry-run` 放行 | security.test.ts: destructive commands require --yes; bridge-commands.test.ts: destructive bridge commands | ✅ |
+| destructiveHint + `--yes` 确认 | 12 个 destructive 命令均需 `--yes` 或 `--dry-run` 放行（含 cli.batch.run/test.cancel/build.cancel，P2-6 补齐） | security.test.ts: destructive commands require --yes; bridge-commands.test.ts: destructive bridge commands; batch.test.ts: batch --yes; cli.test.ts: build cancel --yes | ✅ |
 | dry-run 预览 | `asset.delete`/`go.delete`/`scene.save`/`code.exec` 支持 supportsDryRun | security.test.ts: destructive dry-run; runtime-code.test.ts: code exec dry-run | ✅ |
 | fingerprint 拦截 | custom tool SHA-256 fingerprint 校验 + destructive security proof | security.test.ts: fingerprint proof; custom-tools.test.ts: C# attribute fingerprint | ✅ |
 | group 可见性 | tools list --group 按功能域过滤 | tools.test.ts: filterToolsByGroup; capabilities.test.ts: static data includes destructive tools list | ✅ |
@@ -286,6 +286,11 @@
 | custom-tool | `custom-tool list` 列出注册的自定义工具 | `custom-tool run <name>` 执行自定义工具 | 待最新 main 复测 | 自动测试覆盖 CLI 转发 + C# attribute；P2-2/P2-3 验收已确认 |
 | batch | `batch schema` 查看 schema | `batch run <file>` 执行批处理（destructiveHint） | 待最新 main 复测 | 自动测试覆盖全链路（12 tests）|
 | probuilder | `probuilder shape` 查询形状 | `probuilder create/csg` 修改场景（destructiveHint） | 待最新 main 复测 | 按冻结决策延后为可选 capability |
+| diagnose | `diagnose preflight` 查看 batch schema 合规 | `diagnose preflight` 执行批处理预检 | 待最新 main 复测 | 自动测试覆盖 preflight 接受/拒绝/parallel-safe |
+| screenshot | `screenshot capture <path>` 截取当前视图 | — | 待最新 main 复测 | 自动测试覆盖 output path forwarding |
+| 安全模型 / destructive safety | `capabilities` 列出 destructive 工具 | `--yes` 确认 + dry-run 预览 | 2026-06-16 (P2-5) | 12 个 destructive 命令确认机制已验证 |
+| fingerprint | `doctor` 输出 fingerprint 摘要 | `custom-tool run --fingerprint-mode warn|block` 执行自定义工具 | 2026-06-16 (P2-3/P2-5) | fingerprint 校验链路已验证 |
+| CLI 离线能力 | `init --check`、`docs get/search`、`reflect type/member/search`、`batch schema`、`package list/info/search` | `init`、`batch run`（destructive）、`package install/remove`（destructive）、`job status/logs/cancel` | 离线工具，自动测试已覆盖 | 不需 Unity 实机；自动测试全链路覆盖 |
 
 ---
 
@@ -305,4 +310,4 @@
 - **P2-3 S4.2 Fingerprint runtime 拦截** (2026-06-16): 新增 Fingerprint 域覆盖矩阵；实现 SHA-256 fingerprint 校验 + `E_TOOL_FINGERPRINT_MISMATCH` 拦截 + destructive security proof。
 - **P2-4 S4.3 CLI 命令 + tools 统一发现** (2026-06-16): 新增 Diagnose 域、ProBuilder 域、Screenshot 域、CLI 离线能力域覆盖矩阵；实现 `tools list/groups/search/describe` 统一发现 + `capabilities` 静态/混合 manifest + `diagnose.preflight`。
 - **P2-5 S4.4 安全模型全链路验证** (2026-06-16): 新增安全模型域覆盖矩阵；9 个 destructive 命令 `--yes` 确认机制 + representative dry-run + fingerprint + destructive security proof + group 可见性 + readOnlyHint + 敏感信息保护零风险面。黑名单和网络策略为 v1.0 已知限制。
-- **P2-6 S4.5 覆盖矩阵收口** (2026-06-16): 全量收口；120 contract commands / 95 bridge / 95 C# / 120 metadata / 269 npm tests / contracts:validate ok；更新 smoke 验证状态（P1-2 + P2-4 + P2-5 实机证据合并）。
+- **P2-6 S4.5 覆盖矩阵收口** (2026-06-16): 全量收口；120 contract commands / 95 bridge / 95 C# / 120 metadata / 270 npm tests / contracts:validate ok；更新 smoke 验证状态（P1-2 + P2-4 + P2-5 实机证据合并）；补齐 security-policy.ts 3 条缺失（cli.batch.run/test.cancel/build.cancel）；补齐 smoke 表 7 个域。

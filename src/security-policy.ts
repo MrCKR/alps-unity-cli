@@ -14,7 +14,10 @@ const SECURITY_POLICY: SecurityPolicyEntry[] = [
   { command: "probuilder.csg", title: "ProBuilder CSG", destructiveHint: true },
   { command: "editor.menu", title: "Execute Editor Menu", destructiveHint: true },
   { command: "script.edit", title: "Edit Script", destructiveHint: true },
-  { command: "cli.package.remove", title: "Package Remove", destructiveHint: true }
+  { command: "cli.package.remove", title: "Package Remove", destructiveHint: true },
+  { command: "cli.batch.run", title: "Batch Run", destructiveHint: true, supportsDryRun: true },
+  { command: "test.cancel", title: "Cancel Test Job", destructiveHint: true },
+  { command: "build.cancel", title: "Cancel Build Job", destructiveHint: true }
 ];
 
 const BY_COMMAND = new Map(SECURITY_POLICY.map((entry) => [entry.command, entry]));

@@ -77,7 +77,7 @@ setTimeout(() => process.exit(0), 5000);
     steps: [
       { id: "status", command: ["build", "status"], args: ["--id", jobId] },
       { id: "logs", command: ["build", "logs"], args: ["--id", jobId, "--tail", "10"], dependsOn: ["status"] },
-      { id: "cancel", command: ["build", "cancel"], args: ["--id", jobId], dependsOn: ["logs"] }
+      { id: "cancel", command: ["build", "cancel"], args: ["--id", jobId, "--yes"], dependsOn: ["logs"] }
     ]
   });
 
