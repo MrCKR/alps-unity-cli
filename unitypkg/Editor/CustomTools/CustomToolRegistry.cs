@@ -231,7 +231,12 @@ namespace UnityCli
                 tools.Add(CustomToolDefinitionJson(pair.Value));
             }
             tools.Sort(StringComparer.Ordinal);
-            return SuccessJson("{\"tools\":[" + string.Join(",", tools.ToArray()) + "],\"logPath\":" + Quote(LogPath()) + "}");
+            var data = new UnityCliJsonWriter().BeginObject()
+                .PropRaw("tools", "[" + string.Join(",", tools.ToArray()) + "]")
+                .Prop("logPath", LogPath())
+                .EndObject()
+                .ToString();
+            return SuccessJson(data);
         }
 
         private static string CustomToolRun(BridgeRequest request)
@@ -324,82 +329,149 @@ namespace UnityCli
                 return ErrorJson("E_EXECUTION_TIMEOUT", "Tool exceeded timeoutMs after completion: " + durationMs.ToString(CultureInfo.InvariantCulture) + "ms > " + timeoutMs.ToString(CultureInfo.InvariantCulture) + "ms.", "Inspect bridge logs and artifact manifest with the returned requestId before retrying.");
             }
 
-            return SuccessJson("{"
-                + "\"command\":\"custom-tool.run\","
-                + "\"tool\":{\"name\":" + Quote(definition.Name) + ",\"version\":" + Quote(definition.Version) + "},"
-                + "\"execution\":{\"channel\":\"live\",\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"endedAt\":" + Quote(endedAt.ToString("O", CultureInfo.InvariantCulture)) + ",\"durationMs\":" + durationMs.ToString(CultureInfo.InvariantCulture) + ",\"exitState\":\"completed\"},"
-                + "\"result\":" + JsonLiteralOrString(resultJson) + ","
-                + "\"artifacts\":[{\"id\":\"manifest\",\"kind\":\"json\",\"path\":" + Quote(Path.Combine(artifactDir, "manifest.json")) + ",\"description\":\"custom-tool artifact manifest\"}],"
-                + "\"audit\":" + CustomToolAuditJson(request, definition, artifactDir, inputJson, timeoutMs, startedAt, endedAt, "completed") + ","
-                + "\"logs\":{\"bridge\":" + Quote(LogPath()) + "}"
-                + "}");
+            var data = new UnityCliJsonWriter().BeginObject()
+                .Prop("command", "custom-tool.run")
+                .PropObject("tool", tool =>
+                {
+                    tool.Prop("name", definition.Name)
+                        .Prop("version", definition.Version);
+                })
+                .PropObject("execution", execution =>
+                {
+                    execution.Prop("channel", "live")
+                        .Prop("startedAt", startedAt.ToString("O", CultureInfo.InvariantCulture))
+                        .Prop("endedAt", endedAt.ToString("O", CultureInfo.InvariantCulture))
+                        .Prop("durationMs", durationMs)
+                        .Prop("exitState", "completed");
+                })
+                .PropRaw("result", resultJson)
+                .PropArray("artifacts", artifacts =>
+                {
+                    artifacts.BeginObject()
+                        .Prop("id", "manifest")
+                        .Prop("kind", "json")
+                        .Prop("path", Path.Combine(artifactDir, "manifest.json"))
+                        .Prop("description", "custom-tool artifact manifest")
+                        .EndObject();
+                })
+                .PropRaw("audit", CustomToolAuditJson(request, definition, artifactDir, inputJson, timeoutMs, startedAt, endedAt, "completed"))
+                .PropObject("logs", logs => logs.Prop("bridge", LogPath()))
+                .EndObject()
+                .ToString();
+            return SuccessJson(data);
         }
 
         private static string CustomToolDefinitionJson(UnityCliCustomToolDefinition definition)
         {
-            return "{"
-                + "\"name\":" + Quote(definition.Name) + ","
-                + "\"displayName\":" + Quote(definition.DisplayName) + ","
-                + "\"title\":" + Quote(definition.Title) + ","
-                + "\"description\":" + Quote(definition.Description) + ","
-                + "\"group\":" + Quote(definition.Group) + ","
-                + "\"version\":" + Quote(definition.Version) + ","
-                + "\"inputSchema\":" + JsonLiteralOrString(definition.InputSchema) + ","
-                + "\"outputSchema\":" + JsonLiteralOrString(definition.OutputSchema) + ","
-                + "\"capabilityType\":" + Quote(definition.CapabilityType) + ","
-                + "\"readOnlyHint\":" + Bool(definition.ReadOnlyHint) + ","
-                + "\"destructiveHint\":" + Bool(definition.DestructiveHint) + ","
-                + "\"defaultTimeoutMs\":" + definition.DefaultTimeoutMs.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"maxTimeoutMs\":" + definition.MaxTimeoutMs.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"supportsJob\":" + Bool(definition.SupportsJob) + ","
-                + "\"artifactKinds\":" + StringArrayJson(definition.ArtifactKinds) + ","
-                + "\"architectureSensitive\":" + Bool(definition.ArchitectureSensitive) + ","
-                + "\"frozenDecision\":" + Quote(definition.FrozenDecision) + ","
-                + "\"coverageScope\":" + StringArrayJson(definition.CoverageScope) + ","
-                + "\"handler\":\"bridge\","
-                + "\"supportStatus\":\"live-bridge\","
-                + "\"cliCommand\":" + Quote("custom-tool run " + definition.Name) + ","
-                + "\"docsTopic\":\"custom-tool\","
-                + "\"descriptorSource\":" + Quote(definition.DescriptorSource) + ","
-                + "\"registeredBy\":" + Quote(definition.RegisteredBy) + ","
-                + "\"assembly\":" + Quote(definition.Assembly) + ","
-                + "\"method\":" + Quote(definition.Method) + ","
-                + "\"fingerprint\":" + CustomToolFingerprintJson(definition)
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("name", definition.Name)
+                .Prop("displayName", definition.DisplayName)
+                .Prop("title", definition.Title)
+                .Prop("description", definition.Description)
+                .Prop("group", definition.Group)
+                .Prop("version", definition.Version)
+                .PropRaw("inputSchema", definition.InputSchema)
+                .PropRaw("outputSchema", definition.OutputSchema)
+                .Prop("capabilityType", definition.CapabilityType)
+                .Prop("readOnlyHint", definition.ReadOnlyHint)
+                .Prop("destructiveHint", definition.DestructiveHint)
+                .Prop("defaultTimeoutMs", definition.DefaultTimeoutMs)
+                .Prop("maxTimeoutMs", definition.MaxTimeoutMs)
+                .Prop("supportsJob", definition.SupportsJob)
+                .PropRaw("artifactKinds", StringArrayJson(definition.ArtifactKinds))
+                .Prop("architectureSensitive", definition.ArchitectureSensitive)
+                .Prop("frozenDecision", definition.FrozenDecision)
+                .PropRaw("coverageScope", StringArrayJson(definition.CoverageScope))
+                .Prop("handler", "bridge")
+                .Prop("supportStatus", "live-bridge")
+                .Prop("cliCommand", "custom-tool run " + definition.Name)
+                .Prop("docsTopic", "custom-tool")
+                .Prop("descriptorSource", definition.DescriptorSource)
+                .Prop("registeredBy", definition.RegisteredBy)
+                .Prop("assembly", definition.Assembly)
+                .Prop("method", definition.Method)
+                .PropRaw("fingerprint", CustomToolFingerprintJson(definition))
+                .EndObject()
+                .ToString();
         }
 
         private static string CustomToolManifestJson(string requestId, UnityCliCustomToolDefinition definition, string artifactDir, DateTime startedAt, DateTime endedAt)
         {
-            return "{"
-                + "\"requestId\":" + Quote(requestId) + ","
-                + "\"command\":\"custom-tool.run\","
-                + "\"tool\":{\"name\":" + Quote(definition.Name) + ",\"version\":" + Quote(definition.Version) + "},"
-                + "\"artifact\":[{\"id\":\"manifest\",\"kind\":\"json\",\"relativePath\":\"manifest.json\",\"producer\":\"unity-editor-package\"}],"
-                + "\"createdAt\":" + Quote(endedAt.ToString("O", CultureInfo.InvariantCulture)) + ","
-                + "\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ","
-                + "\"root\":" + Quote(artifactDir)
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("requestId", requestId)
+                .Prop("command", "custom-tool.run")
+                .PropObject("tool", tool =>
+                {
+                    tool.Prop("name", definition.Name)
+                        .Prop("version", definition.Version);
+                })
+                .PropArray("artifact", artifact =>
+                {
+                    artifact.BeginObject()
+                        .Prop("id", "manifest")
+                        .Prop("kind", "json")
+                        .Prop("relativePath", "manifest.json")
+                        .Prop("producer", "unity-editor-package")
+                        .EndObject();
+                })
+                .Prop("createdAt", endedAt.ToString("O", CultureInfo.InvariantCulture))
+                .Prop("startedAt", startedAt.ToString("O", CultureInfo.InvariantCulture))
+                .Prop("root", artifactDir)
+                .EndObject()
+                .ToString();
         }
 
         private static string CustomToolAuditJson(BridgeRequest request, UnityCliCustomToolDefinition definition, string artifactDir, string inputJson, int timeoutMs, DateTime startedAt, DateTime endedAt, string exitState)
         {
-            return "{"
-                + "\"requestId\":" + Quote(request.RequestId) + ","
-                + "\"command\":\"custom-tool.run\","
-                + "\"projectPath\":" + Quote(request.StringArg("projectPath") ?? ProjectRoot()) + ","
-                + "\"instanceId\":" + Quote(request.StringArg("instanceId")) + ","
-                + "\"unityVersion\":" + Quote(Application.unityVersion) + ","
-                + "\"bridgeVersion\":\"com.unity_cli\","
-                + "\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ","
-                + "\"endedAt\":" + Quote(endedAt.ToString("O", CultureInfo.InvariantCulture)) + ","
-                + "\"durationMs\":" + ((long)(endedAt - startedAt).TotalMilliseconds).ToString(CultureInfo.InvariantCulture) + ","
-                + "\"initiator\":{\"cliUser\":\"local\",\"cwd\":" + Quote(Directory.GetCurrentDirectory()) + "},"
-                + "\"input\":{\"sourceKind\":\"json\",\"sizeBytes\":" + Encoding.UTF8.GetByteCount(inputJson ?? string.Empty).ToString(CultureInfo.InvariantCulture) + "},"
-                + "\"execution\":{\"channel\":\"live\",\"timeoutMs\":" + timeoutMs.ToString(CultureInfo.InvariantCulture) + ",\"exitState\":" + Quote(exitState) + "},"
-                + "\"effects\":{\"fileWrites\":[],\"assetRefresh\":false,\"domainReload\":false,\"playModeChanged\":false,\"packagesChanged\":false},"
-                + "\"artifacts\":[{\"kind\":\"json\",\"path\":" + Quote(Path.Combine(artifactDir, "manifest.json")) + "}],"
-                + "\"tool\":{\"name\":" + Quote(definition.Name) + ",\"capabilityType\":" + Quote(definition.CapabilityType) + ",\"fingerprint\":" + CustomToolFingerprintJson(definition) + "}"
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("requestId", request.RequestId)
+                .Prop("command", "custom-tool.run")
+                .Prop("projectPath", request.StringArg("projectPath") ?? ProjectRoot())
+                .Prop("instanceId", request.StringArg("instanceId"))
+                .Prop("unityVersion", Application.unityVersion)
+                .Prop("bridgeVersion", "com.unity_cli")
+                .Prop("startedAt", startedAt.ToString("O", CultureInfo.InvariantCulture))
+                .Prop("endedAt", endedAt.ToString("O", CultureInfo.InvariantCulture))
+                .Prop("durationMs", (long)(endedAt - startedAt).TotalMilliseconds)
+                .PropObject("initiator", initiator =>
+                {
+                    initiator.Prop("cliUser", "local")
+                        .Prop("cwd", Directory.GetCurrentDirectory());
+                })
+                .PropObject("input", input =>
+                {
+                    input.Prop("sourceKind", "json")
+                        .Prop("sizeBytes", Encoding.UTF8.GetByteCount(inputJson ?? string.Empty));
+                })
+                .PropObject("execution", execution =>
+                {
+                    execution.Prop("channel", "live")
+                        .Prop("timeoutMs", timeoutMs)
+                        .Prop("exitState", exitState);
+                })
+                .PropObject("effects", effects =>
+                {
+                    effects.PropRaw("fileWrites", "[]")
+                        .Prop("assetRefresh", false)
+                        .Prop("domainReload", false)
+                        .Prop("playModeChanged", false)
+                        .Prop("packagesChanged", false);
+                })
+                .PropArray("artifacts", artifacts =>
+                {
+                    artifacts.BeginObject()
+                        .Prop("kind", "json")
+                        .Prop("path", Path.Combine(artifactDir, "manifest.json"))
+                        .EndObject();
+                })
+                .PropObject("tool", tool =>
+                {
+                    tool.Prop("name", definition.Name)
+                        .Prop("capabilityType", definition.CapabilityType)
+                        .PropRaw("fingerprint", CustomToolFingerprintJson(definition));
+                })
+                .EndObject()
+                .ToString();
         }
 
         private sealed class CustomToolFingerprintCheck
@@ -575,16 +647,17 @@ namespace UnityCli
 
         private static string CustomToolFingerprintJson(UnityCliCustomToolDefinition definition)
         {
-            return "{"
-                + "\"algorithm\":\"sha256-handler-code-plus-descriptor-v1\","
-                + "\"value\":" + Quote(definition.Fingerprint) + ","
-                + "\"expected\":" + Quote(definition.ExpectedFingerprint) + ","
-                + "\"status\":" + Quote(definition.FingerprintStatus) + ","
-                + "\"mode\":" + Quote(definition.FingerprintMode) + ","
-                + "\"message\":" + Quote(definition.FingerprintMessage) + ","
-                + "\"descriptorSha256\":" + Quote(definition.DescriptorSha256) + ","
-                + "\"handlerSha256\":" + Quote(definition.HandlerSha256)
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("algorithm", "sha256-handler-code-plus-descriptor-v1")
+                .Prop("value", definition.Fingerprint)
+                .Prop("expected", definition.ExpectedFingerprint)
+                .Prop("status", definition.FingerprintStatus)
+                .Prop("mode", definition.FingerprintMode)
+                .Prop("message", definition.FingerprintMessage)
+                .Prop("descriptorSha256", definition.DescriptorSha256)
+                .Prop("handlerSha256", definition.HandlerSha256)
+                .EndObject()
+                .ToString();
         }
 
 
@@ -599,15 +672,33 @@ namespace UnityCli
                 RefreshCustomToolFingerprint(definition, null);
                 if (definition.FingerprintStatus == "blocked") blocked++;
                 if (definition.FingerprintStatus == "warn") warn++;
-                items.Add("{\"name\":" + Quote(definition.Name) + ",\"fingerprint\":" + CustomToolFingerprintJson(definition) + ",\"architectureSensitive\":true}");
+                items.Add(new UnityCliJsonWriter().BeginObject()
+                    .Prop("name", definition.Name)
+                    .PropRaw("fingerprint", CustomToolFingerprintJson(definition))
+                    .Prop("architectureSensitive", true)
+                    .EndObject()
+                    .ToString());
             }
             items.Sort(StringComparer.Ordinal);
-            return "{\"algorithm\":\"sha256-handler-code-plus-descriptor-v1\",\"mode\":" + Quote(NormalizeCustomToolFingerprintMode(null)) + ",\"toolCount\":" + CustomTools.Count.ToString(CultureInfo.InvariantCulture) + ",\"blockedCount\":" + blocked.ToString(CultureInfo.InvariantCulture) + ",\"warnCount\":" + warn.ToString(CultureInfo.InvariantCulture) + ",\"tools\":[" + string.Join(",", items.ToArray()) + "]}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("algorithm", "sha256-handler-code-plus-descriptor-v1")
+                .Prop("mode", NormalizeCustomToolFingerprintMode(null))
+                .Prop("toolCount", CustomTools.Count)
+                .Prop("blockedCount", blocked)
+                .Prop("warnCount", warn)
+                .PropRaw("tools", "[" + string.Join(",", items.ToArray()) + "]")
+                .EndObject()
+                .ToString();
         }
 
         private static string CustomToolFingerprintDetailsJson(UnityCliCustomToolDefinition definition)
         {
-            return "{\"tool\":" + Quote(definition.Name) + ",\"fingerprint\":" + CustomToolFingerprintJson(definition) + ",\"architectureSensitive\":true}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("tool", definition.Name)
+                .PropRaw("fingerprint", CustomToolFingerprintJson(definition))
+                .Prop("architectureSensitive", true)
+                .EndObject()
+                .ToString();
         }
     }
 }

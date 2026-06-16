@@ -561,21 +561,31 @@ test("Unity Bridge C# string literals stay balanced", async () => {
   const source = await readUnityBridgeSources();
   for (const [index, line] of source.split(/\r?\n/).entries()) {
     let inString = false;
+    let inChar = false;
     let escaped = false;
-    for (const char of line) {
+    for (let offset = 0; offset < line.length; offset += 1) {
+      const char = line[offset];
       if (escaped) {
         escaped = false;
         continue;
       }
-      if (char === "\\" && inString) {
+      if (!inString && !inChar && char === "/" && line[offset + 1] === "/") {
+        break;
+      }
+      if (char === "\\" && (inString || inChar)) {
         escaped = true;
         continue;
       }
-      if (char === '"') {
+      if (char === "'" && !inString) {
+        inChar = !inChar;
+        continue;
+      }
+      if (char === '"' && !inChar) {
         inString = !inString;
       }
     }
     assert.equal(inString, false, `unterminated string literal on UnityCliBridge.cs:${index + 1}`);
+    assert.equal(inChar, false, `unterminated char literal on UnityCliBridge.cs:${index + 1}`);
   }
 });
 

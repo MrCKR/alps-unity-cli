@@ -146,7 +146,7 @@ namespace UnityCli
 
         private static string SuccessJson(string dataJson)
         {
-            return "{\"ok\":true,\"data\":" + dataJson + "}";
+            return UnityCliEnvelope.Success(dataJson);
         }
 
         /// <summary>
@@ -156,22 +156,22 @@ namespace UnityCli
         /// </summary>
         private static string TransientErrorJson(string code, string message, string nextAction, int retryAfterMs)
         {
-            return "{\"ok\":false,\"error\":{\"code\":" + Quote(code) + ",\"message\":" + Quote(message) + ",\"transient\":true,\"retry_after_ms\":" + retryAfterMs.ToString(CultureInfo.InvariantCulture) + "},\"nextActions\":[" + Quote(nextAction) + "]}";
+            return UnityCliEnvelope.TransientError(code, message, nextAction, retryAfterMs);
         }
 
         private static string ErrorJson(string code, string message, string nextAction)
         {
-            return "{\"ok\":false,\"error\":{\"code\":" + Quote(code) + ",\"message\":" + Quote(message) + "},\"nextActions\":[" + Quote(nextAction) + "]}";
+            return UnityCliEnvelope.Error(code, message, nextAction);
         }
 
         private static string ErrorJsonWithDetails(string code, string message, string detailsJson, string nextAction)
         {
-            return "{\"ok\":false,\"error\":{\"code\":" + Quote(code) + ",\"message\":" + Quote(message) + ",\"details\":" + (string.IsNullOrEmpty(detailsJson) ? "{}" : detailsJson) + "},\"nextActions\":[" + Quote(nextAction) + "]}";
+            return UnityCliEnvelope.ErrorWithDetails(code, message, detailsJson, nextAction);
         }
 
         private static string TargetAmbiguousErrorJson(string label, string target, TargetResolution resolution, string nextAction)
         {
-            return "{\"ok\":false,\"error\":{\"code\":\"E_TARGET_AMBIGUOUS\",\"message\":" + Quote(label + " target is ambiguous: " + target) + ",\"target\":" + Quote(target) + ",\"matchCount\":" + resolution.Matches.Count.ToString(CultureInfo.InvariantCulture) + ",\"matches\":" + TargetMatchesJson(resolution.Matches) + "},\"nextActions\":[" + Quote(nextAction) + "]}";
+            return UnityCliEnvelope.TargetAmbiguous(label, target, resolution.Matches.Count, TargetMatchesJson(resolution.Matches), nextAction);
         }
 
         private static string TargetMatchesJson(List<GameObject> matches)
@@ -188,30 +188,17 @@ namespace UnityCli
 
         private static string QuotePair(string key, string value)
         {
-            return "\"" + key + "\":\"" + (value ?? string.Empty).Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "\\r").Replace("\n", "\\n").Replace("\t", "\\t") + "\"";
+            return UnityCliJsonWriter.Quote(key) + ":" + UnityCliJsonWriter.Quote(value ?? string.Empty);
         }
 
         private static string Quote(string value)
         {
-            if (value == null)
-            {
-                return "null";
-            }
-            return "\"" + value.Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "\\r").Replace("\n", "\\n").Replace("\t", "\\t") + "\"";
+            return UnityCliJsonWriter.Quote(value);
         }
 
         private static string JsonLiteralOrString(string value)
         {
-            if (string.IsNullOrEmpty(value))
-            {
-                return "null";
-            }
-            var trimmed = value.Trim();
-            if ((trimmed.StartsWith("{") && trimmed.EndsWith("}")) || (trimmed.StartsWith("[") && trimmed.EndsWith("]")) || trimmed == "true" || trimmed == "false" || trimmed == "null" || Regex.IsMatch(trimmed, "^-?\\d+(?:\\.\\d+)?$"))
-            {
-                return trimmed;
-            }
-            return Quote(value);
+            return UnityCliJsonWriter.RawOrString(value);
         }
 
         private static string StringArrayJson(string[] values)
@@ -360,12 +347,12 @@ namespace UnityCli
 
         private static string Bool(bool value)
         {
-            return value ? "true" : "false";
+            return UnityCliJsonWriter.Bool(value);
         }
 
         private static string Number(float value)
         {
-            return value.ToString(CultureInfo.InvariantCulture);
+            return UnityCliJsonWriter.Number(value);
         }
 
         private static string Vector2Json(Vector2 value)
