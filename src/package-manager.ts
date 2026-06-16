@@ -1,6 +1,6 @@
 import { realpath, readFile, writeFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { join, relative, resolve } from "node:path";
+import { join, relative, resolve, win32 } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export interface UnityManifest {
@@ -342,15 +342,20 @@ async function readPackageManifest(packagePath: string): Promise<{ name: string;
   }
 }
 
-function fileDependencySpec(projectPath: string, packagePath: string): string {
-  const dependencyPath = normalizeRelativePath(relative(join(projectPath, "Packages"), packagePath));
+export function fileDependencySpec(projectPath: string, packagePath: string): string {
+  const path = pathHelpersFor(projectPath, packagePath);
+  const dependencyPath = normalizeRelativePath(path.relative(path.join(projectPath, "Packages"), packagePath));
+  if (isAbsoluteDependencyPath(dependencyPath)) {
+    return `file:${dependencyPath}`;
+  }
   const normalized = dependencyPath.startsWith(".") ? dependencyPath : `./${dependencyPath}`;
   return `file:${normalized}`;
 }
 
-function resolveFileDependency(projectPath: string, spec: string): string {
+export function resolveFileDependency(projectPath: string, spec: string): string {
   const dependencyPath = spec.slice("file:".length);
-  return resolve(join(projectPath, "Packages"), dependencyPath);
+  const path = pathHelpersFor(projectPath, dependencyPath);
+  return path.resolve(path.join(projectPath, "Packages"), dependencyPath);
 }
 
 async function hashProjectPath(projectPath: string): Promise<string> {
@@ -446,4 +451,16 @@ function uniqueScopes(scopes: string[]): string[] {
 
 function normalizeRelativePath(path: string): string {
   return path.split("\\").join("/");
+}
+
+function pathHelpersFor(firstPath: string, secondPath: string): Pick<typeof win32, "join" | "relative" | "resolve"> {
+  return hasWindowsDrivePath(firstPath) || hasWindowsDrivePath(secondPath) ? win32 : { join, relative, resolve };
+}
+
+function hasWindowsDrivePath(path: string): boolean {
+  return /^[A-Za-z]:[\\/]/.test(path);
+}
+
+function isAbsoluteDependencyPath(path: string): boolean {
+  return path.startsWith("/") || /^[A-Za-z]:\//.test(path);
 }
