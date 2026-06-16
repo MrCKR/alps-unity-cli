@@ -260,8 +260,7 @@
 ## 真实 Unity 项目 smoke 验证状态
 
 > 验证基准：origin/main `d2287a5`（P0-P2 全链路合入后）| Unity 2022.3.61f1 | Windows DESKTOP-HDGGLLV
-> P1-2 实机 smoke 已于 2026-06-16 完成（S3.1/S3.2/P1-1 Profiler 全部通过），P2-4/P2-5 验收期间已补实机证据。
-> P2-6 收口要求在最新 main 上执行全量 e2e/smoke，已交 Windows Unity 实机工程师执行。
+> P1-2 + P2-6 实机 smoke 已于 2026-06-16 完成全量闭环：S1~S3.2/P1-1/P2-1~P2-5 全部通过，Console error 为空。
 
 | 功能域 | read 操作 | write/modify 操作 | 验证日期 | 备注 |
 |---|---|---|---|---|
@@ -279,16 +278,16 @@
 | physics | `physics raycast` 执行 3D/2D 射线检测 | `physics settings --gravity-y` 或 `physics simulation --simulate` 修改/步进物理 | 2026-06-16 (P1-2) | Console clean |
 | animation/vfx | `animation state` / `vfx graph` 查询动画和 VFX 资源/组件 | `animation play <target> --state <name>` / `vfx effect <target> --add` 执行动画和 VFX 修改 | 2026-06-16 (P1-2) | VFX 因 ProBuilder/VFX package 未安装，CLI 返回预期错误码 |
 | profiler | `profiler status/counter/memory/frame` 返回状态、计数器、内存和帧诊断 | `profiler start/pause/stop` 控制 session，`profiler capture/export` 写 artifact | 2026-06-16 (P1-2/ALP-340/ALP-348) | Console clean（ALP-340 修复后复测通过）；export artifact 1188 bytes |
-| script | `script read/validate <path>` 返回内容和静态诊断 | `script create/edit` 创建或编辑脚本 | 待最新 main 复测 | 自动测试覆盖契约/metadata/CLI 转发；P1-2 未独立 smoke |
-| go/component | `go find/inspect` 返回对象和组件摘要 | `go create/modify/delete`、`component add/remove/set` 修改场景对象 | 待最新 main 复测 | 自动测试覆盖契约/metadata/CLI 转发；P1-2 未独立 smoke |
-| asset | `asset search/info` 返回资源列表与 metadata | `asset create/modify/duplicate/move/rename/delete` 修改 AssetDatabase | 待最新 main 复测 | 自动测试覆盖契约/metadata/CLI 转发；P1-2 未独立 smoke |
-| prefab | `prefab info/hierarchy` 返回 prefab 摘要与层级 | `prefab create/modify/stage-open/stage-save/stage-close` 管理 prefab 生命周期 | 待最新 main 复测 | 自动测试覆盖契约/metadata/CLI 转发；P1-2 未独立 smoke |
-| code | `code exec --code` 返回结果 | `code exec` 执行代码（destructiveHint） | 待最新 main 复测 | P2-5 验收已确认 destructive + dry-run 链路 |
-| custom-tool | `custom-tool list` 列出注册的自定义工具 | `custom-tool run <name>` 执行自定义工具 | 待最新 main 复测 | 自动测试覆盖 CLI 转发 + C# attribute；P2-2/P2-3 验收已确认 |
-| batch | `batch schema` 查看 schema | `batch run <file>` 执行批处理（destructiveHint） | 待最新 main 复测 | 自动测试覆盖全链路（12 tests）|
-| probuilder | `probuilder shape` 查询形状 | `probuilder create/csg` 修改场景（destructiveHint） | 待最新 main 复测 | 按冻结决策延后为可选 capability |
-| diagnose | `diagnose preflight` 查看 batch schema 合规 | `diagnose preflight` 执行批处理预检 | 待最新 main 复测 | 自动测试覆盖 preflight 接受/拒绝/parallel-safe |
-| screenshot | `screenshot capture <path>` 截取当前视图 | — | 待最新 main 复测 | 自动测试覆盖 output path forwarding |
+| script | `script read/validate <path>` 返回内容和静态诊断 | `script create/edit --yes` 创建或编辑脚本 | 2026-06-16 (P2-6 实机) | Console clean；script.create/read/validate/edit 全链路通过 |
+| go/component | `go find/inspect` 返回对象和组件摘要 | `go create/modify/delete --yes`、`component add/set/remove --yes` 修改场景对象 | 2026-06-16 (P2-6 实机) | Console clean；destructive 命令无 --yes 返回 E_DESTRUCTIVE_CONFIRMATION_REQUIRED |
+| asset | `asset search/info` 返回资源列表与 metadata | `asset create/modify/duplicate/move/rename/delete --yes` + `delete --dry-run` 修改 AssetDatabase | 2026-06-16 (P2-6 实机) | Console clean；dry-run 预览正常 |
+| prefab | `prefab info/hierarchy` 返回 prefab 摘要与层级 | `prefab create/modify/stage-open/stage-save/stage-close` 管理 prefab 生命周期 | 2026-06-16 (P2-6 实机) | Console clean |
+| code | `code exec --code` 返回结果 | `code exec --yes` 执行代码（destructiveHint）；`--dry-run` 预览 | 2026-06-16 (P2-6 实机) | Console clean；live inline/file + dry-run 均通过 |
+| custom-tool | `custom-tool list` 列出注册的自定义工具 | `custom-tool run sample.echo --fingerprint-mode warn` 执行自定义工具 | 2026-06-16 (P2-6 实机) | Console clean；fingerprint 链路正常 |
+| batch | `batch schema` 查看 schema | `batch run --preflight` + `batch run --yes` 执行批处理 | 2026-06-16 (P2-6 实机) | Console clean；preflight + --yes 均通过 |
+| probuilder | `probuilder shape` 查询形状 | `probuilder create/csg` 修改场景（destructiveHint） | 离线/可选 capability | 按冻结决策延后为可选 capability；需 ProBuilder 包 |
+| diagnose | `diagnose run` / preflight 查看 batch schema 合规 | `diagnose preflight` 执行批处理预检 | 2026-06-16 (P2-6 实机) | Console clean |
+| screenshot | `screenshot capture <path>` 截取当前视图 | — | 2026-06-16 (P2-6 实机) | Console clean（与 camera/scene.screenshot 合并验证） |
 | 安全模型 / destructive safety | `capabilities` 列出 destructive 工具 | `--yes` 确认 + dry-run 预览 | 2026-06-16 (P2-5) | 12 个 destructive 命令确认机制已验证 |
 | fingerprint | `doctor` 输出 fingerprint 摘要 | `custom-tool run --fingerprint-mode warn|block` 执行自定义工具 | 2026-06-16 (P2-3/P2-5) | fingerprint 校验链路已验证 |
 | CLI 离线能力 | `init --check`、`docs get/search`、`reflect type/member/search`、`batch schema`、`package list/info/search` | `init`、`batch run`（destructive）、`package install/remove`（destructive）、`job status/logs/cancel` | 离线工具，自动测试已覆盖 | 不需 Unity 实机；自动测试全链路覆盖 |
