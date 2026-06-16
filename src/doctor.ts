@@ -48,7 +48,7 @@ export async function handleDoctorCommand(
   let healthyInstances: UnityInstance[] = [];
   if (instanceCheck.status !== "fail") {
     const instances = await readInstances(runtime.dataDir);
-    healthyInstances = instances.filter((i) => i.status === "healthy");
+    healthyInstances = instances.filter((i) => i.status === "healthy" || i.status === "ready");
     checks.push(checkHealthyInstances(instances, healthyInstances));
   } else {
     checks.push({ name: "healthy_instances", status: "warn", message: "Skipped: instance registry not available." });
@@ -144,7 +144,7 @@ function checkHealthyInstances(instances: UnityInstance[], healthy: UnityInstanc
   return {
     name: "healthy_instances",
     status: "pass",
-    message: `${healthy.length} healthy instance(s) found.`,
+    message: `${healthy.length} ready instance(s) found.`,
     details: {
       healthyCount: healthy.length,
       staleCount: stale.length,
@@ -152,7 +152,7 @@ function checkHealthyInstances(instances: UnityInstance[], healthy: UnityInstanc
         instanceId: i.instanceId,
         projectPath: i.projectPath,
         bridgeEndpoint: i.bridgeEndpoint,
-        lastHeartbeatAt: i.lastHeartbeatAt
+        lastHeartbeatAt: i.lastHeartbeatAt ?? i.lastSeenAt
       }))
     }
   };
@@ -335,8 +335,8 @@ async function checkConfigIntegrity(healthyInstances: UnityInstance[]): Promise<
     if (!instance.projectHash) {
       issues.push(`Instance ${instance.instanceId}: missing projectHash.`);
     }
-    if (!instance.lastHeartbeatAt) {
-      issues.push(`Instance ${instance.instanceId}: missing lastHeartbeatAt.`);
+    if (!instance.lastHeartbeatAt && !instance.lastSeenAt) {
+      issues.push(`Instance ${instance.instanceId}: missing lastSeenAt.`);
     }
   }
 
@@ -374,7 +374,7 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
         case "healthy_instances":
           if (check.status === "fail") {
             suggestions.push("Reopen the Unity Editor for the target project.");
-            suggestions.push("Run unity_cli instances cleanup to remove stale entries.");
+            suggestions.push("Run unity_cli instances prune to remove stale entries.");
           }
           break;
         case "bridge_connectivity":

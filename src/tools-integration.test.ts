@@ -143,9 +143,9 @@ test("integration: docs-topic list via execute()", async () => {
   assert.ok(data.count > 0);
 });
 
-test("integration: tools describe nonexistent returns TOOL_NOT_FOUND via execute()", async () => {
+test("integration: tools describe nonexistent returns E_TOOL_NOT_FOUND_FOR_TARGET via execute()", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["tools", "describe", "nonexistent.tool"], runtime);
   assert.equal(result.ok, false);
-  assert.equal(result.error?.code, "TOOL_NOT_FOUND");
+  assert.equal(result.error?.code, "E_TOOL_NOT_FOUND_FOR_TARGET");
 });
