@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -28,6 +29,7 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
+        private const string CustomToolFingerprintDefaultMode = "block";
         private static readonly Dictionary<string, UnityCliCustomToolDefinition> CustomTools = new Dictionary<string, UnityCliCustomToolDefinition>(StringComparer.Ordinal);
 
         public static void RegisterCustomTool(UnityCliCustomToolDefinition definition)
@@ -56,6 +58,7 @@ namespace UnityCli
             definition.MaxTimeoutMs = definition.MaxTimeoutMs <= 0 ? 600000 : definition.MaxTimeoutMs;
             definition.RegisteredBy = string.IsNullOrEmpty(definition.RegisteredBy) ? "unity-editor-package" : definition.RegisteredBy;
             definition.DescriptorSource = string.IsNullOrEmpty(definition.DescriptorSource) ? "runtime-registration" : definition.DescriptorSource;
+            RefreshCustomToolFingerprint(definition, null);
             CustomTools[definition.Name] = definition;
         }
 
@@ -150,6 +153,8 @@ namespace UnityCli
                 DescriptorSource = "UnityCliToolAttribute",
                 Assembly = assembly.GetName().Name,
                 Method = type.FullName + "." + executeMethod.Name,
+                Fingerprint = attribute.Fingerprint,
+                ExpectedFingerprint = attribute.Fingerprint,
                 Execute = delegate(UnityCliCustomToolContext context)
                 {
                     var result = parameters.Length == 0 ? executeMethod.Invoke(null, null) : executeMethod.Invoke(null, new object[] { context });
@@ -239,6 +244,17 @@ namespace UnityCli
             }
 
             var definition = CustomTools[name];
+            var fingerprintCheck = RefreshCustomToolFingerprint(definition, request.StringArg("fingerprintMode"));
+            if (fingerprintCheck.Blocked)
+            {
+                WriteLog("custom_tool_fingerprint_blocked requestId=" + request.RequestId + " name=" + name + " expected=" + fingerprintCheck.Expected + " actual=" + fingerprintCheck.Actual);
+                return ErrorJsonWithDetails("E_TOOL_FINGERPRINT_MISMATCH", fingerprintCheck.Message, CustomToolFingerprintDetailsJson(definition), "Review the registered custom tool descriptor/handler code, then update the expected fingerprint or rerun with --fingerprint-mode warn if policy allows.");
+            }
+            if (fingerprintCheck.Warn)
+            {
+                WriteLog("custom_tool_fingerprint_warn requestId=" + request.RequestId + " name=" + name + " expected=" + fingerprintCheck.Expected + " actual=" + fingerprintCheck.Actual);
+            }
+
             var timeoutMs = request.IntArg("timeoutMs", definition.DefaultTimeoutMs);
             if (timeoutMs <= 0 || timeoutMs > definition.MaxTimeoutMs)
             {
@@ -347,7 +363,8 @@ namespace UnityCli
                 + "\"descriptorSource\":" + Quote(definition.DescriptorSource) + ","
                 + "\"registeredBy\":" + Quote(definition.RegisteredBy) + ","
                 + "\"assembly\":" + Quote(definition.Assembly) + ","
-                + "\"method\":" + Quote(definition.Method)
+                + "\"method\":" + Quote(definition.Method) + ","
+                + "\"fingerprint\":" + CustomToolFingerprintJson(definition)
                 + "}";
         }
 
@@ -381,8 +398,216 @@ namespace UnityCli
                 + "\"execution\":{\"channel\":\"live\",\"timeoutMs\":" + timeoutMs.ToString(CultureInfo.InvariantCulture) + ",\"exitState\":" + Quote(exitState) + "},"
                 + "\"effects\":{\"fileWrites\":[],\"assetRefresh\":false,\"domainReload\":false,\"playModeChanged\":false,\"packagesChanged\":false},"
                 + "\"artifacts\":[{\"kind\":\"json\",\"path\":" + Quote(Path.Combine(artifactDir, "manifest.json")) + "}],"
-                + "\"tool\":{\"name\":" + Quote(definition.Name) + ",\"capabilityType\":" + Quote(definition.CapabilityType) + "}"
+                + "\"tool\":{\"name\":" + Quote(definition.Name) + ",\"capabilityType\":" + Quote(definition.CapabilityType) + ",\"fingerprint\":" + CustomToolFingerprintJson(definition) + "}"
                 + "}";
+        }
+
+        private sealed class CustomToolFingerprintCheck
+        {
+            public bool Blocked;
+            public bool Warn;
+            public string Expected;
+            public string Actual;
+            public string Message;
+        }
+
+        private static CustomToolFingerprintCheck RefreshCustomToolFingerprint(UnityCliCustomToolDefinition definition, string requestedMode)
+        {
+            var descriptor = CustomToolDescriptorFingerprintMaterial(definition);
+            definition.DescriptorSha256 = Sha256Hex(descriptor);
+            definition.HandlerSha256 = Sha256Hex(CustomToolHandlerFingerprintMaterial(definition));
+            definition.Fingerprint = Sha256Hex("unity-cli-custom-tool-fingerprint-v1\nhandler=" + definition.HandlerSha256 + "\ndescriptor=" + definition.DescriptorSha256);
+            if (string.IsNullOrEmpty(definition.ExpectedFingerprint))
+            {
+                var persisted = LoadCustomToolExpectedFingerprint(definition.Name);
+                definition.ExpectedFingerprint = string.IsNullOrEmpty(persisted) ? definition.Fingerprint : persisted;
+                if (string.IsNullOrEmpty(persisted))
+                {
+                    SaveCustomToolExpectedFingerprint(definition.Name, definition.Fingerprint);
+                }
+            }
+            definition.FingerprintMode = NormalizeCustomToolFingerprintMode(requestedMode);
+            var matches = string.Equals(definition.ExpectedFingerprint, definition.Fingerprint, StringComparison.OrdinalIgnoreCase);
+            definition.FingerprintStatus = matches ? "match" : (definition.FingerprintMode == "warn" ? "warn" : "blocked");
+            definition.FingerprintMessage = matches
+                ? "Custom tool fingerprint matches handler code + descriptor."
+                : "Custom tool fingerprint mismatch for " + definition.Name + ": expected " + definition.ExpectedFingerprint + " but computed " + definition.Fingerprint + ".";
+            return new CustomToolFingerprintCheck
+            {
+                Blocked = !matches && definition.FingerprintMode == "block",
+                Warn = !matches && definition.FingerprintMode == "warn",
+                Expected = definition.ExpectedFingerprint,
+                Actual = definition.Fingerprint,
+                Message = definition.FingerprintMessage
+            };
+        }
+
+
+        private static string LoadCustomToolExpectedFingerprint(string name)
+        {
+            try
+            {
+                var path = CustomToolExpectedFingerprintPath(name);
+                return File.Exists(path) ? File.ReadAllText(path).Trim() : null;
+            }
+            catch (Exception exception)
+            {
+                WriteLog("custom_tool_fingerprint_baseline_read_failed name=" + name + " error=" + exception.GetType().Name + ": " + exception.Message);
+                return null;
+            }
+        }
+
+        private static void SaveCustomToolExpectedFingerprint(string name, string fingerprint)
+        {
+            try
+            {
+                var path = CustomToolExpectedFingerprintPath(name);
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                File.WriteAllText(path, fingerprint ?? string.Empty);
+            }
+            catch (Exception exception)
+            {
+                WriteLog("custom_tool_fingerprint_baseline_write_failed name=" + name + " error=" + exception.GetType().Name + ": " + exception.Message);
+            }
+        }
+
+        private static string CustomToolExpectedFingerprintPath(string name)
+        {
+            return Path.Combine(ProjectRoot(), "Library", "UnityCliCustomToolFingerprints", SafeCustomToolFingerprintFileName(name) + ".sha256");
+        }
+
+        private static string SafeCustomToolFingerprintFileName(string name)
+        {
+            return Regex.Replace(name ?? "custom-tool", "[^A-Za-z0-9_.-]", "_");
+        }
+
+        private static string NormalizeCustomToolFingerprintMode(string requestedMode)
+        {
+            if (string.Equals(requestedMode, "warn", StringComparison.OrdinalIgnoreCase)) return "warn";
+            if (string.Equals(requestedMode, "block", StringComparison.OrdinalIgnoreCase)) return "block";
+            var environment = Environment.GetEnvironmentVariable("UNITY_CLI_CUSTOM_TOOL_FINGERPRINT_MODE");
+            if (string.Equals(environment, "warn", StringComparison.OrdinalIgnoreCase)) return "warn";
+            if (string.Equals(environment, "block", StringComparison.OrdinalIgnoreCase)) return "block";
+            return CustomToolFingerprintDefaultMode;
+        }
+
+        private static string CustomToolDescriptorFingerprintMaterial(UnityCliCustomToolDefinition definition)
+        {
+            return "name=" + (definition.Name ?? string.Empty)
+                + "\ntitle=" + (definition.Title ?? string.Empty)
+                + "\ndescription=" + (definition.Description ?? string.Empty)
+                + "\ngroup=" + (definition.Group ?? string.Empty)
+                + "\nversion=" + (definition.Version ?? string.Empty)
+                + "\ninputSchema=" + NormalizeFingerprintJson(definition.InputSchema)
+                + "\noutputSchema=" + NormalizeFingerprintJson(definition.OutputSchema)
+                + "\ncapabilityType=" + (definition.CapabilityType ?? string.Empty)
+                + "\nreadOnlyHint=" + Bool(definition.ReadOnlyHint)
+                + "\ndestructiveHint=" + Bool(definition.DestructiveHint)
+                + "\narchitectureSensitive=" + Bool(definition.ArchitectureSensitive)
+                + "\nfrozenDecision=" + (definition.FrozenDecision ?? string.Empty)
+                + "\ncoverageScope=" + string.Join(",", (definition.CoverageScope ?? new string[0]).OrderBy(value => value, StringComparer.Ordinal).ToArray())
+                + "\ndefaultTimeoutMs=" + definition.DefaultTimeoutMs.ToString(CultureInfo.InvariantCulture)
+                + "\nmaxTimeoutMs=" + definition.MaxTimeoutMs.ToString(CultureInfo.InvariantCulture)
+                + "\nsupportsJob=" + Bool(definition.SupportsJob)
+                + "\nartifactKinds=" + string.Join(",", (definition.ArtifactKinds ?? new string[0]).OrderBy(value => value, StringComparer.Ordinal).ToArray())
+                + "\nrequiredInput=" + string.Join(",", (definition.RequiredInput ?? new string[0]).OrderBy(value => value, StringComparer.Ordinal).ToArray())
+                + "\ndescriptorSource=" + (definition.DescriptorSource ?? string.Empty);
+        }
+
+        private static string CustomToolHandlerFingerprintMaterial(UnityCliCustomToolDefinition definition)
+        {
+            return "assembly=" + (definition.Assembly ?? string.Empty)
+                + "\nmethod=" + (definition.Method ?? string.Empty)
+                + "\nhandler=" + CustomToolHandlerSource(definition);
+        }
+
+        private static string CustomToolHandlerSource(UnityCliCustomToolDefinition definition)
+        {
+            try
+            {
+                var typeName = definition.Method;
+                if (string.IsNullOrEmpty(typeName)) return string.Empty;
+                var dot = typeName.LastIndexOf('.');
+                if (dot <= 0) return string.Empty;
+                typeName = typeName.Substring(0, dot);
+                var fileName = typeName.Substring(typeName.LastIndexOf('.') + 1) + ".cs";
+                foreach (var guid in AssetDatabase.FindAssets(Path.GetFileNameWithoutExtension(fileName) + " t:MonoScript"))
+                {
+                    var path = AssetDatabase.GUIDToAssetPath(guid);
+                    if (!string.Equals(Path.GetFileName(path), fileName, StringComparison.OrdinalIgnoreCase)) continue;
+                    var text = File.ReadAllText(path);
+                    if (text.IndexOf(definition.Method.Substring(dot + 1), StringComparison.Ordinal) >= 0)
+                    {
+                        return NormalizeFingerprintText(text);
+                    }
+                }
+            }
+            catch (Exception exception)
+            {
+                WriteLog("custom_tool_fingerprint_source_failed name=" + definition.Name + " error=" + exception.GetType().Name + ": " + exception.Message);
+            }
+            return string.Empty;
+        }
+
+        private static string NormalizeFingerprintText(string value)
+        {
+            return (value ?? string.Empty).Replace("\r\n", "\n").Replace("\r", "\n");
+        }
+
+        private static string NormalizeFingerprintJson(string value)
+        {
+            return Regex.Replace((value ?? string.Empty).Trim(), "\\s+", " ");
+        }
+
+        private static string Sha256Hex(string value)
+        {
+            using (var sha = SHA256.Create())
+            {
+                var bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(value ?? string.Empty));
+                var builder = new StringBuilder(bytes.Length * 2);
+                foreach (var b in bytes)
+                {
+                    builder.Append(b.ToString("x2", CultureInfo.InvariantCulture));
+                }
+                return builder.ToString();
+            }
+        }
+
+        private static string CustomToolFingerprintJson(UnityCliCustomToolDefinition definition)
+        {
+            return "{"
+                + "\"algorithm\":\"sha256-handler-code-plus-descriptor-v1\","
+                + "\"value\":" + Quote(definition.Fingerprint) + ","
+                + "\"expected\":" + Quote(definition.ExpectedFingerprint) + ","
+                + "\"status\":" + Quote(definition.FingerprintStatus) + ","
+                + "\"mode\":" + Quote(definition.FingerprintMode) + ","
+                + "\"message\":" + Quote(definition.FingerprintMessage) + ","
+                + "\"descriptorSha256\":" + Quote(definition.DescriptorSha256) + ","
+                + "\"handlerSha256\":" + Quote(definition.HandlerSha256)
+                + "}";
+        }
+
+
+        private static string CustomToolFingerprintSummaryJson()
+        {
+            var items = new List<string>();
+            var blocked = 0;
+            var warn = 0;
+            foreach (var pair in CustomTools)
+            {
+                var definition = pair.Value;
+                RefreshCustomToolFingerprint(definition, null);
+                if (definition.FingerprintStatus == "blocked") blocked++;
+                if (definition.FingerprintStatus == "warn") warn++;
+                items.Add("{\"name\":" + Quote(definition.Name) + ",\"fingerprint\":" + CustomToolFingerprintJson(definition) + ",\"architectureSensitive\":true}");
+            }
+            items.Sort(StringComparer.Ordinal);
+            return "{\"algorithm\":\"sha256-handler-code-plus-descriptor-v1\",\"mode\":" + Quote(NormalizeCustomToolFingerprintMode(null)) + ",\"toolCount\":" + CustomTools.Count.ToString(CultureInfo.InvariantCulture) + ",\"blockedCount\":" + blocked.ToString(CultureInfo.InvariantCulture) + ",\"warnCount\":" + warn.ToString(CultureInfo.InvariantCulture) + ",\"tools\":[" + string.Join(",", items.ToArray()) + "]}";
+        }
+
+        private static string CustomToolFingerprintDetailsJson(UnityCliCustomToolDefinition definition)
+        {
+            return "{\"tool\":" + Quote(definition.Name) + ",\"fingerprint\":" + CustomToolFingerprintJson(definition) + ",\"architectureSensitive\":true}";
         }
     }
 }
