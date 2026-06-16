@@ -6,7 +6,7 @@
  */
 
 import { getBoolean, getString } from "./args.js";
-import { executeBridgeCommand, type BridgeRuntime } from "./bridge/index.js";
+import { discoverCustomTools, shouldDiscoverCustomTools, type CustomToolRuntime } from "./custom-tool-discovery.js";
 import {
   builtinToolMetadata,
   builtinToolGroups,
@@ -19,9 +19,7 @@ import { failure, success } from "./output.js";
 import { supportStatusDescription, supportStatusForTool, supportStatusLabel } from "./tools/metadata/status.js";
 import type { CliResult } from "./types.js";
 
-export interface ToolsRuntime extends Partial<BridgeRuntime> {
-  customTools?: ToolMetadata[];
-}
+export type ToolsRuntime = CustomToolRuntime;
 
 export async function handleToolsCommand(
   command: string | undefined,
@@ -35,7 +33,7 @@ export async function handleToolsCommand(
   }
 
   if (command === "groups") {
-    return handleToolsGroups(runtime, requestId);
+    return handleToolsGroups(flags, runtime, requestId);
   }
 
   if (command === "search") {
@@ -61,12 +59,13 @@ async function handleToolsList(
   requestId: string
 ): Promise<CliResult> {
   const groupFilter = getString(flags, "group");
-  const includeCustom = getBoolean(flags, "include-custom");
+  const explicitIncludeCustom = getBoolean(flags, "include-custom");
+  const includeCustom = explicitIncludeCustom || shouldDiscoverCustomTools(flags, runtime);
 
   let tools: ToolMetadata[] = groupFilter ? filterToolsByGroup(groupFilter) : builtinToolMetadata();
 
   if (includeCustom) {
-    const customTools = await discoverCustomTools(flags, runtime, requestId);
+    const customTools = await discoverCustomTools(flags, runtime, requestId, { requireBridge: explicitIncludeCustom });
     if (customTools.ok === false) return customTools;
     tools = [...tools, ...(groupFilter ? customTools.tools.filter((tool: ToolMetadata) => tool.group === groupFilter) : customTools.tools)];
   }
@@ -106,17 +105,16 @@ async function handleToolsList(
   return success(requestId, data);
 }
 
-function handleToolsGroups(runtime: ToolsRuntime, requestId: string): CliResult {
+async function handleToolsGroups(flags: Record<string, string | boolean>, runtime: ToolsRuntime, requestId: string): Promise<CliResult> {
   const builtinGroups = builtinToolGroups();
+  const customDiscovery = await discoverCustomTools(flags, runtime, requestId);
+  if (customDiscovery.ok === false) return customDiscovery;
   const customGroups: string[] = [];
-
-  if (runtime.customTools) {
-    const seen = new Set(builtinGroups);
-    for (const t of runtime.customTools) {
-      if (!seen.has(t.group)) {
-        customGroups.push(t.group);
-        seen.add(t.group);
-      }
+  const seen = new Set(builtinGroups);
+  for (const t of customDiscovery.tools) {
+    if (!seen.has(t.group)) {
+      customGroups.push(t.group);
+      seen.add(t.group);
     }
   }
 
@@ -143,8 +141,8 @@ async function handleToolsSearch(
   }
 
   const builtinResults = searchTools(keyword);
-  const includeCustom = getBoolean(flags, "include-custom");
-  const customTools = includeCustom ? await discoverCustomTools(flags, runtime, requestId) : { ok: true as const, tools: runtime.customTools ?? [] };
+  const includeCustom = getBoolean(flags, "include-custom") || shouldDiscoverCustomTools(flags, runtime);
+  const customTools = includeCustom ? await discoverCustomTools(flags, runtime, requestId, { requireBridge: getBoolean(flags, "include-custom") }) : { ok: true as const, tools: [] };
   if (customTools.ok === false) return customTools;
   const customResults = customTools.tools.filter((t: ToolMetadata) =>
     t.name.toLowerCase().includes(keyword.toLowerCase()) ||
@@ -225,29 +223,6 @@ async function handleToolsDescribe(
   return success(requestId, data);
 }
 
-type CustomToolDiscovery = { ok: true; tools: ToolMetadata[] } | (CliResult & { ok: false });
-
-async function discoverCustomTools(
-  flags: Record<string, string | boolean>,
-  runtime: ToolsRuntime,
-  requestId: string
-): Promise<CustomToolDiscovery> {
-  if (runtime.customTools) {
-    return { ok: true, tools: runtime.customTools };
-  }
-
-  const result = await executeBridgeCommand(requestId, "custom-tool.list", flags, undefined, runtime);
-  if (result.ok === false) {
-    return result as CliResult & { ok: false };
-  }
-
-  const rawTools = (result.data as { tools?: unknown } | undefined)?.tools;
-  if (!Array.isArray(rawTools)) {
-    return { ok: true, tools: [] };
-  }
-  return { ok: true, tools: rawTools.map(customDescriptorToToolMetadata).filter(isToolMetadata) };
-}
-
 async function findCustomToolByName(
   name: string,
   flags: Record<string, string | boolean>,
@@ -259,69 +234,4 @@ async function findCustomToolByName(
     return undefined;
   }
   return customTools.tools.find((tool: ToolMetadata) => tool.name === name);
-}
-
-function customDescriptorToToolMetadata(value: unknown): ToolMetadata | undefined {
-  if (!value || typeof value !== "object") {
-    return undefined;
-  }
-  const descriptor = value as Record<string, unknown>;
-  const name = stringProp(descriptor, "name");
-  if (!name) {
-    return undefined;
-  }
-  const title = stringProp(descriptor, "title") ?? stringProp(descriptor, "displayName") ?? name;
-  const group = stringProp(descriptor, "group") ?? groupFromName(name);
-  return {
-    name,
-    title,
-    description: stringProp(descriptor, "description") ?? title,
-    group,
-    inputSchema: objectProp(descriptor, "inputSchema") ?? {},
-    outputSchema: objectProp(descriptor, "outputSchema"),
-    readOnlyHint: booleanProp(descriptor, "readOnlyHint") ?? false,
-    destructiveHint: booleanProp(descriptor, "destructiveHint") ?? false,
-    timeoutMs: numberProp(descriptor, "defaultTimeoutMs") ?? numberProp(descriptor, "timeoutMs"),
-    permissions: stringArrayProp(descriptor, "permissions"),
-    architectureSensitive: booleanProp(descriptor, "architectureSensitive"),
-    frozenDecision: stringProp(descriptor, "frozenDecision"),
-    coverageScope: stringArrayProp(descriptor, "coverageScope"),
-    docsTopic: stringProp(descriptor, "docsTopic") ?? "custom-tool",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: stringProp(descriptor, "cliCommand") ?? `custom-tool run ${name}`
-  };
-}
-
-function isToolMetadata(value: ToolMetadata | undefined): value is ToolMetadata {
-  return value !== undefined;
-}
-
-function stringProp(record: Record<string, unknown>, key: string): string | undefined {
-  const value = record[key];
-  return typeof value === "string" && value.length > 0 ? value : undefined;
-}
-
-function booleanProp(record: Record<string, unknown>, key: string): boolean | undefined {
-  return typeof record[key] === "boolean" ? record[key] : undefined;
-}
-
-function numberProp(record: Record<string, unknown>, key: string): number | undefined {
-  const value = record[key];
-  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
-}
-
-function objectProp(record: Record<string, unknown>, key: string): Record<string, unknown> | undefined {
-  const value = record[key];
-  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
-}
-
-function stringArrayProp(record: Record<string, unknown>, key: string): string[] | undefined {
-  const value = record[key];
-  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : undefined;
-}
-
-function groupFromName(name: string): string {
-  const [group] = name.split(".");
-  return group || "custom";
 }

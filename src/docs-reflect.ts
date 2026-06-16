@@ -1,6 +1,8 @@
 import { access, readFile, readdir, stat } from "node:fs/promises";
 import { basename, extname, join, relative, resolve, sep } from "node:path";
 import { getNumber, getString } from "./args.js";
+import { handleBuiltinDocsCommand } from "./builtin-docs.js";
+import type { BuiltinDocsRuntime } from "./builtin-docs.js";
 import { failure, success } from "./output.js";
 import type { CliResult } from "./types.js";
 
@@ -75,8 +77,14 @@ export async function handleDocsCommand(
   args: string[],
   flags: Record<string, string | boolean>,
   dataDir: string,
-  requestId: string
+  requestId: string,
+  runtime: BuiltinDocsRuntime = {}
 ): Promise<CliResult> {
+  const builtinResult = handleBuiltinDocsCommand(command, args, flags, runtime, requestId);
+  if (builtinResult) {
+    return builtinResult;
+  }
+
   const cacheDir = docsCacheDir(flags, dataDir);
   try {
     const cache = await loadDocsCache(cacheDir);
@@ -87,7 +95,7 @@ export async function handleDocsCommand(
     if (command === "search") {
       return docsSearch(args[0] ?? getString(flags, "query"), flags, requestId, versioned);
     }
-    return failure(requestId, "UNKNOWN_DOCS_COMMAND", "Expected docs get <api> or docs search <query>.");
+    return failure(requestId, "UNKNOWN_DOCS_COMMAND", "Expected docs, docs topic <topic>, docs get <api> or docs search <query>.");
   } catch (error) {
     return cacheFailure(requestId, error);
   }
