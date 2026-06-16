@@ -269,7 +269,8 @@
 | package | `package list` 返回列表 | `package install/remove` 修改 manifest | 2026-06-16 (P1-2) | 环境验证通过 |
 | test | `test.poll` 查询 job 状态 | `test run` 触发测试 | 2026-06-16 (P1-2) | job 生命周期通过 |
 | build | `build.status` 查询 job 状态 | `build run` 触发构建 | 2026-06-16 (P1-2) | job 生命周期通过 |
-| camera | `camera info <target>` | `camera screenshot <target> --output <path>` | 2026-06-16 (ALP-275) | Console clean |
+| camera | `camera info <target>` | `camera screenshot <target> --output <path>` | 2026-06-16 (ALP-275) | Console clean；含 scene.screenshot 验证 |
+| scene | `scene active/hierarchy/build-settings` 返回场景信息 | `scene create/load/save` 管理场景生命周期 | 2026-06-16 (ALP-275) | 与 camera 域合并验证；scene.active/create/load/save/hierarchy/build-settings 均在 contracts:validate 和 camera-bridge-source.test.ts 覆盖 |
 | material | `material info <path>` | `material create <path> --shader <name>` | 2026-06-16 (ALP-275) | Console clean |
 | shader | `shader info <path>` | `shader create <path> --content-file <file>` | 2026-06-16 (ALP-275) | Console clean |
 | texture | `texture info <path>` | `texture create <path> [--source <file>]` | 2026-06-16 (ALP-275) | Console clean |
