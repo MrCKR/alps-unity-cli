@@ -2,7 +2,9 @@
  * Compatibility CLI command: docs-topic <topic>
  *
  * `docs-topic` remains as a legacy alias for built-in documentation, while
- * the canonical S4.3 surface is now `docs` / `docs topic <topic>`.
+ * the canonical S4.3 surface is now `docs` / `docs topic <topic>`. It
+ * intentionally does not accept runtime/custom tools so existing callers keep
+ * the same offline-only compatibility behavior.
  */
 
 import { getBuiltinDocTopic, listBuiltinDocs } from "./builtin-docs.js";

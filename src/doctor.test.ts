@@ -71,6 +71,10 @@ test("doctor returns warn when instance registry is empty", async () => {
   const registryCheck = data.checks.find((c) => c.name === "instance_registry");
   assert.equal(registryCheck?.status, "warn");
   assert.ok(data.suggestions.some((s) => s.includes("init")));
+
+  const discoveryCheck = data.checks.find((c) => c.name === "unified_tool_discovery");
+  assert.equal(discoveryCheck?.status, "pass");
+  assert.equal((discoveryCheck?.details as { customDiscoveryMode?: string }).customDiscoveryMode, "skipped");
 });
 
 test("doctor returns fail when all instances are stale", async () => {
@@ -196,6 +200,30 @@ test("doctor surfaces bridge custom tool fingerprint summary", async () => {
   assert.equal(fingerprintCheck?.status, "fail");
   assert.ok(fingerprintCheck?.message.includes("1 blocked"));
   assert.ok(data.suggestions.some((s) => s.includes("fingerprint")));
+});
+
+test("doctor reports runtime custom tools in unified discovery", async () => {
+  const dataDir = await makeDataDir();
+  const runtime: DoctorRuntime = {
+    dataDir,
+    customTools: [{
+      name: "project.echo",
+      title: "Project Echo",
+      description: "Echo project data.",
+      group: "project",
+      inputSchema: { type: "object" },
+      readOnlyHint: true,
+      destructiveHint: false
+    }]
+  };
+
+  const result = await handleDoctorCommand({}, runtime, "req_doctor_custom_runtime");
+  assert.equal(result.ok, true);
+  const data = result.data as { checks: DoctorCheck[] };
+  const discoveryCheck = data.checks.find((c) => c.name === "unified_tool_discovery");
+  assert.equal(discoveryCheck?.status, "pass");
+  assert.equal((discoveryCheck?.details as { customToolCount?: number; customDiscoveryMode?: string }).customToolCount, 1);
+  assert.equal((discoveryCheck?.details as { customToolCount?: number; customDiscoveryMode?: string }).customDiscoveryMode, "runtime");
 });
 
 test("doctor uses --bridge-endpoint flag when provided", async () => {
