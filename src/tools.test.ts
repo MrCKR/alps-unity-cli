@@ -183,6 +183,22 @@ test("tools groups returns group names", async () => {
   assert.ok(data.groups.includes("camera"));
 });
 
+test("tools groups includes runtime custom tool groups", async () => {
+  const runtime: ToolsRuntime = { customTools: [{
+    name: "project.bake",
+    title: "Project Bake",
+    description: "Bakes project data.",
+    group: "project",
+    inputSchema: { type: "object" },
+    readOnlyHint: false,
+    destructiveHint: false
+  }] };
+  const result = await handleToolsCommand("groups", [], {}, runtime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as { groups: string[] };
+  assert.ok(data.groups.includes("project"));
+});
+
 // ── tools search ───────────────────────────────────────────
 
 test("tools search finds tools by keyword", async () => {

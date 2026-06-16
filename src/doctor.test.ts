@@ -42,7 +42,7 @@ test("doctor returns all-pass when registry has healthy instance and bridge is r
   assert.equal(result.ok, true);
   const data = result.data as { summary: string; checks: DoctorCheck[] };
   assert.equal(data.summary, "pass");
-  assert.equal(data.checks.length, 6);
+  assert.equal(data.checks.length, 7);
 
   const registryCheck = data.checks.find((c) => c.name === "instance_registry");
   assert.equal(registryCheck?.status, "pass");
@@ -52,6 +52,9 @@ test("doctor returns all-pass when registry has healthy instance and bridge is r
 
   const bridgeCheck = data.checks.find((c) => c.name === "bridge_connectivity");
   assert.equal(bridgeCheck?.status, "pass");
+
+  const discoveryCheck = data.checks.find((c) => c.name === "unified_tool_discovery");
+  assert.equal(discoveryCheck?.status, "pass");
 });
 
 test("doctor returns warn when instance registry is empty", async () => {

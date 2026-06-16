@@ -100,6 +100,29 @@ test("integration: capabilities via execute()", async () => {
   assert.ok(staticData.toolCount > 0);
 });
 
+test("integration: docs built-in topics via canonical docs command", async () => {
+  const runtime = await makeRuntime();
+  const list = await execute(["docs"], runtime);
+  const topic = await execute(["docs", "topic", "scene"], runtime);
+
+  assert.equal(list.ok, true);
+  assert.equal(topic.ok, true);
+  assert.equal((list.data as { command: string }).command, "docs.topics");
+  assert.equal((topic.data as { command: string; topic: string }).command, "docs.topic");
+  assert.equal((topic.data as { topic: string }).topic, "scene");
+});
+
+test("integration: package without subcommand returns CLI and Unity package info", async () => {
+  const runtime = await makeRuntime();
+  const result = await execute(["package"], runtime);
+
+  assert.equal(result.ok, true);
+  const data = result.data as { command: string; npm: { name: string }; unity: { name: string } };
+  assert.equal(data.command, "package");
+  assert.equal(data.npm.name, "unity_cli");
+  assert.equal(data.unity.name, "com.unity_cli");
+});
+
 test("integration: docs-topic scene via execute()", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["docs-topic", "scene"], runtime);

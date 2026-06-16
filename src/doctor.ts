@@ -14,12 +14,14 @@
  */
 
 import { getString, getBoolean } from "./args.js";
+import { discoverCustomTools, type CustomToolRuntime } from "./custom-tool-discovery.js";
 import { readInstances, type UnityInstance } from "./instances.js";
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
+import { builtinToolMetadata } from "./tools/metadata/index.js";
 import { failure, success } from "./output.js";
 import type { CliResult } from "./types.js";
 
-export interface DoctorRuntime extends BridgeRuntime {
+export interface DoctorRuntime extends BridgeRuntime, CustomToolRuntime {
   dataDir: string;
 }
 
@@ -75,6 +77,9 @@ export async function handleDoctorCommand(
   if (fingerprintCheck) {
     checks.push(fingerprintCheck);
   }
+
+  // Unified CLI/tools discovery surface
+  checks.push(await checkUnifiedDiscovery(flags, runtime, requestId));
 
   const allPassed = checks.every((c) => c.status === "pass");
   const hasWarnings = checks.some((c) => c.status === "warn");
@@ -296,6 +301,26 @@ async function checkJobStore(dataDir: string): Promise<DoctorCheck> {
   }
 }
 
+async function checkUnifiedDiscovery(flags: Record<string, string | boolean>, runtime: DoctorRuntime, requestId: string): Promise<DoctorCheck> {
+  const builtinCount = builtinToolMetadata().length;
+  const discovery = await discoverCustomTools(flags, runtime, `${requestId}_custom_tools`);
+  if (!discovery.ok) {
+    return {
+      name: "unified_tool_discovery",
+      status: "warn",
+      message: `Built-in tool metadata is available (${builtinCount}), but custom tool discovery failed: ${discovery.error?.code ?? "unknown"}.`,
+      details: { builtinCount, customTools: { status: "error", code: discovery.error?.code, message: discovery.error?.message } }
+    };
+  }
+
+  return {
+    name: "unified_tool_discovery",
+    status: "pass",
+    message: `Unified discovery is available: ${builtinCount} built-in tool(s), ${discovery.tools.length} custom tool(s).`,
+    details: { builtinCount, customToolCount: discovery.tools.length, customDiscoveryMode: discovery.mode }
+  };
+}
+
 async function checkConfigIntegrity(healthyInstances: UnityInstance[]): Promise<DoctorCheck> {
   const issues: string[] = [];
 
@@ -364,6 +389,9 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
           break;
         case "config_integrity":
           suggestions.push("Re-initialize the instance by restarting Unity Editor.");
+          break;
+        case "unified_tool_discovery":
+          suggestions.push("Run unity_cli tools list --include-custom with a reachable Unity Bridge to inspect project custom descriptors.");
           break;
       }
     }
