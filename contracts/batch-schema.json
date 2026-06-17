@@ -1,0 +1,165 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "alps-unity-cli/batch-schema",
+  "title": "Unity CLI Batch File Schema",
+  "description": "JSON Schema for first-class CLI batch orchestration files. Supports Editor tools, Runtime (Play Mode) tools via 'tools run', and error recovery patterns. All Runtime tool invocations must use 'tools run' as the unified entry point.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["steps"],
+  "properties": {
+    "defaults": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Shared defaults applied to every step unless the step overrides them.",
+      "properties": {
+        "project": {
+          "type": "string",
+          "description": "Relative project path, resolved against cwd or the batch file directory."
+        },
+        "unity": {
+          "type": "string",
+          "description": "Unity executable path."
+        },
+        "cwd": {
+          "type": "string",
+          "description": "Working directory for all steps, resolved relative to the batch file directory."
+        },
+        "wait": {
+          "type": "boolean",
+          "description": "If true, appends --wait to every step that doesn't already have it."
+        },
+        "timeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Default step timeout (milliseconds), applied as --timeout-ms."
+        },
+        "waitTimeoutMs": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Default wait timeout (milliseconds), applied as --wait-timeout-ms."
+        },
+        "env": {
+          "type": "object",
+          "additionalProperties": {
+            "type": ["string", "number", "boolean"]
+          },
+          "description": "Default environment variables for all steps. Keys must appear in envAllowlist."
+        }
+      }
+    },
+    "failFast": {
+      "type": "boolean",
+      "default": true,
+      "description": "Stop the batch after the first failed step. When false, independent steps continue even if others fail."
+    },
+    "parallel": {
+      "type": "integer",
+      "minimum": 1,
+      "default": 1,
+      "description": "Max concurrent steps. Parallel > 1 requires all steps to be parallelSafe."
+    },
+    "envAllowlist": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^[A-Z_][A-Z0-9_]*$"
+      },
+      "uniqueItems": true,
+      "description": "Environment variable names permitted in defaults.env and step.env overrides."
+    },
+    "steps": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["id", "command"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9_.-]+$",
+            "description": "Unique step identifier within the batch."
+          },
+          "command": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "string"
+            },
+            "description": "CLI argv prefix, e.g. ['editor', 'play'] or ['tools', 'run']. The first two words form the commandKey used for registry lookup."
+          },
+          "args": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Additional positional/flag args appended after command."
+          },
+          "dependsOn": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "uniqueItems": true,
+            "description": "IDs of steps that must complete before this step runs."
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Per-step timeout override (milliseconds). Overrides defaults.timeoutMs."
+          },
+          "waitTimeoutMs": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Per-step wait timeout override (milliseconds). Overrides defaults.waitTimeoutMs."
+          },
+          "env": {
+            "type": "object",
+            "additionalProperties": {
+              "type": ["string", "number", "boolean"]
+            },
+            "description": "Per-step environment overrides. Keys must appear in envAllowlist."
+          },
+          "playModeSessionId": {
+            "type": "string",
+            "description": "Runtime target: session ID for 'tools run' commands executed while the Editor is in Play Mode. Converted to --play-mode-session-id CLI flag."
+          },
+          "fingerprintMode": {
+            "type": "string",
+            "enum": ["strict", "loose", "off"],
+            "description": "Runtime target: fingerprint verification mode for 'tools run' commands. Converted to --fingerprint-mode CLI flag."
+          }
+        }
+      }
+    }
+  },
+  "examples": {
+    "runtimeToolBatch": {
+      "description": "Enter Play Mode → run runtime tools → verify → exit Play Mode",
+      "value": {
+        "defaults": { "project": ".", "unity": "/path/to/Unity" },
+        "failFast": true,
+        "steps": [
+          { "id": "enter-play", "command": ["editor", "play"] },
+          { "id": "check-state", "command": ["editor", "state"], "dependsOn": ["enter-play"] },
+          { "id": "run-wait", "command": ["tools", "run"], "args": ["runtime.wait"], "playModeSessionId": "session_001", "dependsOn": ["check-state"] },
+          { "id": "run-echo", "command": ["tools", "run"], "args": ["sample.runtime-echo", "--message", "hello"], "playModeSessionId": "session_001", "dependsOn": ["run-wait"] },
+          { "id": "exit-play", "command": ["editor", "stop"], "dependsOn": ["run-echo"] }
+        ]
+      }
+    },
+    "errorRecovery": {
+      "description": "E_RUNTIME_NOT_READY → enter Play Mode → retry; E_RUNTIME_SESSION_STALE → refresh sessionId → retry; E_RUNTIME_TIMEOUT → increase timeoutMs → retry",
+      "value": {
+        "defaults": { "project": ".", "unity": "/path/to/Unity" },
+        "failFast": false,
+        "steps": [
+          { "id": "attempt-1", "command": ["tools", "run"], "args": ["sample.runtime-echo"], "timeoutMs": 5000 },
+          { "id": "enter-play", "command": ["editor", "play"], "dependsOn": ["attempt-1"] },
+          { "id": "retry", "command": ["tools", "run"], "args": ["sample.runtime-echo"], "playModeSessionId": "session_retry", "dependsOn": ["enter-play"] },
+          { "id": "exit", "command": ["editor", "stop"], "dependsOn": ["retry"] }
+        ]
+      }
+    }
+  }
+}
