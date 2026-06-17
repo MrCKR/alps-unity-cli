@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -186,4 +186,37 @@ test("job logs returns not found for unknown job ID", async () => {
   const result = await execute(["job", "logs", "--id", "job_nonexistent"], runtime);
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "JOB_NOT_FOUND");
+});
+test("instances list reads UTF-8 BOM prefixed registry files", async () => {
+  const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-bom-"));
+  const registryDir = join(dataDir, "instances");
+  await mkdir(registryDir, { recursive: true });
+
+  const instanceWithBom = {
+    instanceId: "editor-bom",
+    projectPath: "/tmp/project-bom",
+    projectHash: "hash-bom",
+    unityVersion: "2022.3.45f1",
+    packageVersion: "com.unity_cli",
+    pid: 1234,
+    bridgeEndpoint: "http://127.0.0.1:47392",
+    capabilitiesHash: "caps",
+    status: "ready",
+    editorState: { playMode: false, compiling: false, domainReloading: false },
+    playModeState: { isPlaying: false, isPaused: false, isPlayingOrWillChangePlaymode: false },
+    runtimeSessionId: null,
+    toolCatalogFingerprint: null,
+    registeredAt: new Date().toISOString(),
+    lastHeartbeatAt: new Date().toISOString()
+  };
+
+  // Write with UTF-8 BOM prefix (0xEF 0xBB 0xBF), like C# File.WriteAllText(Encoding.UTF8)
+  const bom = "\uFEFF";
+  await writeFile(join(registryDir, "editor-bom.json"), bom + JSON.stringify(instanceWithBom, null, 2), "utf8");
+
+  const instances = await readInstances(dataDir);
+  assert.equal(instances.length, 1);
+  assert.equal(instances[0].instanceId, "editor-bom");
+  // Health check will fail (unreachable), but instanceId is preserved - the key is BOM does not prevent parsing
+  assert.equal(instances[0].instanceId, "editor-bom");
 });
