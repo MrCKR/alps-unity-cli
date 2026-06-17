@@ -4,6 +4,8 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { bridgeCommandRegistry, type BridgeRequest } from "./bridge/index.js";
 import { handleToolsCommand, type ToolsRuntime } from "./tools.js";
 import { builtinToolMetadata, builtinToolGroups, findToolByName, filterToolsByGroup, searchTools, supportStatusForTool } from "./tools/metadata/index.js";
@@ -785,4 +787,26 @@ test("tools.run descriptor is not planned/stub", () => {
   assert.equal(tool.handler, "hybrid", "tools.run handler must be hybrid (routes dynamically)");
   assert.ok(!tool.description.includes("Reserved for P3"), "description must not say Reserved for P3");
   assert.ok(!tool.description.includes("currently returns"), "description must not say currently returns stub error");
+});
+
+// ── Skill/descriptor/docs CLI parameter consistency ────────
+
+test("skill does not use stale CLI parameter/field/error names", () => {
+  const skillPath = fileURLToPath(new URL("../skills/unity_cli/SKILL.md", import.meta.url));
+  const skill = readFileSync(skillPath, "utf8");
+
+  // --input-json is not a CLI parameter; the CLI uses --input
+  const inputJsonMatches = skill.match(/--input-json/g);
+  // Allow exactly 1 occurrence in the "What NOT to Do" section (warning against it)
+  const inputJsonAllowed = (skill.match(/Do not.*--input-json/g) ?? []).length;
+  assert.ok(
+    (inputJsonMatches?.length ?? 0) - inputJsonAllowed <= 0,
+    `skill must not teach --input-json (found ${(inputJsonMatches?.length ?? 0)} occurrences beyond the warning)`
+  );
+
+  // JSON field next_actions, not nextActions
+  assert.ok(!skill.includes("nextActions"), "skill must use next_actions (snake_case), not nextActions (camelCase)");
+
+  // E_RUNTIME_NOT_READY, not E_PLAYMODE_NOT_READY
+  assert.ok(!skill.includes("E_PLAYMODE_NOT_READY"), "skill must use E_RUNTIME_NOT_READY, not E_PLAYMODE_NOT_READY");
 });
