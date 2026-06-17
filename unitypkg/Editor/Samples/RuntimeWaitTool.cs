@@ -1,8 +1,6 @@
 #if UNITY_EDITOR
 using System;
-using System.Diagnostics;
 using System.Globalization;
-using System.Threading;
 using UnityEditor;
 using UnityEngine;
 
@@ -12,10 +10,14 @@ namespace UnityCli
     /// Built-in runtime wait tool. Waits for a specified number of frames or a
     /// duration in seconds while in Play Mode. This is the minimal cross-frame
     /// async primitive required for runtime tool orchestration.
-    /// 
+    ///
     /// Declaration via [UnityCliTool] means it is discoverable through the same
     /// project-tool discovery mechanism, but with Target=runtime it is routed
     /// through the RuntimeExecutor and only available in Play Mode.
+    ///
+    /// Multi-frame/duration waits are handled by the RuntimeExecutor as deferred
+    /// waits using EditorApplication.update callbacks — no Thread.Sleep or
+    /// busy-wait that blocks the Unity main thread.
     /// </summary>
     [UnityCliTool(
         "runtime.wait",
@@ -35,6 +37,27 @@ namespace UnityCli
         CoverageScope = "attribute-first,zero-config,unity-runtime-csharp,play-mode-session,cross-frame-wait")]
     public static class RuntimeWaitTool
     {
+        /// <summary>
+        /// Marker returned by Execute when a multi-frame or duration wait is needed.
+        /// The RuntimeExecutor recognizes this and initiates a deferred EditorApplication.update
+        /// callback-based wait that does not block the Unity main thread.
+        /// </summary>
+        public static readonly string DeferredWaitMarker = "\0RUNTIME_WAIT_DEFERRED";
+
+        /// <summary>
+        /// Deserialized wait parameters, passed from Execute to RuntimeExecutor
+        /// so the deferred wait can be configured without blocking the main thread.
+        /// </summary>
+        public sealed class WaitRequest
+        {
+            public string Condition;
+            public int RequestedFrames;
+            public int FramesToWait;
+            public long RequestedDurationMs;
+            public int StartFrame;
+            public DateTime StartedAt;
+        }
+
         public static string Execute(UnityCliProjectToolContext context)
         {
             var inputJson = context.InputJson ?? "{}";
@@ -44,58 +67,60 @@ namespace UnityCli
 
             // Determine actual wait parameters
             int framesToWait;
+            long requestedDurationMs = 0;
             if (condition == "duration" && requestedSeconds.HasValue && requestedSeconds.Value > 0)
             {
                 // Convert seconds to approximate frame count (assume 60fps as baseline)
                 framesToWait = Math.Max(1, (int)(requestedSeconds.Value * 60));
+                requestedDurationMs = Math.Min((long)(requestedSeconds.Value * 1000), 120000);
             }
             else if (condition == "frame-count" && requestedFrames > 0)
             {
                 framesToWait = requestedFrames;
+                requestedDurationMs = framesToWait * 17; // approximate at ~60fps
             }
             else
             {
-                // next-frame: just wait 1 frame
-                framesToWait = 1;
+                // next-frame: just return immediately — no blocking wait needed
+                var startFrame = Time.frameCount;
+                var startedAt = DateTime.UtcNow;
+                var elapsedMs = (long)(DateTime.UtcNow - startedAt).TotalMilliseconds;
+                return new UnityCliJsonWriter().BeginObject()
+                    .Prop("framesWaited", 1)
+                    .Prop("elapsedMs", elapsedMs)
+                    .Prop("condition", condition)
+                    .Prop("requestedFrames", requestedFrames)
+                    .Prop("isPlaying", EditorApplication.isPlaying)
+                    .Prop("frameCount", Time.frameCount)
+                    .EndObject()
+                    .ToString();
             }
 
             // Clamp to reasonable maximum
             framesToWait = Math.Min(framesToWait, 7200); // ~2 minutes at 60fps
 
-            var startFrame = Time.frameCount;
-            var startedAt = DateTime.UtcNow;
-
-            // Simple synchronous frame wait. For duration-based waits, we use
-            // a busy-wait on the main thread (since runtime tool execution is
-            // synchronous on the main thread via EditorApplication.update).
-            // For frame-count waits, we can only observe the current frame.
-            if (condition == "duration" && requestedSeconds.HasValue && requestedSeconds.Value > 0)
+            // Multi-frame or duration wait: return a deferred marker so the
+            // RuntimeExecutor can initiate a non-blocking EditorApplication.update
+            // callback-based wait. This replaces the previous Thread.Sleep
+            // busy-wait which blocked the Unity editor main thread.
+            LastWaitRequest = new WaitRequest
             {
-                // Busy-wait for the requested duration (capped at 2 minutes).
-                // This allows timeout semantics to work correctly.
-                var waitMs = Math.Min((long)(requestedSeconds.Value * 1000), 120000);
-                var sw = System.Diagnostics.Stopwatch.StartNew();
-                while (sw.ElapsedMilliseconds < waitMs)
-                {
-                    if (!EditorApplication.isPlaying) break;
-                    System.Threading.Thread.Sleep(1);
-                }
-            }
+                Condition = condition,
+                RequestedFrames = requestedFrames,
+                FramesToWait = framesToWait,
+                RequestedDurationMs = requestedDurationMs,
+                StartFrame = Time.frameCount,
+                StartedAt = DateTime.UtcNow
+            };
 
-            var currentFrame = Time.frameCount;
-            var elapsedMs = (long)(DateTime.UtcNow - startedAt).TotalMilliseconds;
-
-            return new UnityCliJsonWriter().BeginObject()
-                .Prop("framesWaited", Math.Max(1, currentFrame - startFrame))
-                .Prop("elapsedMs", elapsedMs)
-                .Prop("condition", condition)
-                .Prop("requestedFrames", requestedFrames)
-                .Prop("isPlaying", EditorApplication.isPlaying)
-                .Prop("frameCount", Time.frameCount)
-                .Prop("note", "Runtime wait executes synchronously on the main thread. Duration waits use Thread.Sleep for actual timing. For very long waits, use a longer timeoutMs or issue repeated calls.")
-                .EndObject()
-                .ToString();
+            return DeferredWaitMarker;
         }
+
+        /// <summary>
+        /// The most recent WaitRequest from Execute, used by RuntimeExecutor
+        /// to configure the deferred wait parameters.
+        /// </summary>
+        public static WaitRequest LastWaitRequest;
 
         private static string ExtractString(string json, string name)
         {
