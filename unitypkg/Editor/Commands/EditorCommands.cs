@@ -47,7 +47,7 @@ namespace UnityCli
                 + "\"busy\":{\"isBusy\":" + Bool(EditorApplication.isCompiling || EditorApplication.isUpdating || EditorApplication.isPlayingOrWillChangePlaymode || BuildPipeline.isBuildingPlayer || domainReloading) + ",\"compiling\":" + Bool(EditorApplication.isCompiling) + ",\"updating\":" + Bool(EditorApplication.isUpdating) + ",\"building\":" + Bool(BuildPipeline.isBuildingPlayer) + ",\"domainReloading\":" + Bool(domainReloading) + ",\"playModeChanging\":" + Bool(EditorApplication.isPlayingOrWillChangePlaymode) + "},"
                 + "\"activeScene\":{\"name\":" + Quote(scene.name) + ",\"path\":" + Quote(scene.path) + ",\"isLoaded\":" + Bool(scene.isLoaded) + ",\"isDirty\":" + Bool(scene.isDirty) + "},"
                 + "\"prefabStage\":" + PrefabStageJson(prefabStage) + ","
-                + "\"bridge\":{\"buildStamp\":" + Quote(BridgeBuildStamp()) + "},"
+                + "\"bridge\":{\"buildStamp\":" + Quote(BridgeBuildStamp()) + "},\"runtime\":" + RuntimeSessionJson() + ","
                 + "\"plannedEffects\":[]"
                 + "}";
         }

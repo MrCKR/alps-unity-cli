@@ -38,8 +38,11 @@ export const ERROR_CODES = {
   E_TARGET_ALIAS_CONFLICT: "E_TARGET_ALIAS_CONFLICT",
   // Target preflight busy state; E_UNITY_BUSY remains the Bridge execution-layer busy signal.
   E_TARGET_BUSY: "E_TARGET_BUSY",
-  // P5 runtime executor/session lifecycle placeholder.
+  // P5 runtime executor/session lifecycle.
+  E_RUNTIME_NOT_READY: "E_RUNTIME_NOT_READY",
   E_RUNTIME_SESSION_STALE: "E_RUNTIME_SESSION_STALE",
+  E_RUNTIME_TIMEOUT: "E_RUNTIME_TIMEOUT",
+  E_RUNTIME_TOOL_TARGET_MISMATCH: "E_RUNTIME_TOOL_TARGET_MISMATCH",
 
   // ─── Job ───
   JOB_NOT_FOUND: "JOB_NOT_FOUND",
@@ -123,6 +126,7 @@ export const TRANSIENT_ERROR_CODES: ReadonlySet<string> = new Set([
   ERROR_CODES.E_UNITY_IMPORTING,
   ERROR_CODES.E_UNITY_DOMAIN_RELOAD,
   ERROR_CODES.E_UNITY_PLAY_MODE,
+  ERROR_CODES.E_RUNTIME_NOT_READY,
 ]);
 
 /** Default retry_after_ms values for transient errors. */
@@ -132,6 +136,7 @@ export const DEFAULT_RETRY_AFTER_MS: Record<string, number> = {
   [ERROR_CODES.E_UNITY_DOMAIN_RELOAD]: 10000,
   [ERROR_CODES.E_UNITY_PLAY_MODE]: 3000,
   [ERROR_CODES.E_UNITY_BUSY]: 5000,
+  [ERROR_CODES.E_RUNTIME_NOT_READY]: 3000,
 };
 
 /** CLI-side default timeouts by command category. */

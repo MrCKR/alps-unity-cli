@@ -55,6 +55,8 @@ export function projectDescriptorToToolMetadata(value: unknown): ToolMetadata | 
   }
   const title = stringProp(descriptor, "title") ?? stringProp(descriptor, "displayName") ?? name;
   const group = stringProp(descriptor, "group") ?? groupFromName(name);
+  const target = stringProp(descriptor, "target") ?? "editor";
+  const availabilityScope = stringProp(descriptor, "availabilityScope") ?? (target === "runtime" ? "playModeSession" : "editorSession");
   return ensureProjectToolDefaults({
     name,
     title,
@@ -72,17 +74,22 @@ export function projectDescriptorToToolMetadata(value: unknown): ToolMetadata | 
     docsTopic: stringProp(descriptor, "docsTopic") ?? "project-tool",
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: stringProp(descriptor, "cliCommand") ?? `tools run ${name}`
+    cliCommand: stringProp(descriptor, "cliCommand") ?? `tools run ${name}`,
+    target,
+    availabilityScope,
+    available: booleanProp(descriptor, "available") ?? undefined
   });
 }
 
 function ensureProjectToolDefaults(tool: ToolMetadata): ToolMetadata {
   return {
     ...tool,
-    handler: tool.handler ?? "bridge",
-    supportStatus: tool.supportStatus ?? "live-bridge",
+    handler: tool.handler ?? (tool.target === "runtime" ? "bridge-runtime" : "bridge"),
+    supportStatus: tool.supportStatus ?? (tool.target === "runtime" ? "live-bridge-runtime" : "live-bridge"),
     cliCommand: tool.cliCommand ?? `tools run ${tool.name}`,
-    docsTopic: tool.docsTopic ?? "project-tool"
+    docsTopic: tool.docsTopic ?? (tool.target === "runtime" ? "runtime-tool" : "project-tool"),
+    target: tool.target ?? "editor",
+    availabilityScope: tool.availabilityScope ?? (tool.target === "runtime" ? "playModeSession" : "editorSession")
   };
 }
 

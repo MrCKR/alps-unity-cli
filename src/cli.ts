@@ -197,6 +197,7 @@ function help(): Record<string, unknown> {
       "tools groups",
       "tools search <keyword> [--format json|text]",
       "tools describe <tool>",
+      "tools run <name> [--input <json>] [--input-file <path>] [--timeout-ms <n>] [--fingerprint-mode warn|block] [--artifact-dir <path>] [--runtime] [--target <instance>]",
       "capabilities [--json] [--bridge-endpoint <url>]",
       "code exec (--file <path>|--stdin|--code <text>) [--channel live|batchmode] [--refs <list>] [--define <symbol>] [--args <json>] [--timeout-ms <n>] [--job] [--artifact-dir <path>]",
       "scene active [规划中]",
