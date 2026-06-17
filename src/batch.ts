@@ -180,7 +180,11 @@ const commandRegistry = new Map<string, { parallelSafe: boolean }>([
   ["build run", { parallelSafe: false }],
   ["build status", { parallelSafe: true }],
   ["build logs", { parallelSafe: true }],
-  ["build cancel", { parallelSafe: false }]
+  ["build cancel", { parallelSafe: false }],
+  ["tools run", { parallelSafe: false }],
+  ["tools list", { parallelSafe: true }],
+  ["tools search", { parallelSafe: true }],
+  ["tools describe", { parallelSafe: true }]
 ]);
 
 export function batchJsonSchema(): Record<string, unknown> {
