@@ -110,7 +110,7 @@ test("capabilities static data separates live bridge, hybrid and planned tools",
   for (const name of ["probuilder.shape", "probuilder.create", "probuilder.edit", "probuilder.csg", "profiler.start", "profiler.capture"]) {
     assert.ok(hybridTools.includes(name), `${name} should be listed as hybrid`);
     assert.equal(batchJobTools.includes(name), false, `${name} should not be listed as batch-only`);
-    assert.ok(jobTools.includes(name), `${name} should remain job-capable for compatibility`);
+    assert.ok(jobTools.includes(name), `${name} should be job-capable as a hybrid tool`);
   }
 });
 

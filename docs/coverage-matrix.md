@@ -285,7 +285,7 @@
 | code | `code exec --code` 返回结果 | `code exec --yes` 执行代码（destructiveHint）；`--dry-run` 预览 | 2026-06-16 (P2-6 实机) | Console clean；live inline/file + dry-run 均通过 |
 | custom-tool | `custom-tool list` 列出注册的自定义工具 | `custom-tool run sample.echo --fingerprint-mode warn` 执行自定义工具 | 2026-06-16 (P2-6 实机) | Console clean；fingerprint 链路正常 |
 | batch | `batch schema` 查看 schema | `batch run --preflight` + `batch run --yes` 执行批处理 | 2026-06-16 (P2-6 实机) | Console clean；preflight + --yes 均通过 |
-| probuilder | `probuilder shape` 查询形状 | `probuilder create/csg` 修改场景（destructiveHint） | 离线/可选 capability | 按冻结决策延后为可选 capability；需 ProBuilder 包 |
+| probuilder | `probuilder shape` 查询形状 | `probuilder create/csg` 修改场景（destructiveHint） | 可选 capability | 按冻结决策延后为可选 capability；需 ProBuilder 包 |
 | diagnose | `diagnose run` / preflight 查看 batch schema 合规 | `diagnose preflight` 执行批处理预检 | 2026-06-16 (P2-6 实机) | Console clean |
 | screenshot | `screenshot capture <path>` 截取当前视图 | — | 2026-06-16 (P2-6 实机) | Console clean（与 camera/scene.screenshot 合并验证） |
 | 安全模型 / destructive safety | `capabilities` 列出 destructive 工具 | `--yes` 确认 + dry-run 预览 | 2026-06-16 (P2-5) | 12 个 destructive 命令确认机制已验证 |

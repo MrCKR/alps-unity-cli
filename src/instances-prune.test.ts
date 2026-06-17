@@ -58,7 +58,7 @@ function makeInstance(overrides: Partial<UnityInstance> = {}): UnityInstance {
   };
 }
 
-test("instances cleanup removes stale instances and reports count", async () => {
+test("instances prune removes stale instances and reports count", async () => {
   const runtime = await makeRuntime();
   const staleTime = new Date(Date.now() - 60000).toISOString();
   await writeInstances(runtime.dataDir, [
@@ -67,7 +67,7 @@ test("instances cleanup removes stale instances and reports count", async () => 
     makeInstance({ instanceId: "inst_stale2", lastHeartbeatAt: staleTime })
   ]);
 
-  const result = await execute(["instances", "cleanup"], runtime);
+  const result = await execute(["instances", "prune"], runtime);
   assert.equal(result.ok, true);
   const data = result.data as { removed: number; remaining: number; staleCleaned: Array<{ instanceId: string; pid: number | null; killed: boolean }> };
   assert.equal(data.removed, 2);
@@ -79,39 +79,39 @@ test("instances cleanup removes stale instances and reports count", async () => 
   assert.equal(data.staleCleaned[1].instanceId, "inst_stale2");
 });
 
-test("instances cleanup reports 0 removed when all instances are healthy", async () => {
+test("instances prune reports 0 removed when all instances are healthy", async () => {
   const runtime = await makeRuntime();
   await writeInstances(runtime.dataDir, [
     makeInstance({ instanceId: "inst_healthy1" }),
     makeInstance({ instanceId: "inst_healthy2" })
   ]);
 
-  const result = await execute(["instances", "cleanup"], runtime);
+  const result = await execute(["instances", "prune"], runtime);
   assert.equal(result.ok, true);
   const data = result.data as { removed: number; remaining: number };
   assert.equal(data.removed, 0);
   assert.equal(data.remaining, 2);
 });
 
-test("instances cleanup reports 0 remaining when all instances are stale", async () => {
+test("instances prune reports 0 remaining when all instances are stale", async () => {
   const runtime = await makeRuntime();
   const staleTime = new Date(Date.now() - 60000).toISOString();
   await writeInstances(runtime.dataDir, [
     makeInstance({ instanceId: "inst_stale", lastHeartbeatAt: staleTime })
   ]);
 
-  const result = await execute(["instances", "cleanup"], runtime);
+  const result = await execute(["instances", "prune"], runtime);
   assert.equal(result.ok, true);
   const data = result.data as { removed: number; remaining: number };
   assert.equal(data.removed, 1);
   assert.equal(data.remaining, 0);
 });
 
-test("instances cleanup on empty registry returns 0 removed", async () => {
+test("instances prune on empty registry returns 0 removed", async () => {
   const runtime = await makeRuntime();
   await writeInstances(runtime.dataDir, []);
 
-  const result = await execute(["instances", "cleanup"], runtime);
+  const result = await execute(["instances", "prune"], runtime);
   assert.equal(result.ok, true);
   const data = result.data as { removed: number; remaining: number };
   assert.equal(data.removed, 0);
