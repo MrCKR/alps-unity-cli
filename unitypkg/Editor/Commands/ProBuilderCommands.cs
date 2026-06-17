@@ -143,7 +143,7 @@ namespace UnityCli
         {
             if (!IsProBuilderInstalled())
             {
-                return ErrorJson("E_PROBUILDER_PACKAGE_NOT_FOUND", "Unity ProBuilder package is not installed.", "Install com.unity.probuilder with unity_cli package install com.unity.probuilder, or copy unity-package/OfflinePackages/com.unity.probuilder into the Unity project's Packages directory for offline validation.");
+                return ErrorJson("E_PROBUILDER_PACKAGE_NOT_FOUND", "Unity ProBuilder package is not installed.", "Install com.unity.probuilder with unity_cli package install com.unity.probuilder");
             }
 
             var shape = NormalizeProBuilderShape(request.StringArg("shape"));
@@ -174,7 +174,7 @@ namespace UnityCli
         {
             if (!IsProBuilderInstalled())
             {
-                return ErrorJson("E_PROBUILDER_PACKAGE_NOT_FOUND", "Unity ProBuilder package is not installed.", "Install com.unity.probuilder with unity_cli package install com.unity.probuilder, or copy unity-package/OfflinePackages/com.unity.probuilder into the Unity project's Packages directory for offline validation.");
+                return ErrorJson("E_PROBUILDER_PACKAGE_NOT_FOUND", "Unity ProBuilder package is not installed.", "Install com.unity.probuilder with unity_cli package install com.unity.probuilder");
             }
             var operation = request.StringArg("operation");
             if (string.IsNullOrEmpty(operation))
@@ -192,7 +192,7 @@ namespace UnityCli
         {
             if (!IsProBuilderInstalled())
             {
-                return ErrorJson("E_PROBUILDER_PACKAGE_NOT_FOUND", "Unity ProBuilder package is not installed.", "Install com.unity.probuilder with unity_cli package install com.unity.probuilder, or copy unity-package/OfflinePackages/com.unity.probuilder into the Unity project's Packages directory for offline validation.");
+                return ErrorJson("E_PROBUILDER_PACKAGE_NOT_FOUND", "Unity ProBuilder package is not installed.", "Install com.unity.probuilder with unity_cli package install com.unity.probuilder");
             }
             var target = ResolveRequiredProBuilderTarget(request.StringArg("target"));
             var operation = request.StringArg("operation");
