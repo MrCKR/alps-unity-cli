@@ -199,11 +199,14 @@ describe("ERROR_CODES taxonomy", () => {
     }
   });
 
-  it("includes P1 target/runtime placeholder codes", () => {
+  it("includes P5/P6 target/runtime placeholder codes", () => {
     assert.equal(ERROR_CODES.E_TARGET_BUSY, "E_TARGET_BUSY");
     assert.equal(ERROR_CODES.E_RUNTIME_SESSION_STALE, "E_RUNTIME_SESSION_STALE");
+    assert.equal(ERROR_CODES.E_RUNTIME_NOT_READY, "E_RUNTIME_NOT_READY");
+    assert.equal(ERROR_CODES.E_RUNTIME_TIMEOUT, "E_RUNTIME_TIMEOUT");
     assert.equal(TRANSIENT_ERROR_CODES.has(ERROR_CODES.E_TARGET_BUSY), false);
     assert.equal(TRANSIENT_ERROR_CODES.has(ERROR_CODES.E_RUNTIME_SESSION_STALE), false);
+    assert.equal(TRANSIENT_ERROR_CODES.has(ERROR_CODES.E_RUNTIME_NOT_READY), true);
   });
 });
 
