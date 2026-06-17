@@ -16,129 +16,164 @@ interface DocTopic {
 }
 
 const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tools?: string[] }> = {
+  "target-and-instance": {
+    title: "Targets and Instances",
+    summary: "Discover Unity instances, select a target, and understand instance lifecycle. This is the first step in the discovery path: instances → select target → tools discovery → execute → verify.",
+    guide: "Start with `instances list` to discover running Unity Editors. Use `target set <id|alias>` to select a target before executing any Bridge tool. When multiple instances are ready, the CLI returns E_TARGET_AMBIGUOUS instead of guessing."
+  },
+  "tool-discovery": {
+    title: "Tool Discovery",
+    summary: "Unified tools list/search/describe surface. All tools — built-in and project-local — share the same descriptor schema. Use `tools describe <name>` before executing any tool to read inputSchema, risk hints, handler type, and examples.",
+    guide: "Run `tools list --include-custom` for all available tools on the resolved target. Use `tools search <keyword>` when you know the domain. Always `tools describe <name>` before executing."
+  },
+  "tool-execution": {
+    title: "Tool Execution",
+    summary: "How tools execute: bridge (live Editor), hybrid (bridge + job), job (batch), or offline (no Unity). Target=editor|runtime|both determines internal routing; runtime is not a separate command group.",
+    guide: "Read the `handler` and `supportStatus` from `tools describe` to know the execution channel. Use `--dry-run` for destructive tools that support it. Verify results by re-calling read tools or checking `plannedEffects`."
+  },
+  "availability-differences": {
+    title: "Availability Differences",
+    summary: "Why different Unity instances return different tool availability: package dependencies, project tool registration, Bridge reachability, PlayMode state, and domain reload timing.",
+    guide: "Always resolve target first. Use `tools list --include-custom` against the specific instance. After package installs or domain reload, re-discover tools. Handle package-not-found errors using `nextActions`."
+  },
+  "error-codes": {
+    title: "Error Codes and nextActions",
+    summary: "Structured error taxonomy with machine-readable codes, transient hints, retry_after_ms, and nextActions for automated recovery. Every error follows the unified response envelope.",
+    guide: "Read `error.code` for the error category. Check `transient` — if true, retry after `retry_after_ms`. Follow `next_actions` for recovery. Never guess; use the suggested commands."
+  },
+  "risk-and-side-effects": {
+    title: "Risk and Side Effects",
+    summary: "Risk model expressed through unified tool descriptors: destructiveHint, readOnlyHint, supportsDryRun, --yes confirmation gate, plannedEffects preview, fingerprint integrity, and architecture-sensitive markers.",
+    guide: "Always `tools describe` first. For destructive tools, use `--dry-run` if supported, then `--yes`. Check `doctor` for fingerprint status. Do not modify architecture-sensitive tools without reviewing frozenDecision."
+  },
   scene: {
     title: "Scene Commands",
-    summary: "Query and modify Unity scenes: hierarchy, active scene, build settings, screenshots, create/load/save.",
+    summary: "Query and modify Unity scenes: hierarchy, active scene, build settings, screenshots, create/load/save. Handler: bridge (live Editor). Target: editor.",
     guide: "Start with `scene hierarchy` to list objects. Use `scene screenshot` for visual verification."
   },
   camera: {
     title: "Camera Commands",
-    summary: "Inspect cameras and capture camera-specific screenshots.",
+    summary: "Inspect cameras and capture camera-specific screenshots. Handler: bridge. Target: editor.",
     guide: "Use `camera list` to find camera names, then `camera info <target>` for details."
   },
   go: {
     title: "GameObject Commands",
-    summary: "Find, inspect, create, modify and delete GameObjects in the scene hierarchy.",
+    summary: "Find, inspect, create, modify and delete GameObjects. Handler: bridge. Target: editor. `go.delete` is destructive (requires --yes).",
     guide: "Use `go find --name <name>` to locate objects in the active scene hierarchy."
   },
   component: {
     title: "Component Commands",
-    summary: "Add, remove and set properties on Unity components."
+    summary: "Add, remove and set properties on Unity components. Handler: bridge. Target: editor. `component.remove` is destructive (requires --yes)."
   },
   asset: {
     title: "Asset Commands",
-    summary: "Search, inspect and manage project assets."
+    summary: "Search, inspect and manage project assets. Handler: bridge. Target: editor. `asset.delete` is destructive (supports --dry-run, requires --yes)."
   },
   prefab: {
     title: "Prefab Commands",
-    summary: "Create, inspect and edit Unity prefabs."
+    summary: "Create, inspect and edit Unity prefabs. Handler: bridge. Target: editor."
   },
   material: {
     title: "Material Commands",
-    summary: "Create, inspect and modify materials."
+    summary: "Create, inspect and modify materials. Handler: bridge. Target: editor."
   },
   graphics: {
     title: "Graphics Commands",
-    summary: "Query and modify graphics quality and rendering settings."
+    summary: "Query and modify graphics quality and rendering settings. Handler: bridge. Target: editor."
   },
   physics: {
     title: "Physics Commands",
-    summary: "Query physics settings, perform raycasts and step simulation."
+    summary: "Query physics settings, perform raycasts and step simulation. Handler: bridge. Target: editor/runtime."
   },
   profiler: {
     title: "Profiler Commands",
-    summary: "Control the Unity profiler, read counters, query memory and export frame data. Architecture-sensitive ALP-165-Q4 frozen scope: session, counter, memory, frame debugger and export must remain fully covered.",
+    summary: "Control the Unity profiler, read counters, query memory and export frame data. Architecture-sensitive ALP-165-Q4 frozen scope: session, counter, memory, frame debugger and export must remain fully covered. Handler: bridge + hybrid (capture). Target: editor.",
     guide: "Start with `profiler status`, then `profiler start`, run your workload, inspect `profiler counter` / `profiler memory`, and `profiler export <path>`. Do not downgrade this domain to optional without architecture review because ALP-165-Q4 freezes Profiler as complete coverage."
   },
   probuilder: {
     title: "ProBuilder Commands",
-    summary: "Create and edit ProBuilder meshes, including CSG boolean operations. Runs through live Bridge and optional Unity job paths.",
+    summary: "Create and edit ProBuilder meshes, including CSG boolean operations. Handler: hybrid (bridge + job). Target: editor. Requires com.unity.probuilder package. Availability depends on target instance packages.",
     guide: "Use `--job --wait` when you want durable batch/job execution for supported ProBuilder commands."
   },
   shader: {
     title: "Shader Commands",
-    summary: "Inspect, create and update shader assets."
+    summary: "Inspect, create and update shader assets. Handler: bridge. Target: editor."
   },
   texture: {
     title: "Texture Commands",
-    summary: "Inspect, create and configure texture assets."
+    summary: "Inspect, create and configure texture assets. Handler: bridge. Target: editor."
   },
   animation: {
     title: "Animation Commands",
-    summary: "Query and control animation clips and states."
+    summary: "Query and control animation clips and states. Handler: bridge. Target: editor/runtime."
   },
   vfx: {
     title: "VFX Commands",
-    summary: "Manage Visual Effect graphs and instances."
+    summary: "Manage Visual Effect graphs and instances. Handler: bridge. Target: editor. Requires com.unity.visualeffectgraph package. Availability depends on target instance packages."
   },
   ui: {
     title: "UI Commands",
-    summary: "Create and inspect UI elements (Canvas, Text, Button, Image, UI Document)."
+    summary: "Create and inspect UI elements (Canvas, Text, Button, Image, UI Document). Handler: bridge + offline fallback. Target: editor."
   },
   script: {
     title: "Script Commands",
-    summary: "Create, read, edit and validate C# script files."
+    summary: "Create, read, edit and validate C# script files. Handler: bridge. Target: editor. `script.edit` is destructive (requires --yes)."
   },
   editor: {
     title: "Editor Commands",
-    summary: "Control the Unity Editor: play mode, console, menu items and refresh jobs."
+    summary: "Control the Unity Editor: play mode, console, menu items and refresh jobs. Handlers: bridge (state/play/pause/stop/menu/console), job (refresh). Target: editor. `editor.menu` is destructive (requires --yes)."
   },
   diagnose: {
     title: "Diagnose Commands",
-    summary: "Run project and bridge health checks."
+    summary: "Run project and bridge health checks. Handler: bridge. Target: editor."
   },
   screenshot: {
     title: "Screenshot Commands",
-    summary: "Capture game-view screenshots."
+    summary: "Capture game-view screenshots. Handler: bridge. Target: editor."
   },
   code: {
     title: "Code Execution",
-    summary: "Execute C# code in the Unity Editor. Supports live and batch mode channels.",
+    summary: "Execute C# code in the Unity Editor. Handler: hybrid (live bridge + batch/job). Target: editor|runtime|both. Destructive (supports --dry-run, requires --yes). Channel: --channel live|batchmode.",
     guide: "Use `--channel live` for quick snippets, `--channel batchmode` for larger scripts. Always pass `--timeout-ms` for intentionally long-running code."
   },
   cli: {
     title: "CLI Management Commands",
-    summary: "Project initialization, package management, batch execution and offline documentation."
+    summary: "Project initialization, package management, batch execution, and offline tools. Handler: offline. Target: none (no Unity required)."
   },
   init: {
     title: "Project Initialization",
-    summary: "Deploy the Unity CLI Bridge package into a project."
+    summary: "Deploy the Unity CLI Bridge package into a project. Handler: offline. Target: none."
   },
   package: {
     title: "Package Management",
-    summary: "List, search, install and remove Unity packages from the CLI."
+    summary: "List, search, install and remove Unity packages from the CLI. Handlers: offline (list/info/search/registry), hybrid (install/remove/resolve). Target: editor (for resolve). `package.remove` is destructive (requires --yes)."
   },
   batch: {
     title: "Batch Execution",
-    summary: "Execute a JSON file containing multiple CLI commands in sequence or parallel."
+    summary: "Execute a JSON file containing multiple CLI commands in sequence or parallel. Handler: offline. Target: routed per-step. `batch.run` is destructive (supports --preflight dry-run, requires --yes)."
   },
   docs: {
     title: "Built-in and Offline Documentation",
-    summary: "Read built-in CLI topic docs, or query/search the offline Unity API documentation cache with `docs get` / `docs search`.",
+    summary: "Read built-in CLI topic docs, or query/search the offline Unity API documentation cache with `docs get` / `docs search`. Handler: offline. Target: none.",
     guide: "Run `unity_cli docs` to list built-in topics. Use `docs get <api> --docs-dir <path>` when querying a populated Unity API cache."
   },
   reflect: {
     title: "Offline Reflection",
-    summary: "Query the offline C# reflection cache for types and members.",
+    summary: "Query the offline C# reflection cache for types and members. Handler: offline. Target: none.",
     guide: "Populate the reflect cache first, then query with `reflect type <name>` or `reflect search <query>`."
   },
   test: {
     title: "Test Commands",
-    summary: "Run Unity tests as jobs and inspect status/logs."
+    summary: "Run Unity tests as jobs and inspect status/logs. Handler: job (run), offline (poll/logs/cancel). Target: editor (batch job). `test.cancel` is destructive (requires --yes)."
   },
   build: {
     title: "Build Commands",
-    summary: "Run Unity builds as jobs and inspect status/logs."
+    summary: "Run Unity builds as jobs and inspect status/logs. Handler: job (run), offline (status/logs/cancel). Target: editor (batch job). `build.cancel` is destructive (requires --yes)."
+  },
+  "project-tool": {
+    title: "Project Tools (Custom)",
+    summary: "Tools registered by Unity project C# code via [UnityCliTool] attribute. Discovered through `tools list --include-custom`. Handler: bridge. Target: editor. Availability depends on target instance. Fingerprint-protected.",
+    guide: "Use `tools list --include-custom` to discover project tools. Use `tools describe <name>` for full schema and risk hints. Use `tools run <name>` (P3 unified contract) or the cliCommand shown in the descriptor."
   }
 };
 
