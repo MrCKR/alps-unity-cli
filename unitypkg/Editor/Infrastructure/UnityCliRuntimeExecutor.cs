@@ -93,6 +93,14 @@ namespace UnityCli
 
                 case PlayModeStateChange.EnteredPlayMode:
                     // Play Mode is now active: mark ready
+                    // After domain reload, currentPlayModeSessionId is reset to null.
+                    // Generate a new session ID if the pre-generated one was lost.
+                    if (currentPlayModeSessionId == null)
+                    {
+                        currentPlayModeSessionId = GeneratePlayModeSessionId();
+                        runtimeRegistryVersion++;
+                        RefreshRuntimeToolCatalog();
+                    }
                     playModeReady = true;
                     WriteLog("runtime_session_ready sessionId=" + currentPlayModeSessionId + " registryVersion=" + runtimeRegistryVersion.ToString(CultureInfo.InvariantCulture) + " fingerprint=" + (runtimeToolCatalogFingerprint ?? "none"));
                     break;

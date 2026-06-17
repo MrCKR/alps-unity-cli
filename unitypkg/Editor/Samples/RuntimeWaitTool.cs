@@ -1,6 +1,8 @@
 #if UNITY_EDITOR
 using System;
+using System.Diagnostics;
 using System.Globalization;
+using System.Threading;
 using UnityEditor;
 using UnityEngine;
 
@@ -63,14 +65,23 @@ namespace UnityCli
             var startFrame = Time.frameCount;
             var startedAt = DateTime.UtcNow;
 
-            // Simple synchronous frame wait using EditorApplication.update callback
-            // Note: This is a synchronous execution model. For longer waits,
-            // the caller should use timeoutMs to prevent indefinite blocking.
-            // In practice, the bridge ProcessQueuedWork loop already handles
-            // frame-based yielding since it runs per EditorApplication.update tick.
-            // For a minimal implementation, we simply record the current state
-            // and return, since the actual cross-frame waiting happens naturally
-            // through the bridge's main-thread execution model.
+            // Simple synchronous frame wait. For duration-based waits, we use
+            // a busy-wait on the main thread (since runtime tool execution is
+            // synchronous on the main thread via EditorApplication.update).
+            // For frame-count waits, we can only observe the current frame.
+            if (condition == "duration" && requestedSeconds.HasValue && requestedSeconds.Value > 0)
+            {
+                // Busy-wait for the requested duration (capped at 2 minutes).
+                // This allows timeout semantics to work correctly.
+                var waitMs = Math.Min((long)(requestedSeconds.Value * 1000), 120000);
+                var sw = System.Diagnostics.Stopwatch.StartNew();
+                while (sw.ElapsedMilliseconds < waitMs)
+                {
+                    if (!EditorApplication.isPlaying) break;
+                    System.Threading.Thread.Sleep(1);
+                }
+            }
+
             var currentFrame = Time.frameCount;
             var elapsedMs = (long)(DateTime.UtcNow - startedAt).TotalMilliseconds;
 
@@ -81,7 +92,7 @@ namespace UnityCli
                 .Prop("requestedFrames", requestedFrames)
                 .Prop("isPlaying", EditorApplication.isPlaying)
                 .Prop("frameCount", Time.frameCount)
-                .Prop("note", "Runtime wait executes synchronously on the main thread. For multi-frame waits, the caller should issue repeated runtime.wait calls or use a longer timeoutMs.")
+                .Prop("note", "Runtime wait executes synchronously on the main thread. Duration waits use Thread.Sleep for actual timing. For very long waits, use a longer timeoutMs or issue repeated calls.")
                 .EndObject()
                 .ToString();
         }

@@ -324,7 +324,8 @@ async function readInstanceFiles(dataDir: string): Promise<UnityInstance[]> {
     const files = names.filter((name) => name.endsWith(".json"));
     const values = await Promise.all(files.map(async (name) => {
       try {
-        const parsed = JSON.parse(await readFile(join(dir, name), "utf8")) as UnityInstance;
+        const raw = await readFile(join(dir, name), "utf8");
+        const parsed = JSON.parse(stripBom(raw)) as UnityInstance;
         return parsed;
       } catch {
         return undefined;
@@ -340,7 +341,7 @@ async function readInstanceFiles(dataDir: string): Promise<UnityInstance[]> {
 async function readLegacyInstances(dataDir: string): Promise<UnityInstance[]> {
   try {
     const raw = await readFile(registryPath(dataDir), "utf8");
-    const parsed = JSON.parse(raw) as RegistryFile;
+    const parsed = JSON.parse(stripBom(raw)) as RegistryFile;
     return Array.isArray(parsed.instances) ? parsed.instances : [];
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
@@ -361,7 +362,7 @@ async function deleteInstanceFile(dataDir: string, instanceId: string): Promise<
 async function readTargetConfig(dataDir: string): Promise<TargetConfig> {
   try {
     const raw = await readFile(resolve(dataDir, "config.json"), "utf8");
-    const parsed = JSON.parse(raw) as TargetConfig;
+    const parsed = JSON.parse(stripBom(raw)) as TargetConfig;
     return typeof parsed.activeTarget === "string" ? { activeTarget: parsed.activeTarget } : {};
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
@@ -378,7 +379,7 @@ async function writeTargetConfig(dataDir: string, config: TargetConfig): Promise
 async function readAliases(dataDir: string): Promise<Record<string, string>> {
   try {
     const raw = await readFile(resolve(dataDir, "aliases.json"), "utf8");
-    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    const parsed = JSON.parse(stripBom(raw)) as Record<string, unknown>;
     return Object.fromEntries(Object.entries(parsed).filter((entry): entry is [string, string] => typeof entry[1] === "string"));
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return {};
@@ -571,6 +572,11 @@ function endpointPort(endpoint: string): number | undefined {
 
 function safeFileName(value: string): string {
   return value.replace(/[^A-Za-z0-9._-]/g, "_");
+}
+
+/** Strip UTF-8 BOM (\xEF\xBB\xBF) prefix if present. */
+function stripBom(text: string): string {
+  return text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text;
 }
 
 function projectHash(projectPath: string): string {
