@@ -66,7 +66,12 @@ namespace UnityCli
             {
                 throw new BridgeCommandException("E_IO_ERROR", "Failed to read script file: " + exception.Message, "Check file encoding and permissions: " + path);
             }
-            return SuccessJson("{\"script\":" + ScriptJson(path) + ",\"content\":" + Quote(content) + ",\"encoding\":\"utf-8\",\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("script", ScriptJson(path))
+                .Prop("content", content)
+                .Prop("encoding", "utf-8")
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string ScriptEdit(BridgeRequest request)
@@ -111,17 +116,34 @@ namespace UnityCli
             var diagnostics = new List<string>();
             if (string.IsNullOrWhiteSpace(content))
             {
-                diagnostics.Add("{\"level\":\"error\",\"code\":\"SCRIPT_EMPTY\",\"message\":\"Script content is empty.\"}");
+                diagnostics.Add(new UnityCliJsonWriter().BeginObject()
+                    .Prop("level", "error")
+                    .Prop("code", "SCRIPT_EMPTY")
+                    .Prop("message", "Script content is empty.")
+                    .EndObject().ToString());
             }
             if (!HasBalancedDelimiters(content, '{', '}'))
             {
-                diagnostics.Add("{\"level\":\"error\",\"code\":\"CS_BRACE_UNBALANCED\",\"message\":\"Curly braces are not balanced.\"}");
+                diagnostics.Add(new UnityCliJsonWriter().BeginObject()
+                    .Prop("level", "error")
+                    .Prop("code", "CS_BRACE_UNBALANCED")
+                    .Prop("message", "Curly braces are not balanced.")
+                    .EndObject().ToString());
             }
             if (!HasBalancedDelimiters(content, '(', ')'))
             {
-                diagnostics.Add("{\"level\":\"error\",\"code\":\"CS_PAREN_UNBALANCED\",\"message\":\"Parentheses are not balanced.\"}");
+                diagnostics.Add(new UnityCliJsonWriter().BeginObject()
+                    .Prop("level", "error")
+                    .Prop("code", "CS_PAREN_UNBALANCED")
+                    .Prop("message", "Parentheses are not balanced.")
+                    .EndObject().ToString());
             }
-            return SuccessJson("{\"script\":" + (string.IsNullOrEmpty(path) ? "null" : ScriptJson(RequireScriptPath(path))) + ",\"valid\":" + Bool(diagnostics.Count == 0) + ",\"diagnostics\":[" + string.Join(",", diagnostics.ToArray()) + "],\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("script", string.IsNullOrEmpty(path) ? "null" : ScriptJson(RequireScriptPath(path)))
+                .Prop("valid", diagnostics.Count == 0)
+                .PropArray("diagnostics", arr => { foreach (var d in diagnostics) arr.RawValue(d); })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string RequireScriptPath(string rawPath)
@@ -163,17 +185,23 @@ namespace UnityCli
         {
             var fullPath = AssetFullPath(path);
             var fileInfo = new FileInfo(fullPath);
-            return "{\"path\":" + Quote(path) + ",\"guid\":" + Quote(AssetDatabase.AssetPathToGUID(path)) + ",\"name\":" + Quote(Path.GetFileNameWithoutExtension(path)) + ",\"exists\":" + Bool(fileInfo.Exists) + ",\"sizeBytes\":" + (fileInfo.Exists ? fileInfo.Length.ToString(CultureInfo.InvariantCulture) : "0") + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("path", path)
+                .Prop("guid", AssetDatabase.AssetPathToGUID(path))
+                .Prop("name", Path.GetFileNameWithoutExtension(path))
+                .Prop("exists", fileInfo.Exists)
+                .Prop("sizeBytes", fileInfo.Exists ? (long)fileInfo.Length : 0L)
+                .EndObject().ToString();
         }
 
         private static string ScriptMutationJson(string type, string path)
         {
             AssetDatabase.Refresh();
-            return "{"
-                + "\"script\":" + ScriptJson(path) + ","
-                + "\"plannedEffects\":[" + EffectJson(type, "path", Quote(path)) + "],"
-                + "\"logPath\":" + Quote(LogPath())
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropRaw("script", ScriptJson(path))
+                .PropArray("plannedEffects", arr => arr.RawValue(EffectJson(type, "path", Quote(path))))
+                .Prop("logPath", LogPath())
+                .EndObject().ToString();
         }
 
         private static string ReplaceFirst(string content, string find, string replace)

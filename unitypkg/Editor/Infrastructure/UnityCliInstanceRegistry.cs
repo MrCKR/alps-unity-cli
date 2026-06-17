@@ -124,61 +124,81 @@ namespace UnityCli
             {
                 items.Add(instanceJson);
             }
-            File.WriteAllText(RegistryPath(), "{\"version\":1,\"instances\":[" + string.Join(",", items.ToArray()) + "]}", Encoding.UTF8);
+            var w = new UnityCliJsonWriter().BeginObject()
+                .Prop("version", 1L)
+                .PropArray("instances", arr =>
+                {
+                    foreach (var item in items)
+                    {
+                        arr.RawValue(item);
+                    }
+                })
+                .EndObject();
+            File.WriteAllText(RegistryPath(), w.ToString(), Encoding.UTF8);
         }
 
         private static string InstanceJson(string status)
         {
             var now = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
             var endpoint = "http://127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture);
-            return "{"
-                + "\"instanceId\":" + Quote(InstanceId()) + ","
-                + "\"projectName\":" + Quote(Path.GetFileName(ProjectRoot())) + ","
-                + "\"projectPath\":" + Quote(ProjectRoot()) + ","
-                + "\"projectHash\":" + Quote(ProjectHash()) + ","
-                + "\"processId\":" + System.Diagnostics.Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"pid\":" + System.Diagnostics.Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"host\":\"127.0.0.1\","
-                + "\"port\":" + port.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"bridgeEndpoint\":" + Quote(endpoint) + ","
-                + "\"unityVersion\":" + Quote(Application.unityVersion) + ","
-                + "\"packageVersion\":" + Quote(BridgeBuildStamp()) + ","
-                + "\"packageName\":" + Quote(BridgePackageName()) + ","
-                + "\"packageAssetPath\":" + Quote(BridgePackageAssetPath()) + ","
-                + "\"packageResolvedPath\":" + Quote(BridgePackageResolvedPath()) + ","
-                + "\"capabilitiesHash\":" + Quote(BridgeBuildStamp()) + ","
-                + "\"bridgeDiagnosticsFingerprint\":" + Quote(BridgeDiagnosticsFingerprint) + ","
-                + "\"bridgeListenerId\":" + Quote(ListenerId) + ","
-                + "\"bridgeAssemblyMvid\":" + Quote(AssemblyMvid()) + ","
-                + "\"status\":" + Quote(status == "healthy" ? "ready" : status) + ","
-                + "\"editorState\":" + EditorStateSummaryJson() + ","
-                + "\"playModeState\":" + PlayModeStateJson() + ","
-                + "\"runtimeSessionId\":" + Quote(currentPlayModeSessionId ?? string.Empty) + ","
-                + "\"toolCatalogFingerprint\":" + Quote(runtimeToolCatalogFingerprint ?? string.Empty) + ","
-                + "\"registryVersion\":" + Quote(runtimeRegistryVersion.ToString(CultureInfo.InvariantCulture)) + ","
-                + "\"registeredAt\":" + Quote(now) + ","
-                + "\"lastSeenAt\":" + Quote(now) + ","
-                + "\"lastHeartbeatAt\":" + Quote(now)
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("instanceId", InstanceId())
+                .Prop("projectName", Path.GetFileName(ProjectRoot()))
+                .Prop("projectPath", ProjectRoot())
+                .Prop("projectHash", ProjectHash())
+                .Prop("processId", (long)System.Diagnostics.Process.GetCurrentProcess().Id)
+                .Prop("pid", (long)System.Diagnostics.Process.GetCurrentProcess().Id)
+                .Prop("host", "127.0.0.1")
+                .Prop("port", (long)port)
+                .Prop("bridgeEndpoint", endpoint)
+                .Prop("unityVersion", Application.unityVersion)
+                .Prop("packageVersion", BridgeBuildStamp())
+                .Prop("packageName", BridgePackageName())
+                .Prop("packageAssetPath", BridgePackageAssetPath())
+                .Prop("packageResolvedPath", BridgePackageResolvedPath())
+                .Prop("capabilitiesHash", BridgeBuildStamp())
+                .Prop("bridgeDiagnosticsFingerprint", BridgeDiagnosticsFingerprint)
+                .Prop("bridgeListenerId", ListenerId)
+                .Prop("bridgeAssemblyMvid", AssemblyMvid())
+                .Prop("status", status == "healthy" ? "ready" : status)
+                .PropRaw("editorState", EditorStateSummaryJson())
+                .PropRaw("playModeState", PlayModeStateJson())
+                .Prop("runtimeSessionId", currentPlayModeSessionId ?? string.Empty)
+                .Prop("toolCatalogFingerprint", runtimeToolCatalogFingerprint ?? string.Empty)
+                .Prop("registryVersion", runtimeRegistryVersion.ToString(CultureInfo.InvariantCulture))
+                .Prop("registeredAt", now)
+                .Prop("lastSeenAt", now)
+                .Prop("lastHeartbeatAt", now)
+                .EndObject().ToString();
         }
 
         private static string TargetContextJson()
         {
-            return "{"
-                + "\"id\":" + Quote(InstanceId()) + ","
-                + "\"alias\":null,"
-                + "\"projectPath\":" + Quote(ProjectRoot())
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("id", InstanceId())
+                .PropNull("alias")
+                .Prop("projectPath", ProjectRoot())
+                .EndObject().ToString();
         }
 
         private static string EditorStateSummaryJson()
         {
-            return "{\"busy\":" + Bool(EditorApplication.isCompiling || EditorApplication.isUpdating || BuildPipeline.isBuildingPlayer || domainReloading) + ",\"compiling\":" + Bool(EditorApplication.isCompiling) + ",\"updating\":" + Bool(EditorApplication.isUpdating) + ",\"building\":" + Bool(BuildPipeline.isBuildingPlayer) + ",\"domainReloading\":" + Bool(domainReloading) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("busy", EditorApplication.isCompiling || EditorApplication.isUpdating || BuildPipeline.isBuildingPlayer || domainReloading)
+                .Prop("compiling", EditorApplication.isCompiling)
+                .Prop("updating", EditorApplication.isUpdating)
+                .Prop("building", BuildPipeline.isBuildingPlayer)
+                .Prop("domainReloading", domainReloading)
+                .EndObject().ToString();
         }
 
         private static string PlayModeStateJson()
         {
-            return "{\"isPlaying\":" + Bool(EditorApplication.isPlaying) + ",\"isPaused\":" + Bool(EditorApplication.isPaused) + ",\"isPlayingOrWillChangePlaymode\":" + Bool(EditorApplication.isPlayingOrWillChangePlaymode) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("isPlaying", EditorApplication.isPlaying)
+                .Prop("isPaused", EditorApplication.isPaused)
+                .Prop("isPlayingOrWillChangePlaymode", EditorApplication.isPlayingOrWillChangePlaymode)
+                .EndObject().ToString();
         }
     }
 }

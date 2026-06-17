@@ -95,7 +95,19 @@ namespace UnityCli
                 items.Add(AssetSummaryJson(assetPath, assetType));
             }
             var nextCursor = cursor + items.Count < guids.Length ? (cursor + items.Count).ToString(CultureInfo.InvariantCulture) : null;
-            return SuccessJson("{\"query\":" + Quote(query) + ",\"type\":" + Quote(type) + ",\"path\":" + Quote(path) + ",\"items\":[" + string.Join(",", items.ToArray()) + "],\"pageInfo\":{\"pageSize\":" + pageSize.ToString(CultureInfo.InvariantCulture) + ",\"cursor\":" + cursor.ToString(CultureInfo.InvariantCulture) + ",\"nextCursor\":" + Quote(nextCursor) + ",\"total\":" + guids.Length.ToString(CultureInfo.InvariantCulture) + "},\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("query", query)
+                .Prop("type", type)
+                .Prop("path", path)
+                .PropArray("items", arr => { foreach (var item in items) { arr.RawValue(item); } })
+                .PropObject("pageInfo", pageInfo => pageInfo
+                    .Prop("pageSize", (long)pageSize)
+                    .Prop("cursor", (long)cursor)
+                    .Prop("nextCursor", nextCursor)
+                    .Prop("total", (long)guids.Length))
+                .Prop("logPath", LogPath())
+                .EndObject()
+                .ToString());
         }
 
         private static string AssetInfo(BridgeRequest request)
@@ -105,7 +117,11 @@ namespace UnityCli
             {
                 throw new BridgeCommandException("E_ASSET_NOT_FOUND", "Asset not found: " + path, "Run unity_cli asset search <keyword> or pass an existing Assets/* path.");
             }
-            return SuccessJson("{\"asset\":" + AssetDetailJson(path) + ",\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("asset", AssetDetailJson(path))
+                .Prop("logPath", LogPath())
+                .EndObject()
+                .ToString());
         }
 
         private static string AssetCreate(BridgeRequest request)
@@ -169,14 +185,37 @@ namespace UnityCli
             var path = RequireExistingAssetPath(request.StringArg("path"));
             if (request.DryRun)
             {
-                return SuccessJson("{\"command\":\"asset.delete\",\"dryRun\":true,\"asset\":" + AssetDetailJson(path) + ",\"plannedEffects\":[{\"type\":\"asset.delete\",\"path\":" + Quote(path) + ",\"sideEffects\":\"none\"}],\"logPath\":" + Quote(LogPath()) + "}");
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("command", "asset.delete")
+                    .Prop("dryRun", true)
+                    .PropRaw("asset", AssetDetailJson(path))
+                    .PropArray("plannedEffects", arr => arr
+                        .RawValue(new UnityCliJsonWriter().BeginObject()
+                            .Prop("type", "asset.delete")
+                            .Prop("path", path)
+                            .Prop("sideEffects", "none")
+                            .EndObject().ToString()))
+                    .Prop("logPath", LogPath())
+                    .EndObject()
+                    .ToString());
             }
             if (!AssetDatabase.DeleteAsset(path))
             {
                 throw new BridgeCommandException("E_ASSET_DELETE_FAILED", "Failed to delete asset: " + path, "Check Unity Console and file permissions.");
             }
             AssetDatabase.Refresh();
-            return SuccessJson("{\"asset\":{\"path\":" + Quote(path) + ",\"exists\":false},\"plannedEffects\":[{\"type\":\"asset.delete\",\"path\":" + Quote(path) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropObject("asset", a => a
+                    .Prop("path", path)
+                    .Prop("exists", false))
+                .PropArray("plannedEffects", arr => arr
+                    .RawValue(new UnityCliJsonWriter().BeginObject()
+                        .Prop("type", "asset.delete")
+                        .Prop("path", path)
+                        .EndObject().ToString()))
+                .Prop("logPath", LogPath())
+                .EndObject()
+                .ToString());
         }
 
         private static string AssetDuplicate(BridgeRequest request)
@@ -301,7 +340,20 @@ namespace UnityCli
 
         private static string AssetMutationJson(string type, string path, string source)
         {
-            return "{\"asset\":" + AssetDetailJson(path) + ",\"source\":" + Quote(source) + ",\"plannedEffects\":[{\"type\":" + Quote(type) + ",\"path\":" + Quote(path) + (string.IsNullOrEmpty(source) ? "" : ",\"source\":" + Quote(source)) + "}],\"logPath\":" + Quote(LogPath()) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropRaw("asset", AssetDetailJson(path))
+                .Prop("source", source)
+                .PropArray("plannedEffects", arr =>
+                {
+                    var effect = new UnityCliJsonWriter().BeginObject()
+                        .Prop("type", type)
+                        .Prop("path", path);
+                    if (!string.IsNullOrEmpty(source)) effect.Prop("source", source);
+                    arr.RawValue(effect.EndObject().ToString());
+                })
+                .Prop("logPath", LogPath())
+                .EndObject()
+                .ToString();
         }
 
         private static string AssetDetailJson(string path)
@@ -311,53 +363,64 @@ namespace UnityCli
             var fullPath = AssetFullPath(path);
             var fileInfo = new FileInfo(fullPath);
             var isFolder = AssetDatabase.IsValidFolder(path) || Directory.Exists(fullPath);
-            return "{"
-                + "\"path\":" + Quote(path) + ","
-                + "\"guid\":" + Quote(AssetDatabase.AssetPathToGUID(path)) + ","
-                + "\"name\":" + Quote(asset == null ? Path.GetFileNameWithoutExtension(path) : asset.name) + ","
-                + "\"type\":" + Quote(type == null ? (isFolder ? "Folder" : null) : type.Name) + ","
-                + "\"extension\":" + Quote(Path.GetExtension(path)) + ","
-                + "\"isFolder\":" + Bool(isFolder) + ","
-                + "\"exists\":" + Bool(AssetExists(path)) + ","
-                + "\"sizeBytes\":" + (fileInfo.Exists ? fileInfo.Length.ToString(CultureInfo.InvariantCulture) : "0")
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("path", path)
+                .Prop("guid", AssetDatabase.AssetPathToGUID(path))
+                .Prop("name", asset == null ? Path.GetFileNameWithoutExtension(path) : asset.name)
+                .Prop("type", type == null ? (isFolder ? "Folder" : null) : type.Name)
+                .Prop("extension", Path.GetExtension(path))
+                .Prop("isFolder", isFolder)
+                .Prop("exists", AssetExists(path))
+                .Prop("sizeBytes", fileInfo.Exists ? (long)fileInfo.Length : 0L)
+                .EndObject()
+                .ToString();
         }
 
         private static string AssetSummaryJson(string path, Type assetType)
         {
-            return "{\"path\":" + Quote(path) + ",\"guid\":" + Quote(AssetDatabase.AssetPathToGUID(path)) + ",\"type\":" + Quote(assetType == null ? null : assetType.Name) + ",\"name\":" + Quote(Path.GetFileNameWithoutExtension(path)) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("path", path)
+                .Prop("guid", AssetDatabase.AssetPathToGUID(path))
+                .Prop("type", assetType == null ? null : assetType.Name)
+                .Prop("name", Path.GetFileNameWithoutExtension(path))
+                .EndObject()
+                .ToString();
         }
 
         private static string TextureAssetJson(string path, Texture2D texture)
         {
             var fileInfo = new FileInfo(AssetFullPath(path));
-            return "{"
-                + "\"path\":" + Quote(path) + ","
-                + "\"guid\":" + Quote(AssetDatabase.AssetPathToGUID(path)) + ","
-                + "\"name\":" + Quote(texture == null ? Path.GetFileNameWithoutExtension(path) : texture.name) + ","
-                + "\"width\":" + (texture == null ? "0" : texture.width.ToString(CultureInfo.InvariantCulture)) + ","
-                + "\"height\":" + (texture == null ? "0" : texture.height.ToString(CultureInfo.InvariantCulture)) + ","
-                + "\"format\":" + Quote(texture == null ? null : texture.format.ToString()) + ","
-                + "\"sizeBytes\":" + (fileInfo.Exists ? fileInfo.Length.ToString(CultureInfo.InvariantCulture) : "0")
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("path", path)
+                .Prop("guid", AssetDatabase.AssetPathToGUID(path))
+                .Prop("name", texture == null ? Path.GetFileNameWithoutExtension(path) : texture.name)
+                .Prop("width", texture == null ? 0L : (long)texture.width)
+                .Prop("height", texture == null ? 0L : (long)texture.height)
+                .Prop("format", texture == null ? null : texture.format.ToString())
+                .Prop("sizeBytes", fileInfo.Exists ? (long)fileInfo.Length : 0L)
+                .EndObject()
+                .ToString();
         }
 
         private static string TextureImporterJson(TextureImporter importer)
         {
-            return "{"
-                + "\"textureType\":" + Quote(importer.textureType.ToString()) + ","
-                + "\"spriteImportMode\":" + Quote(importer.spriteImportMode.ToString()) + ","
-                + "\"pixelsPerUnit\":" + importer.spritePixelsPerUnit.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"pivot\":{\"x\":" + importer.spritePivot.x.ToString(CultureInfo.InvariantCulture) + ",\"y\":" + importer.spritePivot.y.ToString(CultureInfo.InvariantCulture) + "},"
-                + "\"readable\":" + Bool(importer.isReadable) + ","
-                + "\"mipmap\":" + Bool(importer.mipmapEnabled) + ","
-                + "\"sRGB\":" + Bool(importer.sRGBTexture) + ","
-                + "\"alphaIsTransparency\":" + Bool(importer.alphaIsTransparency) + ","
-                + "\"wrapMode\":" + Quote(importer.wrapMode.ToString()) + ","
-                + "\"filterMode\":" + Quote(importer.filterMode.ToString()) + ","
-                + "\"maxTextureSize\":" + importer.maxTextureSize.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"compression\":" + Quote(importer.textureCompression.ToString())
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("textureType", importer.textureType.ToString())
+                .Prop("spriteImportMode", importer.spriteImportMode.ToString())
+                .Prop("pixelsPerUnit", (long)importer.spritePixelsPerUnit)
+                .PropObject("pivot", pivot => pivot
+                    .Prop("x", importer.spritePivot.x)
+                    .Prop("y", importer.spritePivot.y))
+                .Prop("readable", importer.isReadable)
+                .Prop("mipmap", importer.mipmapEnabled)
+                .Prop("sRGB", importer.sRGBTexture)
+                .Prop("alphaIsTransparency", importer.alphaIsTransparency)
+                .Prop("wrapMode", importer.wrapMode.ToString())
+                .Prop("filterMode", importer.filterMode.ToString())
+                .Prop("maxTextureSize", (long)importer.maxTextureSize)
+                .Prop("compression", importer.textureCompression.ToString())
+                .EndObject()
+                .ToString();
         }
     }
 }

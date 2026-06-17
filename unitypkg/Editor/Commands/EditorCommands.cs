@@ -9,6 +9,7 @@ using System.Net;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CSharp;
 using UnityEditor;
@@ -41,14 +42,28 @@ namespace UnityCli
         {
             var scene = SceneManager.GetActiveScene();
             var prefabStage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
-            return "{"
-                + "\"playMode\":{\"isPlaying\":" + Bool(EditorApplication.isPlaying) + ",\"isPaused\":" + Bool(EditorApplication.isPaused) + ",\"isPlayingOrWillChangePlaymode\":" + Bool(EditorApplication.isPlayingOrWillChangePlaymode) + "},"
-                + "\"busy\":{\"isBusy\":" + Bool(EditorApplication.isCompiling || EditorApplication.isUpdating || EditorApplication.isPlayingOrWillChangePlaymode || BuildPipeline.isBuildingPlayer || domainReloading) + ",\"compiling\":" + Bool(EditorApplication.isCompiling) + ",\"updating\":" + Bool(EditorApplication.isUpdating) + ",\"building\":" + Bool(BuildPipeline.isBuildingPlayer) + ",\"domainReloading\":" + Bool(domainReloading) + ",\"playModeChanging\":" + Bool(EditorApplication.isPlayingOrWillChangePlaymode) + "},"
-                + "\"activeScene\":{\"name\":" + Quote(scene.name) + ",\"path\":" + Quote(scene.path) + ",\"isLoaded\":" + Bool(scene.isLoaded) + ",\"isDirty\":" + Bool(scene.isDirty) + "},"
-                + "\"prefabStage\":" + PrefabStageJson(prefabStage) + ","
-                + "\"bridge\":{\"buildStamp\":" + Quote(BridgeBuildStamp()) + "},\"runtime\":" + RuntimeSessionJson() + ","
-                + "\"plannedEffects\":[]"
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropObject("playMode", w => w
+                    .Prop("isPlaying", EditorApplication.isPlaying)
+                    .Prop("isPaused", EditorApplication.isPaused)
+                    .Prop("isPlayingOrWillChangePlaymode", EditorApplication.isPlayingOrWillChangePlaymode))
+                .PropObject("busy", w => w
+                    .Prop("isBusy", EditorApplication.isCompiling || EditorApplication.isUpdating || EditorApplication.isPlayingOrWillChangePlaymode || BuildPipeline.isBuildingPlayer || domainReloading)
+                    .Prop("compiling", EditorApplication.isCompiling)
+                    .Prop("updating", EditorApplication.isUpdating)
+                    .Prop("building", BuildPipeline.isBuildingPlayer)
+                    .Prop("domainReloading", domainReloading)
+                    .Prop("playModeChanging", EditorApplication.isPlayingOrWillChangePlaymode))
+                .PropObject("activeScene", w => w
+                    .Prop("name", scene.name)
+                    .Prop("path", scene.path)
+                    .Prop("isLoaded", scene.isLoaded)
+                    .Prop("isDirty", scene.isDirty))
+                .PropRaw("prefabStage", PrefabStageJson(prefabStage))
+                .PropObject("bridge", w => w.Prop("buildStamp", BridgeBuildStamp()))
+                .PropRaw("runtime", RuntimeSessionJson())
+                .PropArray("plannedEffects", null)
+                .EndObject().ToString();
         }
 
         private static string EditorPlayJson(BridgeRequest request)
@@ -59,7 +74,16 @@ namespace UnityCli
             EditorApplication.isPlaying = true;
             var timeoutMs = TimeoutMs(request);
             var responseFactory = new Func<string>(() =>
-                $"{{\"plannedEffects\":[{{\"type\":\"editor.play\",\"from\":{Bool(before)},\"to\":true}}],\"result\":{{\"requested\":\"play\",\"changed\":{Bool(before != EditorApplication.isPlaying)},\"isPlaying\":{Bool(EditorApplication.isPlaying)},\"isPaused\":{Bool(EditorApplication.isPaused)}}},\"state\":{EditorStateJson()}}}");
+                new UnityCliJsonWriter().BeginObject()
+                    .PropArray("plannedEffects", arr => arr
+                        .BeginObject().Prop("type", "editor.play").Prop("from", before).Prop("to", true).EndObject())
+                    .PropObject("result", w => w
+                        .Prop("requested", "play")
+                        .Prop("changed", before != EditorApplication.isPlaying)
+                        .Prop("isPlaying", EditorApplication.isPlaying)
+                        .Prop("isPaused", EditorApplication.isPaused))
+                    .PropRaw("state", EditorStateJson())
+                    .EndObject().ToString());
             var reached = EditorApplication.isPlaying || EditorApplication.isPlayingOrWillChangePlaymode;
             if (reached)
             {
@@ -82,7 +106,16 @@ namespace UnityCli
             EnsureEditorNotBusy("editor.pause");
             var before = EditorApplication.isPaused;
             EditorApplication.isPaused = !EditorApplication.isPaused;
-            return $"{{\"plannedEffects\":[{{\"type\":\"editor.pause\",\"from\":{Bool(before)},\"to\":{Bool(EditorApplication.isPaused)}}}],\"result\":{{\"requested\":\"pause\",\"changed\":{Bool(before != EditorApplication.isPaused)},\"isPlaying\":{Bool(EditorApplication.isPlaying)},\"isPaused\":{Bool(EditorApplication.isPaused)}}},\"state\":{EditorStateJson()}}}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropArray("plannedEffects", arr => arr
+                    .BeginObject().Prop("type", "editor.pause").Prop("from", before).Prop("to", EditorApplication.isPaused).EndObject())
+                .PropObject("result", w => w
+                    .Prop("requested", "pause")
+                    .Prop("changed", before != EditorApplication.isPaused)
+                    .Prop("isPlaying", EditorApplication.isPlaying)
+                    .Prop("isPaused", EditorApplication.isPaused))
+                .PropRaw("state", EditorStateJson())
+                .EndObject().ToString();
         }
 
         private static string EditorStopJson(BridgeRequest request)
@@ -97,7 +130,16 @@ namespace UnityCli
             // synchronous wait for !isPlaying && !isPlayingOrWillChangePlaymode would
             // deadlock (always timeout).  Return immediately — callers can poll
             // editor.state to confirm the transition completed.
-            return $"{{\"plannedEffects\":[{{\"type\":\"editor.stop\",\"from\":{Bool(before)},\"to\":false}}],\"result\":{{\"requested\":\"stop\",\"changed\":{Bool(before != EditorApplication.isPlaying)},\"isPlaying\":{Bool(EditorApplication.isPlaying)},\"isPaused\":{Bool(EditorApplication.isPaused)}}},\"state\":{EditorStateJson()}}}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropArray("plannedEffects", arr => arr
+                    .BeginObject().Prop("type", "editor.stop").Prop("from", before).Prop("to", false).EndObject())
+                .PropObject("result", w => w
+                    .Prop("requested", "stop")
+                    .Prop("changed", before != EditorApplication.isPlaying)
+                    .Prop("isPlaying", EditorApplication.isPlaying)
+                    .Prop("isPaused", EditorApplication.isPaused))
+                .PropRaw("state", EditorStateJson())
+                .EndObject().ToString();
         }
 
         private static string EditorMenuJson(BridgeRequest request)
@@ -123,7 +165,17 @@ namespace UnityCli
                 throw new BridgeCommandException("E_MENU_TIMEOUT", "Unity menu item execution exceeded the requested timeout.", "Check Unity Editor and Unity CLI Bridge logs for long-running menu work.");
             }
 
-            return $"{{\"plannedEffects\":[{{\"type\":\"editor.menu\",\"path\":{Quote(path)}}}],\"result\":{{\"path\":{Quote(path)},\"executed\":true,\"elapsedMs\":{elapsedMs}}},\"summary\":{{\"affected\":\"Unity Editor menu item executed\"}},\"state\":{EditorStateJson()}}}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropArray("plannedEffects", arr => arr
+                    .BeginObject().Prop("type", "editor.menu").Prop("path", path).EndObject())
+                .PropObject("result", w => w
+                    .Prop("path", path)
+                    .Prop("executed", true)
+                    .Prop("elapsedMs", (long)elapsedMs))
+                .PropObject("summary", w => w
+                    .Prop("affected", "Unity Editor menu item executed"))
+                .PropRaw("state", EditorStateJson())
+                .EndObject().ToString();
         }
 
         private static string EditorConsole(BridgeRequest request)
@@ -133,7 +185,23 @@ namespace UnityCli
             var logEntries = LogEntriesType();
             if (logEntries == null)
             {
-                return SuccessJson("{\"cleared\":false,\"type\":" + Quote(type) + ",\"items\":[],\"pageInfo\":{\"pageSize\":" + count.ToString(CultureInfo.InvariantCulture) + ",\"cursor\":0,\"nextCursor\":null,\"total\":0},\"diagnostics\":[{\"level\":\"warning\",\"code\":\"E_CONSOLE_INTERNAL_API_UNAVAILABLE\",\"message\":\"Unity LogEntries internal API was not available.\"}],\"logPath\":" + Quote(LogPath()) + "}");
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("cleared", false)
+                    .Prop("type", type)
+                    .PropArray("items", null)
+                    .PropObject("pageInfo", w => w
+                        .Prop("pageSize", (long)count)
+                        .Prop("cursor", (long)0)
+                        .PropNull("nextCursor")
+                        .Prop("total", (long)0))
+                    .PropArray("diagnostics", arr => arr
+                        .BeginObject()
+                        .Prop("level", "warning")
+                        .Prop("code", "E_CONSOLE_INTERNAL_API_UNAVAILABLE")
+                        .Prop("message", "Unity LogEntries internal API was not available.")
+                        .EndObject())
+                    .Prop("logPath", LogPath())
+                    .EndObject().ToString());
             }
             if (request.BoolArg("clear", false))
             {
@@ -142,9 +210,28 @@ namespace UnityCli
                 {
                     clearMethod.Invoke(null, null);
                 }
-                return SuccessJson("{\"cleared\":true,\"items\":[],\"pageInfo\":{\"pageSize\":" + count.ToString(CultureInfo.InvariantCulture) + ",\"cursor\":0,\"nextCursor\":null,\"total\":0},\"logPath\":" + Quote(LogPath()) + "}");
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("cleared", true)
+                    .PropArray("items", null)
+                    .PropObject("pageInfo", w => w
+                        .Prop("pageSize", (long)count)
+                        .Prop("cursor", (long)0)
+                        .PropNull("nextCursor")
+                        .Prop("total", (long)0))
+                    .Prop("logPath", LogPath())
+                    .EndObject().ToString());
             }
-            return SuccessJson("{\"cleared\":false,\"type\":" + Quote(type) + ",\"items\":" + ConsoleItemsJson(type, count) + ",\"pageInfo\":{\"pageSize\":" + count.ToString(CultureInfo.InvariantCulture) + ",\"cursor\":0,\"nextCursor\":null,\"total\":" + ConsoleEntryCount().ToString(CultureInfo.InvariantCulture) + "},\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("cleared", false)
+                .Prop("type", type)
+                .PropRaw("items", ConsoleItemsJson(type, count))
+                .PropObject("pageInfo", w => w
+                    .Prop("pageSize", (long)count)
+                    .Prop("cursor", (long)0)
+                    .PropNull("nextCursor")
+                    .Prop("total", (long)ConsoleEntryCount()))
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string ConsoleItemsJson(string type, int count)
@@ -157,9 +244,10 @@ namespace UnityCli
                 return "[]";
             }
             var entry = Activator.CreateInstance(entryType);
-            var items = new List<string>();
+            var writer = new UnityCliJsonWriter().BeginArray();
             var total = ConsoleEntryCount();
-            for (var index = total - 1; index >= 0 && items.Count < count; index--)
+            var added = 0;
+            for (var index = total - 1; index >= 0 && added < count; index--)
             {
                 getEntry.Invoke(null, new object[] { index, entry });
                 var mode = Convert.ToInt32(entryType.GetField("mode", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(entry), CultureInfo.InvariantCulture);
@@ -168,9 +256,19 @@ namespace UnityCli
                 {
                     continue;
                 }
-                items.Add("{\"index\":" + index.ToString(CultureInfo.InvariantCulture) + ",\"type\":" + Quote(level) + ",\"message\":" + Quote(Convert.ToString(entryType.GetField("message", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(entry), CultureInfo.InvariantCulture)) + ",\"file\":" + Quote(Convert.ToString(entryType.GetField("file", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(entry), CultureInfo.InvariantCulture)) + ",\"line\":" + Convert.ToInt32(entryType.GetField("line", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(entry), CultureInfo.InvariantCulture).ToString(CultureInfo.InvariantCulture) + "}");
+                var message = Convert.ToString(entryType.GetField("message", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(entry), CultureInfo.InvariantCulture);
+                var file = Convert.ToString(entryType.GetField("file", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(entry), CultureInfo.InvariantCulture);
+                var line = Convert.ToInt32(entryType.GetField("line", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(entry), CultureInfo.InvariantCulture);
+                writer.BeginObject()
+                    .Prop("index", (long)index)
+                    .Prop("type", level)
+                    .Prop("message", message)
+                    .Prop("file", file)
+                    .Prop("line", (long)line)
+                    .EndObject();
+                added++;
             }
-            return "[" + string.Join(",", items.ToArray()) + "]";
+            return writer.EndArray().ToString();
         }
 
         private static int ConsoleEntryCount()
