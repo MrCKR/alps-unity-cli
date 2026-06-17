@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
 async function makeRuntime() {
-  const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-custom-tools-"));
+  const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-project-tools-"));
   const store = new JobStore(dataDir);
   return { dataDir, store, runner: new JobRunner(store, dataDir) };
 }
@@ -38,7 +38,7 @@ test("tools list --include-custom discovers Unity project custom descriptors thr
     coverageScope: ["attribute-first", "zero-config"],
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "custom-tool run sample.echo"
+    cliCommand: "tools run sample.echo"
   };
 
   const result = await execute(["tools", "list", "--include-custom", "--group", "sample"], {
@@ -51,7 +51,7 @@ test("tools list --include-custom discovers Unity project custom descriptors thr
 
   assert.equal(result.ok, true);
   assert.equal(requests.length, 1);
-  assert.equal(requests[0].command, "custom-tool.list");
+  assert.equal(requests[0].command, "project-tool.list");
   const data = result.data as { tools: Array<{ name: string; group: string; architectureSensitive?: boolean }> };
   assert.deepEqual(data.tools.map((tool) => tool.name), ["sample.echo"]);
   assert.equal(data.tools[0].group, "sample");
@@ -87,14 +87,14 @@ test("tools describe resolves custom descriptor without hand-written CLI metadat
   assert.equal(data.mode, "bridge");
   assert.equal(data.requiresUnity, true);
   assert.equal(data.supportStatus, "live-bridge");
-  assert.equal(data.cliCommand, "custom-tool run sample.echo");
+  assert.equal(data.cliCommand, "tools run sample.echo");
   assert.equal(data.architectureSensitive, true);
   assert.deepEqual(data.coverageScope, ["attribute-first", "zero-config"]);
 });
 
 test("Unity C# custom tool registry supports UnityCliToolAttribute descriptors and sample Editor tool", async () => {
-  const registry = await readFile(new URL("../unitypkg/Editor/CustomTools/CustomToolRegistry.cs", import.meta.url), "utf8");
-  const attribute = await readFile(new URL("../unitypkg/Editor/CustomTools/UnityCliToolAttribute.cs", import.meta.url), "utf8");
+  const registry = await readFile(new URL("../unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs", import.meta.url), "utf8");
+  const attribute = await readFile(new URL("../unitypkg/Editor/ProjectTools/UnityCliToolAttribute.cs", import.meta.url), "utf8");
   const sample = await readFile(new URL("../unitypkg/Editor/Samples/SampleEchoTool.cs", import.meta.url), "utf8");
 
   assert.match(attribute, /AttributeTargets\.Class \| AttributeTargets\.Method/);
@@ -103,15 +103,15 @@ test("Unity C# custom tool registry supports UnityCliToolAttribute descriptors a
   assert.match(registry, /typeof\(UnityCliToolAttribute\)/);
   assert.match(registry, /reason=ambiguous_class_level_execute_method/);
   assert.match(registry, /specific method when multiple candidates exist/);
-  assert.match(registry, /CustomToolDefinitionJson/);
-  assert.match(registry, /CustomToolFingerprintJson/);
-  assert.match(registry, /CustomToolHandlerFingerprintMaterial/);
+  assert.match(registry, /ProjectToolDefinitionJson/);
+  assert.match(registry, /ProjectToolFingerprintJson/);
+  assert.match(registry, /ProjectToolHandlerFingerprintMaterial/);
   assert.match(registry, /E_TOOL_FINGERPRINT_MISMATCH/);
-  assert.match(registry, /UNITY_CLI_CUSTOM_TOOL_FINGERPRINT_MODE/);
-  assert.match(registry, /UnityCliCustomToolFingerprints/);
+  assert.match(registry, /UNITY_CLI_PROJECT_TOOL_FINGERPRINT_MODE/);
+  assert.match(registry, /UnityCliProjectToolFingerprints/);
   assert.match(registry, /sha256-handler-code-plus-descriptor-v1/);
   assert.match(registry, /Prop\("descriptorSource", definition\.DescriptorSource\)/);
-  assert.match(registry, /PropRaw\("fingerprint", CustomToolFingerprintJson\(definition\)\)/);
+  assert.match(registry, /PropRaw\("fingerprint", ProjectToolFingerprintJson\(definition\)\)/);
   assert.match(registry, /Prop\("handler", "bridge"\)/);
   assert.match(sample, /\[UnityCliTool\(\s*"sample\.echo"/);
   assert.doesNotMatch(sample, /manifest\.json|config\.json|\.yaml|\.yml/);

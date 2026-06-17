@@ -26,13 +26,13 @@ using UiText = UnityEngine.UI.Text;
 
 namespace UnityCli
 {
-    public sealed class UnityCliCustomToolContext
+    public static partial class UnityCliBridge
     {
-        public string RequestId { get; set; }
-        public string ProjectPath { get; set; }
-        public string InputJson { get; set; }
-        public string ArtifactDir { get; set; }
-        public string LogPath { get; set; }
+        private static void RegisterProjectToolCommands(BridgeCommandRegistry registry)
+        {
+            RegisterCommand(registry, "project-tool.list", "project-tool", false, ProjectToolList);
+            RegisterCommand(registry, "project-tool.run", "project-tool", true, ProjectToolRun);
+        }
     }
 }
 #endif

@@ -60,7 +60,7 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /CapabilityJson\("texture", TextureCommands\)/);
   assert.match(source, /CapabilityJson\("script", ScriptCommands\)/);
   assert.match(source, /CapabilityJson\("code", CodeCommands\)/);
-  assert.match(source, /CapabilityJson\("custom-tool", CustomToolCommands\)/);
+  assert.match(source, /CapabilityJson\("project-tool", ProjectToolCommands\)/);
   assert.match(source, /AssemblyReloadEvents\.beforeAssemblyReload \+= OnBeforeAssemblyReload/);
   assert.match(source, /EditorApplication\.quitting \+= UnregisterAndStop/);
   assert.match(source, /RegisterInstance\("healthy"\)/);
@@ -87,7 +87,7 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /private static readonly string\[\] TextureCommands = \{ "texture\.info", "texture\.create", "texture\.sprite", "texture\.import-settings" \}/);
   assert.match(source, /private static readonly string\[\] ScriptCommands = \{ "script\.create", "script\.read", "script\.edit", "script\.validate" \}/);
   assert.match(source, /private static readonly string\[\] CodeCommands = \{ "code\.exec" \}/);
-  assert.match(source, /private static readonly string\[\] CustomToolCommands = \{ "custom-tool\.list", "custom-tool\.run" \}/);
+  assert.match(source, /private static readonly string\[\] ProjectToolCommands = \{ "project-tool\.list", "project-tool\.run" \}/);
   assert.match(source, /RegisterCommand\(registry, "camera\.list", "camera", false/);
   assert.match(source, /RegisterCommand\(registry, "camera\.info", "camera", false/);
   assert.match(source, /RegisterCommand\(registry, "camera\.screenshot", "camera", true/);
@@ -193,10 +193,10 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /RegisterCommand\(registry, "script\.edit", "script", true/);
   assert.match(source, /RegisterCommand\(registry, "script\.validate", "script", false/);
   assert.match(source, /RegisterCommand\(registry, "code\.exec", "code", true/);
-  assert.match(source, /RegisterCommand\(registry, "custom-tool\.list", "custom-tool", false/);
-  assert.match(source, /RegisterCommand\(registry, "custom-tool\.run", "custom-tool", true/);
+  assert.match(source, /RegisterCommand\(registry, "project-tool\.list", "project-tool", false/);
+  assert.match(source, /RegisterCommand\(registry, "project-tool\.run", "project-tool", true/);
   assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.active`, `scene\.hierarchy`, `scene\.build-settings`, `scene\.screenshot`, `scene\.create`, `scene\.load`, `scene\.save`, `go\.find`, `go\.inspect`, `go\.create`, `go\.modify`, `go\.delete`, `component\.add`, `component\.remove`, `component\.set`/);
-  assert.match(bridgeSection, /`script\.create`, `script\.read`, `script\.edit`, `script\.validate`, `code\.exec`, `custom-tool\.list` and `custom-tool\.run`/);
+  assert.match(bridgeSection, /`script\.create`, `script\.read`, `script\.edit`, `script\.validate`, `code\.exec`\./);
   assert.doesNotMatch(bridgeSection, /live query\/edit\/screenshot/);
   assert.doesNotMatch(bridgeSection, /not routed by this package yet/);
   assert.doesNotMatch(bridgeSection, /E_BRIDGE_COMMAND_UNSUPPORTED/);

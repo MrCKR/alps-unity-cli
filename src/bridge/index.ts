@@ -110,12 +110,7 @@ export async function executeBridgePayload(
       if (command === "code.exec" && isAbortLikeError(error)) {
         return liveCodeTimeoutFailure(requestId, endpoint, args, { cause: errorMessage(error) });
       }
-      if (command === "custom-tool.run" && isAbortLikeError(error)) {
-        return failure(requestId, "E_EXECUTION_TIMEOUT", "custom-tool.run exceeded the requested timeout before the Unity Bridge returned a response.", [
-          "Inspect UnityCliBridge.log and the requestId before retrying; the Editor may still be finishing a long-running tool.",
-          "Use --job only as a preference marker in this release; Local Agent asynchronous custom-tool jobs are not implemented yet."
-        ], { requestId, command, timeoutMs: typeof args.timeoutMs === "number" ? args.timeoutMs : 30_000, bridgeEndpoint: endpoint ?? null });
-      }
+
       return failure(requestId, "BRIDGE_CONNECTION_FAILED", errorMessage(error), ["Check Unity Bridge endpoint and logs."]);
     }
   }, retryOptions);
@@ -134,9 +129,6 @@ function bridgeEndpoint(flags: BridgeFlags, runtime: BridgeRuntime, selectedInst
 }
 
 function selectionFlags(command: string, flags: BridgeFlags): BridgeFlags {
-  if (command.startsWith("custom-tool.")) {
-    return flags;
-  }
   const { target: _target, ...rest } = flags;
   return rest;
 }
@@ -227,10 +219,6 @@ function bridgeErrorDetails(error: BridgeError | undefined): Record<string, unkn
 export function bridgeHttpTimeoutMs(payload: BridgeRequest): number {
   if (payload.command === "code.exec" && typeof payload.args.timeoutMs === "number" && Number.isFinite(payload.args.timeoutMs) && payload.args.timeoutMs > 0) {
     return payload.args.timeoutMs + 5000;
-  }
-  if (payload.command === "custom-tool.run") {
-    const timeoutMs = typeof payload.args.timeoutMs === "number" && Number.isFinite(payload.args.timeoutMs) ? payload.args.timeoutMs : 30_000;
-    return Math.max(timeoutMs + 5000, 65_000);
   }
   return 65_000;
 }

@@ -51,7 +51,7 @@ namespace UnityCli
         private static readonly string[] EditorCommands = { "editor.state", "editor.play", "editor.pause", "editor.stop", "editor.menu", "editor.console" };
         private static readonly string[] ScriptCommands = { "script.create", "script.read", "script.edit", "script.validate" };
         private static readonly string[] CodeCommands = { "code.exec" };
-        private static readonly string[] CustomToolCommands = { "custom-tool.list", "custom-tool.run" };
+        private static readonly string[] ProjectToolCommands = { "project-tool.list", "project-tool.run" };
         private const string BridgeDiagnosticsFingerprint = "alp276-health-fingerprint-20260615-execute-stage-v1";
         private const string DestructiveCommandFingerprint = "alp332-destructive-safety-v1";
         private static readonly BridgeCommandRegistry CommandRegistry = CreateCommandRegistry();
@@ -60,7 +60,7 @@ namespace UnityCli
         private static readonly DateTime BridgeLoadedAtUtc = DateTime.UtcNow;
         private static HttpListener listener;
         private static bool started;
-        private static bool customToolsDiscovered;
+        private static bool projectToolsDiscovered;
         private static volatile bool domainReloading;
         private static int port;
         private static double nextHeartbeatAt;

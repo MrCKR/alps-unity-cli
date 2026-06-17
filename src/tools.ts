@@ -6,7 +6,7 @@
  */
 
 import { getBoolean, getString } from "./args.js";
-import { discoverCustomTools, shouldDiscoverCustomTools, type CustomToolRuntime } from "./custom-tool-discovery.js";
+import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
 import {
   builtinToolMetadata,
   builtinToolGroups,
@@ -20,7 +20,7 @@ import { instanceSelectionFailure, selectInstanceForFlags, targetSummary } from 
 import { supportStatusDescription, supportStatusForTool, supportStatusLabel } from "./tools/metadata/status.js";
 import type { CliResult } from "./types.js";
 
-export type ToolsRuntime = CustomToolRuntime;
+export type ToolsRuntime = ProjectToolRuntime;
 
 export async function handleToolsCommand(
   command: string | undefined,
@@ -36,7 +36,7 @@ export async function handleToolsCommand(
   if (command === "run") {
     return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", "tools run is reserved for the unified tools contract and is not implemented in P1.", [
       "Use the domain CLI command shown by tools describe.",
-      "Use custom-tool run <name> for Unity project custom tools until P3 implements unified tools run."
+      "Use tools run <name> once P3 implements unified tools run."
     ]);
   }
 
@@ -68,12 +68,12 @@ async function handleToolsList(
 ): Promise<CliResult> {
   const groupFilter = getString(flags, "group");
   const explicitIncludeCustom = getBoolean(flags, "include-custom");
-  const includeCustom = explicitIncludeCustom || shouldDiscoverCustomTools(flags, runtime);
+  const includeCustom = explicitIncludeCustom || shouldDiscoverProjectTools(flags, runtime);
 
   let tools: ToolMetadata[] = groupFilter ? filterToolsByGroup(groupFilter) : builtinToolMetadata();
 
   if (includeCustom) {
-    const customTools = await discoverCustomTools(flags, runtime, requestId, { requireBridge: explicitIncludeCustom });
+    const customTools = await discoverProjectTools(flags, runtime, requestId, { requireBridge: explicitIncludeCustom });
     if (customTools.ok === false) return customTools;
     tools = [...tools, ...(groupFilter ? customTools.tools.filter((tool: ToolMetadata) => tool.group === groupFilter) : customTools.tools)];
   }
@@ -116,8 +116,8 @@ async function handleToolsList(
 
 async function handleToolsGroups(flags: Record<string, string | boolean>, runtime: ToolsRuntime, requestId: string): Promise<CliResult> {
   const builtinGroups = builtinToolGroups();
-  const includeCustom = shouldDiscoverCustomTools(flags, runtime);
-  const customDiscovery = includeCustom ? await discoverCustomTools(flags, runtime, requestId) : { ok: true as const, tools: [], mode: "skipped" as const };
+  const includeCustom = shouldDiscoverProjectTools(flags, runtime);
+  const customDiscovery = includeCustom ? await discoverProjectTools(flags, runtime, requestId) : { ok: true as const, tools: [], mode: "skipped" as const };
   if (customDiscovery.ok === false) return customDiscovery;
   const customGroups: string[] = [];
   const seen = new Set(builtinGroups);
@@ -151,8 +151,8 @@ async function handleToolsSearch(
   }
 
   const builtinResults = searchTools(keyword);
-  const includeCustom = getBoolean(flags, "include-custom") || shouldDiscoverCustomTools(flags, runtime);
-  const customTools = includeCustom ? await discoverCustomTools(flags, runtime, requestId, { requireBridge: getBoolean(flags, "include-custom") }) : { ok: true as const, tools: [] };
+  const includeCustom = getBoolean(flags, "include-custom") || shouldDiscoverProjectTools(flags, runtime);
+  const customTools = includeCustom ? await discoverProjectTools(flags, runtime, requestId, { requireBridge: getBoolean(flags, "include-custom") }) : { ok: true as const, tools: [] };
   if (customTools.ok === false) return customTools;
   const customResults = customTools.tools.filter((t: ToolMetadata) =>
     t.name.toLowerCase().includes(keyword.toLowerCase()) ||
@@ -210,7 +210,7 @@ async function handleToolsDescribe(
   }
 
   const builtinTool = findToolByName(toolName);
-  const tool = builtinTool ?? await findCustomToolByName(toolName, flags, runtime, requestId);
+  const tool = builtinTool ?? await findProjectToolByName(toolName, flags, runtime, requestId);
   if (!tool) {
     return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Tool not found for target: ${toolName}.`, [
       "Run unity_cli tools list to see all available tools.",
@@ -219,13 +219,13 @@ async function handleToolsDescribe(
     ]);
   }
 
-  const isCustomTool = builtinTool === undefined;
+  const isProjectTool = builtinTool === undefined;
   const supportStatus = supportStatusForTool(tool);
   const data: Record<string, unknown> = {
     command: "tools.describe",
     target: await optionalTargetSummary(flags, runtime),
-    mode: isCustomTool ? "bridge" : "offline",
-    requiresUnity: isCustomTool,
+    mode: isProjectTool ? "bridge" : "offline",
+    requiresUnity: isProjectTool,
     ...tool,
     supportStatus,
     supportStatusLabel: supportStatusLabel(supportStatus),
@@ -248,13 +248,13 @@ async function optionalTargetSummary(flags: Record<string, string | boolean>, ru
   }
 }
 
-async function findCustomToolByName(
+async function findProjectToolByName(
   name: string,
   flags: Record<string, string | boolean>,
   runtime: ToolsRuntime,
   requestId: string
 ): Promise<ToolMetadata | undefined> {
-  const customTools = await discoverCustomTools(flags, runtime, requestId);
+  const customTools = await discoverProjectTools(flags, runtime, requestId);
   if (customTools.ok === false) {
     return undefined;
   }

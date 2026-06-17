@@ -164,7 +164,7 @@ test("tools list --include-custom with runtime custom tools merges them", async 
     readOnlyHint: true,
     destructiveHint: false
   };
-  const runtime: ToolsRuntime = { customTools: [customTool] };
+  const runtime: ToolsRuntime = { projectTools: [customTool] };
   const result = await handleToolsCommand("list", [], { "include-custom": true }, runtime, requestId);
   assert.equal(result.ok, true);
   const data = result.data as { tools: Array<{ name: string }> };
@@ -192,7 +192,7 @@ test("tools groups keeps built-in groups without custom context", async () => {
 });
 
 test("tools groups includes runtime custom tool groups", async () => {
-  const runtime: ToolsRuntime = { customTools: [{
+  const runtime: ToolsRuntime = { projectTools: [{
     name: "project.bake",
     title: "Project Bake",
     description: "Bakes project data.",
