@@ -70,8 +70,10 @@ namespace UnityCli
                 try
                 {
                     WriteLog("bridge_request_started requestId=" + item.Request.RequestId + " command=" + item.Request.Command);
+                    currentWorkItem = item;
                     item.Response = Execute(item.Request);
-                    WriteLog("bridge_request_finished requestId=" + item.Request.RequestId + " command=" + item.Request.Command + " ok=" + Bool(item.Response != null && item.Response.Contains("\"ok\":true")));
+                    currentWorkItem = null;
+                    WriteLog("bridge_request_finished requestId=" + item.Request.RequestId + " command=" + item.Request.Command + " ok=" + Bool(item.Response != null && item.Response.Contains("\"ok\":true")) + " deferred=" + Bool(item.IsDeferred));
                 }
                 catch (BridgeCommandException exception)
                 {
@@ -86,6 +88,7 @@ namespace UnityCli
                 }
                 catch (Exception exception)
                 {
+                    currentWorkItem = null;
                     item.Response = ErrorJson("E_BRIDGE_COMMAND_FAILED", exception.Message, "Check Unity Console and UnityCliBridge.log.");
                 }
                 finally
@@ -94,7 +97,12 @@ namespace UnityCli
                     {
                         WriteLog("bridge_request_completed_after_http_timeout requestId=" + item.Request.RequestId + " command=" + item.Request.Command);
                     }
-                    item.Completed.Set();
+                    // Deferred items are completed asynchronously via EditorApplication.update callbacks;
+                    // do not signal the HTTP thread here — the callback will call Completed.Set() later.
+                    if (!item.IsDeferred)
+                    {
+                        item.Completed.Set();
+                    }
                 }
             }
         }
@@ -114,6 +122,7 @@ namespace UnityCli
             public ManualResetEventSlim Completed { get; private set; } = new ManualResetEventSlim(false);
             public string Response { get; set; }
             public bool TimedOut { get; private set; }
+            public bool IsDeferred { get; private set; }
 
             public bool TryStart()
             {
@@ -144,6 +153,11 @@ namespace UnityCli
             public void MarkTimedOut()
             {
                 TimedOut = true;
+            }
+
+            public void MarkDeferred()
+            {
+                IsDeferred = true;
             }
         }
     }

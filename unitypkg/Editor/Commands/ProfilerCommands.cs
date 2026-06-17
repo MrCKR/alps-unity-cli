@@ -9,7 +9,6 @@ using System.Net;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CSharp;
 using UnityEditor;
@@ -171,7 +170,11 @@ namespace UnityCli
             return format;
         }
 
-        private static void CaptureRawProfiler(string outputPath, int durationMs, int frames)
+        /// <summary>
+        /// Synchronous single-frame profiler capture. Used when durationMs == 0 and frames <= 1.
+        /// No Thread.Sleep — the capture completes within the current frame.
+        /// </summary>
+        private static void CaptureRawProfilerSync(string outputPath)
         {
             var previousLogFile = UnityEngine.Profiling.Profiler.logFile;
             var previousEnabled = UnityEngine.Profiling.Profiler.enabled;
@@ -181,15 +184,8 @@ namespace UnityCli
                 UnityEngine.Profiling.Profiler.logFile = outputPath;
                 UnityEngine.Profiling.Profiler.enableBinaryLog = true;
                 UnityEngine.Profiling.Profiler.enabled = true;
-                for (var i = 0; i < Math.Max(1, frames); i++)
-                {
-                    UnityEngine.Profiling.Profiler.BeginSample("UnityCliProfilerCapture");
-                    UnityEngine.Profiling.Profiler.EndSample();
-                    if (durationMs > 0)
-                    {
-                        Thread.Sleep(Math.Max(1, durationMs / Math.Max(1, frames)));
-                    }
-                }
+                UnityEngine.Profiling.Profiler.BeginSample("UnityCliProfilerCapture");
+                UnityEngine.Profiling.Profiler.EndSample();
             }
             finally
             {
@@ -201,6 +197,71 @@ namespace UnityCli
             {
                 File.WriteAllText(outputPath, "Profiler raw capture was requested; Unity did not emit binary data for this editor version." + Environment.NewLine, Encoding.UTF8);
             }
+        }
+
+        /// <summary>
+        /// Deferred multi-frame profiler capture. Uses EditorApplication.update callbacks
+        /// to spread profiler samples across real frames without blocking the main thread.
+        /// Returns DeferredResponseMarker — the BridgeWorkItem is completed asynchronously
+        /// when all frames have been captured or an error occurs.
+        /// </summary>
+        private static string CaptureRawProfilerDeferred(string outputPath, int durationMs, int totalFrames, string requestId, string effectType, DateTime startedAt, string format)
+        {
+            var item = currentWorkItem;
+            var previousLogFile = UnityEngine.Profiling.Profiler.logFile;
+            var previousEnabled = UnityEngine.Profiling.Profiler.enabled;
+            var previousBinaryLog = UnityEngine.Profiling.Profiler.enableBinaryLog;
+
+            UnityEngine.Profiling.Profiler.logFile = outputPath;
+            UnityEngine.Profiling.Profiler.enableBinaryLog = true;
+            UnityEngine.Profiling.Profiler.enabled = true;
+
+            var capturedFrames = 0;
+            EditorApplication.CallbackFunction waiter = null;
+            waiter = () =>
+            {
+                try
+                {
+                    if (capturedFrames < totalFrames)
+                    {
+                        UnityEngine.Profiling.Profiler.BeginSample("UnityCliProfilerCapture");
+                        UnityEngine.Profiling.Profiler.EndSample();
+                        capturedFrames++;
+                        return;
+                    }
+
+                    // Capture complete — restore profiler state and build response.
+                    EditorApplication.update -= waiter;
+                    UnityEngine.Profiling.Profiler.enabled = previousEnabled;
+                    UnityEngine.Profiling.Profiler.enableBinaryLog = previousBinaryLog;
+                    UnityEngine.Profiling.Profiler.logFile = previousLogFile;
+
+                    if (!File.Exists(outputPath))
+                    {
+                        File.WriteAllText(outputPath, "Profiler raw capture was requested; Unity did not emit binary data for this editor version." + Environment.NewLine, Encoding.UTF8);
+                    }
+
+                    var finishedAt = DateTime.UtcNow;
+                    var elapsedMs = (long)(finishedAt - startedAt).TotalMilliseconds;
+                    WriteLog(effectType.Replace('.', '_') + "_deferred artifactPath=" + outputPath + " durationMs=" + elapsedMs.ToString(CultureInfo.InvariantCulture));
+                    item.Response = SuccessJson("{"artifactPath":" + Quote(outputPath) + ","profilerPath":" + Quote(outputPath) + ","format":" + Quote(format) + ","durationMs":" + elapsedMs.ToString(CultureInfo.InvariantCulture) + ","requestedDurationMs":" + durationMs.ToString(CultureInfo.InvariantCulture) + ","frames":" + totalFrames.ToString(CultureInfo.InvariantCulture) + ","profiler":" + ProfilerStateJson() + ","plannedEffects":[{"type":" + Quote(effectType) + ","path":" + Quote(outputPath) + "}],"logPath":" + Quote(LogPath()) + "}");
+                    item.Completed.Set();
+                }
+                catch (Exception exception)
+                {
+                    EditorApplication.update -= waiter;
+                    UnityEngine.Profiling.Profiler.enabled = previousEnabled;
+                    UnityEngine.Profiling.Profiler.enableBinaryLog = previousBinaryLog;
+                    UnityEngine.Profiling.Profiler.logFile = previousLogFile;
+                    item.Response = ErrorJson("E_PROFILER_CAPTURE_FAILED", "Profiler artifact write failed: " + exception.Message, "Check output path permissions and Unity Profiler availability, then retry.");
+                    item.Completed.Set();
+                }
+            };
+
+            item.MarkDeferred();
+            EditorApplication.update += waiter;
+            WriteLog("profiler_capture_deferred_started artifactPath=" + outputPath + " requestedFrames=" + totalFrames.ToString(CultureInfo.InvariantCulture) + " requestedDurationMs=" + durationMs.ToString(CultureInfo.InvariantCulture));
+            return DeferredResponseMarker;
         }
 
         private static string ProfilerArtifactJson(string requestId, DateTime startedAt, int durationMs, int frames)
@@ -295,7 +356,15 @@ namespace UnityCli
                 var format = NormalizeProfilerFormat(request.StringArg("format"), outputPath);
                 if (format == "raw")
                 {
-                    CaptureRawProfiler(outputPath, durationMs, frames);
+                    // Multi-frame or timed captures require the main thread to yield between
+                    // frames for realistic profiling data. Use deferred frame-based capture
+                    // that spreads samples across EditorApplication.update callbacks.
+                    if (durationMs > 0 || frames > 1)
+                    {
+                        return CaptureRawProfilerDeferred(outputPath, durationMs, Math.Max(1, frames), request.RequestId, effectType, startedAt, format);
+                    }
+                    // Single-frame capture: synchronous, no Thread.Sleep needed.
+                    CaptureRawProfilerSync(outputPath);
                 }
                 else
                 {
