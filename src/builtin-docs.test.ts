@@ -16,7 +16,7 @@ function customTool(overrides: Partial<ToolMetadata> = {}): ToolMetadata {
     destructiveHint: true,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "custom-tool run terrain.bake",
+    cliCommand: "tools run terrain.bake",
     ...overrides
   };
 }
@@ -47,7 +47,7 @@ test("buildTopics formats custom tool lines", () => {
   const [line] = topic?.tools ?? [];
 
   assert.ok(line);
-  assert.ok(line.includes("terrain.bake (custom-tool run terrain.bake) — Terrain Bake"));
+  assert.ok(line.includes("terrain.bake (tools run terrain.bake) — Terrain Bake"));
   assert.ok(line.includes("已路由可执行"));
   assert.ok(line.includes("write"));
   assert.ok(line.includes("⚠ destructive"));
@@ -55,7 +55,7 @@ test("buildTopics formats custom tool lines", () => {
 });
 
 test("listBuiltinDocs includes runtime custom topics", () => {
-  const result = listBuiltinDocs({}, { customTools: [customTool()] }, requestId);
+  const result = listBuiltinDocs({}, { projectTools: [customTool()] }, requestId);
   assert.equal(result.ok, true);
 
   const data = result.data as { topics: Array<{ key: string; toolCount: number }> };
@@ -64,7 +64,7 @@ test("listBuiltinDocs includes runtime custom topics", () => {
 });
 
 test("getBuiltinDocTopic returns runtime custom topic", () => {
-  const result = getBuiltinDocTopic("terrain-tools", {}, { customTools: [customTool()] }, requestId);
+  const result = getBuiltinDocTopic("terrain-tools", {}, { projectTools: [customTool()] }, requestId);
   assert.equal(result.ok, true);
 
   const data = result.data as { topic: string; tools: string[] };

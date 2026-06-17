@@ -51,7 +51,7 @@ namespace UnityCli
                 + CapabilityJson("editor", EditorCommands) + ","
                 + CapabilityJson("script", ScriptCommands) + ","
                 + CapabilityJson("code", CodeCommands) + ","
-                + CapabilityJson("custom-tool", CustomToolCommands)
+                + CapabilityJson("project-tool", ProjectToolCommands)
                 + "]";
         }
 

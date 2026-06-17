@@ -29,7 +29,7 @@ test("command contract validates bridge registry and metadata", () => {
   assert.doesNotThrow(() => validateBridgeRegistryContracts(bridgeCommandRegistry));
   assert.doesNotThrow(() => validateToolMetadataContracts(builtinToolMetadata(), bridgeCommandRegistry));
   assert.equal(commandContracts().length, builtinToolMetadata().length);
-  assert.equal(new Set(bridgeCommandRegistry.specs().map((spec) => spec.bridgeCommand)).size, 95);
+  assert.equal(new Set(bridgeCommandRegistry.specs().map((spec) => spec.bridgeCommand)).size, 93);
 });
 
 test("command contract marks Profiler frozen coverage as architecture-sensitive", () => {

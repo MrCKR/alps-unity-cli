@@ -21,7 +21,6 @@ import { GRAPHICS_TOOLS } from "./groups/graphics.js";
 import { PHYSICS_TOOLS } from "./groups/physics.js";
 import { PROFILER_TOOLS } from "./groups/profiler.js";
 import { PROBUILDER_TOOLS } from "./groups/probuilder.js";
-import { CUSTOM_TOOL_TOOLS } from "./groups/custom-tool.js";
 import { SHADER_TOOLS } from "./groups/shader.js";
 import { TEXTURE_TOOLS } from "./groups/texture.js";
 import { ANIMATION_TOOLS } from "./groups/animation.js";
@@ -50,7 +49,6 @@ const BUILTIN_TOOLS: ToolMetadata[] = [
   ...PHYSICS_TOOLS,
   ...PROFILER_TOOLS,
   ...PROBUILDER_TOOLS,
-  ...CUSTOM_TOOL_TOOLS,
   ...SHADER_TOOLS,
   ...TEXTURE_TOOLS,
   ...ANIMATION_TOOLS,

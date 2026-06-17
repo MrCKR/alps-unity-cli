@@ -8,7 +8,7 @@
 
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
 import { getString } from "./args.js";
-import { discoverCustomTools, shouldDiscoverCustomTools, type CustomToolRuntime } from "./custom-tool-discovery.js";
+import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
 import { builtinToolGroups, builtinToolMetadata, type ToolMetadata } from "./tools/metadata/index.js";
 import { supportStatusForTool } from "./tools/metadata/status.js";
 import { failure, success } from "./output.js";
@@ -16,24 +16,24 @@ import type { CliResult } from "./types.js";
 
 export async function handleCapabilitiesCommand(
   flags: Record<string, string | boolean>,
-  runtime: BridgeRuntime & CustomToolRuntime,
+  runtime: BridgeRuntime & ProjectToolRuntime,
   requestId: string
 ): Promise<CliResult> {
   const jsonFormat = getString(flags, "format") === "json" || getBoolean(flags, "json");
 
-  let customTools: ToolMetadata[] = [];
-  let customToolDiagnostics: Record<string, unknown> | undefined;
-  if (shouldDiscoverCustomTools(flags, runtime)) {
-    const discovery = await discoverCustomTools(flags, runtime, requestId);
+  let projectTools: ToolMetadata[] = [];
+  let projectToolDiagnostics: Record<string, unknown> | undefined;
+  if (shouldDiscoverProjectTools(flags, runtime)) {
+    const discovery = await discoverProjectTools(flags, runtime, requestId);
     if (discovery.ok) {
-      customTools = discovery.tools;
-      customToolDiagnostics = { mode: discovery.mode, count: customTools.length };
+      projectTools = discovery.tools;
+      projectToolDiagnostics = { mode: discovery.mode, count: projectTools.length };
     } else {
-      customToolDiagnostics = { mode: "error", code: discovery.error?.code, message: discovery.error?.message };
+      projectToolDiagnostics = { mode: "error", code: discovery.error?.code, message: discovery.error?.message };
     }
   }
 
-  const staticCapabilities = buildStaticCapabilities(customTools);
+  const staticCapabilities = buildStaticCapabilities(projectTools);
 
   let runtimeCapabilities: Record<string, unknown> | undefined;
   const endpoint = getString(flags, "bridge-endpoint") ?? runtime.bridgeEndpoint ?? process.env.UNITY_CLI_BRIDGE_ENDPOINT;
@@ -60,7 +60,7 @@ export async function handleCapabilitiesCommand(
     mode: runtimeCapabilities ? "hybrid" : "offline",
     requiresUnity: false,
     static: staticCapabilities,
-    ...(customToolDiagnostics ? { customTools: customToolDiagnostics } : {}),
+    ...(projectToolDiagnostics ? { projectTools: projectToolDiagnostics } : {}),
     ...(runtimeCapabilities ? { runtime: runtimeCapabilities } : {}),
     ...(runtimeCapabilities ? { bridgeEndpoint: endpoint ?? runtime.bridgeEndpoint } : {})
   };
@@ -72,10 +72,10 @@ function getBoolean(flags: Record<string, string | boolean>, name: string): bool
   return flags[name] === true || flags[name] === "true";
 }
 
-function buildStaticCapabilities(customTools: ToolMetadata[] = []): Record<string, unknown> {
+function buildStaticCapabilities(projectTools: ToolMetadata[] = []): Record<string, unknown> {
   const builtinTools = builtinToolMetadata();
-  const tools = [...builtinTools, ...customTools];
-  const groups = [...new Set([...builtinToolGroups(), ...customTools.map((tool) => tool.group)])].sort();
+  const tools = [...builtinTools, ...projectTools];
+  const groups = [...new Set([...builtinToolGroups(), ...projectTools.map((tool) => tool.group)])].sort();
 
   const destructiveTools = tools.filter((t) => t.destructiveHint).map((t) => t.name);
   const readOnlyTools = tools.filter((t) => t.readOnlyHint).map((t) => t.name);
@@ -122,7 +122,7 @@ function buildStaticCapabilities(customTools: ToolMetadata[] = []): Record<strin
     },
     schemaFeatures: {
       toolMetadata: true,
-      customToolDescriptor: true,
+      projectToolDescriptor: true,
       unifiedDiscovery: true,
       builtinDocs: true,
       requestEnvelope: true,
