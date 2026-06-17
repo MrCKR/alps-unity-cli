@@ -1,0 +1,16 @@
+{
+  "command": "editor.console items sub-structure",
+  "item": {
+    "index": "<integer>",
+    "type": "<string>",
+    "message": "<string>",
+    "file": "<string|null>",
+    "line": "<integer>"
+  },
+  "notes": [
+    "Console items is an array returned by ConsoleItemsJson()",
+    "Each item has: index, type, message, file, line",
+    "line may be 0 when unavailable",
+    "file may be empty string when unavailable"
+  ]
+}

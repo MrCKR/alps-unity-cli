@@ -61,7 +61,12 @@ namespace UnityCli
                 AssetDatabase.SaveAssets();
                 WriteLog("graphics_quality_updated effects=" + effects.Count.ToString(CultureInfo.InvariantCulture));
             }
-            return SuccessJson("{\"graphics\":" + GraphicsSummaryJson() + ",\"qualitySettings\":" + QualitySettingsJson() + ",\"plannedEffects\":[" + string.Join(",", effects.ToArray()) + "],\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("graphics", GraphicsSummaryJson())
+                .PropRaw("qualitySettings", QualitySettingsJson())
+                .PropArray("plannedEffects", arr => { foreach (var effect in effects) arr.RawValue(effect); })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string GraphicsSettingsCommand(BridgeRequest request)
@@ -100,18 +105,30 @@ namespace UnityCli
                 AssetDatabase.SaveAssets();
                 WriteLog("graphics_settings_updated effects=" + effects.Count.ToString(CultureInfo.InvariantCulture));
             }
-            return SuccessJson("{\"graphics\":" + GraphicsSummaryJson() + ",\"qualitySettings\":" + QualitySettingsJson() + ",\"plannedEffects\":[" + string.Join(",", effects.ToArray()) + "],\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("graphics", GraphicsSummaryJson())
+                .PropRaw("qualitySettings", QualitySettingsJson())
+                .PropArray("plannedEffects", arr => { foreach (var effect in effects) arr.RawValue(effect); })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string GraphicsPipeline(BridgeRequest request)
         {
-            return SuccessJson("{\"graphics\":" + GraphicsSummaryJson() + ",\"qualitySettings\":" + QualitySettingsJson() + ",\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("graphics", GraphicsSummaryJson())
+                .PropRaw("qualitySettings", QualitySettingsJson())
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string GraphicsVolume(BridgeRequest request)
         {
             var target = request.StringArg("target");
-            return SuccessJson("{\"volumes\":" + GraphicsVolumesJson(target) + ",\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("volumes", GraphicsVolumesJson(target))
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string GraphicsScreenshot(BridgeRequest request)
@@ -122,7 +139,15 @@ namespace UnityCli
                 return ErrorJson("E_SCENE_VIEW_NOT_AVAILABLE", "No SceneView or Camera is available for graphics screenshot capture.", "Open a SceneView or create an active Camera in the scene.");
             }
             var capture = CaptureCamera(camera, request);
-            return SuccessJson("{\"diagnostics\":" + GraphicsSummaryJson() + ",\"qualitySettings\":" + QualitySettingsJson() + ",\"screenshot\":" + ScreenshotDataJson(capture, "graphics", camera.name) + ",\"screenshotPath\":" + Quote(capture.Path) + ",\"artifactPath\":" + Quote(capture.Path) + ",\"plannedEffects\":[" + EffectJson("graphics.screenshot", "path", capture.Path) + "],\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("diagnostics", GraphicsSummaryJson())
+                .PropRaw("qualitySettings", QualitySettingsJson())
+                .PropRaw("screenshot", ScreenshotDataJson(capture, "graphics", camera.name))
+                .Prop("screenshotPath", capture.Path)
+                .Prop("artifactPath", capture.Path)
+                .PropArray("plannedEffects", arr => arr.RawValue(EffectJson("graphics.screenshot", "path", capture.Path)))
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string GraphicsVolumesJson(string target)
@@ -142,12 +167,12 @@ namespace UnityCli
                 components.Add(typed);
             }
             components.Sort(delegate(Component left, Component right) { return string.Compare(HierarchyPath(left.gameObject), HierarchyPath(right.gameObject), StringComparison.OrdinalIgnoreCase); });
-            var items = new List<string>();
+            var w = new UnityCliJsonWriter().BeginArray();
             foreach (var component in components)
             {
-                items.Add(GraphicsVolumeJson(component));
+                w.RawValue(GraphicsVolumeJson(component));
             }
-            return "[" + string.Join(",", items.ToArray()) + "]";
+            return w.EndArray().ToString();
         }
 
         private static string GraphicsVolumeJson(Component component)
@@ -160,20 +185,28 @@ namespace UnityCli
             var profile = MemberValue(type, component, "profile") as UnityEngine.Object;
             var sharedProfile = MemberValue(type, component, "sharedProfile") as UnityEngine.Object;
             var effectiveProfile = profile ?? sharedProfile;
-            return "{\"target\":" + GameObjectTargetJson(component.gameObject)
-                + ",\"enabled\":" + Bool(enabledProperty == null || Convert.ToBoolean(enabledProperty.GetValue(component, null), CultureInfo.InvariantCulture))
-                + ",\"isGlobal\":" + Bool(isGlobalField != null && Convert.ToBoolean(isGlobalField.GetValue(component), CultureInfo.InvariantCulture))
-                + ",\"priority\":" + Number(priorityField == null ? 0f : Convert.ToSingle(priorityField.GetValue(component), CultureInfo.InvariantCulture))
-                + ",\"weight\":" + Number(weightField == null ? 0f : Convert.ToSingle(weightField.GetValue(component), CultureInfo.InvariantCulture))
-                + ",\"profile\":" + AssetReferenceJson(effectiveProfile)
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropRaw("target", GameObjectTargetJson(component.gameObject))
+                .Prop("enabled", enabledProperty == null || Convert.ToBoolean(enabledProperty.GetValue(component, null), CultureInfo.InvariantCulture))
+                .Prop("isGlobal", isGlobalField != null && Convert.ToBoolean(isGlobalField.GetValue(component), CultureInfo.InvariantCulture))
+                .Prop("priority", priorityField == null ? 0f : Convert.ToSingle(priorityField.GetValue(component), CultureInfo.InvariantCulture))
+                .Prop("weight", weightField == null ? 0f : Convert.ToSingle(weightField.GetValue(component), CultureInfo.InvariantCulture))
+                .PropRaw("profile", AssetReferenceJson(effectiveProfile))
+                .EndObject().ToString();
         }
 
         private static string GraphicsSummaryJson()
         {
             var pipeline = GraphicsSettings.defaultRenderPipeline;
             var pipelinePath = pipeline == null ? null : NormalizeAssetPath(AssetDatabase.GetAssetPath(pipeline));
-            return "{\"renderPipeline\":{\"active\":" + Quote(RenderPipelineSummaryName()) + ",\"defaultAsset\":" + Quote(pipeline == null ? null : pipeline.name) + ",\"defaultAssetPath\":" + Quote(pipelinePath) + "},\"currentQualityLevel\":" + QualitySettings.GetQualityLevel().ToString(CultureInfo.InvariantCulture) + ",\"qualityLevelName\":" + Quote(QualitySettings.names.Length > QualitySettings.GetQualityLevel() ? QualitySettings.names[QualitySettings.GetQualityLevel()] : null) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropObject("renderPipeline", obj => obj
+                    .Prop("active", RenderPipelineSummaryName())
+                    .Prop("defaultAsset", pipeline == null ? null : pipeline.name)
+                    .Prop("defaultAssetPath", pipelinePath))
+                .Prop("currentQualityLevel", (long)QualitySettings.GetQualityLevel())
+                .Prop("qualityLevelName", QualitySettings.names.Length > QualitySettings.GetQualityLevel() ? QualitySettings.names[QualitySettings.GetQualityLevel()] : null)
+                .EndObject().ToString();
         }
 
         private static string RenderPipelineSummaryName()
@@ -187,17 +220,44 @@ namespace UnityCli
 
         private static string QualitySettingsJson()
         {
-            var names = new List<string>();
-            foreach (var name in QualitySettings.names)
-            {
-                names.Add(Quote(name));
-            }
-            return "{\"names\":[" + string.Join(",", names.ToArray()) + "],\"currentLevel\":" + QualitySettings.GetQualityLevel().ToString(CultureInfo.InvariantCulture) + ",\"vSyncCount\":" + QualitySettings.vSyncCount.ToString(CultureInfo.InvariantCulture) + ",\"antiAliasing\":" + QualitySettings.antiAliasing.ToString(CultureInfo.InvariantCulture) + ",\"shadowDistance\":" + Number(QualitySettings.shadowDistance) + ",\"masterTextureLimit\":" + QualitySettings.masterTextureLimit.ToString(CultureInfo.InvariantCulture) + ",\"lodBias\":" + Number(QualitySettings.lodBias) + ",\"maximumLODLevel\":" + QualitySettings.maximumLODLevel.ToString(CultureInfo.InvariantCulture) + ",\"anisotropicFiltering\":" + Quote(QualitySettings.anisotropicFiltering.ToString()) + ",\"shadows\":" + Quote(QualitySettings.shadows.ToString()) + ",\"shadowResolution\":" + Quote(QualitySettings.shadowResolution.ToString()) + ",\"realtimeReflectionProbes\":" + Bool(QualitySettings.realtimeReflectionProbes) + ",\"softParticles\":" + Bool(QualitySettings.softParticles) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropArray("names", arr =>
+                {
+                    foreach (var name in QualitySettings.names)
+                    {
+                        arr.Value(name);
+                    }
+                })
+                .Prop("currentLevel", (long)QualitySettings.GetQualityLevel())
+                .Prop("vSyncCount", (long)QualitySettings.vSyncCount)
+                .Prop("antiAliasing", (long)QualitySettings.antiAliasing)
+                .Prop("shadowDistance", QualitySettings.shadowDistance)
+                .Prop("masterTextureLimit", (long)QualitySettings.masterTextureLimit)
+                .Prop("lodBias", QualitySettings.lodBias)
+                .Prop("maximumLODLevel", (long)QualitySettings.maximumLODLevel)
+                .Prop("anisotropicFiltering", QualitySettings.anisotropicFiltering.ToString())
+                .Prop("shadows", QualitySettings.shadows.ToString())
+                .Prop("shadowResolution", QualitySettings.shadowResolution.ToString())
+                .Prop("realtimeReflectionProbes", QualitySettings.realtimeReflectionProbes)
+                .Prop("softParticles", QualitySettings.softParticles)
+                .EndObject().ToString();
         }
 
         private static string PhysicsSettingsJson()
         {
-            return "{\"mode\":\"3d+2d\",\"gravity\":" + Vector3Json(Physics.gravity) + ",\"gravity2d\":" + Vector2Json(Physics2D.gravity) + ",\"defaultContactOffset\":" + Number(Physics.defaultContactOffset) + ",\"bounceThreshold\":" + Number(Physics.bounceThreshold) + ",\"defaultSolverIterations\":" + Physics.defaultSolverIterations.ToString(CultureInfo.InvariantCulture) + ",\"defaultSolverVelocityIterations\":" + Physics.defaultSolverVelocityIterations.ToString(CultureInfo.InvariantCulture) + ",\"queriesHitTriggers\":" + Bool(Physics.queriesHitTriggers) + ",\"queriesHitBackfaces\":" + Bool(Physics.queriesHitBackfaces) + ",\"queriesStartInColliders\":" + Bool(Physics2D.queriesStartInColliders) + ",\"autoSimulation\":" + Bool(Physics.autoSimulation) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("mode", "3d+2d")
+                .PropRaw("gravity", Vector3Json(Physics.gravity))
+                .PropRaw("gravity2d", Vector2Json(Physics2D.gravity))
+                .Prop("defaultContactOffset", Physics.defaultContactOffset)
+                .Prop("bounceThreshold", Physics.bounceThreshold)
+                .Prop("defaultSolverIterations", (long)Physics.defaultSolverIterations)
+                .Prop("defaultSolverVelocityIterations", (long)Physics.defaultSolverVelocityIterations)
+                .Prop("queriesHitTriggers", Physics.queriesHitTriggers)
+                .Prop("queriesHitBackfaces", Physics.queriesHitBackfaces)
+                .Prop("queriesStartInColliders", Physics2D.queriesStartInColliders)
+                .Prop("autoSimulation", Physics.autoSimulation)
+                .EndObject().ToString();
         }
 
         private static void SetQualityLevel(int level, List<string> effects)

@@ -192,7 +192,7 @@ namespace UnityCli
             tools.Sort(StringComparer.Ordinal);
 
             var data = new UnityCliJsonWriter().BeginObject()
-                .PropRaw("tools", "[" + string.Join(",", tools.ToArray()) + "]")
+                .PropArray("tools", arr => { foreach (var tool in tools) { arr.RawValue(tool); } })
                 .PropRaw("session", RuntimeSessionJson())
                 .Prop("logPath", LogPath())
                 .EndObject()

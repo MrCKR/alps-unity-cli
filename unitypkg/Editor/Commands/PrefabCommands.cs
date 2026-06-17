@@ -43,7 +43,11 @@ namespace UnityCli
         {
             var path = RequirePrefabPath(request.StringArg("path"));
             var prefab = LoadPrefabAsset(path);
-            return SuccessJson("{\"prefab\":" + PrefabAssetJson(path, prefab) + ",\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("prefab", PrefabAssetJson(path, prefab))
+                .Prop("logPath", LogPath())
+                .EndObject()
+                .ToString());
         }
 
         private static string PrefabCreate(BridgeRequest request)
@@ -108,7 +112,12 @@ namespace UnityCli
                 if (!string.IsNullOrEmpty(name) && root.name != name)
                 {
                     root.name = name;
-                    effects.Add("{\"type\":\"prefab.modify\",\"path\":" + Quote(path) + ",\"property\":\"name\"}");
+                    effects.Add(new UnityCliJsonWriter().BeginObject()
+                        .Prop("type", "prefab.modify")
+                        .Prop("path", path)
+                        .Prop("property", "name")
+                        .EndObject()
+                        .ToString());
                 }
 
                 var addChild = request.StringArg("addChild");
@@ -125,7 +134,12 @@ namespace UnityCli
                     }
                     var child = new GameObject(addChild);
                     child.transform.SetParent(root.transform, false);
-                    effects.Add("{\"type\":\"prefab.modify\",\"path\":" + Quote(path) + ",\"addChild\":" + Quote(addChild) + "}");
+                    effects.Add(new UnityCliJsonWriter().BeginObject()
+                        .Prop("type", "prefab.modify")
+                        .Prop("path", path)
+                        .Prop("addChild", addChild)
+                        .EndObject()
+                        .ToString());
                 }
 
                 var removeChild = request.StringArg("removeChild");
@@ -137,7 +151,12 @@ namespace UnityCli
                         throw new BridgeCommandException("E_PREFAB_CHILD_NOT_FOUND", "Prefab child not found: " + removeChild, "Run unity_cli prefab hierarchy <path> to inspect child paths.");
                     }
                     UnityEngine.Object.DestroyImmediate(child.gameObject);
-                    effects.Add("{\"type\":\"prefab.modify\",\"path\":" + Quote(path) + ",\"removeChild\":" + Quote(removeChild) + "}");
+                    effects.Add(new UnityCliJsonWriter().BeginObject()
+                        .Prop("type", "prefab.modify")
+                        .Prop("path", path)
+                        .Prop("removeChild", removeChild)
+                        .EndObject()
+                        .ToString());
                 }
 
                 if (effects.Count == 0)
@@ -148,7 +167,12 @@ namespace UnityCli
                 PrefabUtility.SaveAsPrefabAsset(root, path);
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
-                return SuccessJson("{\"prefab\":" + PrefabAssetJson(path, root, root) + ",\"plannedEffects\":[" + string.Join(",", effects.ToArray()) + "],\"logPath\":" + Quote(LogPath()) + "}");
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .PropRaw("prefab", PrefabAssetJson(path, root, root))
+                    .PropArray("plannedEffects", arr => { foreach (var effect in effects) { arr.RawValue(effect); } })
+                    .Prop("logPath", LogPath())
+                    .EndObject()
+                    .ToString());
             }
             finally
             {
@@ -221,7 +245,17 @@ namespace UnityCli
                 var total = CountHierarchy(root.transform);
                 CollectHierarchy(root.transform, items, cursor, pageSize, new Counter());
                 var nextCursor = cursor + items.Count < total ? (cursor + items.Count).ToString(CultureInfo.InvariantCulture) : null;
-                return SuccessJson("{\"prefab\":" + PrefabAssetJson(path, root, root) + ",\"items\":[" + string.Join(",", items.ToArray()) + "],\"pageInfo\":{\"pageSize\":" + pageSize.ToString(CultureInfo.InvariantCulture) + ",\"cursor\":" + cursor.ToString(CultureInfo.InvariantCulture) + ",\"nextCursor\":" + Quote(nextCursor) + ",\"total\":" + total.ToString(CultureInfo.InvariantCulture) + "},\"logPath\":" + Quote(LogPath()) + "}");
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .PropRaw("prefab", PrefabAssetJson(path, root, root))
+                    .PropArray("items", arr => { foreach (var item in items) { arr.RawValue(item); } })
+                    .PropObject("pageInfo", pageInfo => pageInfo
+                        .Prop("pageSize", (long)pageSize)
+                        .Prop("cursor", (long)cursor)
+                        .Prop("nextCursor", nextCursor)
+                        .Prop("total", (long)total))
+                    .Prop("logPath", LogPath())
+                    .EndObject()
+                    .ToString());
             }
             finally
             {
@@ -293,7 +327,11 @@ namespace UnityCli
             var assetPath = type.GetProperty("assetPath")?.GetValue(prefabStage)?.ToString();
             var sceneValue = type.GetProperty("scene")?.GetValue(prefabStage);
             var scenePath = sceneValue is Scene scene ? scene.path : null;
-            return $"{{\"assetPath\":{Quote(assetPath)},\"scenePath\":{Quote(scenePath)}}}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("assetPath", assetPath)
+                .Prop("scenePath", scenePath)
+                .EndObject()
+                .ToString();
         }
 
         private static string PrefabAssetJson(string path, GameObject prefab)
@@ -313,18 +351,19 @@ namespace UnityCli
             var guid = AssetDatabase.AssetPathToGUID(path);
             var assetType = PrefabUtility.GetPrefabAssetType(prefab).ToString();
             var instanceStatus = PrefabUtility.GetPrefabInstanceStatus(prefab).ToString();
-            return "{"
-                + "\"path\":" + Quote(path) + ","
-                + "\"guid\":" + Quote(guid) + ","
-                + "\"rootName\":" + Quote(prefab.name) + ","
-                + "\"assetType\":" + Quote(assetType) + ","
-                + "\"instanceStatus\":" + Quote(instanceStatus) + ","
-                + "\"isVariant\":" + Bool(assetType == "Variant") + ","
-                + "\"variant\":" + PrefabVariantJson(prefab) + ","
-                + "\"dependencyCount\":" + dependencies.Length.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"dependencies\":" + DependencySummaryJson(dependencies) + ","
-                + "\"nestedPrefabs\":" + NestedPrefabReferencesJson(path, contentsRoot)
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("path", path)
+                .Prop("guid", guid)
+                .Prop("rootName", prefab.name)
+                .Prop("assetType", assetType)
+                .Prop("instanceStatus", instanceStatus)
+                .Prop("isVariant", assetType == "Variant")
+                .PropRaw("variant", PrefabVariantJson(prefab))
+                .Prop("dependencyCount", (long)dependencies.Length)
+                .PropRaw("dependencies", DependencySummaryJson(dependencies))
+                .PropRaw("nestedPrefabs", NestedPrefabReferencesJson(path, contentsRoot))
+                .EndObject()
+                .ToString();
         }
 
         private static string PrefabVariantJson(GameObject prefab)
@@ -332,13 +371,14 @@ namespace UnityCli
             var source = PrefabUtility.GetCorrespondingObjectFromSource(prefab);
             var sourcePath = source == null ? null : NormalizeAssetPath(AssetDatabase.GetAssetPath(source));
             var sourceGuid = string.IsNullOrEmpty(sourcePath) ? null : AssetDatabase.AssetPathToGUID(sourcePath);
-            return "{"
-                + "\"isVariant\":" + Bool(PrefabUtility.GetPrefabAssetType(prefab) == PrefabAssetType.Variant) + ","
-                + "\"basePath\":" + Quote(sourcePath) + ","
-                + "\"baseGuid\":" + Quote(sourceGuid) + ","
-                + "\"sourcePath\":" + Quote(sourcePath) + ","
-                + "\"sourceGuid\":" + Quote(sourceGuid)
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("isVariant", PrefabUtility.GetPrefabAssetType(prefab) == PrefabAssetType.Variant)
+                .Prop("basePath", sourcePath)
+                .Prop("baseGuid", sourceGuid)
+                .Prop("sourcePath", sourcePath)
+                .Prop("sourceGuid", sourceGuid)
+                .EndObject()
+                .ToString();
         }
 
         private static string DependencySummaryJson(string[] dependencies)
@@ -347,9 +387,18 @@ namespace UnityCli
             foreach (var dependency in dependencies)
             {
                 var type = AssetDatabase.GetMainAssetTypeAtPath(dependency);
-                items.Add("{\"path\":" + Quote(NormalizeAssetPath(dependency)) + ",\"guid\":" + Quote(AssetDatabase.AssetPathToGUID(dependency)) + ",\"type\":" + Quote(type == null ? null : type.Name) + "}");
+                items.Add(new UnityCliJsonWriter().BeginObject()
+                    .Prop("path", NormalizeAssetPath(dependency))
+                    .Prop("guid", AssetDatabase.AssetPathToGUID(dependency))
+                    .Prop("type", type == null ? null : type.Name)
+                    .EndObject()
+                    .ToString());
             }
-            return "{\"count\":" + dependencies.Length.ToString(CultureInfo.InvariantCulture) + ",\"items\":[" + string.Join(",", items.ToArray()) + "]}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("count", (long)dependencies.Length)
+                .PropArray("items", arr => { foreach (var item in items) { arr.RawValue(item); } })
+                .EndObject()
+                .ToString();
         }
 
         private static string NestedPrefabReferencesJson(string prefabPath, GameObject contentsRoot)
@@ -375,7 +424,11 @@ namespace UnityCli
             var items = new List<string>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
             CollectNestedPrefabReferences(prefabPath, root.transform, root.transform, items, seen);
-            return "{\"count\":" + items.Count.ToString(CultureInfo.InvariantCulture) + ",\"items\":[" + string.Join(",", items.ToArray()) + "]}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("count", (long)items.Count)
+                .PropArray("items", arr => { foreach (var item in items) { arr.RawValue(item); } })
+                .EndObject()
+                .ToString();
         }
 
         private static void CollectNestedPrefabReferences(string prefabPath, Transform root, Transform current, List<string> items, HashSet<string> seen)
@@ -402,34 +455,49 @@ namespace UnityCli
         private static string NestedPrefabReferenceJson(GameObject gameObject, string sourcePath)
         {
             var source = AssetDatabase.LoadAssetAtPath<GameObject>(sourcePath);
-            return "{"
-                + "\"name\":" + Quote(gameObject.name) + ","
-                + "\"path\":" + Quote(HierarchyPath(gameObject)) + ","
-                + "\"sourcePath\":" + Quote(sourcePath) + ","
-                + "\"sourceGuid\":" + Quote(AssetDatabase.AssetPathToGUID(sourcePath)) + ","
-                + "\"assetType\":" + Quote(source == null ? null : PrefabUtility.GetPrefabAssetType(source).ToString()) + ","
-                + "\"instanceStatus\":" + Quote(PrefabUtility.GetPrefabInstanceStatus(gameObject).ToString())
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("name", gameObject.name)
+                .Prop("path", HierarchyPath(gameObject))
+                .Prop("sourcePath", sourcePath)
+                .Prop("sourceGuid", AssetDatabase.AssetPathToGUID(sourcePath))
+                .Prop("assetType", source == null ? null : PrefabUtility.GetPrefabAssetType(source).ToString())
+                .Prop("instanceStatus", PrefabUtility.GetPrefabInstanceStatus(gameObject).ToString())
+                .EndObject()
+                .ToString();
         }
 
         private static string PrefabCreateJson(string source, string path, string mode)
         {
-            return "{"
-                + "\"prefab\":" + PrefabAssetJson(path, LoadPrefabAsset(path)) + ","
-                + "\"source\":" + Quote(source) + ","
-                + "\"mode\":" + Quote(mode) + ","
-                + "\"plannedEffects\":[{\"type\":\"prefab.create\",\"path\":" + Quote(path) + ",\"source\":" + Quote(source) + "}],"
-                + "\"logPath\":" + Quote(LogPath())
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropRaw("prefab", PrefabAssetJson(path, LoadPrefabAsset(path)))
+                .Prop("source", source)
+                .Prop("mode", mode)
+                .PropArray("plannedEffects", arr => arr
+                    .RawValue(new UnityCliJsonWriter().BeginObject()
+                        .Prop("type", "prefab.create")
+                        .Prop("path", path)
+                        .Prop("source", source)
+                        .EndObject().ToString()))
+                .Prop("logPath", LogPath())
+                .EndObject()
+                .ToString();
         }
 
         private static string PrefabStageJson(string action, string path, bool dirty)
         {
-            return "{"
-                + "\"stage\":{\"action\":" + Quote(action) + ",\"path\":" + Quote(path) + ",\"dirty\":" + Bool(dirty) + "},"
-                + "\"plannedEffects\":[{\"type\":" + Quote("prefab.stage-" + action) + ",\"path\":" + Quote(path) + "}],"
-                + "\"logPath\":" + Quote(LogPath())
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropObject("stage", stage => stage
+                    .Prop("action", action)
+                    .Prop("path", path)
+                    .Prop("dirty", dirty))
+                .PropArray("plannedEffects", arr => arr
+                    .RawValue(new UnityCliJsonWriter().BeginObject()
+                        .Prop("type", "prefab.stage-" + action)
+                        .Prop("path", path)
+                        .EndObject().ToString()))
+                .Prop("logPath", LogPath())
+                .EndObject()
+                .ToString();
         }
 
         private static object CurrentPrefabStage()

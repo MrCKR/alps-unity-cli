@@ -40,7 +40,11 @@ namespace UnityCli
         {
             var path = ResolveTexturePath(request.StringArg("path") ?? request.StringArg("target"));
             var texture = LoadTextureAsset(path);
-            return SuccessJson("{\"texture\":" + TextureAssetJson(path, texture) + ",\"importSettings\":" + TextureImporterJson(RequireTextureImporter(path)) + ",\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("texture", TextureAssetJson(path, texture))
+                .PropRaw("importSettings", TextureImporterJson(RequireTextureImporter(path)))
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string TextureCreate(BridgeRequest request)
@@ -130,7 +134,18 @@ namespace UnityCli
                 return ErrorJson("E_IMPORT_FAILED", "Failed to apply texture import settings: " + path + " (" + exception.Message + ")", "Check TextureImporter settings and Unity Console diagnostics.");
             }
             var texture = LoadTextureAsset(path);
-            return SuccessJson("{\"texture\":" + TextureAssetJson(path, texture) + ",\"importSettings\":" + TextureImporterJson(RequireTextureImporter(path)) + ",\"changed\":" + Bool(changed) + ",\"plannedEffects\":" + (changed ? "[{\"type\":\"texture.import-settings\",\"path\":" + Quote(path) + "}]" : "[]") + ",\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("texture", TextureAssetJson(path, texture))
+                .PropRaw("importSettings", TextureImporterJson(RequireTextureImporter(path)))
+                .Prop("changed", changed)
+                .PropArray("plannedEffects", arr => {
+                    if (changed) arr.RawValue(new UnityCliJsonWriter().BeginObject()
+                        .Prop("type", "texture.import-settings")
+                        .Prop("path", path)
+                        .EndObject().ToString());
+                })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string RequireTexturePath(string rawPath)
@@ -330,7 +345,16 @@ namespace UnityCli
 
         private static string TextureMutationJson(string type, string path, Texture2D texture)
         {
-            return "{\"texture\":" + TextureAssetJson(path, texture) + ",\"importSettings\":" + TextureImporterJson(RequireTextureImporter(path)) + ",\"plannedEffects\":[{\"type\":" + Quote(type) + ",\"path\":" + Quote(path) + ",\"refresh\":true}],\"logPath\":" + Quote(LogPath()) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropRaw("texture", TextureAssetJson(path, texture))
+                .PropRaw("importSettings", TextureImporterJson(RequireTextureImporter(path)))
+                .PropArray("plannedEffects", arr => arr.RawValue(new UnityCliJsonWriter().BeginObject()
+                    .Prop("type", type)
+                    .Prop("path", path)
+                    .Prop("refresh", true)
+                    .EndObject().ToString()))
+                .Prop("logPath", LogPath())
+                .EndObject().ToString();
         }
     }
 }

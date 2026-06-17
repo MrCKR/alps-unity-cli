@@ -324,12 +324,21 @@ namespace UnityCli
 
         private static string DiagnosticsJson(CompilerErrorCollection errors)
         {
-            var items = new List<string>();
+            var w = new UnityCliJsonWriter().BeginArray();
             foreach (CompilerError error in errors)
             {
-                items.Add("{\"severity\":" + Quote(error.IsWarning ? "warning" : "error") + ",\"id\":" + Quote(error.ErrorNumber) + ",\"message\":" + Quote(error.ErrorText) + ",\"file\":" + Quote(error.FileName) + ",\"line\":" + error.Line.ToString(CultureInfo.InvariantCulture) + ",\"column\":" + error.Column.ToString(CultureInfo.InvariantCulture) + ",\"span\":null}");
+                w.BeginObject()
+                    .Prop("severity", error.IsWarning ? "warning" : "error")
+                    .Prop("id", error.ErrorNumber)
+                    .Prop("message", error.ErrorText)
+                    .Prop("file", error.FileName)
+                    .Prop("line", (long)error.Line)
+                    .Prop("column", (long)error.Column)
+                    .PropNull("span")
+                    .EndObject();
             }
-            return "[" + string.Join(",", items.ToArray()) + "]";
+            w.EndArray();
+            return w.ToString();
         }
 
         private static string DetailsJson(Exception exception, string stdout, string stderr)

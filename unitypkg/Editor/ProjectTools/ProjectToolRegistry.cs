@@ -198,7 +198,7 @@ namespace UnityCli
             }
             tools.Sort(StringComparer.Ordinal);
             var data = new UnityCliJsonWriter().BeginObject()
-                .PropRaw("tools", "[" + string.Join(",", tools.ToArray()) + "]")
+                .PropArray("tools", arr => { foreach (var tool in tools) { arr.RawValue(tool); } })
                 .Prop("logPath", LogPath())
                 .EndObject()
                 .ToString();
@@ -676,7 +676,7 @@ namespace UnityCli
                 .Prop("toolCount", ProjectTools.Count)
                 .Prop("blockedCount", blocked)
                 .Prop("warnCount", warn)
-                .PropRaw("tools", "[" + string.Join(",", items.ToArray()) + "]")
+                .PropArray("tools", arr => { foreach (var item in items) { arr.RawValue(item); } })
                 .EndObject()
                 .ToString();
         }

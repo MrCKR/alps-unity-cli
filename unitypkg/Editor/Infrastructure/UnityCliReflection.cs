@@ -40,7 +40,11 @@ namespace UnityCli
         {
             if (asset == null) return "null";
             var path = NormalizeAssetPath(AssetDatabase.GetAssetPath(asset));
-            return "{\"name\":" + Quote(asset.name) + ",\"path\":" + Quote(path) + ",\"guid\":" + Quote(string.IsNullOrEmpty(path) ? null : AssetDatabase.AssetPathToGUID(path)) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("name", asset.name)
+                .Prop("path", path)
+                .Prop("guid", string.IsNullOrEmpty(path) ? null : AssetDatabase.AssetPathToGUID(path))
+                .EndObject().ToString();
         }
 
         private static Type FindType(string fullName)

@@ -40,7 +40,10 @@ namespace UnityCli
         {
             var path = ResolveShaderPath(request.StringArg("path") ?? request.StringArg("target"));
             var shader = LoadShaderLikeAsset(path) as Shader;
-            return SuccessJson("{\"shader\":" + ShaderAssetJson(path, shader, false) + ",\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("shader", ShaderAssetJson(path, shader, false))
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string ShaderRead(BridgeRequest request)
@@ -57,7 +60,12 @@ namespace UnityCli
             {
                 throw new BridgeCommandException("E_IO_ERROR", "Failed to read Shader file: " + exception.Message, "Check file encoding and permissions: " + path);
             }
-            return SuccessJson("{\"shader\":" + ShaderAssetJson(path, AssetDatabase.LoadAssetAtPath<Shader>(path), true) + ",\"content\":" + Quote(content) + ",\"encoding\":\"utf-8\",\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("shader", ShaderAssetJson(path, AssetDatabase.LoadAssetAtPath<Shader>(path), true))
+                .Prop("content", content)
+                .Prop("encoding", "utf-8")
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string ShaderCreate(BridgeRequest request)
@@ -161,7 +169,15 @@ namespace UnityCli
         private static string ShaderMutationJson(string type, string path)
         {
             var shader = AssetDatabase.LoadAssetAtPath<Shader>(path);
-            return "{\"shader\":" + ShaderAssetJson(path, shader, false) + ",\"plannedEffects\":[{\"type\":" + Quote(type) + ",\"path\":" + Quote(path) + ",\"refresh\":true}],\"logPath\":" + Quote(LogPath()) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropRaw("shader", ShaderAssetJson(path, shader, false))
+                .PropArray("plannedEffects", arr => arr.RawValue(new UnityCliJsonWriter().BeginObject()
+                    .Prop("type", type)
+                    .Prop("path", path)
+                    .Prop("refresh", true)
+                    .EndObject().ToString()))
+                .Prop("logPath", LogPath())
+                .EndObject().ToString();
         }
 
         private static string ShaderAssetJson(string path, Shader shader, bool includeContentMetadata)
@@ -169,27 +185,35 @@ namespace UnityCli
             var fullPath = AssetFullPath(path);
             var fileInfo = new FileInfo(fullPath);
             var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
-            return "{"
-                + "\"path\":" + Quote(path) + ","
-                + "\"guid\":" + Quote(AssetDatabase.AssetPathToGUID(path)) + ","
-                + "\"name\":" + Quote(shader != null ? shader.name : (asset != null ? asset.name : Path.GetFileNameWithoutExtension(path))) + ","
-                + "\"assetType\":" + Quote(asset == null ? null : asset.GetType().Name) + ","
-                + "\"isShaderGraph\":" + Bool(path.EndsWith(".shadergraph", StringComparison.OrdinalIgnoreCase)) + ","
-                + "\"exists\":" + Bool(fileInfo.Exists) + ","
-                + "\"sizeBytes\":" + (fileInfo.Exists ? fileInfo.Length.ToString(CultureInfo.InvariantCulture) : "0") + ","
-                + "\"encoding\":" + Quote(includeContentMetadata ? "utf-8" : null) + ","
-                + "\"diagnostics\":" + ShaderDiagnosticsJson(shader)
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("path", path)
+                .Prop("guid", AssetDatabase.AssetPathToGUID(path))
+                .Prop("name", shader != null ? shader.name : (asset != null ? asset.name : Path.GetFileNameWithoutExtension(path)))
+                .Prop("assetType", asset == null ? null : asset.GetType().Name)
+                .Prop("isShaderGraph", path.EndsWith(".shadergraph", StringComparison.OrdinalIgnoreCase))
+                .Prop("exists", fileInfo.Exists)
+                .Prop("sizeBytes", fileInfo.Exists ? (long)fileInfo.Length : 0L)
+                .Prop("encoding", includeContentMetadata ? "utf-8" : null)
+                .PropRaw("diagnostics", ShaderDiagnosticsJson(shader))
+                .EndObject().ToString();
         }
 
         private static string ShaderDiagnosticsJson(Shader shader)
         {
             if (shader == null)
             {
-                return "{\"supported\":null,\"messageCount\":0,\"messages\":[]}";
+                return new UnityCliJsonWriter().BeginObject()
+                    .PropNull("supported")
+                    .Prop("messageCount", 0L)
+                    .PropArray("messages", arr => {})
+                    .EndObject().ToString();
             }
             var messages = ShaderMessagesJson(shader);
-            return "{\"supported\":" + Bool(shader.isSupported) + ",\"messageCount\":" + messages.Count.ToString(CultureInfo.InvariantCulture) + ",\"messages\":[" + string.Join(",", messages.ToArray()) + "]}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("supported", shader.isSupported)
+                .Prop("messageCount", (long)messages.Count)
+                .PropArray("messages", arr => { foreach (var m in messages) arr.RawValue(m); })
+                .EndObject().ToString();
         }
 
         private static List<string> ShaderMessagesJson(Shader shader)
@@ -237,13 +261,13 @@ namespace UnityCli
         private static string ShaderMessageJson(object message)
         {
             var type = message.GetType();
-            return "{"
-                + "\"severity\":" + Quote(ReflectionValue(type, message, "severity")) + ","
-                + "\"message\":" + Quote(ReflectionValue(type, message, "message")) + ","
-                + "\"file\":" + Quote(ReflectionValue(type, message, "file")) + ","
-                + "\"line\":" + Quote(ReflectionValue(type, message, "line")) + ","
-                + "\"platform\":" + Quote(ReflectionValue(type, message, "platform"))
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("severity", ReflectionValue(type, message, "severity"))
+                .Prop("message", ReflectionValue(type, message, "message"))
+                .Prop("file", ReflectionValue(type, message, "file"))
+                .Prop("line", ReflectionValue(type, message, "line"))
+                .Prop("platform", ReflectionValue(type, message, "platform"))
+                .EndObject().ToString();
         }
 
         private static string ReflectionValue(Type type, object target, string name)
