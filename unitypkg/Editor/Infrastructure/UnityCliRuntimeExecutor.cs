@@ -226,14 +226,14 @@ namespace UnityCli
                 // If the caller specified a session ID, check whether it matches a
                 // recently-stale session. This gives a more actionable error than
                 // E_RUNTIME_NOT_READY when the Play Mode session simply ended.
-                var requestedSessionId = request.StringArg("playModeSessionId");
-                if (!string.IsNullOrEmpty(requestedSessionId) && string.Equals(requestedSessionId, lastStalePlayModeSessionId, StringComparison.Ordinal))
+                var staleRequestedSessionId = request.StringArg("playModeSessionId");
+                if (!string.IsNullOrEmpty(staleRequestedSessionId) && string.Equals(staleRequestedSessionId, lastStalePlayModeSessionId, StringComparison.Ordinal))
                 {
-                    WriteLog("runtime_tool_session_stale_after_exit requestId=" + request.RequestId + " name=" + name + " requested=" + requestedSessionId + " stale=" + lastStalePlayModeSessionId);
+                    WriteLog("runtime_tool_session_stale_after_exit requestId=" + request.RequestId + " name=" + name + " requested=" + staleRequestedSessionId + " stale=" + lastStalePlayModeSessionId);
                     return ErrorJsonWithDetails("E_RUNTIME_SESSION_STALE",
-                        "Runtime tool session is stale: Play Mode session " + requestedSessionId + " has ended (exited Play Mode).",
+                        "Runtime tool session is stale: Play Mode session " + staleRequestedSessionId + " has ended (exited Play Mode).",
                         new UnityCliJsonWriter().BeginObject()
-                            .Prop("requestedSessionId", requestedSessionId)
+                            .Prop("requestedSessionId", staleRequestedSessionId)
                             .Prop("staleSessionId", lastStalePlayModeSessionId)
                             .Prop("playModeActive", false)
                             .EndObject().ToString(),
