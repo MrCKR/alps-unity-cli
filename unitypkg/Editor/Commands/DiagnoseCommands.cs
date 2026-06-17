@@ -36,13 +36,43 @@ namespace UnityCli
         private static string DiagnosePreflightJson(BridgeRequest request)
         {
             DiscoverProjectTools();
-            return "{\"command\":\"diagnose.preflight\",\"targetCommand\":" + Quote(request.StringArg("command")) + ",\"project\":{\"path\":" + Quote(ProjectRoot()) + ",\"unityVersion\":" + Quote(Application.unityVersion) + ",\"activeScene\":" + Quote(SceneManager.GetActiveScene().path) + "},\"editor\":" + EditorStateJson() + ",\"bridge\":{\"port\":" + port.ToString(CultureInfo.InvariantCulture) + ",\"logPath\":" + Quote(LogPath()) + ",\"capabilities\":" + CapabilitiesJson() + "},\"customTools\":{\"fingerprint\":" + ProjectToolFingerprintSummaryJson() + "},\"checks\":[" + DiagnoseCheckJson("unityNotBusy", !(EditorApplication.isCompiling || EditorApplication.isUpdating || BuildPipeline.isBuildingPlayer)) + "," + DiagnoseCheckJson("sceneLoaded", SceneManager.GetActiveScene().isLoaded) + "," + DiagnoseCheckJson("projectToolFingerprint", !ProjectTools.Values.Any(definition => definition.FingerprintStatus == "blocked")) + "],\"logPath\":" + Quote(LogPath()) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("command", "diagnose.preflight")
+                .Prop("targetCommand", request.StringArg("command"))
+                .PropObject("project", w =>
+                {
+                    w.Prop("path", ProjectRoot())
+                        .Prop("unityVersion", Application.unityVersion)
+                        .Prop("activeScene", SceneManager.GetActiveScene().path);
+                })
+                .PropRaw("editor", EditorStateJson())
+                .PropObject("bridge", w =>
+                {
+                    w.Prop("port", (long)port)
+                        .Prop("logPath", LogPath())
+                        .PropRaw("capabilities", CapabilitiesJson());
+                })
+                .PropObject("customTools", w =>
+                {
+                    w.Prop("fingerprint", ProjectToolFingerprintSummaryJson());
+                })
+                .PropArray("checks", arr =>
+                {
+                    arr.RawValue(DiagnoseCheckJson("unityNotBusy", !(EditorApplication.isCompiling || EditorApplication.isUpdating || BuildPipeline.isBuildingPlayer)));
+                    arr.RawValue(DiagnoseCheckJson("sceneLoaded", SceneManager.GetActiveScene().isLoaded));
+                    arr.RawValue(DiagnoseCheckJson("projectToolFingerprint", !ProjectTools.Values.Any(definition => definition.FingerprintStatus == "blocked")));
+                })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString();
         }
 
 
         private static string DiagnoseCheckJson(string name, bool ok)
         {
-            return "{\"name\":" + Quote(name) + ",\"ok\":" + Bool(ok) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("name", name)
+                .Prop("ok", ok)
+                .EndObject().ToString();
         }
     }
 }

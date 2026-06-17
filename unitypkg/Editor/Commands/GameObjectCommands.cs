@@ -85,7 +85,12 @@ namespace UnityCli
 
         private static string GameObjectTargetJson(GameObject gameObject)
         {
-            return "{\"id\":" + gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) + ",\"name\":" + Quote(gameObject.name) + ",\"path\":" + Quote(HierarchyPath(gameObject)) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("id", (long)gameObject.GetInstanceID())
+                .Prop("name", gameObject.name)
+                .Prop("path", HierarchyPath(gameObject))
+                .EndObject()
+                .ToString();
         }
 
 
@@ -93,7 +98,11 @@ namespace UnityCli
         {
             var target = RequiredTarget(request, "GameObject inspect requires a target.");
             var gameObject = ResolveUniqueTarget(target, "GameObject inspect requires a target.");
-            return SuccessJson("{\"gameObject\":" + GameObjectDetailJson(gameObject) + ",\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("gameObject", GameObjectDetailJson(gameObject))
+                .Prop("logPath", LogPath())
+                .EndObject()
+                .ToString());
         }
 
         private static string GameObjectCreate(BridgeRequest request)
@@ -144,7 +153,19 @@ namespace UnityCli
             var targetJson = GameObjectTargetJson(gameObject);
             if (request.DryRun)
             {
-                return SuccessJson("{\"command\":\"go.delete\",\"dryRun\":true,\"target\":" + targetJson + ",\"plannedEffects\":[{\"type\":\"go.delete\",\"target\":" + targetJson + ",\"sideEffects\":\"none\"}],\"logPath\":" + Quote(LogPath()) + "}");
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("command", "go.delete")
+                    .Prop("dryRun", true)
+                    .PropRaw("target", targetJson)
+                    .PropArray("plannedEffects", arr => arr
+                        .RawValue(new UnityCliJsonWriter().BeginObject()
+                            .Prop("type", "go.delete")
+                            .PropRaw("target", targetJson)
+                            .Prop("sideEffects", "none")
+                            .EndObject().ToString()))
+                    .Prop("logPath", LogPath())
+                    .EndObject()
+                    .ToString());
             }
             var scene = gameObject.scene;
             Undo.DestroyObjectImmediate(gameObject);
@@ -152,7 +173,16 @@ namespace UnityCli
             {
                 EditorSceneManager.MarkSceneDirty(scene);
             }
-            return SuccessJson("{\"deleted\":" + targetJson + ",\"plannedEffects\":[{\"type\":\"go.delete\",\"target\":" + targetJson + "}],\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("deleted", targetJson)
+                .PropArray("plannedEffects", arr => arr
+                    .RawValue(new UnityCliJsonWriter().BeginObject()
+                        .Prop("type", "go.delete")
+                        .PropRaw("target", targetJson)
+                        .EndObject().ToString()))
+                .Prop("logPath", LogPath())
+                .EndObject()
+                .ToString());
         }
 
         private static string ComponentAdd(BridgeRequest request)
@@ -187,7 +217,18 @@ namespace UnityCli
             var removed = ComponentSummaryJson(component);
             Undo.DestroyObjectImmediate(component);
             EditorSceneManager.MarkSceneDirty(gameObject.scene);
-            return SuccessJson("{\"target\":" + GameObjectTargetJson(gameObject) + ",\"component\":" + removed + ",\"plannedEffects\":[{\"type\":\"component.remove\",\"target\":" + Quote(HierarchyPath(gameObject)) + ",\"component\":" + Quote(componentName) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("target", GameObjectTargetJson(gameObject))
+                .PropRaw("component", removed)
+                .PropArray("plannedEffects", arr => arr
+                    .RawValue(new UnityCliJsonWriter().BeginObject()
+                        .Prop("type", "component.remove")
+                        .Prop("target", HierarchyPath(gameObject))
+                        .Prop("component", componentName)
+                        .EndObject().ToString()))
+                .Prop("logPath", LogPath())
+                .EndObject()
+                .ToString());
         }
 
         private static string ComponentSet(BridgeRequest request)
@@ -228,7 +269,13 @@ namespace UnityCli
             {
                 items.Add(HierarchyItemJson(gameObject.transform));
             }
-            return SuccessJson("{\"query\":" + Quote(target) + ",\"matchCount\":" + resolution.Matches.Count.ToString(CultureInfo.InvariantCulture) + ",\"items\":[" + string.Join(",", items.ToArray()) + "],\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("query", target)
+                .Prop("matchCount", (long)resolution.Matches.Count)
+                .PropArray("items", arr => { foreach (var item in items) { arr.RawValue(item); } })
+                .Prop("logPath", LogPath())
+                .EndObject()
+                .ToString());
         }
 
         private static string HierarchyItemJson(Transform transform)
@@ -236,19 +283,20 @@ namespace UnityCli
             var componentNames = new List<string>();
             foreach (var component in transform.GetComponents<Component>())
             {
-                componentNames.Add(Quote(component != null ? component.GetType().Name : "MissingScript"));
+                componentNames.Add(component != null ? component.GetType().Name : "MissingScript");
             }
             var gameObject = transform.gameObject;
-            return "{"
-                + "\"id\":" + gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) + ","
-                + "\"name\":" + Quote(gameObject.name) + ","
-                + "\"path\":" + Quote(HierarchyPath(gameObject)) + ","
-                + "\"active\":" + Bool(gameObject.activeSelf) + ","
-                + "\"tag\":" + Quote(gameObject.tag) + ","
-                + "\"layer\":" + gameObject.layer.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"componentCount\":" + componentNames.Count.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"components\":[" + string.Join(",", componentNames.ToArray()) + "]"
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("id", (long)gameObject.GetInstanceID())
+                .Prop("name", gameObject.name)
+                .Prop("path", HierarchyPath(gameObject))
+                .Prop("active", gameObject.activeSelf)
+                .Prop("tag", gameObject.tag)
+                .Prop("layer", (long)gameObject.layer)
+                .Prop("componentCount", (long)componentNames.Count)
+                .PropArray("components", arr => { foreach (var name in componentNames) { arr.Value(name); } })
+                .EndObject()
+                .ToString();
         }
 
         private static int CountHierarchy(Transform transform)
@@ -348,7 +396,16 @@ namespace UnityCli
 
         private static string GameObjectMutationJson(string type, GameObject gameObject)
         {
-            return "{\"gameObject\":" + GameObjectDetailJson(gameObject) + ",\"plannedEffects\":[{\"type\":" + Quote(type) + ",\"target\":" + Quote(HierarchyPath(gameObject)) + "}],\"logPath\":" + Quote(LogPath()) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropRaw("gameObject", GameObjectDetailJson(gameObject))
+                .PropArray("plannedEffects", arr => arr
+                    .RawValue(new UnityCliJsonWriter().BeginObject()
+                        .Prop("type", type)
+                        .Prop("target", HierarchyPath(gameObject))
+                        .EndObject().ToString()))
+                .Prop("logPath", LogPath())
+                .EndObject()
+                .ToString();
         }
 
         private static string GameObjectDetailJson(GameObject gameObject)
@@ -358,41 +415,56 @@ namespace UnityCli
             {
                 children.Add(GameObjectTargetJson(child.gameObject));
             }
-            return "{"
-                + "\"id\":" + gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) + ","
-                + "\"name\":" + Quote(gameObject.name) + ","
-                + "\"path\":" + Quote(HierarchyPath(gameObject)) + ","
-                + "\"active\":" + Bool(gameObject.activeSelf) + ","
-                + "\"tag\":" + Quote(gameObject.tag) + ","
-                + "\"layer\":" + gameObject.layer.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"transform\":" + TransformJson(gameObject.transform) + ","
-                + "\"components\":" + ComponentsJson(gameObject) + ","
-                + "\"children\":[" + string.Join(",", children.ToArray()) + "]"
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("id", (long)gameObject.GetInstanceID())
+                .Prop("name", gameObject.name)
+                .Prop("path", HierarchyPath(gameObject))
+                .Prop("active", gameObject.activeSelf)
+                .Prop("tag", gameObject.tag)
+                .Prop("layer", (long)gameObject.layer)
+                .PropRaw("transform", TransformJson(gameObject.transform))
+                .PropRaw("components", ComponentsJson(gameObject))
+                .PropArray("children", arr => { foreach (var child in children) { arr.RawValue(child); } })
+                .EndObject()
+                .ToString();
         }
 
         private static string TransformJson(Transform transform)
         {
-            return "{\"position\":" + Vector3Json(transform.position) + ",\"rotation\":" + Vector3Json(transform.eulerAngles) + ",\"scale\":" + Vector3Json(transform.localScale) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropRaw("position", Vector3Json(transform.position))
+                .PropRaw("rotation", Vector3Json(transform.eulerAngles))
+                .PropRaw("scale", Vector3Json(transform.localScale))
+                .EndObject()
+                .ToString();
         }
 
         private static string ComponentsJson(GameObject gameObject)
         {
-            var items = new List<string>();
+            var writer = new UnityCliJsonWriter().BeginArray();
             foreach (var component in gameObject.GetComponents<Component>())
             {
-                items.Add(ComponentSummaryJson(component));
+                writer.RawValue(ComponentSummaryJson(component));
             }
-            return "[" + string.Join(",", items.ToArray()) + "]";
+            return writer.EndArray().ToString();
         }
 
         private static string ComponentSummaryJson(Component component)
         {
             if (component == null)
             {
-                return "{\"type\":\"MissingScript\",\"enabled\":false}";
+                return new UnityCliJsonWriter().BeginObject()
+                    .Prop("type", "MissingScript")
+                    .Prop("enabled", false)
+                    .EndObject()
+                    .ToString();
             }
-            return "{\"type\":" + Quote(component.GetType().Name) + ",\"fullName\":" + Quote(component.GetType().FullName) + ",\"enabled\":" + Bool(ComponentEnabled(component)) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("type", component.GetType().Name)
+                .Prop("fullName", component.GetType().FullName)
+                .Prop("enabled", ComponentEnabled(component))
+                .EndObject()
+                .ToString();
         }
 
         private static string RequiredComponentName(BridgeRequest request)
@@ -493,7 +565,19 @@ namespace UnityCli
 
         private static string ComponentMutationJson(string type, GameObject gameObject, Component component, string propertyName)
         {
-            return "{\"target\":" + GameObjectTargetJson(gameObject) + ",\"component\":" + ComponentSummaryJson(component) + ",\"property\":" + Quote(propertyName) + ",\"plannedEffects\":[{\"type\":" + Quote(type) + ",\"target\":" + Quote(HierarchyPath(gameObject)) + ",\"component\":" + Quote(component == null ? null : component.GetType().Name) + "}],\"logPath\":" + Quote(LogPath()) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropRaw("target", GameObjectTargetJson(gameObject))
+                .PropRaw("component", ComponentSummaryJson(component))
+                .Prop("property", propertyName)
+                .PropArray("plannedEffects", arr => arr
+                    .RawValue(new UnityCliJsonWriter().BeginObject()
+                        .Prop("type", type)
+                        .Prop("target", HierarchyPath(gameObject))
+                        .Prop("component", component == null ? null : component.GetType().Name)
+                        .EndObject().ToString()))
+                .Prop("logPath", LogPath())
+                .EndObject()
+                .ToString();
         }
 
         private sealed class Counter

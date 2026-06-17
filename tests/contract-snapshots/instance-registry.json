@@ -1,0 +1,36 @@
+{
+  "command": "instance registry JSON (disk file)",
+  "structure": {
+    "version": "<integer: 1>",
+    "instances": "<array of instance objects>"
+  },
+  "instance": {
+    "instanceId": "<string>",
+    "projectName": "<string>",
+    "projectPath": "<string>",
+    "projectHash": "<string>",
+    "processId": "<integer>",
+    "pid": "<integer>",
+    "host": "<string: 127.0.0.1>",
+    "port": "<integer>",
+    "bridgeEndpoint": "<string>",
+    "unityVersion": "<string>",
+    "packageVersion": "<string>",
+    "packageName": "<string>",
+    "packageAssetPath": "<string>",
+    "packageResolvedPath": "<string>",
+    "capabilitiesHash": "<string>",
+    "bridgeDiagnosticsFingerprint": "<string>",
+    "bridgeListenerId": "<string>",
+    "bridgeAssemblyMvid": "<string>",
+    "status": "<string>",
+    "editorState": "<editor state object>",
+    "playModeState": "<play mode state object>",
+    "runtimeSessionId": "<string>",
+    "toolCatalogFingerprint": "<string>",
+    "registryVersion": "<string>",
+    "registeredAt": "<string ISO 8601>",
+    "lastSeenAt": "<string ISO 8601>",
+    "lastHeartbeatAt": "<string ISO 8601>"
+  }
+}

@@ -30,29 +30,30 @@ namespace UnityCli
     {
         private static string CapabilitiesJson()
         {
-            return "["
-                + CapabilityJson("camera", CameraCommands) + ","
-                + CapabilityJson("scene", SceneCommands) + ","
-                + CapabilityJson("go", GameObjectCommands) + ","
-                + CapabilityJson("asset", AssetCommands) + ","
-                + CapabilityJson("diagnose", DiagnoseCommands) + ","
-                + CapabilityJson("screenshot", ScreenshotCommands) + ","
-                + CapabilityJson("prefab", PrefabCommands) + ","
-                + CapabilityJson("ui", UiCommands) + ","
-                + CapabilityJson("material", MaterialCommands) + ","
-                + CapabilityJson("graphics", GraphicsCommands) + ","
-                + CapabilityJson("physics", PhysicsCommands) + ","
-                + CapabilityJson("profiler", ProfilerCommands) + ","
-                + CapabilityJson("probuilder", ProBuilderCommands) + ","
-                + CapabilityJson("animation", AnimationCommands) + ","
-                + CapabilityJson("vfx", VfxCommands) + ","
-                + CapabilityJson("shader", ShaderCommands) + ","
-                + CapabilityJson("texture", TextureCommands) + ","
-                + CapabilityJson("editor", EditorCommands) + ","
-                + CapabilityJson("script", ScriptCommands) + ","
-                + CapabilityJson("code", CodeCommands) + ","
-                + CapabilityJson("project-tool", ProjectToolCommands)
-                + "]";
+            var w = new UnityCliJsonWriter().BeginArray();
+            w.RawValue(CapabilityJson("camera", CameraCommands));
+            w.RawValue(CapabilityJson("scene", SceneCommands));
+            w.RawValue(CapabilityJson("go", GameObjectCommands));
+            w.RawValue(CapabilityJson("asset", AssetCommands));
+            w.RawValue(CapabilityJson("diagnose", DiagnoseCommands));
+            w.RawValue(CapabilityJson("screenshot", ScreenshotCommands));
+            w.RawValue(CapabilityJson("prefab", PrefabCommands));
+            w.RawValue(CapabilityJson("ui", UiCommands));
+            w.RawValue(CapabilityJson("material", MaterialCommands));
+            w.RawValue(CapabilityJson("graphics", GraphicsCommands));
+            w.RawValue(CapabilityJson("physics", PhysicsCommands));
+            w.RawValue(CapabilityJson("profiler", ProfilerCommands));
+            w.RawValue(CapabilityJson("probuilder", ProBuilderCommands));
+            w.RawValue(CapabilityJson("animation", AnimationCommands));
+            w.RawValue(CapabilityJson("vfx", VfxCommands));
+            w.RawValue(CapabilityJson("shader", ShaderCommands));
+            w.RawValue(CapabilityJson("texture", TextureCommands));
+            w.RawValue(CapabilityJson("editor", EditorCommands));
+            w.RawValue(CapabilityJson("script", ScriptCommands));
+            w.RawValue(CapabilityJson("code", CodeCommands));
+            w.RawValue(CapabilityJson("project-tool", ProjectToolCommands));
+            w.EndArray();
+            return w.ToString();
         }
 
         private static bool IsMutatingCommand(string command)
@@ -62,12 +63,18 @@ namespace UnityCli
 
         private static string CapabilityJson(string domain, string[] commands)
         {
-            var quotedCommands = new List<string>();
-            foreach (var command in commands)
-            {
-                quotedCommands.Add(Quote(command));
-            }
-            return "{\"domain\":" + Quote(domain) + ",\"route\":\"POST /bridge/execute\",\"commands\":[" + string.Join(",", quotedCommands.ToArray()) + "]}";
+            var w = new UnityCliJsonWriter().BeginObject()
+                .Prop("domain", domain)
+                .Prop("route", "POST /bridge/execute")
+                .PropArray("commands", arr =>
+                {
+                    foreach (var command in commands)
+                    {
+                        arr.Value(command);
+                    }
+                })
+                .EndObject();
+            return w.ToString();
         }
 
         private static string HierarchyPath(GameObject gameObject)
@@ -176,19 +183,20 @@ namespace UnityCli
 
         private static string TargetMatchesJson(List<GameObject> matches)
         {
-            var items = new List<string>();
+            var w = new UnityCliJsonWriter().BeginArray();
             var limit = Math.Min(matches.Count, 10);
             for (var index = 0; index < limit; index++)
             {
                 var gameObject = matches[index];
-                items.Add("{\"id\":" + gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) + ",\"name\":" + Quote(gameObject.name) + ",\"path\":" + Quote(HierarchyPath(gameObject)) + ",\"components\":" + ComponentNamesJson(gameObject) + "}");
+                w.BeginObject()
+                    .Prop("id", (long)gameObject.GetInstanceID())
+                    .Prop("name", gameObject.name)
+                    .Prop("path", HierarchyPath(gameObject))
+                    .PropRaw("components", ComponentNamesJson(gameObject))
+                    .EndObject();
             }
-            return "[" + string.Join(",", items.ToArray()) + "]";
-        }
-
-        private static string QuotePair(string key, string value)
-        {
-            return UnityCliJsonWriter.Quote(key) + ":" + UnityCliJsonWriter.Quote(value ?? string.Empty);
+            w.EndArray();
+            return w.ToString();
         }
 
         private static string Quote(string value)
@@ -203,15 +211,16 @@ namespace UnityCli
 
         private static string StringArrayJson(string[] values)
         {
-            var items = new List<string>();
+            var w = new UnityCliJsonWriter().BeginArray();
             foreach (var value in values ?? new string[0])
             {
                 if (!string.IsNullOrEmpty(value))
                 {
-                    items.Add(Quote(value));
+                    w.Value(value);
                 }
             }
-            return "[" + string.Join(",", items.ToArray()) + "]";
+            w.EndArray();
+            return w.ToString();
         }
 
         private static string JsonRawProperty(string json, string name)
@@ -357,28 +366,30 @@ namespace UnityCli
 
         private static string Vector2Json(Vector2 value)
         {
-            return "{\"x\":" + Number(value.x) + ",\"y\":" + Number(value.y) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("x", (double)value.x)
+                .Prop("y", (double)value.y)
+                .EndObject().ToString();
         }
 
         private static string Vector3Json(Vector3 value)
         {
-            return "{\"x\":" + Number(value.x) + ",\"y\":" + Number(value.y) + ",\"z\":" + Number(value.z) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("x", (double)value.x)
+                .Prop("y", (double)value.y)
+                .Prop("z", (double)value.z)
+                .EndObject().ToString();
         }
 
         private static string EffectJson(string type, string property, string value)
         {
-            return "{\"type\":" + Quote(type) + ",\"property\":" + Quote(property) + ",\"value\":" + Quote(value) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("type", type)
+                .Prop("property", property)
+                .Prop("value", value)
+                .EndObject().ToString();
         }
 
-        private static List<string> QuoteArray(string[] values)
-        {
-            var items = new List<string>();
-            foreach (var value in values)
-            {
-                items.Add(Quote(value));
-            }
-            return items;
-        }
     }
 }
 #endif

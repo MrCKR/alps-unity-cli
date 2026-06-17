@@ -60,9 +60,16 @@ namespace UnityCli
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
                 WriteLog("animation_clip_created path=" + path);
-                return SuccessJson("{\"clip\":" + AnimationClipJson(path, LoadAnimationClipAsset(path)) + ",\"plannedEffects\":[{\"type\":\"animation.clip.create\",\"path\":" + Quote(path) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .PropRaw("clip", AnimationClipJson(path, LoadAnimationClipAsset(path)))
+                    .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "animation.clip.create").Prop("path", path).EndObject())
+                    .Prop("logPath", LogPath())
+                    .EndObject().ToString());
             }
-            return SuccessJson("{\"clip\":" + AnimationClipJson(path, LoadAnimationClipAsset(path)) + ",\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("clip", AnimationClipJson(path, LoadAnimationClipAsset(path)))
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string AnimationState(BridgeRequest request)
@@ -74,7 +81,11 @@ namespace UnityCli
                 return ErrorJson("E_ANIMATOR_NOT_FOUND", "Animator component not found on target: " + HierarchyPath(gameObject), "Add an Animator component or choose another target.");
             }
             var layer = Mathf.Clamp(request.IntArg("layer", 0), 0, Math.Max(0, animator.layerCount - 1));
-            return SuccessJson("{\"target\":" + GameObjectTargetJson(gameObject) + ",\"animator\":" + AnimatorJson(animator, layer) + ",\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("target", GameObjectTargetJson(gameObject))
+                .PropRaw("animator", AnimatorJson(animator, layer))
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string AnimationPlay(BridgeRequest request)
@@ -99,7 +110,12 @@ namespace UnityCli
             animator.Update(0f);
             EditorUtility.SetDirty(animator);
             WriteLog("animation_play target=" + HierarchyPath(gameObject) + " state=" + state + " layer=" + layer.ToString(CultureInfo.InvariantCulture));
-            return SuccessJson("{\"target\":" + GameObjectTargetJson(gameObject) + ",\"animator\":" + AnimatorJson(animator, layer) + ",\"plannedEffects\":[{\"type\":\"animation.play\",\"target\":" + Quote(HierarchyPath(gameObject)) + ",\"state\":" + Quote(state) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("target", GameObjectTargetJson(gameObject))
+                .PropRaw("animator", AnimatorJson(animator, layer))
+                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "animation.play").Prop("target", HierarchyPath(gameObject)).Prop("state", state).EndObject())
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string AnimationStop(BridgeRequest request)
@@ -114,7 +130,12 @@ namespace UnityCli
             animator.Update(0f);
             EditorUtility.SetDirty(animator);
             WriteLog("animation_stop target=" + HierarchyPath(gameObject));
-            return SuccessJson("{\"target\":" + GameObjectTargetJson(gameObject) + ",\"animator\":" + AnimatorJson(animator, 0) + ",\"plannedEffects\":[{\"type\":\"animation.stop\",\"target\":" + Quote(HierarchyPath(gameObject)) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("target", GameObjectTargetJson(gameObject))
+                .PropRaw("animator", AnimatorJson(animator, 0))
+                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "animation.stop").Prop("target", HierarchyPath(gameObject)).EndObject())
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string RequireAnimationClipPath(string rawPath)
@@ -144,26 +165,35 @@ namespace UnityCli
         private static string AnimationClipJson(string path, AnimationClip clip)
         {
             var bindings = AnimationUtility.GetCurveBindings(clip);
-            return "{"
-                + "\"path\":" + Quote(path) + ","
-                + "\"guid\":" + Quote(AssetDatabase.AssetPathToGUID(path)) + ","
-                + "\"name\":" + Quote(clip.name) + ","
-                + "\"length\":" + Number(clip.length) + ","
-                + "\"frameRate\":" + Number(clip.frameRate) + ","
-                + "\"legacy\":" + Bool(clip.legacy) + ","
-                + "\"bindings\":" + AnimationBindingsJson(clip, bindings)
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("path", path)
+                .Prop("guid", AssetDatabase.AssetPathToGUID(path))
+                .Prop("name", clip.name)
+                .Prop("length", clip.length)
+                .Prop("frameRate", clip.frameRate)
+                .Prop("legacy", clip.legacy)
+                .PropRaw("bindings", AnimationBindingsJson(clip, bindings))
+                .EndObject().ToString();
         }
 
         private static string AnimationBindingsJson(AnimationClip clip, EditorCurveBinding[] bindings)
         {
-            var items = new List<string>();
-            foreach (var binding in bindings)
-            {
-                var curve = AnimationUtility.GetEditorCurve(clip, binding);
-                items.Add("{\"path\":" + Quote(binding.path) + ",\"property\":" + Quote(binding.propertyName) + ",\"type\":" + Quote(binding.type == null ? null : binding.type.Name) + ",\"keyCount\":" + (curve == null ? "0" : curve.keys.Length.ToString(CultureInfo.InvariantCulture)) + "}");
-            }
-            return "{\"count\":" + bindings.Length.ToString(CultureInfo.InvariantCulture) + ",\"items\":[" + string.Join(",", items.ToArray()) + "]}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("count", (long)bindings.Length)
+                .PropArray("items", arr =>
+                {
+                    foreach (var binding in bindings)
+                    {
+                        var curve = AnimationUtility.GetEditorCurve(clip, binding);
+                        arr.BeginObject()
+                            .Prop("path", binding.path)
+                            .Prop("property", binding.propertyName)
+                            .Prop("type", binding.type == null ? null : binding.type.Name)
+                            .Prop("keyCount", curve == null ? (long)0 : (long)curve.keys.Length)
+                            .EndObject();
+                    }
+                })
+                .EndObject().ToString();
         }
 
         private static string AnimatorJson(Animator animator, int layer)
@@ -173,13 +203,20 @@ namespace UnityCli
             var layerCount = animator.layerCount;
             var safeLayer = layerCount <= 0 ? 0 : Mathf.Clamp(layer, 0, layerCount - 1);
             var state = layerCount > 0 ? animator.GetCurrentAnimatorStateInfo(safeLayer) : default(AnimatorStateInfo);
-            return "{"
-                + "\"enabled\":" + Bool(animator.enabled) + ","
-                + "\"layerCount\":" + layerCount.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"selectedLayer\":" + safeLayer.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"runtimeAnimatorController\":{\"name\":" + Quote(controller == null ? null : controller.name) + ",\"path\":" + Quote(controllerPath) + ",\"guid\":" + Quote(string.IsNullOrEmpty(controllerPath) ? null : AssetDatabase.AssetPathToGUID(controllerPath)) + "},"
-                + "\"currentState\":{\"fullPathHash\":" + state.fullPathHash.ToString(CultureInfo.InvariantCulture) + ",\"shortNameHash\":" + state.shortNameHash.ToString(CultureInfo.InvariantCulture) + ",\"normalizedTime\":" + Number(state.normalizedTime) + ",\"length\":" + Number(state.length) + "}"
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("enabled", animator.enabled)
+                .Prop("layerCount", (long)layerCount)
+                .Prop("selectedLayer", (long)safeLayer)
+                .PropObject("runtimeAnimatorController", obj => obj
+                    .Prop("name", controller == null ? null : controller.name)
+                    .Prop("path", controllerPath)
+                    .Prop("guid", string.IsNullOrEmpty(controllerPath) ? null : AssetDatabase.AssetPathToGUID(controllerPath)))
+                .PropObject("currentState", obj => obj
+                    .Prop("fullPathHash", (long)state.fullPathHash)
+                    .Prop("shortNameHash", (long)state.shortNameHash)
+                    .Prop("normalizedTime", state.normalizedTime)
+                    .Prop("length", state.length))
+                .EndObject().ToString();
         }
     }
 }
