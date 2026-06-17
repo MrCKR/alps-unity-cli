@@ -42,12 +42,21 @@ Offline tools (`handler: "offline"`, `supportStatus: "cli-only"`) always work re
 - `init --check`, `doctor`, `instances list/prune`
 - `target get/set/clear/alias`
 
-### 4. Editor State (PlayMode)
+### 4. Editor State (PlayMode) and Runtime Tool Availability
 
-Some tools require or behave differently depending on the current Editor PlayMode state:
+Tools with `target: "runtime"` and `availabilityScope: "playModeSession"` are only available when the Editor is in Play Mode. The `available` field in the tool descriptor reflects this:
 
-- `editor.state` always works (read-only)
-- `editor.play/pause/stop` transition the Editor between states
+| `editor.state` | `target: "editor"` tools | `target: "runtime"` tools |
+|----------------|--------------------------|---------------------------|
+| Edit mode | `available: true` | `available: false` — returns `E_RUNTIME_NOT_READY` (transient) |
+| Play mode | `available: true` | `available: true` |
+
+To make a runtime tool available:
+1. Call `tools run editor.play` to enter Play Mode
+2. Verify with `tools run editor.state` that `playMode: playing`
+3. Retry the runtime tool
+
+Some tools behave differently depending on PlayMode state:
 - `code exec --channel live` executes in the current context (edit mode or play mode)
 - Profiler tools (`profiler.start/stop/capture`) may behave differently in play mode vs edit mode
 - `physics.simulation --simulate` requires the physics system to be in a valid state
@@ -65,10 +74,10 @@ Each instance carries a `toolCatalogFingerprint` that captures the current tool 
 ### As an AI Agent
 
 1. **Always resolve target first.** Run `instances list` and `target set` before any tool call.
-2. **Use `tools describe` before executing.** The descriptor shows `handler`, `supportStatus`, and whether the tool requires Bridge connectivity.
-3. **Handle errors gracefully.** Package-not-found and Bridge-unreachable errors include `nextActions` that suggest recovery steps.
+2. **Use `tools describe` before executing.** The descriptor shows `handler`, `supportStatus`, `target`, `availabilityScope`, and `available`.
+3. **Handle errors gracefully.** Package-not-found, Bridge-unreachable, and `E_RUNTIME_NOT_READY` errors include `next_actions` that suggest recovery steps.
 4. **Re-discover after state changes.** After installing packages or domain reload, re-run `tools list --include-custom` to see updated availability.
-5. **Check `editor.state`** before calling tools that are PlayMode-sensitive.
+5. **Check `editor.state`** before calling tools that are PlayMode-sensitive. Enter Play Mode first if `target: "runtime"`.
 
 ### Error Response Pattern
 

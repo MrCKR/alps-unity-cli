@@ -1,4 +1,6 @@
-# Unity CLI v1.0 — 已知风险与限制清单
+# Unity CLI v1.0 — 已知风险与限制清单 (v1.0 Archive)
+
+> ⚠️ **本文档是 v1.0 工程归档，不是当前用户侧指南。** 包含 P3 前的遗留表述。当前风险模型请参阅 risk-and-side-effects topic。
 
 > 基准：origin/main `d2287a5` | 2026-06-16 | P0-P2 全链路收口
 

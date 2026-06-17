@@ -101,11 +101,12 @@ Current architecture-sensitive tools:
 
 ## How to Assess Risk as an AI Agent
 
-1. **Always `tools describe` first.** Read `destructiveHint`, `readOnlyHint`, `supportsDryRun`, and `longRunning`.
+1. **Always `tools describe` first.** Read `destructiveHint`, `readOnlyHint`, `supportsDryRun`, `target`, `availabilityScope`, and `available`.
 2. **For destructive tools**: Use `--dry-run` if supported; otherwise, explain the planned effects to the user before calling with `--yes`.
-3. **For long-running tools**: Set appropriate `--timeout-ms`; understand `cancellationSemantics` before starting.
-4. **For project tools**: Check fingerprint status with `doctor`; use `--fingerprint-mode block` (default) to ensure integrity.
-5. **For architecture-sensitive tools**: Do not change behavior without checking `frozenDecision` and `coverageScope`.
+3. **For runtime tools**: Verify `available: true` and Play Mode state before calling `target: "runtime"` tools.
+4. **For long-running tools**: Set appropriate `--timeout-ms`; understand `cancellationSemantics` before starting.
+5. **For project tools**: Check fingerprint status with `doctor`; use `--fingerprint-mode block` (default) to ensure integrity.
+6. **For architecture-sensitive tools**: Do not change behavior without checking `frozenDecision` and `coverageScope`.
 
 ## v1.0 Known Limitations
 
@@ -116,11 +117,12 @@ Current architecture-sensitive tools:
 | No independent network security policy | Medium | Bridge listens only on `127.0.0.1`; no external network calls |
 | Fingerprint only covers project tools | Low | Built-in commands protected by contract validation + security policy |
 
-See [coverage-matrix](./coverage-matrix.md) for the full v1.0 security model coverage.
+See the v1.0 archive [coverage-matrix](./coverage-matrix.md) (engineering reference only, not a user-side guide) for the full v1.0 security model coverage.
 
 ## Cross-Reference
 
-- Error codes including `E_DESTRUCTIVE_CONFIRMATION_REQUIRED` and `E_TOOL_FINGERPRINT_MISMATCH`: [error-codes](./error-codes.md)
-- Tool descriptor schema: [../schemas/tool-metadata.schema.json](../schemas/tool-metadata.schema.json)
+- Error codes including `E_DESTRUCTIVE_CONFIRMATION_REQUIRED`, `E_RUNTIME_NOT_READY`, and `E_TOOL_FINGERPRINT_MISMATCH`: [error-codes](./error-codes.md)
+- Tool descriptor field coverage vs. P3 contract: [tool-discovery](./tool-discovery.md) §Descriptor field coverage
+- Tool metadata schema: [../schemas/tool-metadata.schema.json](../schemas/tool-metadata.schema.json)
 - Security policy source: `src/security-policy.ts` and `src/security.ts`
-- Coverage matrix: [coverage-matrix](./coverage-matrix.md)
+- AI skill (compact version): [/skills/unity_cli/SKILL.md](../skills/unity_cli/SKILL.md)

@@ -1,4 +1,6 @@
-# Unity CLI — 功能域覆盖矩阵
+# Unity CLI — 功能域覆盖矩阵 (v1.0 Archive)
+
+> ⚠️ **This document is a v1.0 engineering archive, NOT a current user-side guide.** It contains pre-P3 legacy terminology (e.g. `project-tool list/run` as separate command groups). For current AI calling instructions, use the docs topic index (target-and-instance → tool-discovery → tool-execution → availability-differences → error-codes → risk-and-side-effects).
 
 > 格式：unity-mcp 功能域/action → unity_cli 命令 → UnityPkg handler → metadata/describe → 测试证据 → 状态
 

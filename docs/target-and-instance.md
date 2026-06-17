@@ -4,7 +4,9 @@
 
 ## What is a Unity Instance?
 
-A **Unity instance** is a running Unity Editor process that has loaded the `com.unity_cli` bridge package. When the Editor compiles the package, `UnityCliBridge` starts a Windows loopback HTTP listener (default `http://127.0.0.1:47392`, probing later ports) and writes an instance registration file under `%LOCALAPPDATA%\UnityCli\instances\<instanceId>.json`.
+A **Unity instance** is a running Unity Editor process that has loaded the `com.unity_cli` bridge package. When the Editor compiles the package, `UnityCliBridge` starts a Windows loopback HTTP listener and registers itself with the CLI.
+
+> ⚠️ **Do not read registration files or ping endpoints manually.** Always use `unity_cli instances list` and `unity_cli target` commands to inspect and select instances. The internal file paths and endpoint URLs documented here are for understanding the system architecture only — they are not CLI calling interfaces.
 
 Each instance registration contains:
 
@@ -90,12 +92,12 @@ unity_cli target alias list                           # List aliases
 unity_cli target alias unset <alias>                  # Remove alias
 ```
 
-Aliases are stored in `aliases.json` and persist across Editor restarts.
+Aliases persist across Editor restarts.
 
 ## Target Resolution and Tool Discovery
 
 Target resolution happens **before** tool discovery. The resolved target determines:
-- Which `bridgeEndpoint` is used for live Bridge commands
+- Which Bridge endpoint is used for live commands
 - Which project tools are discoverable (project tools are per-instance)
 - Which tool availability fingerprint is checked
 
@@ -103,4 +105,4 @@ If no target is resolved and no `--bridge-endpoint` is provided, only offline an
 
 ## Key Principle
 
-**The CLI never guesses the target.** When multiple ready instances exist, it returns `E_TARGET_AMBIGUOUS` with actionable `nextActions`. The caller (AI agent or user) must explicitly select a target before executing bridge tools.
+**The CLI never guesses the target.** When multiple ready instances exist, it returns `E_TARGET_AMBIGUOUS` with actionable `next_actions`. The caller (AI agent or user) must explicitly select a target before executing bridge tools.
