@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { bridgeCommandRegistry } from "./bridge/index.js";
+import { bridgeCommandRegistry, type BridgeRequest } from "./bridge/index.js";
 import { handleToolsCommand, type ToolsRuntime } from "./tools.js";
 import { builtinToolMetadata, builtinToolGroups, findToolByName, filterToolsByGroup, searchTools, supportStatusForTool } from "./tools/metadata/index.js";
 
@@ -601,4 +601,136 @@ test("tools without subcommand defaults to list", async () => {
   assert.equal(result.ok, true);
   const data = result.data as { count: number; tools: unknown[] };
   assert.ok(data.count > 0);
+});
+
+// ── tools run: handleToolsRun routing ─────────────────────
+
+test("tools run editor-domain builtin tool routes to project-tool.run", async () => {
+  const requests: BridgeRequest[] = [];
+  const runtime: ToolsRuntime = {
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { result: { output: "ok" } } };
+    }
+  };
+
+  const result = await handleToolsCommand("run", ["scene.hierarchy"], {}, runtime, requestId);
+  assert.equal(result.ok, true);
+  assert.equal(requests[0].command, "project-tool.run");
+});
+
+test("tools run with target=runtime project tool routes to runtime-tool.run", async () => {
+  const requests: BridgeRequest[] = [];
+  const runtime: ToolsRuntime = {
+    projectTools: [{
+      name: "sample.runtime-echo",
+      title: "Sample Runtime Echo",
+      description: "Echoes input from runtime",
+      group: "sample",
+      inputSchema: { type: "object", properties: { message: { type: "string" } }, required: ["message"] },
+      readOnlyHint: true,
+      destructiveHint: false,
+      handler: "bridge-runtime",
+      target: "runtime",
+      availabilityScope: "playModeSession"
+    }],
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { result: { requestId: "req", input: {}, isPlaying: true, frameCount: 42 } } };
+    }
+  };
+
+  const result = await handleToolsCommand("run", ["sample.runtime-echo"], { "include-custom": true, yes: true }, runtime, requestId);
+  assert.equal(result.ok, true);
+  assert.equal(requests[0].command, "runtime-tool.run");
+});
+
+test("tools run target=both with --runtime flag routes to runtime-tool.run", async () => {
+  const requests: BridgeRequest[] = [];
+  const runtime: ToolsRuntime = {
+    projectTools: [{
+      name: "dual.tool",
+      title: "Dual Tool",
+      description: "Works in both domains",
+      group: "sample",
+      inputSchema: { type: "object" },
+      readOnlyHint: true,
+      destructiveHint: false,
+      handler: "bridge",
+      target: "both",
+      availabilityScope: "editorSession"
+    }],
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { result: "ok" } };
+    }
+  };
+
+  const result = await handleToolsCommand("run", ["dual.tool"], { "include-custom": true, runtime: true, yes: true }, runtime, requestId);
+  assert.equal(result.ok, true);
+  assert.equal(requests[0].command, "runtime-tool.run");
+});
+
+test("tools run target=both without --runtime routes to project-tool.run", async () => {
+  const requests: BridgeRequest[] = [];
+  const runtime: ToolsRuntime = {
+    projectTools: [{
+      name: "dual.tool",
+      title: "Dual Tool",
+      description: "Works in both domains",
+      group: "sample",
+      inputSchema: { type: "object" },
+      readOnlyHint: true,
+      destructiveHint: false,
+      handler: "bridge",
+      target: "both",
+      availabilityScope: "editorSession"
+    }],
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { result: "ok" } };
+    }
+  };
+
+  const result = await handleToolsCommand("run", ["dual.tool"], { "include-custom": true }, runtime, requestId);
+  assert.equal(result.ok, true);
+  assert.equal(requests[0].command, "project-tool.run");
+});
+
+test("tools run without tool name returns E_TOOL_NOT_FOUND_FOR_TARGET", async () => {
+  const result = await handleToolsCommand("run", [], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_TOOL_NOT_FOUND_FOR_TARGET");
+});
+
+test("tools run with unknown tool name returns E_TOOL_NOT_FOUND_FOR_TARGET", async () => {
+  const result = await handleToolsCommand("run", ["nonexistent.tool"], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_TOOL_NOT_FOUND_FOR_TARGET");
+});
+
+test("tools run default target is editor", async () => {
+  const requests: BridgeRequest[] = [];
+  const runtime: ToolsRuntime = {
+    projectTools: [{
+      name: "my.editor-tool",
+      title: "Editor Tool",
+      description: "Editor-only tool",
+      group: "custom",
+      inputSchema: { type: "object" },
+      readOnlyHint: true,
+      destructiveHint: false,
+      handler: "bridge",
+      target: "editor",
+      availabilityScope: "editorSession"
+    }],
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { result: "ok" } };
+    }
+  };
+
+  const result = await handleToolsCommand("run", ["my.editor-tool"], { "include-custom": true }, runtime, requestId);
+  assert.equal(result.ok, true);
+  assert.equal(requests[0].command, "project-tool.run");
 });

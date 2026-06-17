@@ -27,17 +27,14 @@ namespace UnityCli.Samples
     {
         public static string Execute(UnityCliProjectToolContext context)
         {
-            return "{\"requestId\":\"" + Escape(context.RequestId) + "\",\"input\":" + (string.IsNullOrEmpty(context.InputJson) ? "{}" : context.InputJson) + ",\"isPlaying\":" + Bool(EditorApplication.isPlaying) + ",\"frameCount\":" + Time.frameCount.ToString(System.Globalization.CultureInfo.InvariantCulture) + "}";
-        }
-
-        private static string Escape(string value)
-        {
-            return (value ?? string.Empty).Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "\\r").Replace("\n", "\\n").Replace("\t", "\\t");
-        }
-
-        private static string Bool(bool value)
-        {
-            return value ? "true" : "false";
+            var w = new UnityCliJsonWriter();
+            w.BeginObject()
+                .Prop("requestId", context.RequestId ?? string.Empty)
+                .PropRaw("input", string.IsNullOrEmpty(context.InputJson) ? "{}" : context.InputJson)
+                .Prop("isPlaying", EditorApplication.isPlaying)
+                .Prop("frameCount", Time.frameCount)
+                .EndObject();
+            return w.ToString();
         }
     }
 }
