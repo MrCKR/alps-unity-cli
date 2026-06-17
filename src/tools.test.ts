@@ -734,3 +734,44 @@ test("tools run default target is editor", async () => {
   assert.equal(result.ok, true);
   assert.equal(requests[0].command, "project-tool.run");
 });
+
+test("tools run runtime tool discovery uses runtime-tool.list (not project-tool.list)", async () => {
+  const requests: BridgeRequest[] = [];
+  const runtime: ToolsRuntime = {
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      if (payload.command === "runtime-tool.list") {
+        return { ok: true, data: { tools: [{ name: "sample.runtime-echo", title: "Sample Runtime Echo", description: "Echoes input from runtime", group: "sample", target: "runtime", handler: "bridge-runtime" }] } };
+      }
+      return { ok: true, data: { result: { requestId: "req", isPlaying: true } } };
+    }
+  };
+
+  const result = await handleToolsCommand("run", ["sample.runtime-echo"], { "include-custom": true, yes: true }, runtime, requestId);
+  assert.equal(result.ok, true);
+  // Discovery should use runtime-tool.list, then execution uses runtime-tool.run
+  assert.equal(requests[0].command, "runtime-tool.list");
+  assert.equal(requests[1].command, "runtime-tool.run");
+});
+
+test("tools run editor-domain tool discovery falls back to project-tool.list", async () => {
+  const requests: BridgeRequest[] = [];
+  const runtime: ToolsRuntime = {
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      if (payload.command === "runtime-tool.list") {
+        return { ok: true, data: { tools: [] } };
+      }
+      if (payload.command === "project-tool.list") {
+        return { ok: true, data: { tools: [{ name: "my.editor-tool", title: "Editor Tool", description: "Editor-only", group: "custom", target: "editor" }] } };
+      }
+      return { ok: true, data: { result: "ok" } };
+    }
+  };
+
+  const result = await handleToolsCommand("run", ["my.editor-tool"], { "include-custom": true }, runtime, requestId);
+  assert.equal(result.ok, true);
+  assert.equal(requests[0].command, "runtime-tool.list");
+  assert.equal(requests[1].command, "project-tool.list");
+  assert.equal(requests[2].command, "project-tool.run");
+});

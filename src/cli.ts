@@ -79,6 +79,10 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
 
     const bridgeSpec = bridgeCommandRegistry.lookup(group, command);
     if (bridgeSpec) {
+      // Internal commands are not accessible from CLI
+      if (bridgeSpec.internal) {
+        return failure(requestId, "UNKNOWN_COMMAND", `Unknown command: ${argv.join(" ")}`, ["Run unity_cli --help."]);
+      }
       if (shouldRunBridgeAsJob(group, command, parsed.flags)) {
         const confirmation = await confirmDestructiveExecution(parsed.flags, {
           command: bridgeSpec.bridgeCommand,

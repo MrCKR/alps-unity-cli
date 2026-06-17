@@ -6,9 +6,8 @@
  */
 
 import { getBoolean, getString } from "./args.js";
-import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
-import { executeBridgeCommand } from "./bridge/index.js";
-import {
+import { discoverProjectTools, discoverRuntimeTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
+import { executeBridgeCommand } from "./bridge/index.js";import {
   builtinToolMetadata,
   builtinToolGroups,
   findToolByName,
@@ -257,9 +256,19 @@ async function handleToolsRun(
   const includeCustom = shouldDiscoverProjectTools(flags, runtime) || getBoolean(flags, "include-custom");
   let projectTool: ToolMetadata | undefined;
   if (!builtinTool && includeCustom) {
-    const customTools = await discoverProjectTools(flags, runtime, requestId, { requireBridge: getBoolean(flags, "include-custom") });
-    if (customTools.ok === false) return customTools;
-    projectTool = customTools.tools.find((t: ToolMetadata) => t.name === toolName);
+    // For runtime tools in Play Mode, use runtime-tool.list which is exempt
+    // from the Play Mode busy guard. Try runtime-tool.list first, then fall
+    // back to project-tool.list for editor-domain tools.
+    const runtimeDiscovery = await discoverRuntimeTools(flags, runtime, requestId);
+    if (runtimeDiscovery.ok === false) return runtimeDiscovery;
+    projectTool = runtimeDiscovery.tools.find((t: ToolMetadata) => t.name === toolName);
+
+    if (!projectTool) {
+      // Tool not found in runtime tools; try editor-domain project-tool.list
+      const customTools = await discoverProjectTools(flags, runtime, requestId, { requireBridge: getBoolean(flags, "include-custom") });
+      if (customTools.ok === false) return customTools;
+      projectTool = customTools.tools.find((t: ToolMetadata) => t.name === toolName);
+    }
   }
 
   const tool = builtinTool ?? projectTool;
