@@ -153,9 +153,9 @@ namespace UnityCli
                 + "\"status\":" + Quote(status == "healthy" ? "ready" : status) + ","
                 + "\"editorState\":" + EditorStateSummaryJson() + ","
                 + "\"playModeState\":" + PlayModeStateJson() + ","
-                + "\"runtimeSessionId\":null,"
-                + "\"toolCatalogFingerprint\":null,"
-                + "\"registryVersion\":\"1\","
+                + "\"runtimeSessionId\":" + Quote(currentPlayModeSessionId ?? string.Empty) + ","
+                + "\"toolCatalogFingerprint\":" + Quote(runtimeToolCatalogFingerprint ?? string.Empty) + ","
+                + "\"registryVersion\":" + Quote(runtimeRegistryVersion.ToString(CultureInfo.InvariantCulture)) + ","
                 + "\"registeredAt\":" + Quote(now) + ","
                 + "\"lastSeenAt\":" + Quote(now) + ","
                 + "\"lastHeartbeatAt\":" + Quote(now)

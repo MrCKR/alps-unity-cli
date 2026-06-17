@@ -1,0 +1,38 @@
+{
+  "defaults": {
+    "project": "C:/work/Game",
+    "unity": "C:/Program Files/Unity/Hub/Editor/2022.3.45f1/Editor/Unity.exe",
+    "wait": true,
+    "timeoutMs": 600000,
+    "waitTimeoutMs": 600000,
+    "env": {
+      "UNITY_CLI_BRIDGE_ENDPOINT": "http://127.0.0.1:18080"
+    }
+  },
+  "envAllowlist": ["UNITY_CLI_BRIDGE_ENDPOINT"],
+  "failFast": true,
+  "parallel": 1,
+  "steps": [
+    {
+      "id": "enter-play-mode",
+      "command": ["tools", "run", "editor.play"]
+    },
+    {
+      "id": "run-runtime-echo",
+      "command": ["tools", "run", "sample.echo"],
+      "args": ["--input", "{\"message\":\"runtime batch test\"}", "--include-custom"],
+      "dependsOn": ["enter-play-mode"]
+    },
+    {
+      "id": "run-runtime-wait",
+      "command": ["tools", "run", "sample.wait"],
+      "args": ["--input", "{\"durationMs\":500,\"message\":\"wait complete\"}", "--include-custom", "--timeout-ms", "5000"],
+      "dependsOn": ["run-runtime-echo"]
+    },
+    {
+      "id": "exit-play-mode",
+      "command": ["tools", "run", "editor.stop"],
+      "dependsOn": ["run-runtime-wait"]
+    }
+  ]
+}

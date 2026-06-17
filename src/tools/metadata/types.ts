@@ -4,8 +4,8 @@ export interface ToolExample {
   output?: string;
 }
 
-export type ToolHandler = "bridge" | "job" | "offline" | "hybrid";
-export type ToolSupportStatus = "live-bridge" | "bridge-job" | "batch-job" | "cli-only" | "planned";
+export type ToolHandler = "bridge" | "bridge-runtime" | "job" | "offline" | "hybrid";
+export type ToolSupportStatus = "live-bridge" | "live-bridge-runtime" | "bridge-job" | "batch-job" | "cli-only" | "planned";
 
 export interface ToolMetadata {
   name: string;
@@ -30,4 +30,10 @@ export interface ToolMetadata {
   handler?: ToolHandler;
   supportStatus?: ToolSupportStatus;
   cliCommand?: string;
+  /** Execution target: "editor" (default), "runtime", or "both". */
+  target?: string;
+  /** Availability scope for the tool. "playModeSession" for runtime tools, "editorSession" for editor tools. */
+  availabilityScope?: string;
+  /** Whether the tool is currently available based on session state (runtime tools: only in Play Mode). */
+  available?: boolean;
 }

@@ -53,6 +53,8 @@ namespace UnityCli
             definition.InputSchema = string.IsNullOrEmpty(definition.InputSchema) ? "{}" : definition.InputSchema;
             definition.OutputSchema = string.IsNullOrEmpty(definition.OutputSchema) ? "{}" : definition.OutputSchema;
             definition.CapabilityType = string.IsNullOrEmpty(definition.CapabilityType) ? "project-write" : definition.CapabilityType;
+            definition.Target = string.IsNullOrEmpty(definition.Target) ? "editor" : definition.Target;
+            definition.AvailabilityScope = string.IsNullOrEmpty(definition.AvailabilityScope) ? (definition.Target == "runtime" ? "playModeSession" : "editorSession") : definition.AvailabilityScope;
             definition.CoverageScope = definition.CoverageScope ?? new string[0];
             definition.DefaultTimeoutMs = definition.DefaultTimeoutMs <= 0 ? 30000 : definition.DefaultTimeoutMs;
             definition.MaxTimeoutMs = definition.MaxTimeoutMs <= 0 ? 600000 : definition.MaxTimeoutMs;
@@ -141,6 +143,7 @@ namespace UnityCli
                 ArchitectureSensitive = attribute.ArchitectureSensitive,
                 FrozenDecision = attribute.FrozenDecision,
                 CoverageScope = SplitCsv(attribute.CoverageScope).ToArray(),
+                Target = attribute.Target ?? "editor",
                 DefaultTimeoutMs = attribute.DefaultTimeoutMs,
                 MaxTimeoutMs = attribute.MaxTimeoutMs,
                 SupportsJob = attribute.SupportsJob,
@@ -151,6 +154,7 @@ namespace UnityCli
                 Assembly = assembly.GetName().Name,
                 Method = type.FullName + "." + executeMethod.Name,
                 Fingerprint = attribute.Fingerprint,
+                PinnedFingerprint = attribute.Fingerprint,
                 ExpectedFingerprint = attribute.Fingerprint,
                 Execute = delegate(UnityCliProjectToolContext context)
                 {
@@ -211,6 +215,18 @@ namespace UnityCli
             }
 
             var definition = ProjectTools[name];
+
+            // If the tool has Target=runtime, reject from project-tool.run and suggest runtime-tool.run
+            if (definition.Target == "runtime")
+            {
+                return ErrorJsonWithDetails("E_RUNTIME_TOOL_TARGET_MISMATCH",
+                    "Tool " + name + " has Target=runtime and must be executed via the runtime path (runtime-tool.run).",
+                    new UnityCliJsonWriter().BeginObject()
+                        .Prop("toolName", name)
+                        .Prop("toolTarget", definition.Target)
+                        .EndObject().ToString(),
+                    "Use runtime-tool.run <name> or tools run <name> with a runtime target to execute this tool in Play Mode.");
+            }
             var fingerprintCheck = RefreshProjectToolFingerprint(definition, request.StringArg("fingerprintMode"));
             if (fingerprintCheck.Blocked)
             {
@@ -337,6 +353,8 @@ namespace UnityCli
                 .Prop("capabilityType", definition.CapabilityType)
                 .Prop("readOnlyHint", definition.ReadOnlyHint)
                 .Prop("destructiveHint", definition.DestructiveHint)
+                .Prop("target", definition.Target)
+                .Prop("availabilityScope", definition.AvailabilityScope)
                 .Prop("defaultTimeoutMs", definition.DefaultTimeoutMs)
                 .Prop("maxTimeoutMs", definition.MaxTimeoutMs)
                 .Prop("supportsJob", definition.SupportsJob)
@@ -451,15 +469,25 @@ namespace UnityCli
             definition.DescriptorSha256 = Sha256Hex(descriptor);
             definition.HandlerSha256 = Sha256Hex(ProjectToolHandlerFingerprintMaterial(definition));
             definition.Fingerprint = Sha256Hex("unity-cli-project-tool-fingerprint-v1\nhandler=" + definition.HandlerSha256 + "\ndescriptor=" + definition.DescriptorSha256);
-            if (string.IsNullOrEmpty(definition.ExpectedFingerprint))
+
+            // When the attribute has an explicit Fingerprint (pinned by the developer),
+            // enforce strict matching. When it is not pinned (null/empty), auto-accept
+            // the current computed fingerprint as the new baseline — this allows
+            // built-in sample tools to evolve without manual fingerprint updates.
+            var isPinned = !string.IsNullOrEmpty(definition.PinnedFingerprint);
+            if (isPinned)
             {
-                var persisted = LoadProjectToolExpectedFingerprint(definition.Name);
-                definition.ExpectedFingerprint = string.IsNullOrEmpty(persisted) ? definition.Fingerprint : persisted;
-                if (string.IsNullOrEmpty(persisted))
-                {
-                    SaveProjectToolExpectedFingerprint(definition.Name, definition.Fingerprint);
-                }
+                definition.ExpectedFingerprint = definition.PinnedFingerprint;
             }
+            else
+            {
+                // Not pinned: always accept current fingerprint as expected.
+                // Update the persisted baseline so mismatch is detectable if
+                // the user later pins the fingerprint.
+                definition.ExpectedFingerprint = definition.Fingerprint;
+                SaveProjectToolExpectedFingerprint(definition.Name, definition.Fingerprint);
+            }
+
             definition.FingerprintMode = NormalizeProjectToolFingerprintMode(requestedMode);
             var matches = string.Equals(definition.ExpectedFingerprint, definition.Fingerprint, StringComparison.OrdinalIgnoreCase);
             definition.FingerprintStatus = matches ? "match" : (definition.FingerprintMode == "warn" ? "warn" : "blocked");

@@ -251,7 +251,9 @@ namespace UnityCli
             }
             if (cachedIsPlayingOrWillChangePlaymode
                 && request.Command != "editor.pause"
-                && request.Command != "editor.stop")
+                && request.Command != "editor.stop"
+                && request.Command != "runtime-tool.list"
+                && request.Command != "runtime-tool.run")
             {
                 WriteJson(context, TransientErrorJson("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode.", "Wait for Play mode transition to complete and retry.", 3000), 200);
                 return;

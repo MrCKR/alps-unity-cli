@@ -934,6 +934,41 @@
       ]
     },
     {
+      "bridgeCommand": "runtime-tool.list",
+      "group": "runtime-tool",
+      "command": "list",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000,
+      "architectureSensitive": true,
+      "frozenDecision": "ALP-404-Q3",
+      "coverageScope": [
+        "runtime-executor",
+        "play-mode-session",
+        "availability-scope"
+      ]
+    },
+    {
+      "bridgeCommand": "runtime-tool.run",
+      "group": "runtime-tool",
+      "command": "run",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": true,
+      "timeout": 60000,
+      "architectureSensitive": true,
+      "frozenDecision": "ALP-404-Q4",
+      "coverageScope": [
+        "runtime-executor",
+        "play-mode-session",
+        "cross-frame-wait",
+        "timeout-semantics"
+      ]
+    },
+    {
       "bridgeCommand": "scene.active",
       "group": "scene",
       "command": "active",

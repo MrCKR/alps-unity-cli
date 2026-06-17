@@ -469,3 +469,88 @@ describe("DEFAULT_RETRY_AFTER_MS", () => {
     }
   });
 });
+// ─── P5 Runtime Error Codes ───
+
+describe("E_RUNTIME_NOT_READY is transient with retry_after_ms=3000", () => {
+  it("E_RUNTIME_NOT_READY is in TRANSIENT_ERROR_CODES", () => {
+    assert.ok(TRANSIENT_ERROR_CODES.has(ERROR_CODES.E_RUNTIME_NOT_READY), "E_RUNTIME_NOT_READY should be transient");
+  });
+
+  it("E_RUNTIME_NOT_READY failure envelope has transient=true and retry_after_ms=3000", () => {
+    const requestId = createRequestId();
+    const result = failure(requestId, "E_RUNTIME_NOT_READY", "Runtime is not ready (Play Mode not active).", ["Wait for Play Mode to become active and retry."]);
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.transient, true);
+    assert.equal(result.error?.retry_after_ms, 3000);
+    assert.equal(result.error?.code, "E_RUNTIME_NOT_READY");
+  });
+
+  it("E_RUNTIME_NOT_READY is retried by withRetry", async () => {
+    let calls = 0;
+    const result = await withRetry(async () => {
+      calls += 1;
+      if (calls === 1) {
+        return failure("req_1", "E_RUNTIME_NOT_READY", "Runtime not ready.");
+      }
+      return success("req_1", { status: "ready" });
+    }, { maxRetries: 3 });
+    assert.equal(calls, 2);
+    assert.equal(result.ok, true);
+  });
+
+  it("DEFAULT_RETRY_AFTER_MS has E_RUNTIME_NOT_READY=3000", () => {
+    assert.equal(DEFAULT_RETRY_AFTER_MS[ERROR_CODES.E_RUNTIME_NOT_READY], 3000);
+  });
+});
+
+describe("E_RUNTIME_TIMEOUT is non-transient", () => {
+  it("E_RUNTIME_TIMEOUT is NOT in TRANSIENT_ERROR_CODES", () => {
+    assert.equal(TRANSIENT_ERROR_CODES.has(ERROR_CODES.E_RUNTIME_TIMEOUT), false);
+  });
+
+  it("E_RUNTIME_TIMEOUT failure envelope has transient=undefined", () => {
+    const requestId = createRequestId();
+    const result = failure(requestId, "E_RUNTIME_TIMEOUT", "Runtime tool execution timed out.", ["Increase --timeout-ms or check runtime session state."]);
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.transient, undefined);
+    assert.equal(result.error?.retry_after_ms, undefined);
+    assert.equal(result.error?.code, "E_RUNTIME_TIMEOUT");
+  });
+
+  it("E_RUNTIME_TIMEOUT is not retried by withRetry", async () => {
+    let calls = 0;
+    const result = await withRetry(async () => {
+      calls += 1;
+      return failure("req_1", "E_RUNTIME_TIMEOUT", "Timed out.");
+    }, { maxRetries: 3 });
+    assert.equal(calls, 1);
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "E_RUNTIME_TIMEOUT");
+  });
+});
+
+describe("E_RUNTIME_TOOL_TARGET_MISMATCH is non-transient", () => {
+  it("E_RUNTIME_TOOL_TARGET_MISMATCH is NOT in TRANSIENT_ERROR_CODES", () => {
+    assert.equal(TRANSIENT_ERROR_CODES.has(ERROR_CODES.E_RUNTIME_TOOL_TARGET_MISMATCH), false);
+  });
+
+  it("E_RUNTIME_TOOL_TARGET_MISMATCH failure envelope has transient=undefined", () => {
+    const requestId = createRequestId();
+    const result = failure(requestId, "E_RUNTIME_TOOL_TARGET_MISMATCH", "Tool target mismatch: runtime tool called with editor target.", ["Use --runtime flag or ensure the tool's target matches the execution context."]);
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.transient, undefined);
+    assert.equal(result.error?.retry_after_ms, undefined);
+    assert.equal(result.error?.code, "E_RUNTIME_TOOL_TARGET_MISMATCH");
+  });
+
+  it("E_RUNTIME_TOOL_TARGET_MISMATCH is not retried by withRetry", async () => {
+    let calls = 0;
+    const result = await withRetry(async () => {
+      calls += 1;
+      return failure("req_1", "E_RUNTIME_TOOL_TARGET_MISMATCH", "Target mismatch.");
+    }, { maxRetries: 3 });
+    assert.equal(calls, 1);
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "E_RUNTIME_TOOL_TARGET_MISMATCH");
+  });
+});

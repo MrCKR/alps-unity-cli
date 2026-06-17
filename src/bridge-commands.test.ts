@@ -7,7 +7,7 @@ import test from "node:test";
 import { execute } from "./cli.js";
 import { JobRunner } from "./job-runner.js";
 import { JobStore } from "./job-store.js";
-import { bridgeHttpTimeoutMs, type BridgeRequest } from "./bridge/index.js";
+import { bridgeCommandRegistry, bridgeHttpTimeoutMs, type BridgeRequest } from "./bridge/index.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
@@ -933,4 +933,33 @@ test("editor bridge errors preserve structured diagnostics", async () => {
     assert.equal(result.error?.code, item.response.code, item.name);
     assert.deepEqual(result.error?.next_actions, item.nextActions, item.name);
   }
+});
+
+test("runtime-tool list is blocked from CLI as internal command", async () => {
+  const runtime = await makeRuntime();
+  const result = await execute(["runtime-tool", "list"], runtime);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "UNKNOWN_COMMAND");
+});
+
+test("runtime-tool run is blocked from CLI as internal command", async () => {
+  const runtime = await makeRuntime();
+  const result = await execute(["runtime-tool", "run", "sample.runtime-echo", "--yes"], runtime);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "UNKNOWN_COMMAND");
+});
+
+test("runtime-tool list is registered in bridge command registry as internal", () => {
+  const spec = bridgeCommandRegistry.lookup("runtime-tool", "list");
+  assert.ok(spec, "runtime-tool list should be registered");
+  assert.equal(spec.bridgeCommand, "runtime-tool.list");
+  assert.equal(spec.internal, true);
+});
+
+test("runtime-tool run is registered in bridge command registry as internal", () => {
+  const spec = bridgeCommandRegistry.lookup("runtime-tool", "run");
+  assert.ok(spec, "runtime-tool run should be registered");
+  assert.equal(spec.bridgeCommand, "runtime-tool.run");
+  assert.equal(spec.destructiveHint, true);
+  assert.equal(spec.internal, true);
 });
