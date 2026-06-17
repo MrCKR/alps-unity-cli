@@ -1,0 +1,46 @@
+{
+  "$schema": "../contracts/batch-schema.json",
+  "description": "Editor tool batch example — asset, package, and editor operations in a serial workflow.",
+  "defaults": {
+    "project": ".",
+    "unity": "/path/to/Unity"
+  },
+  "failFast": true,
+  "steps": [
+    {
+      "id": "find-player",
+      "command": ["go", "find"],
+      "args": ["--name", "Player"]
+    },
+    {
+      "id": "search-prefab",
+      "command": ["asset", "search"],
+      "args": ["--query", "Player", "--type", "Prefab"],
+      "dependsOn": ["find-player"]
+    },
+    {
+      "id": "edit-player-script",
+      "command": ["script", "edit", "Assets/Scripts/Player.cs"],
+      "args": ["--find", "speed = 1", "--replace", "speed = 2"],
+      "dependsOn": ["search-prefab"]
+    },
+    {
+      "id": "refresh-editor",
+      "command": ["editor", "refresh"],
+      "args": ["--compile"],
+      "dependsOn": ["edit-player-script"]
+    },
+    {
+      "id": "run-editmode-tests",
+      "command": ["test", "run"],
+      "args": ["--platform", "EditMode"],
+      "dependsOn": ["refresh-editor"]
+    },
+    {
+      "id": "screenshot-result",
+      "command": ["camera", "screenshot", "Main Camera"],
+      "args": ["--output", "Artifacts/player-edit.png", "--overwrite"],
+      "dependsOn": ["run-editmode-tests"]
+    }
+  ]
+}

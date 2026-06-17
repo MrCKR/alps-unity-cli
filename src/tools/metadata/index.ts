@@ -32,6 +32,7 @@ import { DIAGNOSE_TOOLS } from "./groups/diagnose.js";
 import { SCREENSHOT_TOOLS } from "./groups/screenshot.js";
 import { CODE_TOOLS } from "./groups/code.js";
 import { CLI_ONLY_TOOLS } from "./groups/cli-only.js";
+import { TOOLS_DISCOVERY_TOOLS } from "./groups/tools.js";
 import type { ToolMetadata } from "./types.js";
 
 export { supportStatusDescription, supportStatusForTool, supportStatusLabel } from "./status.js";
@@ -60,6 +61,7 @@ const BUILTIN_TOOLS: ToolMetadata[] = [
   ...SCREENSHOT_TOOLS,
   ...CODE_TOOLS,
   ...CLI_ONLY_TOOLS,
+  ...TOOLS_DISCOVERY_TOOLS,
 ];
 
 validateBridgeRegistryContracts(bridgeCommandRegistry);

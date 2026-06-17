@@ -1297,6 +1297,63 @@
       "readOnly": false,
       "destructive": false,
       "timeout": 30000
+    },
+    {
+      "bridgeCommand": "tools.list",
+      "group": "tools",
+      "command": "list",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 5000
+    },
+    {
+      "bridgeCommand": "tools.groups",
+      "group": "tools",
+      "command": "groups",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 5000
+    },
+    {
+      "bridgeCommand": "tools.search",
+      "group": "tools",
+      "command": "search",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 5000
+    },
+    {
+      "bridgeCommand": "tools.describe",
+      "group": "tools",
+      "command": "describe",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 10000
+    },
+    {
+      "bridgeCommand": "tools.run",
+      "group": "tools",
+      "command": "run",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "architectureSensitive": true,
+      "frozenDecision": "ALP-365-P6",
+      "coverageScope": [
+        "tools-run",
+        "runtime-target",
+        "play-mode-session"
+      ]
     }
   ]
 }

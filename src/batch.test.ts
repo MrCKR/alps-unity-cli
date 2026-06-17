@@ -269,6 +269,51 @@ test("batch env entries must be explicitly allowlisted", async () => {
   assert.ok(data.preflight.some((item) => item.code === "BATCH_ENV_NOT_ALLOWED"));
 });
 
+test("batch editor play/stop/state and tools run are registered commands", async () => {
+  const runtime = await makeRuntime();
+  const batch = await writeBatch(runtime.dataDir, {
+    defaults: { project: ".", unity: "/path/to/Unity" },
+    steps: [
+      { id: "enter-play", command: ["editor", "play"] },
+      { id: "check-state", command: ["editor", "state"], "dependsOn": ["enter-play"] },
+      { id: "run-echo", command: ["tools", "run"], args: ["sample.echo"], "dependsOn": ["check-state"] },
+      { id: "exit-play", command: ["editor", "stop"], "dependsOn": ["run-echo"] }
+    ]
+  });
+
+  const result = await execute(["batch", "run", batch, "--preflight"], runtime);
+
+  assert.equal(result.ok, true);
+  const data = result.data as { preflight: Array<{ code: string }> };
+  assert.ok(data.preflight.some((item) => item.code === "BATCH_PREFLIGHT_OK"));
+});
+
+test("batch playModeSessionId and fingerprintMode are converted to CLI flags", async () => {
+  const runtime = await makeRuntime();
+  const batch = await writeBatch(runtime.dataDir, {
+    defaults: { project: ".", unity: "/path/to/Unity" },
+    steps: [
+      {
+        id: "runtime-tool",
+        command: ["tools", "run"],
+        args: ["sample.runtime-echo"],
+        playModeSessionId: "session_test_001",
+        fingerprintMode: "strict"
+      }
+    ]
+  });
+
+  const result = await execute(["batch", "run", batch, "--preflight"], runtime);
+
+  assert.equal(result.ok, true);
+  const data = result.data as { steps: Array<{ command: string[] }> };
+  const argv = data.steps[0].command;
+  assert.ok(argv.includes("--play-mode-session-id"));
+  assert.ok(argv.includes("session_test_001"));
+  assert.ok(argv.includes("--fingerprint-mode"));
+  assert.ok(argv.includes("strict"));
+});
+
 async function writeFakeUnity(dataDir: string, body: string): Promise<string> {
   if (process.platform === "win32") {
     const script = join(dataDir, "UnityFake.js");
