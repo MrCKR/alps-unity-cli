@@ -1,0 +1,30 @@
+{
+  "command": "editor.state",
+  "data": {
+    "playMode": {
+      "isPlaying": "<boolean>",
+      "isPaused": "<boolean>",
+      "isPlayingOrWillChangePlaymode": "<boolean>"
+    },
+    "busy": {
+      "compiling": "<boolean>",
+      "updating": "<boolean>",
+      "building": "<boolean>",
+      "domainReloading": "<boolean>"
+    },
+    "activeScene": {
+      "name": "<string>",
+      "path": "<string|null>",
+      "buildIndex": "<integer>",
+      "isLoaded": "<boolean>",
+      "isDirty": "<boolean>"
+    },
+    "prefabStage": "<object|null>",
+    "bridge": {
+      "port": "<integer>",
+      "logPath": "<string>"
+    },
+    "runtime": "<object|null>",
+    "plannedEffects": "<array>"
+  }
+}

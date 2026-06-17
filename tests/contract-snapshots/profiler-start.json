@@ -1,0 +1,13 @@
+{
+  "command": "profiler.start",
+  "data": {
+    "profiler": "<profiler state object>",
+    "plannedEffects": "<array with {type: profiler.start}>",
+    "logPath": "<string>"
+  },
+  "notes": [
+    "QuotePair has been replaced with PropArray+BeginObject+Prop+EndObject",
+    "plannedEffects now uses typed writer: [{\"type\":\"profiler.start\"}]",
+    "Must match exactly the same JSON as before"
+  ]
+}

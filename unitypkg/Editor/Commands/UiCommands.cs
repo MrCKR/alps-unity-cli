@@ -134,7 +134,11 @@ namespace UnityCli
                 {
                     return ErrorJson("E_UI_DOCUMENT_NOT_FOUND", "UIDocument target not found: " + target, "Pass a UIDocument GameObject name, hierarchy path, instance id or an Assets/*.uxml path.");
                 }
-                return SuccessJson("{\"document\":" + UiDocumentJson(document) + ",\"target\":" + UiGameObjectJson(gameObject, "UIDocument") + ",\"logPath\":" + Quote(LogPath()) + "}");
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .PropRaw("document", UiDocumentJson(document))
+                    .PropRaw("target", UiGameObjectJson(gameObject, "UIDocument"))
+                    .Prop("logPath", LogPath())
+                    .EndObject().ToString());
             }
 
             if (string.IsNullOrEmpty(path))
@@ -179,7 +183,16 @@ namespace UnityCli
             }
             Selection.activeGameObject = gameObject;
             WriteLog("ui_document_created name=" + name + " uxml=" + uxmlPath + " uss=" + ussPath);
-            return SuccessJson("{\"document\":" + UiDocumentJson(document) + ",\"target\":" + UiGameObjectJson(gameObject, "UIDocument") + ",\"styleSheet\":" + UiStyleSheetJson(ussPath, string.IsNullOrEmpty(ussPath) ? null : LoadStyleSheet(ussPath)) + ",\"plannedEffects\":[{\"type\":\"ui.document.create\",\"target\":" + Quote(HierarchyPath(gameObject)) + ",\"uxml\":" + Quote(uxmlPath) + ",\"uss\":" + Quote(ussPath) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("document", UiDocumentJson(document))
+                .PropRaw("target", UiGameObjectJson(gameObject, "UIDocument"))
+                .PropRaw("styleSheet", UiStyleSheetJson(ussPath, string.IsNullOrEmpty(ussPath) ? null : LoadStyleSheet(ussPath)))
+                .PropArray("plannedEffects", arr =>
+                {
+                    arr.BeginObject().Prop("type", "ui.document.create").Prop("target", HierarchyPath(gameObject)).Prop("uxml", uxmlPath).Prop("uss", ussPath).EndObject();
+                })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string UiHierarchy(BridgeRequest request)
@@ -228,7 +241,20 @@ namespace UnityCli
                 items.Add(summaries[index]);
             }
             var nextCursor = cursor + items.Count < summaries.Count ? (cursor + items.Count).ToString(CultureInfo.InvariantCulture) : null;
-            return SuccessJson("{\"items\":[" + string.Join(",", items.ToArray()) + "],\"pageInfo\":{\"pageSize\":" + pageSize.ToString(CultureInfo.InvariantCulture) + ",\"cursor\":" + cursor.ToString(CultureInfo.InvariantCulture) + ",\"nextCursor\":" + Quote(nextCursor) + ",\"total\":" + summaries.Count.ToString(CultureInfo.InvariantCulture) + "},\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropArray("items", arr =>
+                {
+                    foreach (var item in items)
+                    {
+                        arr.RawValue(item);
+                    }
+                })
+                .PropObject("pageInfo", pg =>
+                {
+                    pg.Prop("pageSize", (long)pageSize).Prop("cursor", (long)cursor).Prop("nextCursor", nextCursor).Prop("total", (long)summaries.Count);
+                })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static TargetResolution ResolveUiParent(string target)
@@ -267,24 +293,27 @@ namespace UnityCli
 
         private static string UiCreateJson(string command, GameObject gameObject, string kind)
         {
-            return "{"
-                + "\"created\":" + UiGameObjectJson(gameObject, kind) + ","
-                + "\"rectTransform\":" + RectTransformJson(gameObject.GetComponent<RectTransform>()) + ","
-                + "\"plannedEffects\":[{\"type\":" + Quote(command) + ",\"target\":" + Quote(HierarchyPath(gameObject)) + "}],"
-                + "\"logPath\":" + Quote(LogPath())
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropRaw("created", UiGameObjectJson(gameObject, kind))
+                .PropRaw("rectTransform", RectTransformJson(gameObject.GetComponent<RectTransform>()))
+                .PropArray("plannedEffects", arr =>
+                {
+                    arr.BeginObject().Prop("type", command).Prop("target", HierarchyPath(gameObject)).EndObject();
+                })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString();
         }
 
         private static string UiGameObjectJson(GameObject gameObject, string kind)
         {
-            return "{"
-                + "\"id\":" + gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) + ","
-                + "\"name\":" + Quote(gameObject.name) + ","
-                + "\"path\":" + Quote(HierarchyPath(gameObject)) + ","
-                + "\"kind\":" + Quote(kind) + ","
-                + "\"active\":" + Bool(gameObject.activeSelf) + ","
-                + "\"components\":" + ComponentNamesJson(gameObject)
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("id", (long)gameObject.GetInstanceID())
+                .Prop("name", gameObject.name)
+                .Prop("path", HierarchyPath(gameObject))
+                .Prop("kind", kind)
+                .Prop("active", gameObject.activeSelf)
+                .PropRaw("components", ComponentNamesJson(gameObject))
+                .EndObject().ToString();
         }
 
         private static string RectTransformJson(RectTransform rectTransform)
@@ -293,59 +322,72 @@ namespace UnityCli
             {
                 return "null";
             }
-            return "{"
-                + "\"width\":" + rectTransform.rect.width.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"height\":" + rectTransform.rect.height.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"x\":" + rectTransform.anchoredPosition.x.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"y\":" + rectTransform.anchoredPosition.y.ToString(CultureInfo.InvariantCulture)
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("width", (double)rectTransform.rect.width)
+                .Prop("height", (double)rectTransform.rect.height)
+                .Prop("x", (double)rectTransform.anchoredPosition.x)
+                .Prop("y", (double)rectTransform.anchoredPosition.y)
+                .EndObject().ToString();
         }
 
         private static string ComponentNamesJson(GameObject gameObject)
         {
-            var componentNames = new List<string>();
+            var w = new UnityCliJsonWriter().BeginArray();
             foreach (var component in gameObject.GetComponents<Component>())
             {
-                componentNames.Add(Quote(component != null ? component.GetType().Name : "MissingScript"));
+                w.Value(component != null ? component.GetType().Name : "MissingScript");
             }
-            return "[" + string.Join(",", componentNames.ToArray()) + "]";
+            return w.EndArray().ToString();
         }
 
         private static string UiDocumentAssetInfoJson(string path, VisualTreeAsset visualTree, string uss, StyleSheet styleSheet)
         {
-            return "{"
-                + "\"document\":{"
-                + UiAssetFieldsJson(path, visualTree) + ","
-                + "\"styleSheet\":" + UiStyleSheetJson(uss, styleSheet)
-                + "},"
-                + "\"diagnostics\":" + UiDocumentReadDiagnosticsJson() + ","
-                + "\"logPath\":" + Quote(LogPath())
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropObject("document", doc =>
+                {
+                    WriteAssetFields(doc, path, visualTree);
+                    doc.PropRaw("styleSheet", UiStyleSheetJson(uss, styleSheet));
+                })
+                .PropRaw("diagnostics", UiDocumentReadDiagnosticsJson())
+                .Prop("logPath", LogPath())
+                .EndObject().ToString();
         }
 
         private static string UiDocumentReadDiagnosticsJson()
         {
-            return "[{"
-                + "\"level\":\"info\","
-                + "\"code\":\"UI_DOCUMENT_READ_OK\","
-                + "\"message\":\"UI Toolkit assets are readable.\""
-                + "}]";
+            return new UnityCliJsonWriter().BeginArray()
+                .BeginObject()
+                    .Prop("level", "info")
+                    .Prop("code", "UI_DOCUMENT_READ_OK")
+                    .Prop("message", "UI Toolkit assets are readable.")
+                .EndObject()
+                .EndArray().ToString();
         }
 
         private static string UiDocumentJson(UIDocument document)
         {
             var visualTreePath = document.visualTreeAsset == null ? null : NormalizeAssetPath(AssetDatabase.GetAssetPath(document.visualTreeAsset));
             var panelSettingsPath = document.panelSettings == null ? null : NormalizeAssetPath(AssetDatabase.GetAssetPath(document.panelSettings));
-            return "{"
-                + "\"visualTreeAsset\":" + UiAssetReferenceJson(visualTreePath, document.visualTreeAsset) + ","
-                + "\"panelSettings\":" + UiAssetReferenceJson(panelSettingsPath, document.panelSettings) + ","
-                + "\"rootVisualElement\":{\"name\":" + Quote(document.rootVisualElement == null ? null : document.rootVisualElement.name) + "}"
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropRaw("visualTreeAsset", UiAssetReferenceJson(visualTreePath, document.visualTreeAsset))
+                .PropRaw("panelSettings", UiAssetReferenceJson(panelSettingsPath, document.panelSettings))
+                .PropObject("rootVisualElement", w => w.Prop("name", document.rootVisualElement == null ? null : document.rootVisualElement.name))
+                .EndObject().ToString();
+        }
+
+        private static void WriteAssetFields(UnityCliJsonWriter w, string path, UnityEngine.Object asset)
+        {
+            w.Prop("path", path)
+             .Prop("guid", AssetDatabase.AssetPathToGUID(path))
+             .Prop("type", asset == null ? null : asset.GetType().Name)
+             .Prop("exists", asset != null);
         }
 
         private static string UiAssetFieldsJson(string path, UnityEngine.Object asset)
         {
-            return "\"path\":" + Quote(path) + ",\"guid\":" + Quote(AssetDatabase.AssetPathToGUID(path)) + ",\"type\":" + Quote(asset == null ? null : asset.GetType().Name) + ",\"exists\":" + Bool(asset != null);
+            var w = new UnityCliJsonWriter().BeginObject();
+            WriteAssetFields(w, path, asset);
+            return w.EndObject().ToString();
         }
 
         private static string UiAssetReferenceJson(string path, UnityEngine.Object asset)
@@ -354,7 +396,7 @@ namespace UnityCli
             {
                 return "null";
             }
-            return "{" + UiAssetFieldsJson(path, asset) + "}";
+            return UiAssetFieldsJson(path, asset);
         }
 
         private static string UiStyleSheetJson(string path, StyleSheet styleSheet)
@@ -363,7 +405,7 @@ namespace UnityCli
             {
                 return "null";
             }
-            return "{" + UiAssetFieldsJson(path, styleSheet) + "}";
+            return UiAssetFieldsJson(path, styleSheet);
         }
 
         private static VisualTreeAsset LoadVisualTreeAsset(string path)
@@ -449,7 +491,12 @@ namespace UnityCli
             if (gameObject.GetComponent<Canvas>() != null || gameObject.GetComponent<RectTransform>() != null || gameObject.GetComponent<UIDocument>() != null)
             {
                 var kind = gameObject.GetComponent<UIDocument>() != null ? "UIDocument" : gameObject.GetComponent<Canvas>() != null ? "Canvas" : "RectTransform";
-                items.Add("{\"item\":" + UiGameObjectJson(gameObject, kind) + ",\"rectTransform\":" + RectTransformJson(gameObject.GetComponent<RectTransform>()) + ",\"document\":" + (gameObject.GetComponent<UIDocument>() == null ? "null" : UiDocumentJson(gameObject.GetComponent<UIDocument>())) + "}");
+                var documentComponent = gameObject.GetComponent<UIDocument>();
+                items.Add(new UnityCliJsonWriter().BeginObject()
+                    .PropRaw("item", UiGameObjectJson(gameObject, kind))
+                    .PropRaw("rectTransform", RectTransformJson(gameObject.GetComponent<RectTransform>()))
+                    .PropRaw("document", documentComponent == null ? "null" : UiDocumentJson(documentComponent))
+                    .EndObject().ToString());
             }
             foreach (Transform child in transform)
             {

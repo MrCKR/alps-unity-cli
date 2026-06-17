@@ -55,25 +55,27 @@ namespace UnityCli
 
         private static string RuntimeDiagnosticsJson(string phase)
         {
-            return "{"
-                + "\"ok\":true,"
-                + "\"phase\":" + Quote(phase) + ","
-                + "\"diagnosticsFingerprint\":" + Quote(BridgeDiagnosticsFingerprint) + ","
-                + "\"listenerId\":" + Quote(ListenerId) + ","
-                + "\"loadedAt\":" + Quote(BridgeLoadedAtUtc.ToString("O", CultureInfo.InvariantCulture)) + ","
-                + "\"bridgeLogPath\":" + Quote(LogPath()) + ","
-                + "\"port\":" + port.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"assembly\":{"
-                + "\"fullName\":" + Quote(typeof(UnityCliBridge).Assembly.FullName) + ","
-                + "\"location\":" + Quote(AssemblyLocation(typeof(UnityCliBridge).Assembly)) + ","
-                + "\"moduleVersionId\":" + Quote(AssemblyMvid())
-                + "},"
-                + "\"package\":{"
-                + "\"name\":" + Quote(BridgePackageName()) + ","
-                + "\"assetPath\":" + Quote(BridgePackageAssetPath()) + ","
-                + "\"resolvedPath\":" + Quote(BridgePackageResolvedPath())
-                + "}"
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("ok", true)
+                .Prop("phase", phase)
+                .Prop("diagnosticsFingerprint", BridgeDiagnosticsFingerprint)
+                .Prop("listenerId", ListenerId)
+                .Prop("loadedAt", BridgeLoadedAtUtc.ToString("O", CultureInfo.InvariantCulture))
+                .Prop("bridgeLogPath", LogPath())
+                .Prop("port", (long)port)
+                .PropObject("assembly", w =>
+                {
+                    w.Prop("fullName", typeof(UnityCliBridge).Assembly.FullName)
+                        .Prop("location", AssemblyLocation(typeof(UnityCliBridge).Assembly))
+                        .Prop("moduleVersionId", AssemblyMvid());
+                })
+                .PropObject("package", w =>
+                {
+                    w.Prop("name", BridgePackageName())
+                        .Prop("assetPath", BridgePackageAssetPath())
+                        .Prop("resolvedPath", BridgePackageResolvedPath());
+                })
+                .EndObject().ToString();
         }
 
         private static void WriteLog(string line)

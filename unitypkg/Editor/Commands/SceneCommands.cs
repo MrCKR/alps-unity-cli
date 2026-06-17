@@ -42,19 +42,31 @@ namespace UnityCli
 
         private static string SceneActive(BridgeRequest request)
         {
-            return SuccessJson("{\"scene\":" + ActiveSceneJson() + ",\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("scene", ActiveSceneJson())
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string SceneBuildSettings(BridgeRequest request)
         {
-            var items = new List<string>();
             var scenes = EditorBuildSettings.scenes ?? new EditorBuildSettingsScene[0];
-            for (var index = 0; index < scenes.Length; index++)
-            {
-                var scene = scenes[index];
-                items.Add("{\"path\":" + Quote(NormalizeAssetPath(scene.path)) + ",\"enabled\":" + Bool(scene.enabled) + ",\"buildIndex\":" + index.ToString(CultureInfo.InvariantCulture) + "}");
-            }
-            return SuccessJson("{\"scenes\":[" + string.Join(",", items.ToArray()) + "],\"count\":" + scenes.Length.ToString(CultureInfo.InvariantCulture) + ",\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropArray("scenes", arr =>
+                {
+                    for (var index = 0; index < scenes.Length; index++)
+                    {
+                        var scene = scenes[index];
+                        arr.BeginObject()
+                            .Prop("path", NormalizeAssetPath(scene.path))
+                            .Prop("enabled", scene.enabled)
+                            .Prop("buildIndex", (long)index)
+                            .EndObject();
+                    }
+                })
+                .Prop("count", (long)scenes.Length)
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string SceneCreate(BridgeRequest request)
@@ -100,7 +112,21 @@ namespace UnityCli
             }
             if (request.DryRun)
             {
-                return SuccessJson("{\"command\":\"scene.save\",\"dryRun\":true,\"scene\":" + ActiveSceneJson() + ",\"path\":" + Quote(path) + ",\"plannedEffects\":[{\"type\":\"scene.save\",\"path\":" + Quote(path) + ",\"sideEffects\":\"none\"}],\"logPath\":" + Quote(LogPath()) + "}");
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("command", "scene.save")
+                    .Prop("dryRun", true)
+                    .PropRaw("scene", ActiveSceneJson())
+                    .Prop("path", path)
+                    .PropArray("plannedEffects", arr =>
+                    {
+                        arr.BeginObject()
+                            .Prop("type", "scene.save")
+                            .Prop("path", path)
+                            .Prop("sideEffects", "none")
+                            .EndObject();
+                    })
+                    .Prop("logPath", LogPath())
+                    .EndObject().ToString());
             }
             CreateAssetDirectory(path);
             if (!EditorSceneManager.SaveScene(scene, path))
@@ -125,7 +151,13 @@ namespace UnityCli
         private static string ActiveSceneJson()
         {
             var scene = SceneManager.GetActiveScene();
-            return "{\"name\":" + Quote(scene.name) + ",\"path\":" + Quote(NormalizeAssetPath(scene.path)) + ",\"buildIndex\":" + scene.buildIndex.ToString(CultureInfo.InvariantCulture) + ",\"isLoaded\":" + Bool(scene.isLoaded) + ",\"isDirty\":" + Bool(scene.isDirty) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("name", scene.name)
+                .Prop("path", NormalizeAssetPath(scene.path))
+                .Prop("buildIndex", (long)scene.buildIndex)
+                .Prop("isLoaded", scene.isLoaded)
+                .Prop("isDirty", scene.isDirty)
+                .EndObject().ToString();
         }
 
         private static string ScenePathFromRequest(BridgeRequest request, bool requireExisting)
@@ -154,7 +186,18 @@ namespace UnityCli
         private static string SceneMutationJson(string type, Scene scene, string path)
         {
             AssetDatabase.Refresh();
-            return "{\"scene\":" + ActiveSceneJson() + ",\"requestedPath\":" + Quote(path) + ",\"plannedEffects\":[{\"type\":" + Quote(type) + ",\"path\":" + Quote(NormalizeAssetPath(scene.path) ?? path) + "}],\"logPath\":" + Quote(LogPath()) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropRaw("scene", ActiveSceneJson())
+                .Prop("requestedPath", path)
+                .PropArray("plannedEffects", arr =>
+                {
+                    arr.BeginObject()
+                        .Prop("type", type)
+                        .Prop("path", NormalizeAssetPath(scene.path) ?? path)
+                        .EndObject();
+                })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString();
         }
 
         private static string SceneHierarchy(BridgeRequest request)
@@ -178,7 +221,24 @@ namespace UnityCli
                 CollectHierarchy(root.transform, items, cursor, pageSize, counter);
             }
             var nextCursor = cursor + items.Count < total ? (cursor + items.Count).ToString(CultureInfo.InvariantCulture) : null;
-            return SuccessJson("{\"scene\":{\"name\":" + Quote(SceneManager.GetActiveScene().name) + ",\"path\":" + Quote(SceneManager.GetActiveScene().path) + "},\"items\":[" + string.Join(",", items.ToArray()) + "],\"pageInfo\":{\"pageSize\":" + pageSize.ToString(CultureInfo.InvariantCulture) + ",\"cursor\":" + cursor.ToString(CultureInfo.InvariantCulture) + ",\"nextCursor\":" + Quote(nextCursor) + ",\"total\":" + total.ToString(CultureInfo.InvariantCulture) + "},\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropObject("scene", w => w
+                    .Prop("name", SceneManager.GetActiveScene().name)
+                    .Prop("path", SceneManager.GetActiveScene().path))
+                .PropArray("items", arr =>
+                {
+                    foreach (var item in items)
+                    {
+                        arr.RawValue(item);
+                    }
+                })
+                .PropObject("pageInfo", w => w
+                    .Prop("pageSize", (long)pageSize)
+                    .Prop("cursor", (long)cursor)
+                    .Prop("nextCursor", nextCursor)
+                    .Prop("total", (long)total))
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
     }

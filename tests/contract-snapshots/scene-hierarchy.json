@@ -1,0 +1,17 @@
+{
+  "command": "scene.hierarchy",
+  "data": {
+    "scene": {
+      "name": "<string>",
+      "path": "<string|null>"
+    },
+    "items": "<array of hierarchy items>",
+    "pageInfo": {
+      "pageSize": "<integer>",
+      "cursor": "<integer>",
+      "nextCursor": "<string|null>",
+      "total": "<integer>"
+    },
+    "logPath": "<string>"
+  }
+}

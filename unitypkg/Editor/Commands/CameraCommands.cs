@@ -42,7 +42,10 @@ namespace UnityCli
             {
                 return ErrorJson("E_CAMERA_NOT_FOUND", "Camera not found: " + request.StringArg("target"), "Run unity_cli camera list to inspect available cameras.");
             }
-            return SuccessJson("{\"camera\":" + CameraJson(camera) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("camera", CameraJson(camera))
+                .EndObject()
+                .ToString());
         }
 
         private static string CameraScreenshot(BridgeRequest request)
@@ -137,52 +140,65 @@ namespace UnityCli
         private static string CameraListJson()
         {
             var cameras = Camera.allCameras;
-            var items = new List<string>();
-            foreach (var camera in cameras)
-            {
-                items.Add(CameraJson(camera));
-            }
-            return "{\"cameras\":[" + string.Join(",", items.ToArray()) + "],\"count\":" + cameras.Length + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropArray("cameras", arr => { foreach (var camera in cameras) { arr.RawValue(CameraJson(camera)); } })
+                .Prop("count", (long)cameras.Length)
+                .EndObject()
+                .ToString();
         }
 
         private static string CameraJson(Camera camera)
         {
             var targetTexture = camera.targetTexture != null ? camera.targetTexture.name : null;
-            return "{"
-                + "\"id\":" + camera.GetInstanceID().ToString(CultureInfo.InvariantCulture) + ","
-                + "\"name\":" + Quote(camera.name) + ","
-                + "\"path\":" + Quote(HierarchyPath(camera.gameObject)) + ","
-                + "\"tag\":" + Quote(camera.tag) + ","
-                + "\"enabled\":" + Bool(camera.enabled) + ","
-                + "\"clearFlags\":" + Quote(camera.clearFlags.ToString()) + ","
-                + "\"projection\":" + Quote(camera.orthographic ? "orthographic" : "perspective") + ","
-                + "\"fieldOfView\":" + camera.fieldOfView.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"orthographicSize\":" + camera.orthographicSize.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"depth\":" + camera.depth.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"targetTexture\":" + Quote(targetTexture) + ","
-                + "\"pixelWidth\":" + camera.pixelWidth.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"pixelHeight\":" + camera.pixelHeight.ToString(CultureInfo.InvariantCulture)
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("id", (long)camera.GetInstanceID())
+                .Prop("name", camera.name)
+                .Prop("path", HierarchyPath(camera.gameObject))
+                .Prop("tag", camera.tag)
+                .Prop("enabled", camera.enabled)
+                .Prop("clearFlags", camera.clearFlags.ToString())
+                .Prop("projection", camera.orthographic ? "orthographic" : "perspective")
+                .Prop("fieldOfView", camera.fieldOfView)
+                .Prop("orthographicSize", camera.orthographicSize)
+                .Prop("depth", camera.depth)
+                .Prop("targetTexture", targetTexture)
+                .Prop("pixelWidth", (long)camera.pixelWidth)
+                .Prop("pixelHeight", (long)camera.pixelHeight)
+                .EndObject()
+                .ToString();
         }
 
         private static string ScreenshotJson(ScreenshotResult capture, string source, string target)
         {
-            return ScreenshotDataJson(capture, source, target).TrimEnd('}') + ",\"logPath\":" + Quote(LogPath()) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("screenshotPath", capture.Path)
+                .Prop("artifactPath", capture.Path)
+                .Prop("format", capture.Format)
+                .Prop("width", (long)capture.Width)
+                .Prop("height", (long)capture.Height)
+                .Prop("transparent", capture.Transparent)
+                .Prop("quality", (long)capture.Quality)
+                .Prop("source", source)
+                .Prop("target", target)
+                .Prop("logPath", LogPath())
+                .EndObject()
+                .ToString();
         }
 
         private static string ScreenshotDataJson(ScreenshotResult capture, string source, string target)
         {
-            return "{"
-                + "\"screenshotPath\":" + Quote(capture.Path) + ","
-                + "\"artifactPath\":" + Quote(capture.Path) + ","
-                + "\"format\":" + Quote(capture.Format) + ","
-                + "\"width\":" + capture.Width.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"height\":" + capture.Height.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"transparent\":" + Bool(capture.Transparent) + ","
-                + "\"quality\":" + capture.Quality.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"source\":" + Quote(source) + ","
-                + "\"target\":" + Quote(target)
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("screenshotPath", capture.Path)
+                .Prop("artifactPath", capture.Path)
+                .Prop("format", capture.Format)
+                .Prop("width", (long)capture.Width)
+                .Prop("height", (long)capture.Height)
+                .Prop("transparent", capture.Transparent)
+                .Prop("quality", (long)capture.Quality)
+                .Prop("source", source)
+                .Prop("target", target)
+                .EndObject()
+                .ToString();
         }
     }
 }

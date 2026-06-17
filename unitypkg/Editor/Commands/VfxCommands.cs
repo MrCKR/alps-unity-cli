@@ -57,14 +57,24 @@ namespace UnityCli
                     return ErrorJson("E_VFX_GRAPH_CREATE_FAILED", "VFX Graph asset creation did not produce a readable VisualEffectAsset: " + path, "Check Unity Console and UnityCliBridge.log; the Visual Effect Graph package may have changed its internal authoring API.");
                 }
                 WriteLog("vfx_graph_created path=" + path);
-                return SuccessJson("{\"graph\":" + VfxGraphJson(path, created) + ",\"plannedEffects\":[{\"type\":\"vfx.graph.create\",\"path\":" + Quote(path) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .PropRaw("graph", VfxGraphJson(path, created))
+                    .PropArray("plannedEffects", arr => arr.RawValue(new UnityCliJsonWriter().BeginObject()
+                        .Prop("type", "vfx.graph.create")
+                        .Prop("path", path)
+                        .EndObject().ToString()))
+                    .Prop("logPath", LogPath())
+                    .EndObject().ToString());
             }
             var asset = AssetDatabase.LoadAssetAtPath(path, assetType);
             if (asset == null)
             {
                 return ErrorJson("E_VFX_GRAPH_NOT_FOUND", "VFX Graph asset not found: " + path, "Check the path or create one with unity_cli vfx graph <path> --create.");
             }
-            return SuccessJson("{\"graph\":" + VfxGraphJson(path, asset) + ",\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("graph", VfxGraphJson(path, asset))
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string VfxEffect(BridgeRequest request)
@@ -76,7 +86,10 @@ namespace UnityCli
             if (component == null && request.BoolArg("add", false))
             {
                 component = gameObject.AddComponent(visualEffectType);
-                effects.Add("{\"type\":\"vfx.effect.add\",\"target\":" + Quote(HierarchyPath(gameObject)) + "}");
+                effects.Add(new UnityCliJsonWriter().BeginObject()
+                    .Prop("type", "vfx.effect.add")
+                    .Prop("target", HierarchyPath(gameObject))
+                    .EndObject().ToString());
             }
             if (component == null)
             {
@@ -97,12 +110,21 @@ namespace UnityCli
                     return ErrorJson("E_VFX_ASSIGN_UNSUPPORTED", "VisualEffect asset property is not writable in this Unity version.", "Assign the VFX Graph in Unity or upgrade Visual Effect Graph package.");
                 }
                 property.SetValue(component, graph, null);
-                effects.Add("{\"type\":\"vfx.effect.assign\",\"target\":" + Quote(HierarchyPath(gameObject)) + ",\"graph\":" + Quote(NormalizeAssetPath(graphPath)) + "}");
+                effects.Add(new UnityCliJsonWriter().BeginObject()
+                    .Prop("type", "vfx.effect.assign")
+                    .Prop("target", HierarchyPath(gameObject))
+                    .Prop("graph", NormalizeAssetPath(graphPath))
+                    .EndObject().ToString());
             }
             EditorUtility.SetDirty(component);
             AssetDatabase.SaveAssets();
             WriteLog("vfx_effect target=" + HierarchyPath(gameObject) + " effects=" + effects.Count.ToString(CultureInfo.InvariantCulture));
-            return SuccessJson("{\"target\":" + GameObjectTargetJson(gameObject) + ",\"effect\":" + VfxEffectJson(component) + ",\"plannedEffects\":[" + string.Join(",", effects.ToArray()) + "],\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("target", GameObjectTargetJson(gameObject))
+                .PropRaw("effect", VfxEffectJson(component))
+                .PropArray("plannedEffects", arr => { foreach (var e in effects) arr.RawValue(e); })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string RequireVfxGraphPath(string rawPath)
@@ -236,7 +258,12 @@ namespace UnityCli
 
         private static string VfxGraphJson(string path, UnityEngine.Object asset)
         {
-            return "{\"path\":" + Quote(path) + ",\"guid\":" + Quote(AssetDatabase.AssetPathToGUID(path)) + ",\"name\":" + Quote(asset == null ? null : asset.name) + ",\"type\":" + Quote(asset == null ? null : asset.GetType().FullName) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("path", path)
+                .Prop("guid", AssetDatabase.AssetPathToGUID(path))
+                .Prop("name", asset == null ? null : asset.name)
+                .Prop("type", asset == null ? null : asset.GetType().FullName)
+                .EndObject().ToString();
         }
 
         private static string VfxEffectJson(Component component)
@@ -244,7 +271,14 @@ namespace UnityCli
             var property = component.GetType().GetProperty("visualEffectAsset", BindingFlags.Instance | BindingFlags.Public);
             var graph = property == null ? null : property.GetValue(component, null) as UnityEngine.Object;
             var graphPath = graph == null ? null : NormalizeAssetPath(AssetDatabase.GetAssetPath(graph));
-            return "{\"componentType\":" + Quote(component.GetType().FullName) + ",\"enabled\":" + Bool(ComponentEnabled(component)) + ",\"graph\":{\"name\":" + Quote(graph == null ? null : graph.name) + ",\"path\":" + Quote(graphPath) + ",\"guid\":" + Quote(string.IsNullOrEmpty(graphPath) ? null : AssetDatabase.AssetPathToGUID(graphPath)) + "}}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("componentType", component.GetType().FullName)
+                .Prop("enabled", ComponentEnabled(component))
+                .PropObject("graph", w => w
+                    .Prop("name", graph == null ? null : graph.name)
+                    .Prop("path", graphPath)
+                    .Prop("guid", string.IsNullOrEmpty(graphPath) ? null : AssetDatabase.AssetPathToGUID(graphPath)))
+                .EndObject().ToString();
         }
     }
 }

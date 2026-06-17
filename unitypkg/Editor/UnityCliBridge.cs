@@ -161,7 +161,16 @@ namespace UnityCli
         {
             var rawArgs = string.IsNullOrEmpty(argsJson) ? "{}" : argsJson;
             var dryRun = JsonRawProperty(rawArgs, "dryRun");
-            var body = "{\"requestId\":" + Quote(requestId) + ",\"command\":" + Quote(command) + ",\"args\":" + rawArgs + (string.IsNullOrEmpty(dryRun) ? string.Empty : ",\"dryRun\":" + dryRun) + "}";
+            var w = new UnityCliJsonWriter().BeginObject()
+                .Prop("requestId", requestId)
+                .Prop("command", command)
+                .PropRaw("args", rawArgs);
+            if (!string.IsNullOrEmpty(dryRun))
+            {
+                w.PropRaw("dryRun", dryRun);
+            }
+            w.EndObject();
+            var body = w.ToString();
             var response = string.Empty;
             try
             {

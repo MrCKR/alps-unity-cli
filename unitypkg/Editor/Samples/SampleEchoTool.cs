@@ -24,12 +24,10 @@ namespace UnityCli.Samples
     {
         public static string Execute(UnityCliProjectToolContext context)
         {
-            return "{\"requestId\":\"" + Escape(context.RequestId) + "\",\"input\":" + (string.IsNullOrEmpty(context.InputJson) ? "{}" : context.InputJson) + "}";
-        }
-
-        private static string Escape(string value)
-        {
-            return (value ?? string.Empty).Replace("\\", "\\\\").Replace("\"", "\\\"").Replace("\r", "\\r").Replace("\n", "\\n").Replace("\t", "\\t");
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("requestId", context.RequestId ?? string.Empty)
+                .PropRaw("input", string.IsNullOrEmpty(context.InputJson) ? "{}" : context.InputJson)
+                .EndObject().ToString();
         }
     }
 }

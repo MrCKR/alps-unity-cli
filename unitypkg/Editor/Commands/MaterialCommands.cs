@@ -40,7 +40,11 @@ namespace UnityCli
         {
             var path = RequireMaterialPath(request.StringArg("path"));
             var material = LoadMaterialAsset(path);
-            return SuccessJson("{\"material\":" + MaterialJson(path, material) + ",\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("material", MaterialJson(path, material))
+                .Prop("logPath", LogPath())
+                .EndObject()
+                .ToString());
         }
 
         private static string MaterialCreate(BridgeRequest request)
@@ -153,7 +157,20 @@ namespace UnityCli
             EditorUtility.SetDirty(material);
             AssetDatabase.SaveAssets();
             WriteLog("material_set path=" + path + " property=" + propertyName + " type=" + normalizedType);
-            return SuccessJson("{\"material\":" + MaterialJson(path, material) + ",\"property\":" + Quote(propertyName) + ",\"propertyType\":" + Quote(propertyType) + ",\"appliedValue\":" + appliedValue + ",\"plannedEffects\":[{\"type\":\"material.set\",\"path\":" + Quote(path) + ",\"property\":" + Quote(propertyName) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("material", MaterialJson(path, material))
+                .Prop("property", propertyName)
+                .Prop("propertyType", propertyType)
+                .PropRaw("appliedValue", appliedValue)
+                .PropArray("plannedEffects", arr => arr
+                    .RawValue(new UnityCliJsonWriter().BeginObject()
+                        .Prop("type", "material.set")
+                        .Prop("path", path)
+                        .Prop("property", propertyName)
+                        .EndObject().ToString()))
+                .Prop("logPath", LogPath())
+                .EndObject()
+                .ToString());
         }
 
         private static string RequireMaterialPath(string rawPath)
@@ -205,17 +222,18 @@ namespace UnityCli
         {
             var shader = material.shader;
             var dependencies = AssetDatabase.GetDependencies(path, false);
-            return "{"
-                + "\"path\":" + Quote(path) + ","
-                + "\"guid\":" + Quote(AssetDatabase.AssetPathToGUID(path)) + ","
-                + "\"name\":" + Quote(material.name) + ","
-                + "\"shader\":" + Quote(shader == null ? null : shader.name) + ","
-                + "\"renderQueue\":" + material.renderQueue.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"keywords\":[" + string.Join(",", QuoteArray(material.shaderKeywords).ToArray()) + "],"
-                + "\"properties\":" + MaterialPropertiesJson(material) + ","
-                + "\"textureReferences\":" + MaterialTextureReferencesJson(material) + ","
-                + "\"dependencies\":" + DependencySummaryJson(dependencies)
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("path", path)
+                .Prop("guid", AssetDatabase.AssetPathToGUID(path))
+                .Prop("name", material.name)
+                .Prop("shader", shader == null ? null : shader.name)
+                .Prop("renderQueue", (long)material.renderQueue)
+                .PropArray("keywords", arr => { foreach (var keyword in material.shaderKeywords) { arr.Value(keyword); } })
+                .PropRaw("properties", MaterialPropertiesJson(material))
+                .PropRaw("textureReferences", MaterialTextureReferencesJson(material))
+                .PropRaw("dependencies", DependencySummaryJson(dependencies))
+                .EndObject()
+                .ToString();
         }
 
 
@@ -224,7 +242,11 @@ namespace UnityCli
             var shader = material.shader;
             if (shader == null)
             {
-                return "{\"count\":0,\"items\":[]}";
+                return new UnityCliJsonWriter().BeginObject()
+                    .Prop("count", 0L)
+                    .PropArray("items", arr => {})
+                    .EndObject()
+                    .ToString();
             }
             var items = new List<string>();
             var count = ShaderUtil.GetPropertyCount(shader);
@@ -234,9 +256,19 @@ namespace UnityCli
                 var type = ShaderUtil.GetPropertyType(shader, index).ToString();
                 var description = ShaderUtil.GetPropertyDescription(shader, index);
                 var valueJson = material.HasProperty(name) ? MaterialPropertyValueJson(material, name, NormalizeMaterialValueType(type)) : "null";
-                items.Add("{\"name\":" + Quote(name) + ",\"displayName\":" + Quote(description) + ",\"type\":" + Quote(type) + ",\"value\":" + valueJson + "}");
+                items.Add(new UnityCliJsonWriter().BeginObject()
+                    .Prop("name", name)
+                    .Prop("displayName", description)
+                    .Prop("type", type)
+                    .PropRaw("value", valueJson)
+                    .EndObject()
+                    .ToString());
             }
-            return "{\"count\":" + count.ToString(CultureInfo.InvariantCulture) + ",\"items\":[" + string.Join(",", items.ToArray()) + "]}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("count", (long)count)
+                .PropArray("items", arr => { foreach (var item in items) { arr.RawValue(item); } })
+                .EndObject()
+                .ToString();
         }
 
         private static string MaterialTextureReferencesJson(Material material)
@@ -244,7 +276,11 @@ namespace UnityCli
             var shader = material.shader;
             if (shader == null)
             {
-                return "{\"count\":0,\"items\":[]}";
+                return new UnityCliJsonWriter().BeginObject()
+                    .Prop("count", 0L)
+                    .PropArray("items", arr => {})
+                    .EndObject()
+                    .ToString();
             }
             var items = new List<string>();
             var count = ShaderUtil.GetPropertyCount(shader);
@@ -257,9 +293,18 @@ namespace UnityCli
                 }
                 var texture = material.GetTexture(name);
                 var texturePath = texture == null ? null : NormalizeAssetPath(AssetDatabase.GetAssetPath(texture));
-                items.Add("{\"property\":" + Quote(name) + ",\"path\":" + Quote(texturePath) + ",\"guid\":" + Quote(string.IsNullOrEmpty(texturePath) ? null : AssetDatabase.AssetPathToGUID(texturePath)) + "}");
+                items.Add(new UnityCliJsonWriter().BeginObject()
+                    .Prop("property", name)
+                    .Prop("path", texturePath)
+                    .Prop("guid", string.IsNullOrEmpty(texturePath) ? null : AssetDatabase.AssetPathToGUID(texturePath))
+                    .EndObject()
+                    .ToString());
             }
-            return "{\"count\":" + items.Count.ToString(CultureInfo.InvariantCulture) + ",\"items\":[" + string.Join(",", items.ToArray()) + "]}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("count", (long)items.Count)
+                .PropArray("items", arr => { foreach (var item in items) { arr.RawValue(item); } })
+                .EndObject()
+                .ToString();
         }
 
         private static string MaterialPropertyType(Material material, string propertyName)
@@ -345,7 +390,7 @@ namespace UnityCli
                     }
                 }
                 material.SetTexture(propertyName, texture);
-                return "{\"path\":" + Quote(texturePath) + ",\"guid\":" + Quote(texture == null ? null : AssetDatabase.AssetPathToGUID(texturePath)) + "}";
+                return TextureValueJson(texturePath, texture);
             }
             throw new BridgeCommandException("E_MATERIAL_PROPERTY_TYPE_UNSUPPORTED", "Unsupported Material property value type: " + type, "Pass --type color|float|vector|texture.");
         }
@@ -370,13 +415,22 @@ namespace UnityCli
                 {
                     var texture = material.GetTexture(propertyName);
                     var texturePath = texture == null ? null : NormalizeAssetPath(AssetDatabase.GetAssetPath(texture));
-                    return "{\"path\":" + Quote(texturePath) + ",\"guid\":" + Quote(string.IsNullOrEmpty(texturePath) ? null : AssetDatabase.AssetPathToGUID(texturePath)) + "}";
+                    return TextureValueJson(texturePath, texture);
                 }
             }
             catch
             {
             }
             return "null";
+        }
+
+        private static string TextureValueJson(string texturePath, Texture texture)
+        {
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("path", texturePath)
+                .Prop("guid", texture == null ? null : AssetDatabase.AssetPathToGUID(texturePath))
+                .EndObject()
+                .ToString();
         }
 
         private static Color ParseColor(string value)
@@ -424,29 +478,61 @@ namespace UnityCli
 
         private static string ColorJson(Color color)
         {
-            return "{\"r\":" + color.r.ToString(CultureInfo.InvariantCulture) + ",\"g\":" + color.g.ToString(CultureInfo.InvariantCulture) + ",\"b\":" + color.b.ToString(CultureInfo.InvariantCulture) + ",\"a\":" + color.a.ToString(CultureInfo.InvariantCulture) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("r", color.r)
+                .Prop("g", color.g)
+                .Prop("b", color.b)
+                .Prop("a", color.a)
+                .EndObject()
+                .ToString();
         }
 
         private static string VectorJson(Vector4 vector)
         {
-            return "{\"x\":" + vector.x.ToString(CultureInfo.InvariantCulture) + ",\"y\":" + vector.y.ToString(CultureInfo.InvariantCulture) + ",\"z\":" + vector.z.ToString(CultureInfo.InvariantCulture) + ",\"w\":" + vector.w.ToString(CultureInfo.InvariantCulture) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("x", vector.x)
+                .Prop("y", vector.y)
+                .Prop("z", vector.z)
+                .Prop("w", vector.w)
+                .EndObject()
+                .ToString();
         }
 
         private static string MaterialMutationJson(string type, string path, string materialJson)
         {
-            return "{\"material\":" + materialJson + ",\"plannedEffects\":[{\"type\":" + Quote(type) + ",\"path\":" + Quote(path) + "}],\"logPath\":" + Quote(LogPath()) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropRaw("material", materialJson)
+                .PropArray("plannedEffects", arr => arr
+                    .RawValue(new UnityCliJsonWriter().BeginObject()
+                        .Prop("type", type)
+                        .Prop("path", path)
+                        .EndObject().ToString()))
+                .Prop("logPath", LogPath())
+                .EndObject()
+                .ToString();
         }
 
         private static string MaterialAssignJson(GameObject gameObject, string materialPath, string componentType, int slot)
         {
-            return "{"
-                + "\"target\":{\"id\":" + gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) + ",\"name\":" + Quote(gameObject.name) + ",\"path\":" + Quote(HierarchyPath(gameObject)) + "},"
-                + "\"material\":{\"path\":" + Quote(materialPath) + ",\"guid\":" + Quote(AssetDatabase.AssetPathToGUID(materialPath)) + "},"
-                + "\"componentType\":" + Quote(componentType) + ","
-                + "\"slot\":" + slot.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"plannedEffects\":[{\"type\":\"material.assign\",\"target\":" + Quote(HierarchyPath(gameObject)) + ",\"material\":" + Quote(materialPath) + "}],"
-                + "\"logPath\":" + Quote(LogPath())
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropObject("target", target => target
+                    .Prop("id", (long)gameObject.GetInstanceID())
+                    .Prop("name", gameObject.name)
+                    .Prop("path", HierarchyPath(gameObject)))
+                .PropObject("material", mat => mat
+                    .Prop("path", materialPath)
+                    .Prop("guid", AssetDatabase.AssetPathToGUID(materialPath)))
+                .Prop("componentType", componentType)
+                .Prop("slot", (long)slot)
+                .PropArray("plannedEffects", arr => arr
+                    .RawValue(new UnityCliJsonWriter().BeginObject()
+                        .Prop("type", "material.assign")
+                        .Prop("target", HierarchyPath(gameObject))
+                        .Prop("material", materialPath)
+                        .EndObject().ToString()))
+                .Prop("logPath", LogPath())
+                .EndObject()
+                .ToString();
         }
     }
 }

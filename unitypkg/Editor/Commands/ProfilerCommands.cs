@@ -82,15 +82,16 @@ namespace UnityCli
 
         private static string ProfilerStateJson()
         {
-            return "{\"enabled\":" + Bool(GetProfilerSessionEnabled())
-                + ",\"enableBinaryLog\":" + Bool(UnityEngine.Profiling.Profiler.enableBinaryLog)
-                + ",\"isPaused\":" + Bool(EditorApplication.isPaused)
-                + ",\"supported\":true"
-                + ",\"architectureSensitive\":true"
-                + ",\"frozenDecision\":" + Quote(ProfilerFrozenDecision)
-                + ",\"coverageScope\":" + ProfilerCoverageScopeJson
-                + ",\"handlerFingerprint\":" + Quote(ProfilerHandlerFingerprint)
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("enabled", GetProfilerSessionEnabled())
+                .Prop("enableBinaryLog", UnityEngine.Profiling.Profiler.enableBinaryLog)
+                .Prop("isPaused", EditorApplication.isPaused)
+                .Prop("supported", true)
+                .Prop("architectureSensitive", true)
+                .Prop("frozenDecision", ProfilerFrozenDecision)
+                .PropRaw("coverageScope", ProfilerCoverageScopeJson)
+                .Prop("handlerFingerprint", ProfilerHandlerFingerprint)
+                .EndObject().ToString();
         }
 
         private static string ProfilerModulesJson()
@@ -110,7 +111,7 @@ namespace UnityCli
             AddProfilerCounter(samples, "frame", "RealtimeSinceStartup", Time.realtimeSinceStartup, "seconds");
             var categoryFilter = string.IsNullOrEmpty(category) ? null : category.Trim();
             var counterFilter = string.IsNullOrEmpty(counter) ? null : counter.Trim();
-            var items = new List<string>();
+            var w = new UnityCliJsonWriter().BeginArray();
             foreach (var item in samples)
             {
                 if (!string.IsNullOrEmpty(categoryFilter) && !string.Equals(item.Category, categoryFilter, StringComparison.OrdinalIgnoreCase))
@@ -121,9 +122,14 @@ namespace UnityCli
                 {
                     continue;
                 }
-                items.Add("{\"category\":" + Quote(item.Category) + ",\"name\":" + Quote(item.Name) + ",\"value\":" + Quote(item.Value) + ",\"unit\":" + Quote(item.Unit) + "}");
+                w.BeginObject()
+                    .Prop("category", item.Category)
+                    .Prop("name", item.Name)
+                    .Prop("value", item.Value)
+                    .Prop("unit", item.Unit)
+                    .EndObject();
             }
-            return "[" + string.Join(",", items.ToArray()) + "]";
+            return w.EndArray().ToString();
         }
 
         private static void AddProfilerCounter(List<ProfilerCounterSample> items, string category, string name, long value, string unit)
@@ -138,18 +144,25 @@ namespace UnityCli
 
         private static string ProfilerMemoryJson()
         {
-            return "{"
-                + "\"monoUsedBytes\":" + UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong().ToString(CultureInfo.InvariantCulture) + ","
-                + "\"monoHeapBytes\":" + UnityEngine.Profiling.Profiler.GetMonoHeapSizeLong().ToString(CultureInfo.InvariantCulture) + ","
-                + "\"totalAllocatedBytes\":" + UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong().ToString(CultureInfo.InvariantCulture) + ","
-                + "\"totalReservedBytes\":" + UnityEngine.Profiling.Profiler.GetTotalReservedMemoryLong().ToString(CultureInfo.InvariantCulture) + ","
-                + "\"totalUnusedReservedBytes\":" + UnityEngine.Profiling.Profiler.GetTotalUnusedReservedMemoryLong().ToString(CultureInfo.InvariantCulture)
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("monoUsedBytes", (long)UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong())
+                .Prop("monoHeapBytes", (long)UnityEngine.Profiling.Profiler.GetMonoHeapSizeLong())
+                .Prop("totalAllocatedBytes", (long)UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong())
+                .Prop("totalReservedBytes", (long)UnityEngine.Profiling.Profiler.GetTotalReservedMemoryLong())
+                .Prop("totalUnusedReservedBytes", (long)UnityEngine.Profiling.Profiler.GetTotalUnusedReservedMemoryLong())
+                .EndObject().ToString();
         }
 
         private static string ProfilerFrameJson(string module)
         {
-            return "{\"frameCount\":" + Time.frameCount.ToString(CultureInfo.InvariantCulture) + ",\"renderedFrameCount\":" + Time.renderedFrameCount.ToString(CultureInfo.InvariantCulture) + ",\"realtimeSinceStartup\":" + Number(Time.realtimeSinceStartup) + ",\"deltaTime\":" + Number(Time.deltaTime) + ",\"module\":" + Quote(module) + ",\"modules\":" + ProfilerModulesJson() + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("frameCount", (long)Time.frameCount)
+                .Prop("renderedFrameCount", (long)Time.renderedFrameCount)
+                .Prop("realtimeSinceStartup", Time.realtimeSinceStartup)
+                .Prop("deltaTime", Time.deltaTime)
+                .Prop("module", module)
+                .PropRaw("modules", ProfilerModulesJson())
+                .EndObject().ToString();
         }
 
         private static string NormalizeProfilerFormat(string rawFormat, string outputPath)
@@ -261,7 +274,20 @@ namespace UnityCli
                     var finishedAt = DateTime.UtcNow;
                     var elapsedMs = (long)(finishedAt - startedAt).TotalMilliseconds;
                     WriteLog(effectType.Replace('.', '_') + "_deferred artifactPath=" + outputPath + " durationMs=" + elapsedMs.ToString(CultureInfo.InvariantCulture));
-                    item.Response = SuccessJson("{\"artifactPath\":" + Quote(outputPath) + ",\"profilerPath\":" + Quote(outputPath) + ",\"format\":" + Quote(format) + ",\"durationMs\":" + elapsedMs.ToString(CultureInfo.InvariantCulture) + ",\"requestedDurationMs\":" + durationMs.ToString(CultureInfo.InvariantCulture) + ",\"frames\":" + totalFrames.ToString(CultureInfo.InvariantCulture) + ",\"profiler\":" + ProfilerStateJson() + ",\"plannedEffects\":[{\"type\":" + Quote(effectType) + ",\"path\":" + Quote(outputPath) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+                    item.Response = SuccessJson(new UnityCliJsonWriter().BeginObject()
+                        .Prop("artifactPath", outputPath)
+                        .Prop("profilerPath", outputPath)
+                        .Prop("format", format)
+                        .Prop("durationMs", elapsedMs)
+                        .Prop("requestedDurationMs", (long)durationMs)
+                        .Prop("frames", (long)totalFrames)
+                        .PropRaw("profiler", ProfilerStateJson())
+                        .PropArray("plannedEffects", arr =>
+                        {
+                            arr.BeginObject().Prop("type", effectType).Prop("path", outputPath).EndObject();
+                        })
+                        .Prop("logPath", LogPath())
+                        .EndObject().ToString());
                     UnregisterDeferredItem(item);
                     item.Completed.Set();
                 }
@@ -286,16 +312,16 @@ namespace UnityCli
 
         private static string ProfilerArtifactJson(string requestId, DateTime startedAt, int durationMs, int frames)
         {
-            return "{"
-                + "\"requestId\":" + Quote(requestId) + ","
-                + "\"startedAt\":" + Quote(startedAt.ToString("O", CultureInfo.InvariantCulture)) + ","
-                + "\"durationMs\":" + durationMs.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"frames\":" + frames.ToString(CultureInfo.InvariantCulture) + ","
-                + "\"profiler\":" + ProfilerStateJson() + ","
-                + "\"memory\":" + ProfilerMemoryJson() + ","
-                + "\"frame\":" + ProfilerFrameJson("CPU Usage") + ","
-                + "\"counters\":" + ProfilerCountersJson(null, null)
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("requestId", requestId)
+                .Prop("startedAt", startedAt.ToString("O", CultureInfo.InvariantCulture))
+                .Prop("durationMs", (long)durationMs)
+                .Prop("frames", (long)frames)
+                .PropRaw("profiler", ProfilerStateJson())
+                .PropRaw("memory", ProfilerMemoryJson())
+                .PropRaw("frame", ProfilerFrameJson("CPU Usage"))
+                .PropRaw("counters", ProfilerCountersJson(null, null))
+                .EndObject().ToString();
         }
 
         private static string ProfilerStart(BridgeRequest request)
@@ -304,7 +330,14 @@ namespace UnityCli
             SetProfilerSessionEnabled(true);
             SetProfilerDeepProfiling(deepProfiling);
             WriteLog("profiler_started deepProfiling=" + Bool(deepProfiling));
-            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"plannedEffects\":[{" + QuotePair("type", "profiler.start") + "}],\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("profiler", ProfilerStateJson())
+                .PropArray("plannedEffects", arr =>
+                {
+                    arr.BeginObject().Prop("type", "profiler.start").EndObject();
+                })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string ProfilerStop(BridgeRequest request)
@@ -312,7 +345,14 @@ namespace UnityCli
             SetProfilerSessionEnabled(false);
             UnityEngine.Profiling.Profiler.enableBinaryLog = false;
             WriteLog("profiler_stopped");
-            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"plannedEffects\":[{" + QuotePair("type", "profiler.stop") + "}],\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("profiler", ProfilerStateJson())
+                .PropArray("plannedEffects", arr =>
+                {
+                    arr.BeginObject().Prop("type", "profiler.stop").EndObject();
+                })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string ProfilerPause(BridgeRequest request)
@@ -322,30 +362,58 @@ namespace UnityCli
             SetProfilerSessionEnabled(!paused);
             var isEnabled = GetProfilerSessionEnabled();
             WriteLog("profiler_pause paused=" + Bool(paused) + " profilerEnabled=" + Bool(isEnabled));
-            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"paused\":" + Bool(paused) + ",\"plannedEffects\":[{\"type\":\"profiler.pause\",\"profilerEnabledFrom\":" + Bool(wasEnabled) + ",\"profilerEnabledTo\":" + Bool(isEnabled) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("profiler", ProfilerStateJson())
+                .Prop("paused", paused)
+                .PropArray("plannedEffects", arr =>
+                {
+                    arr.BeginObject().Prop("type", "profiler.pause").Prop("profilerEnabledFrom", wasEnabled).Prop("profilerEnabledTo", isEnabled).EndObject();
+                })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string ProfilerStatus(BridgeRequest request)
         {
-            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"modules\":" + ProfilerModulesJson() + ",\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("profiler", ProfilerStateJson())
+                .PropRaw("modules", ProfilerModulesJson())
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string ProfilerCounter(BridgeRequest request)
         {
             var category = request.StringArg("category");
             var counter = request.StringArg("counter");
-            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"query\":{\"category\":" + Quote(category) + ",\"counter\":" + Quote(counter) + "},\"counters\":" + ProfilerCountersJson(category, counter) + ",\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("profiler", ProfilerStateJson())
+                .PropObject("query", q =>
+                {
+                    q.Prop("category", category).Prop("counter", counter);
+                })
+                .PropRaw("counters", ProfilerCountersJson(category, counter))
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string ProfilerMemory(BridgeRequest request)
         {
-            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"memory\":" + ProfilerMemoryJson() + ",\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("profiler", ProfilerStateJson())
+                .PropRaw("memory", ProfilerMemoryJson())
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string ProfilerFrame(BridgeRequest request)
         {
             var module = request.StringArg("module") ?? "CPU Usage";
-            return SuccessJson("{\"profiler\":" + ProfilerStateJson() + ",\"frame\":" + ProfilerFrameJson(module) + ",\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("profiler", ProfilerStateJson())
+                .PropRaw("frame", ProfilerFrameJson(module))
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string ProfilerExport(BridgeRequest request)
@@ -393,7 +461,20 @@ namespace UnityCli
                 var finishedAt = DateTime.UtcNow;
                 var elapsedMs = (long)(finishedAt - startedAt).TotalMilliseconds;
                 WriteLog(effectType.Replace('.', '_') + " artifactPath=" + outputPath + " durationMs=" + elapsedMs.ToString(CultureInfo.InvariantCulture));
-                return SuccessJson("{\"artifactPath\":" + Quote(outputPath) + ",\"profilerPath\":" + Quote(outputPath) + ",\"format\":" + Quote(format) + ",\"durationMs\":" + elapsedMs.ToString(CultureInfo.InvariantCulture) + ",\"requestedDurationMs\":" + durationMs.ToString(CultureInfo.InvariantCulture) + ",\"frames\":" + frames.ToString(CultureInfo.InvariantCulture) + ",\"profiler\":" + ProfilerStateJson() + ",\"plannedEffects\":[{\"type\":" + Quote(effectType) + ",\"path\":" + Quote(outputPath) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("artifactPath", outputPath)
+                    .Prop("profilerPath", outputPath)
+                    .Prop("format", format)
+                    .Prop("durationMs", elapsedMs)
+                    .Prop("requestedDurationMs", (long)durationMs)
+                    .Prop("frames", (long)frames)
+                    .PropRaw("profiler", ProfilerStateJson())
+                    .PropArray("plannedEffects", arr =>
+                    {
+                        arr.BeginObject().Prop("type", effectType).Prop("path", outputPath).EndObject();
+                    })
+                    .Prop("logPath", LogPath())
+                    .EndObject().ToString());
             }
             catch (BridgeCommandException)
             {

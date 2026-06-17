@@ -1,0 +1,13 @@
+{
+  "command": "scene.active",
+  "data": {
+    "scene": {
+      "name": "<string>",
+      "path": "<string|null>",
+      "buildIndex": "<integer>",
+      "isLoaded": "<boolean>",
+      "isDirty": "<boolean>"
+    },
+    "logPath": "<string>"
+  }
+}

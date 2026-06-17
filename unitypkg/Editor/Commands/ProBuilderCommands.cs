@@ -123,20 +123,23 @@ namespace UnityCli
 
         private static string ProBuilderPackageJson()
         {
-            return "{\"installed\":" + Bool(IsProBuilderInstalled()) + ",\"meshTypeAvailable\":" + Bool(FindType("UnityEngine.ProBuilder.ProBuilderMesh") != null) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("installed", IsProBuilderInstalled())
+                .Prop("meshTypeAvailable", FindType("UnityEngine.ProBuilder.ProBuilderMesh") != null)
+                .EndObject().ToString();
         }
 
         private static string ProBuilderObjectJson(GameObject gameObject, string shape)
         {
-            return "{"
-                + "\"id\":" + gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) + ","
-                + "\"name\":" + Quote(gameObject.name) + ","
-                + "\"path\":" + Quote(HierarchyPath(gameObject)) + ","
-                + "\"shape\":" + Quote(shape) + ","
-                + "\"position\":" + Vector3Json(gameObject.transform.position) + ","
-                + "\"scale\":" + Vector3Json(gameObject.transform.localScale) + ","
-                + "\"hasProBuilderMesh\":" + Bool(FindType("UnityEngine.ProBuilder.ProBuilderMesh") != null && gameObject.GetComponent(FindType("UnityEngine.ProBuilder.ProBuilderMesh")) != null)
-                + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("id", (long)gameObject.GetInstanceID())
+                .Prop("name", gameObject.name)
+                .Prop("path", HierarchyPath(gameObject))
+                .Prop("shape", shape)
+                .PropRaw("position", Vector3Json(gameObject.transform.position))
+                .PropRaw("scale", Vector3Json(gameObject.transform.localScale))
+                .Prop("hasProBuilderMesh", FindType("UnityEngine.ProBuilder.ProBuilderMesh") != null && gameObject.GetComponent(FindType("UnityEngine.ProBuilder.ProBuilderMesh")) != null)
+                .EndObject().ToString();
         }
 
         private static string ProBuilderCreate(BridgeRequest request)
@@ -167,7 +170,15 @@ namespace UnityCli
             Undo.RegisterCreatedObjectUndo(gameObject, "UnityCli ProBuilder Create");
             EditorSceneManager.MarkSceneDirty(gameObject.scene);
             WriteLog("probuilder_shape_created shape=" + shape + " path=" + HierarchyPath(gameObject));
-            return SuccessJson("{\"probuilder\":" + ProBuilderPackageJson() + ",\"object\":" + ProBuilderObjectJson(gameObject, shape) + ",\"plannedEffects\":[{\"type\":\"probuilder.create\",\"shape\":" + Quote(shape) + ",\"path\":" + Quote(HierarchyPath(gameObject)) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("probuilder", ProBuilderPackageJson())
+                .PropRaw("object", ProBuilderObjectJson(gameObject, shape))
+                .PropArray("plannedEffects", arr =>
+                {
+                    arr.BeginObject().Prop("type", "probuilder.create").Prop("shape", shape).Prop("path", HierarchyPath(gameObject)).EndObject();
+                })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string ProBuilderCsg(BridgeRequest request)
@@ -185,7 +196,16 @@ namespace UnityCli
             target.name = target.name + "_" + operation;
             EditorSceneManager.MarkSceneDirty(target.scene);
             WriteLog("probuilder_csg operation=" + operation + " target=" + HierarchyPath(target));
-            return SuccessJson("{\"probuilder\":" + ProBuilderPackageJson() + ",\"operation\":" + Quote(operation) + ",\"object\":" + ProBuilderObjectJson(target, "csg") + ",\"plannedEffects\":[{\"type\":\"probuilder.csg\",\"operation\":" + Quote(operation) + ",\"target\":" + Quote(HierarchyPath(target)) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("probuilder", ProBuilderPackageJson())
+                .Prop("operation", operation)
+                .PropRaw("object", ProBuilderObjectJson(target, "csg"))
+                .PropArray("plannedEffects", arr =>
+                {
+                    arr.BeginObject().Prop("type", "probuilder.csg").Prop("operation", operation).Prop("target", HierarchyPath(target)).EndObject();
+                })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string ProBuilderEdit(BridgeRequest request)
@@ -210,7 +230,16 @@ namespace UnityCli
             }
             EditorSceneManager.MarkSceneDirty(target.scene);
             WriteLog("probuilder_edit operation=" + operation + " target=" + HierarchyPath(target));
-            return SuccessJson("{\"probuilder\":" + ProBuilderPackageJson() + ",\"operation\":" + Quote(operation) + ",\"object\":" + ProBuilderObjectJson(target, "edit") + ",\"plannedEffects\":[{\"type\":\"probuilder.edit\",\"operation\":" + Quote(operation) + ",\"target\":" + Quote(HierarchyPath(target)) + "}],\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("probuilder", ProBuilderPackageJson())
+                .Prop("operation", operation)
+                .PropRaw("object", ProBuilderObjectJson(target, "edit"))
+                .PropArray("plannedEffects", arr =>
+                {
+                    arr.BeginObject().Prop("type", "probuilder.edit").Prop("operation", operation).Prop("target", HierarchyPath(target)).EndObject();
+                })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
     }
 }

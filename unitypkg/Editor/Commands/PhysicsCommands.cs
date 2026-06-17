@@ -57,7 +57,11 @@ namespace UnityCli
                 AssetDatabase.SaveAssets();
                 WriteLog("physics_settings_updated effects=" + effects.Count.ToString(CultureInfo.InvariantCulture));
             }
-            return SuccessJson("{\"physics\":" + PhysicsSettingsJson() + ",\"plannedEffects\":[" + string.Join(",", effects.ToArray()) + "],\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("physics", PhysicsSettingsJson())
+                .PropArray("plannedEffects", arr => { foreach (var e in effects) arr.RawValue(e); })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string PhysicsRaycast(BridgeRequest request)
@@ -72,10 +76,24 @@ namespace UnityCli
                 if (request.BoolArg("all", false))
                 {
                     var hits = Physics2D.RaycastAll(origin, direction, distance, layerMask);
-                    return SuccessJson("{\"mode\":\"2d\",\"query\":" + Raycast2DQueryJson(origin, direction, distance, layerMask) + ",\"hitCount\":" + hits.Length.ToString(CultureInfo.InvariantCulture) + ",\"hits\":" + Raycast2DHitsJson(hits) + ",\"logPath\":" + Quote(LogPath()) + "}");
+                    return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                        .Prop("mode", "2d")
+                        .PropRaw("query", Raycast2DQueryJson(origin, direction, distance, layerMask))
+                        .Prop("hitCount", (long)hits.Length)
+                        .PropRaw("hits", Raycast2DHitsJson(hits))
+                        .Prop("logPath", LogPath())
+                        .EndObject().ToString());
                 }
                 var hit = Physics2D.Raycast(origin, direction, distance, layerMask);
-                return SuccessJson("{\"mode\":\"2d\",\"query\":" + Raycast2DQueryJson(origin, direction, distance, layerMask) + ",\"hit\":" + Bool(hit.collider != null) + ",\"hitCount\":" + (hit.collider != null ? "1" : "0") + ",\"hits\":[" + (hit.collider != null ? Raycast2DHitJson(hit) : string.Empty) + "],\"nextActions\":" + RaycastNextActionsJson(hit.collider != null) + ",\"logPath\":" + Quote(LogPath()) + "}");
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("mode", "2d")
+                    .PropRaw("query", Raycast2DQueryJson(origin, direction, distance, layerMask))
+                    .Prop("hit", hit.collider != null)
+                    .Prop("hitCount", hit.collider != null ? 1L : 0L)
+                    .PropArray("hits", arr => { if (hit.collider != null) arr.RawValue(Raycast2DHitJson(hit)); })
+                    .PropRaw("nextActions", RaycastNextActionsJson(hit.collider != null))
+                    .Prop("logPath", LogPath())
+                    .EndObject().ToString());
             }
 
             var origin3d = new Vector3(request.FloatArg("originX", 0f), request.FloatArg("originY", 0f), request.FloatArg("originZ", 0f));
@@ -84,11 +102,25 @@ namespace UnityCli
             {
                 var hits = Physics.RaycastAll(origin3d, direction3d, distance, layerMask);
                 Array.Sort(hits, delegate(RaycastHit a, RaycastHit b) { return a.distance.CompareTo(b.distance); });
-                return SuccessJson("{\"mode\":\"3d\",\"query\":" + Raycast3DQueryJson(origin3d, direction3d, distance, layerMask) + ",\"hitCount\":" + hits.Length.ToString(CultureInfo.InvariantCulture) + ",\"hits\":" + Raycast3DHitsJson(hits) + ",\"logPath\":" + Quote(LogPath()) + "}");
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("mode", "3d")
+                    .PropRaw("query", Raycast3DQueryJson(origin3d, direction3d, distance, layerMask))
+                    .Prop("hitCount", (long)hits.Length)
+                    .PropRaw("hits", Raycast3DHitsJson(hits))
+                    .Prop("logPath", LogPath())
+                    .EndObject().ToString());
             }
             RaycastHit hit3d;
             var didHit = Physics.Raycast(origin3d, direction3d, out hit3d, distance, layerMask);
-            return SuccessJson("{\"mode\":\"3d\",\"query\":" + Raycast3DQueryJson(origin3d, direction3d, distance, layerMask) + ",\"hit\":" + Bool(didHit) + ",\"hitCount\":" + (didHit ? "1" : "0") + ",\"hits\":[" + (didHit ? Raycast3DHitJson(hit3d) : string.Empty) + "],\"nextActions\":" + RaycastNextActionsJson(didHit) + ",\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("mode", "3d")
+                .PropRaw("query", Raycast3DQueryJson(origin3d, direction3d, distance, layerMask))
+                .Prop("hit", didHit)
+                .Prop("hitCount", didHit ? 1L : 0L)
+                .PropArray("hits", arr => { if (didHit) arr.RawValue(Raycast3DHitJson(hit3d)); })
+                .PropRaw("nextActions", RaycastNextActionsJson(didHit))
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string PhysicsSimulation(BridgeRequest request)
@@ -107,7 +139,17 @@ namespace UnityCli
                 effects.Add(EffectJson("physics.simulation", "steps", steps.ToString(CultureInfo.InvariantCulture)));
                 WriteLog("physics_simulated steps=" + steps.ToString(CultureInfo.InvariantCulture) + " deltaTime=" + deltaTime.ToString(CultureInfo.InvariantCulture));
             }
-            return SuccessJson("{\"simulation\":{\"simulate\":" + Bool(simulate) + ",\"steps\":" + steps.ToString(CultureInfo.InvariantCulture) + ",\"deltaTime\":" + deltaTime.ToString(CultureInfo.InvariantCulture) + ",\"fixedDeltaTime\":" + Time.fixedDeltaTime.ToString(CultureInfo.InvariantCulture) + ",\"autoSimulation\":" + Bool(Physics.autoSimulation) + "},\"physics\":" + PhysicsSettingsJson() + ",\"plannedEffects\":[" + string.Join(",", effects.ToArray()) + "],\"logPath\":" + Quote(LogPath()) + "}");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropObject("simulation", w => w
+                    .Prop("simulate", simulate)
+                    .Prop("steps", (long)steps)
+                    .Prop("deltaTime", deltaTime)
+                    .Prop("fixedDeltaTime", Time.fixedDeltaTime)
+                    .Prop("autoSimulation", Physics.autoSimulation))
+                .PropRaw("physics", PhysicsSettingsJson())
+                .PropArray("plannedEffects", arr => { foreach (var e in effects) arr.RawValue(e); })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static void ApplyPhysicsInt(BridgeRequest request, string arg, string property, Action<int> setter, List<string> effects)
@@ -170,49 +212,72 @@ namespace UnityCli
 
         private static string RaycastNextActionsJson(bool hit)
         {
-            return hit ? "[]" : "[" + Quote("No Physics collider matched the ray; adjust origin, direction, distance or layer mask.") + "]";
+            if (hit) return "[]";
+            return new UnityCliJsonWriter().BeginArray()
+                .Value("No Physics collider matched the ray; adjust origin, direction, distance or layer mask.")
+                .EndArray().ToString();
         }
 
         private static string Raycast3DQueryJson(Vector3 origin, Vector3 direction, float distance, int layerMask)
         {
-            return "{\"origin\":" + Vector3Json(origin) + ",\"direction\":" + Vector3Json(direction) + ",\"distance\":" + Number(distance) + ",\"layerMask\":" + layerMask.ToString(CultureInfo.InvariantCulture) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropRaw("origin", Vector3Json(origin))
+                .PropRaw("direction", Vector3Json(direction))
+                .Prop("distance", distance)
+                .Prop("layerMask", (long)layerMask)
+                .EndObject().ToString();
         }
 
         private static string Raycast2DQueryJson(Vector2 origin, Vector2 direction, float distance, int layerMask)
         {
-            return "{\"origin\":" + Vector2Json(origin) + ",\"direction\":" + Vector2Json(direction) + ",\"distance\":" + Number(distance) + ",\"layerMask\":" + layerMask.ToString(CultureInfo.InvariantCulture) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .PropRaw("origin", Vector2Json(origin))
+                .PropRaw("direction", Vector2Json(direction))
+                .Prop("distance", distance)
+                .Prop("layerMask", (long)layerMask)
+                .EndObject().ToString();
         }
 
         private static string Raycast3DHitsJson(RaycastHit[] hits)
         {
-            var items = new List<string>();
+            var w = new UnityCliJsonWriter().BeginArray();
             foreach (var hit in hits)
             {
-                items.Add(Raycast3DHitJson(hit));
+                w.RawValue(Raycast3DHitJson(hit));
             }
-            return "[" + string.Join(",", items.ToArray()) + "]";
+            return w.EndArray().ToString();
         }
 
         private static string Raycast3DHitJson(RaycastHit hit)
         {
             var gameObject = hit.collider != null ? hit.collider.gameObject : null;
-            return "{\"distance\":" + Number(hit.distance) + ",\"point\":" + Vector3Json(hit.point) + ",\"normal\":" + Vector3Json(hit.normal) + ",\"collider\":" + ColliderJson(gameObject, hit.collider == null ? null : hit.collider.GetType().Name) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("distance", hit.distance)
+                .PropRaw("point", Vector3Json(hit.point))
+                .PropRaw("normal", Vector3Json(hit.normal))
+                .PropRaw("collider", ColliderJson(gameObject, hit.collider == null ? null : hit.collider.GetType().Name))
+                .EndObject().ToString();
         }
 
         private static string Raycast2DHitsJson(RaycastHit2D[] hits)
         {
-            var items = new List<string>();
+            var w = new UnityCliJsonWriter().BeginArray();
             foreach (var hit in hits)
             {
-                items.Add(Raycast2DHitJson(hit));
+                w.RawValue(Raycast2DHitJson(hit));
             }
-            return "[" + string.Join(",", items.ToArray()) + "]";
+            return w.EndArray().ToString();
         }
 
         private static string Raycast2DHitJson(RaycastHit2D hit)
         {
             var gameObject = hit.collider != null ? hit.collider.gameObject : null;
-            return "{\"distance\":" + Number(hit.distance) + ",\"point\":" + Vector2Json(hit.point) + ",\"normal\":" + Vector2Json(hit.normal) + ",\"collider\":" + ColliderJson(gameObject, hit.collider == null ? null : hit.collider.GetType().Name) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("distance", hit.distance)
+                .PropRaw("point", Vector2Json(hit.point))
+                .PropRaw("normal", Vector2Json(hit.normal))
+                .PropRaw("collider", ColliderJson(gameObject, hit.collider == null ? null : hit.collider.GetType().Name))
+                .EndObject().ToString();
         }
 
         private static string ColliderJson(GameObject gameObject, string colliderType)
@@ -221,7 +286,12 @@ namespace UnityCli
             {
                 return "null";
             }
-            return "{\"id\":" + gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) + ",\"name\":" + Quote(gameObject.name) + ",\"path\":" + Quote(HierarchyPath(gameObject)) + ",\"type\":" + Quote(colliderType) + "}";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("id", (long)gameObject.GetInstanceID())
+                .Prop("name", gameObject.name)
+                .Prop("path", HierarchyPath(gameObject))
+                .Prop("type", colliderType)
+                .EndObject().ToString();
         }
 
         private static int ParseInt(string value, string property)

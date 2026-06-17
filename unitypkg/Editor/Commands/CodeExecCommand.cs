@@ -229,12 +229,21 @@ namespace UnityCli
 
         private static string CompilerDiagnosticsJson(CompilerErrorCollection errors)
         {
-            var items = new List<string>();
+            var w = new UnityCliJsonWriter().BeginArray();
             foreach (CompilerError error in errors)
             {
-                items.Add("{\"severity\":" + Quote(error.IsWarning ? "warning" : "error") + ",\"id\":" + Quote(error.ErrorNumber) + ",\"message\":" + Quote(error.ErrorText) + ",\"file\":" + Quote(error.FileName) + ",\"line\":" + error.Line.ToString(CultureInfo.InvariantCulture) + ",\"column\":" + error.Column.ToString(CultureInfo.InvariantCulture) + ",\"span\":null}");
+                w.BeginObject()
+                    .Prop("severity", error.IsWarning ? "warning" : "error")
+                    .Prop("id", error.ErrorNumber)
+                    .Prop("message", error.ErrorText)
+                    .Prop("file", error.FileName)
+                    .Prop("line", (long)error.Line)
+                    .Prop("column", (long)error.Column)
+                    .PropNull("span")
+                    .EndObject();
             }
-            return "[" + string.Join(",", items.ToArray()) + "]";
+            w.EndArray();
+            return w.ToString();
         }
 
         private static string CodeSuccessDataJson(BridgeRequest request, DateTime startedAt, DateTime endedAt, string stdout, string stderr, object returnValue)
