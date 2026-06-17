@@ -37,6 +37,10 @@ interface BatchStepDefinition {
   timeoutMs?: number;
   waitTimeoutMs?: number;
   env?: BatchEnv;
+  /** Runtime target: session ID for tools run commands executed in Play Mode. */
+  playModeSessionId?: string;
+  /** Runtime target: fingerprint mode for tools run commands (e.g. "strict", "loose", "off"). */
+  fingerprintMode?: string;
 }
 
 interface BatchDefinition {
@@ -180,7 +184,19 @@ const commandRegistry = new Map<string, { parallelSafe: boolean }>([
   ["build run", { parallelSafe: false }],
   ["build status", { parallelSafe: true }],
   ["build logs", { parallelSafe: true }],
-  ["build cancel", { parallelSafe: false }]
+  ["build cancel", { parallelSafe: false }],
+  // ─── Editor state / play mode ───
+  ["editor state", { parallelSafe: true }],
+  ["editor play", { parallelSafe: false }],
+  ["editor pause", { parallelSafe: false }],
+  ["editor stop", { parallelSafe: false }],
+  ["editor menu", { parallelSafe: false }],
+  // ─── Tools discovery / unified run ───
+  ["tools run", { parallelSafe: false }],
+  ["tools list", { parallelSafe: true }],
+  ["tools groups", { parallelSafe: true }],
+  ["tools search", { parallelSafe: true }],
+  ["tools describe", { parallelSafe: true }]
 ]);
 
 export function batchJsonSchema(): Record<string, unknown> {
@@ -221,7 +237,9 @@ export function batchJsonSchema(): Record<string, unknown> {
             dependsOn: { type: "array", items: { type: "string" }, uniqueItems: true },
             timeoutMs: { type: "integer", minimum: 1 },
             waitTimeoutMs: { type: "integer", minimum: 1 },
-            env: { type: "object", additionalProperties: { type: ["string", "number", "boolean"] } }
+            env: { type: "object", additionalProperties: { type: ["string", "number", "boolean"] } },
+            playModeSessionId: { type: "string", description: "Runtime target: session ID for tools run commands executed in Play Mode." },
+            fingerprintMode: { type: "string", enum: ["strict", "loose", "off"], description: "Runtime target: fingerprint mode for tools run commands." }
           }
         }
       }
@@ -538,6 +556,8 @@ function applyDefaults(argv: string[], defaults: BatchDefaults, step: BatchStepD
   appendFlagIfMissing(result, "unity", defaults.unity);
   appendFlagIfMissing(result, "timeout-ms", numberToString(step.timeoutMs ?? defaults.timeoutMs));
   appendFlagIfMissing(result, "wait-timeout-ms", numberToString(step.waitTimeoutMs ?? defaults.waitTimeoutMs));
+  appendFlagIfMissing(result, "play-mode-session-id", step.playModeSessionId);
+  appendFlagIfMissing(result, "fingerprint-mode", step.fingerprintMode);
   if (defaults.wait && !hasFlag(result, "wait")) {
     result.push("--wait");
   }

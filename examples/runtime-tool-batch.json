@@ -1,0 +1,47 @@
+{
+  "$schema": "../contracts/batch-schema.json",
+  "description": "Runtime tool batch example — enter Play Mode, run runtime tools via 'tools run', verify, and exit Play Mode.",
+  "defaults": {
+    "project": ".",
+    "unity": "/path/to/Unity"
+  },
+  "failFast": true,
+  "steps": [
+    {
+      "id": "enter-play-mode",
+      "command": ["editor", "play"]
+    },
+    {
+      "id": "check-editor-state",
+      "command": ["editor", "state"],
+      "dependsOn": ["enter-play-mode"]
+    },
+    {
+      "id": "run-runtime-wait",
+      "command": ["tools", "run"],
+      "args": ["runtime.wait"],
+      "playModeSessionId": "session_abc123",
+      "dependsOn": ["check-editor-state"]
+    },
+    {
+      "id": "run-runtime-echo",
+      "command": ["tools", "run"],
+      "args": ["sample.runtime-echo", "--message", "hello-from-batch"],
+      "playModeSessionId": "session_abc123",
+      "dependsOn": ["run-runtime-wait"]
+    },
+    {
+      "id": "verify-runtime-echo",
+      "command": ["tools", "run"],
+      "args": ["runtime.wait"],
+      "playModeSessionId": "session_abc123",
+      "timeoutMs": 5000,
+      "dependsOn": ["run-runtime-echo"]
+    },
+    {
+      "id": "exit-play-mode",
+      "command": ["editor", "stop"],
+      "dependsOn": ["verify-runtime-echo"]
+    }
+  ]
+}

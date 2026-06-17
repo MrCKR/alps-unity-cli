@@ -1,0 +1,74 @@
+{
+  "$schema": "../contracts/batch-schema.json",
+  "description": "Mixed Editor + Runtime tool batch example — editor asset operations, then enter Play Mode for runtime tools, then exit. Includes error recovery guard.",
+  "defaults": {
+    "project": ".",
+    "unity": "/path/to/Unity"
+  },
+  "failFast": false,
+  "steps": [
+    {
+      "id": "search-asset",
+      "command": ["asset", "search"],
+      "args": ["--query", "GameManager", "--type", "Script"]
+    },
+    {
+      "id": "read-script",
+      "command": ["script", "read", "Assets/Scripts/GameManager.cs"],
+      "dependsOn": ["search-asset"]
+    },
+    {
+      "id": "modify-component",
+      "command": ["component", "set", "GameManager"],
+      "args": ["--component", "GameManager", "--property", "difficulty", "--value", "2"],
+      "dependsOn": ["read-script"]
+    },
+    {
+      "id": "refresh-and-compile",
+      "command": ["editor", "refresh"],
+      "args": ["--compile"],
+      "dependsOn": ["modify-component"]
+    },
+    {
+      "id": "enter-play-mode",
+      "command": ["editor", "play"],
+      "dependsOn": ["refresh-and-compile"]
+    },
+    {
+      "id": "check-state",
+      "command": ["editor", "state"],
+      "dependsOn": ["enter-play-mode"]
+    },
+    {
+      "id": "runtime-inspect",
+      "command": ["tools", "run"],
+      "args": ["runtime.wait"],
+      "playModeSessionId": "session_mixed_001",
+      "dependsOn": ["check-state"]
+    },
+    {
+      "id": "runtime-sample-tool",
+      "command": ["tools", "run"],
+      "args": ["sample.runtime-echo", "--message", "mixed-batch-test"],
+      "playModeSessionId": "session_mixed_001",
+      "dependsOn": ["runtime-inspect"]
+    },
+    {
+      "id": "capture-gameplay",
+      "command": ["camera", "screenshot", "Main Camera"],
+      "args": ["--output", "Artifacts/gameplay.png", "--overwrite"],
+      "dependsOn": ["runtime-sample-tool"]
+    },
+    {
+      "id": "exit-play-mode",
+      "command": ["editor", "stop"],
+      "dependsOn": ["capture-gameplay", "runtime-sample-tool"]
+    },
+    {
+      "id": "run-editmode-tests",
+      "command": ["test", "run"],
+      "args": ["--platform", "EditMode"],
+      "dependsOn": ["exit-play-mode"]
+    }
+  ]
+}
