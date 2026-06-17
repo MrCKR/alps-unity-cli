@@ -67,6 +67,7 @@ namespace UnityCli
         private static double nextHeartbeatAt;
         private static BridgeWorkItem currentWorkItem;
         private static readonly string DeferredResponseMarker = "\0DEFERRED";
+        private static readonly List<BridgeWorkItem> DeferredItems = new List<BridgeWorkItem>();
 
         // Cached EditorApplication state — updated on the main thread by ProcessQueuedWork,
         // read by HandleHttpCore on background thread pool threads.
@@ -115,6 +116,7 @@ namespace UnityCli
         private static void OnBeforeAssemblyReload()
         {
             domainReloading = true;
+            CancelDeferredWork();
             RegisterInstance("stale");
             StopListener();
         }
@@ -263,6 +265,7 @@ namespace UnityCli
                     if (condition())
                     {
                         EditorApplication.update -= waiter;
+                        UnregisterDeferredItem(item);
                         item.Response = onSuccess();
                         item.Completed.Set();
                         WriteLog("deferred_wait_completed requestId=" + item.Request.RequestId + " command=" + item.Request.Command);
@@ -271,6 +274,7 @@ namespace UnityCli
                     if (DateTime.UtcNow > deadline)
                     {
                         EditorApplication.update -= waiter;
+                        UnregisterDeferredItem(item);
                         item.Response = ErrorJson(timeoutErrorCode, timeoutErrorMessage, timeoutNextAction);
                         item.Completed.Set();
                         WriteLog("deferred_wait_timeout requestId=" + item.Request.RequestId + " command=" + item.Request.Command + " errorCode=" + timeoutErrorCode);
@@ -280,6 +284,7 @@ namespace UnityCli
                 catch (BridgeCommandException exception)
                 {
                     EditorApplication.update -= waiter;
+                    UnregisterDeferredItem(item);
                     if (exception.Transient)
                     {
                         item.Response = TransientErrorJson(exception.Code, exception.Message, exception.NextAction ?? "Check Unity Console and UnityCliBridge.log.", exception.RetryAfterMs > 0 ? exception.RetryAfterMs : 5000);
@@ -294,15 +299,52 @@ namespace UnityCli
                 catch (Exception exception)
                 {
                     EditorApplication.update -= waiter;
+                    UnregisterDeferredItem(item);
                     item.Response = ErrorJson("E_BRIDGE_COMMAND_FAILED", exception.Message, "Check Unity Console and UnityCliBridge.log.");
                     item.Completed.Set();
                     WriteLog("deferred_wait_exception requestId=" + item.Request.RequestId + " command=" + item.Request.Command + " error=" + exception.GetType().Name);
                 }
             };
             item.MarkDeferred();
+            lock (DeferredItems)
+            {
+                DeferredItems.Add(item);
+            }
             EditorApplication.update += waiter;
             WriteLog("deferred_wait_started requestId=" + item.Request.RequestId + " command=" + item.Request.Command + " timeoutMs=" + timeoutMs.ToString(CultureInfo.InvariantCulture));
             return DeferredResponseMarker;
+        }
+
+        private static void UnregisterDeferredItem(BridgeWorkItem item)
+        {
+            lock (DeferredItems)
+            {
+                DeferredItems.Remove(item);
+            }
+        }
+
+        /// <summary>
+        /// Called from OnBeforeAssemblyReload to clean up any pending deferred work items.
+        /// Removes EditorApplication.update callbacks and signals each deferred item with
+        /// a transient domain reload error so the HTTP thread does not hang.
+        /// </summary>
+        private static void CancelDeferredWork()
+        {
+            List<BridgeWorkItem> snapshot;
+            lock (DeferredItems)
+            {
+                snapshot = new List<BridgeWorkItem>(DeferredItems);
+                DeferredItems.Clear();
+            }
+            foreach (var item in snapshot)
+            {
+                if (!item.Completed.IsSet)
+                {
+                    item.Response = TransientErrorJson("E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", "Wait for domain reload to complete and retry.", 10000);
+                    item.Completed.Set();
+                    WriteLog("deferred_wait_cancelled_domain_reload requestId=" + item.Request.RequestId + " command=" + item.Request.Command);
+                }
+            }
         }
     }
 }

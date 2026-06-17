@@ -217,6 +217,9 @@ namespace UnityCli
             UnityEngine.Profiling.Profiler.enabled = true;
 
             var capturedFrames = 0;
+            // Deadline: use the requested duration as the capture budget, with a minimum
+            // of 30 seconds to avoid premature timeouts on slow editor frames.
+            var deadline = DateTime.UtcNow.AddMilliseconds(Math.Max(durationMs, 30000));
             EditorApplication.CallbackFunction waiter = null;
             waiter = () =>
             {
@@ -224,6 +227,20 @@ namespace UnityCli
                 {
                     if (capturedFrames < totalFrames)
                     {
+                        // Timeout check — if the deadline has passed, stop capturing.
+                        if (DateTime.UtcNow > deadline)
+                        {
+                            EditorApplication.update -= waiter;
+                            UnityEngine.Profiling.Profiler.enabled = previousEnabled;
+                            UnityEngine.Profiling.Profiler.enableBinaryLog = previousBinaryLog;
+                            UnityEngine.Profiling.Profiler.logFile = previousLogFile;
+                            WriteLog("profiler_capture_deferred_timeout artifactPath=" + outputPath + " capturedFrames=" + capturedFrames.ToString(CultureInfo.InvariantCulture) + " totalFrames=" + totalFrames.ToString(CultureInfo.InvariantCulture));
+                            item.Response = ErrorJson("E_PROFILER_CAPTURE_TIMEOUT", "Profiler capture did not complete all frames before the deadline.", "Reduce the requested frame count or duration, or check Unity Editor performance.");
+                            UnregisterDeferredItem(item);
+                            item.Completed.Set();
+                            return;
+                        }
+
                         UnityEngine.Profiling.Profiler.BeginSample("UnityCliProfilerCapture");
                         UnityEngine.Profiling.Profiler.EndSample();
                         capturedFrames++;
@@ -245,6 +262,7 @@ namespace UnityCli
                     var elapsedMs = (long)(finishedAt - startedAt).TotalMilliseconds;
                     WriteLog(effectType.Replace('.', '_') + "_deferred artifactPath=" + outputPath + " durationMs=" + elapsedMs.ToString(CultureInfo.InvariantCulture));
                     item.Response = SuccessJson("{"artifactPath":" + Quote(outputPath) + ","profilerPath":" + Quote(outputPath) + ","format":" + Quote(format) + ","durationMs":" + elapsedMs.ToString(CultureInfo.InvariantCulture) + ","requestedDurationMs":" + durationMs.ToString(CultureInfo.InvariantCulture) + ","frames":" + totalFrames.ToString(CultureInfo.InvariantCulture) + ","profiler":" + ProfilerStateJson() + ","plannedEffects":[{"type":" + Quote(effectType) + ","path":" + Quote(outputPath) + "}],"logPath":" + Quote(LogPath()) + "}");
+                    UnregisterDeferredItem(item);
                     item.Completed.Set();
                 }
                 catch (Exception exception)
@@ -254,11 +272,13 @@ namespace UnityCli
                     UnityEngine.Profiling.Profiler.enableBinaryLog = previousBinaryLog;
                     UnityEngine.Profiling.Profiler.logFile = previousLogFile;
                     item.Response = ErrorJson("E_PROFILER_CAPTURE_FAILED", "Profiler artifact write failed: " + exception.Message, "Check output path permissions and Unity Profiler availability, then retry.");
+                    UnregisterDeferredItem(item);
                     item.Completed.Set();
                 }
             };
 
             item.MarkDeferred();
+            lock (DeferredItems) { DeferredItems.Add(item); }
             EditorApplication.update += waiter;
             WriteLog("profiler_capture_deferred_started artifactPath=" + outputPath + " requestedFrames=" + totalFrames.ToString(CultureInfo.InvariantCulture) + " requestedDurationMs=" + durationMs.ToString(CultureInfo.InvariantCulture));
             return DeferredResponseMarker;

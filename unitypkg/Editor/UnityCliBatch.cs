@@ -92,6 +92,8 @@ namespace UnityCli
             }
             // Wait for the package request using EditorApplication.update callbacks
             // instead of Thread.Sleep, which blocks the Unity main thread.
+            // 30-second deadline prevents indefinite hangs if the package manager stalls.
+            var deadline = DateTime.UtcNow.AddSeconds(30);
             EditorApplication.CallbackFunction waiter = null;
             waiter = () =>
             {
@@ -99,6 +101,14 @@ namespace UnityCli
                 {
                     EditorApplication.update -= waiter;
                     OnPackagesResolved(request);
+                    return;
+                }
+                if (DateTime.UtcNow > deadline)
+                {
+                    EditorApplication.update -= waiter;
+                    Console.Error.WriteLine("E_PACKAGE_RESOLVE_TIMEOUT: Unity PackageManager resolve did not complete within 30 seconds.");
+                    EditorApplication.Exit(1);
+                    return;
                 }
             };
             EditorApplication.update += waiter;
