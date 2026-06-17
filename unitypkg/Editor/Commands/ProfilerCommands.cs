@@ -261,7 +261,7 @@ namespace UnityCli
                     var finishedAt = DateTime.UtcNow;
                     var elapsedMs = (long)(finishedAt - startedAt).TotalMilliseconds;
                     WriteLog(effectType.Replace('.', '_') + "_deferred artifactPath=" + outputPath + " durationMs=" + elapsedMs.ToString(CultureInfo.InvariantCulture));
-                    item.Response = SuccessJson("{"artifactPath":" + Quote(outputPath) + ","profilerPath":" + Quote(outputPath) + ","format":" + Quote(format) + ","durationMs":" + elapsedMs.ToString(CultureInfo.InvariantCulture) + ","requestedDurationMs":" + durationMs.ToString(CultureInfo.InvariantCulture) + ","frames":" + totalFrames.ToString(CultureInfo.InvariantCulture) + ","profiler":" + ProfilerStateJson() + ","plannedEffects":[{"type":" + Quote(effectType) + ","path":" + Quote(outputPath) + "}],"logPath":" + Quote(LogPath()) + "}");
+                    item.Response = SuccessJson("{\"artifactPath\":" + Quote(outputPath) + ",\"profilerPath\":" + Quote(outputPath) + ",\"format\":" + Quote(format) + ",\"durationMs\":" + elapsedMs.ToString(CultureInfo.InvariantCulture) + ",\"requestedDurationMs\":" + durationMs.ToString(CultureInfo.InvariantCulture) + ",\"frames\":" + totalFrames.ToString(CultureInfo.InvariantCulture) + ",\"profiler\":" + ProfilerStateJson() + ",\"plannedEffects\":[{\"type\":" + Quote(effectType) + ",\"path\":" + Quote(outputPath) + "}],\"logPath\":" + Quote(LogPath()) + "}");
                     UnregisterDeferredItem(item);
                     item.Completed.Set();
                 }
