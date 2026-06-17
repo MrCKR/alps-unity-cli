@@ -96,7 +96,15 @@ namespace UnityCli
 
         private static string ProfilerModulesJson()
         {
-            return "[\"CPU Usage\",\"Rendering\",\"Memory\",\"Audio\",\"Physics\",\"UI\",\"Global Illumination\"]";
+            return new UnityCliJsonWriter().BeginArray()
+                .Value("CPU Usage")
+                .Value("Rendering")
+                .Value("Memory")
+                .Value("Audio")
+                .Value("Physics")
+                .Value("UI")
+                .Value("Global Illumination")
+                .EndArray().ToString();
         }
 
         private static string ProfilerCountersJson(string category, string counter)

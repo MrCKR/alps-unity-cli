@@ -7,22 +7,22 @@
       "isPlayingOrWillChangePlaymode": "<boolean>"
     },
     "busy": {
+      "isBusy": "<boolean>",
       "compiling": "<boolean>",
       "updating": "<boolean>",
       "building": "<boolean>",
-      "domainReloading": "<boolean>"
+      "domainReloading": "<boolean>",
+      "playModeChanging": "<boolean>"
     },
     "activeScene": {
       "name": "<string>",
       "path": "<string|null>",
-      "buildIndex": "<integer>",
       "isLoaded": "<boolean>",
       "isDirty": "<boolean>"
     },
     "prefabStage": "<object|null>",
     "bridge": {
-      "port": "<integer>",
-      "logPath": "<string>"
+      "buildStamp": "<string>"
     },
     "runtime": "<object|null>",
     "plannedEffects": "<array>"

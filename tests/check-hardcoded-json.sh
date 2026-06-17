@@ -14,7 +14,10 @@ ROOT="${1:-.}"
 FOUND=0
 
 # Allowlist: files/patterns that are explicitly permitted to use raw JSON
-# Format: <relative-path-pattern>
+# Format:
+#   path/to/file.cs             allow every match in a file
+#   path/to/file.cs:needle      allow lines in a file containing needle
+#   :needle                     allow any line containing needle
 ALLOWLIST=(
     # UnityCliJsonWriter itself implements JSON writing — its internal string ops are by design
     "unitypkg/Editor/Infrastructure/UnityCliJsonWriter.cs"
@@ -31,8 +34,11 @@ ALLOWLIST=(
     "unitypkg/Editor/Samples/RuntimeWaitTool.cs:OutputSchema="
 
     # Default {} values for optional JSON args are not construction
-    ":\"{}\""
-    ":\\\"{}\\\""
+    ':"{}"'
+    ':\"{}\"'
+
+    # Empty arrays are allowed when returning no items/hits/matches
+    ':return "[]"'
 
     # Test fixtures may contain raw JSON
     "tests/"
@@ -47,100 +53,75 @@ ALLOWLIST=(
     "ProjectToolRegistry.cs:supportsJob="
 )
 
-# Pattern 1: SuccessJson(" with string concatenation
-echo "=== Checking SuccessJson(\" with string concat ==="
-while IFS= read -r line; do
-    file=$(echo "$line" | cut -d: -f1 | sed "s|^$ROOT/||")
-    allowed=false
+is_allowed() {
+    local file="$1"
+    local line="$2"
+    local pattern path needle
+
     for pattern in "${ALLOWLIST[@]}"; do
-        if [[ "$file" == *"${pattern%%:*}"* ]] || [[ "$line" == *"$pattern"* ]]; then
-            allowed=true
-            break
+        if [[ "$pattern" == :* ]]; then
+            needle="${pattern:1}"
+            if [[ "$line" == *"$needle"* ]]; then
+                return 0
+            fi
+        elif [[ "$pattern" == *:* ]]; then
+            path="${pattern%%:*}"
+            needle="${pattern#*:}"
+            if [[ "$file" == *"$path"* && "$line" == *"$needle"* ]]; then
+                return 0
+            fi
+        elif [[ "$file" == *"$pattern"* ]]; then
+            return 0
         fi
     done
-    if [[ "$allowed" == "false" ]]; then
-        echo "  VIOLATION: $line"
-        FOUND=1
-    fi
-done < <(grep -rn 'SuccessJson("' "$ROOT/unitypkg/Editor/" --include="*.cs" 2>/dev/null || true)
 
-# Pattern 2: items.Add with JSON object string concatenation (Quote() based)
-echo "=== Checking items.Add with Quote-based JSON ==="
-while IFS= read -r line; do
-    file=$(echo "$line" | cut -d: -f1 | sed "s|^$ROOT/||")
-    allowed=false
-    for pattern in "${ALLOWLIST[@]}"; do
-        if [[ "$file" == *"${pattern%%:*}"* ]] || [[ "$line" == *"$pattern"* ]]; then
-            allowed=true
-            break
+    return 1
+}
+
+check_lines() {
+    local title="$1"
+    local skip_regex="${2:-}"
+    shift 2
+
+    echo "=== Checking $title ==="
+    while IFS= read -r line; do
+        local file
+        file=$(echo "$line" | cut -d: -f1 | sed "s|^$ROOT/||")
+        if [[ -n "$skip_regex" ]] && echo "$line" | grep -qE "$skip_regex"; then
+            continue
         fi
-    done
-    if [[ "$allowed" == "false" ]]; then
-        echo "  VIOLATION: $line"
-        FOUND=1
-    fi
-done < <(grep -rn 'items\.Add.*Quote(' "$ROOT/unitypkg/Editor/" --include="*.cs" 2>/dev/null || true)
-
-# Pattern 3: string.Join to build JSON arrays
-echo "=== Checking string.Join for JSON array construction ==="
-while IFS= read -r line; do
-    file=$(echo "$line" | cut -d: -f1 | sed "s|^$ROOT/||")
-    # Skip non-JSON string.Join usages
-    if echo "$line" | grep -qE 'FindAssets|filterParts|names\.ToArray|HierarchyPath|CoverageScope|ArtifactKinds|RequiredInput'; then
-        continue
-    fi
-    allowed=false
-    for pattern in "${ALLOWLIST[@]}"; do
-        if [[ "$file" == *"${pattern%%:*}"* ]] || [[ "$line" == *"$pattern"* ]]; then
-            allowed=true
-            break
+        if is_allowed "$file" "$line"; then
+            continue
         fi
-    done
-    if [[ "$allowed" == "false" ]]; then
         echo "  VIOLATION: $line"
         FOUND=1
-    fi
-done < <(grep -rn 'string\.Join.*items\|string\.Join.*effects\|string\.Join.*quotedCommands\|string\.Join.*tools' "$ROOT/unitypkg/Editor/" --include="*.cs" 2>/dev/null || true)
+    done < <("$@" 2>/dev/null || true)
+}
 
-# Pattern 4: QuotePair (removed — should not exist)
-echo "=== Checking QuotePair usage ==="
-while IFS= read -r line; do
-    echo "  VIOLATION: $line"
-    FOUND=1
-done < <(grep -rn 'QuotePair' "$ROOT/unitypkg/Editor/" --include="*.cs" 2>/dev/null || true)
+check_lines 'SuccessJson(" with string concat' '' \
+    grep -rn 'SuccessJson("' "$ROOT/unitypkg/Editor/" --include="*.cs"
 
-# Pattern 5: Custom Escape methods (replaced by writer)
-echo "=== Checking custom Escape methods ==="
-while IFS= read -r line; do
-    file=$(echo "$line" | cut -d: -f1 | sed "s|^$ROOT/||")
-    # Allow ShaderCommands.EscapeShaderName (not JSON)
-    if echo "$line" | grep -q 'EscapeShaderName'; then
-        continue
-    fi
-    echo "  VIOLATION: $line"
-    FOUND=1
-done < <(grep -rn 'private static string Escape(' "$ROOT/unitypkg/Editor/" --include="*.cs" 2>/dev/null || true)
+check_lines 'items.Add with Quote-based JSON' '' \
+    grep -rn 'items\.Add.*Quote(' "$ROOT/unitypkg/Editor/" --include="*.cs"
 
-# Pattern 6: $"" string interpolation for JSON construction
-echo "=== Checking \$\"\" interpolation for JSON ==="
-while IFS= read -r line; do
-    file=$(echo "$line" | cut -d: -f1 | sed "s|^$ROOT/||")
-    # Skip non-JSON interpolation
-    if echo "$line" | grep -qE 'BoolArgAtPath|definition\.'; then
-        continue
-    fi
-    allowed=false
-    for pattern in "${ALLOWLIST[@]}"; do
-        if [[ "$file" == *"${pattern%%:*}"* ]] || [[ "$line" == *"$pattern"* ]]; then
-            allowed=true
-            break
-        fi
-    done
-    if [[ "$allowed" == "false" ]]; then
-        echo "  VIOLATION: $line"
-        FOUND=1
-    fi
-done < <(grep -rn '\$".*{.*Quote\|Bool\|Number' "$ROOT/unitypkg/Editor/" --include="*.cs" 2>/dev/null || true)
+check_lines 'string.Join for JSON array construction' \
+    'FindAssets|filterParts|names\.ToArray|HierarchyPath|CoverageScope|ArtifactKinds|RequiredInput' \
+    grep -rn 'string\.Join.*items\|string\.Join.*effects\|string\.Join.*quotedCommands\|string\.Join.*tools' "$ROOT/unitypkg/Editor/" --include="*.cs"
+
+check_lines 'QuotePair usage' '' \
+    grep -rn 'QuotePair' "$ROOT/unitypkg/Editor/" --include="*.cs"
+
+check_lines 'custom Escape methods' 'EscapeShaderName' \
+    grep -rn 'private static string Escape(' "$ROOT/unitypkg/Editor/" --include="*.cs"
+
+check_lines '$"" interpolation for JSON' 'BoolArgAtPath|definition\.' \
+    grep -rnE '\$".*\{.*(Quote|Bool|Number)' "$ROOT/unitypkg/Editor/" --include="*.cs"
+
+check_lines 'return "{ JSON object literals' '' \
+    grep -rnF 'return "{' "$ROOT/unitypkg/Editor/" --include="*.cs"
+
+check_lines 'return "[ JSON array literals' '' \
+    grep -rnF 'return "[' "$ROOT/unitypkg/Editor/" --include="*.cs"
 
 # Summary
 echo ""

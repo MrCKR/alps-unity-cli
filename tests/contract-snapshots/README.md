@@ -7,15 +7,9 @@ hardcoded JSON string concatenation to `UnityCliJsonWriter` builder pattern.
 
 ## How to verify
 
-After any change to command output serialization, run:
-
-```bash
-cd alps-unity-cli
-node tests/contract-verify.mjs
-```
-
-This compares the current code's JSON structure against the snapshots.
-Any field name, type, or structural change will be reported.
+Use these snapshots as review fixtures when changing command output serialization.
+Compare changed command output against the matching snapshot and update the
+snapshot only when a contract change is intentional and reviewed.
 
 ## Snapshot files
 
