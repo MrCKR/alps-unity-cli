@@ -66,6 +66,12 @@ namespace UnityCli
         public string Assembly { get; set; }
         public string Method { get; set; }
         public string Fingerprint { get; set; }
+        /// <summary>
+        /// The fingerprint pinned by the developer via [UnityCliTool(Fingerprint=...)].
+        /// When non-null, this is enforced strictly. When null, the computed
+        /// fingerprint is auto-accepted as the expected baseline.
+        /// </summary>
+        public string PinnedFingerprint { get; set; }
         public string FingerprintStatus { get; set; }
         public string FingerprintMode { get; set; }
         public string ExpectedFingerprint { get; set; }

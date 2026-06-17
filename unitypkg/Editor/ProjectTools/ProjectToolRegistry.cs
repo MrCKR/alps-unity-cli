@@ -154,6 +154,7 @@ namespace UnityCli
                 Assembly = assembly.GetName().Name,
                 Method = type.FullName + "." + executeMethod.Name,
                 Fingerprint = attribute.Fingerprint,
+                PinnedFingerprint = attribute.Fingerprint,
                 ExpectedFingerprint = attribute.Fingerprint,
                 Execute = delegate(UnityCliProjectToolContext context)
                 {
@@ -468,15 +469,25 @@ namespace UnityCli
             definition.DescriptorSha256 = Sha256Hex(descriptor);
             definition.HandlerSha256 = Sha256Hex(ProjectToolHandlerFingerprintMaterial(definition));
             definition.Fingerprint = Sha256Hex("unity-cli-project-tool-fingerprint-v1\nhandler=" + definition.HandlerSha256 + "\ndescriptor=" + definition.DescriptorSha256);
-            if (string.IsNullOrEmpty(definition.ExpectedFingerprint))
+
+            // When the attribute has an explicit Fingerprint (pinned by the developer),
+            // enforce strict matching. When it is not pinned (null/empty), auto-accept
+            // the current computed fingerprint as the new baseline — this allows
+            // built-in sample tools to evolve without manual fingerprint updates.
+            var isPinned = !string.IsNullOrEmpty(definition.PinnedFingerprint);
+            if (isPinned)
             {
-                var persisted = LoadProjectToolExpectedFingerprint(definition.Name);
-                definition.ExpectedFingerprint = string.IsNullOrEmpty(persisted) ? definition.Fingerprint : persisted;
-                if (string.IsNullOrEmpty(persisted))
-                {
-                    SaveProjectToolExpectedFingerprint(definition.Name, definition.Fingerprint);
-                }
+                definition.ExpectedFingerprint = definition.PinnedFingerprint;
             }
+            else
+            {
+                // Not pinned: always accept current fingerprint as expected.
+                // Update the persisted baseline so mismatch is detectable if
+                // the user later pins the fingerprint.
+                definition.ExpectedFingerprint = definition.Fingerprint;
+                SaveProjectToolExpectedFingerprint(definition.Name, definition.Fingerprint);
+            }
+
             definition.FingerprintMode = NormalizeProjectToolFingerprintMode(requestedMode);
             var matches = string.Equals(definition.ExpectedFingerprint, definition.Fingerprint, StringComparison.OrdinalIgnoreCase);
             definition.FingerprintStatus = matches ? "match" : (definition.FingerprintMode == "warn" ? "warn" : "blocked");

@@ -20,6 +20,7 @@ namespace UnityCli
     {
         // Play Mode session tracking
         private static string currentPlayModeSessionId = null;
+        private static string lastStalePlayModeSessionId = null;
         private static bool playModeReady = false;
         private static int runtimeRegistryVersion = 0;
         private static string runtimeToolCatalogFingerprint = null;
@@ -74,8 +75,11 @@ namespace UnityCli
             {
                 case PlayModeStateChange.EnteredEditMode:
                     // Exited Play Mode: invalidate the runtime session
+                    // Preserve the stale sessionId so callers requesting the old session
+                    // get E_RUNTIME_SESSION_STALE instead of E_RUNTIME_NOT_READY.
                     if (currentPlayModeSessionId != null)
                     {
+                        lastStalePlayModeSessionId = currentPlayModeSessionId;
                         WriteLog("runtime_session_stale sessionId=" + currentPlayModeSessionId + " reason=exited_play_mode");
                     }
                     currentPlayModeSessionId = null;
@@ -219,6 +223,22 @@ namespace UnityCli
             // Validate Play Mode is ready
             if (!playModeReady)
             {
+                // If the caller specified a session ID, check whether it matches a
+                // recently-stale session. This gives a more actionable error than
+                // E_RUNTIME_NOT_READY when the Play Mode session simply ended.
+                var requestedSessionId = request.StringArg("playModeSessionId");
+                if (!string.IsNullOrEmpty(requestedSessionId) && string.Equals(requestedSessionId, lastStalePlayModeSessionId, StringComparison.Ordinal))
+                {
+                    WriteLog("runtime_tool_session_stale_after_exit requestId=" + request.RequestId + " name=" + name + " requested=" + requestedSessionId + " stale=" + lastStalePlayModeSessionId);
+                    return ErrorJsonWithDetails("E_RUNTIME_SESSION_STALE",
+                        "Runtime tool session is stale: Play Mode session " + requestedSessionId + " has ended (exited Play Mode).",
+                        new UnityCliJsonWriter().BeginObject()
+                            .Prop("requestedSessionId", requestedSessionId)
+                            .Prop("staleSessionId", lastStalePlayModeSessionId)
+                            .Prop("playModeActive", false)
+                            .EndObject().ToString(),
+                        "Re-enter Play Mode and retry, or omit playModeSessionId to use the current session.");
+                }
                 WriteLog("runtime_tool_not_ready requestId=" + request.RequestId + " name=" + name + " sessionId=" + (currentPlayModeSessionId ?? "null"));
                 return ErrorJson("E_RUNTIME_NOT_READY",
                     "Runtime tool cannot execute: Play Mode is not ready. Current Play Mode session is not active.",
