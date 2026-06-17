@@ -1,0 +1,37 @@
+{
+  "defaults": {
+    "project": "C:/work/Game",
+    "unity": "C:/Program Files/Unity/Hub/Editor/2022.3.45f1/Editor/Unity.exe",
+    "wait": true,
+    "timeoutMs": 600000,
+    "waitTimeoutMs": 600000,
+    "env": {
+      "UNITY_CLI_BRIDGE_ENDPOINT": "http://127.0.0.1:18080"
+    }
+  },
+  "envAllowlist": ["UNITY_CLI_BRIDGE_ENDPOINT"],
+  "failFast": true,
+  "parallel": 1,
+  "steps": [
+    {
+      "id": "list-cameras",
+      "command": ["tools", "run", "camera.list"]
+    },
+    {
+      "id": "read-console",
+      "command": ["tools", "run", "editor.console"]
+    },
+    {
+      "id": "capture-screenshot",
+      "command": ["tools", "run", "camera.screenshot"],
+      "args": ["--input", "{\"target\":\"Main Camera\",\"output\":\"Artifacts/editor-batch-screenshot.png\",\"overwrite\":true}"],
+      "dependsOn": ["list-cameras", "read-console"]
+    },
+    {
+      "id": "refresh-assets",
+      "command": ["tools", "run", "editor.refresh"],
+      "args": ["--compile", "--wait"],
+      "dependsOn": ["capture-screenshot"]
+    }
+  ]
+}
