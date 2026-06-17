@@ -59,7 +59,7 @@ namespace UnityCli
             EditorApplication.isPlaying = true;
             var timeoutMs = TimeoutMs(request);
             var responseFactory = new Func<string>(() =>
-                $"{{\"plannedEffects\":[{{\"type\":\"editor.play\",\"from\":{Bool(before)},\"to\":true}}],\"result\":{{\"requested\":\"play\",\"changed\":{Bool(before != EditorApplication.isPlaying)},\"isPlaying\":{Bool(EditorApplication.isPlaying)},\"isPaused\":{Bool(EditorApplication.isPaused)}}},\"state\":{EditorStateJson()}}}}");
+                $"{{\"plannedEffects\":[{{\"type\":\"editor.play\",\"from\":{Bool(before)},\"to\":true}}],\"result\":{{\"requested\":\"play\",\"changed\":{Bool(before != EditorApplication.isPlaying)},\"isPlaying\":{Bool(EditorApplication.isPlaying)},\"isPaused\":{Bool(EditorApplication.isPaused)}}},\"state\":{EditorStateJson()}}}");
             var reached = EditorApplication.isPlaying || EditorApplication.isPlayingOrWillChangePlaymode;
             if (reached)
             {
