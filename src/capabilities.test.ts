@@ -141,7 +141,7 @@ test("capabilities static data includes schemaFeatures", async () => {
   const schemaFeatures = staticData.schemaFeatures as Record<string, boolean>;
 
   assert.equal(schemaFeatures.toolMetadata, true);
-  assert.equal(schemaFeatures.customToolDescriptor, true);
+  assert.equal(schemaFeatures.projectToolDescriptor, true);
   assert.equal(schemaFeatures.unifiedDiscovery, true);
   assert.equal(schemaFeatures.builtinDocs, true);
   assert.equal(schemaFeatures.requestEnvelope, true);
@@ -150,8 +150,8 @@ test("capabilities static data includes schemaFeatures", async () => {
 });
 
 test("capabilities includes custom tools in unified static manifest when available", async () => {
-  const runtime: BridgeRuntime & { customTools: Array<{ name: string; title: string; description: string; group: string; inputSchema: Record<string, unknown>; readOnlyHint: boolean; destructiveHint: boolean }> } = {
-    customTools: [{
+  const runtime: BridgeRuntime & { projectTools: Array<{ name: string; title: string; description: string; group: string; inputSchema: Record<string, unknown>; readOnlyHint: boolean; destructiveHint: boolean }> } = {
+    projectTools: [{
       name: "project.audit",
       title: "Project Audit",
       description: "Audits project state.",
@@ -166,7 +166,7 @@ test("capabilities includes custom tools in unified static manifest when availab
 
   const data = result.data as Record<string, unknown>;
   const staticData = data.static as Record<string, unknown>;
-  assert.equal((data.customTools as { count: number }).count, 1);
+  assert.equal((data.projectTools as { count: number }).count, 1);
   assert.equal((staticData.groups as Record<string, number>).project, 1);
   assert.ok((staticData.liveBridgeTools as string[]).includes("project.audit"));
 });

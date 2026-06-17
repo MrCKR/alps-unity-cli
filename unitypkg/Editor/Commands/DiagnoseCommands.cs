@@ -35,8 +35,8 @@ namespace UnityCli
 
         private static string DiagnosePreflightJson(BridgeRequest request)
         {
-            DiscoverCustomTools();
-            return "{\"command\":\"diagnose.preflight\",\"targetCommand\":" + Quote(request.StringArg("command")) + ",\"project\":{\"path\":" + Quote(ProjectRoot()) + ",\"unityVersion\":" + Quote(Application.unityVersion) + ",\"activeScene\":" + Quote(SceneManager.GetActiveScene().path) + "},\"editor\":" + EditorStateJson() + ",\"bridge\":{\"port\":" + port.ToString(CultureInfo.InvariantCulture) + ",\"logPath\":" + Quote(LogPath()) + ",\"capabilities\":" + CapabilitiesJson() + "},\"customTools\":{\"fingerprint\":" + CustomToolFingerprintSummaryJson() + "},\"checks\":[" + DiagnoseCheckJson("unityNotBusy", !(EditorApplication.isCompiling || EditorApplication.isUpdating || BuildPipeline.isBuildingPlayer)) + "," + DiagnoseCheckJson("sceneLoaded", SceneManager.GetActiveScene().isLoaded) + "," + DiagnoseCheckJson("customToolFingerprint", !CustomTools.Values.Any(definition => definition.FingerprintStatus == "blocked")) + "],\"logPath\":" + Quote(LogPath()) + "}";
+            DiscoverProjectTools();
+            return "{\"command\":\"diagnose.preflight\",\"targetCommand\":" + Quote(request.StringArg("command")) + ",\"project\":{\"path\":" + Quote(ProjectRoot()) + ",\"unityVersion\":" + Quote(Application.unityVersion) + ",\"activeScene\":" + Quote(SceneManager.GetActiveScene().path) + "},\"editor\":" + EditorStateJson() + ",\"bridge\":{\"port\":" + port.ToString(CultureInfo.InvariantCulture) + ",\"logPath\":" + Quote(LogPath()) + ",\"capabilities\":" + CapabilitiesJson() + "},\"customTools\":{\"fingerprint\":" + ProjectToolFingerprintSummaryJson() + "},\"checks\":[" + DiagnoseCheckJson("unityNotBusy", !(EditorApplication.isCompiling || EditorApplication.isUpdating || BuildPipeline.isBuildingPlayer)) + "," + DiagnoseCheckJson("sceneLoaded", SceneManager.GetActiveScene().isLoaded) + "," + DiagnoseCheckJson("projectToolFingerprint", !ProjectTools.Values.Any(definition => definition.FingerprintStatus == "blocked")) + "],\"logPath\":" + Quote(LogPath()) + "}";
         }
 
 

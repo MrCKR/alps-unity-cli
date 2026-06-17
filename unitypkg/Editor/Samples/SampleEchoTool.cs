@@ -22,7 +22,7 @@ namespace UnityCli.Samples
         CoverageScope = "attribute-first,zero-config,unity-editor-csharp")]
     public static class SampleEchoTool
     {
-        public static string Execute(UnityCliCustomToolContext context)
+        public static string Execute(UnityCliProjectToolContext context)
         {
             return "{\"requestId\":\"" + Escape(context.RequestId) + "\",\"input\":" + (string.IsNullOrEmpty(context.InputJson) ? "{}" : context.InputJson) + "}";
         }

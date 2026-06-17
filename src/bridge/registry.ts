@@ -2,7 +2,6 @@ import { animationBridgeSpecs } from "./domains/animation.js";
 import { assetBridgeSpecs } from "./domains/asset.js";
 import { cameraBridgeSpecs } from "./domains/camera.js";
 import { codeBridgeSpecs } from "./domains/code.js";
-import { customToolBridgeSpecs } from "./domains/custom-tool.js";
 import { diagnoseBridgeSpecs } from "./domains/diagnose.js";
 import { editorBridgeSpecs } from "./domains/editor.js";
 import { gameObjectBridgeSpecs } from "./domains/game-object.js";
@@ -32,7 +31,6 @@ const DOMAIN_SPECS: BridgeCommandSpec[] = [
   ...physicsBridgeSpecs,
   ...profilerBridgeSpecs,
   ...probuilderBridgeSpecs,
-  ...customToolBridgeSpecs,
   ...shaderBridgeSpecs,
   ...textureBridgeSpecs,
   ...animationBridgeSpecs,

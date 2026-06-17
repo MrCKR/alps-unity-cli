@@ -8,7 +8,7 @@ const jsonUrl = new URL("../unitypkg/Editor/Infrastructure/UnityCliJson.cs", imp
 const bridgeHttpUrl = new URL("../unitypkg/Editor/Bridge/BridgeHttpServer.cs", import.meta.url);
 const codeExecUrl = new URL("../unitypkg/Editor/Commands/CodeExecCommand.cs", import.meta.url);
 const batchUrl = new URL("../unitypkg/Editor/UnityCliBatch.cs", import.meta.url);
-const customToolsUrl = new URL("../unitypkg/Editor/CustomTools/CustomToolRegistry.cs", import.meta.url);
+const projectToolsUrl = new URL("../unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs", import.meta.url);
 
 test("Unity JSON writer supports core JSON values and validates raw JSON", async () => {
   const writer = await readFile(writerUrl, "utf8");
@@ -53,7 +53,7 @@ test("high-impact Unity outputs use writer or envelope infrastructure", async ()
   const bridgeHttp = await readFile(bridgeHttpUrl, "utf8");
   const codeExec = await readFile(codeExecUrl, "utf8");
   const batch = await readFile(batchUrl, "utf8");
-  const customTools = await readFile(customToolsUrl, "utf8");
+  const projectTools = await readFile(projectToolsUrl, "utf8");
 
   assert.match(bridgeHttp, /BridgeHealthJson\(\)[\s\S]*UnityCliEnvelope\.Success\(data\)/);
   assert.match(bridgeHttp, /UnityCliEnvelope\.Error\("E_BRIDGE_ROUTE_NOT_FOUND"/);
@@ -61,9 +61,9 @@ test("high-impact Unity outputs use writer or envelope infrastructure", async ()
   assert.match(codeExec, /CodeDetailsJson[\s\S]*PropRaw\("diagnostics"/);
   assert.match(batch, /SuccessEnvelope[\s\S]*UnityCliEnvelope\.Success\(requestId, dataJson\)/);
   assert.match(batch, /ErrorEnvelope[\s\S]*UnityCliEnvelope\.Error\(requestId, code, message, detailsJson, actions\)/);
-  assert.match(customTools, /CustomToolDefinitionJson[\s\S]*PropRaw\("inputSchema", definition\.InputSchema\)/);
-  assert.match(customTools, /CustomToolDefinitionJson[\s\S]*PropRaw\("outputSchema", definition\.OutputSchema\)/);
-  assert.match(customTools, /CustomToolRun[\s\S]*PropRaw\("result", resultJson\)/);
-  assert.match(customTools, /CustomToolFingerprintJson[\s\S]*new UnityCliJsonWriter\(\)\.BeginObject\(\)/);
-  assert.doesNotMatch(customTools, /JsonLiteralOrString\(resultJson\)/);
+  assert.match(projectTools, /ProjectToolDefinitionJson[\s\S]*PropRaw\("inputSchema", definition\.InputSchema\)/);
+  assert.match(projectTools, /ProjectToolDefinitionJson[\s\S]*PropRaw\("outputSchema", definition\.OutputSchema\)/);
+  assert.match(projectTools, /ProjectToolRun[\s\S]*PropRaw\("result", resultJson\)/);
+  assert.match(projectTools, /ProjectToolFingerprintJson[\s\S]*new UnityCliJsonWriter\(\)\.BeginObject\(\)/);
+  assert.doesNotMatch(projectTools, /JsonLiteralOrString\(resultJson\)/);
 });

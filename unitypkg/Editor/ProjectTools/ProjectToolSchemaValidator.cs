@@ -28,7 +28,7 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
-        private static string ValidateCustomToolInput(UnityCliCustomToolDefinition definition, string inputJson)
+        private static string ValidateProjectToolInput(UnityCliProjectToolDefinition definition, string inputJson)
         {
             var schemaJson = definition.InputSchema;
             if (!string.IsNullOrEmpty(schemaJson) && schemaJson.Trim() != "{}")

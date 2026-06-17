@@ -14,14 +14,14 @@
  */
 
 import { getString, getBoolean } from "./args.js";
-import { discoverCustomTools, shouldDiscoverCustomTools, type CustomToolRuntime } from "./custom-tool-discovery.js";
+import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
 import { readInstances, type UnityInstance } from "./instances.js";
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
 import { builtinToolMetadata } from "./tools/metadata/index.js";
 import { failure, success } from "./output.js";
 import type { CliResult } from "./types.js";
 
-export interface DoctorRuntime extends BridgeRuntime, CustomToolRuntime {
+export interface DoctorRuntime extends BridgeRuntime, ProjectToolRuntime {
   dataDir: string;
 }
 
@@ -207,8 +207,8 @@ function checkBridgeFingerprintStatus(checks: DoctorCheck[]): DoctorCheck | unde
   if (!bridgeResponse || typeof bridgeResponse !== "object") {
     return undefined;
   }
-  const customTools = (bridgeResponse as { customTools?: unknown }).customTools;
-  const fingerprint = customTools && typeof customTools === "object" ? (customTools as { fingerprint?: unknown }).fingerprint : undefined;
+  const projectTools = (bridgeResponse as { projectTools?: unknown }).projectTools;
+  const fingerprint = projectTools && typeof projectTools === "object" ? (projectTools as { fingerprint?: unknown }).fingerprint : undefined;
   if (!fingerprint || typeof fingerprint !== "object") {
     return undefined;
   }
@@ -218,7 +218,7 @@ function checkBridgeFingerprintStatus(checks: DoctorCheck[]): DoctorCheck | unde
   const mode = stringProp(fingerprint, "mode") ?? "unknown";
   const status: DoctorCheck["status"] = blockedCount > 0 ? "fail" : warnCount > 0 ? "warn" : "pass";
   return {
-    name: "custom_tool_fingerprint",
+    name: "project_tool_fingerprint",
     status,
     message: status === "pass"
       ? `Custom tool fingerprints match for ${toolCount} tool(s) (mode: ${mode}).`
@@ -303,14 +303,14 @@ async function checkJobStore(dataDir: string): Promise<DoctorCheck> {
 
 async function checkUnifiedDiscovery(flags: Record<string, string | boolean>, runtime: DoctorRuntime, requestId: string): Promise<DoctorCheck> {
   const builtinCount = builtinToolMetadata().length;
-  const includeCustom = shouldDiscoverCustomTools(flags, runtime);
-  const discovery = includeCustom ? await discoverCustomTools(flags, runtime, `${requestId}_custom_tools`) : { ok: true as const, tools: [], mode: "skipped" as const };
+  const includeCustom = shouldDiscoverProjectTools(flags, runtime);
+  const discovery = includeCustom ? await discoverProjectTools(flags, runtime, `${requestId}_project_tools`) : { ok: true as const, tools: [], mode: "skipped" as const };
   if (!discovery.ok) {
     return {
       name: "unified_tool_discovery",
       status: "warn",
       message: `Built-in tool metadata is available (${builtinCount}), but custom tool discovery failed: ${discovery.error?.code ?? "unknown"}.`,
-      details: { builtinCount, customTools: { status: "error", code: discovery.error?.code, message: discovery.error?.message } }
+      details: { builtinCount, projectTools: { status: "error", code: discovery.error?.code, message: discovery.error?.message } }
     };
   }
 
@@ -318,7 +318,7 @@ async function checkUnifiedDiscovery(flags: Record<string, string | boolean>, ru
     name: "unified_tool_discovery",
     status: "pass",
     message: `Unified discovery is available: ${builtinCount} built-in tool(s), ${discovery.tools.length} custom tool(s).`,
-    details: { builtinCount, customToolCount: discovery.tools.length, customDiscoveryMode: discovery.mode }
+    details: { builtinCount, projectToolCount: discovery.tools.length, projectDiscoveryMode: discovery.mode }
   };
 }
 
@@ -381,9 +381,9 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
           suggestions.push("Ensure Unity Editor is running with the Unity CLI Bridge package.");
           suggestions.push("Check --bridge-endpoint or UNITY_CLI_BRIDGE_ENDPOINT.");
           break;
-        case "custom_tool_fingerprint":
-          suggestions.push("Inspect unity_cli doctor fingerprint details, then review custom tool descriptor/handler code changes.");
-          suggestions.push("Use custom-tool run --fingerprint-mode warn only for an intentional, audited mismatch.");
+        case "project_tool_fingerprint":
+          suggestions.push("Inspect unity_cli doctor fingerprint details, then review project tool descriptor/handler code changes.");
+          suggestions.push("Use tools run --fingerprint-mode warn only for an intentional, audited mismatch.");
           break;
         case "data_directory":
           suggestions.push("Run any unity_cli command to auto-create the data directory.");

@@ -199,8 +199,6 @@ function help(): Record<string, unknown> {
       "tools describe <tool>",
       "capabilities [--json] [--bridge-endpoint <url>]",
       "code exec (--file <path>|--stdin|--code <text>) [--channel live|batchmode] [--refs <list>] [--define <symbol>] [--args <json>] [--timeout-ms <n>] [--job] [--artifact-dir <path>]",
-      "custom-tool list [--project <path>] [--target <id|alias>] [--bridge-endpoint <url>]",
-      "custom-tool run <name> [--project <path>] [--target <id|alias>] [--input <json>|--input-file <path>|--stdin] [--timeout-ms 30000] [--fingerprint-mode warn|block] [--job] [--artifact-dir <path>] [--bridge-endpoint <url>]",
       "scene active [规划中]",
       "scene hierarchy [--page-size 100] [--bridge-endpoint <url>]",
       "scene build-settings [规划中]",

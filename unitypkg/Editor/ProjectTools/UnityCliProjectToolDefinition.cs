@@ -27,7 +27,7 @@ using UiText = UnityEngine.UI.Text;
 
 namespace UnityCli
 {
-    public sealed class UnityCliCustomToolDefinition
+    public sealed class UnityCliProjectToolDefinition
     {
         public string Name { get; set; }
         public string DisplayName { get; set; }
@@ -59,7 +59,7 @@ namespace UnityCli
         public string FingerprintMessage { get; set; }
         public string DescriptorSha256 { get; set; }
         public string HandlerSha256 { get; set; }
-        public Func<UnityCliCustomToolContext, string> Execute { get; set; }
+        public Func<UnityCliProjectToolContext, string> Execute { get; set; }
     }
 }
 #endif
