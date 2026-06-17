@@ -18,27 +18,27 @@ interface DocTopic {
 const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tools?: string[] }> = {
   "target-and-instance": {
     title: "Targets and Instances",
-    summary: "Discover Unity instances, select a target, and understand instance lifecycle. This is the first step in the discovery path: instances → select target → tools discovery → execute → verify.",
-    guide: "Start with `instances list` to discover running Unity Editors. Use `target set <id|alias>` to select a target before executing any Bridge tool. When multiple instances are ready, the CLI returns E_TARGET_AMBIGUOUS instead of guessing."
+    summary: "Discover Unity instances, select a target, and understand instance lifecycle. This is the first step in the discovery path: instances → select target → tools discovery → tools run → verify. Do not read registration files or ping endpoints manually — always use CLI commands.",
+    guide: "Start with `instances list` to discover running Unity Editors. Use `target set <id|alias>` to select a target before executing any Bridge tool. When multiple instances are ready, the CLI returns E_TARGET_AMBIGUOUS instead of guessing. Never manually read registration files or ping bridge endpoints."
   },
   "tool-discovery": {
     title: "Tool Discovery",
-    summary: "Unified tools list/search/describe surface. All tools — built-in and project-local — share the same descriptor schema. Use `tools describe <name>` before executing any tool to read inputSchema, risk hints, handler type, and examples.",
+    summary: "Unified tools list/search/describe surface. All tools — built-in and project-local — share the same descriptor schema. Use `tools describe <name>` before executing any tool. Descriptor includes `target`, `availabilityScope`, `available` fields for P3-aligned routing. See docs/tool-discovery.md §Descriptor field coverage for current vs. P3 contract gap.",
     guide: "Run `tools list --include-custom` for all available tools on the resolved target. Use `tools search <keyword>` when you know the domain. Always `tools describe <name>` before executing."
   },
   "tool-execution": {
     title: "Tool Execution",
-    summary: "How tools execute: bridge (live Editor), hybrid (bridge + job), job (batch), or offline (no Unity). Target=editor|runtime|both determines internal routing; runtime is not a separate command group.",
-    guide: "Read the `handler` and `supportStatus` from `tools describe` to know the execution channel. Use `--dry-run` for destructive tools that support it. Verify results by re-calling read tools or checking `plannedEffects`."
+    summary: "Execute tools via `tools run <name>` — the unified entry point. Execution channels: bridge (live Editor), bridge-runtime (Play Mode runtime), hybrid (bridge + job), job (batch), or offline (no Unity). Target=editor|runtime|both determines internal routing; runtime is not a separate command group.",
+    guide: "Use `tools run <name>` to execute any tool. Read the `handler`, `supportStatus`, `target`, and `availabilityScope` from `tools describe` to know the execution channel. Use `--dry-run` for destructive tools that support it. Verify results by re-calling read tools or checking `plannedEffects`."
   },
   "availability-differences": {
     title: "Availability Differences",
-    summary: "Why different Unity instances return different tool availability: package dependencies, project tool registration, Bridge reachability, PlayMode state, and domain reload timing.",
-    guide: "Always resolve target first. Use `tools list --include-custom` against the specific instance. After package installs or domain reload, re-discover tools. Handle package-not-found errors using `nextActions`."
+    summary: "Why different Unity instances return different tool availability: package dependencies, project tool registration, Bridge reachability, PlayMode state (`available` field on runtime tools), and domain reload timing.",
+    guide: "Always resolve target first. Use `tools list --include-custom` against the specific instance. After package installs or domain reload, re-discover tools. Handle package-not-found and E_RUNTIME_NOT_READY errors using `next_actions`."
   },
   "error-codes": {
-    title: "Error Codes and nextActions",
-    summary: "Structured error taxonomy with machine-readable codes, transient hints, retry_after_ms, and nextActions for automated recovery. Every error follows the unified response envelope.",
+    title: "Error Codes and next_actions",
+    summary: "Structured error taxonomy with machine-readable codes, transient hints, `retry_after_ms`, and `next_actions` for automated recovery. JSON fields are `next_actions` and `retry_after_ms` (snake_case, matching error-code.schema.json). Every error follows the unified response envelope.",
     guide: "Read `error.code` for the error category. Check `transient` — if true, retry after `retry_after_ms`. Follow `next_actions` for recovery. Never guess; use the suggested commands."
   },
   "risk-and-side-effects": {
@@ -48,7 +48,7 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   scene: {
     title: "Scene Commands",
-    summary: "Query and modify Unity scenes: hierarchy, active scene, build settings, screenshots, create/load/save. Handler: bridge (live Editor). Target: editor.",
+    summary: "Query and modify Unity scenes: hierarchy, active scene, build settings, screenshots, create/load/save. Handler: bridge. Target: editor.",
     guide: "Start with `scene hierarchy` to list objects. Use `scene screenshot` for visual verification."
   },
   camera: {
@@ -172,8 +172,16 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   "project-tool": {
     title: "Project Tools (Custom)",
-    summary: "Tools registered by Unity project C# code via [UnityCliTool] attribute. Discovered through `tools list --include-custom`. Handler: bridge. Target: editor. Availability depends on target instance. Fingerprint-protected.",
-    guide: "Use `tools list --include-custom` to discover project tools. Use `tools describe <name>` for full schema and risk hints. Use `tools run <name>` (P3 unified contract) or the cliCommand shown in the descriptor."
+    summary: "Tools registered by Unity project C# code via [UnityCliTool] attribute. Discovered through `tools list --include-custom`. Executed via `tools run <name>`. Handler: bridge or bridge-runtime. Target: editor or runtime. Availability depends on target instance and PlayMode state. Fingerprint-protected.",
+    guide: "Use `tools list --include-custom` to discover project tools. Use `tools describe <name>` for full schema, risk hints, and target/availability. Use `tools run <name>` to execute."
+  },
+  "coverage-matrix": {
+    title: "Coverage Matrix (v1.0 Archive — Engineering Reference Only)",
+    summary: "v1.0 archive: P0-P2 function domain coverage status. Contains pre-P3 legacy terminology (custom-tool commands, project-tool list/run). Not a current user-side guide; use the main topic index for AI calling instructions."
+  },
+  "risk-register-v1.0": {
+    title: "Risk Register (v1.0 Archive — Engineering Reference Only)",
+    summary: "v1.0 archive: P0-P2 known risks and limitations. Contains pre-P3 framing. Not a current user-side guide; use risk-and-side-effects topic for current risk model."
   }
 };
 
@@ -293,11 +301,13 @@ export function buildTopics(projectTools: ToolMetadata[] = []): DocTopic[] {
 
 function toolLine(tool: ToolMetadata): string {
   const status = supportStatusLabel(supportStatusForTool(tool));
+  const target = tool.target ?? "editor";
   const notes = [
     status,
     tool.readOnlyHint ? "read-only" : "write",
     tool.destructiveHint ? "⚠ destructive" : undefined,
-    tool.architectureSensitive ? `architecture-sensitive${tool.frozenDecision ? ` ${tool.frozenDecision}` : ""}` : undefined
+    tool.architectureSensitive ? `architecture-sensitive${tool.frozenDecision ? ` ${tool.frozenDecision}` : ""}` : undefined,
+    `target:${target}`
   ].filter(Boolean).join(", ");
   return `${tool.name}${tool.cliCommand ? ` (${tool.cliCommand})` : ""} — ${tool.title}; ${notes}. ${supportStatusDescription(supportStatusForTool(tool))}`;
 }

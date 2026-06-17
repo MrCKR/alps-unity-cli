@@ -1,4 +1,4 @@
-# Error Codes and nextActions
+# Error Codes and next_actions
 
 > **Structured error taxonomy for recovery and retry**
 
@@ -37,11 +37,13 @@ Every CLI command that fails returns a standardized error envelope (see [../sche
 | `retry_after_ms` | integer | Suggested minimum retry delay for transient errors; `0` = no specific recommendation |
 | `requestId` | string | Echoed from the original request for audit correlation |
 
+> **Note**: The JSON field names are `next_actions` and `retry_after_ms` (snake_case), matching `schemas/error-code.schema.json`. In prose we write "next actions" for readability, but AI agents must use the JSON field names `next_actions` and `retry_after_ms` when parsing error responses.
+
 ## Error Code Taxonomy
 
 ### Target and Instance Errors
 
-| Code | Meaning | Transient? | nextActions |
+| Code | Meaning | Transient? | next_actions |
 |------|---------|------------|-------------|
 | `E_TARGET_NOT_FOUND` | No Unity target matches the selector | No | Run `instances list`; use `target set` |
 | `E_TARGET_AMBIGUOUS` | Multiple ready targets match | No | Pass `--target <id|alias>`; run `target set` |
@@ -52,9 +54,18 @@ Every CLI command that fails returns a standardized error envelope (see [../sche
 | `E_UNITY_BUSY` | Unity is compiling or executing | Yes | Retry after delay; check `editor state` |
 | `E_UNITY_COMPILING` | Domain reload in progress | Yes | Wait for compilation to finish |
 
+### Runtime Tool Errors
+
+| Code | Meaning | Transient? | next_actions |
+|------|---------|------------|-------------|
+| `E_RUNTIME_NOT_READY` | Runtime tools require Play Mode, which is not active | Yes | Run `tools run editor.play` to enter Play Mode, then retry |
+| `E_RUNTIME_SESSION_STALE` | Runtime session is stale (domain reload during Play Mode) | Yes | Exit and re-enter Play Mode; check `editor.state` |
+| `E_RUNTIME_TIMEOUT` | Runtime tool execution timed out | No | Increase `--timeout-ms`; simplify the operation |
+| `E_RUNTIME_TOOL_TARGET_MISMATCH` | Runtime tool called with editor target context | No | Use `--runtime` flag or ensure the tool's `target` matches the execution context |
+
 ### Scene and Object Errors
 
-| Code | Meaning | Transient? | nextActions |
+| Code | Meaning | Transient? | next_actions |
 |------|---------|------------|-------------|
 | `E_SCENE_VIEW_NOT_AVAILABLE` | Scene view not available for screenshot | No | Use `camera screenshot` instead |
 | `E_TARGET_AMBIGUOUS` (domain) | Multiple objects match the selector | No | Use hierarchy path or instance ID |
@@ -63,7 +74,7 @@ Every CLI command that fails returns a standardized error envelope (see [../sche
 
 ### Asset Errors
 
-| Code | Meaning | Transient? | nextActions |
+| Code | Meaning | Transient? | next_actions |
 |------|---------|------------|-------------|
 | `E_ASSET_PATH_REQUIRED` | Asset path argument missing | No | Provide `Assets/...` path |
 | `E_ASSET_NOT_FOUND` | Asset does not exist at path | No | Use `asset search` to find correct path |
@@ -72,7 +83,7 @@ Every CLI command that fails returns a standardized error envelope (see [../sche
 
 ### Package Errors
 
-| Code | Meaning | Transient? | nextActions |
+| Code | Meaning | Transient? | next_actions |
 |------|---------|------------|-------------|
 | `E_SHADER_NOT_FOUND` | Shader asset not found | No | Use `asset search --type Shader` |
 | `E_VFX_PACKAGE_MISSING` | Visual Effect Graph not installed | No | Install `com.unity.visualeffectgraph` |
@@ -80,7 +91,7 @@ Every CLI command that fails returns a standardized error envelope (see [../sche
 
 ### Execution Errors
 
-| Code | Meaning | Transient? | nextActions |
+| Code | Meaning | Transient? | next_actions |
 |------|---------|------------|-------------|
 | `E_CODE_SOURCE_INVALID` | Invalid code source specification | No | Use `--file`, `--stdin`, or `--code` (exactly one) |
 | `E_CODE_COMPILE_FAILED` | C# compilation error in runtime code | No | Check `compile.diagnostics` in response |
@@ -90,7 +101,7 @@ Every CLI command that fails returns a standardized error envelope (see [../sche
 
 ### Security and Confirmation Errors
 
-| Code | Meaning | Transient? | nextActions |
+| Code | Meaning | Transient? | next_actions |
 |------|---------|------------|-------------|
 | `E_DESTRUCTIVE_CONFIRMATION_REQUIRED` | Destructive command needs `--yes` | No | Add `--yes` to confirm; use `--dry-run` for preview if supported |
 | `E_DRY_RUN_UNSUPPORTED` | `--dry-run` not supported for this command | No | Remove `--dry-run`; use `tools describe` to check `supportsDryRun` |
@@ -99,14 +110,14 @@ Every CLI command that fails returns a standardized error envelope (see [../sche
 
 ### IO and Path Errors
 
-| Code | Meaning | Transient? | nextActions |
+| Code | Meaning | Transient? | next_actions |
 |------|---------|------------|-------------|
 | `E_OUTPUT_EXISTS` | Output file already exists | No | Add `--overwrite` |
 | `E_OUTPUT_PATH_REQUIRED` | Output path argument missing | No | Provide `--output <path>` |
 | `E_IO_ERROR` | File system IO error | No | Check path validity and permissions |
 | `E_CAMERA_NOT_FOUND` | Camera target not found | No | Use `camera list` to find camera names |
 
-## How to Use nextActions as an AI Agent
+## How to Use next_actions as an AI Agent
 
 1. **Read the `code` first.** It tells you the category of the problem.
 2. **Check `transient`.** If `true`, retry after `retry_after_ms` (or a reasonable delay if `0`). If `false`, the error requires a different action.
@@ -117,7 +128,7 @@ Every CLI command that fails returns a standardized error envelope (see [../sche
 ## Cross-Reference
 
 - Target errors: [target-and-instance](./target-and-instance.md)
-- Availability differences: [availability-differences](./availability-differences.md)
+- Runtime tool availability: [availability-differences](./availability-differences.md)
 - Risk and side effects: [risk-and-side-effects](./risk-and-side-effects.md)
 - Error schema: [../schemas/error-code.schema.json](../schemas/error-code.schema.json)
 - Response envelope schema: [../schemas/response-envelope.schema.json](../schemas/response-envelope.schema.json)
