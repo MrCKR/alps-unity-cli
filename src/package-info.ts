@@ -54,7 +54,7 @@ export async function handlePackageInfoCommand(
     discovery: {
       builtinTools: "unity_cli tools list",
       unifiedTools: "unity_cli tools list --include-custom",
-      customTools: "unity_cli custom-tool list"
+      projectTools: "unity_cli tools list --include-custom"
     }
   };
 

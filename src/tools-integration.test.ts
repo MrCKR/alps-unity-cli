@@ -1,5 +1,5 @@
 /**
- * Integration tests: execute() → tools/capabilities/docs-topic commands through the full CLI pipeline.
+ * Integration tests: execute() → tools/capabilities commands through the full CLI pipeline.
  */
 
 import assert from "node:assert/strict";
@@ -123,25 +123,7 @@ test("integration: package without subcommand returns CLI and Unity package info
   assert.equal(data.unity.name, "com.unity_cli");
 });
 
-test("integration: docs-topic scene via execute()", async () => {
-  const runtime = await makeRuntime();
-  const result = await execute(["docs-topic", "scene"], runtime);
-  assert.equal(result.ok, true);
 
-  const data = result.data as Record<string, unknown>;
-  assert.equal(data.topic, "scene");
-  assert.equal(data.title, "Scene Commands");
-});
-
-test("integration: docs-topic list via execute()", async () => {
-  const runtime = await makeRuntime();
-  const result = await execute(["docs-topic"], runtime);
-  assert.equal(result.ok, true);
-
-  const data = result.data as Record<string, unknown>;
-  assert.ok(typeof data.count === "number");
-  assert.ok(data.count > 0);
-});
 
 test("integration: tools describe nonexistent returns E_TOOL_NOT_FOUND_FOR_TARGET via execute()", async () => {
   const runtime = await makeRuntime();

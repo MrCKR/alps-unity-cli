@@ -3,36 +3,36 @@ import { executeBridgeCommand, type BridgeRuntime } from "./bridge/index.js";
 import type { ToolMetadata } from "./tools/metadata/index.js";
 import type { CliResult } from "./types.js";
 
-export interface CustomToolRuntime extends Partial<BridgeRuntime> {
-  customTools?: ToolMetadata[];
+export interface ProjectToolRuntime extends Partial<BridgeRuntime> {
+  projectTools?: ToolMetadata[];
 }
 
-export type CustomToolDiscovery = { ok: true; tools: ToolMetadata[]; mode: "runtime" | "bridge" | "skipped" } | (CliResult & { ok: false });
+export type ProjectToolDiscovery = { ok: true; tools: ToolMetadata[]; mode: "runtime" | "bridge" | "skipped" } | (CliResult & { ok: false });
 
-export function shouldDiscoverCustomTools(flags: Record<string, string | boolean>, runtime: CustomToolRuntime): boolean {
+export function shouldDiscoverProjectTools(flags: Record<string, string | boolean>, runtime: ProjectToolRuntime): boolean {
   return getBoolean(flags, "include-custom") ||
-    runtime.customTools !== undefined ||
+    runtime.projectTools !== undefined ||
     runtime.bridgeExecute !== undefined ||
     typeof getString(flags, "bridge-endpoint") === "string" ||
     typeof runtime.bridgeEndpoint === "string" ||
     typeof process.env.UNITY_CLI_BRIDGE_ENDPOINT === "string";
 }
 
-export async function discoverCustomTools(
+export async function discoverProjectTools(
   flags: Record<string, string | boolean>,
-  runtime: CustomToolRuntime,
+  runtime: ProjectToolRuntime,
   requestId: string,
   options: { requireBridge?: boolean } = {}
-): Promise<CustomToolDiscovery> {
-  if (runtime.customTools) {
-    return { ok: true, tools: runtime.customTools.map(ensureCustomToolDefaults), mode: "runtime" };
+): Promise<ProjectToolDiscovery> {
+  if (runtime.projectTools) {
+    return { ok: true, tools: runtime.projectTools.map(ensureProjectToolDefaults), mode: "runtime" };
   }
 
-  if (!options.requireBridge && !shouldDiscoverCustomTools(flags, runtime)) {
+  if (!options.requireBridge && !shouldDiscoverProjectTools(flags, runtime)) {
     return { ok: true, tools: [], mode: "skipped" };
   }
 
-  const result = await executeBridgeCommand(requestId, "custom-tool.list", flags, undefined, runtime);
+  const result = await executeBridgeCommand(requestId, "project-tool.list", flags, undefined, runtime);
   if (result.ok === false) {
     return result as CliResult & { ok: false };
   }
@@ -41,10 +41,10 @@ export async function discoverCustomTools(
   if (!Array.isArray(rawTools)) {
     return { ok: true, tools: [], mode: "bridge" };
   }
-  return { ok: true, tools: rawTools.map(customDescriptorToToolMetadata).filter(isToolMetadata), mode: "bridge" };
+  return { ok: true, tools: rawTools.map(projectDescriptorToToolMetadata).filter(isToolMetadata), mode: "bridge" };
 }
 
-export function customDescriptorToToolMetadata(value: unknown): ToolMetadata | undefined {
+export function projectDescriptorToToolMetadata(value: unknown): ToolMetadata | undefined {
   if (!value || typeof value !== "object") {
     return undefined;
   }
@@ -55,7 +55,7 @@ export function customDescriptorToToolMetadata(value: unknown): ToolMetadata | u
   }
   const title = stringProp(descriptor, "title") ?? stringProp(descriptor, "displayName") ?? name;
   const group = stringProp(descriptor, "group") ?? groupFromName(name);
-  return ensureCustomToolDefaults({
+  return ensureProjectToolDefaults({
     name,
     title,
     description: stringProp(descriptor, "description") ?? title,
@@ -69,20 +69,20 @@ export function customDescriptorToToolMetadata(value: unknown): ToolMetadata | u
     architectureSensitive: booleanProp(descriptor, "architectureSensitive"),
     frozenDecision: stringProp(descriptor, "frozenDecision"),
     coverageScope: stringArrayProp(descriptor, "coverageScope"),
-    docsTopic: stringProp(descriptor, "docsTopic") ?? "custom-tool",
+    docsTopic: stringProp(descriptor, "docsTopic") ?? "project-tool",
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: stringProp(descriptor, "cliCommand") ?? `custom-tool run ${name}`
+    cliCommand: stringProp(descriptor, "cliCommand") ?? `tools run ${name}`
   });
 }
 
-function ensureCustomToolDefaults(tool: ToolMetadata): ToolMetadata {
+function ensureProjectToolDefaults(tool: ToolMetadata): ToolMetadata {
   return {
     ...tool,
     handler: tool.handler ?? "bridge",
     supportStatus: tool.supportStatus ?? "live-bridge",
-    cliCommand: tool.cliCommand ?? `custom-tool run ${tool.name}`,
-    docsTopic: tool.docsTopic ?? "custom-tool"
+    cliCommand: tool.cliCommand ?? `tools run ${tool.name}`,
+    docsTopic: tool.docsTopic ?? "project-tool"
   };
 }
 

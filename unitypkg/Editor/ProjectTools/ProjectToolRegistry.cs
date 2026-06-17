@@ -29,10 +29,10 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
-        private const string CustomToolFingerprintDefaultMode = "block";
-        private static readonly Dictionary<string, UnityCliCustomToolDefinition> CustomTools = new Dictionary<string, UnityCliCustomToolDefinition>(StringComparer.Ordinal);
+        private const string ProjectToolFingerprintDefaultMode = "block";
+        private static readonly Dictionary<string, UnityCliProjectToolDefinition> ProjectTools = new Dictionary<string, UnityCliProjectToolDefinition>(StringComparer.Ordinal);
 
-        public static void RegisterCustomTool(UnityCliCustomToolDefinition definition)
+        public static void RegisterProjectTool(UnityCliProjectToolDefinition definition)
         {
             if (definition == null || string.IsNullOrEmpty(definition.Name) || definition.Execute == null)
             {
@@ -48,7 +48,7 @@ namespace UnityCli
             }
             definition.DisplayName = string.IsNullOrEmpty(definition.DisplayName) ? definition.Name : definition.DisplayName;
             definition.Title = string.IsNullOrEmpty(definition.Title) ? definition.DisplayName : definition.Title;
-            definition.Group = string.IsNullOrEmpty(definition.Group) ? CustomToolGroupFromName(definition.Name) : definition.Group;
+            definition.Group = string.IsNullOrEmpty(definition.Group) ? ProjectToolGroupFromName(definition.Name) : definition.Group;
             definition.Version = string.IsNullOrEmpty(definition.Version) ? "1.0.0" : definition.Version;
             definition.InputSchema = string.IsNullOrEmpty(definition.InputSchema) ? "{}" : definition.InputSchema;
             definition.OutputSchema = string.IsNullOrEmpty(definition.OutputSchema) ? "{}" : definition.OutputSchema;
@@ -58,17 +58,17 @@ namespace UnityCli
             definition.MaxTimeoutMs = definition.MaxTimeoutMs <= 0 ? 600000 : definition.MaxTimeoutMs;
             definition.RegisteredBy = string.IsNullOrEmpty(definition.RegisteredBy) ? "unity-editor-package" : definition.RegisteredBy;
             definition.DescriptorSource = string.IsNullOrEmpty(definition.DescriptorSource) ? "runtime-registration" : definition.DescriptorSource;
-            RefreshCustomToolFingerprint(definition, null);
-            CustomTools[definition.Name] = definition;
+            RefreshProjectToolFingerprint(definition, null);
+            ProjectTools[definition.Name] = definition;
         }
 
-        private static void DiscoverCustomTools()
+        private static void DiscoverProjectTools()
         {
-            if (customToolsDiscovered)
+            if (projectToolsDiscovered)
             {
                 return;
             }
-            customToolsDiscovered = true;
+            projectToolsDiscovered = true;
 
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
@@ -92,7 +92,7 @@ namespace UnityCli
                     var classAttribute = Attribute.GetCustomAttribute(type, typeof(UnityCliToolAttribute)) as UnityCliToolAttribute;
                     if (classAttribute != null)
                     {
-                        TryRegisterAttributedCustomTool(assembly, type, null, classAttribute);
+                        TryRegisterAttributedProjectTool(assembly, type, null, classAttribute);
                     }
 
                     foreach (var method in type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
@@ -100,19 +100,16 @@ namespace UnityCli
                         var toolAttribute = Attribute.GetCustomAttribute(method, typeof(UnityCliToolAttribute)) as UnityCliToolAttribute;
                         if (toolAttribute != null)
                         {
-                            TryRegisterAttributedCustomTool(assembly, type, method, toolAttribute);
+                            TryRegisterAttributedProjectTool(assembly, type, method, toolAttribute);
                             continue;
                         }
 
-                        var legacyAttribute = Attribute.GetCustomAttribute(method, typeof(UnityCliCustomToolAttribute)) as UnityCliCustomToolAttribute;
-                        if (legacyAttribute == null) continue;
-                        TryRegisterAttributedCustomTool(assembly, type, method, legacyAttribute);
                     }
                 }
             }
         }
 
-        private static void TryRegisterAttributedCustomTool(Assembly assembly, Type type, MethodInfo method, UnityCliToolAttribute attribute)
+        private static void TryRegisterAttributedProjectTool(Assembly assembly, Type type, MethodInfo method, UnityCliToolAttribute attribute)
         {
             var executeMethod = method ?? ResolveClassAttributedToolMethod(type, attribute.Name);
             if (executeMethod == null)
@@ -122,13 +119,13 @@ namespace UnityCli
             }
 
             var parameters = executeMethod.GetParameters();
-            if (executeMethod.ReturnType != typeof(string) || parameters.Length > 1 || (parameters.Length == 1 && parameters[0].ParameterType != typeof(UnityCliCustomToolContext)))
+            if (executeMethod.ReturnType != typeof(string) || parameters.Length > 1 || (parameters.Length == 1 && parameters[0].ParameterType != typeof(UnityCliProjectToolContext)))
             {
                 WriteLog("custom_tool_registration_skipped name=" + attribute.Name + " reason=signature");
                 return;
             }
 
-            RegisterCustomTool(new UnityCliCustomToolDefinition
+            RegisterProjectTool(new UnityCliProjectToolDefinition
             {
                 Name = attribute.Name,
                 DisplayName = string.IsNullOrEmpty(attribute.DisplayName) ? attribute.Title : attribute.DisplayName,
@@ -155,7 +152,7 @@ namespace UnityCli
                 Method = type.FullName + "." + executeMethod.Name,
                 Fingerprint = attribute.Fingerprint,
                 ExpectedFingerprint = attribute.Fingerprint,
-                Execute = delegate(UnityCliCustomToolContext context)
+                Execute = delegate(UnityCliProjectToolContext context)
                 {
                     var result = parameters.Length == 0 ? executeMethod.Invoke(null, null) : executeMethod.Invoke(null, new object[] { context });
                     return result == null ? "null" : (string)result;
@@ -163,42 +160,7 @@ namespace UnityCli
             });
         }
 
-        private static void TryRegisterAttributedCustomTool(Assembly assembly, Type type, MethodInfo method, UnityCliCustomToolAttribute attribute)
-        {
-            var parameters = method.GetParameters();
-            if (method.ReturnType != typeof(string) || parameters.Length > 1 || (parameters.Length == 1 && parameters[0].ParameterType != typeof(UnityCliCustomToolContext)))
-            {
-                WriteLog("custom_tool_registration_skipped name=" + attribute.Name + " reason=signature");
-                return;
-            }
 
-            RegisterCustomTool(new UnityCliCustomToolDefinition
-            {
-                Name = attribute.Name,
-                DisplayName = attribute.DisplayName,
-                Title = attribute.DisplayName,
-                Description = attribute.Description,
-                Group = CustomToolGroupFromName(attribute.Name),
-                Version = attribute.Version,
-                InputSchema = attribute.InputSchema,
-                OutputSchema = attribute.OutputSchema,
-                CapabilityType = attribute.CapabilityType,
-                DefaultTimeoutMs = attribute.DefaultTimeoutMs,
-                MaxTimeoutMs = attribute.MaxTimeoutMs,
-                SupportsJob = attribute.SupportsJob,
-                ArtifactKinds = SplitCsv(attribute.ArtifactKinds).ToArray(),
-                RequiredInput = SplitCsv(attribute.RequiredInput).ToArray(),
-                RegisteredBy = "unity-editor-package",
-                DescriptorSource = "UnityCliCustomToolAttribute",
-                Assembly = assembly.GetName().Name,
-                Method = type.FullName + "." + method.Name,
-                Execute = delegate(UnityCliCustomToolContext context)
-                {
-                    var result = parameters.Length == 0 ? method.Invoke(null, null) : method.Invoke(null, new object[] { context });
-                    return result == null ? "null" : (string)result;
-                }
-            });
-        }
 
         private static MethodInfo ResolveClassAttributedToolMethod(Type type, string toolName)
         {
@@ -215,20 +177,20 @@ namespace UnityCli
             return null;
         }
 
-        private static string CustomToolGroupFromName(string name)
+        private static string ProjectToolGroupFromName(string name)
         {
             if (string.IsNullOrEmpty(name)) return "custom";
             var dot = name.IndexOf('.');
             return dot > 0 ? name.Substring(0, dot) : "custom";
         }
 
-        private static string CustomToolList(BridgeRequest request)
+        private static string ProjectToolList(BridgeRequest request)
         {
-            DiscoverCustomTools();
+            DiscoverProjectTools();
             var tools = new List<string>();
-            foreach (var pair in CustomTools)
+            foreach (var pair in ProjectTools)
             {
-                tools.Add(CustomToolDefinitionJson(pair.Value));
+                tools.Add(ProjectToolDefinitionJson(pair.Value));
             }
             tools.Sort(StringComparer.Ordinal);
             var data = new UnityCliJsonWriter().BeginObject()
@@ -239,21 +201,21 @@ namespace UnityCli
             return SuccessJson(data);
         }
 
-        private static string CustomToolRun(BridgeRequest request)
+        private static string ProjectToolRun(BridgeRequest request)
         {
-            DiscoverCustomTools();
+            DiscoverProjectTools();
             var name = request.StringArg("name");
-            if (string.IsNullOrEmpty(name) || !CustomTools.ContainsKey(name))
+            if (string.IsNullOrEmpty(name) || !ProjectTools.ContainsKey(name))
             {
-                return ErrorJson("E_TOOL_NOT_FOUND", "Tool not found: " + name, "Run unity_cli custom-tool list to inspect registered tools.");
+                return ErrorJson("E_TOOL_NOT_FOUND", "Tool not found: " + name, "Run unity_cli tools list --include-custom to inspect registered tools.");
             }
 
-            var definition = CustomTools[name];
-            var fingerprintCheck = RefreshCustomToolFingerprint(definition, request.StringArg("fingerprintMode"));
+            var definition = ProjectTools[name];
+            var fingerprintCheck = RefreshProjectToolFingerprint(definition, request.StringArg("fingerprintMode"));
             if (fingerprintCheck.Blocked)
             {
                 WriteLog("custom_tool_fingerprint_blocked requestId=" + request.RequestId + " name=" + name + " expected=" + fingerprintCheck.Expected + " actual=" + fingerprintCheck.Actual);
-                return ErrorJsonWithDetails("E_TOOL_FINGERPRINT_MISMATCH", fingerprintCheck.Message, CustomToolFingerprintDetailsJson(definition), "Review the registered custom tool descriptor/handler code, then update the expected fingerprint or rerun with --fingerprint-mode warn if policy allows.");
+                return ErrorJsonWithDetails("E_TOOL_FINGERPRINT_MISMATCH", fingerprintCheck.Message, ProjectToolFingerprintDetailsJson(definition), "Review the registered custom tool descriptor/handler code, then update the expected fingerprint or rerun with --fingerprint-mode warn if policy allows.");
             }
             if (fingerprintCheck.Warn)
             {
@@ -268,14 +230,14 @@ namespace UnityCli
 
             if (request.BoolArgAtPath(new[] { "args", "execution", "preferJob" }, false))
             {
-                return ErrorJson("E_JOB_UNSUPPORTED", "--job / Local Agent custom-tool execution is not implemented by the bundled Live Bridge yet.", "Run without --job for synchronous Live Bridge execution, or wait for Local Agent job support before relying on asynchronous custom-tool semantics.");
+                return ErrorJson("E_JOB_UNSUPPORTED", "--job / Local Agent project-tool execution is not implemented by the bundled Live Bridge yet.", "Run without --job for synchronous Live Bridge execution, or wait for Local Agent job support before relying on asynchronous project-tool semantics.");
             }
 
             var inputJson = request.RawJsonArg("input") ?? "{}";
-            var schemaError = ValidateCustomToolInput(definition, inputJson);
+            var schemaError = ValidateProjectToolInput(definition, inputJson);
             if (!string.IsNullOrEmpty(schemaError))
             {
-                return ErrorJson("E_TOOL_SCHEMA_INVALID", schemaError, "Run unity_cli custom-tool list to inspect the tool inputSchema.");
+                return ErrorJson("E_TOOL_SCHEMA_INVALID", schemaError, "Run unity_cli tools list --include-custom to inspect the tool inputSchema.");
             }
 
             var startedAt = DateTime.UtcNow;
@@ -293,7 +255,7 @@ namespace UnityCli
             try
             {
                 WriteLog("custom_tool_run requestId=" + request.RequestId + " name=" + name + " timeoutMs=" + timeoutMs.ToString(CultureInfo.InvariantCulture));
-                resultJson = definition.Execute(new UnityCliCustomToolContext
+                resultJson = definition.Execute(new UnityCliProjectToolContext
                 {
                     RequestId = request.RequestId,
                     ProjectPath = request.StringArg("projectPath") ?? ProjectRoot(),
@@ -314,7 +276,7 @@ namespace UnityCli
 
             var endedAt = DateTime.UtcNow;
             var durationMs = (long)(endedAt - startedAt).TotalMilliseconds;
-            var manifest = CustomToolManifestJson(request.RequestId, definition, artifactDir, startedAt, endedAt);
+            var manifest = ProjectToolManifestJson(request.RequestId, definition, artifactDir, startedAt, endedAt);
             try
             {
                 File.WriteAllText(Path.Combine(artifactDir, "manifest.json"), manifest);
@@ -330,7 +292,7 @@ namespace UnityCli
             }
 
             var data = new UnityCliJsonWriter().BeginObject()
-                .Prop("command", "custom-tool.run")
+                .Prop("command", "project-tool.run")
                 .PropObject("tool", tool =>
                 {
                     tool.Prop("name", definition.Name)
@@ -351,17 +313,17 @@ namespace UnityCli
                         .Prop("id", "manifest")
                         .Prop("kind", "json")
                         .Prop("path", Path.Combine(artifactDir, "manifest.json"))
-                        .Prop("description", "custom-tool artifact manifest")
+                        .Prop("description", "project-tool artifact manifest")
                         .EndObject();
                 })
-                .PropRaw("audit", CustomToolAuditJson(request, definition, artifactDir, inputJson, timeoutMs, startedAt, endedAt, "completed"))
+                .PropRaw("audit", ProjectToolAuditJson(request, definition, artifactDir, inputJson, timeoutMs, startedAt, endedAt, "completed"))
                 .PropObject("logs", logs => logs.Prop("bridge", LogPath()))
                 .EndObject()
                 .ToString();
             return SuccessJson(data);
         }
 
-        private static string CustomToolDefinitionJson(UnityCliCustomToolDefinition definition)
+        private static string ProjectToolDefinitionJson(UnityCliProjectToolDefinition definition)
         {
             return new UnityCliJsonWriter().BeginObject()
                 .Prop("name", definition.Name)
@@ -384,22 +346,22 @@ namespace UnityCli
                 .PropRaw("coverageScope", StringArrayJson(definition.CoverageScope))
                 .Prop("handler", "bridge")
                 .Prop("supportStatus", "live-bridge")
-                .Prop("cliCommand", "custom-tool run " + definition.Name)
-                .Prop("docsTopic", "custom-tool")
+                .Prop("cliCommand", "tools run " + definition.Name)
+                .Prop("docsTopic", "project-tool")
                 .Prop("descriptorSource", definition.DescriptorSource)
                 .Prop("registeredBy", definition.RegisteredBy)
                 .Prop("assembly", definition.Assembly)
                 .Prop("method", definition.Method)
-                .PropRaw("fingerprint", CustomToolFingerprintJson(definition))
+                .PropRaw("fingerprint", ProjectToolFingerprintJson(definition))
                 .EndObject()
                 .ToString();
         }
 
-        private static string CustomToolManifestJson(string requestId, UnityCliCustomToolDefinition definition, string artifactDir, DateTime startedAt, DateTime endedAt)
+        private static string ProjectToolManifestJson(string requestId, UnityCliProjectToolDefinition definition, string artifactDir, DateTime startedAt, DateTime endedAt)
         {
             return new UnityCliJsonWriter().BeginObject()
                 .Prop("requestId", requestId)
-                .Prop("command", "custom-tool.run")
+                .Prop("command", "project-tool.run")
                 .PropObject("tool", tool =>
                 {
                     tool.Prop("name", definition.Name)
@@ -421,11 +383,11 @@ namespace UnityCli
                 .ToString();
         }
 
-        private static string CustomToolAuditJson(BridgeRequest request, UnityCliCustomToolDefinition definition, string artifactDir, string inputJson, int timeoutMs, DateTime startedAt, DateTime endedAt, string exitState)
+        private static string ProjectToolAuditJson(BridgeRequest request, UnityCliProjectToolDefinition definition, string artifactDir, string inputJson, int timeoutMs, DateTime startedAt, DateTime endedAt, string exitState)
         {
             return new UnityCliJsonWriter().BeginObject()
                 .Prop("requestId", request.RequestId)
-                .Prop("command", "custom-tool.run")
+                .Prop("command", "project-tool.run")
                 .Prop("projectPath", request.StringArg("projectPath") ?? ProjectRoot())
                 .Prop("instanceId", request.StringArg("instanceId"))
                 .Prop("unityVersion", Application.unityVersion)
@@ -468,13 +430,13 @@ namespace UnityCli
                 {
                     tool.Prop("name", definition.Name)
                         .Prop("capabilityType", definition.CapabilityType)
-                        .PropRaw("fingerprint", CustomToolFingerprintJson(definition));
+                        .PropRaw("fingerprint", ProjectToolFingerprintJson(definition));
                 })
                 .EndObject()
                 .ToString();
         }
 
-        private sealed class CustomToolFingerprintCheck
+        private sealed class ProjectToolFingerprintCheck
         {
             public bool Blocked;
             public bool Warn;
@@ -483,28 +445,28 @@ namespace UnityCli
             public string Message;
         }
 
-        private static CustomToolFingerprintCheck RefreshCustomToolFingerprint(UnityCliCustomToolDefinition definition, string requestedMode)
+        private static ProjectToolFingerprintCheck RefreshProjectToolFingerprint(UnityCliProjectToolDefinition definition, string requestedMode)
         {
-            var descriptor = CustomToolDescriptorFingerprintMaterial(definition);
+            var descriptor = ProjectToolDescriptorFingerprintMaterial(definition);
             definition.DescriptorSha256 = Sha256Hex(descriptor);
-            definition.HandlerSha256 = Sha256Hex(CustomToolHandlerFingerprintMaterial(definition));
-            definition.Fingerprint = Sha256Hex("unity-cli-custom-tool-fingerprint-v1\nhandler=" + definition.HandlerSha256 + "\ndescriptor=" + definition.DescriptorSha256);
+            definition.HandlerSha256 = Sha256Hex(ProjectToolHandlerFingerprintMaterial(definition));
+            definition.Fingerprint = Sha256Hex("unity-cli-project-tool-fingerprint-v1\nhandler=" + definition.HandlerSha256 + "\ndescriptor=" + definition.DescriptorSha256);
             if (string.IsNullOrEmpty(definition.ExpectedFingerprint))
             {
-                var persisted = LoadCustomToolExpectedFingerprint(definition.Name);
+                var persisted = LoadProjectToolExpectedFingerprint(definition.Name);
                 definition.ExpectedFingerprint = string.IsNullOrEmpty(persisted) ? definition.Fingerprint : persisted;
                 if (string.IsNullOrEmpty(persisted))
                 {
-                    SaveCustomToolExpectedFingerprint(definition.Name, definition.Fingerprint);
+                    SaveProjectToolExpectedFingerprint(definition.Name, definition.Fingerprint);
                 }
             }
-            definition.FingerprintMode = NormalizeCustomToolFingerprintMode(requestedMode);
+            definition.FingerprintMode = NormalizeProjectToolFingerprintMode(requestedMode);
             var matches = string.Equals(definition.ExpectedFingerprint, definition.Fingerprint, StringComparison.OrdinalIgnoreCase);
             definition.FingerprintStatus = matches ? "match" : (definition.FingerprintMode == "warn" ? "warn" : "blocked");
             definition.FingerprintMessage = matches
                 ? "Custom tool fingerprint matches handler code + descriptor."
                 : "Custom tool fingerprint mismatch for " + definition.Name + ": expected " + definition.ExpectedFingerprint + " but computed " + definition.Fingerprint + ".";
-            return new CustomToolFingerprintCheck
+            return new ProjectToolFingerprintCheck
             {
                 Blocked = !matches && definition.FingerprintMode == "block",
                 Warn = !matches && definition.FingerprintMode == "warn",
@@ -515,11 +477,11 @@ namespace UnityCli
         }
 
 
-        private static string LoadCustomToolExpectedFingerprint(string name)
+        private static string LoadProjectToolExpectedFingerprint(string name)
         {
             try
             {
-                var path = CustomToolExpectedFingerprintPath(name);
+                var path = ProjectToolExpectedFingerprintPath(name);
                 return File.Exists(path) ? File.ReadAllText(path).Trim() : null;
             }
             catch (Exception exception)
@@ -529,11 +491,11 @@ namespace UnityCli
             }
         }
 
-        private static void SaveCustomToolExpectedFingerprint(string name, string fingerprint)
+        private static void SaveProjectToolExpectedFingerprint(string name, string fingerprint)
         {
             try
             {
-                var path = CustomToolExpectedFingerprintPath(name);
+                var path = ProjectToolExpectedFingerprintPath(name);
                 Directory.CreateDirectory(Path.GetDirectoryName(path));
                 File.WriteAllText(path, fingerprint ?? string.Empty);
             }
@@ -543,27 +505,27 @@ namespace UnityCli
             }
         }
 
-        private static string CustomToolExpectedFingerprintPath(string name)
+        private static string ProjectToolExpectedFingerprintPath(string name)
         {
-            return Path.Combine(ProjectRoot(), "Library", "UnityCliCustomToolFingerprints", SafeCustomToolFingerprintFileName(name) + ".sha256");
+            return Path.Combine(ProjectRoot(), "Library", "UnityCliProjectToolFingerprints", SafeProjectToolFingerprintFileName(name) + ".sha256");
         }
 
-        private static string SafeCustomToolFingerprintFileName(string name)
+        private static string SafeProjectToolFingerprintFileName(string name)
         {
-            return Regex.Replace(name ?? "custom-tool", "[^A-Za-z0-9_.-]", "_");
+            return Regex.Replace(name ?? "project-tool", "[^A-Za-z0-9_.-]", "_");
         }
 
-        private static string NormalizeCustomToolFingerprintMode(string requestedMode)
+        private static string NormalizeProjectToolFingerprintMode(string requestedMode)
         {
             if (string.Equals(requestedMode, "warn", StringComparison.OrdinalIgnoreCase)) return "warn";
             if (string.Equals(requestedMode, "block", StringComparison.OrdinalIgnoreCase)) return "block";
-            var environment = Environment.GetEnvironmentVariable("UNITY_CLI_CUSTOM_TOOL_FINGERPRINT_MODE");
+            var environment = Environment.GetEnvironmentVariable("UNITY_CLI_PROJECT_TOOL_FINGERPRINT_MODE");
             if (string.Equals(environment, "warn", StringComparison.OrdinalIgnoreCase)) return "warn";
             if (string.Equals(environment, "block", StringComparison.OrdinalIgnoreCase)) return "block";
-            return CustomToolFingerprintDefaultMode;
+            return ProjectToolFingerprintDefaultMode;
         }
 
-        private static string CustomToolDescriptorFingerprintMaterial(UnityCliCustomToolDefinition definition)
+        private static string ProjectToolDescriptorFingerprintMaterial(UnityCliProjectToolDefinition definition)
         {
             return "name=" + (definition.Name ?? string.Empty)
                 + "\ntitle=" + (definition.Title ?? string.Empty)
@@ -586,14 +548,14 @@ namespace UnityCli
                 + "\ndescriptorSource=" + (definition.DescriptorSource ?? string.Empty);
         }
 
-        private static string CustomToolHandlerFingerprintMaterial(UnityCliCustomToolDefinition definition)
+        private static string ProjectToolHandlerFingerprintMaterial(UnityCliProjectToolDefinition definition)
         {
             return "assembly=" + (definition.Assembly ?? string.Empty)
                 + "\nmethod=" + (definition.Method ?? string.Empty)
-                + "\nhandler=" + CustomToolHandlerSource(definition);
+                + "\nhandler=" + ProjectToolHandlerSource(definition);
         }
 
-        private static string CustomToolHandlerSource(UnityCliCustomToolDefinition definition)
+        private static string ProjectToolHandlerSource(UnityCliProjectToolDefinition definition)
         {
             try
             {
@@ -645,7 +607,7 @@ namespace UnityCli
             }
         }
 
-        private static string CustomToolFingerprintJson(UnityCliCustomToolDefinition definition)
+        private static string ProjectToolFingerprintJson(UnityCliProjectToolDefinition definition)
         {
             return new UnityCliJsonWriter().BeginObject()
                 .Prop("algorithm", "sha256-handler-code-plus-descriptor-v1")
@@ -661,20 +623,20 @@ namespace UnityCli
         }
 
 
-        private static string CustomToolFingerprintSummaryJson()
+        private static string ProjectToolFingerprintSummaryJson()
         {
             var items = new List<string>();
             var blocked = 0;
             var warn = 0;
-            foreach (var pair in CustomTools)
+            foreach (var pair in ProjectTools)
             {
                 var definition = pair.Value;
-                RefreshCustomToolFingerprint(definition, null);
+                RefreshProjectToolFingerprint(definition, null);
                 if (definition.FingerprintStatus == "blocked") blocked++;
                 if (definition.FingerprintStatus == "warn") warn++;
                 items.Add(new UnityCliJsonWriter().BeginObject()
                     .Prop("name", definition.Name)
-                    .PropRaw("fingerprint", CustomToolFingerprintJson(definition))
+                    .PropRaw("fingerprint", ProjectToolFingerprintJson(definition))
                     .Prop("architectureSensitive", true)
                     .EndObject()
                     .ToString());
@@ -682,8 +644,8 @@ namespace UnityCli
             items.Sort(StringComparer.Ordinal);
             return new UnityCliJsonWriter().BeginObject()
                 .Prop("algorithm", "sha256-handler-code-plus-descriptor-v1")
-                .Prop("mode", NormalizeCustomToolFingerprintMode(null))
-                .Prop("toolCount", CustomTools.Count)
+                .Prop("mode", NormalizeProjectToolFingerprintMode(null))
+                .Prop("toolCount", ProjectTools.Count)
                 .Prop("blockedCount", blocked)
                 .Prop("warnCount", warn)
                 .PropRaw("tools", "[" + string.Join(",", items.ToArray()) + "]")
@@ -691,11 +653,11 @@ namespace UnityCli
                 .ToString();
         }
 
-        private static string CustomToolFingerprintDetailsJson(UnityCliCustomToolDefinition definition)
+        private static string ProjectToolFingerprintDetailsJson(UnityCliProjectToolDefinition definition)
         {
             return new UnityCliJsonWriter().BeginObject()
                 .Prop("tool", definition.Name)
-                .PropRaw("fingerprint", CustomToolFingerprintJson(definition))
+                .PropRaw("fingerprint", ProjectToolFingerprintJson(definition))
                 .Prop("architectureSensitive", true)
                 .EndObject()
                 .ToString();

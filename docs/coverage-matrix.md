@@ -186,8 +186,8 @@
 
 | unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
 |---|---|---|---|---|---|
-| custom-tool.list | `custom-tool list [--project] [--instance]` | bridge (UnityCliBridge) | ✅ `custom-tool.list` in CUSTOM_TOOL_TOOLS | bridge-commands.test.ts: custom-tool list and run; custom-tools.test.ts: descriptor forwarding; tools.test.ts: tools list --include-custom | ✅ |
-| custom-tool.run | `custom-tool run <name> [--input/--input-file/--stdin] [--timeout-ms] [--fingerprint-mode] [--artifact-dir] [--job]` | bridge (UnityCliBridge) | ✅ `custom-tool.run` in CUSTOM_TOOL_TOOLS | bridge-commands.test.ts: custom-tool list and run; custom-tools.test.ts: C# attribute source validation; security.test.ts: fingerprint proof | ✅ |
+| project-tool.list | `project-tool list [--project] [--instance]` | bridge (UnityCliBridge) | ✅ `project-tool.list` in CUSTOM_TOOL_TOOLS | bridge-commands.test.ts: project-tool list and run; project-tools.test.ts: descriptor forwarding; tools.test.ts: tools list --include-custom | ✅ |
+| project-tool.run | `project-tool run <name> [--input/--input-file/--stdin] [--timeout-ms] [--fingerprint-mode] [--artifact-dir] [--job]` | bridge (UnityCliBridge) | ✅ `project-tool.run` in CUSTOM_TOOL_TOOLS | bridge-commands.test.ts: project-tool list and run; project-tools.test.ts: C# attribute source validation; security.test.ts: fingerprint proof | ✅ |
 
 ## Diagnose 域（S4.3 P2-4 新增）
 
@@ -229,7 +229,7 @@
 |---|---|---|---|
 | destructiveHint + `--yes` 确认 | 12 个 destructive 命令均需 `--yes` 或 `--dry-run` 放行（含 cli.batch.run/test.cancel/build.cancel，P2-6 补齐） | security.test.ts: destructive commands require --yes; bridge-commands.test.ts: destructive bridge commands; batch.test.ts: batch --yes; cli.test.ts: build cancel --yes | ✅ |
 | dry-run 预览 | `asset.delete`/`go.delete`/`scene.save`/`code.exec` 支持 supportsDryRun | security.test.ts: destructive dry-run; runtime-code.test.ts: code exec dry-run | ✅ |
-| fingerprint 拦截 | custom tool SHA-256 fingerprint 校验 + destructive security proof | security.test.ts: fingerprint proof; custom-tools.test.ts: C# attribute fingerprint | ✅ |
+| fingerprint 拦截 | project tool SHA-256 fingerprint 校验 + destructive security proof | security.test.ts: fingerprint proof; project-tools.test.ts: C# attribute fingerprint | ✅ |
 | group 可见性 | tools list --group 按功能域过滤 | tools.test.ts: filterToolsByGroup; capabilities.test.ts: static data includes destructive tools list | ✅ |
 | readOnlyHint | readOnly 命令标记和传播 | contracts:validate: readOnly 标记一致性 | ✅ |
 | 黑名单/网络策略 | v1.0 已知限制，未独立实现 | — | 🔶 v1.0 限制 |
@@ -239,9 +239,9 @@
 
 | 功能 | 实现 | 测试证据 | 状态 |
 |---|---|---|---|
-| custom tool fingerprint 校验 | SHA-256(handler code + descriptor) 自动计算；不一致时 `E_TOOL_FINGERPRINT_MISMATCH` 拦截执行 | custom-tools.test.ts: C# attribute; doctor.test.ts: fingerprint summary; security.test.ts: destructive fingerprint proof | ✅ |
+| project tool fingerprint 校验 | SHA-256(handler code + descriptor) 自动计算；不一致时 `E_TOOL_FINGERPRINT_MISMATCH` 拦截执行 | project-tools.test.ts: C# attribute; doctor.test.ts: fingerprint summary; security.test.ts: destructive fingerprint proof | ✅ |
 | destructive security proof | destructive 命令执行时携带 `alp332-destructive-safety-v1` fingerprint | security.test.ts: security proof 随 dry-run/yes 传播 | ✅ |
-| doctor fingerprint 诊断 | `doctor` 命令输出 custom tool fingerprint 摘要 | doctor.test.ts: custom tool fingerprint summary | ✅ |
+| doctor fingerprint 诊断 | `doctor` 命令输出 project tool fingerprint 摘要 | doctor.test.ts: project tool fingerprint summary | ✅ |
 
 ## UI 域
 
@@ -283,13 +283,13 @@
 | asset | `asset search/info` 返回资源列表与 metadata | `asset create/modify/duplicate/move/rename/delete --yes` + `delete --dry-run` 修改 AssetDatabase | 2026-06-16 (P2-6 实机) | Console clean；dry-run 预览正常 |
 | prefab | `prefab info/hierarchy` 返回 prefab 摘要与层级 | `prefab create/modify/stage-open/stage-save/stage-close` 管理 prefab 生命周期 | 2026-06-16 (P2-6 实机) | Console clean |
 | code | `code exec --code` 返回结果 | `code exec --yes` 执行代码（destructiveHint）；`--dry-run` 预览 | 2026-06-16 (P2-6 实机) | Console clean；live inline/file + dry-run 均通过 |
-| custom-tool | `custom-tool list` 列出注册的自定义工具 | `custom-tool run sample.echo --fingerprint-mode warn` 执行自定义工具 | 2026-06-16 (P2-6 实机) | Console clean；fingerprint 链路正常 |
+| project-tool | `project-tool list` 列出注册的自定义工具 | `project-tool run sample.echo --fingerprint-mode warn` 执行自定义工具 | 2026-06-16 (P2-6 实机) | Console clean；fingerprint 链路正常 |
 | batch | `batch schema` 查看 schema | `batch run --preflight` + `batch run --yes` 执行批处理 | 2026-06-16 (P2-6 实机) | Console clean；preflight + --yes 均通过 |
 | probuilder | `probuilder shape` 查询形状 | `probuilder create/csg` 修改场景（destructiveHint） | 离线/可选 capability | 按冻结决策延后为可选 capability；需 ProBuilder 包 |
 | diagnose | `diagnose run` / preflight 查看 batch schema 合规 | `diagnose preflight` 执行批处理预检 | 2026-06-16 (P2-6 实机) | Console clean |
 | screenshot | `screenshot capture <path>` 截取当前视图 | — | 2026-06-16 (P2-6 实机) | Console clean（与 camera/scene.screenshot 合并验证） |
 | 安全模型 / destructive safety | `capabilities` 列出 destructive 工具 | `--yes` 确认 + dry-run 预览 | 2026-06-16 (P2-5) | 12 个 destructive 命令确认机制已验证 |
-| fingerprint | `doctor` 输出 fingerprint 摘要 | `custom-tool run --fingerprint-mode warn|block` 执行自定义工具 | 2026-06-16 (P2-3/P2-5) | fingerprint 校验链路已验证 |
+| fingerprint | `doctor` 输出 fingerprint 摘要 | `project-tool run --fingerprint-mode warn|block` 执行自定义工具 | 2026-06-16 (P2-3/P2-5) | fingerprint 校验链路已验证 |
 | CLI 离线能力 | `init --check`、`docs get/search`、`reflect type/member/search`、`batch schema`、`package list/info/search` | `init`、`batch run`（destructive）、`package install/remove`（destructive）、`job status/logs/cancel` | 离线工具，自动测试已覆盖 | 不需 Unity 实机；自动测试全链路覆盖 |
 
 ---
@@ -306,7 +306,7 @@
 - **P1-1 Profiler 迁移重做** (2026-06-16): 在新结构 contract/metadata/handler/docs 中显式标记 `architectureSensitive=true`、`frozenDecision=ALP-165-Q4`、完整 `coverageScope`，用于防止冻结口径被误降级。
 - **S3.5** (2026-06-16): 补齐 `cli.batch.schema` metadata、`test.logs`/`test.cancel`、`build.logs`、job describe/cancellation semantics 字段，并新增 batch→build status/logs/cancel 自动化链路测试。
 - **P2-1 S3.5 Batch/Job 完整化** (2026-06-16): 新增 `cli.batch.run/schema` metadata，补齐 batch orchestration 全链路（preflight/parallel/fail-fast/env allowlist），job lifecycle（status/logs/cancel/timeout）。
-- **P2-2 S4.1 Custom tool 注册 + descriptor** (2026-06-16): 新增 `custom-tool.list/run` 覆盖矩阵行；实现 Attribute-first `[UnityCliTool]` 注册 + 自动 descriptor 生成 + schema 校验。
+- **P2-2 S4.1 Project tool 注册 + descriptor** (2026-06-16): 新增 `project-tool.list/run` 覆盖矩阵行；实现 Attribute-first `[UnityCliTool]` 注册 + 自动 descriptor 生成 + schema 校验。
 - **P2-3 S4.2 Fingerprint runtime 拦截** (2026-06-16): 新增 Fingerprint 域覆盖矩阵；实现 SHA-256 fingerprint 校验 + `E_TOOL_FINGERPRINT_MISMATCH` 拦截 + destructive security proof。
 - **P2-4 S4.3 CLI 命令 + tools 统一发现** (2026-06-16): 新增 Diagnose 域、ProBuilder 域、Screenshot 域、CLI 离线能力域覆盖矩阵；实现 `tools list/groups/search/describe` 统一发现 + `capabilities` 静态/混合 manifest + `diagnose.preflight`。
 - **P2-5 S4.4 安全模型全链路验证** (2026-06-16): 新增安全模型域覆盖矩阵；9 个 destructive 命令 `--yes` 确认机制 + representative dry-run + fingerprint + destructive security proof + group 可见性 + readOnlyHint + 敏感信息保护零风险面。黑名单和网络策略为 v1.0 已知限制。

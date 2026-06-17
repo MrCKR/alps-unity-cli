@@ -4,7 +4,7 @@ import { failure, success } from "./output.js";
 import type { CliResult } from "./types.js";
 
 export interface BuiltinDocsRuntime {
-  customTools?: ToolMetadata[];
+  projectTools?: ToolMetadata[];
 }
 
 interface DocTopic {
@@ -64,11 +64,6 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
     title: "ProBuilder Commands",
     summary: "Create and edit ProBuilder meshes, including CSG boolean operations. Runs through live Bridge and optional Unity job paths.",
     guide: "Use `--job --wait` when you want durable batch/job execution for supported ProBuilder commands."
-  },
-  "custom-tool": {
-    title: "Custom Tool Commands",
-    summary: "List and run project-specific custom tools registered with the Unity CLI Bridge.",
-    guide: "Use `custom-tool list` for raw project descriptors, or `tools list --include-custom` / `tools describe <custom.name>` for unified discovery with built-ins."
   },
   shader: {
     title: "Shader Commands",
@@ -170,7 +165,7 @@ export function listBuiltinDocs(
   runtime: BuiltinDocsRuntime,
   requestId: string
 ): CliResult {
-  const topics = buildTopics(runtime.customTools)
+  const topics = buildTopics(runtime.projectTools)
     .map((topic) => ({ key: topic.key, title: topic.title, summary: topic.summary, toolCount: topic.tools.length }))
     .sort((a, b) => a.key.localeCompare(b.key));
   const format = getString(flags, "format");
@@ -197,9 +192,9 @@ export function getBuiltinDocTopic(
     return failure(requestId, "DOCS_TOPIC_REQUIRED", "Pass a topic: unity_cli docs topic <topic>.", ["Run unity_cli docs to list built-in topics."]);
   }
 
-  const doc = buildTopics(runtime.customTools).find((candidate) => candidate.key === topic);
+  const doc = buildTopics(runtime.projectTools).find((candidate) => candidate.key === topic);
   if (!doc) {
-    const available = buildTopics(runtime.customTools).map((candidate) => candidate.key).sort();
+    const available = buildTopics(runtime.projectTools).map((candidate) => candidate.key).sort();
     return failure(requestId, "DOCS_TOPIC_NOT_FOUND", `Documentation topic not found: ${topic}.`, [
       `Available topics: ${available.join(", ")}.`,
       "Run unity_cli tools list to see tools grouped by topic."
@@ -236,9 +231,9 @@ export function getBuiltinDocTopic(
   return success(requestId, data);
 }
 
-export function buildTopics(customTools: ToolMetadata[] = []): DocTopic[] {
+export function buildTopics(projectTools: ToolMetadata[] = []): DocTopic[] {
   const byTopic = new Map<string, ToolMetadata[]>();
-  for (const tool of [...builtinToolMetadata(), ...customTools]) {
+  for (const tool of [...builtinToolMetadata(), ...projectTools]) {
     const topic = tool.docsTopic ?? tool.group;
     const tools = byTopic.get(topic) ?? [];
     tools.push(tool);

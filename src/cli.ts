@@ -17,7 +17,6 @@ import { handleCapabilitiesCommand } from "./capabilities.js";
 import { handleDoctorCommand } from "./doctor.js";
 import { handleInstancesCommand, handleTargetCommand } from "./instances.js";
 import { handleDocsCommand, handleReflectCommand } from "./docs-reflect.js";
-import { handleDocsTopicCommand } from "./docs-topic.js";
 import { JobRunner } from "./job-runner.js";
 import { handleCode } from "./runtime-code.js";
 import { JobStore } from "./job-store.js";
@@ -41,7 +40,6 @@ const CLI_COMMANDS = new Map<string, CliCommandModule>([
   ["capabilities", { run: ({ flags, runtime, requestId }) => handleCapabilitiesCommand(flags, runtime, requestId) }],
   ["docs", { run: ({ command, args, flags, runtime, requestId }) => handleDocsCommand(command, args, flags, runtime.dataDir, requestId, runtime) }],
   ["reflect", { run: ({ command, args, flags, runtime, requestId }) => handleReflectCommand(command, args, flags, runtime.dataDir, requestId) }],
-  ["docs-topic", { run: ({ command, flags, requestId }) => handleDocsTopicCommand(command, flags, requestId) }],
   ["editor", { run: ({ command, flags, runtime, requestId }) => handleEditor(command, flags, runtime, requestId) }],
   ["test", { run: ({ command, flags, runtime, requestId }) => handleTest(command, flags, runtime, requestId) }],
   ["build", { run: ({ command, flags, runtime, requestId }) => handleBuild(command, flags, runtime, requestId) }]
@@ -200,10 +198,7 @@ function help(): Record<string, unknown> {
       "tools search <keyword> [--format json|text]",
       "tools describe <tool>",
       "capabilities [--json] [--bridge-endpoint <url>]",
-      "docs-topic [topic] [--format json|text]",
       "code exec (--file <path>|--stdin|--code <text>) [--channel live|batchmode] [--refs <list>] [--define <symbol>] [--args <json>] [--timeout-ms <n>] [--job] [--artifact-dir <path>]",
-      "custom-tool list [--project <path>] [--target <id|alias>] [--bridge-endpoint <url>]",
-      "custom-tool run <name> [--project <path>] [--target <id|alias>] [--input <json>|--input-file <path>|--stdin] [--timeout-ms 30000] [--fingerprint-mode warn|block] [--job] [--artifact-dir <path>] [--bridge-endpoint <url>]",
       "scene active [规划中]",
       "scene hierarchy [--page-size 100] [--bridge-endpoint <url>]",
       "scene build-settings [规划中]",

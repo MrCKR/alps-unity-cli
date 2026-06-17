@@ -403,26 +403,6 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "custom-tool.list",
-      "group": "custom-tool",
-      "command": "list",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "readOnly": true,
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "custom-tool.run",
-      "group": "custom-tool",
-      "command": "run",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "readOnly": false,
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
       "bridgeCommand": "diagnose.preflight",
       "group": "preflight",
       "command": "",
