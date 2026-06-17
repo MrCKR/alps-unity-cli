@@ -121,7 +121,40 @@ function stringArrayProp(record: Record<string, unknown>, key: string): string[]
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : undefined;
 }
 
-function groupFromName(name: string): string {
+export function groupFromName(name: string): string {
   const [group] = name.split(".");
   return group || "custom";
+}
+
+/**
+ * Discover runtime tools via runtime-tool.list bridge command.
+ * This path is exempt from the Play Mode busy guard, so it works
+ * correctly in Play Mode where project-tool.list would be blocked.
+ */
+export async function discoverRuntimeTools(
+  flags: Record<string, string | boolean>,
+  runtime: ProjectToolRuntime,
+  requestId: string
+): Promise<ProjectToolDiscovery> {
+  if (runtime.projectTools) {
+    const runtimeTools = runtime.projectTools
+      .map(ensureProjectToolDefaults)
+      .filter((tool) => tool.target === "runtime" || tool.target === "both");
+    return { ok: true, tools: runtimeTools, mode: "runtime" };
+  }
+
+  if (!shouldDiscoverProjectTools(flags, runtime)) {
+    return { ok: true, tools: [], mode: "skipped" };
+  }
+
+  const result = await executeBridgeCommand(requestId, "runtime-tool.list", flags, undefined, runtime);
+  if (result.ok === false) {
+    return result as CliResult & { ok: false };
+  }
+
+  const rawTools = (result.data as { tools?: unknown } | undefined)?.tools;
+  if (!Array.isArray(rawTools)) {
+    return { ok: true, tools: [], mode: "bridge" };
+  }
+  return { ok: true, tools: rawTools.map(projectDescriptorToToolMetadata).filter(isToolMetadata), mode: "bridge" };
 }

@@ -123,6 +123,10 @@ namespace UnityCli
             WriteLog("bridge_after_assembly_reload restarting listener");
             StopStaleBridgeListeners();
             StartListener();
+
+            // After domain reload, static fields are reset. Re-initialize the Runtime Executor
+            // and restore session state if we are already in Play Mode.
+            ReinitializeRuntimeExecutorAfterDomainReload();
         }
 
         private static void UnregisterAndStop()

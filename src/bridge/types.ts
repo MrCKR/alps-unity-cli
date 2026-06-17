@@ -43,4 +43,6 @@ export interface BridgeCommandSpec {
   supportsJob?: boolean;
   destructiveHint?: boolean;
   supportsDryRun?: boolean;
+  /** If true, this command is internal and not accessible from CLI. Only used as bridge protocol. */
+  internal?: boolean;
 }

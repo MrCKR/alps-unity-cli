@@ -36,6 +36,31 @@ namespace UnityCli
             EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
             RefreshRuntimeToolCatalog();
             WriteLog("runtime_executor_initialized");
+
+            // If we are already in Play Mode at initialization time (e.g. after domain reload),
+            // immediately establish the session as ready.
+            if (EditorApplication.isPlaying)
+            {
+                currentPlayModeSessionId = GeneratePlayModeSessionId();
+                playModeReady = true;
+                runtimeRegistryVersion++;
+                RefreshRuntimeToolCatalog();
+                WriteLog("runtime_session_ready_after_domain_reload sessionId=" + currentPlayModeSessionId + " registryVersion=" + runtimeRegistryVersion.ToString(CultureInfo.InvariantCulture) + " fingerprint=" + (runtimeToolCatalogFingerprint ?? "none"));
+            }
+        }
+
+        /// <summary>
+        /// Called after domain reload to reinitialize the Runtime Executor.
+        /// Domain reload resets all static fields, so the event subscription
+        /// and session state are lost. This method re-subscribes to Play Mode
+        /// state change events and restores the session state if already in
+        /// Play Mode.
+        /// </summary>
+        private static void ReinitializeRuntimeExecutorAfterDomainReload()
+        {
+            // Reset the guard so InitializeRuntimeExecutor runs again
+            runtimeExecutorInitialized = false;
+            InitializeRuntimeExecutor();
         }
 
         /// <summary>
