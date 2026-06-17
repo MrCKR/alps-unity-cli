@@ -1342,7 +1342,7 @@
       "bridgeCommand": "tools.run",
       "group": "tools",
       "command": "run",
-      "handler_type": "offline",
+      "handler_type": "hybrid",
       "csharp_handler": "none",
       "readOnly": false,
       "destructive": false,

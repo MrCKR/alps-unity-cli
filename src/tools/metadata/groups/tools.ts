@@ -60,26 +60,33 @@ export const TOOLS_DISCOVERY_TOOLS: ToolMetadata[] = [
   {
     name: "tools.run",
     title: "Run Tool (Unified)",
-    description: "Execute a tool by its dotted name using the unified tools contract. Reserved for P3; currently returns E_TOOL_NOT_FOUND_FOR_TARGET. Runtime target tools (e.g. sample.runtime-echo) require the Editor to be in Play Mode and accept --play-mode-session-id and --fingerprint-mode flags.",
+    description: "Execute a tool by its dotted name using the unified tools contract. This is the primary execution entry point — the router determines the execution channel (bridge, bridge-runtime, job, offline, or hybrid) based on the tool's handler and target descriptor. Runtime target tools require the Editor to be in Play Mode; if not in Play Mode, the CLI returns E_RUNTIME_NOT_READY (transient).",
     group: "tools",
     inputSchema: objSchema({
-      name: { type: "string" },
-      playModeSessionId: { type: "string", description: "Session ID for Play Mode runtime tool execution." },
-      fingerprintMode: { type: "string", enum: ["strict", "loose", "off"], description: "Fingerprint verification mode for runtime tool execution." },
-      timeoutMs: { type: "integer" }
+      name: { type: "string", description: "Dotted tool name, e.g. 'scene.hierarchy', 'sample.echo', 'runtime.echo'" },
+      input: { type: "string", description: "JSON input for the tool" },
+      inputFile: { type: "string", description: "Path to JSON input file" },
+      timeoutMs: { type: "integer", description: "Override default timeout" },
+      fingerprintMode: { type: "string", enum: ["block", "warn"], description: "Fingerprint mismatch handling: block (default) or warn" },
+      runtime: { type: "boolean", description: "Force runtime execution path for target=both tools" }
     }, ["name"]),
     readOnlyHint: false,
     destructiveHint: false,
-    handler: "offline",
-    supportStatus: "planned",
+    handler: "hybrid",
+    supportStatus: "live-bridge",
     cliCommand: "tools run",
-    docsTopic: "tools",
+    docsTopic: "tool-execution",
+    target: "both",
+    availabilityScope: "editorSession",
     architectureSensitive: true,
     frozenDecision: "ALP-365-P6",
     coverageScope: ["tools-run", "runtime-target", "play-mode-session"],
     examples: [
-      { description: "Run a runtime tool in Play Mode", argv: ["tools", "run", "sample.runtime-echo", "--message", "hello", "--play-mode-session-id", "session_001"] },
-      { description: "Run a runtime tool with fingerprint verification", argv: ["tools", "run", "runtime.wait", "--fingerprint-mode", "strict"] }
+      { description: "Run an editor-domain tool", argv: ["tools", "run", "scene.hierarchy", "--target", "my-editor"] },
+      { description: "Run a runtime tool (requires Play Mode active)", argv: ["tools", "run", "runtime.echo", "--target", "my-editor"] },
+      { description: "Run with input parameters as JSON", argv: ["tools", "run", "camera.list", "--input", "{\"format\": \"text\"}"] },
+      { description: "Run with fingerprint warn mode", argv: ["tools", "run", "sample.echo", "--fingerprint-mode", "warn"] },
+      { description: "Force runtime path for target=both tool", argv: ["tools", "run", "code.exec", "--runtime", "--target", "my-editor"] }
     ]
   }
 ];
