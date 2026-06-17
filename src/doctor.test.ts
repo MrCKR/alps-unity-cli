@@ -281,5 +281,5 @@ test("doctor provides actionable suggestions when checks fail", async () => {
   assert.equal(result.ok, true);
   const data = result.data as { suggestions: string[] };
 
-  assert.ok(data.suggestions.some((s) => s.includes("cleanup") || s.includes("Reopen")));
+  assert.ok(data.suggestions.some((s) => s.includes("prune") || s.includes("Reopen")));
 });

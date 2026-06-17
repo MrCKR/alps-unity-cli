@@ -65,7 +65,7 @@ export async function handleInstancesCommand(
     return success(requestId, { registryPath: instancesDir(dataDir), instances: instances.map(instanceListSummary) });
   }
 
-  if (command === "prune" || command === "cleanup") {
+  if (command === "prune") {
     const before = await readInstances(dataDir);
     const stale = before.filter((instance) => instance.status === "stale" || instance.status === "unreachable");
     const staleIds = new Set(stale.map((instance) => instance.instanceId));
