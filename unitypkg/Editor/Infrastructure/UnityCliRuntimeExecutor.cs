@@ -2,6 +2,8 @@
 using System;
 using System.Collections;
 using System.Globalization;
+using System.IO;
+using System.Reflection;
 using System.Text;
 using UnityEditor;
 using UnityEngine;
@@ -316,7 +318,7 @@ namespace UnityCli
             var manifest = ProjectToolManifestJson(request.RequestId, definition, artifactDir, startedAt, endedAt);
             try
             {
-                File.WriteAllText(System.IO.Path.Combine(artifactDir, "manifest.json"), manifest);
+                File.WriteAllText(Path.Combine(artifactDir, "manifest.json"), manifest);
             }
             catch (Exception exception)
             {
@@ -364,7 +366,7 @@ namespace UnityCli
                     artifacts.BeginObject()
                         .Prop("id", "manifest")
                         .Prop("kind", "json")
-                        .Prop("path", System.IO.Path.Combine(artifactDir, "manifest.json"))
+                        .Prop("path", Path.Combine(artifactDir, "manifest.json"))
                         .Prop("description", "runtime-tool artifact manifest")
                         .EndObject();
                 })
