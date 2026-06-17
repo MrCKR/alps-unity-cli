@@ -65,6 +65,8 @@ namespace UnityCli
         private static volatile bool domainReloading;
         private static int port;
         private static double nextHeartbeatAt;
+        private static BridgeWorkItem currentWorkItem;
+        private static readonly string DeferredResponseMarker = "\0DEFERRED";
 
         // Cached EditorApplication state — updated on the main thread by ProcessQueuedWork,
         // read by HandleHttpCore on background thread pool threads.
@@ -234,6 +236,73 @@ namespace UnityCli
                 || command == "probuilder.csg"
                 || command == "editor.menu"
                 || command == "script.edit";
+        }
+
+        /// <summary>
+        /// Starts a deferred wait that checks a condition each frame via EditorApplication.update.
+        /// The BridgeWorkItem is completed when the condition is met or the timeout elapses.
+        /// The calling command handler should return DeferredResponseMarker.
+        /// This replaces Thread.Sleep-based polling loops with non-blocking frame-based waits
+        /// that do not block the Unity main thread.
+        /// </summary>
+        private static string StartDeferredWait(
+            BridgeWorkItem item,
+            Func<bool> condition,
+            int timeoutMs,
+            Func<string> onSuccess,
+            string timeoutErrorCode,
+            string timeoutErrorMessage,
+            string timeoutNextAction)
+        {
+            var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+            EditorApplication.CallbackFunction waiter = null;
+            waiter = () =>
+            {
+                try
+                {
+                    if (condition())
+                    {
+                        EditorApplication.update -= waiter;
+                        item.Response = onSuccess();
+                        item.Completed.Set();
+                        WriteLog("deferred_wait_completed requestId=" + item.Request.RequestId + " command=" + item.Request.Command);
+                        return;
+                    }
+                    if (DateTime.UtcNow > deadline)
+                    {
+                        EditorApplication.update -= waiter;
+                        item.Response = ErrorJson(timeoutErrorCode, timeoutErrorMessage, timeoutNextAction);
+                        item.Completed.Set();
+                        WriteLog("deferred_wait_timeout requestId=" + item.Request.RequestId + " command=" + item.Request.Command + " errorCode=" + timeoutErrorCode);
+                        return;
+                    }
+                }
+                catch (BridgeCommandException exception)
+                {
+                    EditorApplication.update -= waiter;
+                    if (exception.Transient)
+                    {
+                        item.Response = TransientErrorJson(exception.Code, exception.Message, exception.NextAction ?? "Check Unity Console and UnityCliBridge.log.", exception.RetryAfterMs > 0 ? exception.RetryAfterMs : 5000);
+                    }
+                    else
+                    {
+                        item.Response = ErrorJson(exception.Code, exception.Message, exception.NextAction ?? "Check Unity Console and UnityCliBridge.log.");
+                    }
+                    item.Completed.Set();
+                    WriteLog("deferred_wait_exception requestId=" + item.Request.RequestId + " command=" + item.Request.Command + " error=" + exception.Code);
+                }
+                catch (Exception exception)
+                {
+                    EditorApplication.update -= waiter;
+                    item.Response = ErrorJson("E_BRIDGE_COMMAND_FAILED", exception.Message, "Check Unity Console and UnityCliBridge.log.");
+                    item.Completed.Set();
+                    WriteLog("deferred_wait_exception requestId=" + item.Request.RequestId + " command=" + item.Request.Command + " error=" + exception.GetType().Name);
+                }
+            };
+            item.MarkDeferred();
+            EditorApplication.update += waiter;
+            WriteLog("deferred_wait_started requestId=" + item.Request.RequestId + " command=" + item.Request.Command + " timeoutMs=" + timeoutMs.ToString(CultureInfo.InvariantCulture));
+            return DeferredResponseMarker;
         }
     }
 }

@@ -726,7 +726,9 @@ test("Unity Bridge editor commands expose state, play/pause/stop, menu execution
 test("Unity Bridge treats PlayMode switching as editor-command busy state", async () => {
   const source = await readUnityBridgeSources();
   const busyStart = source.indexOf("private static void EnsureEditorNotBusy");
-  const busyEnd = source.indexOf("private static void WaitForPlayModeState", busyStart);
+  // WaitForPlayModeState has been replaced by StartDeferredWait; use the closing
+  // brace of EnsureEditorNotBusy followed by the doc comment as boundary.
+  const busyEnd = source.indexOf("Removed: WaitForPlayModeState", busyStart);
   const busyBlock = source.slice(busyStart, busyEnd);
 
   assert.ok(busyStart > -1);

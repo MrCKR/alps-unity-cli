@@ -85,8 +85,27 @@ namespace UnityCli
         {
             Client.Resolve();
             var request = Client.List(false, true);
-            WaitForRequest(request);
+            if (request.IsCompleted)
+            {
+                OnPackagesResolved(request);
+                return;
+            }
+            // Wait for the package request using EditorApplication.update callbacks
+            // instead of Thread.Sleep, which blocks the Unity main thread.
+            EditorApplication.CallbackFunction waiter = null;
+            waiter = () =>
+            {
+                if (request.IsCompleted)
+                {
+                    EditorApplication.update -= waiter;
+                    OnPackagesResolved(request);
+                }
+            };
+            EditorApplication.update += waiter;
+        }
 
+        private static void OnPackagesResolved(Request request)
+        {
             if (request.Status == StatusCode.Failure)
             {
                 var error = request.Error != null ? request.Error.message : "Unity PackageManager resolve failed.";
@@ -456,13 +475,13 @@ namespace UnityCli
             public static CodeExecutionResult Fail(string code, string message, string detailsJson, string nextActionsJson) { return new CodeExecutionResult { Ok = false, ErrorCode = code, ErrorMessage = message, DetailsJson = detailsJson, NextActionsJson = nextActionsJson }; }
         }
 
-        private static void WaitForRequest(Request request)
-        {
-            while (!request.IsCompleted)
-            {
-                System.Threading.Thread.Sleep(100);
-            }
-        }
+        /// <summary>
+        /// Removed: WaitForRequest with Thread.Sleep has been replaced by
+        /// EditorApplication.update callback-based waiting in ResolvePackages.
+        /// Thread.Sleep blocks the Unity main thread and prevents the Package Manager
+        /// from completing its work. The callback approach yields to Unity's event loop
+        /// between checks, allowing the request to complete naturally.
+        /// </summary>
     }
 }
 #endif

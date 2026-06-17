@@ -9,7 +9,6 @@ using System.Net;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.CSharp;
 using UnityEditor;
@@ -58,8 +57,24 @@ namespace UnityCli
             var before = EditorApplication.isPlaying;
             EditorApplication.isPaused = false;
             EditorApplication.isPlaying = true;
-            WaitForPlayModeState(true, TimeoutMs(request));
-            return $"{{\"plannedEffects\":[{{\"type\":\"editor.play\",\"from\":{Bool(before)},\"to\":true}}],\"result\":{{\"requested\":\"play\",\"changed\":{Bool(before != EditorApplication.isPlaying)},\"isPlaying\":{Bool(EditorApplication.isPlaying)},\"isPaused\":{Bool(EditorApplication.isPaused)}}},\"state\":{EditorStateJson()}}}";
+            var timeoutMs = TimeoutMs(request);
+            var responseFactory = new Func<string>(() =>
+                $"{{\"plannedEffects\":[{{\"type\":\"editor.play\",\"from\":{Bool(before)},\"to\":true}}],\"result\":{{\"requested\":\"play\",\"changed\":{Bool(before != EditorApplication.isPlaying)},\"isPlaying\":{Bool(EditorApplication.isPlaying)},\"isPaused\":{Bool(EditorApplication.isPaused)}}},\"state\":{EditorStateJson()}}}}");
+            var reached = EditorApplication.isPlaying || EditorApplication.isPlayingOrWillChangePlaymode;
+            if (reached)
+            {
+                return responseFactory();
+            }
+            // Play mode transition requires the main thread to yield back to Unity's event loop.
+            // Use a deferred EditorApplication.update callback to wait without blocking the main thread.
+            return StartDeferredWait(
+                currentWorkItem,
+                () => EditorApplication.isPlaying || EditorApplication.isPlayingOrWillChangePlaymode,
+                timeoutMs,
+                responseFactory,
+                "E_PLAYMODE_TIMEOUT",
+                "Unity PlayMode did not reach the requested state before the timeout.",
+                "Wait for PlayMode switching or domain reload to finish, then retry.");
         }
 
         private static string EditorPauseJson(BridgeRequest request)
@@ -210,20 +225,13 @@ namespace UnityCli
             }
         }
 
-        private static void WaitForPlayModeState(bool expectedPlaying, int timeoutMs)
-        {
-            var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
-            while (DateTime.UtcNow <= deadline)
-            {
-                var reached = expectedPlaying ? (EditorApplication.isPlaying || EditorApplication.isPlayingOrWillChangePlaymode) : (!EditorApplication.isPlaying && !EditorApplication.isPlayingOrWillChangePlaymode);
-                if (reached)
-                {
-                    return;
-                }
-                Thread.Sleep(25);
-            }
-            throw new BridgeCommandException("E_PLAYMODE_TIMEOUT", "Unity PlayMode did not reach the requested state before the timeout.", "Wait for PlayMode switching or domain reload to finish, then retry.");
-        }
+        /// <summary>
+        /// Removed: WaitForPlayModeState with Thread.Sleep has been replaced by
+        /// the deferred EditorApplication.update mechanism in EditorPlayJson.
+        /// Play mode state transitions require the main thread to yield to Unity's
+        /// event loop; synchronous polling with Thread.Sleep blocks the editor and
+        /// is no longer used. See StartDeferredWait for the replacement pattern.
+        /// </summary>
     }
 }
 #endif
