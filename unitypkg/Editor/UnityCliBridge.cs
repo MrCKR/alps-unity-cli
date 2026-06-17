@@ -56,6 +56,7 @@ namespace UnityCli
         private const string DestructiveCommandFingerprint = "alp332-destructive-safety-v1";
         private static readonly BridgeCommandRegistry CommandRegistry = CreateCommandRegistry();
         private static readonly string ListenerId = Guid.NewGuid().ToString("N");
+        private static readonly string InstanceSuffix = Guid.NewGuid().ToString("N").Substring(0, 6);
         private static readonly DateTime BridgeLoadedAtUtc = DateTime.UtcNow;
         private static HttpListener listener;
         private static bool started;
@@ -78,7 +79,7 @@ namespace UnityCli
             EditorApplication.update += ProcessQueuedWork;
             AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
             AssemblyReloadEvents.afterAssemblyReload += OnAfterAssemblyReload;
-            EditorApplication.quitting += MarkStaleAndStop;
+            EditorApplication.quitting += UnregisterAndStop;
             domainReloading = false;
             StopStaleBridgeListeners();
             StartListener();
@@ -123,9 +124,9 @@ namespace UnityCli
             StartListener();
         }
 
-        private static void MarkStaleAndStop()
+        private static void UnregisterAndStop()
         {
-            RegisterInstance("stale");
+            DeleteInstanceRegistration();
             StopListener();
         }
 
