@@ -52,6 +52,7 @@ namespace UnityCli
         private static readonly string[] ScriptCommands = { "script.create", "script.read", "script.edit", "script.validate" };
         private static readonly string[] CodeCommands = { "code.exec" };
         private static readonly string[] ProjectToolCommands = { "project-tool.list", "project-tool.run" };
+        private static readonly string[] RuntimeToolCommands = { "runtime-tool.list", "runtime-tool.run" };
         private const string BridgeDiagnosticsFingerprint = "alp276-health-fingerprint-20260615-execute-stage-v1";
         private const string DestructiveCommandFingerprint = "alp332-destructive-safety-v1";
         private static readonly BridgeCommandRegistry CommandRegistry = CreateCommandRegistry();
@@ -122,6 +123,10 @@ namespace UnityCli
             WriteLog("bridge_after_assembly_reload restarting listener");
             StopStaleBridgeListeners();
             StartListener();
+
+            // After domain reload, static fields are reset. Re-initialize the Runtime Executor
+            // and restore session state if we are already in Play Mode.
+            ReinitializeRuntimeExecutorAfterDomainReload();
         }
 
         private static void UnregisterAndStop()
@@ -198,7 +203,9 @@ namespace UnityCli
 
             if (EditorApplication.isPlayingOrWillChangePlaymode
                 && request.Command != "editor.pause"
-                && request.Command != "editor.stop")
+                && request.Command != "editor.stop"
+                && request.Command != "runtime-tool.list"
+                && request.Command != "runtime-tool.run")
             {
                 return TransientErrorJson("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode.", "Wait for Play mode transition to complete and retry.", 3000);
             }

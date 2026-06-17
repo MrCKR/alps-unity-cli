@@ -225,17 +225,113 @@ Use `--wait-timeout-ms <ms>` to limit synchronous waiting. Use `--timeout-ms <ms
 
 `init` and `package install/remove/resolve` install the bundled `com.unity_cli` package by writing a local `file:` dependency into the target project's `Packages/manifest.json`; no scoped registry is configured during local development. `init` also writes `Packages/unity_cli.install.json` with the project hash, package version and CLI compatibility range, while `init --check` verifies those values without mutating the project. When a live Bridge endpoint is already reachable, `init` asks the open Editor to run `Assets/Refresh` so a resident Editor sees the package update. When the Editor compiles that package, `UnityCliBridge` starts a Windows loopback HTTP listener on `http://127.0.0.1:47392` (probing later ports when needed), writes `instances/<instanceId>.json` under `%LOCALAPPDATA%\UnityCli` or `UNITY_CLI_DATA_DIR`, and refreshes `lastSeenAt` every 5 seconds. During domain reload it marks the target stale; during normal Editor quit it tries to delete the registration so the CLI can report stale/unreachable state or remove old entries with `instances prune`. The bridge serves `POST /bridge/execute` for the live Bridge commands declared in `contracts/command-contract.json`: `camera.list`, `camera.info`, `camera.screenshot`, `scene.active`, `scene.hierarchy`, `scene.build-settings`, `scene.screenshot`, `scene.create`, `scene.load`, `scene.save`, `go.find`, `go.inspect`, `go.create`, `go.modify`, `go.delete`, `component.add`, `component.remove`, `component.set`, `asset.search`, `asset.info`, `asset.create`, `asset.import`, `asset.modify`, `asset.delete`, `asset.duplicate`, `asset.move`, `asset.rename`, `diagnose.preflight`, `screenshot.capture`, `prefab.info`, `prefab.hierarchy`, `prefab.create`, `prefab.modify`, `prefab.stage-open`, `prefab.stage-save`, `prefab.stage-close`, `ui.canvas.create`, `ui.text.create`, `ui.button.create`, `ui.image.create`, `ui.document.info`, `ui.document.create`, `ui.hierarchy`, `material.info`, `material.create`, `material.assign`, `material.set`, `graphics.quality`, `graphics.settings`, `graphics.pipeline`, `graphics.volume`, `graphics.screenshot`, `physics.settings`, `physics.raycast`, `physics.simulation`, `profiler.start`, `profiler.stop`, `profiler.pause`, `profiler.counter`, `profiler.memory`, `profiler.frame`, `profiler.capture`, `profiler.export`, `profiler.status`, `probuilder.shape`, `probuilder.create`, `probuilder.csg`, `probuilder.edit`, `animation.clip`, `animation.state`, `animation.play`, `animation.stop`, `vfx.graph`, `vfx.effect`, `shader.info`, `shader.read`, `shader.create`, `shader.update`, `texture.info`, `texture.create`, `texture.sprite`, `texture.import-settings`, `editor.state`, `editor.play`, `editor.pause`, `editor.stop`, `editor.menu`, `editor.console`, `script.create`, `script.read`, `script.edit`, `script.validate`, `code.exec`. Run `npm run contracts:validate` to compare the contract file with the TypeScript bridge registry, built-in metadata and C# `BridgeCommandRegistry` registrations. The bridge executes Unity APIs on the Editor main thread and writes diagnostics to `<project>\Logs\UnityCliBridge.log`. If a request waits 60 seconds before Unity starts it, the bridge cancels that queued work before execution and returns `E_UNITY_BUSY` with no side effects applied. If a mutating request already started before the HTTP timeout, the bridge returns a success envelope with `status: "running"`, `sideEffectSemantics: "started-before-http-timeout"`, the original `requestId` and `logPath` so callers do not treat a possible in-flight side effect as a failed/no-op request. During Unity domain reload or Editor quit, the Bridge stops its loopback listener before the new assembly starts it again; on startup it also asks any older loaded `UnityCliBridge` type in the same Editor process to stop its listener before binding the port, preventing stale runtime capabilities from serving `/health` after package replacement. A compiled bridge runtime also writes `<project>\Logs\UnityCliBridgeRuntime.json` and `bridge_runtime_loaded` log lines with `diagnosticsFingerprint`, listener id, assembly MVID and Unity PackageManager `com.unity_cli` resolved path, so a live Editor can prove whether the new package was actually compiled/loaded even when an older listener is still answering a port.
 
+## Tools Run — Unified Execution Entry Point
+
+`tools run <toolName>` is the unified entry point for executing any tool — built-in or project-defined, editor-domain or runtime-domain. It replaces all previous per-domain command invocations with a single consistent interface.
+
+```powershell
+# Discover available tools
+unity_cli tools list
+unity_cli tools search screenshot
+unity_cli tools describe camera.screenshot
+
+# Run an editor-domain tool (target=editor, default)
+unity_cli tools run editor.console
+unity_cli tools run camera.screenshot --input "{\"target\":\"Main Camera\",\"output\":\"shot.png\",\"overwrite\":true}"
+
+# Run a runtime-domain tool (target=runtime, requires Play Mode)
+unity_cli tools run editor.play
+unity_cli tools run sample.echo --input "{\"message\":\"hello\"}" --include-custom
+unity_cli tools run editor.stop
+
+# Run with input file
+unity_cli tools run camera.screenshot --input-file screenshot-input.json
+
+# Run with timeout for long operations
+unity_cli tools run sample.wait --input "{\"durationMs\":500}" --include-custom --timeout-ms 5000
+```
+
+### Target Routing
+
+`tools run` automatically routes based on the tool's `target` field:
+
+| Target | Availability | Routing |
+|--------|-------------|----------|
+| `editor` (default) | `editorSession` — always available when Bridge is connected | Routes through `project-tool.run` bridge command |
+| `runtime` | `playModeSession` — only available during Play Mode | Routes through `runtime-tool.run` bridge command |
+| `both` | Depends on current mode | Uses `editor` by default; pass `--runtime` to force runtime routing |
+
+### AI Usage Workflow
+
+The complete discovery-to-verification chain:
+
+```
+instances list → target set <alias> → tools search <keyword> → tools describe <name> → tools run <name> [--input <json>] → verify ok
+```
+
+## Examples
+
+Runnable examples are in the [`examples/`](examples/) directory:
+
+| Example | Category | Description |
+|---------|----------|-------------|
+| `01-editor-tool-echo.md` | Editor tool | Run a built-in editor-domain tool via `tools run` |
+| `02-editor-tool-camera.md` | Editor tool | List cameras and capture a screenshot via `tools run` |
+| `03-runtime-tool-echo.md` | Runtime tool | Run a runtime-domain tool in Play Mode via `tools run` |
+| `04-runtime-tool-verify.md` | Runtime tool | Execute runtime code and verify the result |
+| `05-verify-workflow.md` | Verification | Full discovery → describe → run → verify workflow |
+| `06-batch-editor-only.json` | Batch | Editor-only batch automation via `tools run` |
+| `07-batch-runtime-only.json` | Batch | Runtime-only batch automation in Play Mode via `tools run` |
+| `08-batch-editor-plus-runtime.json` | Batch | Combined editor + runtime batch via `tools run` |
+| `09-batch-parallel-readonly.json` | Batch | Parallel batch of read-only editor queries via `tools run` |
+
 ## Batch Automation
 
-`batch run <file.json>` composes registered Unity CLI first-class commands only. It does not provide hidden bottom-layer commands, arbitrary tool calls, or capability-gap escape hatches.
+`batch run <file.json>` composes registered Unity CLI first-class commands only. It does not provide hidden bottom-layer commands, arbitrary tool calls, or capability-gap escape hatches. Batch steps can use `tools run` as the unified command entry point.
 
 ```powershell
 unity_cli batch schema
-unity_cli batch run .\automation\camera-test-screenshot.json --preflight
-unity_cli batch run .\automation\camera-test-screenshot.json --fail-fast true --parallel 1
+unity_cli batch run .\examples\08-batch-editor-plus-runtime.json --preflight
+unity_cli batch run .\examples\08-batch-editor-plus-runtime.json --fail-fast true --parallel 1
 ```
 
-Example `camera-test-screenshot.json`:
+Example batch with `tools run` — editor + runtime combined (`08-batch-editor-plus-runtime.json`):
+
+```json
+{
+  "defaults": {
+    "project": "C:/work/Game",
+    "unity": "C:/Program Files/Unity/Hub/Editor/2022.3.45f1/Editor/Unity.exe",
+    "wait": true,
+    "timeoutMs": 600000,
+    "waitTimeoutMs": 600000,
+    "env": {
+      "UNITY_CLI_BRIDGE_ENDPOINT": "http://127.0.0.1:18080"
+    }
+  },
+  "envAllowlist": ["UNITY_CLI_BRIDGE_ENDPOINT"],
+  "failFast": true,
+  "parallel": 1,
+  "steps": [
+    { "id": "read-console", "command": ["tools", "run", "editor.console"] },
+    { "id": "list-cameras", "command": ["tools", "run", "camera.list"] },
+    { "id": "capture", "command": ["tools", "run", "camera.screenshot"],
+      "args": ["--input", "{\"target\":\"Main Camera\",\"output\":\"Artifacts/pre.png\",\"overwrite\":true}"],
+      "dependsOn": ["list-cameras"] },
+    { "id": "enter-play", "command": ["tools", "run", "editor.play"],
+      "dependsOn": ["read-console", "capture"] },
+    { "id": "runtime-echo", "command": ["tools", "run", "sample.echo"],
+      "args": ["--input", "{\"message\":\"hello\"}", "--include-custom"],
+      "dependsOn": ["enter-play"] },
+    { "id": "exit-play", "command": ["tools", "run", "editor.stop"],
+      "dependsOn": ["runtime-echo"] },
+    { "id": "verify", "command": ["tools", "run", "editor.console"],
+      "dependsOn": ["exit-play"] }
+  ]
+}
+```
+
+Legacy batch example using direct domain commands (`camera-test-screenshot.json`):
 
 ```json
 {

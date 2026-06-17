@@ -43,6 +43,19 @@ namespace UnityCli
         public bool ArchitectureSensitive { get; set; }
         public string FrozenDecision { get; set; }
         public string[] CoverageScope { get; set; }
+        /// <summary>
+        /// Execution target: "editor", "runtime", or "both".
+        /// Determines which invocation path is used: editor-domain
+        /// (project-tool.run) or runtime-domain (runtime-tool.run).
+        /// </summary>
+        public string Target { get; set; }
+        /// <summary>
+        /// Availability scope for the tool. For Target=runtime tools,
+        /// this is "playModeSession", meaning the tool is only available
+        /// while a specific Play Mode session is active and becomes
+        /// stale when the session changes.
+        /// </summary>
+        public string AvailabilityScope { get; set; }
         public int DefaultTimeoutMs { get; set; }
         public int MaxTimeoutMs { get; set; }
         public bool SupportsJob { get; set; }
@@ -53,6 +66,12 @@ namespace UnityCli
         public string Assembly { get; set; }
         public string Method { get; set; }
         public string Fingerprint { get; set; }
+        /// <summary>
+        /// The fingerprint pinned by the developer via [UnityCliTool(Fingerprint=...)].
+        /// When non-null, this is enforced strictly. When null, the computed
+        /// fingerprint is auto-accepted as the expected baseline.
+        /// </summary>
+        public string PinnedFingerprint { get; set; }
         public string FingerprintStatus { get; set; }
         public string FingerprintMode { get; set; }
         public string ExpectedFingerprint { get; set; }

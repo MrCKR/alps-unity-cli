@@ -20,6 +20,7 @@ namespace UnityCli
             OutputSchema = "{}";
             Group = "custom";
             CapabilityType = "project-write";
+            Target = "editor";
             DefaultTimeoutMs = 30000;
             MaxTimeoutMs = 600000;
             SupportsJob = true;
@@ -45,6 +46,14 @@ namespace UnityCli
         public bool ArchitectureSensitive { get; set; }
         public string FrozenDecision { get; set; }
         public string CoverageScope { get; set; }
+        /// <summary>
+        /// Execution target: "editor" (default, runs in Editor domain),
+        /// "runtime" (runs only in Play Mode), or "both" (available in both).
+        /// Tools with Target="runtime" require an active Play Mode session
+        /// and are routed through the RuntimeExecutor.
+        /// </summary>
+        public string Target { get; set; }
+
         /// <summary>
         /// Optional pinned fingerprint for tamper detection. When omitted, the
         /// first computed handler-code + descriptor fingerprint is treated as
