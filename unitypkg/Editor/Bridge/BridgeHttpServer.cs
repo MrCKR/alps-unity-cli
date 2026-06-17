@@ -63,6 +63,7 @@ namespace UnityCli
         {
             var data = new UnityCliJsonWriter().BeginObject()
                 .Prop("bridge", "unity_cli")
+                .PropRaw("target", TargetContextJson())
                 .Prop("port", port)
                 .Prop("route", "POST /bridge/execute")
                 .Prop("buildStamp", BridgeBuildStamp())

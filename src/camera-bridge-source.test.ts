@@ -62,10 +62,10 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /CapabilityJson\("code", CodeCommands\)/);
   assert.match(source, /CapabilityJson\("custom-tool", CustomToolCommands\)/);
   assert.match(source, /AssemblyReloadEvents\.beforeAssemblyReload \+= OnBeforeAssemblyReload/);
-  assert.match(source, /EditorApplication\.quitting \+= MarkStaleAndStop/);
+  assert.match(source, /EditorApplication\.quitting \+= UnregisterAndStop/);
   assert.match(source, /RegisterInstance\("healthy"\)/);
   assert.match(source, /RegisterInstance\("stale"\)/);
-  assert.match(source, /"instances\.json"/);
+  assert.match(source, /"instances"/);
   assert.match(source, /\\"domainReloading\\":\" \+ Bool\(domainReloading\)/);
   assert.doesNotMatch(source, /\\"domainReloading\\":\" \+ Bool\(EditorApplication\.isCompiling\)/);
   assert.match(source, /private static Type FindType\(string fullName\)/);
