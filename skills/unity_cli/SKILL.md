@@ -96,6 +96,9 @@ Each search result shows:
 | `supportStatusLabel` | Availability status |
 | `readOnlyHint` | True = no side effects |
 | `destructiveHint` | True = may irreversibly modify/delete |
+| `target` | Execution target: `editor`, `runtime`, or `both` |
+| `availabilityScope` | `editorSession` or `playModeSession` |
+| `available` | Whether the tool is currently available for this target |
 
 **Tip:** Use `tools list --include-custom` to discover project-specific Editor tools registered by the connected Unity instance.
 
@@ -109,50 +112,49 @@ unity_cli tools describe <toolName>
 
 | Field | Purpose |
 |-------|---------|
-| `inputSchema` | JSON Schema for parameters — use this to build `--input-json` |
+| `inputSchema` | JSON Schema for parameters — use this to build `--input` |
 | `outputSchema` | JSON Schema for successful output |
 | `target` | Whether this tool targets `editor`, `runtime`, or `both` |
-| `execution` | Internal execution path (`editorBridge`, `runtimeExecutor`, `cliLocal`, `cliOrchestrator`) |
-| `availability` | Current availability state for the resolved target |
-| `requiresPlayMode` | Whether the tool requires Play Mode to be active |
+| `handler` | Execution mode: `bridge`, `bridge-runtime`, `job`, `offline`, or `hybrid` |
+| `supportStatus` | Availability label: `live-bridge`, `live-bridge-runtime`, `bridge-job`, `batch-job`, `cli-only`, or `planned` |
+| `availabilityScope` | `editorSession` or `playModeSession` |
+| `available` | Whether the tool is currently available for this target |
 | `readOnlyHint` | Whether the tool mutates state |
 | `destructiveHint` | Whether changes are irreversible |
-| `longRunning` | Whether to expect delays |
 | `supportsDryRun` | Whether `--dry-run` is available |
-| `risk` | Risk level, mutating/destructive flags, confirmation requirements |
+| `longRunning` | Whether to expect delays |
 | `examples` | Ready-to-use command examples |
-| `nextActions` | Suggested follow-up actions after running |
-| `validation` | Recommended verification checks and success signals |
+| `next_actions` | Suggested follow-up actions after running (JSON field: `next_actions`, prose: "next actions") |
 | `docsTopic` | Topic key for `unity_cli docs topic <key>` for deeper docs |
 
 **Key behavioral hints from describe:**
 
-- **`destructiveHint: true`** or **`risk.requiresConfirmation: true`** → Confirm with the user before executing. Use `--dry-run` if available.
-- **`requiresPlayMode: true`** → The tool needs Play Mode active. If the Editor is not in Play Mode, enter it first.
-- **`availability.state: unavailable`** → The tool cannot run on this target in the current state. Check `nextActions` for guidance.
+- **`destructiveHint: true`** → Confirm with the user before executing. Use `--dry-run` if `supportsDryRun: true`.
+- **`target: runtime`** and **`availabilityScope: playModeSession`** → The tool needs Play Mode active. If `available: false`, enter Play Mode first.
+- **`available: false`** → The tool cannot run on this target in the current state. Check `next_actions` for guidance.
 - **`longRunning: true`** → May take seconds or minutes. Poll job status with `unity_cli job status --id <jobId>`.
 - **`target: runtime`** → This tool executes through the runtime executor in Play Mode. Still use `tools run` — the router handles the execution path internally.
-- **`target: both`** → This tool can execute on either the editor or runtime path. The descriptor explains which path is taken.
+- **`target: both`** → This tool can execute on either the editor or runtime path. Use `--runtime` to force the runtime path.
 
 **About `cliCommand`**: The descriptor may include a `cliCommand` field (e.g. `scene hierarchy`) for backward-compatibility or low-level debugging. **Do not use `cliCommand` as your primary execution path.** Always use `tools run <toolName>` instead.
 
 ## Step 5: Execute a Tool with `tools run`
 
 ```bash
-unity_cli tools run <toolName> [--input-json '<json>'] [--target <id|alias>] [--timeout-ms <n>]
+unity_cli tools run <toolName> [--input '<json>'] [--input-file <path>] [--target <id|alias>] [--timeout-ms <n>] [--fingerprint-mode warn|block] [--runtime]
 ```
 
-This is the **only** execution entry point you need. The invocation router internally selects the correct execution path (editor bridge, runtime executor, CLI local, or orchestrator) based on the tool's descriptor.
+This is the **only** execution entry point you need. The invocation router internally selects the correct execution path (editor bridge, runtime executor, CLI local, or job runner) based on the tool's descriptor.
 
 ### Input Methods
 
 Parameters come from `tools describe.inputSchema`. Pass them using one of:
 
 ```bash
-# Inline JSON (most common)
-unity_cli tools run camera.screenshot --input-json '{"target":"MainCamera","output":"screenshot.png","width":1280,"height":720}'
+# Inline JSON (most common) — use --input
+unity_cli tools run camera.screenshot --input '{"target":"MainCamera","output":"screenshot.png","width":1280,"height":720}'
 
-# From a file
+# From a file — use --input-file
 unity_cli tools run code.exec --input-file params.json
 
 # Via stdin
@@ -176,14 +178,17 @@ unity_cli tools run scene.hierarchy --target <id|alias>
 
 ### Destructive Tool Confirmation
 
-For tools with `destructiveHint: true` or `risk.requiresConfirmation: true`:
+For tools with `destructiveHint: true`:
 
 ```bash
 # The CLI will prompt for confirmation before executing
-unity_cli tools run asset.delete --input-json '{"path":"Assets/Old.asset"}'
+unity_cli tools run asset.delete --input '{"path":"Assets/Old.asset"}'
 
 # Use --dry-run to preview without executing (if supportsDryRun is true)
-unity_cli tools run asset.delete --input-json '{"path":"Assets/Old.asset"}' --dry-run
+unity_cli tools run asset.delete --input '{"path":"Assets/Old.asset"}' --dry-run
+
+# Add --yes to confirm in non-TTY / CI environments
+unity_cli tools run asset.delete --input '{"path":"Assets/Old.asset"}' --yes
 ```
 
 Always confirm destructive operations with the user before running them.
@@ -194,14 +199,14 @@ Runtime tools (`target: runtime` or `target: both`) also use `tools run` — no 
 
 ```bash
 # Runtime tool — the router handles Play Mode and session checks
-unity_cli tools run <runtimeToolName> --input-json '<params>'
+unity_cli tools run <runtimeToolName> --input '<params>'
 ```
 
-If `requiresPlayMode: true` and the Editor is not in Play Mode, `tools run` will return `E_PLAYMODE_NOT_READY` with `nextActions` telling you to enter Play Mode first. Enter Play Mode, then retry:
+If `available: false` for a runtime tool (Editor not in Play Mode), `tools run` will return `E_RUNTIME_NOT_READY` (transient) with `next_actions` telling you to enter Play Mode first. Enter Play Mode, then retry:
 
 ```bash
 unity_cli tools run editor.play
-unity_cli tools run <runtimeToolName> --input-json '<params>'
+unity_cli tools run <runtimeToolName> --input '<params>'
 ```
 
 ### Long-Running Tools and Job Polling
@@ -218,7 +223,7 @@ unity_cli job cancel --id <jobId>
 
 ```bash
 # Override default timeout
-unity_cli tools run code.exec --input-json '{"code":"..."}' --timeout-ms 120000
+unity_cli tools run code.exec --input '{"code":"..."}' --timeout-ms 120000
 ```
 
 ## Step 6: Verify Results
@@ -233,7 +238,6 @@ After executing a tool, verify the outcome:
 - **Visual verification:** Use `tools run camera.screenshot` or `tools run screenshot.capture` to visually confirm scene changes.
 - **Console check:** Use `tools run editor.console` to check for errors or warnings after mutations.
 - **Compilation check:** After script changes, wait for compilation, then use `tools run editor.console` to check for errors.
-- **Use `validation` from describe:** The `validation.recommendedChecks` and `validation.successSignals` fields in the descriptor tell you exactly what to verify.
 
 ---
 
@@ -253,9 +257,9 @@ unity_cli tools run scene.hierarchy
 
 ```bash
 unity_cli tools describe scene.load
-unity_cli tools run scene.load --input-json '{"path":"Assets/Scenes/Main.unity"}'
+unity_cli tools run scene.load --input '{"path":"Assets/Scenes/Main.unity"}'
 unity_cli tools run scene.hierarchy
-unity_cli tools run screenshot.capture --input-json '{"output":"verify.png"}'
+unity_cli tools run screenshot.capture --input '{"output":"verify.png"}'
 unity_cli tools run editor.console
 ```
 
@@ -266,7 +270,7 @@ unity_cli capabilities
 unity_cli tools groups
 unity_cli tools search camera
 unity_cli tools describe camera.screenshot
-unity_cli tools run camera.screenshot --input-json '{"target":"MainCamera","output":"shot.png","width":1280,"height":720}'
+unity_cli tools run camera.screenshot --input '{"target":"MainCamera","output":"shot.png","width":1280,"height":720}'
 ```
 
 ### Running a Runtime Tool
@@ -274,10 +278,10 @@ unity_cli tools run camera.screenshot --input-json '{"target":"MainCamera","outp
 ```bash
 # Describe first to check requirements
 unity_cli tools describe <runtimeToolName>
-# If requiresPlayMode, enter Play Mode
+# If available: false (requires Play Mode), enter Play Mode
 unity_cli tools run editor.play
 # Then run the runtime tool
-unity_cli tools run <runtimeToolName> --input-json '<params>'
+unity_cli tools run <runtimeToolName> --input '<params>'
 ```
 
 ### Checking Editor State Before Operations
@@ -311,31 +315,31 @@ All CLI output follows a structured envelope:
 }
 ```
 
-**Transient errors** (compiling, importing, domain reload, busy):
+**Note:** JSON field names are `next_actions` and `retry_after_ms` (snake_case), matching the error envelope schema. In prose we write "next actions" for readability, but always use `next_actions` when parsing error responses.
+
+**Transient errors** (compiling, importing, domain reload, busy, runtime not ready):
 - `error.transient === true` means the Editor is temporarily unavailable.
 - Respect `retry_after_ms` before retrying.
-- Common transient codes: `E_UNITY_COMPILING`, `E_UNITY_IMPORTING`, `E_UNITY_DOMAIN_RELOAD`, `E_UNITY_BUSY`.
+- Common transient codes: `E_UNITY_COMPILING`, `E_UNITY_IMPORTING`, `E_UNITY_DOMAIN_RELOAD`, `E_UNITY_BUSY`, `E_RUNTIME_NOT_READY`.
 
 **Target errors:**
 - `E_TARGET_AMBIGUOUS` → Multiple instances; pass `--target` or run `target set`.
 - `E_TARGET_STALE` → Instance heartbeat is stale; reopen the Editor.
 - `E_TARGET_UNREACHABLE` → Bridge endpoint not responding; check the Editor process.
-- `E_TARGET_BUSY` → Target is busy (compiling, etc.); wait and retry.
+- `BRIDGE_CONNECTION_FAILED` → Cannot connect to Bridge; ensure Editor is running.
+
+**Runtime/session errors:**
+- `E_RUNTIME_NOT_READY` → Runtime tool requires Play Mode; enter Play Mode first (`tools run editor.play`), then retry.
+- `E_RUNTIME_SESSION_STALE` → Runtime session is no longer valid; re-enter Play Mode and retry.
+- `E_RUNTIME_TIMEOUT` → Runtime tool execution timed out; increase `--timeout-ms`.
 
 **Tool discovery errors:**
 - `E_TOOL_NOT_FOUND_FOR_TARGET` → Tool not available on this target instance; use `tools list` to see what's available.
-- `E_TOOL_SCHEMA_CONFLICT` → Same-named tool has different schemas across targets; specify `--target` to resolve.
-- `E_TOOL_AVAILABILITY_STALE` → Tool availability fingerprint is outdated; retry with a fresh `tools describe`.
-- `E_TOOL_DESCRIPTOR_INVALID` → Tool descriptor is malformed; this is a CLI/internal issue.
 
-**Runtime/session errors:**
-- `E_PLAYMODE_NOT_READY` → Tool requires Play Mode; enter Play Mode first, then retry `tools run`.
-- `E_RUNTIME_SESSION_STALE` → Runtime session is no longer valid; re-enter Play Mode and retry.
-
-**Invocation errors:**
-- `E_TOOL_INPUT_INVALID` → Input does not match `inputSchema`; check `details.validationErrors` and correct parameters.
-- `E_TOOL_RISK_CONFIRMATION_REQUIRED` → Destructive tool requires explicit confirmation; confirm with the user and retry.
-- `E_TOOL_TIMEOUT` → Execution exceeded timeout; check `--timeout-ms` or use `job status` for long-running tools.
+**Execution errors:**
+- `E_DESTRUCTIVE_CONFIRMATION_REQUIRED` → Destructive tool requires `--yes`; use `--dry-run` first if supported.
+- `E_EXECUTION_TIMEOUT` → Execution exceeded timeout; increase `--timeout-ms`.
+- `E_CODE_SOURCE_INVALID` → Invalid code source; use exactly one of `--file`, `--stdin`, or `--code`.
 
 **Always follow `next_actions`** — the CLI provides actionable recovery steps for every error.
 
@@ -345,10 +349,11 @@ All CLI output follows a structured envelope:
 
 - **Do not** use `custom-tool` commands — they have been removed. Use `tools` commands exclusively.
 - **Do not** use domain-specific commands (e.g. `unity_cli scene hierarchy`, `unity_cli editor console`, `unity_cli code exec`) as your primary execution path — use `tools run <toolName>` instead. The `cliCommand` field in descriptors exists only for backward-compatibility and debugging, not as the user-facing execution entry point.
-- **Do not** use standalone `runtime` commands — runtime capabilities are expressed through tool descriptors (`target=runtime`, `requiresPlayMode`, `nextActions` in `tools describe` output) and executed via `tools run`.
+- **Do not** use standalone `runtime` commands — runtime capabilities are expressed through tool descriptors (`target: runtime`, `availabilityScope: playModeSession`, `available`) and executed via `tools run`.
 - **Do not** manually ping bridge endpoints or read instance registry files — use `instances list` and `target` commands.
 - **Do not** skip `tools describe` before running a tool you haven't used before — always check schema, hints, and examples first.
 - **Do not** assume all tools are available on every instance — different Unity projects expose different tool sets. Use `tools list` to discover what's available per target.
+- **Do not** use `--input-json` — the CLI parameter is `--input`. Use `--input-file` for file input.
 
 ---
 
