@@ -105,6 +105,7 @@ namespace UnityCli
             RegisterScriptCommands(registry);
             RegisterCodeExecCommand(registry);
             RegisterProjectToolCommands(registry);
+            RegisterRuntimeToolCommands(registry);
             return registry;
         }
 

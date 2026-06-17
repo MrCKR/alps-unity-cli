@@ -7,6 +7,7 @@
 
 import { getBoolean, getString } from "./args.js";
 import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
+import { executeBridgeCommand } from "./bridge/index.js";
 import {
   builtinToolMetadata,
   builtinToolGroups,
@@ -34,10 +35,7 @@ export async function handleToolsCommand(
   }
 
   if (command === "run") {
-    return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", "tools run is reserved for the unified tools contract and is not implemented in P1.", [
-      "Use the domain CLI command shown by tools describe.",
-      "Use tools run <name> once P3 implements unified tools run."
-    ]);
+    return handleToolsRun(positional, flags, runtime, requestId);
   }
 
   if (command === "groups") {
@@ -95,7 +93,10 @@ async function handleToolsList(
       cliCommand: t.cliCommand,
       architectureSensitive: t.architectureSensitive,
       frozenDecision: t.frozenDecision,
-      coverageScope: t.coverageScope
+      coverageScope: t.coverageScope,
+      target: t.target ?? "editor",
+      availabilityScope: t.availabilityScope ?? (t.target === "runtime" ? "playModeSession" : "editorSession"),
+      available: t.available
     };
   });
 
@@ -176,7 +177,9 @@ async function handleToolsSearch(
       cliCommand: t.cliCommand,
       architectureSensitive: t.architectureSensitive,
       frozenDecision: t.frozenDecision,
-      coverageScope: t.coverageScope
+      coverageScope: t.coverageScope,
+      target: t.target ?? "editor",
+      availabilityScope: t.availabilityScope ?? (t.target === "runtime" ? "playModeSession" : "editorSession")
     };
   });
 
@@ -233,6 +236,59 @@ async function handleToolsDescribe(
   };
 
   return success(requestId, data);
+}
+
+async function handleToolsRun(
+  positional: string[],
+  flags: Record<string, string | boolean>,
+  runtime: ToolsRuntime,
+  requestId: string
+): Promise<CliResult> {
+  const toolName = positional[0] ?? getString(flags, "name") ?? getString(flags, "tool");
+  if (!toolName) {
+    return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", "Tool name is required for tools run.", [
+      "Run unity_cli tools list to see available tools.",
+      "Run unity_cli tools run <name> [--input <json>] [--target <instance>]."
+    ]);
+  }
+
+  // Discover the tool (builtin metadata + project tools)
+  const builtinTool = findToolByName(toolName);
+  const includeCustom = shouldDiscoverProjectTools(flags, runtime) || getBoolean(flags, "include-custom");
+  let projectTool: ToolMetadata | undefined;
+  if (!builtinTool && includeCustom) {
+    const customTools = await discoverProjectTools(flags, runtime, requestId, { requireBridge: getBoolean(flags, "include-custom") });
+    if (customTools.ok === false) return customTools;
+    projectTool = customTools.tools.find((t: ToolMetadata) => t.name === toolName);
+  }
+
+  const tool = builtinTool ?? projectTool;
+  if (!tool) {
+    return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Tool not found: ${toolName}.`, [
+      "Run unity_cli tools list --include-custom to see all available tools.",
+      "Run unity_cli tools search <keyword> to find related tools."
+    ]);
+  }
+
+  // Determine the execution target and route accordingly
+  const target = tool.target ?? "editor";
+  const isRuntime = target === "runtime" || (target === "both" && getBoolean(flags, "runtime"));
+
+  if (isRuntime) {
+    // Route through RuntimeExecutor via runtime-tool.run bridge command
+    return executeBridgeCommand(requestId, "runtime-tool.run", flags, toolName, runtime);
+  }
+
+  // Route through project-tool.run for editor-domain tools
+  // For built-in tools with bridge commands, use their native bridge command
+  if (builtinTool && tool.handler !== "bridge" && tool.handler !== "bridge-runtime") {
+    // Builtin tools with non-bridge handlers need different routing
+    // For now, treat all built-in tools as bridge commands via their cliCommand
+    return executeBridgeCommand(requestId, "project-tool.run", flags, toolName, runtime);
+  }
+
+  // Custom project tools go through project-tool.run
+  return executeBridgeCommand(requestId, "project-tool.run", flags, toolName, runtime);
 }
 
 async function optionalTargetSummary(flags: Record<string, string | boolean>, runtime: ToolsRuntime): Promise<Record<string, unknown> | null> {

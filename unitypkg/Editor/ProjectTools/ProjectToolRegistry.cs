@@ -53,6 +53,8 @@ namespace UnityCli
             definition.InputSchema = string.IsNullOrEmpty(definition.InputSchema) ? "{}" : definition.InputSchema;
             definition.OutputSchema = string.IsNullOrEmpty(definition.OutputSchema) ? "{}" : definition.OutputSchema;
             definition.CapabilityType = string.IsNullOrEmpty(definition.CapabilityType) ? "project-write" : definition.CapabilityType;
+            definition.Target = string.IsNullOrEmpty(definition.Target) ? "editor" : definition.Target;
+            definition.AvailabilityScope = string.IsNullOrEmpty(definition.AvailabilityScope) ? (definition.Target == "runtime" ? "playModeSession" : "editorSession") : definition.AvailabilityScope;
             definition.CoverageScope = definition.CoverageScope ?? new string[0];
             definition.DefaultTimeoutMs = definition.DefaultTimeoutMs <= 0 ? 30000 : definition.DefaultTimeoutMs;
             definition.MaxTimeoutMs = definition.MaxTimeoutMs <= 0 ? 600000 : definition.MaxTimeoutMs;
@@ -141,6 +143,7 @@ namespace UnityCli
                 ArchitectureSensitive = attribute.ArchitectureSensitive,
                 FrozenDecision = attribute.FrozenDecision,
                 CoverageScope = SplitCsv(attribute.CoverageScope).ToArray(),
+                Target = attribute.Target ?? "editor",
                 DefaultTimeoutMs = attribute.DefaultTimeoutMs,
                 MaxTimeoutMs = attribute.MaxTimeoutMs,
                 SupportsJob = attribute.SupportsJob,
@@ -211,6 +214,18 @@ namespace UnityCli
             }
 
             var definition = ProjectTools[name];
+
+            // If the tool has Target=runtime, reject from project-tool.run and suggest runtime-tool.run
+            if (definition.Target == "runtime")
+            {
+                return ErrorJsonWithDetails("E_RUNTIME_TOOL_TARGET_MISMATCH",
+                    "Tool " + name + " has Target=runtime and must be executed via the runtime path (runtime-tool.run).",
+                    new UnityCliJsonWriter().BeginObject()
+                        .Prop("toolName", name)
+                        .Prop("toolTarget", definition.Target)
+                        .EndObject().ToString(),
+                    "Use runtime-tool.run <name> or tools run <name> with a runtime target to execute this tool in Play Mode.");
+            }
             var fingerprintCheck = RefreshProjectToolFingerprint(definition, request.StringArg("fingerprintMode"));
             if (fingerprintCheck.Blocked)
             {
@@ -337,6 +352,8 @@ namespace UnityCli
                 .Prop("capabilityType", definition.CapabilityType)
                 .Prop("readOnlyHint", definition.ReadOnlyHint)
                 .Prop("destructiveHint", definition.DestructiveHint)
+                .Prop("target", definition.Target)
+                .Prop("availabilityScope", definition.AvailabilityScope)
                 .Prop("defaultTimeoutMs", definition.DefaultTimeoutMs)
                 .Prop("maxTimeoutMs", definition.MaxTimeoutMs)
                 .Prop("supportsJob", definition.SupportsJob)

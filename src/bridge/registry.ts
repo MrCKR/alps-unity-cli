@@ -17,6 +17,7 @@ import { shaderBridgeSpecs } from "./domains/shader.js";
 import { textureBridgeSpecs } from "./domains/texture.js";
 import { uiBridgeSpecs } from "./domains/ui.js";
 import { vfxBridgeSpecs } from "./domains/vfx.js";
+import { runtimeToolBridgeSpecs } from "./domains/runtime-tool.js";
 import { securityPolicyForCommand } from "../security-policy.js";
 import type { BridgeCommandSpec } from "./types.js";
 
@@ -39,7 +40,8 @@ const DOMAIN_SPECS: BridgeCommandSpec[] = [
   ...scriptBridgeSpecs,
   ...editorBridgeSpecs,
   ...diagnoseBridgeSpecs,
-  ...codeBridgeSpecs
+  ...codeBridgeSpecs,
+  ...runtimeToolBridgeSpecs
 ];
 
 export class BridgeCommandRegistry {
