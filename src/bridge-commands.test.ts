@@ -7,7 +7,7 @@ import test from "node:test";
 import { execute } from "./cli.js";
 import { JobRunner } from "./job-runner.js";
 import { JobStore } from "./job-store.js";
-import { bridgeHttpTimeoutMs, type BridgeRequest } from "./bridge/index.js";
+import { bridgeCommandRegistry, bridgeHttpTimeoutMs, type BridgeRequest } from "./bridge/index.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
@@ -933,4 +933,50 @@ test("editor bridge errors preserve structured diagnostics", async () => {
     assert.equal(result.error?.code, item.response.code, item.name);
     assert.deepEqual(result.error?.next_actions, item.nextActions, item.name);
   }
+});
+
+test("runtime-tool list forwards args and returns envelope", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+  const bridgeExecute = async (payload: BridgeRequest) => {
+    requests.push(payload);
+    return { ok: true, data: { tools: [{ name: "sample.runtime-echo", title: "Sample Runtime Echo", description: "Echoes input from runtime", group: "sample", target: "runtime" }] } };
+  };
+
+  const result = await execute(["runtime-tool", "list"], { ...runtime, bridgeExecute });
+
+  assert.equal(result.ok, true);
+  assert.equal(requests[0].command, "runtime-tool.list");
+  assert.deepEqual(requests[0].args, {});
+});
+
+test("runtime-tool run forwards name, input and session args", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+  const bridgeExecute = async (payload: BridgeRequest) => {
+    requests.push(payload);
+    return { ok: true, data: { result: { requestId: "req", input: {}, isPlaying: true, frameCount: 42 } } };
+  };
+
+  const result = await execute(["runtime-tool", "run", "sample.runtime-echo", "--input", "{\"message\":\"hello\"}" , "--play-mode-session-id", "sess_abc", "--timeout-ms", "5000", "--yes"], { ...runtime, bridgeExecute });
+
+  assert.equal(result.ok, true);
+  assert.equal(requests[0].command, "runtime-tool.run");
+  assert.equal(requests[0].args.name, "sample.runtime-echo");
+  assert.equal(requests[0].args.input, "{\"message\":\"hello\"}");
+  assert.equal(requests[0].args.playModeSessionId, "sess_abc");
+  assert.equal(requests[0].args.timeoutMs, 5000);
+});
+
+test("runtime-tool list is registered in bridge command registry", () => {
+  const spec = bridgeCommandRegistry.lookup("runtime-tool", "list");
+  assert.ok(spec, "runtime-tool list should be registered");
+  assert.equal(spec.bridgeCommand, "runtime-tool.list");
+});
+
+test("runtime-tool run is registered in bridge command registry", () => {
+  const spec = bridgeCommandRegistry.lookup("runtime-tool", "run");
+  assert.ok(spec, "runtime-tool run should be registered");
+  assert.equal(spec.bridgeCommand, "runtime-tool.run");
+  assert.equal(spec.destructiveHint, true);
 });
