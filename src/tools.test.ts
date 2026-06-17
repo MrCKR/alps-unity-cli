@@ -775,3 +775,14 @@ test("tools run editor-domain tool discovery falls back to project-tool.list", a
   assert.equal(requests[1].command, "project-tool.list");
   assert.equal(requests[2].command, "project-tool.run");
 });
+
+// ── tools.run descriptor is not planned/stub ──────────────
+
+test("tools.run descriptor is not planned/stub", () => {
+  const tool = findToolByName("tools.run");
+  assert.ok(tool, "tools.run must exist in builtin metadata");
+  assert.equal(tool.supportStatus, "live-bridge", "tools.run supportStatus must be live-bridge, not planned");
+  assert.equal(tool.handler, "hybrid", "tools.run handler must be hybrid (routes dynamically)");
+  assert.ok(!tool.description.includes("Reserved for P3"), "description must not say Reserved for P3");
+  assert.ok(!tool.description.includes("currently returns"), "description must not say currently returns stub error");
+});
