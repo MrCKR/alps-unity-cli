@@ -19,6 +19,18 @@ Tools backed by specific Unity packages are only available when the target proje
 
 When `tools list --include-custom` is called against an instance whose project lacks these packages, the corresponding tools still appear in the built-in metadata (because built-in metadata is shipped with the CLI), but executing them against that instance returns a package-not-found error.
 
+**Package prerequisites are declared in tool metadata** via the `requiresPackages` field. Tools with this field will include it in `tools list` and `tools describe` output, making it possible to detect package dependencies before execution:
+
+```json
+{
+  "name": "vfx.graph",
+  "requiresPackages": ["com.unity.visualeffectgraph"],
+  ...
+}
+```
+
+If `requiresPackages` is present and non-empty, the tool requires all listed packages to be installed in the target Unity project. If any package is missing, execution will fail with a package-not-found error code that includes `next_actions` suggesting how to install the missing package.
+
 ### 2. Project Tool Registration
 
 Project tools (`[UnityCliTool]` C# attributes) are discovered by querying the Bridge at runtime. Different projects register different project tools. `tools list --include-custom` against Instance A may show `sample.echo` while Instance B shows `acme.custom-builder` — or no project tools at all.

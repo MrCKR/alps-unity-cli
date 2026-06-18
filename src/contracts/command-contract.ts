@@ -17,6 +17,7 @@ export interface CommandContractEntry {
   architectureSensitive?: boolean;
   frozenDecision?: string;
   coverageScope?: string[];
+  requires_packages?: string[];
 }
 
 interface CommandContractFile {
@@ -81,6 +82,9 @@ export function validateToolMetadataContracts(tools: ToolMetadata[], registry: B
     }
     if (JSON.stringify(contract.coverageScope ?? []) !== JSON.stringify(tool.coverageScope ?? [])) {
       throw new Error(`Tool metadata coverage scope mismatch for ${tool.name}`);
+    }
+    if (JSON.stringify(contract.requires_packages ?? []) !== JSON.stringify(tool.requiresPackages ?? [])) {
+      throw new Error(`Tool metadata requiresPackages mismatch for ${tool.name}: metadata=${JSON.stringify(tool.requiresPackages ?? [])} contract=${JSON.stringify(contract.requires_packages ?? [])}`);
     }
     if (tool.cliCommand && (tool.handler === "bridge" || tool.handler === "hybrid")) {
       const [group, ...commandParts] = tool.cliCommand.split(" ");

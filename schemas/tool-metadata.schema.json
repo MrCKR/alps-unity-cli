@@ -135,6 +135,11 @@
     "available": {
       "type": "boolean",
       "description": "Whether the tool is currently available based on the resolved target's session state. Runtime tools are only available when Play Mode is active. Populated by tools list/search at runtime, not in static metadata. P3 contract field."
+    },
+    "requiresPackages": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Unity package names required by this tool at runtime (e.g. 'com.unity.visualeffectgraph'). When absent the tool has no package prerequisites. Tools with requiresPackages that are executed against a project lacking the package will return a package-not-found error (e.g. E_VFX_PACKAGE_MISSING, E_PROBUILDER_PACKAGE_NOT_FOUND)."
     }
   },
   "additionalProperties": false

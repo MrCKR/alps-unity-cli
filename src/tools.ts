@@ -95,7 +95,8 @@ async function handleToolsList(
       coverageScope: t.coverageScope,
       target: t.target ?? "editor",
       availabilityScope: t.availabilityScope ?? (t.target === "runtime" ? "playModeSession" : "editorSession"),
-      available: t.available
+      available: t.available,
+      requiresPackages: t.requiresPackages
     };
   });
 
@@ -178,7 +179,8 @@ async function handleToolsSearch(
       frozenDecision: t.frozenDecision,
       coverageScope: t.coverageScope,
       target: t.target ?? "editor",
-      availabilityScope: t.availabilityScope ?? (t.target === "runtime" ? "playModeSession" : "editorSession")
+      availabilityScope: t.availabilityScope ?? (t.target === "runtime" ? "playModeSession" : "editorSession"),
+      requiresPackages: t.requiresPackages
     };
   });
 

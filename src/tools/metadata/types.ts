@@ -36,4 +36,6 @@ export interface ToolMetadata {
   availabilityScope?: string;
   /** Whether the tool is currently available based on session state (runtime tools: only in Play Mode). */
   available?: boolean;
+  /** Unity package names required by this tool at runtime. When absent the tool has no package prerequisites. */
+  requiresPackages?: string[];
 }
