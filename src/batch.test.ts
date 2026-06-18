@@ -58,9 +58,9 @@ test("batch run orders steps by dependsOn and aggregates envelopes", async () =>
 test("batch can orchestrate long job status logs and cancel chain", async () => {
   const runtime = await makeRuntime();
   const unity = await writeFakeUnity(runtime.dataDir, `
-const fs = require("node:fs");
-const logIndex = process.argv.indexOf("-logFile");
-if (logIndex >= 0) fs.appendFileSync(process.argv[logIndex + 1], "build started\\n");
+// With -logFile -, Unity writes its log to stdout. The runner captures stdout
+// and writes it to the job's logPath.
+process.stdout.write("build started\\n");
 setTimeout(() => process.exit(0), 5000);
 `);
   const created = await execute(["build", "run", "--unity", unity, "--project", runtime.dataDir], runtime);

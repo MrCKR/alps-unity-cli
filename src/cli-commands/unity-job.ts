@@ -22,7 +22,7 @@ export async function startUnityJob(kind: JobKind, flags: Record<string, string 
   const timeoutMs = getNumber(flags, "timeout-ms");
   const job = await runtime.runner.start({ kind, projectPath, unityPath, args: unityArgs, timeoutMs, requestId, result });
   if (!getBoolean(flags, "wait")) {
-    return success(requestId, summarizeJob(job));
+    return success(requestId, await summarizeJob(job));
   }
 
   const waitTimeoutMs = getNumber(flags, "wait-timeout-ms") ?? timeoutMs ?? 600000;
@@ -41,11 +41,11 @@ export async function startUnityJob(kind: JobKind, flags: Record<string, string 
       domainReloadObserved: false
     });
   }
-  return success(requestId, summarizeJob(waited));
+  return success(requestId, await summarizeJob(waited));
 }
 
-export function summarizeJob(job: JobRecord): Record<string, unknown> {
-  return {
+export async function summarizeJob(job: JobRecord): Promise<Record<string, unknown>> {
+  const base: Record<string, unknown> = {
     jobId: job.id,
     kind: job.kind,
     status: job.status,
@@ -64,6 +64,21 @@ export function summarizeJob(job: JobRecord): Record<string, unknown> {
     cancellation: jobCancellationSemantics(job.kind),
     ...(job.error ? { error: job.error } : {})
   };
+
+  // For terminal jobs, embed the last N log lines so callers can see the failure
+  // reason without a separate `job logs` round-trip.
+  if (terminalStatuses.has(job.status) && job.logPath) {
+    try {
+      const { readFile } = await import("node:fs/promises");
+      const raw = await readFile(job.logPath, "utf8");
+      const lines = raw.split(/\r?\n/).filter(Boolean);
+      base.logTail = lines.slice(Math.max(0, lines.length - 40));
+    } catch {
+      // Log file may not exist or be unreadable — non-critical.
+    }
+  }
+
+  return base;
 }
 
 export function jobCancellationSemantics(kind: JobKind): Record<string, unknown> {

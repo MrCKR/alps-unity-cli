@@ -129,7 +129,7 @@ async function runJobWorker(flags: Record<string, string | boolean>, requestId: 
   try {
     const runtime = createRuntime(dataDir);
     const job = await runtime.runner.runWorker(id);
-    return success(requestId, summarizeJob(job));
+    return success(requestId, await summarizeJob(job));
   } catch (error) {
     return failure(requestId, "WORKER_FAILED", error instanceof Error ? error.message : String(error));
   }

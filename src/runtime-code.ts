@@ -345,7 +345,7 @@ async function startBatchCodeJob(
   }
 
   if (!getBoolean(flags, "wait")) {
-    return success(requestId, summarizeJob(job));
+    return success(requestId, await summarizeJob(job));
   }
 
   const waitTimeoutMs = getNumber(flags, "wait-timeout-ms") ?? timeoutMs;
@@ -364,7 +364,7 @@ async function startBatchCodeJob(
       domainReloadObserved: false
     });
   }
-  return success(requestId, summarizeJob(waited));
+  return success(requestId, await summarizeJob(waited));
 }
 
 function normalizeRelativePath(path: string): string {
