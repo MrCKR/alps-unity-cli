@@ -313,9 +313,18 @@ namespace UnityCli
             }
             if (EditorApplication.isPlayingOrWillChangePlaymode
                 && command != "editor.pause"
-                && command != "editor.stop")
+                && command != "editor.stop"
+                && command != "editor.state"
+                && command != "editor.console")
             {
-                throw new BridgeCommandException("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode.", "Wait for Play mode transition to complete and retry.", transient: true, retryAfterMs: 3000);
+                var isTransition = !EditorApplication.isPlaying;
+                var message = isTransition
+                    ? "Unity Editor is entering or exiting Play mode."
+                    : "Unity Editor is in Play Mode; this editor-domain command is not available.";
+                var nextAction = isTransition
+                    ? "Wait for Play mode transition to complete and retry."
+                    : "Exit Play Mode first (use editor stop).";
+                throw new BridgeCommandException("E_UNITY_PLAY_MODE", message, nextAction, transient: isTransition, retryAfterMs: isTransition ? 3000 : 0);
             }
             if (BuildPipeline.isBuildingPlayer)
             {

@@ -11,9 +11,12 @@ export type ProjectToolDiscovery = { ok: true; tools: ToolMetadata[]; mode: "run
 
 export function shouldDiscoverProjectTools(flags: Record<string, string | boolean>, runtime: ProjectToolRuntime): boolean {
   return getBoolean(flags, "include-custom") ||
+    getBoolean(flags, "runtime") ||
     runtime.projectTools !== undefined ||
     runtime.bridgeExecute !== undefined ||
     typeof getString(flags, "bridge-endpoint") === "string" ||
+    typeof getString(flags, "target") === "string" ||
+    typeof getString(flags, "instance") === "string" ||
     typeof runtime.bridgeEndpoint === "string" ||
     typeof process.env.UNITY_CLI_BRIDGE_ENDPOINT === "string";
 }
