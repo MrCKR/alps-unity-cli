@@ -53,7 +53,7 @@ namespace UnityCli
         private static readonly string[] CodeCommands = { "code.exec" };
         private static readonly string[] ProjectToolCommands = { "project-tool.list", "project-tool.run" };
         private static readonly string[] RuntimeToolCommands = { "runtime-tool.list", "runtime-tool.run" };
-        private const string BridgeDiagnosticsFingerprint = "alp276-health-fingerprint-20260615-execute-stage-v1";
+        private const string BridgeDiagnosticsFingerprint = "alp276-health-fingerprint-20260618-play-mode-guard-v2";
         private const string DestructiveCommandFingerprint = "alp332-destructive-safety-v1";
         private static readonly BridgeCommandRegistry CommandRegistry = CreateCommandRegistry();
         private static readonly string ListenerId = Guid.NewGuid().ToString("N");
@@ -230,20 +230,22 @@ namespace UnityCli
 
                 if (!alwaysAllowedInPlayMode)
                 {
+                    WriteLog("execute_play_mode_guard_blocked requestId=" + request.RequestId + " command=" + request.Command + " isPlaying=" + Bool(EditorApplication.isPlaying));
                     if (!EditorApplication.isPlaying)
                     {
                         // Transition phase: isPlayingOrWillChangePlaymode is true but
                         // isPlaying is not yet true (entering) or already false (exiting).
                         // Transient — callers should wait and retry.
-                        return TransientErrorJson("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode.", "Wait for Play mode transition to complete and retry.", 3000);
+                        return TransientErrorJson("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode. (execute-guard-v2)", "Wait for Play mode transition to complete and retry.", 3000);
                     }
                     else
                     {
                         // Stable Play Mode: editor-domain write commands are not available.
                         // Non-transient — retrying won't help; the caller must exit Play Mode first.
-                        return ErrorJson("E_UNITY_PLAY_MODE", "Unity Editor is in Play Mode; editor-domain write commands are not available.", "Exit Play Mode first (use editor stop), or use read-only and runtime tool commands.");
+                        return ErrorJson("E_UNITY_PLAY_MODE", "Unity Editor is in Play Mode; editor-domain write commands are not available. (execute-guard-v2)", "Exit Play Mode first (use editor stop), or use read-only and runtime tool commands.");
                     }
                 }
+                WriteLog("execute_play_mode_guard_allowed requestId=" + request.RequestId + " command=" + request.Command);
             }
 
             if (RequiresDestructiveSecurityProof(request.Command) && !request.DryRun && !request.SecurityConfirmed(DestructiveCommandFingerprint))
