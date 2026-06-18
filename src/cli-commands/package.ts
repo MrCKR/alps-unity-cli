@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { getBoolean, getString } from "../args.js";
 import { executeBridgePayload } from "../bridge/index.js";
@@ -149,6 +150,10 @@ async function refreshOpenEditor(requestId: string, flags: Record<string, string
   return { status: "failed", command: "editor.menu", path: "Assets/Refresh", endpoint, code: result.error?.code, message: result.error?.message };
 }
 
+function isProjectLocked(projectPath: string): boolean {
+  return existsSync(resolve(projectPath, "Temp", "UnityLockfile"));
+}
+
 async function isBridgeReachable(endpoint: string): Promise<boolean> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 1500);
@@ -163,6 +168,40 @@ async function isBridgeReachable(endpoint: string): Promise<boolean> {
 }
 
 async function maybeResolvePackage(command: string, flags: Record<string, string | boolean>, runtime: Runtime, requestId: string, projectPath: string, result: Record<string, unknown>): Promise<CliResult> {
+  // If a live Editor is reachable via bridge, trigger an asset refresh so it picks up the manifest change.
+  // Skip if caller already performed a bridge refresh (e.g. handleInit).
+  let liveRefresh = result.liveRefresh as Record<string, unknown> | undefined;
+  if (!liveRefresh) {
+    liveRefresh = await refreshOpenEditor(requestId, flags, runtime);
+  }
+
+  // If bridge refresh was triggered, return success — no need for Unity path or batchmode.
+  if (liveRefresh.status === "triggered") {
+    return success(requestId, {
+      ...result,
+      projectPath,
+      status: result.status ?? "manifest_updated",
+      resolve: "live_bridge_refresh",
+      liveRefresh,
+      nextActions: result.nextActions ?? ["The open Unity Editor has been notified to refresh assets. Wait for Unity to finish reimporting before using the package."]
+    });
+  }
+
+  // If bridge was reachable but the refresh command failed, the Editor is open — batchmode would also fail.
+  if (liveRefresh.status === "failed") {
+    return failure(requestId, "UNITY_BUSY", "The Unity Editor is open but the asset refresh command failed.", [
+      "Wait for Unity to finish compiling/importing and retry.",
+      "If the issue persists, close the Unity Editor and retry without --bridge-endpoint.",
+      "The manifest has been updated; Unity will detect the change on next domain reload or asset refresh."
+    ], {
+      projectPath,
+      resolve: "blocked_by_open_editor",
+      manifestUpdated: true,
+      liveRefresh
+    });
+  }
+
+  // Bridge was not reachable — fall through to Unity path / batchmode checks.
   const unityPath = getString(flags, "unity") ?? discoverUnity();
   if (!unityPath && !getBoolean(flags, "job")) {
     return success(requestId, { ...result, projectPath, status: result.status ?? "manifest_updated", resolve: "skipped", nextActions: result.nextActions ?? ["Pass --unity <path-to-Unity.exe> or set UNITY_EXE to run Unity PackageManager resolve as a job."] });
@@ -170,6 +209,20 @@ async function maybeResolvePackage(command: string, flags: Record<string, string
   if (!unityPath) {
     return failure(requestId, "UNITY_NOT_FOUND", "Unity.exe was not found.", ["Pass --unity <path-to-Unity.exe> or set UNITY_EXE."]);
   }
+
+  // Pre-flight: check if the project is locked by another Unity instance (batchmode will fail if so).
+  if (isProjectLocked(projectPath)) {
+    return failure(requestId, "UNITY_BUSY", "Cannot start Unity batchmode: the project is currently open in the Unity Editor.", [
+      "Close the Unity Editor and retry, or pass --bridge-endpoint <url> to trigger a live refresh.",
+      "The manifest has been updated; Unity will detect the change on next domain reload or asset refresh.",
+      "If Unity is not running, delete the stale lock file: <project>/Temp/UnityLockfile"
+    ], {
+      projectPath,
+      resolve: "blocked_by_open_editor",
+      manifestUpdated: true
+    });
+  }
+
   const { ensurePackageBridge } = await import("../package-manager.js");
   const bridge = await ensurePackageBridge(projectPath);
   return startUnityJob("package", flags, runtime, requestId, ["-executeMethod", "UnityCli.UnityCliBatch.ResolvePackages", "-unityCliPackageAction", command], { ...result, bridge });

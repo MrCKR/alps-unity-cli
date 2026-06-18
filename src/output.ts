@@ -127,6 +127,7 @@ export const TRANSIENT_ERROR_CODES: ReadonlySet<string> = new Set([
   ERROR_CODES.E_UNITY_DOMAIN_RELOAD,
   ERROR_CODES.E_UNITY_PLAY_MODE,
   ERROR_CODES.E_RUNTIME_NOT_READY,
+  ERROR_CODES.UNITY_BUSY,
 ]);
 
 /** Default retry_after_ms values for transient errors. */
@@ -137,6 +138,7 @@ export const DEFAULT_RETRY_AFTER_MS: Record<string, number> = {
   [ERROR_CODES.E_UNITY_PLAY_MODE]: 3000,
   [ERROR_CODES.E_UNITY_BUSY]: 5000,
   [ERROR_CODES.E_RUNTIME_NOT_READY]: 3000,
+  [ERROR_CODES.UNITY_BUSY]: 15000,
 };
 
 /** CLI-side default timeouts by command category. */

@@ -473,6 +473,70 @@ test("package remove returns structured diagnostic for missing package", async (
   assert.equal(removed.error?.next_actions?.[0].includes("package list"), true);
 });
 
+test("package remove with --yes asks an open Editor to refresh via bridge instead of batchmode", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+  const unity = await makeFakeUnity(`process.exit(0);`);
+  const requests: Array<{ command: string; args: Record<string, unknown> }> = [];
+
+  const removed = await execute(["package", "remove", "com.example.tool", "--project", project, "--unity", unity, "--yes"], {
+    ...runtime,
+    bridgeExecute: async (payload) => {
+      requests.push({ command: payload.command, args: payload.args });
+      return { ok: true, data: { command: payload.command, result: { executed: true } } };
+    }
+  });
+
+  assert.equal(removed.ok, true);
+  assert.deepEqual(requests, [{ command: "editor.menu", args: { path: "Assets/Refresh", timeoutMs: 7000 } }]);
+  const data = removed.data as { action: string; package: string; resolve: string; liveRefresh: { status: string } };
+  assert.equal(data.action, "remove");
+  assert.equal(data.package, "com.example.tool");
+  assert.equal(data.resolve, "live_bridge_refresh");
+  assert.equal(data.liveRefresh.status, "triggered");
+
+  // Manifest should have the package removed even though batchmode was not started.
+  const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string> };
+  assert.equal(manifest.dependencies["com.example.tool"], undefined);
+});
+
+test("package remove with --yes returns UNITY_BUSY when the project is locked by an open Editor", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+  const unity = await makeFakeUnity(`process.exit(0);`);
+  // Simulate an open Unity Editor by creating the lock file.
+  await mkdir(join(project, "Temp"), { recursive: true });
+  await writeFile(join(project, "Temp", "UnityLockfile"), "");
+
+  const removed = await execute(["package", "remove", "com.example.tool", "--project", project, "--unity", unity, "--bridge-endpoint", "http://127.0.0.1:9", "--yes"], runtime);
+
+  assert.equal(removed.ok, false);
+  assert.equal(removed.error?.code, "UNITY_BUSY");
+  assert.equal(removed.error?.transient, true);
+  assert.equal((removed.error as unknown as { resolve: string }).resolve, "blocked_by_open_editor");
+  assert.equal((removed.error as unknown as { manifestUpdated: boolean }).manifestUpdated, true);
+
+  // Manifest should still have been updated (package removed) before the resolve was blocked.
+  const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string> };
+  assert.equal(manifest.dependencies["com.example.tool"], undefined);
+});
+
+test("package remove with --yes returns UNITY_BUSY when bridge refresh fails in an open Editor", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+  const unity = await makeFakeUnity(`process.exit(0);`);
+
+  const removed = await execute(["package", "remove", "com.example.tool", "--project", project, "--unity", unity, "--yes"], {
+    ...runtime,
+    bridgeExecute: async () => ({ ok: false, error: { code: "BRIDGE_COMMAND_FAILED", message: "Unity is compiling" } })
+  });
+
+  assert.equal(removed.ok, false);
+  assert.equal(removed.error?.code, "UNITY_BUSY");
+  assert.equal(removed.error?.transient, true);
+  assert.equal((removed.error as unknown as { resolve: string }).resolve, "blocked_by_open_editor");
+});
+
 test("package write commands require an existing Unity manifest", async () => {
   const runtime = await makeRuntime();
   const project = await mkdtemp(join(tmpdir(), "not-unity-project-"));
