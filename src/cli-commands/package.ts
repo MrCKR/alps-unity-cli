@@ -13,21 +13,32 @@ import { startUnityJob } from "./unity-job.js";
 export async function handleInit(flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult> {
   const projectPath = resolve(getString(flags, "project") ?? process.cwd());
   const { checkPackageBridge, ensurePackageBridge } = await import("../package-manager.js");
+  const agentFlag = getString(flags, "agent");
 
   if (getBoolean(flags, "check")) {
     const bridge = await checkPackageBridge(projectPath);
-    return success(requestId, {
+    const result: Record<string, unknown> = {
       action: "init_check",
       status: "installed",
       projectPath,
       bridge,
       nextActions: ["Unity package com.unity_cli is installed via copy mode in Packages/com.unity_cli/."]
-    });
+    };
+
+    // When --agent is specified with --check, also check agent skill status
+    if (agentFlag) {
+      const { agentSkillInstaller, findSkillSourcePath } = await import("./skill-installer.js");
+      const sourcePath = await findSkillSourcePath();
+      const skillResults = await agentSkillInstaller.checkForAgents(agentFlag, sourcePath, projectPath);
+      result.skills = skillResults;
+    }
+
+    return success(requestId, result);
   }
 
   const bridge = await ensurePackageBridge(projectPath);
   const liveRefresh = await refreshOpenEditor(requestId, flags, runtime);
-  return maybeResolvePackage("init", flags, runtime, requestId, projectPath, {
+  const baseResult: Record<string, unknown> = {
     action: "init",
     status: "package_installed",
     bridge,
@@ -35,7 +46,29 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
     nextActions: liveRefresh.status === "triggered"
       ? ["Wait for Unity to finish compiling/importing, then retry /health and Bridge commands against the live endpoint."]
       : ["Open the Unity project to start using the package. The package is copied to Packages/com.unity_cli/."]
-  });
+  };
+
+  // When --agent is specified, install skills for the listed agents
+  if (agentFlag) {
+    const { agentSkillInstaller, findSkillSourcePath } = await import("./skill-installer.js");
+    const sourcePath = await findSkillSourcePath();
+    const skillResults = await agentSkillInstaller.installForAgents(agentFlag, sourcePath, projectPath);
+    baseResult.skills = skillResults;
+
+    // Build change description for updated skills
+    const updated = skillResults.filter((r) => r.status === "updated");
+    if (updated.length > 0) {
+      baseResult.skillChanges = updated.map((r) => ({
+        agent: r.agent,
+        action: "overwritten",
+        reason: "source content differs from installed skill",
+        previousHash: r.previousHash,
+        newHash: r.newHash
+      }));
+    }
+  }
+
+  return maybeResolvePackage("init", flags, runtime, requestId, projectPath, baseResult);
 }
 
 export async function handlePackage(command: string | undefined, args: string[], flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult> {
