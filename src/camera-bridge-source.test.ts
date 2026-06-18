@@ -674,7 +674,7 @@ test("Unity Bridge editor commands expose state, play/pause/stop, menu execution
   assert.match(source, /private static string EditorConsole\(BridgeRequest request\)/);
   assert.match(source, /private static string BridgeBuildStamp\(\)/);
   assert.match(source, /private static string BridgeHealthJson\(\)/);
-  assert.match(source, /private const string BridgeDiagnosticsFingerprint = "alp276-health-fingerprint-20260615-execute-stage-v1"/);
+  assert.match(source, /private const string BridgeDiagnosticsFingerprint = "alp276-health-fingerprint-20260618-play-mode-guard-v2"/);
   assert.match(source, /private static readonly string ListenerId = Guid\.NewGuid\(\)\.ToString\("N"\)/);
   assert.match(source, /private static readonly DateTime BridgeLoadedAtUtc = DateTime\.UtcNow/);
   assert.match(source, /private static string AssemblyMvid\(Assembly assembly\)/);
@@ -808,4 +808,28 @@ test("ALP-467: EnsureEditorNotBusy distinguishes transition from stable Play Mod
 
   // Must have distinct messages for transition vs stable Play Mode
   assert.match(busyBlock, /is in Play Mode/, "Must have 'is in Play Mode' message for stable Play Mode");
+});
+
+test("ALP-467: Play Mode guard includes diagnostic version markers (http-guard-v2 / execute-guard-v2)", async () => {
+  // Regression: add version markers to Play Mode guard error messages so we can
+  // verify from the error output or Bridge log whether the new or old guard is active.
+  // If the retest shows errors WITHOUT these markers, the old C# code is running.
+  const source = await readUnityBridgeSources();
+
+  // HandleHttpCore guard
+  const httpStart = source.indexOf("private static void HandleHttpCore");
+  const httpEnd = source.indexOf("private static void StopStaleBridgeListeners", httpStart);
+  const httpBlock = source.slice(httpStart, httpEnd > httpStart ? httpEnd : undefined);
+  assert.ok(httpStart > -1, "Could not find HandleHttpCore method");
+  assert.match(httpBlock, /http-guard-v2/, "HandleHttpCore Play Mode guard must include http-guard-v2 version marker");
+
+  // Execute() guard
+  const executeStart = source.indexOf("private static string Execute(BridgeRequest request)");
+  const executeEnd = source.indexOf("RequiresDestructiveSecurityProof", executeStart);
+  const executeBlock = source.slice(executeStart, executeEnd > executeStart ? executeEnd : undefined);
+  assert.ok(executeStart > -1, "Could not find Execute method");
+  assert.match(executeBlock, /execute-guard-v2/, "Execute() Play Mode guard must include execute-guard-v2 version marker");
+
+  // Bridge diagnostics fingerprint must be updated to reflect the guard change
+  assert.match(source, /play-mode-guard-v2/, "BridgeDiagnosticsFingerprint must include play-mode-guard-v2");
 });
