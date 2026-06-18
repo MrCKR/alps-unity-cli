@@ -894,3 +894,67 @@ test("ALP-466: tools run built-in hybrid tool routes to native bridge command", 
   assert.equal(requests[0].command, "code.exec");
   assert.deepEqual((requests[0].args as Record<string, unknown>).code, "return 42;");
 });
+
+// ── ALP-467 Regression: Play Mode tool discovery and --target/--runtime flags ──
+
+test("shouldDiscoverProjectTools returns true when --target flag is provided", async () => {
+  // Regression: passing --target without --bridge-endpoint should still discover tools
+  // because the target instance has a bridge endpoint.
+  const { shouldDiscoverProjectTools } = await import("./project-tool-discovery.js");
+  assert.equal(shouldDiscoverProjectTools({ target: "da1e42fad0da" }, {}), true);
+});
+
+test("shouldDiscoverProjectTools returns true when --instance flag is provided", async () => {
+  const { shouldDiscoverProjectTools } = await import("./project-tool-discovery.js");
+  assert.equal(shouldDiscoverProjectTools({ instance: "abc123" }, {}), true);
+});
+
+test("shouldDiscoverProjectTools returns true when --runtime flag is provided", async () => {
+  // --runtime implies the user wants runtime tools, which must be discovered from the bridge
+  const { shouldDiscoverProjectTools } = await import("./project-tool-discovery.js");
+  assert.equal(shouldDiscoverProjectTools({ runtime: true }, {}), true);
+});
+
+test("shouldDiscoverProjectTools returns false when no bridge indicators are present", async () => {
+  const { shouldDiscoverProjectTools } = await import("./project-tool-discovery.js");
+  assert.equal(shouldDiscoverProjectTools({}, {}), false);
+});
+
+test("tools run discovers runtime tools when --target flag is provided without --bridge-endpoint", async () => {
+  // Regression for ALP-467: user passes --target without --bridge-endpoint
+  // and expects runtime tool discovery to work.
+  const requests: BridgeRequest[] = [];
+  const runtime: ToolsRuntime = {
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      if (payload.command === "runtime-tool.list") {
+        return { ok: true, data: { tools: [{ name: "runtime.wait", title: "Runtime Wait", description: "Wait in runtime", group: "runtime", target: "runtime", handler: "bridge-runtime" }] } };
+      }
+      return { ok: true, data: { result: { requestId: "req", isPlaying: true } } };
+    }
+  };
+
+  const result = await handleToolsCommand("run", ["runtime.wait"], { target: "da1e42fad0da", runtime: true, yes: true }, runtime, requestId);
+  assert.equal(result.ok, true, `Expected ok=true, got error: ${result.error?.code} ${result.error?.message}`);
+  assert.equal(requests[0].command, "runtime-tool.list");
+  assert.equal(requests[1].command, "runtime-tool.run");
+});
+
+test("tools run discovers runtime tools when --runtime flag is provided", async () => {
+  // --runtime flag should trigger custom tool discovery even without --include-custom
+  const requests: BridgeRequest[] = [];
+  const runtime: ToolsRuntime = {
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      if (payload.command === "runtime-tool.list") {
+        return { ok: true, data: { tools: [{ name: "sample.runtime-echo", title: "Sample Runtime Echo", description: "Echoes input from runtime", group: "sample", target: "runtime", handler: "bridge-runtime" }] } };
+      }
+      return { ok: true, data: { result: { requestId: "req", isPlaying: true } } };
+    }
+  };
+
+  const result = await handleToolsCommand("run", ["sample.runtime-echo"], { runtime: true, "bridge-endpoint": "http://127.0.0.1:47392", yes: true }, runtime, requestId);
+  assert.equal(result.ok, true, `Expected ok=true, got error: ${result.error?.code} ${result.error?.message}`);
+  assert.equal(requests[0].command, "runtime-tool.list");
+  assert.equal(requests[1].command, "runtime-tool.run");
+});
