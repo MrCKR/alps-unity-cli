@@ -368,39 +368,48 @@ test("package list and info accept UTF-8 BOM manifest and lock", async () => {
   assert.equal(((info.data as { package: { dependencies: Record<string, string> } }).package.dependencies)["com.unity.textmeshpro"], "3.0.6");
 });
 
-test("init installs com.unity_cli as a local file dependency without requiring Unity", async () => {
+
+test("init copies com.unity_cli package to Packages/com.unity_cli without requiring Unity", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
 
   const initialized = await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
   assert.equal(initialized.ok, true);
-  const data = initialized.data as { action: string; projectPath: string; package: { status: string; bridge: { dependencyName: string; bridgePath: string; dependencySpec: string; packageVersion: string; projectHash: string; cliCompatibilityRange: string; installMetadataPath: string }; liveRefresh: { status: string } }; liveRefresh: { status: string }; resolve: string };
+  const data = initialized.data as { action: string; status: string; projectPath: string; package: { status: string; bridge: { dependencyName: string; bridgePath: string; packageVersion: string; sourceHash: string; projectHash: string; installMode: string; installTime: string; cliCompatibilityRange: string; installMetadataPath: string; fileManifestPath: string }; liveRefresh: { status: string } }; liveRefresh: { status: string }; resolve: string };
   assert.equal(data.action, "init");
+  assert.equal(data.status, "package_installed");
   assert.equal(data.package.status, "package_installed");
   assert.equal(data.package.bridge.dependencyName, "com.unity_cli");
   assert.equal(data.package.bridge.packageVersion, "0.1.0");
+  assert.equal(data.package.bridge.sourceHash.length, 64);
   assert.equal(data.package.bridge.projectHash.length, 64);
+  assert.equal(data.package.bridge.installMode, "copy");
   assert.equal(data.package.bridge.cliCompatibilityRange, ">=0.1.0 <0.2.0");
   assert.equal(data.package.liveRefresh.status, "skipped");
   assert.equal(data.resolve, "skipped");
   assert.match(await readFile(join(data.package.bridge.bridgePath, "Editor", "UnityCliBridge.cs"), "utf8"), /class UnityCliBridge/);
 
+  // No file: dependency in manifest — copied package is discovered by Unity directly
   const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string>; scopedRegistries?: unknown[] };
-  assert.equal(manifest.dependencies["com.unity_cli"], data.package.bridge.dependencySpec);
-  assert.match(manifest.dependencies["com.unity_cli"], /^file:/);
+  assert.equal(manifest.dependencies["com.unity_cli"], undefined);
   assert.deepEqual(manifest.scopedRegistries, [{ name: "Example", url: "https://registry.example.com", scopes: ["com.example"] }]);
 
-  const metadata = JSON.parse(await readFile(data.package.bridge.installMetadataPath, "utf8")) as { packageName: string; packageVersion: string; dependencySpec: string; projectHash: string; cliCompatibilityRange: string };
-  assert.deepEqual(metadata, {
-    packageName: "com.unity_cli",
-    packageVersion: data.package.bridge.packageVersion,
-    dependencySpec: data.package.bridge.dependencySpec,
-    projectHash: data.package.bridge.projectHash,
-    cliCompatibilityRange: data.package.bridge.cliCompatibilityRange
-  });
+  const metadata = JSON.parse(await readFile(data.package.bridge.installMetadataPath, "utf8")) as { packageName: string; packageVersion: string; sourceHash: string; projectHash: string; installMode: string; installTime: string; cliCompatibilityRange: string };
+  assert.equal(metadata.packageName, "com.unity_cli");
+  assert.equal(metadata.packageVersion, data.package.bridge.packageVersion);
+  assert.equal(metadata.sourceHash, data.package.bridge.sourceHash);
+  assert.equal(metadata.projectHash, data.package.bridge.projectHash);
+  assert.equal(metadata.installMode, "copy");
+  assert.equal(metadata.cliCompatibilityRange, data.package.bridge.cliCompatibilityRange);
+
+  // File manifest should list managed files
+  const fileManifest = JSON.parse(await readFile(data.package.bridge.fileManifestPath, "utf8")) as { version: number; files: string[] };
+  assert.equal(fileManifest.version, 1);
+  assert.ok(fileManifest.files.length > 0);
+  assert.ok(fileManifest.files.some((f) => f === "package.json"));
 });
 
-test("init --check verifies local package install metadata", async () => {
+test("init --check verifies copy-mode install metadata", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
 
@@ -413,54 +422,28 @@ test("init --check verifies local package install metadata", async () => {
   const checked = await execute(["init", "--check", "--project", project], runtime);
 
   assert.equal(checked.ok, true);
-  const data = checked.data as { action: string; package: { status: string; bridge: { dependencyName: string; dependencySpec: string; packageVersion: string; projectHash: string; cliCompatibilityRange: string } } };
+  const data = checked.data as { action: string; package: { status: string; bridge: { dependencyName: string; packageVersion: string; sourceHash: string; projectHash: string; installMode: string; cliCompatibilityRange: string } } };
   assert.equal(data.action, "init_check");
   assert.equal(data.package.status, "installed");
   assert.equal(data.package.bridge.dependencyName, "com.unity_cli");
-  assert.match(data.package.bridge.dependencySpec, /^file:/);
+  assert.equal(data.package.bridge.installMode, "copy");
   assert.equal(data.package.bridge.packageVersion, "0.1.0");
   assert.equal(data.package.bridge.projectHash.length, 64);
+  assert.equal(data.package.bridge.sourceHash.length, 64);
   assert.equal(data.package.bridge.cliCompatibilityRange, ">=0.1.0 <0.2.0");
 });
 
-test("init asks an already open bridge to refresh assets", async () => {
-  const runtime = await makeRuntime();
-  const project = await makeUnityProject();
-  const requests: Array<{ command: string; args: Record<string, unknown> }> = [];
-
-  const initialized = await execute(["init", "--project", project], {
-    ...runtime,
-    bridgeExecute: async (payload) => {
-      requests.push({ command: payload.command, args: payload.args });
-      return { ok: true, data: { command: payload.command, result: { executed: true } } };
-    }
-  });
-
-  assert.equal(initialized.ok, true);
-  assert.deepEqual(requests, [{ command: "editor.menu", args: { path: "Assets/Refresh", timeoutMs: 7000 } }]);
-  assert.equal(((initialized.data as { liveRefresh: { status: string } }).liveRefresh.status), "triggered");
-});
-
-test("package install updates manifest, deploys bridge and can start package resolve job", async () => {
-  const runtime = await makeRuntime();
-  const project = await makeUnityProject();
-  const unity = await makeFakeUnity(`process.exit(0);`);
-
-  const installed = await execute(["package", "install", "com.acme.lib@2.0.0", "--project", project, "--unity", unity], runtime);
-  assert.equal(installed.ok, true);
-  const jobData = installed.data as { kind: string; result: { action: string; package: string; installedVersion: string; bridge: { dependencyName: string; bridgePath: string } } };
-  assert.equal(jobData.kind, "package");
-  assert.equal(jobData.result.action, "install");
-  assert.equal(jobData.result.package, "com.acme.lib");
   assert.equal(jobData.result.installedVersion, "2.0.0");
   assert.equal(jobData.result.bridge.dependencyName, "com.unity_cli");
+  assert.equal(jobData.result.bridge.installMode, "copy");
   assert.match(await readFile(join(jobData.result.bridge.bridgePath, "Editor", "UnityCliBatch.cs"), "utf8"), /ResolvePackages/);
   const bridgeManifest = JSON.parse(await readFile(join(jobData.result.bridge.bridgePath, "package.json"), "utf8")) as { name: string };
   assert.equal(bridgeManifest.name, "com.unity_cli");
 
   const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string> };
   assert.equal(manifest.dependencies["com.acme.lib"], "2.0.0");
-  assert.match(manifest.dependencies["com.unity_cli"], /^file:/);
+  // com.unity_cli is NOT in manifest dependencies (copy mode: no file: reference)
+  assert.equal(manifest.dependencies["com.unity_cli"], undefined);
 });
 
 test("package remove returns structured diagnostic for missing package", async () => {

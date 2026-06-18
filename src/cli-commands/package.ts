@@ -72,7 +72,8 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
         const bridge = await checkPackageBridge(projectPath);
         result.package = {
           status: "installed",
-          bridge
+          bridge,
+          nextActions: ["Unity package com.unity_cli is installed via copy mode in Packages/com.unity_cli/."]
         };
       } catch (error) {
         const { PackageManagerError } = await import("../package-manager.js");
@@ -110,6 +111,7 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
   if (!skillOnly) {
     const bridge = await ensurePackageBridge(projectPath);
     const liveRefresh = await refreshOpenEditor(requestId, flags, runtime);
+    baseResult.status = "package_installed";
     baseResult.package = {
       status: "package_installed",
       bridge,
@@ -118,7 +120,7 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
     baseResult.liveRefresh = liveRefresh;
     baseResult.nextActions = liveRefresh.status === "triggered"
       ? ["Wait for Unity to finish compiling/importing, then retry /health and Bridge commands against the live endpoint."]
-      : ["Open the Unity project or run unity_cli package resolve --project <path> --unity <Unity.exe> --wait to refresh packages."];
+      : ["Open the Unity project to start using the package. The package is copied to Packages/com.unity_cli/."];
   }
 
   // Install agent skills (when --agent is specified)
