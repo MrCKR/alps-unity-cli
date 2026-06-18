@@ -767,6 +767,32 @@ test("ALP-467: Bridge Execute allows editor.state and runtime tools during Play 
   assert.match(executeBlock, /is in Play Mode.*editor-domain write/, "Stable Play Mode error must mention 'editor-domain write'");
 });
 
+test("ALP-467: BridgeHttpServer HandleHttpCore Play Mode guard matches Execute allowlist", async () => {
+  // Regression: the HTTP pre-queue guard in HandleHttpCore must allow the same
+  // commands as the Execute() method's Play Mode guard. If they drift, requests
+  // that Execute() would accept get blocked at the HTTP layer before reaching the queue.
+  const source = await readUnityBridgeSources();
+  const handleHttpCoreStart = source.indexOf("private static void HandleHttpCore");
+  const handleHttpCoreEnd = source.indexOf("private sealed class BridgeWorkItem", handleHttpCoreStart);
+  const httpBlock = source.slice(handleHttpCoreStart, handleHttpCoreEnd > handleHttpCoreStart ? handleHttpCoreEnd : source.length);
+
+  assert.ok(handleHttpCoreStart > -1, "Could not find HandleHttpCore method");
+
+  // The same always-allowed commands must appear in HandleHttpCore's Play Mode guard
+  assert.match(httpBlock, /request\.Command == "editor\.state"/, "HandleHttpCore must allow editor.state during Play Mode");
+  assert.match(httpBlock, /request\.Command == "editor\.console"/, "HandleHttpCore must allow editor.console during Play Mode");
+  assert.match(httpBlock, /request\.Command == "editor\.pause"/, "HandleHttpCore must allow editor.pause during Play Mode");
+  assert.match(httpBlock, /request\.Command == "editor\.stop"/, "HandleHttpCore must allow editor.stop during Play Mode");
+  assert.match(httpBlock, /request\.Command == "runtime-tool\.list"/, "HandleHttpCore must allow runtime-tool.list during Play Mode");
+  assert.match(httpBlock, /request\.Command == "runtime-tool\.run"/, "HandleHttpCore must allow runtime-tool.run during Play Mode");
+  assert.match(httpBlock, /request\.Command == "project-tool\.list"/, "HandleHttpCore must allow project-tool.list during Play Mode");
+  assert.match(httpBlock, /request\.Command == "diagnose\.preflight"/, "HandleHttpCore must allow diagnose.preflight during Play Mode");
+
+  // The guard must distinguish between transitions and stable Play Mode
+  assert.match(httpBlock, /cachedIsPlaying/, "HandleHttpCore must use cachedIsPlaying to distinguish transition from stable Play Mode");
+  assert.match(httpBlock, /is in Play Mode.*editor-domain write/, "Stable Play Mode error in HandleHttpCore must mention 'editor-domain write'");
+});
+
 test("ALP-467: EnsureEditorNotBusy distinguishes transition from stable Play Mode", async () => {
   // Regression: the error message must accurately describe the state
   const source = await readUnityBridgeSources();

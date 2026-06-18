@@ -75,6 +75,7 @@ namespace UnityCli
         private static volatile bool cachedIsCompiling;
         private static volatile bool cachedIsUpdating;
         private static volatile bool cachedIsPlayingOrWillChangePlaymode;
+        private static volatile bool cachedIsPlaying;
         private static volatile bool cachedIsBuilding;
 
         static UnityCliBridge()
