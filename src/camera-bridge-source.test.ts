@@ -215,6 +215,7 @@ test("Unity Bridge animation and vfx commands expose assets, target resolver dia
   assert.match(source, /E_ANIMATION_CLIP_PATH_INVALID/);
   assert.match(source, /E_ANIMATION_CLIP_NOT_FOUND/);
   assert.match(source, /E_ANIMATION_STATE_REQUIRED/);
+  assert.match(source, /E_ANIMATION_NO_CONTROLLER/);
   assert.match(source, /FindType\("UnityEngine\.VFX\.VisualEffectAsset"\)/);
   assert.match(source, /FindType\("UnityEngine\.VFX\.VisualEffect"\)/);
   assert.match(source, /E_VFX_PACKAGE_MISSING/);

@@ -96,6 +96,10 @@ namespace UnityCli
             {
                 return ErrorJson("E_ANIMATOR_NOT_FOUND", "Animator component not found on target: " + HierarchyPath(gameObject), "Add an Animator component or choose another target.");
             }
+            if (animator.runtimeAnimatorController == null || animator.layerCount <= 0)
+            {
+                return ErrorJson("E_ANIMATION_NO_CONTROLLER", "Animator has no RuntimeAnimatorController assigned (layerCount=0): " + HierarchyPath(gameObject), "Assign a RuntimeAnimatorController with at least one layer, then retry.");
+            }
             var state = request.StringArg("state");
             if (string.IsNullOrEmpty(state))
             {
