@@ -736,3 +736,50 @@ test("Unity Bridge treats PlayMode switching as editor-command busy state", asyn
   assert.match(busyBlock, /EditorApplication\.isPlayingOrWillChangePlaymode/);
   assert.match(busyBlock, /E_UNITY_BUSY/);
 });
+
+test("ALP-467: Bridge Execute allows editor.state and runtime tools during Play Mode", async () => {
+  // Regression: editor.state must be allowed during Play Mode (not just transitions)
+  // so callers can query state to determine when Play Mode is ready.
+  const source = await readUnityBridgeSources();
+  const executeStart = source.indexOf("private static string Execute(BridgeRequest request)");
+  const executeEnd = source.indexOf("RequiresDestructiveSecurityProof", executeStart);
+  const executeBlock = source.slice(executeStart, executeEnd);
+
+  assert.ok(executeStart > -1, "Could not find Execute method");
+  assert.ok(executeEnd > executeStart, "Could not find end of Execute method");
+
+  // editor.state must be in the always-allowed list
+  assert.match(executeBlock, /request\.Command == "editor\.state"/, "editor.state must be allowed during Play Mode");
+
+  // project-tool.list must be in the always-allowed list (needed for tool discovery)
+  assert.match(executeBlock, /request\.Command == "project-tool\.list"/, "project-tool.list must be allowed during Play Mode");
+
+  // editor.console must be in the always-allowed list (read-only query)
+  assert.match(executeBlock, /request\.Command == "editor\.console"/, "editor.console must be allowed during Play Mode");
+
+  // Runtime tool commands must remain allowed
+  assert.match(executeBlock, /request\.Command == "runtime-tool\.list"/, "runtime-tool.list must be allowed during Play Mode");
+  assert.match(executeBlock, /request\.Command == "runtime-tool\.run"/, "runtime-tool.run must be allowed during Play Mode");
+
+  // The guard must distinguish between transitions and stable Play Mode
+  // During stable Play Mode, write commands should be non-transient
+  assert.match(executeBlock, /!EditorApplication\.isPlaying/, "Execute must check isPlaying to distinguish transition from stable Play Mode");
+  assert.match(executeBlock, /is in Play Mode.*editor-domain write/, "Stable Play Mode error must mention 'editor-domain write'");
+});
+
+test("ALP-467: EnsureEditorNotBusy distinguishes transition from stable Play Mode", async () => {
+  // Regression: the error message must accurately describe the state
+  const source = await readUnityBridgeSources();
+  const busyStart = source.indexOf("private static void EnsureEditorNotBusy");
+  const busyEnd = source.indexOf("Removed: WaitForPlayModeState", busyStart);
+  const busyBlock = source.slice(busyStart, busyEnd);
+
+  assert.ok(busyStart > -1);
+  assert.ok(busyEnd > busyStart);
+
+  // EnsureEditorNotBusy must also check isPlaying for accurate messaging
+  assert.match(busyBlock, /!EditorApplication\.isPlaying/, "EnsureEditorNotBusy must check isPlaying to distinguish transition from stable Play Mode");
+
+  // Must have distinct messages for transition vs stable Play Mode
+  assert.match(busyBlock, /is in Play Mode/, "Must have 'is in Play Mode' message for stable Play Mode");
+});
