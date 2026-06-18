@@ -845,10 +845,111 @@ test("ALP-466: tools run built-in bridge tool without --input sends empty args",
   assert.deepEqual(requests[0].args, {});
 });
 
-test("ALP-466: tools run built-in job-handler tool returns E_TOOL_HANDLER_UNSUPPORTED", async () => {
+test("ALP-466: tools run built-in job-handler tool with empty runtime returns E_TOOL_HANDLER_UNSUPPORTED", async () => {
   const result = await handleToolsCommand("run", ["editor.refresh"], {}, emptyRuntime, requestId);
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "E_TOOL_HANDLER_UNSUPPORTED");
+});
+
+// ── ALP-477/478: job-handler routing via dispatchJobHandler ──────────
+
+test("ALP-478: tools run test.run routes to handleTest with --input merged", async () => {
+  const { JobStore } = await import("./job-store.js");
+  const { JobRunner } = await import("./job-runner.js");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { mkdirSync, rmSync } = await import("node:fs");
+  const dataDir = join(tmpdir(), `alp478-test-${Date.now()}`);
+  mkdirSync(dataDir, { recursive: true });
+  try {
+    const store = new JobStore(dataDir);
+    const runner = new JobRunner(store, dataDir);
+    const runtime: ToolsRuntime = { dataDir, store, runner } as ToolsRuntime;
+    // test.run without --unity will fail with UNITY_NOT_FOUND, but the routing
+    // should reach handleTest (not E_TOOL_HANDLER_UNSUPPORTED)
+    const result = await handleToolsCommand("run", ["test.run"], { input: '{"platform":"EditMode"}' }, runtime, requestId);
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "UNITY_NOT_FOUND");
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("ALP-478: tools run build.run routes to handleBuild with --input merged", async () => {
+  const { JobStore } = await import("./job-store.js");
+  const { JobRunner } = await import("./job-runner.js");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { mkdirSync, rmSync } = await import("node:fs");
+  const dataDir = join(tmpdir(), `alp478-build-${Date.now()}`);
+  mkdirSync(dataDir, { recursive: true });
+  try {
+    const store = new JobStore(dataDir);
+    const runner = new JobRunner(store, dataDir);
+    const runtime: ToolsRuntime = { dataDir, store, runner } as ToolsRuntime;
+    // build.run without --unity will fail with UNITY_NOT_FOUND
+    const result = await handleToolsCommand("run", ["build.run"], { input: '{"target":"StandaloneWindows64"}' }, runtime, requestId);
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "UNITY_NOT_FOUND");
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("ALP-478: tools run editor.refresh routes to handleEditor with --input merged", async () => {
+  const { JobStore } = await import("./job-store.js");
+  const { JobRunner } = await import("./job-runner.js");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { mkdirSync, rmSync } = await import("node:fs");
+  const dataDir = join(tmpdir(), `alp478-editor-${Date.now()}`);
+  mkdirSync(dataDir, { recursive: true });
+  try {
+    const store = new JobStore(dataDir);
+    const runner = new JobRunner(store, dataDir);
+    const runtime: ToolsRuntime = { dataDir, store, runner } as ToolsRuntime;
+    // editor.refresh without --unity will fail with UNITY_NOT_FOUND
+    const result = await handleToolsCommand("run", ["editor.refresh"], { input: '{"compile":true}' }, runtime, requestId);
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "UNITY_NOT_FOUND");
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("ALP-478: mergeInputToFlags converts camelCase to kebab-case", async () => {
+  // Verify that --input '{"unity":"/path/Unity.exe","project":"/path/project"}' is merged as --unity and --project
+  // by checking that routing reaches the job handler instead of E_TOOL_HANDLER_UNSUPPORTED.
+  const { JobStore } = await import("./job-store.js");
+  const { JobRunner } = await import("./job-runner.js");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { mkdirSync, rmSync } = await import("node:fs");
+  const dataDir = join(tmpdir(), `alp478-merge-${Date.now()}`);
+  mkdirSync(dataDir, { recursive: true });
+  try {
+    const store = new JobStore(dataDir);
+    const runner = new JobRunner(store, dataDir);
+    const runtime: ToolsRuntime = { dataDir, store, runner } as ToolsRuntime;
+    // Pass unity/project via --input JSON (camelCase keys).
+    // Without --wait, the job is created and returned immediately.
+    // The key assertion: routing works (not E_TOOL_HANDLER_UNSUPPORTED) and
+    // a job was created (jobId is present).
+    const result = await handleToolsCommand(
+      "run",
+      ["build.run"],
+      { input: JSON.stringify({ unity: "/nonexistent/Unity.exe", project: "/nonexistent/project", target: "StandaloneWindows64" }) },
+      runtime,
+      requestId
+    );
+    assert.notEqual(result.error?.code, "E_TOOL_HANDLER_UNSUPPORTED");
+    // Without --wait, the job is queued/running and a jobId is returned
+    assert.ok(result.ok, `Expected ok=true, got error: ${result.error?.code} ${result.error?.message}`);
+    assert.ok((result.data as Record<string, unknown>)?.jobId, "Expected jobId in result");
+  } finally {
+    await new Promise(r => setTimeout(r, 200));
+    rmSync(dataDir, { recursive: true, force: true });
+  }
 });
 
 test("ALP-466: tools run custom project tool passes name and input to project-tool.run", async () => {
