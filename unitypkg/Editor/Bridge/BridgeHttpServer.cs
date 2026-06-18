@@ -263,24 +263,29 @@ namespace UnityCli
                     || request.Command == "project-tool.list"
                     || request.Command == "diagnose.preflight";
 
+                WriteLog("http_play_mode_guard requestId=" + request.RequestId + " command=" + request.Command + " cachedIsPlayingOrWillChange=" + Bool(cachedIsPlayingOrWillChangePlaymode) + " cachedIsPlaying=" + Bool(cachedIsPlaying) + " alwaysAllowed=" + Bool(alwaysAllowedInPlayMode));
+
                 if (!alwaysAllowedInPlayMode)
                 {
                     if (!cachedIsPlaying)
                     {
-                        // Transition phase: isPlayingOrWillChangePlaymode is true but
-                        // isPlaying is not yet true (entering) or already false (exiting).
+                        // Transition phase: cachedIsPlayingOrWillChangePlaymode is true but
+                        // cachedIsPlaying is not yet true (entering) or already false (exiting).
                         // Transient — callers should wait and retry.
-                        WriteJson(context, TransientErrorJson("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode.", "Wait for Play mode transition to complete and retry.", 3000), 200);
+                        WriteLog("http_play_mode_guard_blocked_transition requestId=" + request.RequestId + " command=" + request.Command);
+                        WriteJson(context, TransientErrorJson("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode. (http-guard-v2)", "Wait for Play mode transition to complete and retry.", 3000), 200);
                         return;
                     }
                     else
                     {
                         // Stable Play Mode: editor-domain write commands are not available.
                         // Non-transient — retrying won't help; the caller must exit Play Mode first.
-                        WriteJson(context, ErrorJson("E_UNITY_PLAY_MODE", "Unity Editor is in Play Mode; editor-domain write commands are not available.", "Exit Play Mode first (use editor stop), or use read-only and runtime tool commands."), 200);
+                        WriteLog("http_play_mode_guard_blocked_stable requestId=" + request.RequestId + " command=" + request.Command);
+                        WriteJson(context, ErrorJson("E_UNITY_PLAY_MODE", "Unity Editor is in Play Mode; editor-domain write commands are not available. (http-guard-v2)", "Exit Play Mode first (use editor stop), or use read-only and runtime tool commands."), 200);
                         return;
                     }
                 }
+                WriteLog("http_play_mode_guard_allowed requestId=" + request.RequestId + " command=" + request.Command);
             }
 
             var item = new BridgeWorkItem(request);
