@@ -124,9 +124,8 @@ test("final CLI failure envelope preserves structured error details", () => {
 test("test run returns a job and status reaches succeeded", async () => {
   const runtime = await makeRuntime();
   const unity = await makeFakeUnity(`
-const fs = require("node:fs");
-const logIndex = process.argv.indexOf("-logFile");
-if (logIndex >= 0) fs.appendFileSync(process.argv[logIndex + 1], "tests ok\\n");
+// With -logFile -, Unity writes its log to stdout.
+process.stdout.write("tests ok\\n");
 process.exit(0);
 `);
 
@@ -144,9 +143,8 @@ process.exit(0);
 test("job logs returns tail lines", async () => {
   const runtime = await makeRuntime();
   const unity = await makeFakeUnity(`
-const fs = require("node:fs");
-const logIndex = process.argv.indexOf("-logFile");
-if (logIndex >= 0) fs.appendFileSync(process.argv[logIndex + 1], "one\\ntwo\\nthree\\n");
+// With -logFile -, Unity writes its log to stdout.
+process.stdout.write("one\\ntwo\\nthree\\n");
 process.exit(0);
 `);
 
@@ -551,9 +549,8 @@ test("package resolve job maps version conflicts to package diagnostics", async 
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
   const unity = await makeFakeUnity(`
-const fs = require("node:fs");
-const logIndex = process.argv.indexOf("-logFile");
-if (logIndex >= 0) fs.appendFileSync(process.argv[logIndex + 1], "E_PACKAGE_RESOLVE_FAILED: version conflict for com.acme.lib\\n");
+// With -logFile -, Unity writes its log to stdout.
+process.stdout.write("E_PACKAGE_RESOLVE_FAILED: version conflict for com.acme.lib\\n");
 process.exit(1);
 `);
 
@@ -569,9 +566,8 @@ test("package resolve job maps bridge compile errors to compile diagnostics", as
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
   const unity = await makeFakeUnity(`
-const fs = require("node:fs");
-const logIndex = process.argv.indexOf("-logFile");
-if (logIndex >= 0) fs.appendFileSync(process.argv[logIndex + 1], "Packages\\\\com.unity_cli\\\\Editor\\\\UnityCliBatch.cs(13,17): error CS0815: Cannot assign void to an implicitly-typed variable\\n[Package Manager] UpmClient::Connect -- IPC stream closed\\n");
+// With -logFile -, Unity writes its log to stdout.
+process.stdout.write("Packages\\\\com.unity_cli\\\\Editor\\\\UnityCliBatch.cs(13,17): error CS0815: Cannot assign void to an implicitly-typed variable\\n[Package Manager] UpmClient::Connect -- IPC stream closed\\n");
 process.exit(1);
 `);
 

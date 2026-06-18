@@ -10,6 +10,14 @@ import { readUnityTestSummary } from "./test-results.js";
 
 const terminalStatuses: JobStatus[] = ["succeeded", "failed", "cancelled", "timeout"];
 
+/** Default process timeout when none is provided. Unity builds can be slow, but never-ending
+ * jobs are worse — orphan processes must be killed. 30 minutes matches the job_wait max category. */
+const DEFAULT_JOB_TIMEOUT_MS = 1_800_000;
+
+/** Number of trailing log lines to embed in the job result so callers can see the failure
+ * reason without a separate `job logs` round-trip. */
+const EMBEDDED_LOG_TAIL = 40;
+
 export class JobRunner {
   constructor(
     private readonly store: JobStore,
@@ -21,7 +29,7 @@ export class JobRunner {
     const id = `job_${randomUUID()}`;
     const logDir = join(this.dataDir, "logs");
     const logPath = join(logDir, `${id}.log`);
-    const command = [options.unityPath, "-batchmode", "-nographics", "-quit", "-projectPath", options.projectPath, "-logFile", logPath, ...options.args];
+    const command = [options.unityPath, "-batchmode", "-nographics", "-quit", "-projectPath", options.projectPath, "-logFile", "-", ...options.args];
 
     await mkdir(logDir, { recursive: true });
     const job = await this.store.create({
@@ -117,17 +125,46 @@ export class JobRunner {
     const cliPath = fileURLToPath(new URL("cli.js", import.meta.url));
     const child = spawn(process.execPath, [cliPath, "__run-job", "--id", id, "--data-dir", this.dataDir], {
       detached: true,
-      stdio: "ignore",
+      stdio: ["ignore", "ignore", "pipe"],
       windowsHide: true
     });
+
+    // Pipe worker stderr to the job log so worker crashes are visible.
+    const job = this.store.get(id).catch(() => undefined);
+    void job.then((record) => {
+      if (!record?.logPath) return;
+      try {
+        const logStream = createWriteStream(record.logPath, { flags: "a" });
+        child.stderr.pipe(logStream);
+      } catch {
+        // Best-effort — worker crash visibility is non-critical.
+      }
+    });
+
     child.unref();
   }
 
   private async spawnJob(job: JobRecord): Promise<JobRecord> {
     const child = spawn(job.unityPath, job.command.slice(1), { windowsHide: true, stdio: ["ignore", "pipe", "pipe"], shell: isWindowsCommandScript(job.unityPath) });
+
+    // Unity -logFile - writes all output to stdout. Pipe stdout to the log file AND
+    // accumulate in memory so the last N lines can be embedded in the result.
     const logStream = createWriteStream(job.logPath, { flags: "a" });
-    child.stdout.pipe(logStream);
-    child.stderr.pipe(logStream);
+    const logChunks: Buffer[] = [];
+    child.stdout.on("data", (chunk: Buffer) => {
+      logChunks.push(chunk);
+      logStream.write(chunk);
+    });
+    child.stderr.on("data", (chunk: Buffer) => {
+      logChunks.push(chunk);
+      logStream.write(chunk);
+    });
+
+    // Close logStream when the process finishes; also write accumulated log to a
+    // snapshot so logs() can always read from disk.
+    const closeLogStream = (): void => {
+      logStream.end();
+    };
 
     await this.store.update(job.id, {
       status: "running",
@@ -135,31 +172,32 @@ export class JobRunner {
       pid: child.pid
     });
 
+    // Always apply an internal timeout — orphan processes are unacceptable.
+    const effectiveTimeout = job.timeoutMs && job.timeoutMs > 0 ? job.timeoutMs : DEFAULT_JOB_TIMEOUT_MS;
+
     let timeoutHandle: NodeJS.Timeout | undefined;
     let didTimeout = false;
-    if (job.timeoutMs && job.timeoutMs > 0) {
-      timeoutHandle = setTimeout(() => {
-        didTimeout = true;
-        void (async () => {
-          const processKilled = await killProcessTree(child.pid);
-          try {
-            await this.store.markTerminal(job.id, "timeout", {
-              exitCode: null,
-              error: { code: "E_EXECUTION_TIMEOUT", message: "Unity batchmode job exceeded timeout.", details: timeoutDetails(true, false, processKilled, false) }
-            });
-          } catch {
-            // The close handler also resolves timeout if the state was not persisted yet.
-          }
-        })();
-      }, job.timeoutMs);
-    }
+    timeoutHandle = setTimeout(() => {
+      didTimeout = true;
+      void (async () => {
+        const processKilled = await killProcessTree(child.pid);
+        try {
+          await this.store.markTerminal(job.id, "timeout", {
+            exitCode: null,
+            error: { code: "E_EXECUTION_TIMEOUT", message: `Unity batchmode job exceeded timeout (${effectiveTimeout}ms).`, details: timeoutDetails(true, false, processKilled, false) }
+          });
+        } catch {
+          // The close handler also resolves timeout if the state was not persisted yet.
+        }
+      })();
+    }, effectiveTimeout);
 
     return new Promise((resolve, reject) => {
       child.on("error", async (error) => {
         if (timeoutHandle) {
           clearTimeout(timeoutHandle);
         }
-        logStream.end();
+        closeLogStream();
         try {
           const failed = await this.store.markTerminal(job.id, "failed", {
             error: { code: "UNITY_SPAWN_FAILED", message: error.message },
@@ -175,7 +213,12 @@ export class JobRunner {
         if (timeoutHandle) {
           clearTimeout(timeoutHandle);
         }
-        logStream.end();
+        closeLogStream();
+
+        // Flush the accumulated log to disk so that logs() can always read
+        // from the file path even when -logFile - was used.
+        await this.flushLogSnapshot(job.logPath, logChunks);
+
         try {
           const latest = await this.store.get(job.id);
           if (!latest) {
@@ -187,11 +230,11 @@ export class JobRunner {
             return;
           }
 
-          const timedOut = didTimeout || Boolean(job.timeoutMs && latest.startedAt && Date.now() - Date.parse(latest.startedAt) >= job.timeoutMs);
+          const timedOut = didTimeout || Boolean(effectiveTimeout && latest.startedAt && Date.now() - Date.parse(latest.startedAt) >= effectiveTimeout);
           if (timedOut) {
             const timedOutJob = await this.store.markTerminal(job.id, "timeout", {
               exitCode: code,
-              error: { code: "E_EXECUTION_TIMEOUT", message: "Unity batchmode job exceeded timeout.", details: timeoutDetails(true, false, true, false) }
+              error: { code: "E_EXECUTION_TIMEOUT", message: `Unity batchmode job exceeded timeout (${effectiveTimeout}ms).`, details: timeoutDetails(true, false, true, false) }
             });
             resolve(timedOutJob);
             return;
@@ -210,6 +253,18 @@ export class JobRunner {
         }
       });
     });
+  }
+
+  /** Write accumulated log chunks back to the log file so that `logs()` can
+   *  always read from the on-disk path, even when -logFile - was used. */
+  private async flushLogSnapshot(logPath: string, chunks: Buffer[]): Promise<void> {
+    if (chunks.length === 0) return;
+    try {
+      const content = Buffer.concat(chunks);
+      await writeFile(logPath, content);
+    } catch {
+      // Best-effort — the in-memory data was already streamed during the run.
+    }
   }
 
   private async finalResult(job: JobRecord): Promise<Record<string, unknown> | undefined> {
