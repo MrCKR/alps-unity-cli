@@ -1,6 +1,6 @@
-import { realpath, readFile, writeFile } from "node:fs/promises";
+import { realpath, readFile, writeFile, readdir, stat, mkdir, copyFile, rm } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { join, relative, resolve, win32 } from "node:path";
+import { join, relative, resolve, win32, dirname, posix } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export interface UnityManifest {
@@ -65,6 +65,7 @@ export interface PackageSpec {
 const bridgePackageName = "com.unity_cli";
 const cliCompatibilityRange = ">=0.1.0 <0.2.0";
 const installMetadataFileName = "unity_cli.install.json";
+const fileManifestFileName = "unity_cli.files.json";
 
 export function packagePaths(projectPath: string): PackageManagerPaths {
   const resolvedProject = resolve(projectPath);
@@ -169,8 +170,10 @@ export async function removeScopedRegistry(projectPath: string, name: string): P
 export interface UnityCliInstallMetadata {
   packageName: string;
   packageVersion: string;
-  dependencySpec: string;
+  sourceHash: string;
   projectHash: string;
+  installMode: "copy";
+  installTime: string;
   cliCompatibilityRange: string;
 }
 
@@ -178,76 +181,149 @@ export interface UnityCliPackageInstall {
   manifestPath: string;
   bridgePath: string;
   dependencyName: string;
-  dependencySpec: string;
   packageVersion: string;
+  sourceHash: string;
   projectHash: string;
+  installMode: "copy";
+  installTime: string;
   cliCompatibilityRange: string;
   installMetadataPath: string;
+  fileManifestPath: string;
 }
 
 export async function ensurePackageBridge(projectPath: string): Promise<UnityCliPackageInstall> {
   const paths = packagePaths(projectPath);
-  const manifest = await readManifest(paths.manifestPath, false);
-  manifest.dependencies ??= {};
-
   const sourcePath = packageSourcePath();
   const packageManifest = await readPackageManifest(sourcePath);
-  const dependencySpec = fileDependencySpec(paths.projectPath, sourcePath);
   const projectHash = await hashProjectPath(paths.projectPath);
+  const sourceHash = await hashSourcePath(sourcePath);
+  const targetPath = join(paths.projectPath, "Packages", bridgePackageName);
   const installMetadataPath = join(paths.projectPath, "Packages", installMetadataFileName);
+  const fileManifestPath = join(targetPath, fileManifestFileName);
 
-  manifest.dependencies[bridgePackageName] = dependencySpec;
-  await writeManifest(paths.manifestPath, manifest);
+  // Check existing installation: skip if same version & hash
+  const existing = await readExistingInstallMetadata(installMetadataPath).catch(() => undefined);
+  if (existing && existing.packageVersion === packageManifest.version && existing.sourceHash === sourceHash && existing.projectHash === projectHash) {
+    return {
+      manifestPath: paths.manifestPath,
+      bridgePath: targetPath,
+      dependencyName: bridgePackageName,
+      packageVersion: packageManifest.version,
+      sourceHash,
+      projectHash,
+      installMode: "copy",
+      installTime: existing.installTime,
+      cliCompatibilityRange,
+      installMetadataPath,
+      fileManifestPath
+    };
+  }
+
+  // Remove stale managed files before copying
+  await removeStaleManagedFiles(targetPath, fileManifestPath);
+
+  // Copy source to target, tracking managed files
+  const managedFiles = await copyPackageContents(sourcePath, targetPath);
+
+  // Write file manifest (tracks which files we manage so we don't delete user files on update)
+  await writeFileManifest(fileManifestPath, managedFiles);
+
+  // Remove any file: dependency from manifest if present (migration from old install mode)
+  const manifest = await readManifest(paths.manifestPath, false);
+  manifest.dependencies ??= {};
+  if (manifest.dependencies[bridgePackageName]?.startsWith("file:")) {
+    delete manifest.dependencies[bridgePackageName];
+    await writeManifest(paths.manifestPath, manifest);
+  }
+
+  const installTime = new Date().toISOString();
   await writeInstallMetadata(installMetadataPath, {
     packageName: bridgePackageName,
     packageVersion: packageManifest.version,
-    dependencySpec,
+    sourceHash,
     projectHash,
+    installMode: "copy",
+    installTime,
     cliCompatibilityRange
   });
 
   return {
     manifestPath: paths.manifestPath,
-    bridgePath: sourcePath,
+    bridgePath: targetPath,
     dependencyName: bridgePackageName,
-    dependencySpec,
     packageVersion: packageManifest.version,
+    sourceHash,
     projectHash,
+    installMode: "copy",
+    installTime,
     cliCompatibilityRange,
-    installMetadataPath
+    installMetadataPath,
+    fileManifestPath
   };
 }
 
 export async function checkPackageBridge(projectPath: string): Promise<UnityCliPackageInstall> {
   const paths = packagePaths(projectPath);
-  const manifest = await readManifest(paths.manifestPath, false);
-  const dependencySpec = manifest.dependencies?.[bridgePackageName];
-  if (!dependencySpec?.startsWith("file:")) {
-    throw new PackageManagerError("INIT_CHECK_FAILED", `${bridgePackageName} is not installed as a local file: dependency.`, ["Run unity_cli init --project <path> to install the bundled Unity package."]);
-  }
+  const targetPath = join(paths.projectPath, "Packages", bridgePackageName);
+  const installMetadataPath = join(paths.projectPath, "Packages", installMetadataFileName);
+  const fileManifestPath = join(targetPath, fileManifestFileName);
 
-  const bridgePath = resolveFileDependency(paths.projectPath, dependencySpec);
-  const packageManifest = await readPackageManifest(bridgePath);
+  // Verify the copied package exists and has correct identity
+  let packageManifest: { name: string; version: string };
+  try {
+    packageManifest = await readPackageManifest(targetPath);
+  } catch (error) {
+    if (error instanceof PackageManagerError) {
+      throw new PackageManagerError("INIT_CHECK_FAILED", `${bridgePackageName} is not installed in copy mode: ${error.message}`, ["Run unity_cli init --project <path> to install the bundled Unity package."]);
+    }
+    throw error;
+  }
   if (packageManifest.name !== bridgePackageName) {
     throw new PackageManagerError("INIT_CHECK_FAILED", `Installed package identity mismatch: expected ${bridgePackageName}, found ${packageManifest.name}.`, ["Run unity_cli init --project <path> to reinstall the bundled Unity package."]);
   }
 
-  const installMetadataPath = join(paths.projectPath, "Packages", installMetadataFileName);
+  // Verify install metadata
   const installMetadata = await readInstallMetadata(installMetadataPath);
+  if (installMetadata.packageName !== bridgePackageName) {
+    throw new PackageManagerError("INIT_CHECK_FAILED", `Install metadata package name mismatch: expected ${bridgePackageName}, found ${installMetadata.packageName}.`, ["Run unity_cli init --project <path> to reinstall the bundled Unity package."]);
+  }
+
   const projectHash = await hashProjectPath(paths.projectPath);
-  if (installMetadata.packageName !== bridgePackageName || installMetadata.packageVersion !== packageManifest.version || installMetadata.projectHash !== projectHash || installMetadata.cliCompatibilityRange !== cliCompatibilityRange) {
-    throw new PackageManagerError("INIT_CHECK_FAILED", `${bridgePackageName} install metadata is stale or incomplete.`, ["Run unity_cli init --project <path> to refresh install metadata."]);
+  const sourcePath = packageSourcePath();
+  const sourceHash = await hashSourcePath(sourcePath);
+
+  if (installMetadata.installMode !== "copy") {
+    throw new PackageManagerError("INIT_CHECK_FAILED", `${bridgePackageName} is not installed in copy mode.`, ["Run unity_cli init --project <path> to reinstall the bundled Unity package in copy mode."]);
+  }
+
+  if (installMetadata.packageVersion !== packageManifest.version) {
+    throw new PackageManagerError("INIT_CHECK_FAILED", `${bridgePackageName} version mismatch: metadata says ${installMetadata.packageVersion}, package.json says ${packageManifest.version}.`, ["Run unity_cli init --project <path> to reinstall the bundled Unity package."]);
+  }
+
+  if (installMetadata.sourceHash !== sourceHash) {
+    throw new PackageManagerError("INIT_CHECK_FAILED", `${bridgePackageName} source has changed since installation (hash mismatch).`, ["Run unity_cli init --project <path> to update the bundled Unity package."]);
+  }
+
+  if (installMetadata.projectHash !== projectHash) {
+    throw new PackageManagerError("INIT_CHECK_FAILED", `${bridgePackageName} install metadata project hash is stale.`, ["Run unity_cli init --project <path> to refresh install metadata."]);
+  }
+
+  if (installMetadata.cliCompatibilityRange !== cliCompatibilityRange) {
+    throw new PackageManagerError("INIT_CHECK_FAILED", `${bridgePackageName} CLI compatibility range has changed.`, ["Run unity_cli init --project <path> to refresh install metadata."]);
   }
 
   return {
     manifestPath: paths.manifestPath,
-    bridgePath,
+    bridgePath: targetPath,
     dependencyName: bridgePackageName,
-    dependencySpec,
     packageVersion: packageManifest.version,
+    sourceHash,
     projectHash,
+    installMode: "copy",
+    installTime: installMetadata.installTime,
     cliCompatibilityRange,
-    installMetadataPath
+    installMetadataPath,
+    fileManifestPath
   };
 }
 
@@ -367,14 +443,21 @@ async function writeInstallMetadata(path: string, metadata: UnityCliInstallMetad
   await writeFile(path, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
 }
 
+async function readExistingInstallMetadata(path: string): Promise<UnityCliInstallMetadata> {
+  return readInstallMetadata(path);
+}
+
 async function readInstallMetadata(path: string): Promise<UnityCliInstallMetadata> {
   try {
     const metadata = JSON.parse(stripJsonBom(await readFile(path, "utf8"))) as Partial<UnityCliInstallMetadata>;
-    if (typeof metadata.packageName !== "string" || typeof metadata.packageVersion !== "string" || typeof metadata.dependencySpec !== "string" || typeof metadata.projectHash !== "string" || typeof metadata.cliCompatibilityRange !== "string") {
+    if (typeof metadata.packageName !== "string" || typeof metadata.packageVersion !== "string" || typeof metadata.sourceHash !== "string" || typeof metadata.projectHash !== "string" || metadata.installMode !== "copy" || typeof metadata.installTime !== "string" || typeof metadata.cliCompatibilityRange !== "string") {
       throw new PackageManagerError("INIT_CHECK_FAILED", `Install metadata is invalid: ${path}`, ["Run unity_cli init --project <path> to refresh install metadata."]);
     }
     return metadata as UnityCliInstallMetadata;
   } catch (error) {
+    if (error instanceof PackageManagerError) {
+      throw error;
+    }
     const nodeError = error as NodeJS.ErrnoException;
     if (nodeError.code === "ENOENT") {
       throw new PackageManagerError("INIT_CHECK_FAILED", `Install metadata not found: ${path}`, ["Run unity_cli init --project <path> to create install metadata."]);
@@ -384,6 +467,92 @@ async function readInstallMetadata(path: string): Promise<UnityCliInstallMetadat
     }
     throw error;
   }
+}
+
+interface FileManifest {
+  version: number;
+  files: string[];
+}
+
+async function copyPackageContents(sourcePath: string, targetPath: string): Promise<string[]> {
+  const files: string[] = [];
+  await copyDirRecursive(sourcePath, targetPath, sourcePath, files);
+  return files;
+}
+
+async function copyDirRecursive(dir: string, targetRoot: string, sourceRoot: string, files: string[]): Promise<void> {
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const srcPath = join(dir, entry.name);
+    const relPath = posix.normalize(relative(sourceRoot, srcPath).split("\\").join("/"));
+    const destPath = join(targetRoot, relPath);
+    if (entry.isDirectory()) {
+      await mkdir(destPath, { recursive: true });
+      await copyDirRecursive(srcPath, targetRoot, sourceRoot, files);
+    } else if (entry.isFile()) {
+      await mkdir(dirname(destPath), { recursive: true });
+      await copyFile(srcPath, destPath);
+      files.push(relPath);
+    }
+    // Symlinks are skipped
+  }
+}
+
+async function hashSourcePath(sourcePath: string): Promise<string> {
+  const hash = createHash("sha256");
+  await hashDirectory(hash, sourcePath, sourcePath);
+  return hash.digest("hex");
+}
+
+async function hashDirectory(hash: ReturnType<typeof createHash>, dir: string, root: string): Promise<void> {
+  const entries = await readdir(dir, { withFileTypes: true });
+  // Sort for deterministic hash
+  const sorted = entries.sort((a, b) => a.name.localeCompare(b.name));
+  for (const entry of sorted) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      hash.update(`dir:${relative(root, fullPath).split("\\").join("/")}/\n`);
+      await hashDirectory(hash, fullPath, root);
+    } else if (entry.isFile()) {
+      const relPath = relative(root, fullPath).split("\\").join("/");
+      hash.update(`file:${relPath}\n`);
+      const content = await readFile(fullPath);
+      hash.update(content);
+      hash.update("\n");
+    }
+  }
+}
+
+async function removeStaleManagedFiles(targetPath: string, fileManifestPath: string): Promise<void> {
+  const managedFiles = await readManagedFileList(fileManifestPath);
+  if (managedFiles.length === 0) {
+    return;
+  }
+  for (const relPath of managedFiles) {
+    const fullPath = join(targetPath, relPath);
+    try {
+      await rm(fullPath, { force: true });
+    } catch {
+      // Best-effort: skip files that can't be removed
+    }
+  }
+}
+
+async function readManagedFileList(fileManifestPath: string): Promise<string[]> {
+  try {
+    const data = JSON.parse(stripJsonBom(await readFile(fileManifestPath, "utf8"))) as FileManifest;
+    if (data && Array.isArray(data.files)) {
+      return data.files;
+    }
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+async function writeFileManifest(path: string, files: string[]): Promise<void> {
+  const manifest: FileManifest = { version: 1, files };
+  await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
 }
 
 async function readManifest(path: string, allowMissing: boolean): Promise<UnityManifest> {

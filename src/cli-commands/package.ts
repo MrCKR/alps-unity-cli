@@ -21,7 +21,7 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
       status: "installed",
       projectPath,
       bridge,
-      nextActions: ["Unity package com.unity_cli is installed via a local manifest file: dependency."]
+      nextActions: ["Unity package com.unity_cli is installed via copy mode in Packages/com.unity_cli/."]
     });
   }
 
@@ -34,7 +34,7 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
     liveRefresh,
     nextActions: liveRefresh.status === "triggered"
       ? ["Wait for Unity to finish compiling/importing, then retry /health and Bridge commands against the live endpoint."]
-      : ["Open the Unity project or run unity_cli package resolve --project <path> --unity <Unity.exe> --wait to refresh packages."]
+      : ["Open the Unity project to start using the package. The package is copied to Packages/com.unity_cli/."]
   });
 }
 
