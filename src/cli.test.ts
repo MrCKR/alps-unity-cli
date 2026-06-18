@@ -374,29 +374,29 @@ test("init installs com.unity_cli as a local file dependency without requiring U
 
   const initialized = await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
   assert.equal(initialized.ok, true);
-  const data = initialized.data as { action: string; status: string; bridge: { dependencyName: string; bridgePath: string; dependencySpec: string; packageVersion: string; projectHash: string; cliCompatibilityRange: string; installMetadataPath: string }; liveRefresh: { status: string }; resolve: string };
+  const data = initialized.data as { action: string; projectPath: string; package: { status: string; bridge: { dependencyName: string; bridgePath: string; dependencySpec: string; packageVersion: string; projectHash: string; cliCompatibilityRange: string; installMetadataPath: string }; liveRefresh: { status: string } }; liveRefresh: { status: string }; resolve: string };
   assert.equal(data.action, "init");
-  assert.equal(data.status, "package_installed");
-  assert.equal(data.bridge.dependencyName, "com.unity_cli");
-  assert.equal(data.bridge.packageVersion, "0.1.0");
-  assert.equal(data.bridge.projectHash.length, 64);
-  assert.equal(data.bridge.cliCompatibilityRange, ">=0.1.0 <0.2.0");
-  assert.equal(data.liveRefresh.status, "skipped");
+  assert.equal(data.package.status, "package_installed");
+  assert.equal(data.package.bridge.dependencyName, "com.unity_cli");
+  assert.equal(data.package.bridge.packageVersion, "0.1.0");
+  assert.equal(data.package.bridge.projectHash.length, 64);
+  assert.equal(data.package.bridge.cliCompatibilityRange, ">=0.1.0 <0.2.0");
+  assert.equal(data.package.liveRefresh.status, "skipped");
   assert.equal(data.resolve, "skipped");
-  assert.match(await readFile(join(data.bridge.bridgePath, "Editor", "UnityCliBridge.cs"), "utf8"), /class UnityCliBridge/);
+  assert.match(await readFile(join(data.package.bridge.bridgePath, "Editor", "UnityCliBridge.cs"), "utf8"), /class UnityCliBridge/);
 
   const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string>; scopedRegistries?: unknown[] };
-  assert.equal(manifest.dependencies["com.unity_cli"], data.bridge.dependencySpec);
+  assert.equal(manifest.dependencies["com.unity_cli"], data.package.bridge.dependencySpec);
   assert.match(manifest.dependencies["com.unity_cli"], /^file:/);
   assert.deepEqual(manifest.scopedRegistries, [{ name: "Example", url: "https://registry.example.com", scopes: ["com.example"] }]);
 
-  const metadata = JSON.parse(await readFile(data.bridge.installMetadataPath, "utf8")) as { packageName: string; packageVersion: string; dependencySpec: string; projectHash: string; cliCompatibilityRange: string };
+  const metadata = JSON.parse(await readFile(data.package.bridge.installMetadataPath, "utf8")) as { packageName: string; packageVersion: string; dependencySpec: string; projectHash: string; cliCompatibilityRange: string };
   assert.deepEqual(metadata, {
     packageName: "com.unity_cli",
-    packageVersion: data.bridge.packageVersion,
-    dependencySpec: data.bridge.dependencySpec,
-    projectHash: data.bridge.projectHash,
-    cliCompatibilityRange: data.bridge.cliCompatibilityRange
+    packageVersion: data.package.bridge.packageVersion,
+    dependencySpec: data.package.bridge.dependencySpec,
+    projectHash: data.package.bridge.projectHash,
+    cliCompatibilityRange: data.package.bridge.cliCompatibilityRange
   });
 });
 
@@ -405,21 +405,22 @@ test("init --check verifies local package install metadata", async () => {
   const project = await makeUnityProject();
 
   const missing = await execute(["init", "--check", "--project", project], runtime);
-  assert.equal(missing.ok, false);
-  assert.equal(missing.error?.code, "INIT_CHECK_FAILED");
+  assert.equal(missing.ok, true);
+  const missingData = missing.data as { action: string; package: { status: string; code: string; message: string } };
+  assert.equal(missingData.package.status, "not_installed");
 
   await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
   const checked = await execute(["init", "--check", "--project", project], runtime);
 
   assert.equal(checked.ok, true);
-  const data = checked.data as { action: string; status: string; bridge: { dependencyName: string; dependencySpec: string; packageVersion: string; projectHash: string; cliCompatibilityRange: string } };
+  const data = checked.data as { action: string; package: { status: string; bridge: { dependencyName: string; dependencySpec: string; packageVersion: string; projectHash: string; cliCompatibilityRange: string } } };
   assert.equal(data.action, "init_check");
-  assert.equal(data.status, "installed");
-  assert.equal(data.bridge.dependencyName, "com.unity_cli");
-  assert.match(data.bridge.dependencySpec, /^file:/);
-  assert.equal(data.bridge.packageVersion, "0.1.0");
-  assert.equal(data.bridge.projectHash.length, 64);
-  assert.equal(data.bridge.cliCompatibilityRange, ">=0.1.0 <0.2.0");
+  assert.equal(data.package.status, "installed");
+  assert.equal(data.package.bridge.dependencyName, "com.unity_cli");
+  assert.match(data.package.bridge.dependencySpec, /^file:/);
+  assert.equal(data.package.bridge.packageVersion, "0.1.0");
+  assert.equal(data.package.bridge.projectHash.length, 64);
+  assert.equal(data.package.bridge.cliCompatibilityRange, ">=0.1.0 <0.2.0");
 });
 
 test("init asks an already open bridge to refresh assets", async () => {
@@ -666,4 +667,191 @@ test("ALP-477/478: isProjectLocked detects lock file and allows clean project", 
   await mkdir(join(project, "Temp"), { recursive: true });
   await writeFile(join(project, "Temp", "UnityLockfile"), "locked", "utf8");
   assert.equal(isProjectLocked(project), true);
+});
+
+// ─── P3: CLI 参数与校验改造 ───────────────────────────────────────────
+
+test("ALP-503: init --agent pi installs unitypkg + pi skill", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  const result = await execute(["init", "--project", project, "--agent", "pi", "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.action, "init");
+  assert.ok(data.package, "package segment should be present");
+  assert.ok(data.skills, "skills segment should be present");
+
+  const skills = data.skills as Array<{ agent: string; status: string }>;
+  assert.equal(skills.length, 1);
+  assert.equal(skills[0].agent, "pi");
+  assert.equal(skills[0].status, "installed");
+
+  const skillContent = await readFile(join(project, ".pi", "skills", "unity_cli", "SKILL.md"), "utf8");
+  assert.ok(skillContent.length > 0);
+});
+
+test("ALP-503: init --agent pi,claude installs unitypkg + two skills", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  const result = await execute(["init", "--project", project, "--agent", "pi,claude", "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.ok(data.package);
+  assert.ok(data.skills);
+
+  const skills = data.skills as Array<{ agent: string; status: string }>;
+  assert.equal(skills.length, 2);
+  assert.equal(skills[0].agent, "pi");
+  assert.equal(skills[1].agent, "claude");
+});
+
+test("ALP-503: init --pkg-only installs unitypkg only, no skills", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  const result = await execute(["init", "--project", project, "--pkg-only", "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.ok(data.package, "package segment should be present");
+  assert.equal(data.skills, undefined, "skills should not be present with --pkg-only");
+});
+
+test("ALP-503: init --skill-only --agent pi installs only skill, no unitypkg", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  const result = await execute(["init", "--skill-only", "--agent", "pi", "--project", project], runtime);
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.package, undefined, "package segment should not be present with --skill-only");
+  assert.ok(data.skills, "skills segment should be present");
+
+  const skills = data.skills as Array<{ agent: string; status: string }>;
+  assert.equal(skills[0].agent, "pi");
+  assert.equal(skills[0].status, "installed");
+});
+
+test("ALP-503: init --skill-only without --agent returns error", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  const result = await execute(["init", "--skill-only", "--project", project], runtime);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "INVALID_INIT_FLAGS");
+  assert.match(result.error?.message ?? "", /--skill-only requires --agent/);
+});
+
+test("ALP-503: init --pkg-only --skill-only returns mutual exclusion error", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  const result = await execute(["init", "--pkg-only", "--skill-only", "--agent", "pi", "--project", project], runtime);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "INVALID_INIT_FLAGS");
+  assert.match(result.error?.message ?? "", /mutually exclusive/);
+});
+
+test("ALP-503: init --pkg-only --agent pi returns mutual exclusion error", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  const result = await execute(["init", "--pkg-only", "--agent", "pi", "--project", project], runtime);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "INVALID_INIT_FLAGS");
+  assert.match(result.error?.message ?? "", /--pkg-only and --agent are mutually exclusive/);
+});
+
+test("ALP-503: init --agent unknown returns validation error", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  const result = await execute(["init", "--agent", "unknown", "--project", project], runtime);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "UNKNOWN_AGENT_KIND");
+  assert.match(result.error?.message ?? "", /Unknown agent kind/);
+});
+
+test("ALP-503: init --check without --agent checks only unitypkg", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  // Install first
+  await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
+
+  const checkResult = await execute(["init", "--check", "--project", project], runtime);
+  assert.equal(checkResult.ok, true);
+  const data = checkResult.data as Record<string, unknown>;
+  assert.ok(data.package, "package segment should be present");
+  assert.equal(data.skills, undefined, "skills should not be present without --agent");
+});
+
+test("ALP-503: init --check --agent pi checks unitypkg + skill", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  // Install first
+  await execute(["init", "--project", project, "--agent", "pi", "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
+
+  const checkResult = await execute(["init", "--check", "--project", project, "--agent", "pi"], runtime);
+  assert.equal(checkResult.ok, true);
+  const data = checkResult.data as Record<string, unknown>;
+  assert.ok(data.package, "package segment should be present");
+  assert.ok(data.skills, "skills segment should be present");
+
+  const skills = data.skills as Array<{ agent: string; status: string }>;
+  assert.equal(skills[0].agent, "pi");
+  assert.equal(skills[0].status, "installed");
+});
+
+test("ALP-503: init --check --skill-only --agent pi checks only skill", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  // Install first
+  await execute(["init", "--project", project, "--agent", "pi", "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
+
+  const checkResult = await execute(["init", "--check", "--skill-only", "--agent", "pi", "--project", project], runtime);
+  assert.equal(checkResult.ok, true);
+  const data = checkResult.data as Record<string, unknown>;
+  assert.equal(data.package, undefined, "package segment should not be present with --skill-only");
+  assert.ok(data.skills, "skills segment should be present");
+});
+
+test("ALP-503: init without --agent defaults to unitypkg-only (matches frozen command semantics)", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  const result = await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.ok(data.package, "package segment should be present");
+  assert.equal(data.skills, undefined, "skills should not be present without --agent");
+});
+
+test("ALP-503: init --check on missing project returns package not_installed", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  const checkResult = await execute(["init", "--check", "--project", project], runtime);
+  assert.equal(checkResult.ok, true);
+  const data = checkResult.data as Record<string, unknown>;
+  const pkg = data.package as { status: string; code?: string; message?: string };
+  assert.equal(pkg.status, "not_installed");
+});
+
+test("ALP-503: init --check --agent on missing skill reports missing", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  // Install unitypkg only (not skills)
+  await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
+
+  const checkResult = await execute(["init", "--check", "--agent", "pi", "--project", project], runtime);
+  assert.equal(checkResult.ok, true);
+  const data = checkResult.data as Record<string, unknown>;
+  const skills = data.skills as Array<{ agent: string; status: string }>;
+  assert.equal(skills[0].agent, "pi");
+  assert.equal(skills[0].status, "missing");
 });

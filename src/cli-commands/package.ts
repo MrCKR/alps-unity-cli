@@ -14,18 +14,81 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
   const projectPath = resolve(getString(flags, "project") ?? process.cwd());
   const { checkPackageBridge, ensurePackageBridge } = await import("../package-manager.js");
   const agentFlag = getString(flags, "agent");
+  const pkgOnly = getBoolean(flags, "pkg-only");
+  const skillOnly = getBoolean(flags, "skill-only");
+  const isCheck = getBoolean(flags, "check");
 
-  if (getBoolean(flags, "check")) {
-    const bridge = await checkPackageBridge(projectPath);
+  // ─── Parameter validation ─────────────────────────────────────────────
+
+  // --skill-only requires --agent
+  if (skillOnly && !agentFlag) {
+    return failure(requestId, "INVALID_INIT_FLAGS", "--skill-only requires --agent to specify which agent skill(s) to install.", [
+      "Use --skill-only --agent <pi|claude|.agent> to install only agent skills.",
+      "Omit --skill-only to install both unitypkg and agent skills."
+    ]);
+  }
+
+  // --pkg-only and --skill-only are mutually exclusive
+  if (pkgOnly && skillOnly) {
+    return failure(requestId, "INVALID_INIT_FLAGS", "--pkg-only and --skill-only are mutually exclusive.", [
+      "Use --pkg-only to install only the unity package.",
+      "Use --skill-only --agent <agents> to install only agent skills.",
+      "Omit both to install both unitypkg and agent skills."
+    ]);
+  }
+
+  // --pkg-only and --agent are mutually exclusive
+  if (pkgOnly && agentFlag) {
+    return failure(requestId, "INVALID_INIT_FLAGS", "--pkg-only and --agent are mutually exclusive; --pkg-only installs only the unity package.", [
+      "Use --pkg-only to install only the unity package without agent skills.",
+      "Use --agent <agents> to install the unity package and agent skills."
+    ]);
+  }
+
+  // Validate --agent values early (applies to both install and check)
+  if (agentFlag) {
+    const { parseAgentList, SkillInstallerError } = await import("./skill-installer.js");
+    try {
+      parseAgentList(agentFlag);
+    } catch (error) {
+      if (error instanceof SkillInstallerError) {
+        return failure(requestId, error.code, error.message, error.nextActions);
+      }
+      throw error;
+    }
+  }
+
+  // ─── Check mode ──────────────────────────────────────────────────────
+
+  if (isCheck) {
     const result: Record<string, unknown> = {
       action: "init_check",
-      status: "installed",
-      projectPath,
-      bridge,
-      nextActions: ["Unity package com.unity_cli is installed via a local manifest file: dependency."]
+      projectPath
     };
 
-    // When --agent is specified with --check, also check agent skill status
+    // Check unitypkg status (always, unless --skill-only)
+    if (!skillOnly) {
+      try {
+        const bridge = await checkPackageBridge(projectPath);
+        result.package = {
+          status: "installed",
+          bridge
+        };
+      } catch (error) {
+        const { PackageManagerError } = await import("../package-manager.js");
+        if (error instanceof PackageManagerError) {
+          result.package = {
+            status: "not_installed",
+            code: error.code,
+            message: error.message
+          };
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    // Check skill status (when --agent is specified)
     if (agentFlag) {
       const { agentSkillInstaller, findSkillSourcePath } = await import("./skill-installer.js");
       const sourcePath = await findSkillSourcePath();
@@ -36,19 +99,29 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
     return success(requestId, result);
   }
 
-  const bridge = await ensurePackageBridge(projectPath);
-  const liveRefresh = await refreshOpenEditor(requestId, flags, runtime);
+  // ─── Install mode ────────────────────────────────────────────────────
+
   const baseResult: Record<string, unknown> = {
     action: "init",
-    status: "package_installed",
-    bridge,
-    liveRefresh,
-    nextActions: liveRefresh.status === "triggered"
-      ? ["Wait for Unity to finish compiling/importing, then retry /health and Bridge commands against the live endpoint."]
-      : ["Open the Unity project or run unity_cli package resolve --project <path> --unity <Unity.exe> --wait to refresh packages."]
+    projectPath
   };
 
-  // When --agent is specified, install skills for the listed agents
+  // Install unitypkg (unless --skill-only)
+  if (!skillOnly) {
+    const bridge = await ensurePackageBridge(projectPath);
+    const liveRefresh = await refreshOpenEditor(requestId, flags, runtime);
+    baseResult.package = {
+      status: "package_installed",
+      bridge,
+      liveRefresh
+    };
+    baseResult.liveRefresh = liveRefresh;
+    baseResult.nextActions = liveRefresh.status === "triggered"
+      ? ["Wait for Unity to finish compiling/importing, then retry /health and Bridge commands against the live endpoint."]
+      : ["Open the Unity project or run unity_cli package resolve --project <path> --unity <Unity.exe> --wait to refresh packages."];
+  }
+
+  // Install agent skills (when --agent is specified)
   if (agentFlag) {
     const { agentSkillInstaller, findSkillSourcePath } = await import("./skill-installer.js");
     const sourcePath = await findSkillSourcePath();
@@ -66,6 +139,11 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
         newHash: r.newHash
       }));
     }
+  }
+
+  // --skill-only skips package resolution
+  if (skillOnly) {
+    return success(requestId, baseResult);
   }
 
   return maybeResolvePackage("init", flags, runtime, requestId, projectPath, baseResult);
