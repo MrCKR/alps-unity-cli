@@ -16,13 +16,13 @@ import { executeBridgeCommand, executeBridgePayload } from "./bridge/index.js";i
   type ToolMetadata
 } from "./tools/metadata/index.js";
 import { failure, success } from "./output.js";
-import { handleTest } from "./cli-commands/test.js";
-import { handleBuild } from "./cli-commands/build.js";
-import { handleEditor } from "./cli-commands/editor.js";
-import type { Runtime } from "./cli-commands/types.js";
 import { instanceSelectionFailure, selectInstanceForFlags, targetSummary } from "./instances.js";
 import { supportStatusDescription, supportStatusForTool, supportStatusLabel } from "./tools/metadata/status.js";
 import type { CliResult } from "./types.js";
+import { handleBuild } from "./cli-commands/build.js";
+import { handleEditor } from "./cli-commands/editor.js";
+import { handleTest } from "./cli-commands/test.js";
+import type { Runtime } from "./cli-commands/types.js";
 
 export type ToolsRuntime = ProjectToolRuntime;
 
@@ -302,10 +302,9 @@ async function handleToolsRun(
     return executeBridgePayload(requestId, toolName, input, flags, runtime);
   }
 
-  // ── Built-in job-handler tools: route to native CLI command ──
+  // ── Built-in job-handler tools: route to native CLI command handlers ──
   if (builtinTool && tool.handler === "job") {
-    const input = await parseToolInput(flags);
-    return dispatchJobHandler(tool, input, flags, runtime, requestId);
+    return dispatchJobHandler(tool, flags, runtime, requestId);
   }
 
   // ── Built-in tools with offline/other unsupported handlers ──
@@ -346,84 +345,95 @@ async function parseToolInput(flags: Record<string, string | boolean>): Promise<
 }
 
 /**
- * Convert camelCase to kebab-case.
- * e.g. timeoutMs → timeout-ms, platform → platform
+ * Convert a camelCase key to kebab-case CLI flag name.
+ * e.g. "timeoutMs" → "timeout-ms", "outputPath" → "output-path"
  */
-export function camelToKebab(s: string): string {
-  return s.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
+function camelToKebab(key: string): string {
+  return key.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
 }
 
 /**
- * Merge --input JSON (camelCase keys) into CLI flags (kebab-case keys).
- * Values already present in flags are not overridden — explicit CLI flags win.
+ * Merge --input JSON fields into CLI flags (kebab-case).
+ * Boolean values become true; string/number values are passed as-is.
+ * Existing flags are not overwritten.
  */
-export function mergeInputToFlags(
+function mergeInputToFlags(
   input: Record<string, unknown>,
   flags: Record<string, string | boolean>
 ): Record<string, string | boolean> {
   const merged = { ...flags };
   for (const [key, value] of Object.entries(input)) {
     const flagKey = camelToKebab(key);
-    if (merged[flagKey] === undefined) {
-      if (typeof value === "boolean") {
-        merged[flagKey] = value;
-      } else if (typeof value === "number") {
-        merged[flagKey] = String(value);
-      } else if (typeof value === "string") {
-        merged[flagKey] = value;
-      }
-      // Ignore null, undefined, object, array — not valid flag values
+    if (flagKey in merged) continue; // explicit CLI flags take precedence
+    if (typeof value === "boolean") {
+      if (value) merged[flagKey] = true;
+    } else if (typeof value === "number") {
+      merged[flagKey] = String(value);
+    } else if (typeof value === "string") {
+      merged[flagKey] = value;
     }
   }
   return merged;
 }
 
 /**
- * Dispatch a job-handler tool to its native CLI command.
+ * Dispatch a built-in job-handler tool to its native CLI command handler.
  *
- * Job-handler tools (test.run, build.run, editor.refresh) use `startUnityJob()`
- * under the hood. This function converts the `--input` JSON into CLI flags
- * and routes to the appropriate native handler.
+ * Routes based on `tool.cliCommand`:
+ *   "test run"    → handleTest("run", ...)
+ *   "build run"   → handleBuild("run", ...)
+ *   "editor refresh" → handleEditor("refresh", ...)
+ *
+ * Merges --input JSON into CLI flags so that `--input '{"unity":"...","project":"..."}'`
+ * is equivalent to passing `--unity ... --project ...` on the native command.
  */
 async function dispatchJobHandler(
   tool: ToolMetadata,
-  input: Record<string, unknown>,
   flags: Record<string, string | boolean>,
   runtime: ToolsRuntime,
   requestId: string
 ): Promise<CliResult> {
+  const cliCommand = tool.cliCommand ?? "";
+  const [group, sub] = cliCommand.split(" ");
+
+  // Verify the runtime has the full Runtime shape (store, runner, dataDir).
+  // When called from the CLI entry point it always will; but tests may pass
+  // a minimal ToolsRuntime.
+  const fullRuntime = runtime as Runtime;
+  if (!fullRuntime.store || !fullRuntime.runner || !fullRuntime.dataDir) {
+    return failure(requestId, "E_TOOL_HANDLER_UNSUPPORTED", `Tool "${tool.name}" requires a job runner runtime.`, [
+      `Use the native command instead: ${cliCommand}`,
+      "Run unity_cli tools describe <tool> for details."
+    ]);
+  }
+
+  // Merge --input JSON into CLI flags (camelCase → kebab-case)
+  const input = await parseToolInput(flags);
   const mergedFlags = mergeInputToFlags(input, flags);
-  const cliCommand = tool.cliCommand ?? tool.name;
-  const spaceIdx = cliCommand.indexOf(" ");
-  const group = spaceIdx >= 0 ? cliCommand.slice(0, spaceIdx) : cliCommand;
-  const command = spaceIdx >= 0 ? cliCommand.slice(spaceIdx + 1) : undefined;
-  const nativeRuntime = runtime as Runtime;
+
+  let result: CliResult | undefined;
 
   switch (group) {
     case "test":
-      return (await handleTest(command, mergedFlags, nativeRuntime, requestId))
-        ?? failure(requestId, "E_TOOL_HANDLER_UNSUPPORTED", `Test command "${command}" is not supported by tools run.`, [
-          `Use the native command instead: test ${command}`,
-          "Run unity_cli tools describe test.run for details."
-        ]);
+      result = await handleTest(sub, mergedFlags, fullRuntime, requestId);
+      break;
     case "build":
-      return (await handleBuild(command, mergedFlags, nativeRuntime, requestId))
-        ?? failure(requestId, "E_TOOL_HANDLER_UNSUPPORTED", `Build command "${command}" is not supported by tools run.`, [
-          `Use the native command instead: build ${command}`,
-          "Run unity_cli tools describe build.run for details."
-        ]);
+      result = await handleBuild(sub, mergedFlags, fullRuntime, requestId);
+      break;
     case "editor":
-      return (await handleEditor(command, mergedFlags, nativeRuntime, requestId))
-        ?? failure(requestId, "E_TOOL_HANDLER_UNSUPPORTED", `Editor command "${command}" is not supported by tools run.`, [
-          `Use the native command instead: editor ${command}`,
-          "Run unity_cli tools describe editor.refresh for details."
-        ]);
+      result = await handleEditor(sub, mergedFlags, fullRuntime, requestId);
+      break;
     default:
-      return failure(requestId, "E_TOOL_HANDLER_UNSUPPORTED", `Tool "${tool.name}" uses handler "job" with unknown CLI command "${cliCommand}".`, [
+      return failure(requestId, "E_TOOL_HANDLER_UNSUPPORTED", `Tool "${tool.name}" has unmapped job cliCommand "${cliCommand}".`, [
         `Use the native command instead: ${cliCommand}`,
         "Run unity_cli tools describe <tool> for details."
       ]);
   }
+
+  return result ?? failure(requestId, "E_TOOL_HANDLER_UNSUPPORTED", `Job command "${cliCommand}" is not supported by tools run.`, [
+    `Use the native command instead: ${cliCommand}`,
+    "Run unity_cli tools describe <tool> for details."
+  ]);
 }
 
 async function optionalTargetSummary(flags: Record<string, string | boolean>, runtime: ToolsRuntime): Promise<Record<string, unknown> | null> {
