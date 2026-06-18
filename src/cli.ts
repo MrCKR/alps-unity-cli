@@ -171,7 +171,7 @@ function help(): Record<string, unknown> {
       "init [--project <path>] [--agent <pi|claude|.agent>] [--unity <Unity.exe>] [--wait]",
       "init --pkg-only [--project <path>] [--unity <Unity.exe>] [--wait]",
       "init --skill-only --agent <pi|claude|.agent,...> [--project <path>]",
-      "init --check [--project <path>] [--agent <pi|claude|.agent,...>],",
+      "init --check [--project <path>] [--agent <pi|claude|.agent,...>]",
       "package [--format json|text]",
       "package list [--project <path>]",
       "package info <name> [--project <path>]",
