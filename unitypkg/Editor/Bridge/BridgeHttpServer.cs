@@ -249,14 +249,38 @@ namespace UnityCli
                 WriteJson(context, TransientErrorJson("E_UNITY_IMPORTING", "Unity Editor is importing assets.", "Wait for Unity to finish importing and retry.", 5000), 200);
                 return;
             }
-            if (cachedIsPlayingOrWillChangePlaymode
-                && request.Command != "editor.pause"
-                && request.Command != "editor.stop"
-                && request.Command != "runtime-tool.list"
-                && request.Command != "runtime-tool.run")
+            if (cachedIsPlayingOrWillChangePlaymode)
             {
-                WriteJson(context, TransientErrorJson("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode.", "Wait for Play mode transition to complete and retry.", 3000), 200);
-                return;
+                // Read-only queries, runtime tool commands, and tool discovery
+                // are always allowed in any Play Mode state.
+                // This must match the Execute() allowlist in UnityCliBridge.cs.
+                var alwaysAllowedInPlayMode = request.Command == "editor.state"
+                    || request.Command == "editor.console"
+                    || request.Command == "editor.pause"
+                    || request.Command == "editor.stop"
+                    || request.Command == "runtime-tool.list"
+                    || request.Command == "runtime-tool.run"
+                    || request.Command == "project-tool.list"
+                    || request.Command == "diagnose.preflight";
+
+                if (!alwaysAllowedInPlayMode)
+                {
+                    if (!cachedIsPlaying)
+                    {
+                        // Transition phase: isPlayingOrWillChangePlaymode is true but
+                        // isPlaying is not yet true (entering) or already false (exiting).
+                        // Transient — callers should wait and retry.
+                        WriteJson(context, TransientErrorJson("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode.", "Wait for Play mode transition to complete and retry.", 3000), 200);
+                        return;
+                    }
+                    else
+                    {
+                        // Stable Play Mode: editor-domain write commands are not available.
+                        // Non-transient — retrying won't help; the caller must exit Play Mode first.
+                        WriteJson(context, ErrorJson("E_UNITY_PLAY_MODE", "Unity Editor is in Play Mode; editor-domain write commands are not available.", "Exit Play Mode first (use editor stop), or use read-only and runtime tool commands."), 200);
+                        return;
+                    }
+                }
             }
 
             var item = new BridgeWorkItem(request);

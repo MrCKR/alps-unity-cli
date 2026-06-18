@@ -37,6 +37,7 @@ namespace UnityCli
             cachedIsCompiling = EditorApplication.isCompiling;
             cachedIsUpdating = EditorApplication.isUpdating;
             cachedIsPlayingOrWillChangePlaymode = EditorApplication.isPlayingOrWillChangePlaymode;
+            cachedIsPlaying = EditorApplication.isPlaying;
             cachedIsBuilding = BuildPipeline.isBuildingPlayer;
 
             if (started && EditorApplication.timeSinceStartup >= nextHeartbeatAt)
