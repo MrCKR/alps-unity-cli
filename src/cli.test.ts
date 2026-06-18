@@ -368,7 +368,6 @@ test("package list and info accept UTF-8 BOM manifest and lock", async () => {
   assert.equal(((info.data as { package: { dependencies: Record<string, string> } }).package.dependencies)["com.unity.textmeshpro"], "3.0.6");
 });
 
-
 test("init copies com.unity_cli package to Packages/com.unity_cli without requiring Unity", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
@@ -381,8 +380,8 @@ test("init copies com.unity_cli package to Packages/com.unity_cli without requir
   assert.equal(data.package.status, "package_installed");
   assert.equal(data.package.bridge.dependencyName, "com.unity_cli");
   assert.equal(data.package.bridge.packageVersion, "0.1.0");
-  assert.equal(data.package.bridge.sourceHash.length, 64);
   assert.equal(data.package.bridge.projectHash.length, 64);
+  assert.equal(data.package.bridge.sourceHash.length, 64);
   assert.equal(data.package.bridge.installMode, "copy");
   assert.equal(data.package.bridge.cliCompatibilityRange, ">=0.1.0 <0.2.0");
   assert.equal(data.package.liveRefresh.status, "skipped");
@@ -433,6 +432,35 @@ test("init --check verifies copy-mode install metadata", async () => {
   assert.equal(data.package.bridge.cliCompatibilityRange, ">=0.1.0 <0.2.0");
 });
 
+test("init asks an already open bridge to refresh assets", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+  const requests: Array<{ command: string; args: Record<string, unknown> }> = [];
+
+  const initialized = await execute(["init", "--project", project], {
+    ...runtime,
+    bridgeExecute: async (payload) => {
+      requests.push({ command: payload.command, args: payload.args });
+      return { ok: true, data: { command: payload.command, result: { executed: true } } };
+    }
+  });
+
+  assert.equal(initialized.ok, true);
+  assert.deepEqual(requests, [{ command: "editor.menu", args: { path: "Assets/Refresh", timeoutMs: 7000 } }]);
+  assert.equal(((initialized.data as { liveRefresh: { status: string } }).liveRefresh.status), "triggered");
+});
+
+test("package install updates manifest, deploys bridge and can start package resolve job", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+  const unity = await makeFakeUnity(`process.exit(0);`);
+
+  const installed = await execute(["package", "install", "com.acme.lib@2.0.0", "--project", project, "--unity", unity], runtime);
+  assert.equal(installed.ok, true);
+  const jobData = installed.data as { kind: string; result: { action: string; package: string; installedVersion: string; bridge: { dependencyName: string; bridgePath: string; installMode: string } } };
+  assert.equal(jobData.kind, "package");
+  assert.equal(jobData.result.action, "install");
+  assert.equal(jobData.result.package, "com.acme.lib");
   assert.equal(jobData.result.installedVersion, "2.0.0");
   assert.equal(jobData.result.bridge.dependencyName, "com.unity_cli");
   assert.equal(jobData.result.bridge.installMode, "copy");
@@ -651,9 +679,6 @@ test("ALP-477/478: isProjectLocked detects lock file and allows clean project", 
   await writeFile(join(project, "Temp", "UnityLockfile"), "locked", "utf8");
   assert.equal(isProjectLocked(project), true);
 });
-
-// ─── P3: CLI 参数与校验改造 ───────────────────────────────────────────
-
 test("ALP-503: init --agent pi installs unitypkg + pi skill", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
