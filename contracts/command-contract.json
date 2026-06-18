@@ -730,7 +730,10 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
     },
     {
       "bridgeCommand": "probuilder.csg",
@@ -740,7 +743,10 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": true,
-      "timeout": 60000
+      "timeout": 60000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
     },
     {
       "bridgeCommand": "probuilder.edit",
@@ -750,7 +756,10 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
     },
     {
       "bridgeCommand": "probuilder.shape",
@@ -760,7 +769,10 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
     },
     {
       "bridgeCommand": "profiler.capture",
@@ -1320,7 +1332,10 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.visualeffectgraph"
+      ]
     },
     {
       "bridgeCommand": "vfx.graph",
@@ -1330,7 +1345,10 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.visualeffectgraph"
+      ]
     },
     {
       "bridgeCommand": "tools.list",
