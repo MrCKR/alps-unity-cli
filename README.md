@@ -1,6 +1,6 @@
 # unity_cli
 
-Windows-first npm CLI for Unity CLI automation. The current scope follows the frozen ALP-22 direction: independent CLI implementation, Windows-only runtime target, npm-first installation, and fully open capabilities without default risk gates or secondary confirmation prompts.
+Windows-first npm CLI for Unity CLI automation, published as the npm package `@alps_ckr/unity_cli` and invoked through the `unity_cli` binary. The current scope follows the frozen ALP-22 direction: independent CLI implementation, Windows-only runtime target, npm-first installation, and fully open capabilities without default risk gates or secondary confirmation prompts.
 
 ## Requirements
 
@@ -11,7 +11,7 @@ Windows-first npm CLI for Unity CLI automation. The current scope follows the fr
 ## Install and Build
 
 ```powershell
-npm install -g unity_cli
+npm install -g @alps_ckr/unity_cli
 unity_cli --help
 ```
 
@@ -223,7 +223,39 @@ Use `--wait-timeout-ms <ms>` to limit synchronous waiting. Use `--timeout-ms <ms
 
 ## Unity Editor Bridge
 
-`init` and `package install/remove/resolve` install the bundled `com.unity_cli` package by writing a local `file:` dependency into the target project's `Packages/manifest.json`; no scoped registry is configured during local development. `init` also writes `Packages/unity_cli.install.json` with the project hash, package version and CLI compatibility range, while `init --check` verifies those values without mutating the project. When a live Bridge endpoint is already reachable, `init` asks the open Editor to run `Assets/Refresh` so a resident Editor sees the package update. When the Editor compiles that package, `UnityCliBridge` starts a Windows loopback HTTP listener on `http://127.0.0.1:47392` (probing later ports when needed), writes `instances/<instanceId>.json` under `%LOCALAPPDATA%\UnityCli` or `UNITY_CLI_DATA_DIR`, and refreshes `lastSeenAt` every 5 seconds. During domain reload it marks the target stale; during normal Editor quit it tries to delete the registration so the CLI can report stale/unreachable state or remove old entries with `instances prune`. The bridge serves `POST /bridge/execute` for the live Bridge commands declared in `contracts/command-contract.json`: `camera.list`, `camera.info`, `camera.screenshot`, `scene.active`, `scene.hierarchy`, `scene.build-settings`, `scene.screenshot`, `scene.create`, `scene.load`, `scene.save`, `go.find`, `go.inspect`, `go.create`, `go.modify`, `go.delete`, `component.add`, `component.remove`, `component.set`, `asset.search`, `asset.info`, `asset.create`, `asset.import`, `asset.modify`, `asset.delete`, `asset.duplicate`, `asset.move`, `asset.rename`, `diagnose.preflight`, `screenshot.capture`, `prefab.info`, `prefab.hierarchy`, `prefab.create`, `prefab.modify`, `prefab.stage-open`, `prefab.stage-save`, `prefab.stage-close`, `ui.canvas.create`, `ui.text.create`, `ui.button.create`, `ui.image.create`, `ui.document.info`, `ui.document.create`, `ui.hierarchy`, `material.info`, `material.create`, `material.assign`, `material.set`, `graphics.quality`, `graphics.settings`, `graphics.pipeline`, `graphics.volume`, `graphics.screenshot`, `physics.settings`, `physics.raycast`, `physics.simulation`, `profiler.start`, `profiler.stop`, `profiler.pause`, `profiler.counter`, `profiler.memory`, `profiler.frame`, `profiler.capture`, `profiler.export`, `profiler.status`, `probuilder.shape`, `probuilder.create`, `probuilder.csg`, `probuilder.edit`, `animation.clip`, `animation.state`, `animation.play`, `animation.stop`, `vfx.graph`, `vfx.effect`, `shader.info`, `shader.read`, `shader.create`, `shader.update`, `texture.info`, `texture.create`, `texture.sprite`, `texture.import-settings`, `editor.state`, `editor.play`, `editor.pause`, `editor.stop`, `editor.menu`, `editor.console`, `script.create`, `script.read`, `script.edit`, `script.validate`, `code.exec`. Run `npm run contracts:validate` to compare the contract file with the TypeScript bridge registry, built-in metadata and C# `BridgeCommandRegistry` registrations. The bridge executes Unity APIs on the Editor main thread and writes diagnostics to `<project>\Logs\UnityCliBridge.log`. If a request waits 60 seconds before Unity starts it, the bridge cancels that queued work before execution and returns `E_UNITY_BUSY` with no side effects applied. If a mutating request already started before the HTTP timeout, the bridge returns a success envelope with `status: "running"`, `sideEffectSemantics: "started-before-http-timeout"`, the original `requestId` and `logPath` so callers do not treat a possible in-flight side effect as a failed/no-op request. During Unity domain reload or Editor quit, the Bridge stops its loopback listener before the new assembly starts it again; on startup it also asks any older loaded `UnityCliBridge` type in the same Editor process to stop its listener before binding the port, preventing stale runtime capabilities from serving `/health` after package replacement. A compiled bridge runtime also writes `<project>\Logs\UnityCliBridgeRuntime.json` and `bridge_runtime_loaded` log lines with `diagnosticsFingerprint`, listener id, assembly MVID and Unity PackageManager `com.unity_cli` resolved path, so a live Editor can prove whether the new package was actually compiled/loaded even when an older listener is still answering a port.
+`init` installs the bundled `com.unity_cli` package by copying the contents of the CLI's `unitypkg/` directory into the target project's `Packages/com.unity_cli/` (copy mode). No `file:` reference or scoped registry is written to `Packages/manifest.json`. `init` also writes `Packages/unity_cli.install.json` with the project hash, package version and CLI compatibility range, while `init --check` verifies those values without mutating the project. `init` supports the following flags:
+
+| Flag | Meaning |
+|------|----------|
+| *(none)* | Install/update unitypkg only (copy mode) |
+| `--agent <values>` | Install unitypkg + skill for each listed agent (comma-separated: `pi`, `claude`, `.agent`) |
+| `--pkg-only` | Install/update unitypkg only (explicit) |
+| `--skill-only` | Install skill files only; requires `--agent` |
+| `--check` | Verify installation status; can combine with `--agent` |
+
+Examples:
+
+```powershell
+unity_cli init                         # Install/update unitypkg only
+unity_cli init --agent pi              # Install unitypkg + Pi skill
+unity_cli init --agent claude          # Install unitypkg + Claude skill
+unity_cli init --agent .agent          # Install unitypkg + .agent skill (codex)
+unity_cli init --agent pi,claude       # Install unitypkg + multiple agent skills
+unity_cli init --skill-only --agent pi # Install Pi skill only
+unity_cli init --pkg-only              # Install/update unitypkg explicitly
+unity_cli init --check                 # Check unitypkg status
+unity_cli init --check --agent pi      # Check unitypkg + Pi skill status
+```
+
+Agent skill paths:
+
+| Agent | Target path |
+|-------|-------------|
+| `pi` | `<unityProjectRoot>/.pi/skills/unity_cli/SKILL.md` |
+| `claude` | `<unityProjectRoot>/.claude/skills/unity_cli/SKILL.md` |
+| `.agent` | `<unityProjectRoot>/.agent/skills/unity_cli/SKILL.md` |
+
+`--skill-only` must be used with `--agent`; `--agent` values are restricted to the whitelist `pi / claude / .agent`. When a live Bridge endpoint is already reachable, `init` asks the open Editor to run `Assets/Refresh` so a resident Editor sees the package update. When the Editor compiles that package, `UnityCliBridge` starts a Windows loopback HTTP listener on `http://127.0.0.1:47392` (probing later ports when needed), writes `instances/<instanceId>.json` under `%LOCALAPPDATA%\UnityCli` or `UNITY_CLI_DATA_DIR`, and refreshes `lastSeenAt` every 5 seconds. During domain reload it marks the target stale; during normal Editor quit it tries to delete the registration so the CLI can report stale/unreachable state or remove old entries with `instances prune`. The bridge serves `POST /bridge/execute` for the live Bridge commands declared in `contracts/command-contract.json`: `camera.list`, `camera.info`, `camera.screenshot`, `scene.active`, `scene.hierarchy`, `scene.build-settings`, `scene.screenshot`, `scene.create`, `scene.load`, `scene.save`, `go.find`, `go.inspect`, `go.create`, `go.modify`, `go.delete`, `component.add`, `component.remove`, `component.set`, `asset.search`, `asset.info`, `asset.create`, `asset.import`, `asset.modify`, `asset.delete`, `asset.duplicate`, `asset.move`, `asset.rename`, `diagnose.preflight`, `screenshot.capture`, `prefab.info`, `prefab.hierarchy`, `prefab.create`, `prefab.modify`, `prefab.stage-open`, `prefab.stage-save`, `prefab.stage-close`, `ui.canvas.create`, `ui.text.create`, `ui.button.create`, `ui.image.create`, `ui.document.info`, `ui.document.create`, `ui.hierarchy`, `material.info`, `material.create`, `material.assign`, `material.set`, `graphics.quality`, `graphics.settings`, `graphics.pipeline`, `graphics.volume`, `graphics.screenshot`, `physics.settings`, `physics.raycast`, `physics.simulation`, `profiler.start`, `profiler.stop`, `profiler.pause`, `profiler.counter`, `profiler.memory`, `profiler.frame`, `profiler.capture`, `profiler.export`, `profiler.status`, `probuilder.shape`, `probuilder.create`, `probuilder.csg`, `probuilder.edit`, `animation.clip`, `animation.state`, `animation.play`, `animation.stop`, `vfx.graph`, `vfx.effect`, `shader.info`, `shader.read`, `shader.create`, `shader.update`, `texture.info`, `texture.create`, `texture.sprite`, `texture.import-settings`, `editor.state`, `editor.play`, `editor.pause`, `editor.stop`, `editor.menu`, `editor.console`, `script.create`, `script.read`, `script.edit`, `script.validate`, `code.exec`. Run `npm run contracts:validate` to compare the contract file with the TypeScript bridge registry, built-in metadata and C# `BridgeCommandRegistry` registrations. The bridge executes Unity APIs on the Editor main thread and writes diagnostics to `<project>\Logs\UnityCliBridge.log`. If a request waits 60 seconds before Unity starts it, the bridge cancels that queued work before execution and returns `E_UNITY_BUSY` with no side effects applied. If a mutating request already started before the HTTP timeout, the bridge returns a success envelope with `status: "running"`, `sideEffectSemantics: "started-before-http-timeout"`, the original `requestId` and `logPath` so callers do not treat a possible in-flight side effect as a failed/no-op request. During Unity domain reload or Editor quit, the Bridge stops its loopback listener before the new assembly starts it again; on startup it also asks any older loaded `UnityCliBridge` type in the same Editor process to stop its listener before binding the port, preventing stale runtime capabilities from serving `/health` after package replacement. A compiled bridge runtime also writes `<project>\Logs\UnityCliBridgeRuntime.json` and `bridge_runtime_loaded` log lines with `diagnosticsFingerprint`, listener id, assembly MVID and Unity PackageManager `com.unity_cli` resolved path, so a live Editor can prove whether the new package was actually compiled/loaded even when an older listener is still answering a port.
 
 ## Tools Run — Unified Execution Entry Point
 
