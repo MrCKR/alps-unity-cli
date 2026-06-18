@@ -71,6 +71,8 @@ Every CLI command that fails returns a standardized error envelope (see [../sche
 | `E_TARGET_AMBIGUOUS` (domain) | Multiple objects match the selector | No | Use hierarchy path or instance ID |
 | `E_TARGET_NOT_FOUND` (domain) | Specified object not found | No | Use `go find` or `scene hierarchy` |
 | `E_ANIMATOR_NOT_FOUND` | No Animator on target object | No | Check `go inspect` for component list |
+| `E_ANIMATION_NO_CONTROLLER` | Animator has no RuntimeAnimatorController (layerCount=0) | No | Assign a RuntimeAnimatorController with at least one layer, then retry |
+| `E_ANIMATION_LAYER_INVALID` | Animator layer index out of range | No | Run `animation state --target <go>` to inspect layer count |
 
 ### Asset Errors
 
