@@ -845,10 +845,13 @@ test("ALP-466: tools run built-in bridge tool without --input sends empty args",
   assert.deepEqual(requests[0].args, {});
 });
 
-test("ALP-466: tools run built-in job-handler tool returns E_TOOL_HANDLER_UNSUPPORTED", async () => {
+test("ALP-466/477: tools run built-in job-handler tool routes to native CLI command", async () => {
+  // Job-handler tools (test.run, build.run, editor.refresh) now route to their
+  // native CLI commands instead of returning E_TOOL_HANDLER_UNSUPPORTED.
+  // Without --unity and no Unity on PATH, startUnityJob returns UNITY_NOT_FOUND.
   const result = await handleToolsCommand("run", ["editor.refresh"], {}, emptyRuntime, requestId);
   assert.equal(result.ok, false);
-  assert.equal(result.error?.code, "E_TOOL_HANDLER_UNSUPPORTED");
+  assert.equal(result.error?.code, "UNITY_NOT_FOUND");
 });
 
 test("ALP-466: tools run custom project tool passes name and input to project-tool.run", async () => {
@@ -957,4 +960,99 @@ test("tools run discovers runtime tools when --runtime flag is provided", async 
   assert.equal(result.ok, true, `Expected ok=true, got error: ${result.error?.code} ${result.error?.message}`);
   assert.equal(requests[0].command, "runtime-tool.list");
   assert.equal(requests[1].command, "runtime-tool.run");
+});
+
+// ── ALP-477: job handler routing (test.run, build.run, editor.refresh) ──
+
+test("ALP-477: camelToKebab converts camelCase to kebab-case", async () => {
+  const { camelToKebab } = await import("./tools.js");
+  assert.equal(camelToKebab("timeoutMs"), "timeout-ms");
+  assert.equal(camelToKebab("platform"), "platform");
+  assert.equal(camelToKebab("wait"), "wait");
+  assert.equal(camelToKebab("outputPath"), "output-path");
+  assert.equal(camelToKebab("myLongKeyName"), "my-long-key-name");
+});
+
+test("ALP-477: mergeInputToFlags converts camelCase --input keys to kebab-case flags", async () => {
+  const { mergeInputToFlags } = await import("./tools.js");
+  const input = { unity: "/path/to/Unity.exe", project: "/my/project", timeoutMs: 30000, wait: true };
+  const flags = { input: JSON.stringify(input) };
+  const merged = mergeInputToFlags(input, flags);
+  assert.equal(merged["unity"], "/path/to/Unity.exe");
+  assert.equal(merged["project"], "/my/project");
+  assert.equal(merged["timeout-ms"], "30000");
+  assert.equal(merged["wait"], true);
+  // Existing flags not overwritten
+  assert.equal(merged["input"], JSON.stringify(input));
+});
+
+test("ALP-477: mergeInputToFlags does not override explicit CLI flags", async () => {
+  const { mergeInputToFlags } = await import("./tools.js");
+  const input = { unity: "/input/path", project: "/input/project" };
+  const flags = { unity: "/cli/path" } as Record<string, string | boolean>;
+  const merged = mergeInputToFlags(input, flags);
+  // CLI flag wins
+  assert.equal(merged["unity"], "/cli/path");
+  // Input-only key is still merged
+  assert.equal(merged["project"], "/input/project");
+});
+
+test("ALP-477: tools run test.run routes to native test handler", async () => {
+  // Without Unity on PATH and no --unity, startUnityJob returns UNITY_NOT_FOUND
+  // (not E_TOOL_HANDLER_UNSUPPORTED), proving the routing works.
+  // Need a runtime with dataDir for handleTest to resolve paths.
+  const { mkdtempSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const dataDir = mkdtempSync(join(tmpdir(), "alp477-test-"));
+  const jobRuntime: ToolsRuntime & { dataDir: string; runner: { start: () => never } } = { dataDir, runner: { start: () => { throw new Error("should not reach"); } } } as unknown as typeof jobRuntime;
+  const result = await handleToolsCommand("run", ["test.run"], {}, jobRuntime, requestId);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "UNITY_NOT_FOUND");
+});
+
+test("ALP-477: tools run build.run routes to native build handler", async () => {
+  const result = await handleToolsCommand("run", ["build.run"], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "UNITY_NOT_FOUND");
+});
+
+test("ALP-477: tools run test.run with --input merges flags into native handler", async () => {
+  // Pass unity via --input JSON; should get past UNITY_NOT_FOUND.
+  // Since there's no real runner, it will fail differently, but NOT with
+  // E_TOOL_HANDLER_UNSUPPORTED — proving --input was converted to flags.
+  const { mkdtempSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const dataDir = mkdtempSync(join(tmpdir(), "alp477-test-input-"));
+  const fakeJob = { id: "job_test_001", kind: "test", status: "queued", requestId, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), projectPath: "/fake/project", unityPath: "/fake/Unity.exe", logPath: "/fake/log.txt", command: [] };
+  const jobRuntime: ToolsRuntime & { dataDir: string; runner: { start: () => Promise<typeof fakeJob>; wait: () => Promise<typeof fakeJob> } } = { dataDir, runner: { start: async () => fakeJob, wait: async () => ({ ...fakeJob, status: "succeeded" }) } } as unknown as typeof jobRuntime;
+  const input = JSON.stringify({ unity: "/fake/Unity.exe", project: "/fake/project" });
+  const result = await handleToolsCommand("run", ["test.run"], { input }, jobRuntime, requestId);
+  // Should NOT be E_TOOL_HANDLER_UNSUPPORTED
+  assert.notEqual(result.error?.code, "E_TOOL_HANDLER_UNSUPPORTED");
+});
+
+test("ALP-477: tools run build.run with --input merges flags into native handler", async () => {
+  const { mkdtempSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const dataDir = mkdtempSync(join(tmpdir(), "alp477-build-input-"));
+  const fakeJob = { id: "job_build_001", kind: "build", status: "queued", requestId, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), projectPath: "/fake/project", unityPath: "/fake/Unity.exe", logPath: "/fake/log.txt", command: [] };
+  const jobRuntime: ToolsRuntime & { dataDir: string; runner: { start: () => Promise<typeof fakeJob>; wait: () => Promise<typeof fakeJob> } } = { dataDir, runner: { start: async () => fakeJob, wait: async () => ({ ...fakeJob, status: "succeeded" }) } } as unknown as typeof jobRuntime;
+  const input = JSON.stringify({ unity: "/fake/Unity.exe", project: "/fake/project", target: "StandaloneWindows64" });
+  const result = await handleToolsCommand("run", ["build.run"], { input }, jobRuntime, requestId);
+  assert.notEqual(result.error?.code, "E_TOOL_HANDLER_UNSUPPORTED");
+});
+
+test("ALP-477: tools run editor.refresh with --input merges flags into native handler", async () => {
+  const { mkdtempSync } = await import("node:fs");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const dataDir = mkdtempSync(join(tmpdir(), "alp477-editor-input-"));
+  const fakeJob = { id: "job_refresh_001", kind: "refresh", status: "queued", requestId, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), projectPath: "/fake/project", unityPath: "/fake/Unity.exe", logPath: "/fake/log.txt", command: [] };
+  const jobRuntime: ToolsRuntime & { dataDir: string; runner: { start: () => Promise<typeof fakeJob>; wait: () => Promise<typeof fakeJob> } } = { dataDir, runner: { start: async () => fakeJob, wait: async () => ({ ...fakeJob, status: "succeeded" }) } } as unknown as typeof jobRuntime;
+  const input = JSON.stringify({ unity: "/fake/Unity.exe", project: "/fake/project", compile: true });
+  const result = await handleToolsCommand("run", ["editor.refresh"], { input }, jobRuntime, requestId);
+  assert.notEqual(result.error?.code, "E_TOOL_HANDLER_UNSUPPORTED");
 });
