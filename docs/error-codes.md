@@ -52,6 +52,7 @@ Every CLI command that fails returns a standardized error envelope (see [../sche
 | `E_TARGET_ALIAS_CONFLICT` | Alias already points to another instance | No | Run `target alias unset <alias>` first, or use `--force` |
 | `BRIDGE_CONNECTION_FAILED` | Cannot connect to Bridge endpoint | Yes | Check `--bridge-endpoint`; ensure Editor is running |
 | `E_UNITY_BUSY` | Unity is compiling or executing | Yes | Retry after delay; check `editor state` |
+| `UNITY_BUSY` | Project is locked by open Unity Editor (batchmode cannot start) | Yes | Close Unity Editor; delete stale `<project>/Temp/UnityLockfile` if Unity is not running |
 | `E_UNITY_COMPILING` | Domain reload in progress | Yes | Wait for compilation to finish |
 
 ### Runtime Tool Errors

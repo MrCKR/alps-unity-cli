@@ -10,6 +10,7 @@ import { failure, printJson } from "./output.js";
 import { JobRunner } from "./job-runner.js";
 import { JobStore } from "./job-store.js";
 import { defaultDataDir } from "./platform.js";
+import { isProjectLocked } from "./cli-commands/unity-job.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
@@ -627,4 +628,46 @@ test("Unity package batch hook exposes BuildProject executeMethod", async () => 
   assert.match(source, /BuildPipeline\.BuildPlayer\(/);
   assert.match(source, /BuildResult\.Succeeded/);
   assert.match(source, /E_BUILD_OUTPUT_REQUIRED/);
+});
+
+test("ALP-477/478: test run returns UNITY_BUSY when project is locked by open Editor", async () => {
+  const runtime = await makeRuntime();
+  const unity = await makeFakeUnity(`process.exit(0);`);
+  // Simulate an open Unity Editor by creating the lock file
+  await mkdir(join(runtime.dataDir, "Temp"), { recursive: true });
+  await writeFile(join(runtime.dataDir, "Temp", "UnityLockfile"), "lock", "utf8");
+
+  const result = await execute(["test", "run", "--unity", unity, "--project", runtime.dataDir], runtime);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "UNITY_BUSY");
+  assert.equal(result.error?.transient, true);
+  assert.equal(result.error?.retry_after_ms, 15000);
+  assert.deepEqual(result.error?.details, {
+    projectPath: runtime.dataDir,
+    kind: "test",
+    lockFilePath: join(runtime.dataDir, "Temp", "UnityLockfile")
+  });
+  assert.ok((result.error?.next_actions ?? []).length > 0);
+  assert.ok((result.error?.next_actions ?? []).some((action) => action.includes("UnityLockfile")));
+});
+
+test("ALP-477/478: build run returns UNITY_BUSY when project is locked by open Editor", async () => {
+  const runtime = await makeRuntime();
+  const unity = await makeFakeUnity(`process.exit(0);`);
+  await mkdir(join(runtime.dataDir, "Temp"), { recursive: true });
+  await writeFile(join(runtime.dataDir, "Temp", "UnityLockfile"), "lock", "utf8");
+
+  const result = await execute(["build", "run", "--unity", unity, "--project", runtime.dataDir], runtime);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "UNITY_BUSY");
+  assert.equal(result.error?.transient, true);
+});
+
+test("ALP-477/478: isProjectLocked detects lock file and allows clean project", async () => {
+  const project = await mkdtemp(join(tmpdir(), "unity-project-lock-"));
+  assert.equal(isProjectLocked(project), false);
+
+  await mkdir(join(project, "Temp"), { recursive: true });
+  await writeFile(join(project, "Temp", "UnityLockfile"), "locked", "utf8");
+  assert.equal(isProjectLocked(project), true);
 });

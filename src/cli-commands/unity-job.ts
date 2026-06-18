@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { getBoolean, getNumber, getString } from "../args.js";
@@ -6,6 +7,14 @@ import { discoverUnity } from "../platform.js";
 import type { CliResult, JobKind, JobRecord } from "../types.js";
 import type { Runtime } from "./types.js";
 
+/**
+ * Check if the project is currently open in the Unity Editor by looking for the lock file.
+ * Unity creates `Temp/UnityLockfile` when a project is open; stale files may remain after crashes.
+ */
+export function isProjectLocked(projectPath: string): boolean {
+  return existsSync(resolve(projectPath, "Temp", "UnityLockfile"));
+}
+
 const terminalStatuses = new Set(["succeeded", "failed", "cancelled", "timeout"]);
 
 export async function startUnityJob(kind: JobKind, flags: Record<string, string | boolean>, runtime: Runtime, requestId: string, unityArgs: string[], result: Record<string, unknown>): Promise<CliResult> {
@@ -13,6 +22,21 @@ export async function startUnityJob(kind: JobKind, flags: Record<string, string 
   const unityPath = getString(flags, "unity") ?? discoverUnity();
   if (!unityPath) {
     return failure(requestId, "UNITY_NOT_FOUND", "Unity.exe was not found.", ["Pass --unity <path-to-Unity.exe> or set UNITY_EXE."]);
+  }
+
+  // Pre-flight: check if the project is locked by another Unity instance.
+  // Unity batchmode cannot open a project that is already open in the Editor;
+  // it will hang or exit immediately with empty output, leading to confusing timeouts.
+  if (isProjectLocked(projectPath)) {
+    return failure(requestId, "UNITY_BUSY", `Cannot start Unity batchmode: the project is currently open in the Unity Editor (${projectPath}).`, [
+      "Close the Unity Editor and retry.",
+      "If Unity is not running, delete the stale lock file: <project>/Temp/UnityLockfile",
+      `Run 'unity_cli job status' to check existing jobs.`
+    ], {
+      projectPath,
+      kind,
+      lockFilePath: resolve(projectPath, "Temp", "UnityLockfile")
+    });
   }
 
   if (typeof result.resultPath === "string") {
