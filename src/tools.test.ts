@@ -607,7 +607,7 @@ test("tools without subcommand defaults to list", async () => {
 
 // ── tools run: handleToolsRun routing ─────────────────────
 
-test("tools run editor-domain builtin tool routes to project-tool.run", async () => {
+test("tools run built-in bridge tool routes to native bridge command", async () => {
   const requests: BridgeRequest[] = [];
   const runtime: ToolsRuntime = {
     bridgeExecute: async (payload: BridgeRequest) => {
@@ -618,7 +618,7 @@ test("tools run editor-domain builtin tool routes to project-tool.run", async ()
 
   const result = await handleToolsCommand("run", ["scene.hierarchy"], {}, runtime, requestId);
   assert.equal(result.ok, true);
-  assert.equal(requests[0].command, "project-tool.run");
+  assert.equal(requests[0].command, "scene.hierarchy");
 });
 
 test("tools run with target=runtime project tool routes to runtime-tool.run", async () => {
@@ -673,7 +673,7 @@ test("tools run target=both with --runtime flag routes to runtime-tool.run", asy
   assert.equal(requests[0].command, "runtime-tool.run");
 });
 
-test("tools run target=both without --runtime routes to project-tool.run", async () => {
+test("tools run custom editor-domain tool routes to project-tool.run", async () => {
   const requests: BridgeRequest[] = [];
   const runtime: ToolsRuntime = {
     projectTools: [{
@@ -711,7 +711,7 @@ test("tools run with unknown tool name returns E_TOOL_NOT_FOUND_FOR_TARGET", asy
   assert.equal(result.error?.code, "E_TOOL_NOT_FOUND_FOR_TARGET");
 });
 
-test("tools run default target is editor", async () => {
+test("tools run custom editor tool routes to project-tool.run", async () => {
   const requests: BridgeRequest[] = [];
   const runtime: ToolsRuntime = {
     projectTools: [{
@@ -776,6 +776,8 @@ test("tools run editor-domain tool discovery falls back to project-tool.list", a
   assert.equal(requests[0].command, "runtime-tool.list");
   assert.equal(requests[1].command, "project-tool.list");
   assert.equal(requests[2].command, "project-tool.run");
+  // Verify project-tool.run receives the tool name and input
+  assert.equal((requests[2].args as Record<string, unknown>).name, "my.editor-tool");
 });
 
 // ── tools.run descriptor is not planned/stub ──────────────
@@ -809,4 +811,86 @@ test("skill does not use stale CLI parameter/field/error names", () => {
 
   // E_RUNTIME_NOT_READY, not E_PLAYMODE_NOT_READY
   assert.ok(!skill.includes("E_PLAYMODE_NOT_READY"), "skill must use E_RUNTIME_NOT_READY, not E_PLAYMODE_NOT_READY");
+});
+
+// ── ALP-466 regression: tools run built-in bridge + custom tools ──
+
+test("ALP-466: tools run scene.hierarchy passes --input as bridge args", async () => {
+  const requests: BridgeRequest[] = [];
+  const runtime: ToolsRuntime = {
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { roots: [], count: 0 } };
+    }
+  };
+
+  const result = await handleToolsCommand("run", ["scene.hierarchy"], { input: '{"pageSize":1}' }, runtime, requestId);
+  assert.equal(result.ok, true);
+  assert.equal(requests[0].command, "scene.hierarchy");
+  assert.deepEqual((requests[0].args as Record<string, unknown>).pageSize, 1);
+});
+
+test("ALP-466: tools run built-in bridge tool without --input sends empty args", async () => {
+  const requests: BridgeRequest[] = [];
+  const runtime: ToolsRuntime = {
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { name: "Untitled", path: "/Assets/Untitled.unity", buildIndex: -1 } };
+    }
+  };
+
+  const result = await handleToolsCommand("run", ["scene.active"], {}, runtime, requestId);
+  assert.equal(result.ok, true);
+  assert.equal(requests[0].command, "scene.active");
+  assert.deepEqual(requests[0].args, {});
+});
+
+test("ALP-466: tools run built-in job-handler tool returns E_TOOL_HANDLER_UNSUPPORTED", async () => {
+  const result = await handleToolsCommand("run", ["editor.refresh"], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_TOOL_HANDLER_UNSUPPORTED");
+});
+
+test("ALP-466: tools run custom project tool passes name and input to project-tool.run", async () => {
+  const requests: BridgeRequest[] = [];
+  const runtime: ToolsRuntime = {
+    projectTools: [{
+      name: "sample.echo",
+      title: "Sample Echo",
+      description: "Echoes input",
+      group: "sample",
+      inputSchema: { type: "object", properties: { message: { type: "string" } } },
+      readOnlyHint: true,
+      destructiveHint: false,
+      handler: "bridge",
+      target: "editor",
+      availabilityScope: "editorSession"
+    }],
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { result: "ok" } };
+    }
+  };
+
+  const result = await handleToolsCommand("run", ["sample.echo"], { "include-custom": true, input: '{"message":"alp461"}' }, runtime, requestId);
+  assert.equal(result.ok, true);
+  assert.equal(requests[0].command, "project-tool.run");
+  assert.equal((requests[0].args as Record<string, unknown>).name, "sample.echo");
+  assert.deepEqual((requests[0].args as Record<string, unknown>).input, { message: "alp461" });
+});
+
+test("ALP-466: tools run built-in hybrid tool routes to native bridge command", async () => {
+  const requests: BridgeRequest[] = [];
+  const runtime: ToolsRuntime = {
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { result: "ok" } };
+    }
+  };
+
+  // code.exec is a hybrid handler tool with bridgeCommand "code.exec"
+  const result = await handleToolsCommand("run", ["code.exec"], { input: '{"code":"return 42;"}' }, runtime, requestId);
+  assert.equal(result.ok, true);
+  assert.equal(requests[0].command, "code.exec");
+  assert.deepEqual((requests[0].args as Record<string, unknown>).code, "return 42;");
 });

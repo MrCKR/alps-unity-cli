@@ -969,6 +969,40 @@
       ]
     },
     {
+      "bridgeCommand": "project-tool.list",
+      "group": "project-tool",
+      "command": "list",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000,
+      "architectureSensitive": true,
+      "frozenDecision": "ALP-404-Q3",
+      "coverageScope": [
+        "project-tool",
+        "editor-session",
+        "availability-scope"
+      ]
+    },
+    {
+      "bridgeCommand": "project-tool.run",
+      "group": "project-tool",
+      "command": "run",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 60000,
+      "architectureSensitive": true,
+      "frozenDecision": "ALP-404-Q4",
+      "coverageScope": [
+        "project-tool",
+        "editor-session",
+        "custom-tool-execution"
+      ]
+    },
+    {
       "bridgeCommand": "scene.active",
       "group": "scene",
       "command": "active",

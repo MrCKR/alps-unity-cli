@@ -7,7 +7,7 @@
 
 import { getBoolean, getString } from "./args.js";
 import { discoverProjectTools, discoverRuntimeTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
-import { executeBridgeCommand } from "./bridge/index.js";import {
+import { executeBridgeCommand, executeBridgePayload } from "./bridge/index.js";import {
   builtinToolMetadata,
   builtinToolGroups,
   findToolByName,
@@ -288,16 +288,49 @@ async function handleToolsRun(
     return executeBridgeCommand(requestId, "runtime-tool.run", flags, toolName, runtime);
   }
 
-  // Route through project-tool.run for editor-domain tools
-  // For built-in tools with bridge commands, use their native bridge command
-  if (builtinTool && tool.handler !== "bridge" && tool.handler !== "bridge-runtime") {
-    // Builtin tools with non-bridge handlers need different routing
-    // For now, treat all built-in tools as bridge commands via their cliCommand
-    return executeBridgeCommand(requestId, "project-tool.run", flags, toolName, runtime);
+  // ── Built-in bridge/hybrid tools: route through native bridge command ──
+  // The tool name (e.g. "scene.hierarchy") IS the bridge command name.
+  // Parse --input as the args payload directly.
+  if (builtinTool && (tool.handler === "bridge" || tool.handler === "hybrid")) {
+    const input = await parseToolInput(flags);
+    return executeBridgePayload(requestId, toolName, input, flags, runtime);
   }
 
-  // Custom project tools go through project-tool.run
+  // ── Built-in tools with unsupported handlers (job, offline) ──
+  if (builtinTool) {
+    return failure(requestId, "E_TOOL_HANDLER_UNSUPPORTED", `Tool "${toolName}" uses handler "${tool.handler}" which is not yet supported by tools run.`, [
+      `Use the native command instead: ${tool.cliCommand ?? toolName}`,
+      "Run unity_cli tools describe <tool> for details."
+    ]);
+  }
+
+  // ── Custom project tools (editor domain): route through project-tool.run ──
   return executeBridgeCommand(requestId, "project-tool.run", flags, toolName, runtime);
+}
+
+async function parseToolInput(flags: Record<string, string | boolean>): Promise<Record<string, unknown>> {
+  const inputFilePath = getString(flags, "input-file");
+  if (inputFilePath) {
+    const { readFile } = await import("node:fs/promises");
+    const { resolve } = await import("node:path");
+    const content = await readFile(resolve(inputFilePath), "utf8");
+    try {
+      const parsed = JSON.parse(content);
+      return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed : { input: parsed };
+    } catch {
+      return {};
+    }
+  }
+  const inputString = getString(flags, "input");
+  if (inputString !== undefined) {
+    try {
+      const parsed = JSON.parse(inputString);
+      return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed : { input: parsed };
+    } catch {
+      return {};
+    }
+  }
+  return {};
 }
 
 async function optionalTargetSummary(flags: Record<string, string | boolean>, runtime: ToolsRuntime): Promise<Record<string, unknown> | null> {
