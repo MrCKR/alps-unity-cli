@@ -119,7 +119,7 @@ test("integration: package without subcommand returns CLI and Unity package info
   assert.equal(result.ok, true);
   const data = result.data as { command: string; npm: { name: string }; unity: { name: string } };
   assert.equal(data.command, "package");
-  assert.equal(data.npm.name, "unity_cli");
+  assert.equal(data.npm.name, "@alps_ckr/unity_cli");
   assert.equal(data.unity.name, "com.unity_cli");
 });
 
