@@ -1305,9 +1305,9 @@
       "timeout": 10000
     },
     {
-      "bridgeCommand": "tools.groups",
+      "bridgeCommand": "tools.group",
       "group": "tools",
-      "command": "groups",
+      "command": "group",
       "handler_type": "offline",
       "csharp_handler": "none",
       "readOnly": true,
@@ -1315,9 +1315,9 @@
       "timeout": 5000
     },
     {
-      "bridgeCommand": "tools.list",
+      "bridgeCommand": "tools.group-list",
       "group": "tools",
-      "command": "list",
+      "command": "group-list",
       "handler_type": "offline",
       "csharp_handler": "none",
       "readOnly": true,

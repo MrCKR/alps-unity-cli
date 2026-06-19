@@ -283,3 +283,19 @@ test("doctor provides actionable suggestions when checks fail", async () => {
 
   assert.ok(data.suggestions.some((s) => s.includes("prune") || s.includes("Reopen")));
 });
+
+test("doctor stale_tools_list_wording check passes when no stale references exist", async () => {
+  const dataDir = await makeDataDir();
+  await writeInstances(dataDir, [makeInstance()]);
+
+  const runtime = makeRuntime(dataDir, async (payload) => {
+    return { ok: true, data: { command: payload.command, status: "ok" } };
+  });
+
+  const result = await handleDoctorCommand({}, runtime, "req_doctor_stale_1");
+  assert.equal(result.ok, true);
+  const data = result.data as { checks: DoctorCheck[] };
+  const staleCheck = data.checks.find((c) => c.name === "stale_tools_list_wording");
+  assert.equal(staleCheck?.status, "pass");
+  assert.ok(staleCheck?.message.includes("No stale"));
+});

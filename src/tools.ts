@@ -59,9 +59,9 @@ export async function handleToolsCommand(
     return handleToolsGroup(flags, runtime, requestId);
   }
 
-  // Legacy `tools groups` alias → redirect to `tools group`
+  // `tools groups` is a removed legacy alias — treat as unknown command.
   if (command === "groups") {
-    return handleToolsGroup(flags, runtime, requestId);
+    return handleToolsListRemoved(requestId);
   }
 
   if (command === "search") {

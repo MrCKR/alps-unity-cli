@@ -22,6 +22,8 @@ import { builtinToolMetadata } from "./tools/metadata/index.js";
 import { builtinContextMetadata } from "./context/metadata/index.js";
 import { builtinExtensionMetadata } from "./extensions/metadata/index.js";
 import { failure, success } from "./output.js";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import type { CliResult } from "./types.js";
 
 export interface DoctorRuntime extends BridgeRuntime, ProjectToolRuntime {
@@ -403,14 +405,67 @@ function checkExtensionRegistry(): DoctorCheck {
 }
 
 function checkStaleToolsListWording(): DoctorCheck {
-  // P1 gate: check that the CLI help does not reference the removed 'tools list' command.
-  // A more thorough stale wording scan (docs, skills, examples) will be added by P1-T05.
+  // P1 gate: scan key source files for stale 'tools list' / 'tools groups' references
+  // that contradict the group-first discovery model mandated by ALP-505.
+  const stalePatterns = [
+    /tools list(?:\s|--)/gi,
+    /tools groups(?![\w.-])/gi,  // match 'tools groups' but not 'tools.group-list' etc.
+  ];
+  // Files that should NOT contain stale references in user-visible output
+  const filesToCheck = [
+    { label: "package-info.ts", content: tryReadSrcFile("package-info.ts") },
+    { label: "builtin-docs.ts", content: tryReadSrcFile("builtin-docs.ts") },
+    { label: "batch.ts", content: tryReadSrcFile("batch.ts") },
+  ];
+
+  const findings: Array<{ file: string; line: number; match: string }> = [];
+  for (const { label, content } of filesToCheck) {
+    if (!content) continue;
+    const lines = content.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      // Skip comments and string literals that are part of the removed-command handling
+      if (line.trimStart().startsWith("//")) continue;
+      for (const pattern of stalePatterns) {
+        pattern.lastIndex = 0;
+        const match = pattern.exec(line);
+        if (match) {
+          // Exclude legitimate references inside E_TOOLS_LIST_REMOVED guidance strings
+          // and contract/metadata name patterns like "tools.group" / "tools.group-list"
+          const matched = match[0];
+          if (/tools\.group/i.test(matched)) continue;
+          findings.push({ file: label, line: i + 1, match: matched });
+        }
+      }
+    }
+  }
+
+  if (findings.length === 0) {
+    return {
+      name: "stale_tools_list_wording",
+      status: "pass",
+      message: "No stale 'tools list' or 'tools groups' references found in user-visible output files.",
+      details: { checked: filesToCheck.map((f) => f.label).join(", ") }
+    };
+  }
+
+  const details = findings.map((f) => `${f.file}:${f.line}: '${f.match}'`);
   return {
     name: "stale_tools_list_wording",
-    status: "pass",
-    message: "CLI help does not reference removed 'tools list' command.",
-    details: { checked: "cli_help" }
+    status: "warn",
+    message: `Found ${findings.length} stale 'tools list'/'tools groups' reference(s) in user-visible output files.`,
+    details: { findings: details, checked: filesToCheck.map((f) => f.label).join(", ") }
   };
+}
+
+/** Try to read a source file from the src/ directory. Returns null if not found. */
+function tryReadSrcFile(filename: string): string | null {
+  try {
+    const path = fileURLToPath(new URL(`./${filename}`, import.meta.url));
+    return readFileSync(path, "utf8");
+  } catch {
+    return null;
+  }
 }
 
 function buildSuggestions(checks: DoctorCheck[]): string[] {

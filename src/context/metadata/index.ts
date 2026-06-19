@@ -244,7 +244,7 @@ const SCENE_RENDERER_FEATURES: ContextMetadata = {
   title: "Renderer Features",
   description: "List URP renderer features configured in the project.",
   kind: "context",
-  source: "built-in",
+  source: "extension",
   category: "scene",
   inputSchema: {},
   readOnlyHint: true,

@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { bridgeCommandRegistry, type BridgeRequest } from "./bridge/index.js";
 import { handleToolsCommand, type ToolsRuntime } from "./tools.js";
-import { builtinToolMetadata, builtinToolGroups, findToolByName, filterToolsByGroup, searchTools, supportStatusForTool } from "./tools/metadata/index.js";
+import { builtinToolMetadata, builtinToolGroups, findToolByName, filterToolsByGroup, searchTools, supportStatusForTool, normalizeToolMetadata } from "./tools/metadata/index.js";
 
 const requestId = "test_req_tools_001";
 const emptyRuntime: ToolsRuntime = {};
@@ -604,6 +604,18 @@ test("tools without subcommand returns tools-list-removed guidance", async () =>
   assert.equal(result.error?.code, "E_TOOLS_LIST_REMOVED");
 });
 
+test("tools list returns tools-list-removed guidance", async () => {
+  const result = await handleToolsCommand("list", [], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_TOOLS_LIST_REMOVED");
+});
+
+test("tools groups returns tools-list-removed guidance (alias removed)", async () => {
+  const result = await handleToolsCommand("groups", [], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_TOOLS_LIST_REMOVED");
+});
+
 // ── tools run: handleToolsRun routing ─────────────────────
 
 test("tools run built-in bridge tool routes to native bridge command", async () => {
@@ -1057,4 +1069,45 @@ test("tools run discovers runtime tools when --runtime flag is provided", async 
   assert.equal(result.ok, true, `Expected ok=true, got error: ${result.error?.code} ${result.error?.message}`);
   assert.equal(requests[0].command, "runtime-tool.list");
   assert.equal(requests[1].command, "runtime-tool.run");
+});
+
+// ── P1: normalizeToolMetadata defaults and extension source ───────
+
+test("normalizeToolMetadata fills P1 defaults: kind, source, category", () => {
+  const normalized = normalizeToolMetadata({
+    name: "test.tool",
+    title: "Test",
+    description: "Test tool",
+    group: "test",
+    inputSchema: {},
+    readOnlyHint: true,
+    destructiveHint: false
+  });
+  assert.equal(normalized.kind, "tool");
+  assert.equal(normalized.source, "built-in");
+  assert.equal(normalized.category, "test");
+});
+
+test("probuilder and vfx tools have source: extension (ALP-505 decision #10)", () => {
+  const probuilder = findToolByName("probuilder.shape");
+  assert.ok(probuilder, "probuilder.shape should exist");
+  assert.equal(probuilder.source, "extension");
+
+  const vfx = findToolByName("vfx.graph");
+  assert.ok(vfx, "vfx.graph should exist");
+  assert.equal(vfx.source, "extension");
+});
+
+test("tools.group and tools.group-list descriptors replace tools.list and tools.groups", () => {
+  const group = findToolByName("tools.group");
+  assert.ok(group, "tools.group should exist");
+  assert.equal(group.cliCommand, "tools group");
+
+  const groupList = findToolByName("tools.group-list");
+  assert.ok(groupList, "tools.group-list should exist");
+  assert.equal(groupList.cliCommand, "tools group list");
+
+  // Old names should no longer exist
+  assert.equal(findToolByName("tools.list"), undefined, "tools.list should be removed");
+  assert.equal(findToolByName("tools.groups"), undefined, "tools.groups should be removed");
 });

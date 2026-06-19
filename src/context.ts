@@ -120,11 +120,16 @@ async function handleContextDescribe(
   }
 
   const isProjectContext = builtinContext === undefined;
+  // Derive mode/requiresUnity from the handler, not from builtin vs project.
+  // Built-in contexts use handler "bridge" and require Unity connection;
+  // only truly offline handlers (e.g. future offline context) require no Unity.
+  const requiresUnity = context.handler !== "offline";
+  const mode = requiresUnity ? "bridge" : "offline";
   const data: Record<string, unknown> = {
     command: "context.describe",
     target: await optionalTargetSummary(flags, runtime),
-    mode: isProjectContext ? "bridge" : "offline",
-    requiresUnity: isProjectContext,
+    mode,
+    requiresUnity,
     ...context
   };
 

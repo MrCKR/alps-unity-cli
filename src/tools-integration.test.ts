@@ -48,18 +48,11 @@ test("integration: tools group list scene via execute()", async () => {
   }
 });
 
-test("integration: tools group (legacy groups alias) via execute()", async () => {
+test("integration: tools groups returns tools-list-removed guidance", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["tools", "groups"], runtime);
-  assert.equal(result.ok, true);
-
-  const data = result.data as Record<string, unknown>;
-  assert.equal(data.command, "tools.group");
-  const groups = data.groups as Array<{ name: string; toolCount: number }>;
-  const groupNames = groups.map((g) => g.name);
-  assert.ok(groupNames.includes("scene"));
-  assert.ok(groupNames.includes("camera"));
-  assert.ok(groupNames.includes("probuilder"));
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_TOOLS_LIST_REMOVED");
 });
 
 test("integration: tools search hierarchy via execute()", async () => {

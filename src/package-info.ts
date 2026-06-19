@@ -52,9 +52,9 @@ export async function handlePackageInfoCommand(
       reflect: "unity_cli reflect type/member/search --reflect-dir <path>"
     },
     discovery: {
-      builtinTools: "unity_cli tools list",
-      unifiedTools: "unity_cli tools list --include-custom",
-      projectTools: "unity_cli tools list --include-custom"
+      builtinTools: "unity_cli tools group",
+      unifiedTools: "unity_cli tools group list <group> --include-custom",
+      projectTools: "unity_cli tools group list <group> --include-custom"
     }
   };
 
@@ -63,7 +63,7 @@ export async function handlePackageInfoCommand(
       `${(data.npm as { name: string }).name}@${(data.npm as { version: string }).version}`,
       `Unity package: ${(data.unity as { name: string }).name}@${(data.unity as { version: string }).version}`,
       "Docs: unity_cli docs / docs topic <topic> / docs get/search",
-      "Discovery: tools list [--include-custom], tools groups/search/describe"
+      "Discovery: tools group / tools group list <group> / tools search / tools describe"
     ].join("\n");
   }
 
