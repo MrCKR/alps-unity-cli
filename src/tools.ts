@@ -7,7 +7,8 @@
 
 import { getBoolean, getString } from "./args.js";
 import { discoverProjectTools, discoverRuntimeTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
-import { executeBridgeCommand, executeBridgePayload } from "./bridge/index.js";import {
+import { executeBridgeCommand, executeBridgePayload } from "./bridge/index.js";import { checkToolExtensionAvailability, collectExtensionToolDescriptors } from "./extension-availability.js";
+import {
   builtinToolMetadata,
   builtinToolGroups,
   findToolByName,
@@ -221,11 +222,19 @@ async function handleToolsDescribe(
   const tool = builtinTool ?? await findProjectToolByName(toolName, flags, runtime, requestId);
   if (!tool) {
     return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Tool not found for target: ${toolName}.`, [
+      "Run unity_cli tools groups to see available tool categories.",
       "Run unity_cli tools list to see all available tools.",
       "Run unity_cli tools list --include-custom to discover Unity project Editor custom tools.",
       "Run unity_cli tools search <keyword> to find related tools."
     ]);
   }
+
+  // ── Extension availability check ──
+  // If the tool requires optional Unity packages, check whether they are
+  // installed in the target project. If unavailable, return the descriptor
+  // with an explicit unavailable status + next_actions rather than pretending
+  // the tool is usable.
+  const extensionCheck = await checkToolExtensionAvailability(tool, flags);
 
   const isProjectTool = builtinTool === undefined;
   const supportStatus = supportStatusForTool(tool);
@@ -239,6 +248,16 @@ async function handleToolsDescribe(
     supportStatusLabel: supportStatusLabel(supportStatus),
     supportStatusDescription: supportStatusDescription(supportStatus)
   };
+
+  if (!extensionCheck.available) {
+    data.extensionAvailability = "unavailable";
+    data.extensionId = extensionCheck.extensionId;
+    data.missingPackageIds = extensionCheck.availabilityResult?.missingPackageIds ?? tool.requiresPackages ?? [];
+    data.nextActions = extensionCheck.nextActions;
+  } else if (extensionCheck.extensionId) {
+    data.extensionAvailability = extensionCheck.availabilityResult?.status ?? "available";
+    data.extensionId = extensionCheck.extensionId;
+  }
 
   return success(requestId, data);
 }
@@ -283,6 +302,23 @@ async function handleToolsRun(
       "Run unity_cli tools list --include-custom to see all available tools.",
       "Run unity_cli tools search <keyword> to find related tools."
     ]);
+  }
+
+  // ── Extension availability guard ──
+  // If the tool requires optional Unity packages that are not installed,
+  // block execution and return E_EXTENSION_UNAVAILABLE with next_actions.
+  const extensionCheck = await checkToolExtensionAvailability(tool, flags);
+  if (!extensionCheck.available) {
+    return failure(
+      requestId,
+      extensionCheck.errorCode,
+      extensionCheck.message,
+      extensionCheck.nextActions,
+      {
+        extensionId: extensionCheck.extensionId,
+        missingPackageIds: extensionCheck.availabilityResult?.missingPackageIds ?? tool.requiresPackages ?? []
+      }
+    );
   }
 
   // Determine the execution target and route accordingly

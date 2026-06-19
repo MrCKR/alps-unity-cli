@@ -18,6 +18,8 @@ import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRunti
 import { readInstances, type UnityInstance } from "./instances.js";
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
 import { builtinToolMetadata } from "./tools/metadata/index.js";
+import { ExtensionRegistry, loadExtensionDescriptor, extensionAvailabilitySummary } from "./extensions/index.js";
+import { readInstalledUnityPackages } from "./extensions/project-resolver.js";
 import { failure, success } from "./output.js";
 import type { CliResult } from "./types.js";
 
@@ -80,6 +82,9 @@ export async function handleDoctorCommand(
 
   // Unified CLI/tools discovery surface
   checks.push(await checkUnifiedDiscovery(flags, runtime, requestId));
+
+  // Extension availability
+  checks.push(await checkExtensionAvailability(flags));
 
   const allPassed = checks.every((c) => c.status === "pass");
   const hasWarnings = checks.some((c) => c.status === "warn");
@@ -359,6 +364,85 @@ async function checkConfigIntegrity(healthyInstances: UnityInstance[]): Promise<
   };
 }
 
+async function checkExtensionAvailability(flags: Record<string, string | boolean>): Promise<DoctorCheck> {
+  const projectPath = getString(flags, "project");
+  if (!projectPath) {
+    return {
+      name: "extension_availability",
+      status: "warn",
+      message: "No project path provided. Cannot resolve extension availability. Pass --project <path>.",
+      details: { projectResolved: false }
+    };
+  }
+
+  const registry = new ExtensionRegistry();
+  let installedPackages: Map<string, string>;
+  try {
+    installedPackages = await readInstalledUnityPackages(projectPath);
+  } catch {
+    return {
+      name: "extension_availability",
+      status: "warn",
+      message: `Cannot read Unity packages from project: ${projectPath}.`,
+      details: { projectPath }
+    };
+  }
+
+  const summary = extensionAvailabilitySummary(registry, installedPackages);
+
+  const unavailableExtensions = summary.extensions.filter((e) => e.status === "unavailable");
+  const unknownExtensions = summary.extensions.filter((e) => e.status === "unknown");
+
+  if (unavailableExtensions.length > 0) {
+    return {
+      name: "extension_availability",
+      status: "fail",
+      message: `${unavailableExtensions.length} extension(s) have missing Unity package dependencies: ${unavailableExtensions.map((e) => e.name + " (missing: " + e.missingPackages.join(", ") + ")").join("; ")}.`,
+      details: {
+        projectPath,
+        projectResolved: true,
+        total: summary.total,
+        available: summary.available,
+        unavailable: summary.unavailable,
+        unknown: summary.unknown,
+        unavailableExtensions,
+        unknownExtensions
+      }
+    };
+  }
+
+  if (unknownExtensions.length > 0) {
+    return {
+      name: "extension_availability",
+      status: "warn",
+      message: `${unknownExtensions.length} extension(s) could not be resolved (no installed packages data): ${unknownExtensions.map((e) => e.name).join(", ")}.`,
+      details: {
+        projectPath,
+        projectResolved: true,
+        total: summary.total,
+        available: summary.available,
+        unavailable: summary.unavailable,
+        unknown: summary.unknown
+      }
+    };
+  }
+
+  return {
+    name: "extension_availability",
+    status: "pass",
+    message: `All ${summary.total} extensions resolved: ${summary.available} available, ${summary.unavailable} unavailable, ${summary.unknown} unknown.`,
+    details: {
+      projectPath,
+      projectResolved: true,
+      total: summary.total,
+      available: summary.available,
+      unavailable: summary.unavailable,
+      unknown: summary.unknown,
+      extensions: summary.extensions
+    }
+  };
+}
+
 function buildSuggestions(checks: DoctorCheck[]): string[] {
   const suggestions: string[] = [];
 
@@ -393,6 +477,11 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
           break;
         case "unified_tool_discovery":
           suggestions.push("Run unity_cli tools list --include-custom with a reachable Unity Bridge to inspect project custom descriptors.");
+          break;
+        case "extension_availability":
+          suggestions.push("Run 'unity_cli extensions doctor --project <path>' for detailed extension diagnostics.");
+          suggestions.push("Run 'unity_cli extensions list --project <path>' to see all extensions and their status.");
+          suggestions.push("Install missing packages with 'unity_cli package install <package-id>'.");
           break;
       }
     }

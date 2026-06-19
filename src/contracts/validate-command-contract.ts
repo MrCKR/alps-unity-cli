@@ -2,11 +2,15 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { bridgeCommandRegistry } from "../bridge/index.js";
 import { builtinToolMetadata } from "../tools/metadata/index.js";
-import { commandContracts, validateBridgeRegistryContracts, validateToolMetadataContracts } from "./command-contract.js";
+import { commandContracts, validateBridgeRegistryContracts, validateToolMetadataContracts, validateExtensionManifestContracts } from "./command-contract.js";
+import { BUILTIN_EXTENSION_MANIFESTS } from "../extensions/registry-data.js";
 
 const contracts = commandContracts();
 validateBridgeRegistryContracts(bridgeCommandRegistry);
 validateToolMetadataContracts(builtinToolMetadata(), bridgeCommandRegistry);
+
+// P5-T04: Validate extension manifest tool contributions against contract
+validateExtensionManifestContracts(BUILTIN_EXTENSION_MANIFESTS, bridgeCommandRegistry);
 
 const csharpCommands = extractCSharpRegisteredCommands("unitypkg/Editor");
 const requiredCsharpCommands = contracts
