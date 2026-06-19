@@ -374,7 +374,8 @@ async function checkConfigIntegrity(healthyInstances: UnityInstance[]): Promise<
 }
 
 function checkContextDiscovery(flags: Record<string, string | boolean>, runtime: DoctorRuntime): DoctorCheck {
-  const builtinCount = builtinContextMetadata().length;
+  const contexts = builtinContextMetadata();
+  const builtinCount = contexts.length;
   const includeCustom = shouldDiscoverContexts(flags, runtime);
   if (builtinCount === 0) {
     return {
@@ -384,6 +385,28 @@ function checkContextDiscovery(flags: Record<string, string | boolean>, runtime:
       details: { builtinCount }
     };
   }
+
+  // P2: Verify all contexts have required fields
+  const missingResourceUri = contexts.filter((c) => !c.resourceUri);
+  const missingEquivalent = contexts.filter((c) => !c.equivalentUnityMcp);
+  const missingOutputSchema = contexts.filter((c) => !c.outputSchema);
+  const notReadOnly = contexts.filter((c) => c.readOnlyHint !== true);
+
+  const warnings: string[] = [];
+  if (missingResourceUri.length > 0) warnings.push(`${missingResourceUri.length} context(s) missing resourceUri`);
+  if (missingEquivalent.length > 0) warnings.push(`${missingEquivalent.length} context(s) missing equivalentUnityMcp`);
+  if (missingOutputSchema.length > 0) warnings.push(`${missingOutputSchema.length} context(s) missing outputSchema`);
+  if (notReadOnly.length > 0) warnings.push(`${notReadOnly.length} context(s) not read-only`);
+
+  if (warnings.length > 0) {
+    return {
+      name: "context_discovery",
+      status: "warn",
+      message: `Context discovery available: ${builtinCount} built-in context(s), but ${warnings.join("; ")}.`,
+      details: { builtinCount, customDiscoveryEnabled: includeCustom, warnings }
+    };
+  }
+
   return {
     name: "context_discovery",
     status: "pass",

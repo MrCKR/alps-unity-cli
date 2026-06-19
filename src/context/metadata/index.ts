@@ -26,7 +26,9 @@ const PROJECT_INFO: ContextMetadata = {
   refreshBehavior: "static",
   target: "editor",
   availabilityScope: "editorSession",
-  equivalentUnityMcp: "project/info",
+  resourceUri: "unity-cli://project/info",
+  outputSchema: { type: "object", properties: { projectRoot: { type: "string" }, projectName: { type: "string" }, unityVersion: { type: "string" }, platform: { type: "string" }, assetsPath: { type: "string" } } },
+  equivalentUnityMcp: "mcpforunity://project/info",
   handler: "bridge",
   cliCommand: "context read project.info"
 };
@@ -43,7 +45,9 @@ const PROJECT_TAGS: ContextMetadata = {
   refreshBehavior: "on-demand",
   target: "editor",
   availabilityScope: "editorSession",
-  equivalentUnityMcp: "project/tags",
+  resourceUri: "unity-cli://project/tags",
+  outputSchema: { type: "object", properties: { tags: { type: "array", items: { type: "string" } }, count: { type: "integer" } } },
+  equivalentUnityMcp: "mcpforunity://project/tags",
   handler: "bridge",
   cliCommand: "context read project.tags"
 };
@@ -60,7 +64,9 @@ const PROJECT_LAYERS: ContextMetadata = {
   refreshBehavior: "on-demand",
   target: "editor",
   availabilityScope: "editorSession",
-  equivalentUnityMcp: "project/layers",
+  resourceUri: "unity-cli://project/layers",
+  outputSchema: { type: "object", properties: { layers: { type: "array", items: { type: "object", properties: { index: { type: "integer" }, name: { type: "string" } } } }, count: { type: "integer" } } },
+  equivalentUnityMcp: "mcpforunity://project/layers",
   handler: "bridge",
   cliCommand: "context read project.layers"
 };
@@ -79,7 +85,9 @@ const EDITOR_STATE: ContextMetadata = {
   refreshBehavior: "live",
   target: "editor",
   availabilityScope: "editorSession",
-  equivalentUnityMcp: "editor/state",
+  resourceUri: "unity-cli://editor/state",
+  outputSchema: { type: "object", properties: { playMode: { type: "string" }, busy: { type: "boolean" }, activeScene: { type: "string" }, prefabStage: { type: "object" }, bridge: { type: "object" }, runtime: { type: "object" }, schemaVersion: { type: "string" }, observedAt: { type: "string" }, availability: { type: "object" }, next_actions: { type: "array" } } },
+  equivalentUnityMcp: "mcpforunity://editor/state",
   handler: "bridge",
   cliCommand: "context read editor.state"
 };
@@ -96,7 +104,9 @@ const EDITOR_SELECTION: ContextMetadata = {
   refreshBehavior: "live",
   target: "editor",
   availabilityScope: "editorSession",
-  equivalentUnityMcp: "editor/selection",
+  resourceUri: "unity-cli://editor/selection",
+  outputSchema: { type: "object", properties: { activeObject: { type: ["string", "null"] }, activeGameObject: { type: ["string", "null"] }, activeTransform: { type: ["string", "null"] }, objects: { type: "array", items: { type: "string" } }, gameObjects: { type: "array", items: { type: "string" } }, assetGUIDs: { type: "array", items: { type: "string" } } } },
+  equivalentUnityMcp: "mcpforunity://editor/selection",
   handler: "bridge",
   cliCommand: "context read editor.selection"
 };
@@ -113,7 +123,9 @@ const EDITOR_ACTIVE_TOOL: ContextMetadata = {
   refreshBehavior: "live",
   target: "editor",
   availabilityScope: "editorSession",
-  equivalentUnityMcp: "editor/active-tool",
+  resourceUri: "unity-cli://editor/active-tool",
+  outputSchema: { type: "object", properties: { activeTool: { type: "string" }, isCustom: { type: "boolean" }, pivotMode: { type: "string" }, pivotRotation: { type: "string" }, handlePosition: { type: "object" }, handleRotation: { type: "object" } } },
+  equivalentUnityMcp: "mcpforunity://editor/active-tool",
   handler: "bridge",
   cliCommand: "context read editor.active-tool"
 };
@@ -130,7 +142,9 @@ const EDITOR_WINDOWS: ContextMetadata = {
   refreshBehavior: "on-demand",
   target: "editor",
   availabilityScope: "editorSession",
-  equivalentUnityMcp: "editor/windows",
+  resourceUri: "unity-cli://editor/windows",
+  outputSchema: { type: "object", properties: { windows: { type: "array", items: { type: "object", properties: { title: { type: "string" }, typeName: { type: "string" }, isFocused: { type: "boolean" }, position: { type: "object" }, instanceID: { type: "integer" } } } }, count: { type: "integer" } } },
+  equivalentUnityMcp: "mcpforunity://editor/windows",
   handler: "bridge",
   cliCommand: "context read editor.windows"
 };
@@ -147,26 +161,30 @@ const EDITOR_TOOL_STATES: ContextMetadata = {
   refreshBehavior: "live",
   target: "editor",
   availabilityScope: "editorSession",
-  equivalentUnityMcp: "editor/tool-states",
+  resourceUri: "unity-cli://editor/tool-states",
+  outputSchema: { type: "object", properties: { transform: { type: "object" }, snap: { type: "object" }, grid: { type: "object" }, activeTool: { type: "string" } } },
+  equivalentUnityMcp: "mcpforunity://editor/tool-states",
   handler: "bridge",
   cliCommand: "context read editor.tool-states"
 };
 
-const EDITOR_PREFAB_STAGE: ContextMetadata = {
-  name: "editor.prefab-stage",
+const PREFAB_STAGE: ContextMetadata = {
+  name: "prefab.stage",
   title: "Prefab Stage",
   description: "Current Prefab Mode / Prefab Stage state if a prefab is being edited.",
   kind: "context",
   source: "built-in",
-  category: "editor",
+  category: "prefab",
   inputSchema: {},
   readOnlyHint: true,
   refreshBehavior: "live",
   target: "editor",
   availabilityScope: "editorSession",
-  equivalentUnityMcp: "editor/prefab-stage",
+  resourceUri: "unity-cli://prefab/stage",
+  outputSchema: { type: "object", properties: { isOpen: { type: "boolean" }, assetPath: { type: "string" }, prefabRootName: { type: "string" }, mode: { type: "string" }, isDirty: { type: "boolean" } } },
+  equivalentUnityMcp: "mcpforunity://editor/prefab-stage",
   handler: "bridge",
-  cliCommand: "context read editor.prefab-stage"
+  cliCommand: "context read prefab.stage"
 };
 
 const EDITOR_MENU_ITEMS: ContextMetadata = {
@@ -176,12 +194,14 @@ const EDITOR_MENU_ITEMS: ContextMetadata = {
   kind: "context",
   source: "built-in",
   category: "editor",
-  inputSchema: { search: { type: "string", description: "Optional filter substring." } },
+  inputSchema: { type: "object", properties: { search: { type: "string", description: "Optional filter substring." } } },
   readOnlyHint: true,
   refreshBehavior: "static",
   target: "editor",
   availabilityScope: "editorSession",
-  equivalentUnityMcp: "editor/menu-items",
+  resourceUri: "unity-cli://editor/menu-items",
+  outputSchema: { type: "object", properties: { items: { type: "array", items: { type: "object", properties: { path: { type: "string" }, label: { type: "string" } } } }, count: { type: "integer" } } },
+  equivalentUnityMcp: "mcpforunity://menu-items",
   handler: "bridge",
   cliCommand: "context read editor.menu-items"
 };
@@ -195,12 +215,22 @@ const SCENE_GAMEOBJECT: ContextMetadata = {
   kind: "context",
   source: "built-in",
   category: "scene",
-  inputSchema: { target: { type: "string", description: "GameObject name or path." } },
+  inputSchema: {
+    type: "object",
+    properties: {
+      target: { type: "string", description: "GameObject name or path." },
+      id: { type: "integer", description: "GameObject instance ID (takes priority over target/path)." },
+      path: { type: "string", description: "Hierarchy path, e.g. 'Main Camera/Directional Light'." },
+      includeComponents: { type: "boolean", description: "Include component summaries in the output." }
+    }
+  },
   readOnlyHint: true,
   refreshBehavior: "on-demand",
   target: "editor",
   availabilityScope: "editorSession",
-  equivalentUnityMcp: "scene/gameobject",
+  resourceUri: "unity-cli://scene/gameobject/{instance_id}",
+  outputSchema: { type: "object", properties: { gameObject: { type: "object", properties: { name: { type: "string" }, path: { type: "string" }, instanceID: { type: "integer" }, active: { type: "boolean" }, components: { type: "array" } } } } },
+  equivalentUnityMcp: "mcpforunity://scene/gameobject/{instance_id}",
   handler: "bridge",
   cliCommand: "context read scene.gameobject"
 };
@@ -217,7 +247,9 @@ const SCENE_CAMERAS: ContextMetadata = {
   refreshBehavior: "on-demand",
   target: "editor",
   availabilityScope: "editorSession",
-  equivalentUnityMcp: "scene/cameras",
+  resourceUri: "unity-cli://scene/cameras",
+  outputSchema: { type: "object", properties: { cameras: { type: "array", items: { type: "object" } }, count: { type: "integer" } } },
+  equivalentUnityMcp: "mcpforunity://scene/cameras",
   handler: "bridge",
   cliCommand: "context read scene.cameras"
 };
@@ -229,12 +261,21 @@ const SCENE_VOLUMES: ContextMetadata = {
   kind: "context",
   source: "built-in",
   category: "scene",
-  inputSchema: {},
+  inputSchema: {
+    type: "object",
+    properties: {
+      target: { type: "string", description: "Optional volume target filter." },
+      pageSize: { type: "integer", description: "Maximum number of volumes per page." },
+      cursor: { type: "string", description: "Opaque pagination cursor." }
+    }
+  },
   readOnlyHint: true,
   refreshBehavior: "on-demand",
   target: "editor",
   availabilityScope: "editorSession",
-  equivalentUnityMcp: "scene/volumes",
+  resourceUri: "unity-cli://scene/volumes",
+  outputSchema: { type: "object", properties: { volumes: { type: "array", items: { type: "object" } }, count: { type: "integer" }, pageInfo: { type: "object" } } },
+  equivalentUnityMcp: "mcpforunity://scene/volumes",
   handler: "bridge",
   cliCommand: "context read scene.volumes"
 };
@@ -244,14 +285,16 @@ const SCENE_RENDERER_FEATURES: ContextMetadata = {
   title: "Renderer Features",
   description: "List URP renderer features configured in the project.",
   kind: "context",
-  source: "extension",
+  source: "built-in",
   category: "scene",
   inputSchema: {},
   readOnlyHint: true,
   refreshBehavior: "static",
   target: "editor",
   availabilityScope: "editorSession",
-  equivalentUnityMcp: "scene/renderer-features",
+  resourceUri: "unity-cli://scene/renderer-features",
+  outputSchema: { type: "object", properties: { available: { type: "boolean" }, renderer: { type: "object" }, features: { type: "array", items: { type: "object" } }, diagnostics: { type: "string" } } },
+  equivalentUnityMcp: "mcpforunity://pipeline/renderer-features",
   requiresPackages: ["com.unity.render-pipelines.universal"],
   handler: "bridge",
   cliCommand: "context read scene.renderer-features"
@@ -269,7 +312,9 @@ const SCENE_RENDERING_STATS: ContextMetadata = {
   refreshBehavior: "live",
   target: "editor",
   availabilityScope: "editorSession",
-  equivalentUnityMcp: "scene/rendering-stats",
+  resourceUri: "unity-cli://scene/rendering-stats",
+  outputSchema: { type: "object", properties: { available: { type: "boolean" }, stats: { type: "object" }, diagnostics: { type: "string" } } },
+  equivalentUnityMcp: "mcpforunity://rendering/stats",
   handler: "bridge",
   cliCommand: "context read scene.rendering-stats"
 };
@@ -283,12 +328,21 @@ const TESTS_LIST: ContextMetadata = {
   kind: "context",
   source: "built-in",
   category: "tests",
-  inputSchema: { platform: { type: "string", enum: ["EditMode", "PlayMode"], description: "Test platform filter." } },
+  inputSchema: {
+    type: "object",
+    properties: {
+      mode: { type: "string", enum: ["EditMode", "PlayMode"], description: "Test platform filter." },
+      pageSize: { type: "integer", description: "Maximum number of tests per page." },
+      cursor: { type: "string", description: "Opaque pagination cursor." }
+    }
+  },
   readOnlyHint: true,
   refreshBehavior: "on-demand",
   target: "editor",
   availabilityScope: "editorSession",
-  equivalentUnityMcp: "tests",
+  resourceUri: "unity-cli://tests/list",
+  outputSchema: { type: "object", properties: { available: { type: "boolean" }, tests: { type: "array", items: { type: "object" } }, count: { type: "integer" }, pageInfo: { type: "object" }, diagnostics: { type: "string" } } },
+  equivalentUnityMcp: "mcpforunity://tests",
   handler: "bridge",
   cliCommand: "context read tests.list"
 };
@@ -304,7 +358,7 @@ const BUILTIN_CONTEXTS: ContextMetadata[] = [
   EDITOR_ACTIVE_TOOL,
   EDITOR_WINDOWS,
   EDITOR_TOOL_STATES,
-  EDITOR_PREFAB_STAGE,
+  PREFAB_STAGE,
   EDITOR_MENU_ITEMS,
   SCENE_GAMEOBJECT,
   SCENE_CAMERAS,
