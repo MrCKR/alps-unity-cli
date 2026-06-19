@@ -97,6 +97,14 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
       result.skills = skillResults;
     }
 
+    // P5-T03: Check extension auto-detect plan (dry-run in check mode)
+    if (!skillOnly) {
+      const { autoDetectExtensions, autoDetectSummary } = await import("./extension-auto-detect.js");
+      const detectResult = await autoDetectExtensions(projectPath, true);
+      result.extensions = detectResult;
+      result.extensionSummary = autoDetectSummary(detectResult);
+    }
+
     return success(requestId, result);
   }
 
@@ -141,6 +149,14 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
         newHash: r.newHash
       }));
     }
+  }
+
+  // P5-T03: Auto-detect and install matching extensions (unless --skill-only or --pkg-only)
+  if (!skillOnly && !pkgOnly) {
+    const { autoDetectExtensions, autoDetectSummary } = await import("./extension-auto-detect.js");
+    const detectResult = await autoDetectExtensions(projectPath);
+    baseResult.extensions = detectResult;
+    baseResult.extensionSummary = autoDetectSummary(detectResult);
   }
 
   // --skill-only skips package resolution

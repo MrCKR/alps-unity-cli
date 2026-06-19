@@ -8,6 +8,7 @@ import { bridgeCommandRegistry, executeBridgeCommand, type BridgeRuntime } from 
 import { handleBatch } from "./cli-commands/batch.js";
 import { handleBuild } from "./cli-commands/build.js";
 import { handleEditor } from "./cli-commands/editor.js";
+import { handleExtensionsCommand } from "./cli-commands/extensions.js";
 import { handleJob } from "./cli-commands/job.js";
 import { handleInit, handlePackage } from "./cli-commands/package.js";
 import { handleTest } from "./cli-commands/test.js";
@@ -42,7 +43,8 @@ const CLI_COMMANDS = new Map<string, CliCommandModule>([
   ["reflect", { run: ({ command, args, flags, runtime, requestId }) => handleReflectCommand(command, args, flags, runtime.dataDir, requestId) }],
   ["editor", { run: ({ command, flags, runtime, requestId }) => handleEditor(command, flags, runtime, requestId) }],
   ["test", { run: ({ command, flags, runtime, requestId }) => handleTest(command, flags, runtime, requestId) }],
-  ["build", { run: ({ command, flags, runtime, requestId }) => handleBuild(command, flags, runtime, requestId) }]
+  ["build", { run: ({ command, flags, runtime, requestId }) => handleBuild(command, flags, runtime, requestId) }],
+  ["extensions", { run: ({ command, args, flags, runtime, requestId }) => handleExtensionsCommand(command, args, flags, runtime, requestId) }]
 ]);
 
 export async function execute(argv: string[], runtime = createRuntime()): Promise<CliResult> {
@@ -200,6 +202,10 @@ function help(): Record<string, unknown> {
       "reflect member <type.member> [--reflect-dir <path>] [--format json|text]",
       "reflect search <query> [--reflect-dir <path>] [--page-size 20 --cursor 0] [--format json|text]",
       "tools list [--group <group>] [--include-custom] [--format json|text]",
+      "extensions list [--project <path>] [--format json|text]",
+      "extensions install <name> [--project <path>]",
+      "extensions remove <name> [--project <path>]",
+      "extensions doctor [--project <path>] [--format json|text]",
       "tools groups",
       "tools search <keyword> [--format json|text]",
       "tools describe <tool>",
