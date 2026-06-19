@@ -58,7 +58,10 @@ namespace UnityCli
             public string AvailabilityScope;
             public string ResourceUri;
             public string EquivalentUnityMcp;
+            public string EquivalentUnityMcpNote;
             public string Handler;
+            public string InputSchema;
+            public string OutputSchema;
             public string[] RequiresPackages;
             public Func<BridgeRequest, string> ReadHandler;
         }
@@ -75,6 +78,8 @@ namespace UnityCli
                     Name = "project.info", Title = "Project Info", Description = "Project metadata: name, path, Unity version, and overall project structure.",
                     Category = "project", Source = "built-in", RefreshBehavior = "static", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://project/info", EquivalentUnityMcp = "mcpforunity://project/info", Handler = "bridge",
+                    InputSchema = "{}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"projectRoot\":{\"type\":\"string\"},\"projectName\":{\"type\":\"string\"},\"unityVersion\":{\"type\":\"string\"},\"platform\":{\"type\":\"string\"},\"assetsPath\":{\"type\":\"string\"}}}",
                     RequiresPackages = null, ReadHandler = ReadProjectInfo
                 },
                 new BuiltInContextDefinition
@@ -82,6 +87,8 @@ namespace UnityCli
                     Name = "project.tags", Title = "Project Tags", Description = "List all tags defined in the project's Tag Manager.",
                     Category = "project", Source = "built-in", RefreshBehavior = "on-demand", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://project/tags", EquivalentUnityMcp = "mcpforunity://project/tags", Handler = "bridge",
+                    InputSchema = "{}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"tags\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"count\":{\"type\":\"integer\"}}}",
                     RequiresPackages = null, ReadHandler = ReadProjectTags
                 },
                 new BuiltInContextDefinition
@@ -89,6 +96,8 @@ namespace UnityCli
                     Name = "project.layers", Title = "Project Layers", Description = "List all layers defined in the project's Tag Manager.",
                     Category = "project", Source = "built-in", RefreshBehavior = "on-demand", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://project/layers", EquivalentUnityMcp = "mcpforunity://project/layers", Handler = "bridge",
+                    InputSchema = "{}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"layers\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"index\":{\"type\":\"integer\"},\"name\":{\"type\":\"string\"}}}},\"count\":{\"type\":\"integer\"}}}",
                     RequiresPackages = null, ReadHandler = ReadProjectLayers
                 },
                 // ── Editor contexts ──
@@ -97,6 +106,8 @@ namespace UnityCli
                     Name = "editor.state", Title = "Editor State", Description = "Current editor state: compilation state, play mode, and general editor status.",
                     Category = "editor", Source = "built-in", RefreshBehavior = "live", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://editor/state", EquivalentUnityMcp = "mcpforunity://editor/state", Handler = "bridge",
+                    InputSchema = "{}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"schemaVersion\":{\"type\":\"string\"},\"observedAt\":{\"type\":\"string\"},\"state\":{\"type\":\"object\"},\"readOnlyHint\":{\"type\":\"boolean\"}}}",
                     RequiresPackages = null, ReadHandler = ReadEditorStateContext
                 },
                 new BuiltInContextDefinition
@@ -104,6 +115,8 @@ namespace UnityCli
                     Name = "editor.selection", Title = "Editor Selection", Description = "Currently selected objects in the Unity Editor hierarchy or project browser.",
                     Category = "editor", Source = "built-in", RefreshBehavior = "live", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://editor/selection", EquivalentUnityMcp = "mcpforunity://editor/selection", Handler = "bridge",
+                    InputSchema = "{}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"activeObject\":{\"type\":\"string\"},\"activeGameObject\":{\"type\":\"string\"},\"activeTransform\":{\"type\":\"string\"},\"objects\":{\"type\":\"array\"},\"gameObjects\":{\"type\":\"array\"},\"assetGUIDs\":{\"type\":\"array\"}}}",
                     RequiresPackages = null, ReadHandler = ReadEditorSelection
                 },
                 new BuiltInContextDefinition
@@ -111,6 +124,8 @@ namespace UnityCli
                     Name = "editor.active-tool", Title = "Active Tool", Description = "Currently active editor tool (move, rotate, scale, rect, etc.).",
                     Category = "editor", Source = "built-in", RefreshBehavior = "live", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://editor/active-tool", EquivalentUnityMcp = "mcpforunity://editor/active-tool", Handler = "bridge",
+                    InputSchema = "{}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"activeTool\":{\"type\":\"string\"},\"isCustom\":{\"type\":\"boolean\"},\"pivotMode\":{\"type\":\"string\"},\"pivotRotation\":{\"type\":\"string\"},\"handlePosition\":{\"type\":\"object\"},\"handleRotation\":{\"type\":\"object\"}}}",
                     RequiresPackages = null, ReadHandler = ReadEditorActiveTool
                 },
                 new BuiltInContextDefinition
@@ -118,13 +133,19 @@ namespace UnityCli
                     Name = "editor.windows", Title = "Editor Windows", Description = "List currently open editor windows and their types.",
                     Category = "editor", Source = "built-in", RefreshBehavior = "on-demand", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://editor/windows", EquivalentUnityMcp = "mcpforunity://editor/windows", Handler = "bridge",
+                    InputSchema = "{}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"windows\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"title\":{\"type\":\"string\"},\"typeName\":{\"type\":\"string\"},\"isFocused\":{\"type\":\"boolean\"}}}},\"count\":{\"type\":\"integer\"}}}",
                     RequiresPackages = null, ReadHandler = ReadEditorWindows
                 },
                 new BuiltInContextDefinition
                 {
                     Name = "editor.tool-states", Title = "Tool States", Description = "Current state of editor tools (enabled/disabled, snap, grid settings).",
                     Category = "editor", Source = "built-in", RefreshBehavior = "live", Target = "editor", AvailabilityScope = "editorSession",
-                    ResourceUri = "unity-cli://editor/tool-states", EquivalentUnityMcp = "mcpforunity://editor/tool-states", Handler = "bridge",
+                    ResourceUri = "unity-cli://editor/tool-states", EquivalentUnityMcp = "none",
+                    EquivalentUnityMcpNote = "unity-mcp 'get_tool_states' (mcpforunity://editor/tool-states) returns MCP tool discovery/enabled state, not Unity Editor tool settings. No direct unity-mcp equivalent exists for this context.",
+                    Handler = "bridge",
+                    InputSchema = "{}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"transform\":{\"type\":\"object\"},\"snap\":{\"type\":\"object\"},\"grid\":{\"type\":\"boolean\"},\"activeTool\":{\"type\":\"string\"}}}",
                     RequiresPackages = null, ReadHandler = ReadEditorToolStates
                 },
                 new BuiltInContextDefinition
@@ -132,6 +153,8 @@ namespace UnityCli
                     Name = "prefab.stage", Title = "Prefab Stage", Description = "Current Prefab Mode / Prefab Stage state if a prefab is being edited.",
                     Category = "prefab", Source = "built-in", RefreshBehavior = "live", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://prefab/stage", EquivalentUnityMcp = "mcpforunity://editor/prefab-stage", Handler = "bridge",
+                    InputSchema = "{}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"isOpen\":{\"type\":\"boolean\"},\"assetPath\":{\"type\":\"string\"},\"prefabRootName\":{\"type\":\"string\"},\"mode\":{\"type\":\"string\"},\"isDirty\":{\"type\":\"boolean\"}}}",
                     RequiresPackages = null, ReadHandler = ReadPrefabStage
                 },
                 new BuiltInContextDefinition
@@ -139,6 +162,8 @@ namespace UnityCli
                     Name = "editor.menu-items", Title = "Menu Items", Description = "Enumerate available menu items in the Unity Editor.",
                     Category = "editor", Source = "built-in", RefreshBehavior = "static", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://editor/menu-items", EquivalentUnityMcp = "mcpforunity://menu-items", Handler = "bridge",
+                    InputSchema = "{\"type\":\"object\",\"properties\":{\"search\":{\"type\":\"string\",\"description\":\"Optional filter substring.\"}}}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"items\":{\"type\":\"array\",\"items\":{\"type\":\"object\"}},\"count\":{\"type\":\"integer\"},\"diagnostics\":{\"type\":\"string\"}}}",
                     RequiresPackages = null, ReadHandler = ReadEditorMenuItems
                 },
                 // ── Scene contexts ──
@@ -147,6 +172,8 @@ namespace UnityCli
                     Name = "scene.gameobject", Title = "Scene GameObject", Description = "Read a specific GameObject's properties from the active scene.",
                     Category = "scene", Source = "built-in", RefreshBehavior = "on-demand", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://scene/gameobject/{instance_id}", EquivalentUnityMcp = "mcpforunity://scene/gameobject/{instance_id}", Handler = "bridge",
+                    InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\",\"description\":\"GameObject name or path.\"},\"id\":{\"type\":\"integer\",\"description\":\"Instance ID.\"},\"path\":{\"type\":\"string\",\"description\":\"Hierarchy path.\"},\"includeComponents\":{\"type\":\"boolean\",\"description\":\"Include component summaries.\"}}}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"gameObject\":{\"type\":\"object\"},\"readOnlyHint\":{\"type\":\"boolean\"}}}",
                     RequiresPackages = null, ReadHandler = ReadSceneGameObject
                 },
                 new BuiltInContextDefinition
@@ -154,6 +181,8 @@ namespace UnityCli
                     Name = "scene.cameras", Title = "Scene Cameras", Description = "List all cameras in the active scene with their key properties.",
                     Category = "scene", Source = "built-in", RefreshBehavior = "on-demand", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://scene/cameras", EquivalentUnityMcp = "mcpforunity://scene/cameras", Handler = "bridge",
+                    InputSchema = "{}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"camerasData\":{\"type\":\"object\"},\"readOnlyHint\":{\"type\":\"boolean\"}}}",
                     RequiresPackages = null, ReadHandler = ReadSceneCameras
                 },
                 new BuiltInContextDefinition
@@ -161,6 +190,8 @@ namespace UnityCli
                     Name = "scene.volumes", Title = "Scene Volumes", Description = "List all volume components in the active scene.",
                     Category = "scene", Source = "built-in", RefreshBehavior = "on-demand", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://scene/volumes", EquivalentUnityMcp = "mcpforunity://scene/volumes", Handler = "bridge",
+                    InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"pageSize\":{\"type\":\"integer\"},\"cursor\":{\"type\":\"string\"}}}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"volumes\":{\"type\":\"array\"},\"pageInfo\":{\"type\":\"object\"},\"readOnlyHint\":{\"type\":\"boolean\"}}}",
                     RequiresPackages = null, ReadHandler = ReadSceneVolumes
                 },
                 new BuiltInContextDefinition
@@ -168,6 +199,8 @@ namespace UnityCli
                     Name = "scene.renderer-features", Title = "Renderer Features", Description = "List URP renderer features configured in the project.",
                     Category = "scene", Source = "built-in", RefreshBehavior = "static", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://scene/renderer-features", EquivalentUnityMcp = "mcpforunity://pipeline/renderer-features", Handler = "bridge",
+                    InputSchema = "{}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"available\":{\"type\":\"boolean\"},\"features\":{\"type\":\"array\"},\"diagnostics\":{\"type\":\"string\"}}}",
                     RequiresPackages = new[] { "com.unity.render-pipelines.universal" }, ReadHandler = ReadSceneRendererFeatures
                 },
                 new BuiltInContextDefinition
@@ -175,6 +208,8 @@ namespace UnityCli
                     Name = "scene.rendering-stats", Title = "Rendering Stats", Description = "Current rendering statistics from the active scene camera.",
                     Category = "scene", Source = "built-in", RefreshBehavior = "live", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://scene/rendering-stats", EquivalentUnityMcp = "mcpforunity://rendering/stats", Handler = "bridge",
+                    InputSchema = "{}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"available\":{\"type\":\"boolean\"},\"stats\":{\"type\":\"object\"},\"diagnostics\":{\"type\":\"string\"}}}",
                     RequiresPackages = null, ReadHandler = ReadSceneRenderingStats
                 },
                 // ── Tests contexts ──
@@ -183,6 +218,8 @@ namespace UnityCli
                     Name = "tests.list", Title = "Test List", Description = "List all test fixtures and test methods in the project.",
                     Category = "tests", Source = "built-in", RefreshBehavior = "on-demand", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://tests/list", EquivalentUnityMcp = "mcpforunity://tests", Handler = "bridge",
+                    InputSchema = "{\"type\":\"object\",\"properties\":{\"mode\":{\"type\":\"string\",\"enum\":[\"EditMode\",\"PlayMode\"]},\"pageSize\":{\"type\":\"integer\"},\"cursor\":{\"type\":\"string\"}}}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"available\":{\"type\":\"boolean\"},\"tests\":{\"type\":\"array\"},\"count\":{\"type\":\"integer\"},\"diagnostics\":{\"type\":\"string\"}}}",
                     RequiresPackages = null, ReadHandler = ReadTestsList
                 }
             };
@@ -274,8 +311,14 @@ namespace UnityCli
                 .Prop("target", ctx.Target)
                 .Prop("availabilityScope", ctx.AvailabilityScope)
                 .Prop("resourceUri", ctx.ResourceUri)
-                .Prop("equivalentUnityMcp", ctx.EquivalentUnityMcp)
-                .Prop("handler", ctx.Handler)
+                .Prop("equivalentUnityMcp", ctx.EquivalentUnityMcp);
+            if (!string.IsNullOrEmpty(ctx.EquivalentUnityMcpNote))
+            {
+                w.Prop("equivalentUnityMcpNote", ctx.EquivalentUnityMcpNote);
+            }
+            w.Prop("handler", ctx.Handler)
+                .PropRaw("inputSchema", ctx.InputSchema ?? "{}")
+                .PropRaw("outputSchema", ctx.OutputSchema ?? "{}")
                 .Prop("cliCommand", "context read " + ctx.Name);
             if (ctx.RequiresPackages != null && ctx.RequiresPackages.Length > 0)
             {

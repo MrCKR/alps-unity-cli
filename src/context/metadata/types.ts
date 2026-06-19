@@ -46,6 +46,8 @@ export interface ContextMetadata {
   fingerprint?: string;
   /** Mapping to equivalent unity-mcp resource URI, for parity tracking. */
   equivalentUnityMcp?: string;
+  /** Note explaining semantic difference when equivalentUnityMcp mapping is not exact. */
+  equivalentUnityMcpNote?: string;
   /** CLI command to read this context, e.g. 'context read project.info'. */
   cliCommand?: string;
   /** Handler type for bridge routing. */

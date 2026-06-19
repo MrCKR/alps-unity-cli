@@ -163,7 +163,8 @@ const EDITOR_TOOL_STATES: ContextMetadata = {
   availabilityScope: "editorSession",
   resourceUri: "unity-cli://editor/tool-states",
   outputSchema: { type: "object", properties: { transform: { type: "object" }, snap: { type: "object" }, grid: { type: "object" }, activeTool: { type: "string" } } },
-  equivalentUnityMcp: "mcpforunity://editor/tool-states",
+  equivalentUnityMcp: "none",
+  equivalentUnityMcpNote: "unity-mcp 'get_tool_states' (mcpforunity://editor/tool-states) returns MCP tool discovery/enabled state (which MCP tools are available). This context returns Unity Editor tool settings (move/rotate/scale, pivot mode, snap, grid). No direct unity-mcp equivalent exists.",
   handler: "bridge",
   cliCommand: "context read editor.tool-states"
 };

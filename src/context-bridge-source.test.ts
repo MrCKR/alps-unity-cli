@@ -70,6 +70,33 @@ test("scene.renderer-features has source=built-in", async () => {
   assert.match(block, /com\.unity\.render-pipelines\.universal/, "scene.renderer-features must list URP in requiresPackages");
 });
 
+test("C# descriptor includes inputSchema and outputSchema (B2)", async () => {
+  const source = await readContextCommandsSource();
+  // BuiltInContextDefinition must have InputSchema and OutputSchema fields
+  assert.match(source, /public string InputSchema;/, "BuiltInContextDefinition must have InputSchema field");
+  assert.match(source, /public string OutputSchema;/, "BuiltInContextDefinition must have OutputSchema field");
+  // ContextDescriptorJson must output them
+  assert.match(source, /\.PropRaw\("inputSchema",/, "ContextDescriptorJson must output inputSchema");
+  assert.match(source, /\.PropRaw\("outputSchema",/, "ContextDescriptorJson must output outputSchema");
+  // At least some contexts must have non-empty schemas
+  assert.match(source, /InputSchema = "\{/, "At least one context must have non-empty InputSchema");
+  assert.match(source, /OutputSchema = "\{/, "At least one context must have non-empty OutputSchema");
+});
+
+test("editor.tool-states EquivalentUnityMcp is 'none' with note (B1)", async () => {
+  const source = await readContextCommandsSource();
+  const tsIndex = source.indexOf("editor.tool-states");
+  assert.ok(tsIndex > -1, "Must find editor.tool-states in source");
+  const blockStart = source.lastIndexOf("new BuiltInContextDefinition", tsIndex);
+  const blockEnd = source.indexOf("ReadHandler =", tsIndex);
+  const block = source.slice(blockStart, blockEnd > blockStart ? blockEnd : tsIndex + 300);
+  assert.match(block, /EquivalentUnityMcp = "none"/, "editor.tool-states EquivalentUnityMcp must be 'none'");
+  assert.match(block, /EquivalentUnityMcpNote =/, "editor.tool-states must have EquivalentUnityMcpNote");
+  assert.match(block, /MCP tool discovery/, "Note must mention MCP tool discovery");
+  // ContextDescriptorJson must output EquivalentUnityMcpNote when present
+  assert.match(source, /equivalentUnityMcpNote/, "ContextDescriptorJson must handle equivalentUnityMcpNote");
+});
+
 test("Context availability-sensitive handlers return available=false with diagnostics", async () => {
   const source = await readContextCommandsSource();
   // renderer-features, rendering-stats, tests.list should have available=false fallback

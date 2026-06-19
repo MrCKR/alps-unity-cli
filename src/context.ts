@@ -78,6 +78,7 @@ async function handleContextList(
     available: c.available,
     requiresPackages: c.requiresPackages,
     equivalentUnityMcp: c.equivalentUnityMcp,
+    equivalentUnityMcpNote: c.equivalentUnityMcpNote,
     cliCommand: c.cliCommand
   }));
 

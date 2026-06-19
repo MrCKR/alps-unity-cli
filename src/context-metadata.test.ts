@@ -28,10 +28,14 @@ test("all builtin contexts have resourceUri starting with unity-cli://", () => {
   }
 });
 
-test("all builtin contexts have equivalentUnityMcp starting with mcpforunity://", () => {
+test("all builtin contexts have equivalentUnityMcp (or 'none' with note)", () => {
   for (const ctx of builtinContextMetadata()) {
     assert.ok(ctx.equivalentUnityMcp, `${ctx.name} must have equivalentUnityMcp`);
-    assert.ok(ctx.equivalentUnityMcp.startsWith("mcpforunity://"), `${ctx.name} equivalentUnityMcp must start with mcpforunity://`);
+    if (ctx.equivalentUnityMcp === "none") {
+      assert.ok(ctx.equivalentUnityMcpNote, `${ctx.name} has equivalentUnityMcp='none' and must explain the semantic difference`);
+    } else {
+      assert.ok(ctx.equivalentUnityMcp.startsWith("mcpforunity://"), `${ctx.name} equivalentUnityMcp must start with mcpforunity://`);
+    }
   }
 });
 
@@ -96,6 +100,15 @@ test("prefab.stage is categorized as prefab (not editor)", () => {
   assert.ok(prefabStage, "prefab.stage must exist");
   assert.equal(prefabStage.category, "prefab");
   assert.equal(prefabStage.equivalentUnityMcp, "mcpforunity://editor/prefab-stage");
+});
+
+test("editor.tool-states has equivalentUnityMcp='none' with semantic difference note", () => {
+  const toolStates = findContextByName("editor.tool-states");
+  assert.ok(toolStates, "editor.tool-states must exist");
+  assert.equal(toolStates.equivalentUnityMcp, "none");
+  assert.ok(toolStates.equivalentUnityMcpNote, "editor.tool-states must have equivalentUnityMcpNote");
+  assert.ok(toolStates.equivalentUnityMcpNote!.includes("MCP tool discovery"), "Note must explain that unity-mcp tool-states is about MCP tool discovery");
+  assert.ok(toolStates.equivalentUnityMcpNote!.includes("Unity Editor tool settings"), "Note must explain that this context is about Unity Editor tool settings");
 });
 
 test("scene.renderer-features has source=built-in (not extension)", () => {
