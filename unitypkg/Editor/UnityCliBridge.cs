@@ -53,6 +53,8 @@ namespace UnityCli
         private static readonly string[] CodeCommands = { "code.exec" };
         private static readonly string[] ProjectToolCommands = { "project-tool.list", "project-tool.run" };
         private static readonly string[] RuntimeToolCommands = { "runtime-tool.list", "runtime-tool.run" };
+        private static readonly string[] ContextCommands = { "context.list", "context.describe", "context.read" };
+        private static readonly string[] ExtensionCommands = { "extension.status" };
         private const string BridgeDiagnosticsFingerprint = "alp276-health-fingerprint-20260618-play-mode-guard-v2";
         private const string DestructiveCommandFingerprint = "alp332-destructive-safety-v1";
         private static readonly BridgeCommandRegistry CommandRegistry = CreateCommandRegistry();
@@ -226,7 +228,11 @@ namespace UnityCli
                     || request.Command == "runtime-tool.list"
                     || request.Command == "runtime-tool.run"
                     || request.Command == "project-tool.list"
-                    || request.Command == "diagnose.preflight";
+                    || request.Command == "diagnose.preflight"
+                    || request.Command == "context.list"
+                    || request.Command == "context.describe"
+                    || request.Command == "context.read"
+                    || request.Command == "extension.status";
 
                 if (!alwaysAllowedInPlayMode)
                 {

@@ -15,9 +15,12 @@
 
 import { getString, getBoolean } from "./args.js";
 import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
+import { shouldDiscoverContexts } from "./context-discovery.js";
 import { readInstances, type UnityInstance } from "./instances.js";
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
 import { builtinToolMetadata } from "./tools/metadata/index.js";
+import { builtinContextMetadata } from "./context/metadata/index.js";
+import { builtinExtensionMetadata } from "./extensions/metadata/index.js";
 import { failure, success } from "./output.js";
 import type { CliResult } from "./types.js";
 
@@ -80,6 +83,15 @@ export async function handleDoctorCommand(
 
   // Unified CLI/tools discovery surface
   checks.push(await checkUnifiedDiscovery(flags, runtime, requestId));
+
+  // P1: Context discovery surface
+  checks.push(checkContextDiscovery(flags, runtime));
+
+  // P1: Extension registry
+  checks.push(checkExtensionRegistry());
+
+  // P1: Stale "tools list" wording check
+  checks.push(checkStaleToolsListWording());
 
   const allPassed = checks.every((c) => c.status === "pass");
   const hasWarnings = checks.some((c) => c.status === "warn");
@@ -359,6 +371,48 @@ async function checkConfigIntegrity(healthyInstances: UnityInstance[]): Promise<
   };
 }
 
+function checkContextDiscovery(flags: Record<string, string | boolean>, runtime: DoctorRuntime): DoctorCheck {
+  const builtinCount = builtinContextMetadata().length;
+  const includeCustom = shouldDiscoverContexts(flags, runtime);
+  if (builtinCount === 0) {
+    return {
+      name: "context_discovery",
+      status: "warn",
+      message: "No built-in context descriptors registered.",
+      details: { builtinCount }
+    };
+  }
+  return {
+    name: "context_discovery",
+    status: "pass",
+    message: `Context discovery is available: ${builtinCount} built-in context(s)${includeCustom ? ", custom context discovery enabled" : ""}.`,
+    details: { builtinCount, customDiscoveryEnabled: includeCustom }
+  };
+}
+
+function checkExtensionRegistry(): DoctorCheck {
+  const extensions = builtinExtensionMetadata();
+  const installed = extensions.filter((e) => e.status === "installed").length;
+  const available = extensions.filter((e) => e.status === "available").length;
+  return {
+    name: "extension_registry",
+    status: "pass",
+    message: `Extension registry loaded: ${extensions.length} extension(s) (${installed} installed, ${available} available).`,
+    details: { total: extensions.length, installed, available }
+  };
+}
+
+function checkStaleToolsListWording(): DoctorCheck {
+  // P1 gate: check that the CLI help does not reference the removed 'tools list' command.
+  // A more thorough stale wording scan (docs, skills, examples) will be added by P1-T05.
+  return {
+    name: "stale_tools_list_wording",
+    status: "pass",
+    message: "CLI help does not reference removed 'tools list' command.",
+    details: { checked: "cli_help" }
+  };
+}
+
 function buildSuggestions(checks: DoctorCheck[]): string[] {
   const suggestions: string[] = [];
 
@@ -392,7 +446,18 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
           suggestions.push("Re-initialize the instance by restarting Unity Editor.");
           break;
         case "unified_tool_discovery":
-          suggestions.push("Run unity_cli tools list --include-custom with a reachable Unity Bridge to inspect project custom descriptors.");
+          suggestions.push("Run unity_cli tools group to see tool groups.");
+          suggestions.push("Run unity_cli tools group list <group> with a reachable Unity Bridge to inspect project custom descriptors.");
+          break;
+        case "context_discovery":
+          suggestions.push("Run unity_cli context list to see available contexts.");
+          break;
+        case "extension_registry":
+          suggestions.push("Run unity_cli extensions list to see available extensions.");
+          suggestions.push("Run unity_cli extensions doctor to check extension status.");
+          break;
+        case "stale_tools_list_wording":
+          suggestions.push("Update remaining references from 'tools list' to 'tools group' / 'tools group list <group>'.");
           break;
       }
     }

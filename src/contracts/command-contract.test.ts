@@ -28,9 +28,9 @@ const filledCsharpHandlerCommands = [
 test("command contract validates bridge registry and metadata", () => {
   assert.doesNotThrow(() => validateBridgeRegistryContracts(bridgeCommandRegistry));
   assert.doesNotThrow(() => validateToolMetadataContracts(builtinToolMetadata(), bridgeCommandRegistry));
-  // Built-in tool metadata count + runtime-tool commands + project-tool commands
-  assert.equal(commandContracts().length, builtinToolMetadata().length + 4);
-  assert.equal(new Set(bridgeCommandRegistry.specs().map((spec) => spec.bridgeCommand)).size, 97);
+  // Built-in tool metadata count + runtime-tool commands + project-tool commands + context commands + extension commands
+  assert.equal(commandContracts().length, builtinToolMetadata().length + 4 + 3 + 1);
+  assert.equal(new Set(bridgeCommandRegistry.specs().map((spec) => spec.bridgeCommand)).size, 97 + 3 + 1);
 });
 
 test("command contract marks Profiler frozen coverage as architecture-sensitive", () => {
@@ -52,7 +52,7 @@ test("command contract marks ALP-306 C# handler gaps as present", async () => {
     assert.ok(csharpCommands.has(command), `${command} should be registered in C# BridgeCommandRegistry`);
   }
 
-  assert.equal(csharpCommands.size, 97);
+  assert.equal(csharpCommands.size, 97 + 3 + 1);
 });
 
 async function registeredCsharpCommands(): Promise<Set<string>> {

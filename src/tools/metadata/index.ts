@@ -33,10 +33,20 @@ import { SCREENSHOT_TOOLS } from "./groups/screenshot.js";
 import { CODE_TOOLS } from "./groups/code.js";
 import { CLI_ONLY_TOOLS } from "./groups/cli-only.js";
 import { TOOLS_DISCOVERY_TOOLS } from "./groups/tools.js";
-import type { ToolMetadata } from "./types.js";
+import type { ToolMetadata, ToolSource } from "./types.js";
 
 export { supportStatusDescription, supportStatusForTool, supportStatusLabel } from "./status.js";
-export type { ToolExample, ToolHandler, ToolMetadata, ToolSupportStatus } from "./types.js";
+export type { ToolExample, ToolHandler, ToolMetadata, ToolSource, ToolRiskLevel, ToolSupportStatus } from "./types.js";
+
+/** Normalize a ToolMetadata entry to include P1 defaults for kind/source/category. */
+export function normalizeToolMetadata(tool: ToolMetadata): ToolMetadata & { kind: "tool"; source: ToolSource; category: string } {
+  return {
+    ...tool,
+    kind: tool.kind ?? "tool",
+    source: tool.source ?? "built-in",
+    category: tool.category ?? tool.group,
+  };
+}
 
 const BUILTIN_TOOLS: ToolMetadata[] = [
   ...SCENE_TOOLS,
@@ -68,28 +78,29 @@ validateBridgeRegistryContracts(bridgeCommandRegistry);
 validateBuiltinTools(BUILTIN_TOOLS);
 validateToolMetadataContracts(BUILTIN_TOOLS, bridgeCommandRegistry);
 
-/** Return all built-in tool metadata entries. */
+/** Return all built-in tool metadata entries, normalized with P1 defaults. */
 export function builtinToolMetadata(): ToolMetadata[] {
-  return BUILTIN_TOOLS;
+  return BUILTIN_TOOLS.map(normalizeToolMetadata);
 }
 
-/** Return distinct group names from built-in metadata. */
+/** Return distinct group names from built-in metadata (uses category when set). */
 export function builtinToolGroups(): string[] {
   const groups = new Set<string>();
   for (const tool of BUILTIN_TOOLS) {
-    groups.add(tool.group);
+    groups.add(tool.category ?? tool.group);
   }
   return [...groups].sort();
 }
 
 /** Find a single tool by its dotted name. */
 export function findToolByName(name: string): ToolMetadata | undefined {
-  return BUILTIN_TOOLS.find((t) => t.name === name);
+  const tool = BUILTIN_TOOLS.find((t) => t.name === name);
+  return tool ? normalizeToolMetadata(tool) : undefined;
 }
 
-/** Filter tools by group. */
+/** Filter tools by group (matches both group and category). */
 export function filterToolsByGroup(group: string): ToolMetadata[] {
-  return BUILTIN_TOOLS.filter((t) => t.group === group);
+  return BUILTIN_TOOLS.filter((t) => t.group === group || t.category === group).map(normalizeToolMetadata);
 }
 
 /** Search tools by keyword across name, title, description, group. */
@@ -99,7 +110,8 @@ export function searchTools(keyword: string): ToolMetadata[] {
     t.name.toLowerCase().includes(lower) ||
     t.title.toLowerCase().includes(lower) ||
     t.description.toLowerCase().includes(lower) ||
-    t.group.toLowerCase().includes(lower)
+    t.group.toLowerCase().includes(lower) ||
+    (t.category ?? "").toLowerCase().includes(lower)
   ).sort((a, b) => {
     const aScore = scoreSearch(a.name.toLowerCase(), lower) + scoreSearch(a.title.toLowerCase(), lower);
     const bScore = scoreSearch(b.name.toLowerCase(), lower) + scoreSearch(b.title.toLowerCase(), lower);

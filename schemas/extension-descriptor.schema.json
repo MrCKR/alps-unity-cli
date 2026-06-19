@@ -1,0 +1,79 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unity-cli.local/schemas/extension-descriptor.schema.json",
+  "title": "Unity CLI Extension Descriptor",
+  "description": "Describes an optional capability pack (extension) for the Unity CLI. Extensions depend on optional Unity packages and provide additional tools, contexts, or both. P1 baseline schema matching the ALP-505 architecture base.",
+  "type": "object",
+  "required": ["id", "title", "description", "kind", "source", "status", "installMode"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9-]*$",
+      "description": "Extension identifier, e.g. 'probuilder'. Must be unique."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Short human-readable title."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One-paragraph explanation of what the extension provides."
+    },
+    "kind": {
+      "type": "string",
+      "const": "extension",
+      "description": "Discriminator: always 'extension' for ExtensionMetadata."
+    },
+    "source": {
+      "type": "string",
+      "enum": ["built-in", "package"],
+      "description": "Origin: 'built-in' (declared in core metadata) or 'package' (separate npm/Unity package)."
+    },
+    "version": {
+      "type": "string",
+      "description": "Semantic version of the extension."
+    },
+    "status": {
+      "type": "string",
+      "enum": ["installed", "available", "unavailable"],
+      "description": "Current install status."
+    },
+    "providesTools": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Tools provided by this extension (dotted names)."
+    },
+    "providesContexts": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Contexts provided by this extension (dotted names)."
+    },
+    "requiresUnityPackages": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Unity packages required for this extension to work."
+    },
+    "installMode": {
+      "type": "string",
+      "enum": ["auto", "manual"],
+      "description": "How the extension is installed: 'auto' (detected during init) or 'manual' (explicit install command)."
+    },
+    "installCommand": {
+      "type": "string",
+      "description": "CLI command to install this extension."
+    },
+    "equivalentMcpGroup": {
+      "type": "string",
+      "description": "Mapping to equivalent unity-mcp group name, for parity tracking."
+    },
+    "nextActions": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Suggested next actions after listing/describing the extension."
+    }
+  },
+  "additionalProperties": false
+}

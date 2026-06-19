@@ -403,6 +403,36 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "context.describe",
+      "group": "context",
+      "command": "describe",
+      "handler_type": "bridge",
+      "csharp_handler": "planned",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "context.list",
+      "group": "context",
+      "command": "list",
+      "handler_type": "bridge",
+      "csharp_handler": "planned",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "context.read",
+      "group": "context",
+      "command": "read",
+      "handler_type": "bridge",
+      "csharp_handler": "planned",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "diagnose.preflight",
       "group": "preflight",
       "command": "",
@@ -479,6 +509,16 @@
       "handler_type": "bridge",
       "csharp_handler": "present",
       "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "extension.status",
+      "group": "extension",
+      "command": "status",
+      "handler_type": "bridge",
+      "csharp_handler": "planned",
+      "readOnly": true,
       "destructive": false,
       "timeout": 30000
     },
@@ -946,6 +986,40 @@
       ]
     },
     {
+      "bridgeCommand": "project-tool.list",
+      "group": "project-tool",
+      "command": "list",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000,
+      "architectureSensitive": true,
+      "frozenDecision": "ALP-404-Q3",
+      "coverageScope": [
+        "project-tool",
+        "editor-session",
+        "availability-scope"
+      ]
+    },
+    {
+      "bridgeCommand": "project-tool.run",
+      "group": "project-tool",
+      "command": "run",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 60000,
+      "architectureSensitive": true,
+      "frozenDecision": "ALP-404-Q4",
+      "coverageScope": [
+        "project-tool",
+        "editor-session",
+        "custom-tool-execution"
+      ]
+    },
+    {
       "bridgeCommand": "runtime-tool.list",
       "group": "runtime-tool",
       "command": "list",
@@ -978,40 +1052,6 @@
         "play-mode-session",
         "cross-frame-wait",
         "timeout-semantics"
-      ]
-    },
-    {
-      "bridgeCommand": "project-tool.list",
-      "group": "project-tool",
-      "command": "list",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "readOnly": true,
-      "destructive": false,
-      "timeout": 30000,
-      "architectureSensitive": true,
-      "frozenDecision": "ALP-404-Q3",
-      "coverageScope": [
-        "project-tool",
-        "editor-session",
-        "availability-scope"
-      ]
-    },
-    {
-      "bridgeCommand": "project-tool.run",
-      "group": "project-tool",
-      "command": "run",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "readOnly": false,
-      "destructive": false,
-      "timeout": 60000,
-      "architectureSensitive": true,
-      "frozenDecision": "ALP-404-Q4",
-      "coverageScope": [
-        "project-tool",
-        "editor-session",
-        "custom-tool-execution"
       ]
     },
     {
@@ -1255,6 +1295,63 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "tools.describe",
+      "group": "tools",
+      "command": "describe",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 10000
+    },
+    {
+      "bridgeCommand": "tools.groups",
+      "group": "tools",
+      "command": "groups",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 5000
+    },
+    {
+      "bridgeCommand": "tools.list",
+      "group": "tools",
+      "command": "list",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 5000
+    },
+    {
+      "bridgeCommand": "tools.run",
+      "group": "tools",
+      "command": "run",
+      "handler_type": "hybrid",
+      "csharp_handler": "none",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "architectureSensitive": true,
+      "frozenDecision": "ALP-365-P6",
+      "coverageScope": [
+        "tools-run",
+        "runtime-target",
+        "play-mode-session"
+      ]
+    },
+    {
+      "bridgeCommand": "tools.search",
+      "group": "tools",
+      "command": "search",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 5000
+    },
+    {
       "bridgeCommand": "ui.button.create",
       "group": "ui",
       "command": "button/create",
@@ -1348,63 +1445,6 @@
       "timeout": 30000,
       "requires_packages": [
         "com.unity.visualeffectgraph"
-      ]
-    },
-    {
-      "bridgeCommand": "tools.list",
-      "group": "tools",
-      "command": "list",
-      "handler_type": "offline",
-      "csharp_handler": "none",
-      "readOnly": true,
-      "destructive": false,
-      "timeout": 5000
-    },
-    {
-      "bridgeCommand": "tools.groups",
-      "group": "tools",
-      "command": "groups",
-      "handler_type": "offline",
-      "csharp_handler": "none",
-      "readOnly": true,
-      "destructive": false,
-      "timeout": 5000
-    },
-    {
-      "bridgeCommand": "tools.search",
-      "group": "tools",
-      "command": "search",
-      "handler_type": "offline",
-      "csharp_handler": "none",
-      "readOnly": true,
-      "destructive": false,
-      "timeout": 5000
-    },
-    {
-      "bridgeCommand": "tools.describe",
-      "group": "tools",
-      "command": "describe",
-      "handler_type": "offline",
-      "csharp_handler": "none",
-      "readOnly": true,
-      "destructive": false,
-      "timeout": 10000
-    },
-    {
-      "bridgeCommand": "tools.run",
-      "group": "tools",
-      "command": "run",
-      "handler_type": "hybrid",
-      "csharp_handler": "none",
-      "readOnly": false,
-      "destructive": false,
-      "timeout": 30000,
-      "architectureSensitive": true,
-      "frozenDecision": "ALP-365-P6",
-      "coverageScope": [
-        "tools-run",
-        "runtime-target",
-        "play-mode-session"
       ]
     }
   ]

@@ -70,7 +70,7 @@ test("doctor returns all-pass when registry has healthy instance and bridge is r
   assert.equal(result.ok, true);
   const data = result.data as { summary: string; checks: DoctorCheck[] };
   assert.equal(data.summary, "pass");
-  assert.equal(data.checks.length, 7);
+  assert.equal(data.checks.length, 10);
 
   const registryCheck = data.checks.find((c) => c.name === "instance_registry");
   assert.equal(registryCheck?.status, "pass");
