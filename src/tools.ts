@@ -120,7 +120,7 @@ async function handleToolsGroup(
   const customDiscovery = includeCustom ? await discoverProjectTools(flags, runtime, requestId) : { ok: true as const, tools: [] as ToolMetadata[], mode: "skipped" as const };
   if (customDiscovery.ok === false) return customDiscovery;
 
-  // Build group info with counts and descriptions
+ // Build group info with counts and descriptions
   const allTools = [...builtinToolMetadata(), ...availableExtensionTools, ...customDiscovery.tools];
   const groupCounts: Record<string, number> = {};
   const groupDescriptions: Record<string, string> = {
@@ -198,7 +198,7 @@ async function handleToolsGroupList(
     ]);
   }
 
-  const builtinTools = filterToolsByGroup(groupName);
+  const builtinTools = builtinToolMetadata().filter((t) => t.group === groupName);
   // P10-R3: Include available extension tools for this group
   const availableExtensionTools = await resolveAvailableExtensionTools(flags);
   const extensionTools = availableExtensionTools.filter((t) => t.group === groupName);
@@ -219,6 +219,7 @@ async function handleToolsGroupList(
     return {
       name: t.name,
       title: t.title,
+      group: t.group,
       source: t.source ?? (customTools.includes(t) ? "project" : "built-in"),
       readOnlyHint: t.readOnlyHint,
       destructiveHint: t.destructiveHint,
@@ -584,6 +585,13 @@ async function dispatchJobHandler(
   ]);
 }
 
+/**
+ * P10-R3: Resolve which extension tools are available for the target project.
+ *
+ * Extension tools (ProBuilder, Cinemachine, VFX, URP, HDRP) are only shown in
+ * tools list/groups/search when their required Unity packages are installed
+ * in the target project. Without --project, extension tools are NOT included.
+ */
 async function optionalTargetSummary(flags: Record<string, string | boolean>, runtime: ToolsRuntime): Promise<Record<string, unknown> | null> {
   try {
     const selection = await selectInstanceForFlags(flags, runtime.dataDir ?? process.cwd());

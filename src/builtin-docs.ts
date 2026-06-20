@@ -1,5 +1,5 @@
 import { getString } from "./args.js";
-import { builtinToolMetadata, allRegisteredToolMetadata, supportStatusDescription, supportStatusForTool, supportStatusLabel, type ToolMetadata } from "./tools/metadata/index.js";
+import { builtinToolMetadata, extensionToolMetadata, allRegisteredToolMetadata, supportStatusDescription, supportStatusForTool, supportStatusLabel, type ToolMetadata } from "./tools/metadata/index.js";
 import { failure, success } from "./output.js";
 import type { CliResult } from "./types.js";
 

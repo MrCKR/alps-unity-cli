@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
-import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
+import { readFile, readdir } from "node:fs/promises";
 import { bridgeCommandRegistry } from "../bridge/index.js";
 import { builtinToolMetadata, allRegisteredToolMetadata } from "../tools/metadata/index.js";
 import { commandContracts, validateBridgeRegistryContracts, validateToolMetadataContracts } from "./command-contract.js";

@@ -1,0 +1,16 @@
+{
+  "name": "vfx-graph",
+  "version": "1.0.0",
+  "description": "VFX Graph extension for alps-unity-cli",
+  "packageName": "unity-cli-extension-vfx-graph",
+  "unityPackages": [
+    {
+      "name": "com.unity.visualeffectgraph"
+    }
+  ],
+  "toolGroups": ["vfx"],
+  "descriptorEntry": "tools/metadata/vfx.js",
+  "bridgeEntry": "bridge/domains/vfx.js",
+  "docsTopic": "vfx",
+  "docsEntry": "docs/vfx.md"
+}

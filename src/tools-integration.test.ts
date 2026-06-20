@@ -51,7 +51,7 @@ test("integration: tools group list scene via execute()", async () => {
 test("integration: tools groups returns tools-list-removed guidance", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["tools", "groups"], runtime);
-  assert.equal(result.ok, false);
+ assert.equal(result.ok, false);
   assert.equal(result.error?.code, "E_TOOLS_LIST_REMOVED");
 });
 
