@@ -564,7 +564,7 @@ test("S3.2 physics group has settings, raycast and simulation tools", () => {
 
 test("S3.2 animation and vfx groups have required tools", () => {
   assert.deepEqual(filterToolsByGroup("animation").map((t) => t.name), ["animation.clip", "animation.state", "animation.play", "animation.stop"]);
-  assert.deepEqual(filterToolsByGroup("vfx").map((t) => t.name), ["vfx.graph", "vfx.effect", "vfx.particle-create", "vfx.particle-info", "vfx.particle-main", "vfx.particle-emission", "vfx.particle-shape", "vfx.particle-play", "vfx.particle-module", "vfx.line-create", "vfx.line-positions", "vfx.trail"]);
+  assert.deepEqual(filterToolsByGroup("vfx").map((t) => t.name), ["vfx.graph", "vfx.effect", "vfx.parameter", "vfx.control", "vfx.event", "vfx.template", "vfx.particle-create", "vfx.particle-info", "vfx.particle-main", "vfx.particle-emission", "vfx.particle-shape", "vfx.particle-play", "vfx.particle-module", "vfx.line-create", "vfx.line-positions", "vfx.trail"]);
 });
 
 test("tools describe graphics.volume returns bridge metadata", async () => {

@@ -12,6 +12,8 @@ const SECURITY_POLICY: SecurityPolicyEntry[] = [
   { command: "code.exec", title: "Execute Live Code", destructiveHint: true, supportsDryRun: true },
   { command: "component.remove", title: "Remove Component", destructiveHint: true },
   { command: "probuilder.csg", title: "ProBuilder CSG", destructiveHint: true },
+  { command: "cinemachine.extension", title: "Cinemachine Extension Remove", destructiveHint: true },
+  { command: "urp.feature", title: "URP Renderer Feature Modify", destructiveHint: true },
   { command: "editor.menu", title: "Execute Editor Menu", destructiveHint: true },
   { command: "script.edit", title: "Edit Script", destructiveHint: true },
   { command: "cli.package.remove", title: "Package Remove", destructiveHint: true },

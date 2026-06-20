@@ -29,16 +29,16 @@ test("bridge registry marks destructive commands from security policy", () => {
   assert.equal(sceneSave?.supportsDryRun, true);
 });
 
-test("security policy covers all 13 destructive commands including CLI-only", async () => {
+test("security policy covers all 15 destructive commands including CLI-only", async () => {
   const { destructiveCommands } = await import("./security-policy.js");
   const policyCommands = destructiveCommands().map((e: { command: string }) => e.command);
   const expected = [
     "asset.delete", "go.delete", "scene.save", "code.exec", "component.remove",
-    "probuilder.csg", "editor.menu", "script.edit", "cli.package.remove",
+    "probuilder.csg", "cinemachine.extension", "urp.feature", "editor.menu", "script.edit", "cli.package.remove",
     "cli.batch.run", "test.cancel", "build.cancel", "controller.remove-layer"
   ];
   assert.deepEqual(policyCommands.sort(), expected.sort());
-  assert.equal(destructiveCommands().length, 13);
+  assert.equal(destructiveCommands().length, 15);
 });
 
 test("destructive dry-run forwards envelope preview without --yes", async () => {

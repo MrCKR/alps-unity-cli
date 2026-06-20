@@ -55,7 +55,7 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /CapabilityJson\("probuilder", ProBuilderCommands\)/);
   assert.match(source, /CapabilityJson\("animation", AnimationCommands\)/);
   assert.match(source, /CapabilityJson\("vfx", VfxCommands\)/);
-  assert.match(source, /CapabilityJson\("physics", PhysicsCommands\)/);
+  assert.match(source, /CapabilityJson\("physics", PhysicsCommands\) \+ ","\s+\+ CapabilityJson\("profiler", ProfilerCommands\) \+ ","\s+\+ CapabilityJson\("probuilder", ProBuilderCommands\) \+ ","\s+\+ CapabilityJson\("cinemachine", CinemachineCommands\) \+ ","\s+\+ CapabilityJson\("animation", AnimationCommands\) \+ ","\s+\+ CapabilityJson\("vfx", VfxCommands\) \+ ","\s+\+ CapabilityJson\("urp", UrpCommands\) \+ ","\s+\+ CapabilityJson\("hdrp", HdrpCommands\) \+ ","\s+\+ CapabilityJson\("shader", ShaderCommands\) \+ ","/);
   assert.match(source, /CapabilityJson\("shader", ShaderCommands\)/);
   assert.match(source, /CapabilityJson\("texture", TextureCommands\)/);
   assert.match(source, /CapabilityJson\("script", ScriptCommands\)/);

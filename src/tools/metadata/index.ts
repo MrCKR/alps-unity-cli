@@ -21,10 +21,13 @@ import { GRAPHICS_TOOLS } from "./groups/graphics.js";
 import { PHYSICS_TOOLS } from "./groups/physics.js";
 import { PROFILER_TOOLS } from "./groups/profiler.js";
 import { PROBUILDER_TOOLS } from "./groups/probuilder.js";
+import { CINEMACHINE_TOOLS } from "./groups/cinemachine.js";
 import { SHADER_TOOLS } from "./groups/shader.js";
 import { TEXTURE_TOOLS } from "./groups/texture.js";
 import { ANIMATION_TOOLS } from "./groups/animation.js";
 import { VFX_TOOLS } from "./groups/vfx.js";
+import { URP_TOOLS } from "./groups/urp.js";
+import { HDRP_TOOLS } from "./groups/hdrp.js";
 import { UI_TOOLS } from "./groups/ui.js";
 import { SCRIPT_TOOLS } from "./groups/script.js";
 import { EDITOR_TOOLS } from "./groups/editor.js";
@@ -60,10 +63,13 @@ const BUILTIN_TOOLS: ToolMetadata[] = [
   ...PHYSICS_TOOLS,
   ...PROFILER_TOOLS,
   ...PROBUILDER_TOOLS,
+  ...CINEMACHINE_TOOLS,
   ...SHADER_TOOLS,
   ...TEXTURE_TOOLS,
   ...ANIMATION_TOOLS,
   ...VFX_TOOLS,
+  ...URP_TOOLS,
+  ...HDRP_TOOLS,
   ...UI_TOOLS,
   ...SCRIPT_TOOLS,
   ...EDITOR_TOOLS,

@@ -97,8 +97,11 @@ namespace UnityCli
             RegisterProfilerCommands(registry);
             // ProBuilder commands removed from core — now served by extension package (P7-T2b)
             // RegisterProBuilderCommands(registry);
+            RegisterCinemachineCommands(registry);
             RegisterAnimationCommands(registry);
             RegisterVfxCommands(registry);
+            RegisterUrpCommands(registry);
+            RegisterHdrpCommands(registry);
             RegisterShaderCommands(registry);
             RegisterTextureCommands(registry);
             RegisterEditorCommands(registry);

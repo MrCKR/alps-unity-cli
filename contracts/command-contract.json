@@ -43,6 +43,16 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "animator.crossfade",
+      "group": "animator",
+      "command": "crossfade",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "animator.get-info",
       "group": "animator",
       "command": "get-info",
@@ -63,36 +73,6 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "animator.set-parameter",
-      "group": "animator",
-      "command": "set-parameter",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "readOnly": false,
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "animator.crossfade",
-      "group": "animator",
-      "command": "crossfade",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "readOnly": false,
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "animator.set-speed",
-      "group": "animator",
-      "command": "set-speed",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "readOnly": false,
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
       "bridgeCommand": "animator.set-enabled",
       "group": "animator",
       "command": "set-enabled",
@@ -103,9 +83,9 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "controller.create",
-      "group": "controller",
-      "command": "create",
+      "bridgeCommand": "animator.set-parameter",
+      "group": "animator",
+      "command": "set-parameter",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "readOnly": false,
@@ -113,109 +93,9 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "controller.add-state",
-      "group": "controller",
-      "command": "add-state",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "readOnly": false,
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "controller.add-transition",
-      "group": "controller",
-      "command": "add-transition",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "readOnly": false,
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "controller.add-parameter",
-      "group": "controller",
-      "command": "add-parameter",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "readOnly": false,
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "controller.get-info",
-      "group": "controller",
-      "command": "get-info",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "readOnly": true,
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "controller.assign",
-      "group": "controller",
-      "command": "assign",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "readOnly": false,
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "controller.add-layer",
-      "group": "controller",
-      "command": "add-layer",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "readOnly": false,
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "controller.remove-layer",
-      "group": "controller",
-      "command": "remove-layer",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "readOnly": false,
-      "destructive": true,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "controller.set-layer-weight",
-      "group": "controller",
-      "command": "set-layer-weight",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "readOnly": false,
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "controller.create-blend-tree-1d",
-      "group": "controller",
-      "command": "create-blend-tree-1d",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "readOnly": false,
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "controller.create-blend-tree-2d",
-      "group": "controller",
-      "command": "create-blend-tree-2d",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "readOnly": false,
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "controller.add-blend-tree-child",
-      "group": "controller",
-      "command": "add-blend-tree-child",
+      "bridgeCommand": "animator.set-speed",
+      "group": "animator",
+      "command": "set-speed",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "readOnly": false,
@@ -421,6 +301,136 @@
       "readOnly": false,
       "destructive": false,
       "timeout": 30000
+    },
+    {
+      "bridgeCommand": "cinemachine.aim",
+      "group": "cinemachine",
+      "command": "aim",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.cinemachine"
+      ]
+    },
+    {
+      "bridgeCommand": "cinemachine.blend",
+      "group": "cinemachine",
+      "command": "blend",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.cinemachine"
+      ]
+    },
+    {
+      "bridgeCommand": "cinemachine.body",
+      "group": "cinemachine",
+      "command": "body",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.cinemachine"
+      ]
+    },
+    {
+      "bridgeCommand": "cinemachine.brain",
+      "group": "cinemachine",
+      "command": "brain",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.cinemachine"
+      ]
+    },
+    {
+      "bridgeCommand": "cinemachine.create",
+      "group": "cinemachine",
+      "command": "create",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.cinemachine"
+      ]
+    },
+    {
+      "bridgeCommand": "cinemachine.extension",
+      "group": "cinemachine",
+      "command": "extension",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": true,
+      "timeout": 60000,
+      "requires_packages": [
+        "com.unity.cinemachine"
+      ]
+    },
+    {
+      "bridgeCommand": "cinemachine.lens",
+      "group": "cinemachine",
+      "command": "lens",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.cinemachine"
+      ]
+    },
+    {
+      "bridgeCommand": "cinemachine.noise",
+      "group": "cinemachine",
+      "command": "noise",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.cinemachine"
+      ]
+    },
+    {
+      "bridgeCommand": "cinemachine.priority",
+      "group": "cinemachine",
+      "command": "priority",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.cinemachine"
+      ]
+    },
+    {
+      "bridgeCommand": "cinemachine.target",
+      "group": "cinemachine",
+      "command": "target",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.cinemachine"
+      ]
     },
     {
       "bridgeCommand": "cli.batch.run",
@@ -651,6 +661,126 @@
       "readOnly": true,
       "destructive": false,
       "timeout": 10000
+    },
+    {
+      "bridgeCommand": "controller.add-blend-tree-child",
+      "group": "controller",
+      "command": "add-blend-tree-child",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "controller.add-layer",
+      "group": "controller",
+      "command": "add-layer",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "controller.add-parameter",
+      "group": "controller",
+      "command": "add-parameter",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "controller.add-state",
+      "group": "controller",
+      "command": "add-state",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "controller.add-transition",
+      "group": "controller",
+      "command": "add-transition",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "controller.assign",
+      "group": "controller",
+      "command": "assign",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "controller.create",
+      "group": "controller",
+      "command": "create",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "controller.create-blend-tree-1d",
+      "group": "controller",
+      "command": "create-blend-tree-1d",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "controller.create-blend-tree-2d",
+      "group": "controller",
+      "command": "create-blend-tree-2d",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "controller.get-info",
+      "group": "controller",
+      "command": "get-info",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "controller.remove-layer",
+      "group": "controller",
+      "command": "remove-layer",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "controller.set-layer-weight",
+      "group": "controller",
+      "command": "set-layer-weight",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
     },
     {
       "bridgeCommand": "diagnose.preflight",
@@ -1071,6 +1201,32 @@
       "readOnly": true,
       "destructive": false,
       "timeout": 30000
+    },
+    {
+      "bridgeCommand": "hdrp.settings",
+      "group": "hdrp",
+      "command": "settings",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.render-pipelines.high-definition"
+      ]
+    },
+    {
+      "bridgeCommand": "hdrp.volume",
+      "group": "hdrp",
+      "command": "volume",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.render-pipelines.high-definition"
+      ]
     },
     {
       "bridgeCommand": "material.assign",
@@ -2171,7 +2327,6 @@
       "timeout": 10000
     },
     {
-
       "bridgeCommand": "tools.groups",
       "group": "tools",
       "command": "groups",
@@ -2182,7 +2337,6 @@
       "timeout": 5000
     },
     {
-
       "bridgeCommand": "tools.list",
       "group": "tools",
       "command": "list",
@@ -2290,9 +2444,74 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "urp.feature",
+      "group": "urp",
+      "command": "feature",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": true,
+      "timeout": 60000,
+      "requires_packages": [
+        "com.unity.render-pipelines.universal"
+      ]
+    },
+    {
+      "bridgeCommand": "urp.settings",
+      "group": "urp",
+      "command": "settings",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.render-pipelines.universal"
+      ]
+    },
+    {
+      "bridgeCommand": "urp.volume",
+      "group": "urp",
+      "command": "volume",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.render-pipelines.universal"
+      ]
+    },
+    {
+      "bridgeCommand": "vfx.control",
+      "group": "vfx",
+      "command": "control",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.visualeffectgraph"
+      ]
+    },
+    {
       "bridgeCommand": "vfx.effect",
       "group": "vfx",
       "command": "effect",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.visualeffectgraph"
+      ]
+    },
+    {
+      "bridgeCommand": "vfx.event",
+      "group": "vfx",
+      "command": "event",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "readOnly": false,
@@ -2323,7 +2542,10 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.visualeffectgraph"
+      ]
     },
     {
       "bridgeCommand": "vfx.line-positions",
@@ -2333,7 +2555,23 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.visualeffectgraph"
+      ]
+    },
+    {
+      "bridgeCommand": "vfx.parameter",
+      "group": "vfx",
+      "command": "parameter",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.visualeffectgraph"
+      ]
     },
     {
       "bridgeCommand": "vfx.particle-create",
@@ -2343,7 +2581,10 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.visualeffectgraph"
+      ]
     },
     {
       "bridgeCommand": "vfx.particle-emission",
@@ -2353,7 +2594,10 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.visualeffectgraph"
+      ]
     },
     {
       "bridgeCommand": "vfx.particle-info",
@@ -2363,7 +2607,10 @@
       "csharp_handler": "present",
       "readOnly": true,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.visualeffectgraph"
+      ]
     },
     {
       "bridgeCommand": "vfx.particle-main",
@@ -2373,7 +2620,10 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.visualeffectgraph"
+      ]
     },
     {
       "bridgeCommand": "vfx.particle-module",
@@ -2383,7 +2633,10 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.visualeffectgraph"
+      ]
     },
     {
       "bridgeCommand": "vfx.particle-play",
@@ -2393,7 +2646,10 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.visualeffectgraph"
+      ]
     },
     {
       "bridgeCommand": "vfx.particle-shape",
@@ -2403,7 +2659,23 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.visualeffectgraph"
+      ]
+    },
+    {
+      "bridgeCommand": "vfx.template",
+      "group": "vfx",
+      "command": "template",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.visualeffectgraph"
+      ]
     },
     {
       "bridgeCommand": "vfx.trail",
@@ -2413,7 +2685,10 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.visualeffectgraph"
+      ]
     }
   ]
 }

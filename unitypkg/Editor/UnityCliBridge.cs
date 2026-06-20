@@ -45,7 +45,10 @@ namespace UnityCli
         private static readonly string[] ProfilerCommands = { "profiler.start", "profiler.stop", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export", "profiler.status" };
         private static readonly string[] ProBuilderCommands = { "probuilder.shape", "probuilder.create", "probuilder.csg", "probuilder.edit" };
         private static readonly string[] AnimationCommands = { "animation.clip", "animation.state", "animation.play", "animation.stop", "animator.get-info", "animator.get-parameter", "animator.set-parameter", "animator.crossfade", "animator.set-speed", "animator.set-enabled", "controller.create", "controller.add-state", "controller.add-transition", "controller.add-parameter", "controller.get-info", "controller.assign", "controller.add-layer", "controller.remove-layer", "controller.set-layer-weight", "controller.create-blend-tree-1d", "controller.create-blend-tree-2d", "controller.add-blend-tree-child" };
-        private static readonly string[] VfxCommands = { "vfx.graph", "vfx.effect", "vfx.particle-create", "vfx.particle-info", "vfx.particle-main", "vfx.particle-emission", "vfx.particle-shape", "vfx.particle-play", "vfx.particle-module", "vfx.line-create", "vfx.line-positions", "vfx.trail" };
+        private static readonly string[] VfxCommands = { "vfx.graph", "vfx.effect", "vfx.parameter", "vfx.control", "vfx.event", "vfx.template", "vfx.particle-create", "vfx.particle-info", "vfx.particle-main", "vfx.particle-emission", "vfx.particle-shape", "vfx.particle-play", "vfx.particle-module", "vfx.line-create", "vfx.line-positions", "vfx.trail" };
+        private static readonly string[] CinemachineCommands = { "cinemachine.create", "cinemachine.target", "cinemachine.lens", "cinemachine.priority", "cinemachine.blend", "cinemachine.body", "cinemachine.aim", "cinemachine.noise", "cinemachine.brain", "cinemachine.extension" };
+        private static readonly string[] UrpCommands = { "urp.feature", "urp.volume", "urp.settings" };
+        private static readonly string[] HdrpCommands = { "hdrp.volume", "hdrp.settings" };
         private static readonly string[] ShaderCommands = { "shader.info", "shader.read", "shader.create", "shader.update" };
         private static readonly string[] TextureCommands = { "texture.info", "texture.create", "texture.sprite", "texture.import-settings" };
         private static readonly string[] EditorCommands = { "editor.state", "editor.play", "editor.pause", "editor.stop", "editor.menu", "editor.console" };
@@ -276,6 +279,8 @@ namespace UnityCli
                 || command == "code.exec"
                 || command == "component.remove"
                 || command == "probuilder.csg"
+                || command == "cinemachine.extension"
+                || command == "urp.feature"
                 || command == "editor.menu"
                 || command == "script.edit";
         }

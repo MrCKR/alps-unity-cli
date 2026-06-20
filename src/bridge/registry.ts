@@ -1,11 +1,13 @@
 import { animationBridgeSpecs } from "./domains/animation.js";
 import { assetBridgeSpecs } from "./domains/asset.js";
 import { cameraBridgeSpecs } from "./domains/camera.js";
+import { cinemachineBridgeSpecs } from "./domains/cinemachine.js";
 import { codeBridgeSpecs } from "./domains/code.js";
 import { diagnoseBridgeSpecs } from "./domains/diagnose.js";
 import { editorBridgeSpecs } from "./domains/editor.js";
 import { gameObjectBridgeSpecs } from "./domains/game-object.js";
 import { graphicsBridgeSpecs } from "./domains/graphics.js";
+import { hdrpBridgeSpecs } from "./domains/hdrp.js";
 import { materialBridgeSpecs } from "./domains/material.js";
 import { physicsBridgeSpecs } from "./domains/physics.js";
 import { prefabBridgeSpecs } from "./domains/prefab.js";
@@ -16,6 +18,7 @@ import { scriptBridgeSpecs } from "./domains/script.js";
 import { shaderBridgeSpecs } from "./domains/shader.js";
 import { textureBridgeSpecs } from "./domains/texture.js";
 import { uiBridgeSpecs } from "./domains/ui.js";
+import { urpBridgeSpecs } from "./domains/urp.js";
 import { vfxBridgeSpecs } from "./domains/vfx.js";
 import { contextBridgeSpecs } from "./domains/context.js";
 import { extensionBridgeSpecs } from "./domains/extension.js";
@@ -35,10 +38,13 @@ const DOMAIN_SPECS: BridgeCommandSpec[] = [
   ...physicsBridgeSpecs,
   ...profilerBridgeSpecs,
   ...probuilderBridgeSpecs,
+  ...cinemachineBridgeSpecs,
   ...shaderBridgeSpecs,
   ...textureBridgeSpecs,
   ...animationBridgeSpecs,
   ...vfxBridgeSpecs,
+  ...urpBridgeSpecs,
+  ...hdrpBridgeSpecs,
   ...uiBridgeSpecs,
   ...scriptBridgeSpecs,
   ...editorBridgeSpecs,
