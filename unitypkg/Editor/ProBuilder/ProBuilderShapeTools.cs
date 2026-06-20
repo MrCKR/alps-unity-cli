@@ -162,20 +162,36 @@ namespace UnityCli.ProBuilder
 
             var name = ProBuilderInput.StringArg(context.InputJson, "name") ?? "ProBuilder_PolyShape";
             var height = ProBuilderInput.FloatArg(context.InputJson, "extrudeHeight", 1f);
+            var flipNormals = ProBuilderInput.BoolArg(context.InputJson, "flipNormals");
 
-            // Poly-shape creation uses ProBuilder API; fallback to a simple cube
-            // Full polygon parsing requires ProBuilder runtime types
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            go.name = name;
-            go.transform.localScale = new Vector3(1f, height, 1f);
+            var points = ProBuilderInput.Vector3ListArg(context.InputJson, "points");
+            if (points == null || points.Count < 3)
+                return ProBuilderErrors.SchemaInvalid("At least 3 points are required for create-poly-shape.");
 
-            ProBuilderReflection.AddProBuilderMesh(go);
+            // Create a new GameObject with ProBuilderMesh via reflection
+            var go = new GameObject(name);
             Undo.RegisterCreatedObjectUndo(go, "ProBuilder Create Poly Shape");
+
+            var pbMesh = ProBuilderReflection.AddProBuilderMesh(go);
+            if (pbMesh == null)
+            {
+                UnityEngine.Object.DestroyImmediate(go);
+                return ProBuilderErrors.OperationFailed("create-poly-shape", "Failed to add ProBuilderMesh component.");
+            }
+
+            // Use AppendElements.CreateShapeFromPolygon via reflection
+            var created = ProBuilderReflection.CreateShapeFromPolygon(pbMesh, points, height, flipNormals);
+            if (!created)
+            {
+                UnityEngine.Object.DestroyImmediate(go);
+                return ProBuilderErrors.OperationFailed("create-poly-shape", "CreateShapeFromPolygon method not found or failed in ProBuilder assembly.");
+            }
+
+            ProBuilderReflection.RefreshMesh(pbMesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
-            var pbMesh = ProBuilderReflection.GetProBuilderMesh(go);
-            var faceCount = pbMesh != null ? ProBuilderReflection.GetFaceCount(pbMesh) : 0;
-            var vertexCount = pbMesh != null ? ProBuilderReflection.GetVertexCount(pbMesh) : 0;
+            var faceCount = ProBuilderReflection.GetFaceCount(pbMesh);
+            var vertexCount = ProBuilderReflection.GetVertexCount(pbMesh);
 
             var result = new UnityCliJsonWriter().BeginObject()
                 .PropObject("object", obj =>

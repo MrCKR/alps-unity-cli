@@ -54,8 +54,10 @@ namespace UnityCli.ProBuilder
             if (vertexIndices == null || vertexIndices.Length < 2)
                 return ProBuilderErrors.SchemaInvalid("At least 2 vertexIndices required for merge-vertices.");
 
+            var collapseToFirst = ProBuilderInput.BoolArg(context.InputJson, "collapseToFirst");
+
             Undo.RecordObject(go, "ProBuilder Merge Vertices");
-            var merged = ProBuilderReflection.MergeVertices(mesh, vertexIndices);
+            var merged = ProBuilderReflection.MergeVerticesWithCollapse(mesh, vertexIndices, collapseToFirst);
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
@@ -105,7 +107,7 @@ namespace UnityCli.ProBuilder
             var radius = ProBuilderInput.FloatArg(context.InputJson, "radius", 0.01f);
 
             Undo.RecordObject(go, "ProBuilder Weld Vertices");
-            var welded = ProBuilderReflection.WeldVertices(mesh, vertexIndices ?? new int[0], radius);
+            var welded = ProBuilderReflection.WeldVerticesWithRadius(mesh, vertexIndices ?? new int[0], radius);
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
@@ -156,7 +158,7 @@ namespace UnityCli.ProBuilder
                 return ProBuilderErrors.SchemaInvalid("vertexIndices is required for split-vertices.");
 
             Undo.RecordObject(go, "ProBuilder Split Vertices");
-            var split = ProBuilderReflection.SplitVertices(mesh, vertexIndices);
+            var split = ProBuilderReflection.SplitVerticesWithList(mesh, vertexIndices);
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
@@ -211,17 +213,13 @@ namespace UnityCli.ProBuilder
             var z = ProBuilderInput.FloatArg(context.InputJson, "z", 0f);
             var offset = new Vector3(x, y, z);
 
-            var positions = new Vector3[vertexIndices.Length];
-            for (var i = 0; i < vertexIndices.Length; i++)
-                positions[i] = offset;
-
             Undo.RecordObject(go, "ProBuilder Move Vertices");
-            ProBuilderReflection.SetVertexPositions(mesh, vertexIndices, positions);
+            var moved = ProBuilderReflection.MoveVerticesByOffset(mesh, vertexIndices, offset);
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
             var result = new UnityCliJsonWriter().BeginObject()
-                .Prop("movedCount", vertexIndices.Length)
+                .Prop("movedCount", moved)
                 .EndObject().ToString();
 
             return ProBuilderErrors.Success("probuilder.move-vertices", result);
@@ -268,7 +266,26 @@ namespace UnityCli.ProBuilder
             var point = new Vector3(x, y, z);
 
             Undo.RecordObject(go, "ProBuilder Insert Vertex");
-            var insertedIndex = ProBuilderReflection.InsertVertexOnEdge(mesh, null, point);
+
+            var edgePair = ProBuilderInput.EdgeArg(context.InputJson, "edge");
+            var faceIndex = ProBuilderInput.IntArg(context.InputJson, "faceIndex");
+
+            int insertedIndex = -1;
+            if (edgePair != null)
+            {
+                insertedIndex = ProBuilderReflection.InsertVertexOnEdgeByPair(mesh, edgePair.Value.a, edgePair.Value.b, point);
+            }
+            else if (faceIndex.HasValue)
+            {
+                var inserted = ProBuilderReflection.InsertVertexInFace(mesh, faceIndex.Value, point);
+                if (inserted) insertedIndex = ProBuilderReflection.GetVertexCount(mesh) - 1;
+            }
+            else
+            {
+                // Fallback: try old method with null edge
+                insertedIndex = ProBuilderReflection.InsertVertexOnEdge(mesh, null, point);
+            }
+
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
@@ -315,13 +332,27 @@ namespace UnityCli.ProBuilder
             if (mesh == null) return ProBuilderErrors.OperationFailed("append-vertices-to-edge", "No ProBuilderMesh on target.");
 
             var count = ProBuilderInput.IntArg(context.InputJson, "count", 1);
+            var edgeIndices = ProBuilderInput.IntArrayArg(context.InputJson, "edgeIndices");
+            var edgePairs = ProBuilderInput.EdgePairArrayArg(context.InputJson, "edges");
+
+            if ((edgeIndices == null || edgeIndices.Length == 0) && (edgePairs == null || edgePairs.Length == 0))
+                return ProBuilderErrors.SchemaInvalid("edgeIndices or edges parameter is required for append-vertices-to-edge.");
 
             Undo.RecordObject(go, "ProBuilder Append Vertices");
+
+            var edgeArray = ProBuilderReflection.ResolveEdges(mesh, edgeIndices, edgePairs);
+            if (edgeArray == null || edgeArray.Length == 0)
+                return ProBuilderErrors.OperationFailed("append-vertices-to-edge", "Could not resolve edges from input.");
+
+            var appended = ProBuilderReflection.AppendVerticesToEdge(mesh, edgeArray, count);
+            if (!appended)
+                return ProBuilderErrors.OperationFailed("append-vertices-to-edge", "AppendElements.AppendVerticesToEdge method not found or failed in ProBuilder assembly.");
+
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
             var result = new UnityCliJsonWriter().BeginObject()
-                .Prop("insertedCount", count)
+                .Prop("insertedCount", count * edgeArray.Length)
                 .EndObject().ToString();
 
             return ProBuilderErrors.Success("probuilder.append-vertices-to-edge", result);
@@ -366,13 +397,19 @@ namespace UnityCli.ProBuilder
             if (vertexIndices == null || vertexIndices.Length < 3)
                 return ProBuilderErrors.SchemaInvalid("At least 3 vertexIndices required for create-polygon.");
 
+            var unordered = ProBuilderInput.BoolArg(context.InputJson, "unordered", true);
+
             Undo.RecordObject(go, "ProBuilder Create Polygon");
+            var created = ProBuilderReflection.CreatePolygon(mesh, vertexIndices, unordered);
+            if (!created)
+                return ProBuilderErrors.OperationFailed("create-polygon", "AppendElements.CreatePolygon method not found or failed in ProBuilder assembly.");
+
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
             var faceCount = ProBuilderReflection.GetFaceCount(mesh);
             var result = new UnityCliJsonWriter().BeginObject()
-                .Prop("newFaceIndex", faceCount)
+                .Prop("newFaceIndex", faceCount - 1)
                 .EndObject().ToString();
 
             return ProBuilderErrors.Success("probuilder.create-polygon", result);
