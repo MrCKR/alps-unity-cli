@@ -63,7 +63,7 @@ export async function handlePackageInfoCommand(
       `${(data.npm as { name: string }).name}@${(data.npm as { version: string }).version}`,
       `Unity package: ${(data.unity as { name: string }).name}@${(data.unity as { version: string }).version}`,
       "Docs: unity_cli docs / docs topic <topic> / docs get/search",
-      "Discovery: tools group / tools group list <group> / tools search / tools describe"
+ "Discovery: tools group / tools group list <group> [--include-custom] / tools search / tools describe"
     ].join("\n");
   }
 

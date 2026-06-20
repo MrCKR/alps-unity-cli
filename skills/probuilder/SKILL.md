@@ -29,7 +29,7 @@ unity_cli package install com.unity.probuilder --project <path>
 
 ### List all ProBuilder tools
 ```bash
-unity_cli tools list --group probuilder
+unity_cli tools group list probuilder
 ```
 
 ### Describe a specific tool
