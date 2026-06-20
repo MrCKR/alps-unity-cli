@@ -43,6 +43,186 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "animator.get-info",
+      "group": "animator",
+      "command": "get-info",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "animator.get-parameter",
+      "group": "animator",
+      "command": "get-parameter",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "animator.set-parameter",
+      "group": "animator",
+      "command": "set-parameter",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "animator.crossfade",
+      "group": "animator",
+      "command": "crossfade",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "animator.set-speed",
+      "group": "animator",
+      "command": "set-speed",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "animator.set-enabled",
+      "group": "animator",
+      "command": "set-enabled",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "controller.create",
+      "group": "controller",
+      "command": "create",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "controller.add-state",
+      "group": "controller",
+      "command": "add-state",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "controller.add-transition",
+      "group": "controller",
+      "command": "add-transition",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "controller.add-parameter",
+      "group": "controller",
+      "command": "add-parameter",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "controller.get-info",
+      "group": "controller",
+      "command": "get-info",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "controller.assign",
+      "group": "controller",
+      "command": "assign",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "controller.add-layer",
+      "group": "controller",
+      "command": "add-layer",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "controller.remove-layer",
+      "group": "controller",
+      "command": "remove-layer",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "controller.set-layer-weight",
+      "group": "controller",
+      "command": "set-layer-weight",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "controller.create-blend-tree-1d",
+      "group": "controller",
+      "command": "create-blend-tree-1d",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "controller.create-blend-tree-2d",
+      "group": "controller",
+      "command": "create-blend-tree-2d",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "controller.add-blend-tree-child",
+      "group": "controller",
+      "command": "add-blend-tree-child",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "asset.create",
       "group": "asset",
       "command": "create",

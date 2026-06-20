@@ -17,7 +17,8 @@ const SECURITY_POLICY: SecurityPolicyEntry[] = [
   { command: "cli.package.remove", title: "Package Remove", destructiveHint: true },
   { command: "cli.batch.run", title: "Batch Run", destructiveHint: true, supportsDryRun: true },
   { command: "test.cancel", title: "Cancel Test Job", destructiveHint: true },
-  { command: "build.cancel", title: "Cancel Build Job", destructiveHint: true }
+  { command: "build.cancel", title: "Cancel Build Job", destructiveHint: true },
+  { command: "controller.remove-layer", title: "Remove Animator Layer", destructiveHint: true }
 ];
 
 const BY_COMMAND = new Map(SECURITY_POLICY.map((entry) => [entry.command, entry]));

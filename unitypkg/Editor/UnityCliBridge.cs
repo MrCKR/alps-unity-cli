@@ -43,9 +43,8 @@ namespace UnityCli
         private static readonly string[] GraphicsCommands = { "graphics.quality", "graphics.settings", "graphics.pipeline", "graphics.volume", "graphics.screenshot" };
         private static readonly string[] PhysicsCommands = { "physics.settings", "physics.raycast", "physics.simulation" };
         private static readonly string[] ProfilerCommands = { "profiler.start", "profiler.stop", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export", "profiler.status" };
-        // ProBuilder commands removed from core — served by extension package (P7-T2b)
-        // private static readonly string[] ProBuilderCommands = { "probuilder.ping", "probuilder.create-shape", ... };
-        private static readonly string[] AnimationCommands = { "animation.clip", "animation.state", "animation.play", "animation.stop" };
+        private static readonly string[] ProBuilderCommands = { "probuilder.shape", "probuilder.create", "probuilder.csg", "probuilder.edit" };
+        private static readonly string[] AnimationCommands = { "animation.clip", "animation.state", "animation.play", "animation.stop", "animator.get-info", "animator.get-parameter", "animator.set-parameter", "animator.crossfade", "animator.set-speed", "animator.set-enabled", "controller.create", "controller.add-state", "controller.add-transition", "controller.add-parameter", "controller.get-info", "controller.assign", "controller.add-layer", "controller.remove-layer", "controller.set-layer-weight", "controller.create-blend-tree-1d", "controller.create-blend-tree-2d", "controller.add-blend-tree-child" };
         private static readonly string[] VfxCommands = { "vfx.graph", "vfx.effect" };
         private static readonly string[] ShaderCommands = { "shader.info", "shader.read", "shader.create", "shader.update" };
         private static readonly string[] TextureCommands = { "texture.info", "texture.create", "texture.sprite", "texture.import-settings" };
@@ -270,11 +269,7 @@ namespace UnityCli
                 || command == "scene.save"
                 || command == "code.exec"
                 || command == "component.remove"
-                // ProBuilder destructive commands served by extension package (P7-T2b)
-                // || command == "probuilder.csg"
-                || command == "probuilder.delete-faces"
-                || command == "probuilder.combine-meshes"
-                || command == "probuilder.merge-objects"
+                || command == "probuilder.csg"
                 || command == "editor.menu"
                 || command == "script.edit";
         }

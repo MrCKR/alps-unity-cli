@@ -35,7 +35,7 @@ test("Unity Bridge source does not duplicate C# method signatures", async () => 
   assert.deepEqual(duplicateCSharpMethodSignatures(source), []);
 });
 
-test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, graphics, physics, profiler, animation, vfx, shader, texture and editor commands", async () => {
+test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, graphics, physics, profiler, probuilder, animation, vfx, shader, texture and editor commands", async () => {
   const source = await readUnityBridgeSources();
   const bridgeSource = await readFile(sourceUrl, "utf8");
   const readme = await readFile(readmeUrl, "utf8");
@@ -52,10 +52,10 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /CapabilityJson\("graphics", GraphicsCommands\)/);
   assert.match(source, /CapabilityJson\("physics", PhysicsCommands\)/);
   assert.match(source, /CapabilityJson\("profiler", ProfilerCommands\)/);
-  // ProBuilder removed from core capabilities — served by extension package (P7-T2b)
+  assert.match(source, /CapabilityJson\("probuilder", ProBuilderCommands\)/);
   assert.match(source, /CapabilityJson\("animation", AnimationCommands\)/);
   assert.match(source, /CapabilityJson\("vfx", VfxCommands\)/);
-  assert.match(source, /CapabilityJson\("profiler", ProfilerCommands\)[\s\S]*CapabilityJson\("animation", AnimationCommands\)/);
+  assert.match(source, /CapabilityJson\("physics", PhysicsCommands\) \+ ","\s+\+ CapabilityJson\("profiler", ProfilerCommands\) \+ ","\s+\+ CapabilityJson\("probuilder", ProBuilderCommands\) \+ ","\s+\+ CapabilityJson\("animation", AnimationCommands\) \+ ","\s+\+ CapabilityJson\("vfx", VfxCommands\) \+ ","\s+\+ CapabilityJson\("shader", ShaderCommands\) \+ ","/);
   assert.match(source, /CapabilityJson\("shader", ShaderCommands\)/);
   assert.match(source, /CapabilityJson\("texture", TextureCommands\)/);
   assert.match(source, /CapabilityJson\("script", ScriptCommands\)/);
@@ -80,8 +80,8 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /private static readonly string\[\] GraphicsCommands = \{ "graphics\.quality", "graphics\.settings", "graphics\.pipeline", "graphics\.volume", "graphics\.screenshot" \}/);
   assert.match(source, /private static readonly string\[\] PhysicsCommands = \{ "physics\.settings", "physics\.raycast", "physics\.simulation" \}/);
   assert.match(source, /private static readonly string\[\] ProfilerCommands = \{ "profiler\.start", "profiler\.stop", "profiler\.pause", "profiler\.counter", "profiler\.memory", "profiler\.frame", "profiler\.capture", "profiler\.export", "profiler\.status" \}/);
-  // ProBuilder commands array removed from core — served by extension package (P7-T2b)
-  assert.match(source, /private static readonly string\[\] AnimationCommands = \{ "animation\.clip", "animation\.state", "animation\.play", "animation\.stop" \}/);
+  assert.match(source, /private static readonly string\[\] ProBuilderCommands = \{ "probuilder\.shape", "probuilder\.create", "probuilder\.csg", "probuilder\.edit" \}/);
+  assert.match(source, /private static readonly string\[\] AnimationCommands = \{ "animation\.clip", "animation\.state", "animation\.play", "animation\.stop", "animator\.get-info", "animator\.get-parameter", "animator\.set-parameter", "animator\.crossfade", "animator\.set-speed", "animator\.set-enabled", "controller\.create", "controller\.add-state", "controller\.add-transition", "controller\.add-parameter", "controller\.get-info", "controller\.assign", "controller\.add-layer", "controller\.remove-layer", "controller\.set-layer-weight", "controller\.create-blend-tree-1d", "controller\.create-blend-tree-2d", "controller\.add-blend-tree-child" \}/);
   assert.match(source, /private static readonly string\[\] VfxCommands = \{ "vfx\.graph", "vfx\.effect" \}/);
   assert.match(source, /private static readonly string\[\] ShaderCommands = \{ "shader\.info", "shader\.read", "shader\.create", "shader\.update" \}/);
   assert.match(source, /private static readonly string\[\] TextureCommands = \{ "texture\.info", "texture\.create", "texture\.sprite", "texture\.import-settings" \}/);
@@ -145,11 +145,32 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /\\"architectureSensitive\\":true/);
   assert.match(source, /\\"frozenDecision\\":/);
   assert.match(source, /\\"coverageScope\\":/);
-  // ProBuilder RegisterCommand calls removed from core — served by extension package (P7-T2b)
+  assert.match(source, /RegisterCommand\(registry, "probuilder\.shape", "probuilder", true/);
+  assert.match(source, /RegisterCommand\(registry, "probuilder\.create", "probuilder", true/);
+  assert.match(source, /RegisterCommand\(registry, "probuilder\.csg", "probuilder", true/);
+  assert.match(source, /RegisterCommand\(registry, "probuilder\.edit", "probuilder", true/);
   assert.match(source, /RegisterCommand\(registry, "animation\.clip", "animation", true/);
   assert.match(source, /RegisterCommand\(registry, "animation\.state", "animation", false/);
   assert.match(source, /RegisterCommand\(registry, "animation\.play", "animation", true/);
   assert.match(source, /RegisterCommand\(registry, "animation\.stop", "animation", true/);
+  assert.match(source, /RegisterCommand\(registry, "animator\.get-info", "animation", false/);
+  assert.match(source, /RegisterCommand\(registry, "animator\.get-parameter", "animation", false/);
+  assert.match(source, /RegisterCommand\(registry, "animator\.set-parameter", "animation", true/);
+  assert.match(source, /RegisterCommand\(registry, "animator\.crossfade", "animation", true/);
+  assert.match(source, /RegisterCommand\(registry, "animator\.set-speed", "animation", true/);
+  assert.match(source, /RegisterCommand\(registry, "animator\.set-enabled", "animation", true/);
+  assert.match(source, /RegisterCommand\(registry, "controller\.create", "animation", true/);
+  assert.match(source, /RegisterCommand\(registry, "controller\.add-state", "animation", true/);
+  assert.match(source, /RegisterCommand\(registry, "controller\.add-transition", "animation", true/);
+  assert.match(source, /RegisterCommand\(registry, "controller\.add-parameter", "animation", true/);
+  assert.match(source, /RegisterCommand\(registry, "controller\.get-info", "animation", false/);
+  assert.match(source, /RegisterCommand\(registry, "controller\.assign", "animation", true/);
+  assert.match(source, /RegisterCommand\(registry, "controller\.add-layer", "animation", true/);
+  assert.match(source, /RegisterCommand\(registry, "controller\.remove-layer", "animation", true/);
+  assert.match(source, /RegisterCommand\(registry, "controller\.set-layer-weight", "animation", true/);
+  assert.match(source, /RegisterCommand\(registry, "controller\.create-blend-tree-1d", "animation", true/);
+  assert.match(source, /RegisterCommand\(registry, "controller\.create-blend-tree-2d", "animation", true/);
+  assert.match(source, /RegisterCommand\(registry, "controller\.add-blend-tree-child", "animation", true/);
   assert.match(source, /RegisterCommand\(registry, "vfx\.graph", "vfx", true/);
   assert.match(source, /RegisterCommand\(registry, "vfx\.effect", "vfx", true/);
   assert.match(source, /RegisterCommand\(registry, "shader\.info", "shader", false/);
@@ -213,6 +234,19 @@ test("Unity Bridge animation and vfx commands expose assets, target resolver dia
   assert.match(source, /E_ANIMATION_CLIP_NOT_FOUND/);
   assert.match(source, /E_ANIMATION_STATE_REQUIRED/);
   assert.match(source, /E_ANIMATION_NO_CONTROLLER/);
+  assert.match(source, /E_ANIMATOR_NOT_FOUND/);
+  assert.match(source, /E_ANIMATOR_PARAMETER_NAME_REQUIRED/);
+  assert.match(source, /E_ANIMATOR_PARAMETER_NOT_FOUND/);
+  assert.match(source, /E_ANIMATOR_NO_CONTROLLER/);
+  assert.match(source, /E_CONTROLLER_NOT_FOUND/);
+  assert.match(source, /E_CONTROLLER_EXISTS/);
+  assert.match(source, /E_CONTROLLER_PATH_REQUIRED/);
+  assert.match(source, /E_STATE_NOT_FOUND/);
+  assert.match(source, /E_STATE_EXISTS/);
+  assert.match(source, /E_PARAMETER_EXISTS/);
+  assert.match(source, /E_LAYER_NOT_FOUND/);
+  assert.match(source, /E_LAYER_BASE_IMMUTABLE/);
+  assert.match(source, /E_NOT_A_BLEND_TREE/);
   assert.match(source, /FindType\("UnityEngine\.VFX\.VisualEffectAsset"\)/);
   assert.match(source, /FindType\("UnityEngine\.VFX\.VisualEffect"\)/);
   assert.match(source, /E_VFX_PACKAGE_MISSING/);
