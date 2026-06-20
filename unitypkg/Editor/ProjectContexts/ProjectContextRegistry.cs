@@ -183,6 +183,9 @@ namespace UnityCli
             if (projectContextsDiscovered) return;
             projectContextsDiscovered = true;
 
+            // Populate built-in context descriptors from ContextCommands.BuiltInContexts
+            PopulateBuiltInContextDescriptors();
+
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
                 Type[] types;
@@ -475,6 +478,25 @@ namespace UnityCli
                 .ToString();
         }
 
+        // ── Populate built-in context descriptors from ContextCommands ──
+
+        private static void PopulateBuiltInContextDescriptors()
+        {
+            foreach (var ctx in BuiltInContexts)
+            {
+                var descriptor = new Dictionary<string, object>(StringComparer.Ordinal)
+                {
+                    { "name", ctx.Name },
+                    { "title", ctx.Title },
+                    { "source", ctx.Source ?? "built-in" },
+                    { "category", ctx.Category ?? "" },
+                    { "kind", "context" },
+                    { "readOnlyHint", true }
+                };
+                BuiltInContextDescriptors[ctx.Name] = descriptor;
+            }
+        }
+
         // ── Bridge commands: context.list, context.describe, context.read ──
 
         private static void RegisterContextCommands(BridgeCommandRegistry registry)
@@ -534,10 +556,11 @@ namespace UnityCli
                     "Pass a valid context name from context.list output.");
             }
 
-            // Built-in first
-            if (BuiltInContextDescriptors.ContainsKey(name))
+            // Built-in first — return full descriptor from ContextCommands
+            var builtInCtx = FindBuiltInContext(name);
+            if (builtInCtx != null)
             {
-                return SuccessJson(BuiltInContextDescriptorJson(name, BuiltInContextDescriptors[name]));
+                return SuccessJson(ContextDescriptorJson(builtInCtx));
             }
 
             // Project custom second
@@ -571,12 +594,20 @@ namespace UnityCli
                     "Pass a valid context name from context.list output.");
             }
 
-            // Built-in first
-            if (BuiltInContextDescriptors.ContainsKey(name))
+            // Built-in first — delegate to ContextCommands.BuiltInContexts read handlers
+            var builtInCtx = FindBuiltInContext(name);
+            if (builtInCtx != null)
             {
-                return ErrorJson("E_CONTEXT_BUILTIN_READ_NOT_IMPLEMENTED",
-                    "Built-in context read is not yet implemented for: " + name,
-                    "Use the corresponding built-in tool or wait for built-in context read support.");
+                try
+                {
+                    return builtInCtx.ReadHandler(request);
+                }
+                catch (Exception exception)
+                {
+                    return ErrorJson("E_CONTEXT_READ_FAILED",
+                        "Built-in context read failed for " + name + ": " + exception.Message,
+                        "Check Unity Console and UnityCliBridge.log.");
+                }
             }
 
             // Project custom second

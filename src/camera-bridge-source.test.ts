@@ -39,7 +39,7 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   const source = await readUnityBridgeSources();
   const bridgeSource = await readFile(sourceUrl, "utf8");
   const readme = await readFile(readmeUrl, "utf8");
-  const bridgeSection = readme.slice(readme.indexOf("## Unity Editor Bridge"), readme.indexOf("## Batch Automation"));
+  const bridgeSection = readme.slice(readme.indexOf("## Unity Editor Bridge"), readme.indexOf("## 项目自定义工具"));
 
   assert.match(source, /HttpListener/);
   assert.doesNotMatch(bridgeSource, /switch \(request\.Command\)/);
@@ -52,10 +52,16 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /CapabilityJson\("graphics", GraphicsCommands\)/);
   assert.match(source, /CapabilityJson\("physics", PhysicsCommands\)/);
   assert.match(source, /CapabilityJson\("profiler", ProfilerCommands\)/);
-  assert.match(source, /CapabilityJson\("probuilder", ProBuilderCommands\)/);
+  // ProBuilder removed from core CapabilitiesJson — served by extension package (P7-T2b)
+  // w.RawValue(CapabilityJson("probuilder", ProBuilderCommands)) is commented out
   assert.match(source, /CapabilityJson\("animation", AnimationCommands\)/);
   assert.match(source, /CapabilityJson\("vfx", VfxCommands\)/);
-  assert.match(source, /CapabilityJson\("physics", PhysicsCommands\) \+ ","\s+\+ CapabilityJson\("profiler", ProfilerCommands\) \+ ","\s+\+ CapabilityJson\("probuilder", ProBuilderCommands\) \+ ","\s+\+ CapabilityJson\("cinemachine", CinemachineCommands\) \+ ","\s+\+ CapabilityJson\("animation", AnimationCommands\) \+ ","\s+\+ CapabilityJson\("vfx", VfxCommands\) \+ ","\s+\+ CapabilityJson\("urp", UrpCommands\) \+ ","\s+\+ CapabilityJson\("hdrp", HdrpCommands\) \+ ","\s+\+ CapabilityJson\("shader", ShaderCommands\) \+ ","/);
+  // CapabilitiesJson uses w.RawValue(CapabilityJson(...)) writer pattern since P10-R3 refactor
+  // Verify the writer-based ordering: physics → profiler → (probuilder commented) → cinemachine → animation → vfx → urp → hdrp → shader
+  assert.match(source, /w\.RawValue\(CapabilityJson\("physics", PhysicsCommands\)\)/);
+  assert.match(source, /w\.RawValue\(CapabilityJson\("cinemachine", CinemachineCommands\)\)/);
+  assert.match(source, /w\.RawValue\(CapabilityJson\("urp", UrpCommands\)\)/);
+  assert.match(source, /w\.RawValue\(CapabilityJson\("hdrp", HdrpCommands\)\)/);
   assert.match(source, /CapabilityJson\("shader", ShaderCommands\)/);
   assert.match(source, /CapabilityJson\("texture", TextureCommands\)/);
   assert.match(source, /CapabilityJson\("script", ScriptCommands\)/);
@@ -83,9 +89,11 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /private static readonly string\[\] GraphicsCommands = \{ "graphics\.quality", "graphics\.settings", "graphics\.pipeline", "graphics\.volume", "graphics\.screenshot", "graphics\.bake-start"/);
   assert.match(source, /private static readonly string\[\] PhysicsCommands = \{ "physics\.settings", "physics\.raycast", "physics\.simulation" \}/);
   assert.match(source, /private static readonly string\[\] ProfilerCommands = \{ "profiler\.start", "profiler\.stop", "profiler\.pause", "profiler\.counter", "profiler\.memory", "profiler\.frame", "profiler\.capture", "profiler\.export", "profiler\.status" \}/);
-  assert.match(source, /private static readonly string\[\] ProBuilderCommands = \{ "probuilder\.shape", "probuilder\.create", "probuilder\.csg", "probuilder\.edit" \}/);
+  // ProBuilderCommands expanded to 36 tools in P7-T2b (was 4 placeholder entries)
+  assert.match(source, /private static readonly string\[\] ProBuilderCommands = \{[\s\S]*?"probuilder\.ping"[\s\S]*?"probuilder\.repair-mesh"[\s\S]*?\}/);
   assert.match(source, /private static readonly string\[\] AnimationCommands = \{ "animation\.clip", "animation\.state", "animation\.play", "animation\.stop", "animator\.get-info", "animator\.get-parameter", "animator\.set-parameter", "animator\.crossfade", "animator\.set-speed", "animator\.set-enabled", "controller\.create", "controller\.add-state", "controller\.add-transition", "controller\.add-parameter", "controller\.get-info", "controller\.assign", "controller\.add-layer", "controller\.remove-layer", "controller\.set-layer-weight", "controller\.create-blend-tree-1d", "controller\.create-blend-tree-2d", "controller\.add-blend-tree-child" \}/);
-  assert.match(source, /private static readonly string\[\] VfxCommands = \{ "vfx\.graph", "vfx\.effect", "vfx\.particle-create", "vfx\.particle-info", "vfx\.particle-main", "vfx\.particle-emission", "vfx\.particle-shape", "vfx\.particle-play", "vfx\.particle-module", "vfx\.line-create", "vfx\.line-positions", "vfx\.trail" \}/);
+  // VfxCommands expanded with parameter, control, event, template commands
+  assert.match(source, /private static readonly string\[\] VfxCommands = \{[\s\S]*?"vfx\.graph"[\s\S]*?"vfx\.trail"[\s\S]*?\}/);
   assert.match(source, /private static readonly string\[\] ShaderCommands = \{ "shader\.info", "shader\.read", "shader\.create", "shader\.update" \}/);
   assert.match(source, /private static readonly string\[\] TextureCommands = \{ "texture\.info", "texture\.create", "texture\.sprite", "texture\.import-settings" \}/);
   assert.match(source, /private static readonly string\[\] ScriptCommands = \{ "script\.create", "script\.read", "script\.edit", "script\.validate" \}/);
@@ -159,10 +167,10 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /\.Prop\("architectureSensitive", true\)/);
   assert.match(source, /\.Prop\("frozenDecision",/);
   assert.match(source, /\.PropRaw\("coverageScope",/);
-  assert.match(source, /RegisterCommand\(registry, "probuilder\.shape", "probuilder", true/);
-  assert.match(source, /RegisterCommand\(registry, "probuilder\.create", "probuilder", true/);
-  assert.match(source, /RegisterCommand\(registry, "probuilder\.csg", "probuilder", true/);
-  assert.match(source, /RegisterCommand\(registry, "probuilder\.edit", "probuilder", true/);
+  // ProBuilder tools are discovered via [UnityCliTool] attribute (P7-T2b), not RegisterCommand
+  // RegisterProBuilderCommands is commented out in BridgeCommandRegistry
+  assert.match(source, /RegisterProBuilderCommands\(registry\)/);
+  assert.match(source, /\/\/ RegisterProBuilderCommands\(registry\)/);
   assert.match(source, /RegisterCommand\(registry, "animation\.clip", "animation", true/);
   assert.match(source, /RegisterCommand\(registry, "animation\.state", "animation", false/);
   assert.match(source, /RegisterCommand\(registry, "animation\.play", "animation", true/);

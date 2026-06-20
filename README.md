@@ -439,6 +439,86 @@ Bridge 生命周期：
 3. CLI 通过 `instances list` 发现运行中的 Bridge 端点
 4. Bridge 自动向 CLI 注册实例（心跳机制）
 
+### Bridge Command Reference
+
+`camera.list`, `camera.info`, `camera.screenshot`, `scene.active`, `scene.hierarchy`, `scene.build-settings`, `scene.screenshot`, `scene.create`, `scene.load`, `scene.save`, `go.find`, `go.inspect`, `go.create`, `go.modify`, `go.delete`, `component.add`, `component.remove`, `component.set`
+
+**Camera & Screenshot:**
+- `camera.list`, `camera.info`, `camera.screenshot`, `camera.create`, `camera.target`, `camera.lens`, `camera.multiview`
+- `camera.screenshot` captures render texture and returns artifact metadata
+- `E_CAMERA_NOT_FOUND` for `camera info` when a target Camera cannot be resolved
+- `E_TARGET_NOT_FOUND` for `camera screenshot` when the target is empty or cannot be resolved
+
+**Scene:**
+- `scene.active`, `scene.hierarchy`, `scene.build-settings`, `scene.screenshot`, `scene.create`, `scene.load`, `scene.save`
+
+**GameObject & Component:**
+- `go.find`, `go.inspect`, `go.create`, `go.modify`, `go.delete`, `component.add`, `component.remove`, `component.set`
+
+**Asset:**
+- `asset.search`, `asset.info`, `asset.create`, `asset.import`, `asset.modify`, `asset.delete`, `asset.duplicate`, `asset.move`, `asset.rename`
+
+**Prefab:**
+- `prefab info <path>` returns Prefab metadata including GUID, root name, asset type, `variant` base/source paths and GUIDs, `dependencies.items`, and `nestedPrefabs.items` rather than counts only
+- `prefab hierarchy <path>` pages hierarchy items with `pageInfo`, component summaries, the same Prefab variant/dependency summary, `nestedPrefabs.items` and `logPath`
+- `E_PREFAB_PATH_REQUIRED`, `E_PREFAB_PATH_INVALID`, `E_PREFAB_NOT_FOUND`, `E_ASSET_NOT_PREFAB`, `E_PREFAB_OUTPUT_EXISTS`, `E_PREFAB_MODIFY_NOOP`, `E_PREFAB_CHILD_EXISTS`, `E_PREFAB_CHILD_NOT_FOUND`, `E_PREFAB_DIRTY_CONFLICT`, `E_PREFAB_STAGE_NOT_OPEN`, `E_PREFAB_STAGE_MISMATCH` and `E_UNITY_BUSY`
+
+**UI:**
+- `ui canvas/create`, `ui text/create`, `ui button/create` and `ui image/create` create uGUI objects
+- `ui document/info` supports live UIDocument inspection and offline `.uxml`/`.uss` file reads
+- `E_UI_PARENT_NOT_FOUND`, `E_UI_SPRITE_NOT_FOUND`, `E_UI_UXML_NOT_FOUND`, `E_UI_USS_NOT_FOUND`, `E_UI_PANEL_SETTINGS_NOT_FOUND`, `E_TARGET_NOT_FOUND`, `E_TARGET_AMBIGUOUS` and `E_UNITY_BUSY`
+
+**Material:**
+- `material info <path>` returns shader, keywords, ShaderUtil property metadata, current values, texture references, dependencies and `logPath`
+- `material assign --target <go> --material <path>` assigns to a Renderer shared material slot or a UI Graphic `material` property
+- `E_MATERIAL_PATH_REQUIRED`, `E_MATERIAL_PATH_INVALID`, `E_MATERIAL_NOT_FOUND`, `E_SHADER_NOT_FOUND`, `E_MATERIAL_PROPERTY_NOT_FOUND`, `E_MATERIAL_PROPERTY_TYPE_MISMATCH`, `E_TARGET_AMBIGUOUS`, `E_MATERIAL_SLOT_INVALID`, `E_TEXTURE_NOT_FOUND` and `E_UNITY_BUSY`
+
+**Graphics & Physics:**
+- `graphics quality` reads and updates `QualitySettings`
+- `physics raycast` supports 3D and 2D ray queries
+- `physics.raycast` supports 3D and 2D ray queries
+
+**Shader & Texture:**
+- `shader info/read/create/update`
+- `texture info/create/sprite/import-settings`
+- `E_SHADER_NOT_FOUND`, `E_TEXTURE_NOT_FOUND`, `E_IMPORT_FAILED`
+
+**Animation & VFX:**
+- `animation clip <path>` reads or creates `Assets/*.anim` AnimationClip assets
+- `vfx graph <path>` reads or creates `Assets/*.vfx` Visual Effect Graph assets
+- Windows-style `Assets\VFX\Explosion.vfx` paths are normalized to Unity asset paths
+- `E_VFX_PACKAGE_MISSING`, `E_VFX_GRAPH_NOT_FOUND`
+
+**Editor:**
+- `editor state` returns playMode, pause, busy, activeScene and Prefab Stage status
+- `editor play`, `editor pause` and `editor stop` control Editor PlayMode
+- `editor menu <path>` executes a Unity Editor menu item
+- `editor console --count <n>` returns recent Unity Console entries
+- `E_UNITY_BUSY`, `E_PLAYMODE_TIMEOUT`, `E_MENU_NOT_FOUND`, `E_MENU_TIMEOUT`
+
+**Bridge HTTP timeout & side-effect safety:**
+- If a request times out at the HTTP layer while the command is still queued, the bridge cancels that queued work before execution and returns `E_UNITY_BUSY` with no side effects applied
+- If a request times out at the HTTP layer but the command has already started, it returns a success envelope with `status: "running"`, `sideEffectSemantics: "started-before-http-timeout"`, the original `requestId` and `logPath`
+
+**Runtime validation disclaimer:**
+- C# runtime behavior for empty camera targets, missing Cameras, screenshot IO failures, actual PNG/JPG artifacts, Prefab Stage open/save/close, Prefab dirty conflicts, nested/variant Prefab summaries, Material asset creation, Renderer/UI Graphic assignment, Material property writes, GraphicsSettings/QualitySettings persistence, render pipeline asset resolution, Physics/Physics2D project setting persistence, raycast collision hits, explicit simulation steps, AnimationClip asset creation/binding summaries, Animator state/play/stop behavior, VFX Graph asset creation, VisualEffect assignment, Shader import diagnostics, TextureImporter mutations, uGUI object creation, UIDocument/PanelSettings linking, UI hierarchy summaries and Runtime Code live execution must still be proven by real Windows + Unity Editor validation
+
+**Script & Code:**
+- `script.create`, `script.read`, `script.edit`, `script.validate`, `code.exec`.
+
+**Context & Extension:**
+- `context.list`, `context.describe`, `context.read` — read-only context observations
+- `extension.status` — extension availability check
+
+**ProBuilder Extension:**
+- Requires `com.unity.probuilder` package
+- 36 tools: `probuilder.ping` through `probuilder.repair-mesh`
+
+**Cinemachine, URP, HDRP Extensions:**
+- Cinemachine: `cinemachine.create`, `cinemachine.target`, `cinemachine.lens`, etc.
+- URP: `urp.feature`, `urp.volume`, `urp.settings`
+- HDRP: `hdrp.volume`, `hdrp.settings`
+
 ## 项目自定义工具（Custom Tools）
 
 Unity 项目 C# 代码通过 `[UnityCliTool]` 特性注册自定义工具：

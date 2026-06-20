@@ -5,10 +5,14 @@ import assert from "node:assert/strict";
 const editorUrl = new URL("../unitypkg/Editor/", import.meta.url);
 
 test("Context commands register context.list, context.describe, context.read", async () => {
+  // Registration is in ProjectContextRegistry.cs since P10-R7 (unified handler)
   const source = await readContextCommandsSource();
-  assert.match(source, /RegisterCommand\(registry, "context\.list", "context", false/);
-  assert.match(source, /RegisterCommand\(registry, "context\.describe", "context", false/);
-  assert.match(source, /RegisterCommand\(registry, "context\.read", "context", false/);
+  const allSources = await readUnityBridgeSources();
+  // ContextCommands.cs has the built-in context definitions and read handlers
+  // ProjectContextRegistry.cs has the unified RegisterContextCommands
+  assert.match(allSources, /RegisterCommand\(registry, "context\.list", "context", false/);
+  assert.match(allSources, /RegisterCommand\(registry, "context\.describe", "context", false/);
+  assert.match(allSources, /RegisterCommand\(registry, "context\.read", "context", false/);
 });
 
 test("Context built-in table contains all 16 expected context names", async () => {

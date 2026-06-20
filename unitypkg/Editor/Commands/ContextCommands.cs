@@ -36,13 +36,9 @@ namespace UnityCli
         /// If a capability has side effects, it must be a Tool, not a Context.
         ///
         /// P2: Built-in context registry with 16 contexts and read handlers.
+        /// Registration is handled by ProjectContextRegistry which unifies built-in
+        /// and project custom context commands into a single handler.
         /// </summary>
-        private static void RegisterContextCommands(BridgeCommandRegistry registry)
-        {
-            RegisterCommand(registry, "context.list", "context", false, ContextList);
-            RegisterCommand(registry, "context.describe", "context", false, ContextDescribe);
-            RegisterCommand(registry, "context.read", "context", false, ContextRead);
-        }
 
         // ── Built-in context definition ──
 
@@ -225,67 +221,9 @@ namespace UnityCli
             };
         }
 
-        // ── Context list / describe / read ──
+        // ── Built-in context lookup (used by ProjectContextRegistry) ──
 
-        private static string ContextList(BridgeRequest request)
-        {
-            var w = new UnityCliJsonWriter().BeginObject()
-                .Prop("ok", true)
-                .Prop("count", (long)BuiltInContexts.Length)
-                .PropArray("contexts", arr =>
-                {
-                    foreach (var ctx in BuiltInContexts)
-                    {
-                        arr.RawValue(ContextDescriptorJson(ctx));
-                    }
-                })
-                .EndObject();
-            return w.ToString();
-        }
-
-        private static string ContextDescribe(BridgeRequest request)
-        {
-            var name = request.StringArg("contextName") ?? request.StringArg("name");
-            if (string.IsNullOrEmpty(name))
-            {
-                return ErrorJson("E_CONTEXT_NAME_REQUIRED", "contextName is required.", "Pass contextName as a string argument.");
-            }
-            var ctx = FindBuiltInContext(name);
-            if (ctx == null)
-            {
-                return ErrorJson("E_CONTEXT_NOT_FOUND", $"Context not found: {name}.", "Run context list to see available contexts.");
-            }
-            return SuccessJson(new UnityCliJsonWriter().BeginObject()
-                .Prop("mode", "bridge")
-                .Prop("requiresUnity", true)
-                .PropRaw("descriptor", ContextDescriptorJson(ctx))
-                .EndObject()
-                .ToString());
-        }
-
-        private static string ContextRead(BridgeRequest request)
-        {
-            var name = request.StringArg("contextName") ?? request.StringArg("name");
-            if (string.IsNullOrEmpty(name))
-            {
-                return ErrorJson("E_CONTEXT_NAME_REQUIRED", "contextName is required.", "Pass contextName as a string argument.");
-            }
-            var ctx = FindBuiltInContext(name);
-            if (ctx == null)
-            {
-                return ErrorJson("E_CONTEXT_NOT_FOUND", $"Context not found: {name}.", "Run context list to see available contexts.");
-            }
-            try
-            {
-                return ctx.ReadHandler(request);
-            }
-            catch (Exception exception)
-            {
-                return ErrorJson("E_CONTEXT_READ_FAILED", $"Context read failed for {name}: {exception.Message}", "Check Unity Console and UnityCliBridge.log.");
-            }
-        }
-
-        private static BuiltInContextDefinition FindBuiltInContext(string name)
+        internal static BuiltInContextDefinition FindBuiltInContext(string name)
         {
             foreach (var ctx in BuiltInContexts)
             {
