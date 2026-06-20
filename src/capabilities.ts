@@ -11,6 +11,8 @@ import { getString } from "./args.js";
 import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
 import { builtinToolGroups, builtinToolMetadata, type ToolMetadata } from "./tools/metadata/index.js";
 import { supportStatusForTool } from "./tools/metadata/status.js";
+import { ExtensionRegistry, extensionAvailabilitySummary, collectAvailableTools, collectAllTools } from "./extensions/index.js";
+import { readInstalledUnityPackages } from "./extensions/project-resolver.js";
 import { failure, success } from "./output.js";
 import type { CliResult } from "./types.js";
 
@@ -34,6 +36,28 @@ export async function handleCapabilitiesCommand(
   }
 
   const staticCapabilities = buildStaticCapabilities(projectTools);
+
+  // ── Extension availability ──
+  const projectPath = getString(flags, "project");
+  let extensionInfo: Record<string, unknown> | undefined;
+  if (projectPath) {
+    try {
+      const registry = new ExtensionRegistry();
+      const installedPackages = await readInstalledUnityPackages(projectPath);
+      const summary = extensionAvailabilitySummary(registry, installedPackages);
+      extensionInfo = {
+        total: summary.total,
+        available: summary.available,
+        unavailable: summary.unavailable,
+        unknown: summary.unknown,
+        extensions: summary.extensions,
+        extensionToolCount: collectAvailableTools(registry, installedPackages).length,
+        allExtensionToolCount: collectAllTools(registry, installedPackages).length
+      };
+    } catch {
+      // Extension info is best-effort; failures should not break capabilities.
+    }
+  }
 
   let runtimeCapabilities: Record<string, unknown> | undefined;
   const endpoint = getString(flags, "bridge-endpoint") ?? runtime.bridgeEndpoint ?? process.env.UNITY_CLI_BRIDGE_ENDPOINT;
@@ -61,6 +85,7 @@ export async function handleCapabilitiesCommand(
     requiresUnity: false,
     static: staticCapabilities,
     ...(projectToolDiagnostics ? { projectTools: projectToolDiagnostics } : {}),
+    ...(extensionInfo ? { extensions: extensionInfo } : {}),
     ...(runtimeCapabilities ? { runtime: runtimeCapabilities } : {}),
     ...(runtimeCapabilities ? { bridgeEndpoint: endpoint ?? runtime.bridgeEndpoint } : {})
   };

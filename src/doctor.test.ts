@@ -69,8 +69,9 @@ test("doctor returns all-pass when registry has healthy instance and bridge is r
   const result = await handleDoctorCommand({}, runtime, "req_doctor_1");
   assert.equal(result.ok, true);
   const data = result.data as { summary: string; checks: DoctorCheck[] };
-  assert.equal(data.summary, "pass");
-  assert.equal(data.checks.length, 7);
+  // extension_availability warns when no --project provided
+  assert.equal(data.summary, "warn");
+  assert.equal(data.checks.length, 8);
 
   const registryCheck = data.checks.find((c) => c.name === "instance_registry");
   assert.equal(registryCheck?.status, "pass");
@@ -83,6 +84,10 @@ test("doctor returns all-pass when registry has healthy instance and bridge is r
 
   const discoveryCheck = data.checks.find((c) => c.name === "unified_tool_discovery");
   assert.equal(discoveryCheck?.status, "pass");
+
+  const extCheck = data.checks.find((c) => c.name === "extension_availability");
+  assert.equal(extCheck?.status, "warn");
+  assert.ok(extCheck?.message?.includes("project path"));
 });
 
 test("doctor returns warn when instance registry is empty", async () => {

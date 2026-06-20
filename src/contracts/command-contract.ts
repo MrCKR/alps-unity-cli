@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { BridgeCommandRegistry, BridgeCommandSpec } from "../bridge/index.js";
 import type { ToolMetadata } from "../tools/metadata/types.js";
+import type { ExtensionManifest } from "../extensions/types.js";
 
 export type CommandHandlerType = "bridge" | "hybrid" | "job" | "offline" | "cli_only";
 
@@ -91,6 +92,80 @@ export function validateToolMetadataContracts(tools: ToolMetadata[], registry: B
       const spec = registry.lookup(group, commandParts.join(" ")) as BridgeCommandSpec | undefined;
       if (spec && spec.bridgeCommand !== tool.name) {
         throw new Error(`Tool metadata contract mismatch: ${tool.name} uses cliCommand=\"${tool.cliCommand}\" but registry resolves ${spec.bridgeCommand}`);
+      }
+    }
+  }
+}
+
+/**
+ * Validate that extension manifest tool contributions are consistent with the
+ * command contract. Each tool contribution's `bridgeCommand` must either:
+ * - Be present in the contract (already registered as a built-in tool), or
+ * - Declare a matching `bridgeCommand`/`cliCommand`/`group` tuple.
+ *
+ * Extension tool contributions that duplicate built-in tool names must
+ * match the built-in contract exactly.
+ *
+ * @param manifests - Extension manifests to validate.
+ * @param registry - Bridge command registry for cross-checking cliCommand.
+ */
+export function validateExtensionManifestContracts(
+  manifests: ExtensionManifest[],
+  registry: BridgeCommandRegistry
+): void {
+  for (const manifest of manifests) {
+    const tools = manifest.contributions.tools ?? [];
+    const expectedPackages = manifest.unityPackages.map((p) => p.packageId).sort();
+
+    for (const tool of tools) {
+      const contract = findCommandContract(tool.bridgeCommand);
+      if (!contract) {
+        // Extension contributes a tool that is not in the contract.
+        // This is allowed only if the extension declares it as a future
+        // contribution (no live bridge command). We verify the bridgeCommand
+        // group matches the manifest's declared bridgeCommands.
+        const declaredBridge = (manifest.contributions.bridgeCommands ?? []).find(
+          (b) => b.group === tool.group && b.commands.length > 0
+        );
+        if (!declaredBridge) {
+          throw new Error(
+            `Extension '${manifest.id}' contributes tool '${tool.name}' ` +
+            `with bridgeCommand '${tool.bridgeCommand}' that is missing from the contract ` +
+            `and not declared in manifest.bridgeCommands.`
+          );
+        }
+        continue;
+      }
+
+      // Contract exists — verify the manifest's tool/group matches it.
+      if (contract.group !== tool.group) {
+        throw new Error(
+          `Extension '${manifest.id}' tool '${tool.name}' group mismatch: ` +
+          `manifest=${tool.group} contract=${contract.group}`
+        );
+      }
+
+      // Verify the contract's requires_packages includes the extension's
+      // declared Unity packages (so the contract is the source of truth).
+      const contractPackages = (contract.requires_packages ?? []).slice().sort();
+      if (JSON.stringify(contractPackages) !== JSON.stringify(expectedPackages)) {
+        throw new Error(
+          `Extension '${manifest.id}' tool '${tool.name}' requires_packages mismatch: ` +
+          `manifest=${JSON.stringify(expectedPackages)} contract=${JSON.stringify(contractPackages)}`
+        );
+      }
+
+      // Cross-check the cliCommand resolves to the contract bridgeCommand.
+      if (tool.cliCommand) {
+        const [group, ...commandParts] = tool.cliCommand.split(" ");
+        const spec = registry.lookup(group, commandParts.join(" ")) as BridgeCommandSpec | undefined;
+        if (spec && spec.bridgeCommand !== tool.bridgeCommand) {
+          throw new Error(
+            `Extension '${manifest.id}' tool '${tool.name}' cliCommand mismatch: ` +
+            `cliCommand="${tool.cliCommand}" resolves to ${spec.bridgeCommand}, ` +
+            `expected ${tool.bridgeCommand}`
+          );
+        }
       }
     }
   }

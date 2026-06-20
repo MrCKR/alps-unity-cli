@@ -1,0 +1,145 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unity-cli.local/schemas/extension-manifest.schema.json",
+  "title": "Unity CLI Extension Manifest",
+  "description": "Describes a CLI extension package: its identity, required Unity packages, and contributions (tools, contexts, bridge commands, C# entries, docs fragments). The core CLI does not compile-time depend on any optional Unity package declared here.",
+  "type": "object",
+  "required": ["id", "name", "description", "version", "unityPackages", "contributions"],
+  "properties": {
+    "id": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9]*(-[a-z0-9]+)*$",
+      "description": "Unique extension identifier in kebab-case, e.g. 'probuilder', 'vfx-graph'."
+    },
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Human-readable extension name, e.g. 'ProBuilder'."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One-paragraph explanation of the extension."
+    },
+    "version": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Extension version (semver), e.g. '1.0.0'."
+    },
+    "unityPackages": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["packageId", "displayName"],
+        "properties": {
+          "packageId": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Unity package identifier, e.g. 'com.unity.probuilder'."
+          },
+          "versionRange": {
+            "type": "string",
+            "description": "Optional semver range constraint."
+          },
+          "displayName": {
+            "type": "string",
+            "minLength": 1,
+            "description": "Human-readable package name, e.g. 'ProBuilder'."
+          }
+        },
+        "additionalProperties": false
+      },
+      "description": "Required Unity packages for this extension to be available."
+    },
+    "contributions": {
+      "type": "object",
+      "properties": {
+        "tools": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["name", "title", "description", "group", "bridgeCommand", "cliCommand"],
+            "properties": {
+              "name": { "type": "string" },
+              "title": { "type": "string" },
+              "description": { "type": "string" },
+              "group": { "type": "string" },
+              "bridgeCommand": { "type": "string" },
+              "cliCommand": { "type": "string" }
+            },
+            "additionalProperties": false
+          },
+          "description": "Tool descriptors contributed by this extension."
+        },
+        "contexts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["key", "description"],
+            "properties": {
+              "key": { "type": "string" },
+              "description": { "type": "string" }
+            },
+            "additionalProperties": false
+          },
+          "description": "Context descriptors contributed by this extension."
+        },
+        "bridgeCommands": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["group", "commands"],
+            "properties": {
+              "group": { "type": "string" },
+              "commands": {
+                "type": "array",
+                "items": { "type": "string" }
+              }
+            },
+            "additionalProperties": false
+          },
+          "description": "Bridge command groups contributed by this extension."
+        },
+        "csharpEntries": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["type", "description"],
+            "properties": {
+              "type": { "type": "string" },
+              "method": { "type": "string" },
+              "description": { "type": "string" }
+            },
+            "additionalProperties": false
+          },
+          "description": "C# implementation entry points."
+        },
+        "docs": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": ["topic", "description"],
+            "properties": {
+              "topic": { "type": "string" },
+              "description": { "type": "string" }
+            },
+            "additionalProperties": false
+          },
+          "description": "Documentation fragment topics."
+        }
+      },
+      "additionalProperties": false
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Tags for categorization."
+    },
+    "homepage": {
+      "type": "string",
+      "description": "Homepage or documentation URL."
+    }
+  },
+  "additionalProperties": false
+}
