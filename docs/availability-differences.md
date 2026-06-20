@@ -1,52 +1,49 @@
-# Availability Differences
+# 可用性差异（Availability Differences）
 
-> **Why different Unity instances may return different tool availability**
+> 为什么不同 Unity 实例可能返回不同的工具可用性
 
-## Core Principle
+## 核心原则
 
-Tool availability is **per-instance**, not global. `tools list` and `tools describe` reflect the capabilities of the resolved target instance. Different instances may show different tool sets for the following reasons.
+工具可用性是 **per-instance** 的，不是全局的。`tools list` 和 `tools describe` 反映已解析目标实例的能力。不同实例可能显示不同的工具集。
 
-## Reasons for Availability Differences
+## 可用性差异原因
 
-### 1. Installed Packages
+### 1. 已安装 Package
 
-Tools backed by specific Unity packages are only available when the target project has those packages installed:
+依赖特定 Unity Package 的工具只在目标项目安装了对应包时可用：
 
-| Tool | Package Dependency | Unavailable Behavior |
-|------|-------------------|---------------------|
-| `probuilder.shape/create/edit/csg` | `com.unity.probuilder` | Returns `E_PROBUILDER_PACKAGE_NOT_FOUND` |
-| `vfx.graph/vfx.effect` | `com.unity.visualeffectgraph` | Returns `E_VFX_PACKAGE_MISSING` |
+| 工具 | Package 依赖 | 不可用时行为 |
+|------|-------------|-------------|
+| `probuilder.shape/create/edit/csg` | `com.unity.probuilder` | 返回 `E_PROBUILDER_PACKAGE_NOT_FOUND` |
+| `vfx.graph/vfx.effect` | `com.unity.visualeffectgraph` | 返回 `E_VFX_PACKAGE_MISSING` |
 
-When `tools list --include-custom` is called against an instance whose project lacks these packages, the corresponding tools still appear in the built-in metadata (because built-in metadata is shipped with the CLI), but executing them against that instance returns a package-not-found error.
-
-**Package prerequisites are declared in tool metadata** via the `requiresPackages` field. Tools with this field will include it in `tools list` and `tools describe` output, making it possible to detect package dependencies before execution:
+Package 依赖通过 `requiresPackages` 字段声明在工具 descriptor 中：
 
 ```json
 {
   "name": "vfx.graph",
-  "requiresPackages": ["com.unity.visualeffectgraph"],
-  ...
+  "requiresPackages": ["com.unity.visualeffectgraph"]
 }
 ```
 
-If `requiresPackages` is present and non-empty, the tool requires all listed packages to be installed in the target Unity project. If any package is missing, execution will fail with a package-not-found error code that includes `next_actions` suggesting how to install the missing package.
+执行前可通过 `tools describe` 检查 `requiresPackages` 和 `available` 字段。
 
-### 2. Project Tool Registration
+### 2. 项目工具注册
 
-Project tools (`[UnityCliTool]` C# attributes) are discovered by querying the Bridge at runtime. Different projects register different project tools. `tools list --include-custom` against Instance A may show `sample.echo` while Instance B shows `acme.custom-builder` — or no project tools at all.
+项目工具（`[UnityCliTool]` C# 特性）通过 Bridge 运行时发现。不同项目注册不同工具。`tools list --include-custom` 对实例 A 可能显示 `sample.echo`，对实例 B 可能显示 `acme.custom-builder`。
 
-Project tool discovery requires a reachable Bridge. Without a Bridge connection, only built-in tools are discoverable.
+项目工具发现需要可达的 Bridge。无 Bridge 连接时，只能发现内置工具。
 
-### 3. Bridge Reachability
+### 3. Bridge 可达性
 
-| Bridge State | Available Tools |
-|-------------|-----------------|
-| Reachable (`/health` OK) | All built-in tools + project tools (with `--include-custom`) |
-| Not reachable | Only `offline` and `cli-only` tools |
-| Stale (heartbeat expired) | No Bridge commands; CLI returns `E_TARGET_STALE` |
-| Unreachable (`/health` failed) | No Bridge commands; CLI returns `E_TARGET_UNREACHABLE` |
+| Bridge 状态 | 可用工具 |
+|-------------|---------|
+| 可达（`/health` OK） | 所有内置 + 项目工具（`--include-custom`） |
+| 不可达 | 仅 `offline` / `cli-only` 工具 |
+| 过期（心跳超时） | 无 Bridge 命令；返回 `E_TARGET_STALE` |
+| 不可用（`/health` 失败） | 无 Bridge 命令；返回 `E_TARGET_UNREACHABLE` |
 
-Offline tools (`handler: "offline"`, `supportStatus: "cli-only"`) always work regardless of Bridge state. This includes:
+离线工具（`handler: "offline"`, `supportStatus: "cli-only"`）不受 Bridge 状态影响：
 - `package list/info/search/install/remove`
 - `batch schema/run`
 - `docs get/search`, `reflect type/member/search`
@@ -54,68 +51,38 @@ Offline tools (`handler: "offline"`, `supportStatus: "cli-only"`) always work re
 - `init --check`, `doctor`, `instances list/prune`
 - `target get/set/clear/alias`
 
-### 4. Editor State (PlayMode) and Runtime Tool Availability
+### 4. 编辑器状态（PlayMode）与 Runtime 工具可用性
 
-Tools with `target: "runtime"` and `availabilityScope: "playModeSession"` are only available when the Editor is in Play Mode. The `available` field in the tool descriptor reflects this:
+`target: "runtime"` 和 `availabilityScope: "playModeSession"` 的工具仅在 Play Mode 下可用：
 
-| `editor.state` | `target: "editor"` tools | `target: "runtime"` tools |
-|----------------|--------------------------|---------------------------|
-| Edit mode | `available: true` | `available: false` — returns `E_RUNTIME_NOT_READY` (transient) |
-| Play mode | `available: true` | `available: true` |
+| 编辑器状态 | `target: "editor"` 工具 | `target: "runtime"` 工具 |
+|-----------|------------------------|-------------------------|
+| 编辑模式 | `available: true` | `available: false` → `E_RUNTIME_NOT_READY`（transient） |
+| 播放模式 | `available: true` | `available: true` |
 
-To make a runtime tool available:
-1. Call `tools run editor.play` to enter Play Mode
-2. Verify with `tools run editor.state` that `playMode: playing`
-3. Retry the runtime tool
-
-Some tools behave differently depending on PlayMode state:
-- `code exec --channel live` executes in the current context (edit mode or play mode)
-- Profiler tools (`profiler.start/stop/capture`) may behave differently in play mode vs edit mode
-- `physics.simulation --simulate` requires the physics system to be in a valid state
+使 runtime 工具可用的步骤：
+1. `tools run editor.play` 进入 Play Mode
+2. `tools run editor.state` 确认 `playMode: playing`
+3. 重试 runtime 工具
 
 ### 5. Domain Reload
 
-During Unity domain reload (e.g., after script compilation), the Bridge marks the target as stale and stops serving requests. The CLI returns `E_UNITY_COMPILING` or `E_UNITY_BUSY` during this window. After reload completes, the Bridge re-registers with updated capabilities.
+Unity domain reload 期间（如脚本编译后），Bridge 标记目标为过期并停止服务请求。CLI 返回 `E_UNITY_COMPILING` 或 `E_UNITY_BUSY`。reload 完成后，Bridge 使用更新后的能力重新注册。
 
-### 6. Tool Catalog Fingerprint
+### 6. 工具目录 Fingerprint
 
-Each instance carries a `toolCatalogFingerprint` that captures the current tool catalog state. If the fingerprint changes between discovery and execution (e.g., because a package was installed or a domain reload occurred), the CLI may return a fingerprint mismatch warning. The `doctor` command checks fingerprint consistency.
+每个实例携带 `toolCatalogFingerprint` 捕获当前工具目录状态。如果发现与执行之间 fingerprint 变化（如安装了包或发生 domain reload），CLI 可能返回 fingerprint mismatch 警告。`doctor` 命令检查 fingerprint 一致性。
 
-## How to Handle Availability Differences
+## AI Agent 处理方式
 
-### As an AI Agent
+1. **先解析目标。** 执行任何工具前先 `instances list` + `target set`
+2. **执行前先 describe。** descriptor 显示 `handler`、`supportStatus`、`target`、`availabilityScope`、`available`
+3. **优雅处理错误。** Package-not-found、Bridge-unreachable 和 `E_RUNTIME_NOT_READY` 包含 `next_actions`
+4. **状态变化后重新发现。** 安装包或 domain reload 后，重新 `tools list --include-custom`
+5. **检查 `editor.state`** 再调用 PlayMode 敏感工具。`target: "runtime"` 需先进入 Play Mode
 
-1. **Always resolve target first.** Run `instances list` and `target set` before any tool call.
-2. **Use `tools describe` before executing.** The descriptor shows `handler`, `supportStatus`, `target`, `availabilityScope`, and `available`.
-3. **Handle errors gracefully.** Package-not-found, Bridge-unreachable, and `E_RUNTIME_NOT_READY` errors include `next_actions` that suggest recovery steps.
-4. **Re-discover after state changes.** After installing packages or domain reload, re-run `tools list --include-custom` to see updated availability.
-5. **Check `editor.state`** before calling tools that are PlayMode-sensitive. Enter Play Mode first if `target: "runtime"`.
+## 交叉引用
 
-### Error Response Pattern
-
-When a tool is unavailable for the resolved target, the response follows the standard error envelope:
-
-```json
-{
-  "ok": false,
-  "requestId": "req_...",
-  "error": {
-    "code": "E_PROBUILDER_PACKAGE_NOT_FOUND",
-    "message": "ProBuilder package is not installed in the target project.",
-    "transient": false,
-    "next_actions": [
-      "Install the com.unity.probuilder package in the Unity project.",
-      "Use unity_cli package install com.unity.probuilder --project <path>."
-    ]
-  }
-}
-```
-
-The `next_actions` field provides concrete recovery steps specific to the error.
-
-## Cross-Reference
-
-- Target selection: [target-and-instance](./target-and-instance.md)
-- Discovery: [tool-discovery](./tool-discovery.md)
-- Error codes: [error-codes](./error-codes.md)
-- Tool metadata schema: [../schemas/tool-metadata.schema.json](../schemas/tool-metadata.schema.json)
+- 目标选择：[target-and-instance](./target-and-instance.md)
+- 工具发现：[tool-discovery](./tool-discovery.md)
+- 错误码：[error-codes](./error-codes.md)

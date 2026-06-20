@@ -1,165 +1,122 @@
-# Tool Execution
+# 工具执行（Tool Execution）
 
-> **Discovery path**: `tools describe → tools run → verify`
+`tools run` 是统一执行入口，所有工具（内置和项目自定义）都通过此命令执行。
 
-## The Unified Execution Entry Point
-
-`tools run <name>` is the unified entry point for tool execution. It replaces all domain-specific invocation patterns — you do not need to memorize separate command groups. The router determines the execution channel based on the tool's `handler`, `target`, and `availabilityScope`.
+## 基本用法
 
 ```powershell
-unity_cli tools run scene.hierarchy --target <alias>
-unity_cli tools run sample.echo --target <alias>
-unity_cli tools run camera.list --target <alias>
-unity_cli tools run runtime.echo --target <alias>  # Runtime tool (requires Play Mode)
+# 通过 --input 传参（JSON 字符串）
+unity_cli tools run camera.list --input '{}'
+
+# 通过 --input-file 传参（JSON 文件）
+unity_cli tools run camera.screenshot --input-file params.json
+
+# 通过 --stdin 传参
+echo '{"target":"Main Camera"}' | unity_cli tools run camera.screenshot --stdin
 ```
 
-`tools run` accepts:
-- `--input <json>` — Input parameters as JSON string
-- `--input-file <path>` or `--stdin` — Input from file or stdin
-- `--target <id|alias>` — Explicit target selection
-- `--timeout-ms <ms>` — Override default timeout
-- `--fingerprint-mode warn|block` — Fingerprint mismatch handling (project tools)
-- `--yes` — Confirm destructive tools
-- `--dry-run` — Preview effects (if `supportsDryRun: true`)
+## 执行通道
 
-## Execution Channels
+`tools run` 根据 descriptor 的 `handler` 和 `target` 自动路由：
 
-Every tool has a `handler` field in its descriptor that determines how it executes. The unified tools contract defines these execution channels:
+| Handler | 通道 | 说明 |
+|---------|------|------|
+| `bridge` | `POST /bridge/execute` | 实时编辑器命令 |
+| `bridge-runtime` | Bridge + Play Mode guard | 运行时工具，需 Play Mode |
+| `hybrid` | Bridge 或 job | 支持 `--job` 标志切换为 job 模式 |
+| `job` | Unity batchmode | 测试、构建等长时间操作 |
+| `offline` | 本地 CLI | 包管理、文档、反射等 |
 
-### 1. `bridge` — Live Editor Bridge
+### Target 路由
 
-The tool is dispatched as `POST /bridge/execute` to the Unity Editor's loopback HTTP server. The Bridge executes Unity APIs on the Editor main thread and returns results in the unified response envelope.
+| target 值 | 路由行为 |
+|-----------|---------|
+| `editor` | 直接 Bridge 执行 |
+| `runtime` | 检查 Play Mode 状态，非 Play Mode 返回 `E_RUNTIME_NOT_READY` |
+| `both` | 默认走 editor 通道；`--runtime` 标志强制走 runtime 通道 |
 
-- **Requires**: a reachable Bridge endpoint (target instance must be `ready`)
-- **Target**: `editor`
-- **Examples**: `camera list`, `scene hierarchy`, `asset search`, `editor play`
-- **Timeout**: default 60 seconds per Bridge request; `--timeout-ms` overrides
-- **Side effects**: executed on the live Editor; mutations are real and immediate
+## 输入校验
 
-### 2. `bridge-runtime` — Runtime Bridge
-
-The tool is dispatched through the Bridge to the `RuntimeExecutor`, which runs the tool in the Unity Play Mode context. The tool is only available when the Editor is in Play Mode.
-
-- **Requires**: a reachable Bridge endpoint AND Editor in Play Mode
-- **Target**: `runtime`
-- **Availability scope**: `playModeSession`
-- **`available`**: `true` only when Play Mode is active
-- **Examples**: runtime-domain tools registered by `[UnityCliTool]` with `target = "runtime"`
-- **Error when not in Play Mode**: `E_RUNTIME_NOT_READY` (transient; retry after entering Play Mode)
-
-### 3. `hybrid` — Bridge + Job Path
-
-The tool supports both live Bridge execution and a batch/job fallback. The caller chooses the channel:
-
-- **Live channel**: `--channel live` or default (when Bridge is reachable)
-- **Job channel**: `--job`, `--channel batchmode`, or when `--project/--unity/--wait` are provided
-- **Target**: `editor` or `both`
-- **Examples**: `code exec`, `profiler capture`, `package install/remove/resolve`
-- **Job lifecycle**: returns `jobId`; poll with `job status/logs`; cancel with `job cancel`
-
-### 4. `job` — Batch/Job Only
-
-The tool runs through Unity batchmode as a durable job. No live Bridge is needed at invocation time; the CLI creates a process that runs Unity in batchmode.
-
-- **Requires**: `--project` and `--unity` (or `UNITY_EXE` env)
-- **Target**: `editor`
-- **Examples**: `editor refresh`, `test run`, `build run`
-- **Job lifecycle**: `queued → running → succeeded/failed/cancelled/timeout`
-- **Cancellation**: `job cancel --id <jobId>` attempts process termination
-
-### 5. `offline` — CLI-Only Local
-
-The tool runs locally without any Unity connection. Reads local files, writes manifests, manages the job store.
-
-- **Requires**: nothing (no Bridge, no Unity process)
-- **Target**: none
-- **Examples**: `package list/info/search`, `batch schema/run`, `docs get/search`, `reflect type/member/search`, `job status/logs/cancel`, `init --check`
-- **Job commands**: `job status/logs/cancel` read from the local job store
-
-## Target=editor vs runtime vs both
-
-The P3 unified tools contract defines `target` as a descriptor field that controls internal routing, not as an external command group:
-
-| Target | Meaning | Execution routing |
-|--------|---------|-------------------|
-| `editor` | Tool operates in the Editor domain (edit-mode APIs, AssetDatabase, scene hierarchy) | Dispatched through `editorBridge` — the live Bridge `/bridge/execute` path |
-| `runtime` | Tool operates in the runtime domain (PlayMode APIs, runtime game state) | Dispatched through `runtimeExecutor` — requires Play Mode active |
-| `both` | Tool can operate in either domain depending on context | Router checks `editorState` / `playModeState` to decide the execution branch; use `--runtime` flag to force runtime path |
-
-### What this means for AI agents
-
-- You **do not** call a separate `runtime` command group. Runtime behavior is expressed through:
-  - The `target` field in the tool descriptor (`"editor"`, `"runtime"`, or `"both"`)
-  - The `availabilityScope` field (`"editorSession"` or `"playModeSession"`)
-  - The `available` field (`true`/`false` based on current session state)
-  - The `handler` field (`bridge-runtime` for runtime tools)
-- When `editor.state` returns `playMode: playing`, tools with `target: "runtime"` become available; when `playMode: stopped`, those tools return `E_RUNTIME_NOT_READY` (transient).
-- `code exec --channel live` executes in the current Editor context regardless of PlayMode state; `code exec --channel batchmode` runs in a headless Unity batchmode process.
-
-## Verification After Execution
-
-After executing a tool, verify the result using the appropriate strategy:
-
-### For read-only tools
+`tools run` 会用 `inputSchema` 校验输入参数。校验失败返回 `E_INPUT_VALIDATION_FAILED`。
 
 ```powershell
-# Verify camera list
-unity_cli tools run camera.list --target <alias>
+# 正确：提供 inputSchema 要求的字段
+unity_cli tools run camera.screenshot --input '{"target":"Main Camera","output":"shot.png"}'
 
-# Verify scene hierarchy
-unity_cli tools run scene.hierarchy --target <alias>
+# 错误：缺少必需字段
+unity_cli tools run camera.screenshot --input '{}'
+# → E_INPUT_VALIDATION_FAILED, next_actions 指向 tools describe
 ```
 
-Re-call the same read tool and compare the output with expectations. See `examples/05-verify-workflow.md` for the full discovery → run → verify cycle.
+## Fingerprint 保护
 
-### For mutating tools with visual output
+项目自定义工具有 handler 代码 + descriptor 的 SHA256 指纹。执行前会校验指纹：
+
+- 指纹匹配 → 正常执行
+- 指纹不匹配 → 默认返回 `E_TOOL_FINGERPRINT_MISMATCH`（阻止执行）
+- `--fingerprint-mode warn` → 警告但继续执行
+- `UNITY_CLI_PROJECT_TOOL_FINGERPRINT_MODE=warn` → 环境变量覆盖
 
 ```powershell
-# After creating a material, verify it exists
-unity_cli tools run material.info --input '{"path":"Assets/Materials/New.mat"}' --target <alias>
+# 默认 block 模式
+unity_cli tools run my.custom-tool --input '{}'
 
-# After scene changes, capture screenshot
-unity_cli tools run camera.screenshot --input '{"target":"Main Camera","output":"Artifacts/verify.png"}' --target <alias>
+# 警告模式（仅用于审计后的有意修改）
+unity_cli tools run my.custom-tool --input '{}' --fingerprint-mode warn
 ```
 
-### For job-based tools
+## 破坏性工具确认
+
+`destructiveHint: true` 的工具需要额外确认：
 
 ```powershell
-# After test run, check status
+# 1. 先 dry-run 预览（如工具支持）
+unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --dry-run
+
+# 2. 查看 plannedEffects
+# 输出中会包含 plannedEffects 字段，说明将要执行的操作
+
+# 3. 确认执行
+unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --yes
+```
+
+不支持 `--dry-run` 的破坏性工具，使用 `--dry-run` 时返回 `E_DRY_RUN_UNSUPPORTED`。
+
+## Job 模式
+
+handler 为 `hybrid` 的工具支持 `--job` 标志，切换为 batchmode/job 执行：
+
+```powershell
+# 实时 Bridge 执行（默认）
+unity_cli tools run probuilder.shape --input '{"type":"Cube"}'
+
+# Job 模式
+unity_cli tools run probuilder.shape --input '{"type":"Cube"}' --job
+
+# 查看任务状态
 unity_cli job status --id <jobId>
-
-# After build run, check logs
-unity_cli build logs --id <jobId> --tail 50
-
-# After package install, verify manifest
-unity_cli package list --project <path>
 ```
 
-### Using `plannedEffects` and `--dry-run`
+## 验证策略
 
-Tools that mutate state often return a `plannedEffects` preview before execution. Tools with `supportsDryRun: true` accept `--dry-run` to preview effects without executing:
+执行后应验证结果：
 
-```powershell
-# Dry-run preview for destructive commands
-unity_cli tools run asset.delete --input '{"path":"Assets/Temp.json"}' --dry-run --target <alias>
-unity_cli tools run go.delete --input '{"target":"ObsoleteObject"}' --dry-run --target <alias>
-unity_cli batch run automation.json --preflight
-```
+| 工具类型 | 验证方式 |
+|----------|---------|
+| 只读工具 | 检查输出数据是否符合预期 |
+| 修改工具 | 重新调用只读工具确认变更 |
+| Job 工具 | 检查 job status + logs |
+| 诊断工具 | 检查 doctor 或 preflight |
 
-### Using diagnostics
+## 错误处理
 
-```powershell
-# Doctor checks overall health
-unity_cli doctor
-
-# Diagnose preflight validates batch files
-unity_cli diagnose preflight batch.json --target <alias>
-```
-
-## Cross-Reference
-
-- Discovery: [tool-discovery](./tool-discovery.md)
-- Risk and side effects: [risk-and-side-effects](./risk-and-side-effects.md)
-- Error recovery: [error-codes](./error-codes.md)
-- Availability differences: [availability-differences](./availability-differences.md)
-- Examples (runnable): [/examples/](../examples/) — see `05-verify-workflow.md` for the full verify cycle
+| 错误码 | 原因 | 恢复方式 |
+|--------|------|---------|
+| `E_TOOL_NOT_FOUND_FOR_TARGET` | 工具在目标不可用 | 检查 requiresPackages 和 available |
+| `E_RUNTIME_NOT_READY` | Runtime 工具但非 Play Mode | 先执行 `editor play`，transient 可重试 |
+| `E_INPUT_VALIDATION_FAILED` | 输入不符合 inputSchema | 查看 `tools describe` 的 inputSchema |
+| `E_TOOL_FINGERPRINT_MISMATCH` | handler 代码变更 | 审计后 `--fingerprint-mode warn` |
+| `E_DRY_RUN_UNSUPPORTED` | 工具不支持 dry-run | 直接使用 `--yes` 确认 |
+| `E_DESTRUCTIVE_CONFIRMATION_REQUIRED` | 破坏性工具未确认 | 添加 `--yes` 标志 |
+| `E_TARGET_AMBIGUOUS` | 多个实例可用 | 显式指定 `--target` |
+| `E_TARGET_NOT_FOUND` | 无可用实例 | 检查 `instances list` |

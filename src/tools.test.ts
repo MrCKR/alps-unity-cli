@@ -799,18 +799,28 @@ test("skill does not use stale CLI parameter/field/error names", () => {
 
   // --input-json is not a CLI parameter; the CLI uses --input
   const inputJsonMatches = skill.match(/--input-json/g);
-  // Allow exactly 1 occurrence in the "What NOT to Do" section (warning against it)
-  const inputJsonAllowed = (skill.match(/Do not.*--input-json/g) ?? []).length;
+  // Allow occurrences in "Do not / 不要 / 不得 / 使用" warning context
+  const inputJsonAllowed = (skill.match(/Do not.*--input-json|不要.*--input-json|不得.*--input-json|用 `--input-json`/g) ?? []).length;
   assert.ok(
     (inputJsonMatches?.length ?? 0) - inputJsonAllowed <= 0,
     `skill must not teach --input-json (found ${(inputJsonMatches?.length ?? 0)} occurrences beyond the warning)`
   );
 
-  // JSON field next_actions, not nextActions
-  assert.ok(!skill.includes("nextActions"), "skill must use next_actions (snake_case), not nextActions (camelCase)");
+  // JSON field next_actions, not nextActions (except in warning table)
+  const nextActionsMatches = skill.match(/nextActions/g);
+  const nextActionsAllowed = (skill.match(/使用 `nextActions`/g) ?? []).length;
+  assert.ok(
+    (nextActionsMatches?.length ?? 0) - nextActionsAllowed <= 0,
+    "skill must use next_actions (snake_case), not nextActions (camelCase) outside warning context"
+  );
 
-  // E_RUNTIME_NOT_READY, not E_PLAYMODE_NOT_READY
-  assert.ok(!skill.includes("E_PLAYMODE_NOT_READY"), "skill must use E_RUNTIME_NOT_READY, not E_PLAYMODE_NOT_READY");
+  // E_RUNTIME_NOT_READY, not E_PLAYMODE_NOT_READY (except in warning table)
+  const playmodeMatches = skill.match(/E_PLAYMODE_NOT_READY/g);
+  const playmodeAllowed = (skill.match(/使用 `E_PLAYMODE_NOT_READY`/g) ?? []).length;
+  assert.ok(
+    (playmodeMatches?.length ?? 0) - playmodeAllowed <= 0,
+    "skill must use E_RUNTIME_NOT_READY, not E_PLAYMODE_NOT_READY outside warning context"
+  );
 });
 
 // ── ALP-466 regression: tools run built-in bridge + custom tools ──

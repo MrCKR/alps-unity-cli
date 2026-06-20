@@ -1,0 +1,323 @@
+/**
+ * Stale wording tests for documentation and skill files.
+ *
+ * Ensures docs/skill/examples reflect actual CLI commands and do not
+ * reference non-existent commands or outdated terminology.
+ *
+ * ALP-505 P9-T2: Chinese docs & CLI Skill rewrite
+ */
+
+import assert from "node:assert/strict";
+import test from "node:test";
+import { readFileSync, readdirSync, statSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { join, extname } from "node:path";
+
+const __dirname = fileURLToPath(new URL(".", import.meta.url));
+
+// ── Helpers ────────────────────────────────────────────────
+
+function readDocFile(relPath: string): string {
+  return readFileSync(join(__dirname, "..", relPath), "utf8");
+}
+
+function listMarkdownFiles(dir: string): string[] {
+  const absDir = join(__dirname, "..", dir);
+  const results: string[] = [];
+  try {
+    for (const entry of readdirSync(absDir)) {
+      const full = join(absDir, entry);
+      if (statSync(full).isFile() && extname(entry) === ".md") {
+        results.push(`${dir}/${entry}`);
+      }
+    }
+  } catch {
+    // directory may not exist
+  }
+  return results;
+}
+
+function allDocFiles(): string[] {
+  const files: string[] = [];
+  files.push("README.md");
+  files.push("skills/unity_cli/SKILL.md");
+  files.push(...listMarkdownFiles("docs"));
+  files.push(...listMarkdownFiles("examples"));
+  return files;
+}
+
+// ── Stale command names that must NOT appear as current/available ──
+
+// These commands do NOT exist in the current CLI implementation.
+// They may appear in "规划中/planned" context but must not be taught as available.
+const NONEXISTENT_COMMANDS = [
+  "tools group list",       // does not exist; use "tools list --group <group>"
+  "context list",           // P3 planned; not a current command
+  "context describe",       // P3 planned
+  "context read",           // P3 planned
+  "extensions list",        // P5 planned
+  "extensions install",     // P5 planned
+  "extensions remove",      // P5 planned
+  "extensions doctor",      // P5 planned
+];
+
+// ── Current commands that MUST appear in docs ──
+
+const REQUIRED_COMMANDS = [
+  "tools groups",           // actual command to list groups
+  "tools list",             // actual command to list tools
+  "tools describe",         // actual command for full descriptor
+  "tools run",              // actual command to execute
+  "tools search",           // actual command for keyword search
+  "--include-custom",       // flag to discover project tools
+];
+
+// ── Field naming conventions ──
+
+// Must use snake_case, not camelCase
+const STALE_CAMEL_CASE = [
+  "nextActions",            // must be next_actions
+  "retryAfterMs",           // must be retry_after_ms
+  "readOnlyhint",           // must be readOnlyHint (PascalCase for descriptor field)
+];
+
+// Must use correct error code names
+const STALE_ERROR_CODES = [
+  "E_PLAYMODE_NOT_READY",   // must be E_RUNTIME_NOT_READY
+];
+
+// ── Tests ──────────────────────────────────────────────────
+
+test("docs do not teach non-existent commands as available", () => {
+  const files = allDocFiles();
+  const violations: string[] = [];
+
+  for (const file of files) {
+    let content: string;
+    try {
+      content = readDocFile(file);
+    } catch {
+      continue; // skip missing files
+    }
+
+    for (const cmd of NONEXISTENT_COMMANDS) {
+      // Allow mentions in "规划中/planned/规划中（P3）/规划中（P5）" context
+      // But NOT in code blocks without a planned marker nearby
+      const lines = content.split("\n");
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (!line.includes(cmd)) continue;
+
+        // Skip if line or nearby context mentions "规划中/planned/规划/P3/P5"
+        const contextWindow = lines.slice(Math.max(0, i - 3), i + 4).join(" ");
+        if (
+          contextWindow.includes("规划中") ||
+          contextWindow.includes("planned") ||
+          contextWindow.includes("规划") ||
+          contextWindow.includes("P3") ||
+          contextWindow.includes("P5") ||
+          contextWindow.includes("待实现") ||
+          contextWindow.includes("实现后生效")
+        ) {
+          continue; // allowed: it's clearly marked as planned
+        }
+
+        violations.push(`${file}:${i + 1}: "${cmd}" appears without planned marker`);
+      }
+    }
+  }
+
+  assert.equal(
+    violations.length,
+    0,
+    `Non-existent commands found without planned markers:\n${violations.join("\n")}`
+  );
+});
+
+test("docs contain required current command references", () => {
+  // Check that README and SKILL.md contain all required commands
+  const requiredFiles = ["README.md", "skills/unity_cli/SKILL.md"];
+  const violations: string[] = [];
+
+  for (const file of requiredFiles) {
+    let content: string;
+    try {
+      content = readDocFile(file);
+    } catch {
+      continue;
+    }
+
+    for (const cmd of REQUIRED_COMMANDS) {
+      if (!content.includes(cmd)) {
+        violations.push(`${file}: missing required command "${cmd}"`);
+      }
+    }
+  }
+
+  assert.equal(
+    violations.length,
+    0,
+    `Required commands missing from docs:\n${violations.join("\n")}`
+  );
+});
+
+test("skill does not use stale CLI parameter/field/error names", () => {
+  const skillPath = fileURLToPath(new URL("../skills/unity_cli/SKILL.md", import.meta.url));
+  const skill = readFileSync(skillPath, "utf8");
+
+  // --input-json is not a CLI parameter; the CLI uses --input
+  const inputJsonMatches = skill.match(/--input-json/g);
+  const inputJsonAllowed = (skill.match(/Do not.*--input-json|不要.*--input-json|不得.*--input-json|用 `--input-json`/g) ?? []).length;
+  assert.ok(
+    (inputJsonMatches?.length ?? 0) - inputJsonAllowed <= 0,
+    `skill must not teach --input-json (found ${(inputJsonMatches?.length ?? 0)} occurrences beyond the warning)`
+  );
+
+  // JSON field next_actions, not nextActions
+  // Allow in "使用 ... |" context (warning table)
+  const nextActionsMatches = skill.match(/nextActions/g);
+  const nextActionsAllowed = (skill.match(/使用 `nextActions`/g) ?? []).length;
+  assert.ok(
+    (nextActionsMatches?.length ?? 0) - nextActionsAllowed <= 0,
+    `skill must use next_actions (snake_case), not nextActions (camelCase) outside warning context`
+  );
+
+  // E_RUNTIME_NOT_READY, not E_PLAYMODE_NOT_READY
+  // Allow in warning table
+  const playmodeMatches = skill.match(/E_PLAYMODE_NOT_READY/g);
+  const playmodeAllowed = (skill.match(/使用 `E_PLAYMODE_NOT_READY`/g) ?? []).length;
+  assert.ok(
+    (playmodeMatches?.length ?? 0) - playmodeAllowed <= 0,
+    `skill must use E_RUNTIME_NOT_READY, not E_PLAYMODE_NOT_READY outside warning context`
+  );
+});
+
+test("docs use snake_case for error response fields", () => {
+  const files = allDocFiles();
+  const violations: string[] = [];
+
+  for (const file of files) {
+    let content: string;
+    try {
+      content = readDocFile(file);
+    } catch {
+      continue;
+    }
+
+    // Check for camelCase field names that should be snake_case
+    // Allow in "不是/不要/Do not" context (warning against them)
+    // nextActions → next_actions (in error response context)
+    if (content.includes("nextActions")) {
+      // Count occurrences that are NOT in a "warning/不是" context
+      const lines = content.split("\n");
+      let staleCount = 0;
+      for (const line of lines) {
+        if (!line.includes("nextActions")) continue;
+        const trimmed = line.trim().toLowerCase();
+        if (trimmed.includes("不是") || trimmed.includes("不要") || trimmed.includes("do not") || trimmed.includes("instead of") || (trimmed.includes("使用 ") && trimmed.includes(" | "))) continue;
+        staleCount++;
+      }
+      if (staleCount > 0) {
+        violations.push(`${file}: uses "nextActions" instead of "next_actions" (outside warning context)`);
+      }
+    }
+    if (content.includes("retryAfterMs")) {
+      const lines = content.split("\n");
+      let staleCount = 0;
+      for (const line of lines) {
+        if (!line.includes("retryAfterMs")) continue;
+        const trimmed = line.trim().toLowerCase();
+        if (trimmed.includes("不是") || trimmed.includes("不要") || trimmed.includes("do not") || trimmed.includes("instead of") || (trimmed.includes("使用 ") && trimmed.includes(" | "))) continue;
+        staleCount++;
+      }
+      if (staleCount > 0) {
+        violations.push(`${file}: uses "retryAfterMs" instead of "retry_after_ms" (outside warning context)`);
+      }
+    }
+
+    // E_PLAYMODE_NOT_READY → E_RUNTIME_NOT_READY
+    if (content.includes("E_PLAYMODE_NOT_READY")) {
+      const lines = content.split("\n");
+      let staleCount = 0;
+      for (const line of lines) {
+        if (!line.includes("E_PLAYMODE_NOT_READY")) continue;
+        const trimmed = line.trim().toLowerCase();
+        if (trimmed.includes("不是") || trimmed.includes("不要") || trimmed.includes("do not") || trimmed.includes("instead of") || (trimmed.includes("使用 ") && trimmed.includes(" | "))) continue;
+        staleCount++;
+      }
+      if (staleCount > 0) {
+        violations.push(`${file}: uses "E_PLAYMODE_NOT_READY" instead of "E_RUNTIME_NOT_READY" (outside warning context)`);
+      }
+    }
+  }
+
+  assert.equal(
+    violations.length,
+    0,
+    `Stale field names found:\n${violations.join("\n")}`
+  );
+});
+
+test("docs use actual command names (tools groups not tools group)", () => {
+  const files = allDocFiles();
+  const violations: string[] = [];
+
+  for (const file of files) {
+    let content: string;
+    try {
+      content = readDocFile(file);
+    } catch {
+      continue;
+    }
+
+    // "tools group" (singular) as a command reference — the actual command is "tools groups" (plural)
+    // Allow in "规划中/planned" context
+    const lines = content.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      // Match "tools group" as a command but NOT "tools groups"
+      // and NOT "tools group list" (already caught above)
+      if (/tools group(?!s| list)/.test(line) && line.includes("tools group")) {
+        const contextWindow = lines.slice(Math.max(0, i - 3), i + 4).join(" ");
+        if (
+          contextWindow.includes("规划中") ||
+          contextWindow.includes("planned") ||
+          contextWindow.includes("P4") ||
+          contextWindow.includes("P9-T1") ||
+          contextWindow.includes("方案") ||
+          contextWindow.includes("计划")
+        ) {
+          continue;
+        }
+        // Allow mentions in the context of "group-first" as a concept
+        if (line.includes("group-first") || line.includes("分组")) {
+          continue;
+        }
+        violations.push(`${file}:${i + 1}: uses "tools group" (singular) — actual command is "tools groups" (plural)`);
+      }
+    }
+  }
+
+  assert.equal(
+    violations.length,
+    0,
+    `Incorrect command names found:\n${violations.join("\n")}`
+  );
+});
+
+test("docs distinguish between current and planned features", () => {
+  // Verify that planned features (P3 context, P5 extensions) are clearly marked
+  const readme = readDocFile("README.md");
+
+  // Context commands should be marked as planned
+  assert.ok(
+    readme.includes("规划中") || readme.includes("P3"),
+    "README must note that context commands are planned (P3)"
+  );
+
+  // Extensions commands should be marked as planned
+  assert.ok(
+    readme.includes("规划中") || readme.includes("P5"),
+    "README must note that extensions commands are planned (P5)"
+  );
+});
