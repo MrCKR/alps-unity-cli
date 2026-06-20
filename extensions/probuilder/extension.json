@@ -1,0 +1,17 @@
+{
+  "name": "probuilder",
+  "version": "1.0.0",
+  "description": "ProBuilder mesh editing extension for alps-unity-cli",
+  "packageName": "unity-cli-extension-probuilder",
+  "unityPackages": [
+    {
+      "name": "com.unity.probuilder"
+    }
+  ],
+  "toolGroups": ["probuilder"],
+  "descriptorEntry": "tools/metadata/probuilder.js",
+  "bridgeEntry": "bridge/domains/probuilder.js",
+  "unityPackageFiles": ["unitypkg/"],
+  "docsTopic": "probuilder",
+  "docsEntry": "docs/probuilder.md"
+}
