@@ -15,12 +15,26 @@ import { objSchema } from "../schemas.js";
  *   Volume operations share the same UnityEngine.Rendering.Volume base types as URP,
  *   but HDRP-specific effects and settings are accessed via HDRP assembly types.
  */
+
+const HDRP_PACKAGE = "com.unity.render-pipelines.high-definition";
+
+/** Common fields shared by all HDRP extension tools (P10-R4: mirrors PB_COMMON pattern). */
+const HDRP_COMMON = {
+  group: "hdrp",
+  target: "editor" as const,
+  availabilityScope: "editorSession" as const,
+  requiresPackages: [HDRP_PACKAGE],
+  handler: "hybrid" as const,
+  source: "extension" as const,
+  docsTopic: "hdrp",
+};
+
 export const HDRP_TOOLS: ToolMetadata[] = [
   {
+    ...HDRP_COMMON,
     name: "hdrp.volume",
     title: "HDRP Volume",
     description: "List, create or configure HDRP Volume components and their profile effects. Requires HDRP (com.unity.render-pipelines.high-definition) to be the active render pipeline.",
-    group: "hdrp",
     inputSchema: objSchema({
       target: { type: "string" },
       action: { type: "string", enum: ["list", "create", "add-effect", "set", "info"] },
@@ -33,30 +47,24 @@ export const HDRP_TOOLS: ToolMetadata[] = [
     }),
     readOnlyHint: false,
     destructiveHint: false,
-    handler: "hybrid",
     cliCommand: "hdrp volume",
-    docsTopic: "hdrp",
-    requiresPackages: ["com.unity.render-pipelines.high-definition"],
     examples: [
       { description: "List HDRP volumes in scene", argv: ["hdrp", "volume", "--action", "list"] },
       { description: "Create a global HDRP volume", argv: ["hdrp", "volume", "--action", "create", "--is-global", "true", "--name", "GlobalVolume"] }
     ]
   },
   {
+    ...HDRP_COMMON,
     name: "hdrp.settings",
     title: "HDRP Pipeline Settings",
     description: "Get or set High Definition Render Pipeline asset settings. Requires HDRP (com.unity.render-pipelines.high-definition) to be the active render pipeline.",
-    group: "hdrp",
     inputSchema: objSchema({
       property: { type: "string" },
       value: { type: "string" }
     }),
     readOnlyHint: false,
     destructiveHint: false,
-    handler: "hybrid",
     cliCommand: "hdrp settings",
-    docsTopic: "hdrp",
-    requiresPackages: ["com.unity.render-pipelines.high-definition"],
     examples: [
       { description: "Read HDRP pipeline settings", argv: ["hdrp", "settings"] },
       { description: "Set shadow distance", argv: ["hdrp", "settings", "--property", "shadowDistance", "--value", "500"] }

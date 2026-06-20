@@ -1,4 +1,4 @@
-import { compactArgs, floatFlag, queryArgs, stringFlag, targetArgs } from "../args.js";
+import { boolFlag, compactArgs, floatFlag, queryArgs, stringFlag, targetArgs } from "../args.js";
 import type { BridgeCommandSpec } from "../types.js";
 
 export const hdrpBridgeSpecs: BridgeCommandSpec[] = [
@@ -11,7 +11,7 @@ function hdrpVolumeArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpe
     ...targetArgs(flags, positionalTarget),
     action: stringFlag(flags, "action") ?? stringFlag(flags, "op") ?? "list",
     effectType: stringFlag(flags, "effect-type") ?? stringFlag(flags, "type"),
-    isGlobal: stringFlag(flags, "is-global") === "true" ? true : undefined,
+    isGlobal: boolFlag(flags, "is-global") || undefined,
     priority: floatFlag(flags, "priority"),
     weight: floatFlag(flags, "weight"),
     property: stringFlag(flags, "property"),
