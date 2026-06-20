@@ -1,33 +1,32 @@
 import { animationBridgeSpecs } from "./domains/animation.js";
 import { assetBridgeSpecs } from "./domains/asset.js";
 import { cameraBridgeSpecs } from "./domains/camera.js";
-import { cinemachineBridgeSpecs } from "./domains/cinemachine.js";
 import { codeBridgeSpecs } from "./domains/code.js";
+import { contextBridgeSpecs } from "./domains/context.js";
 import { diagnoseBridgeSpecs } from "./domains/diagnose.js";
 import { editorBridgeSpecs } from "./domains/editor.js";
+import { extensionBridgeSpecs } from "./domains/extension.js";
 import { gameObjectBridgeSpecs } from "./domains/game-object.js";
 import { graphicsBridgeSpecs } from "./domains/graphics.js";
-import { hdrpBridgeSpecs } from "./domains/hdrp.js";
 import { materialBridgeSpecs } from "./domains/material.js";
 import { physicsBridgeSpecs } from "./domains/physics.js";
 import { prefabBridgeSpecs } from "./domains/prefab.js";
-import { probuilderBridgeSpecs } from "./domains/probuilder.js";
 import { profilerBridgeSpecs } from "./domains/profiler.js";
 import { sceneBridgeSpecs } from "./domains/scene.js";
 import { scriptBridgeSpecs } from "./domains/script.js";
 import { shaderBridgeSpecs } from "./domains/shader.js";
 import { textureBridgeSpecs } from "./domains/texture.js";
 import { uiBridgeSpecs } from "./domains/ui.js";
-import { urpBridgeSpecs } from "./domains/urp.js";
-import { vfxBridgeSpecs } from "./domains/vfx.js";
-import { contextBridgeSpecs } from "./domains/context.js";
-import { extensionBridgeSpecs } from "./domains/extension.js";
 import { projectToolBridgeSpecs } from "./domains/project-tool.js";
 import { runtimeToolBridgeSpecs } from "./domains/runtime-tool.js";
 import { securityPolicyForCommand } from "../security-policy.js";
 import type { BridgeCommandSpec } from "./types.js";
 
-const DOMAIN_SPECS: BridgeCommandSpec[] = [
+/**
+ * Core domain specs — ProBuilder, Cinemachine, VFX, URP, HDRP are excluded from core.
+ * They are registered via the extension contribution loader instead.
+ */
+const CORE_DOMAIN_SPECS: BridgeCommandSpec[] = [
   ...sceneBridgeSpecs,
   ...cameraBridgeSpecs,
   ...gameObjectBridgeSpecs,
@@ -37,14 +36,9 @@ const DOMAIN_SPECS: BridgeCommandSpec[] = [
   ...graphicsBridgeSpecs,
   ...physicsBridgeSpecs,
   ...profilerBridgeSpecs,
-  ...probuilderBridgeSpecs,
-  ...cinemachineBridgeSpecs,
   ...shaderBridgeSpecs,
   ...textureBridgeSpecs,
   ...animationBridgeSpecs,
-  ...vfxBridgeSpecs,
-  ...urpBridgeSpecs,
-  ...hdrpBridgeSpecs,
   ...uiBridgeSpecs,
   ...scriptBridgeSpecs,
   ...editorBridgeSpecs,
@@ -61,6 +55,17 @@ export class BridgeCommandRegistry {
   private readonly byBridgeCommand = new Map<string, BridgeCommandSpec[]>();
 
   public constructor(specs: BridgeCommandSpec[]) {
+    this.registerSpecs(specs);
+  }
+
+  /**
+   * Dynamically register bridge command specs.
+   *
+   * Used by the extension contribution loader to register extension-provided
+   * bridge commands without statically importing them into the core
+   * DOMAIN_SPECS aggregation.
+   */
+  public registerSpecs(specs: BridgeCommandSpec[]): void {
     for (const spec of specs) {
       const policy = securityPolicyForCommand(spec.bridgeCommand);
       if (policy) {
@@ -102,4 +107,4 @@ export class BridgeCommandRegistry {
   }
 }
 
-export const bridgeCommandRegistry = new BridgeCommandRegistry(DOMAIN_SPECS);
+export const bridgeCommandRegistry = new BridgeCommandRegistry(CORE_DOMAIN_SPECS);

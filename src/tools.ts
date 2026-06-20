@@ -14,13 +14,19 @@
 
 import { getBoolean, getString } from "./args.js";
 import { discoverProjectTools, discoverRuntimeTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
-import { executeBridgeCommand, executeBridgePayload } from "./bridge/index.js";import { checkToolExtensionAvailability, collectExtensionToolDescriptors } from "./extension-availability.js";
+import { executeBridgeCommand, executeBridgePayload } from "./bridge/index.js";
+import { checkToolExtensionAvailability, collectExtensionToolDescriptors } from "./extension-availability.js";
+import { ExtensionRegistry, collectAvailableTools, readInstalledUnityPackages } from "./extensions/index.js";
 import {
   builtinToolMetadata,
+  extensionToolMetadata,
+  allRegisteredToolMetadata,
   builtinToolGroups,
+  allRegisteredToolGroups,
   findToolByName,
   filterToolsByGroup,
   searchTools,
+  EXTENSION_GROUPS,
   type ToolMetadata
 } from "./tools/metadata/index.js";
 import { failure, success } from "./output.js";
@@ -105,13 +111,17 @@ async function handleToolsGroup(
   runtime: ToolsRuntime,
   requestId: string
 ): Promise<CliResult> {
+  // P10-R3: Core groups always present; extension groups are included
+  // only when their required Unity packages are installed in the target project.
+  const availableExtensionTools = await resolveAvailableExtensionTools(flags);
   const builtinGroups = builtinToolGroups();
+  const extensionGroupNames = [...new Set(availableExtensionTools.map((t) => t.group))].sort();
   const includeCustom = shouldDiscoverProjectTools(flags, runtime);
   const customDiscovery = includeCustom ? await discoverProjectTools(flags, runtime, requestId) : { ok: true as const, tools: [] as ToolMetadata[], mode: "skipped" as const };
   if (customDiscovery.ok === false) return customDiscovery;
 
   // Build group info with counts and descriptions
-  const allTools = [...builtinToolMetadata(), ...customDiscovery.tools];
+  const allTools = [...builtinToolMetadata(), ...availableExtensionTools, ...customDiscovery.tools];
   const groupCounts: Record<string, number> = {};
   const groupDescriptions: Record<string, string> = {
     scene: "Scene management: active scene, hierarchy, build settings, screenshots, create, load, save.",
@@ -124,6 +134,9 @@ async function handleToolsGroup(
     physics: "Physics operations: settings, raycast, simulation.",
     profiler: "Unity Profiler: status, start, stop, capture, export.",
     probuilder: "ProBuilder 3D modeling: shapes, CSG operations, mesh editing (requires com.unity.probuilder).",
+    cinemachine: "Cinemachine smart camera system: virtual cameras, composition, blending, noise (requires com.unity.cinemachine).",
+    urp: "Universal Render Pipeline: renderer features, volumes, pipeline settings (requires com.unity.render-pipelines.universal).",
+    hdrp: "High Definition Render Pipeline: volumes, lighting, pipeline settings (requires com.unity.render-pipelines.high-definition).",
     shader: "Shader management: info, read, create, update.",
     texture: "Texture management: info, create, sprite, import settings.",
     animation: "Animation control: clips, states, play, stop.",
@@ -150,7 +163,7 @@ async function handleToolsGroup(
     name: group,
     title: groupDescriptions[group] ?? `Tools in the ${group} domain.`,
     toolCount: groupCounts[group] ?? 0,
-    source: builtinGroups.includes(group) ? "core" : "extension",
+    source: EXTENSION_GROUPS.has(group) ? "extension" : builtinGroups.includes(group) ? "core" : "project",
     cliCommand: `tools group list ${group}`
   }));
 
@@ -186,12 +199,15 @@ async function handleToolsGroupList(
   }
 
   const builtinTools = filterToolsByGroup(groupName);
+  // P10-R3: Include available extension tools for this group
+  const availableExtensionTools = await resolveAvailableExtensionTools(flags);
+  const extensionTools = availableExtensionTools.filter((t) => t.group === groupName);
   const includeCustom = shouldDiscoverProjectTools(flags, runtime);
   const customDiscovery = includeCustom ? await discoverProjectTools(flags, runtime, requestId) : { ok: true as const, tools: [] as ToolMetadata[], mode: "skipped" as const };
   if (customDiscovery.ok === false) return customDiscovery;
   const customTools = customDiscovery.tools.filter((t: ToolMetadata) => (t.category ?? t.group) === groupName);
 
-  const allTools = [...builtinTools, ...customTools];
+  const allTools = [...builtinTools, ...extensionTools, ...customTools];
   if (allTools.length === 0) {
     return failure(requestId, "E_TOOL_GROUP_NOT_FOUND", `Tool group not found: ${groupName}.`, [
       "Run unity_cli tools group to see all tool groups."
@@ -241,17 +257,28 @@ async function handleToolsSearch(
   }
 
   const builtinResults = searchTools(keyword);
-  const includeCustom = getBoolean(flags, "include-custom") || shouldDiscoverProjectTools(flags, runtime);
-  const customTools = includeCustom ? await discoverProjectTools(flags, runtime, requestId, { requireBridge: getBoolean(flags, "include-custom") }) : { ok: true as const, tools: [] };
-  if (customTools.ok === false) return customTools;
-  const customResults = customTools.tools.filter((t: ToolMetadata) =>
+  const availableExtensionTools = await resolveAvailableExtensionTools(flags);
+  const extensionResults = availableExtensionTools.filter((t: ToolMetadata) =>
     t.name.toLowerCase().includes(keyword.toLowerCase()) ||
     t.title.toLowerCase().includes(keyword.toLowerCase()) ||
     t.description.toLowerCase().includes(keyword.toLowerCase()) ||
     t.group.toLowerCase().includes(keyword.toLowerCase())
   );
 
-  const results = [...builtinResults, ...customResults];
+  let results = [...builtinResults, ...extensionResults];
+
+  const includeCustom = getBoolean(flags, "include-custom") || shouldDiscoverProjectTools(flags, runtime);
+  if (includeCustom) {
+    const customTools = await discoverProjectTools(flags, runtime, requestId, { requireBridge: getBoolean(flags, "include-custom") });
+    if (customTools.ok === false) return customTools;
+    const customResults = customTools.tools.filter((t: ToolMetadata) =>
+      t.name.toLowerCase().includes(keyword.toLowerCase()) ||
+      t.title.toLowerCase().includes(keyword.toLowerCase()) ||
+      t.description.toLowerCase().includes(keyword.toLowerCase()) ||
+      t.group.toLowerCase().includes(keyword.toLowerCase())
+    );
+    results = [...results, ...customResults];
+  }
 
   const summaries = results.map((t) => {
     const supportStatus = supportStatusForTool(t);
@@ -581,4 +608,46 @@ async function findProjectToolByName(
     return undefined;
   }
   return customTools.tools.find((tool: ToolMetadata) => tool.name === name);
+}
+
+/**
+ * P10-R3: Resolve which extension tools are available for the target project.
+ *
+ * Extension tools (ProBuilder, Cinemachine, VFX, URP, HDRP) are only shown in
+ * tools group/list/search when their required Unity packages are installed
+ * in the target project. Without --project, extension tools are NOT included.
+ */
+async function resolveAvailableExtensionTools(
+  flags: Record<string, string | boolean>
+): Promise<ToolMetadata[]> {
+  const allExtensionTools = extensionToolMetadata();
+  if (allExtensionTools.length === 0) return [];
+
+  const projectPath = getString(flags, "project");
+  if (!projectPath) {
+    // Without a project path, we cannot determine availability.
+    // Return NO extension tools — they are not part of core.
+    return [];
+  }
+
+  try {
+    const installedPackages = await readInstalledUnityPackages(projectPath);
+    const registry = new ExtensionRegistry();
+    const availableExtensionIds = new Set(
+      registry.availableExtensions(installedPackages).map((r) => r.extensionId)
+    );
+    return allExtensionTools.filter((t) => {
+      // Find which extension provides this tool's group
+      for (const extId of availableExtensionIds) {
+        const ext = registry.getExtension(extId)!;
+        if (ext.manifest.contributions.tools?.some((et) => et.group === t.group)) {
+          return true;
+        }
+      }
+      return false;
+    });
+  } catch {
+    // Cannot read packages — return no extension tools
+    return [];
+  }
 }

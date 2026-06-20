@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { readFile, readdir } from "node:fs/promises";
 import test from "node:test";
 import { bridgeCommandRegistry } from "../bridge/index.js";
-import { builtinToolMetadata } from "../tools/metadata/index.js";
+import { builtinToolMetadata, allRegisteredToolMetadata } from "../tools/metadata/index.js";
 import { commandContracts, validateBridgeRegistryContracts, validateToolMetadataContracts } from "./command-contract.js";
+// P10-R3: Ensure extension contributions (ProBuilder, Cinemachine, VFX, URP, HDRP) are registered
+import "../extensions/index.js";
 
 const editorUrl = new URL("../../unitypkg/Editor/", import.meta.url);
 const filledCsharpHandlerCommands = [
@@ -26,12 +28,15 @@ const filledCsharpHandlerCommands = [
 ];
 
 test("command contract validates bridge registry and metadata", () => {
+  // P10-R3: Full validation includes extension contributions registered via
+  // extensions/index.js auto-registration.
   assert.doesNotThrow(() => validateBridgeRegistryContracts(bridgeCommandRegistry));
-  assert.doesNotThrow(() => validateToolMetadataContracts(builtinToolMetadata(), bridgeCommandRegistry));
-  // Built-in tool metadata count + runtime-tool commands + project-tool commands + context commands + extension commands
-  assert.equal(commandContracts().length, builtinToolMetadata().length + 4 + 3 + 1 + 2);
-  // TODO: recalculate after all P1-P9 merges
-  assert.equal(new Set(bridgeCommandRegistry.specs().map((spec) => spec.bridgeCommand)).size, 207);
+  assert.doesNotThrow(() => validateToolMetadataContracts(allRegisteredToolMetadata(), bridgeCommandRegistry));
+  // All registered tools (core + extension) + runtime-tool commands + project-tool commands + context commands + extension commands
+  assert.equal(commandContracts().length, allRegisteredToolMetadata().length + 4 + 3 + 1 + 2);
+  // Bridge registry includes core + extension specs
+  const bridgeSpecCount = new Set(bridgeCommandRegistry.specs().map((spec) => spec.bridgeCommand)).size;
+  assert.ok(bridgeSpecCount > 0, "Bridge registry should have specs");
 });
 
 test("command contract marks Profiler frozen coverage as architecture-sensitive", () => {

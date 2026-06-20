@@ -1,0 +1,17 @@
+{
+  "name": "urp",
+  "version": "1.0.0",
+  "description": "Universal Render Pipeline extension for alps-unity-cli",
+  "packageName": "unity-cli-extension-urp",
+  "unityPackages": [
+    {
+      "name": "com.unity.render-pipelines.universal"
+    }
+  ],
+  "toolGroups": ["urp"],
+  "descriptorEntry": "tools/metadata/urp.js",
+  "bridgeEntry": "bridge/domains/urp.js",
+  "unityPackageFiles": ["unitypkg/"],
+  "docsTopic": "urp",
+  "docsEntry": "docs/urp.md"
+}

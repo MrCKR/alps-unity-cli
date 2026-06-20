@@ -390,8 +390,10 @@ test("collectAllTools includes unavailable extension tools with availability fla
   assert.equal(probuilderTools.length, 36);
   assert.ok(probuilderTools.every((t) => t.available));
 
+  // P10-R4: Cinemachine now has 10 tools in its manifest
   const cinemachineTools = tools.filter((t) => t.extensionId === "cinemachine");
-  assert.equal(cinemachineTools.length, 0); // Cinemachine has no tools yet
+  assert.equal(cinemachineTools.length, 10);
+  assert.ok(cinemachineTools.every((t) => !t.available)); // Not installed
 });
 
 // ── collectAvailableContexts / Docs / CSharpEntries ─────────────────────────
@@ -573,16 +575,16 @@ test("VFX Graph manifest has correct tool contributions", () => {
   assert.deepEqual(toolNames, ["vfx.graph", "vfx.effect"]);
 });
 
-test("Cinemachine manifest has no tools yet (future phase)", () => {
-  assert.equal(CINEMACHINE_MANIFEST.contributions.tools!.length, 0);
+test("Cinemachine manifest has 10 tools (P10-R4)", () => {
+  assert.equal(CINEMACHINE_MANIFEST.contributions.tools!.length, 10);
 });
 
-test("URP manifest has no tools yet (future phase)", () => {
-  assert.equal(URP_MANIFEST.contributions.tools!.length, 0);
+test("URP manifest has 3 tools (P10-R4)", () => {
+  assert.equal(URP_MANIFEST.contributions.tools!.length, 3);
 });
 
-test("HDRP manifest has no tools yet (future phase)", () => {
-  assert.equal(HDRP_MANIFEST.contributions.tools!.length, 0);
+test("HDRP manifest has 2 tools (P10-R4)", () => {
+  assert.equal(HDRP_MANIFEST.contributions.tools!.length, 2);
 });
 
 test("all five manifests have unique IDs", () => {

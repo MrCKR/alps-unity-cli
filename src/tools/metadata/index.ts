@@ -6,6 +6,10 @@
  * CLI/UnityPkg release so that `tools describe` works without a live Unity instance.
  *
  * The schema is /schemas/tool-metadata.schema.json (ALP-164 frozen v1.0).
+ *
+ * P10-R3: ProBuilder, Cinemachine, VFX, URP, and HDRP tool metadata is no longer
+ * statically aggregated here. These optional extensions register their tools
+ * through the extension contribution loader instead.
  */
 
 import { bridgeCommandRegistry } from "../../bridge/index.js";
@@ -20,14 +24,9 @@ import { MATERIAL_TOOLS } from "./groups/material.js";
 import { GRAPHICS_TOOLS } from "./groups/graphics.js";
 import { PHYSICS_TOOLS } from "./groups/physics.js";
 import { PROFILER_TOOLS } from "./groups/profiler.js";
-import { PROBUILDER_TOOLS } from "./groups/probuilder.js";
-import { CINEMACHINE_TOOLS } from "./groups/cinemachine.js";
 import { SHADER_TOOLS } from "./groups/shader.js";
 import { TEXTURE_TOOLS } from "./groups/texture.js";
 import { ANIMATION_TOOLS } from "./groups/animation.js";
-import { VFX_TOOLS } from "./groups/vfx.js";
-import { URP_TOOLS } from "./groups/urp.js";
-import { HDRP_TOOLS } from "./groups/hdrp.js";
 import { UI_TOOLS } from "./groups/ui.js";
 import { SCRIPT_TOOLS } from "./groups/script.js";
 import { EDITOR_TOOLS } from "./groups/editor.js";
@@ -41,6 +40,9 @@ import type { ToolMetadata, ToolSource } from "./types.js";
 export { supportStatusDescription, supportStatusForTool, supportStatusLabel } from "./status.js";
 export type { ToolExample, ToolHandler, ToolMetadata, ToolSource, ToolRiskLevel, ToolSupportStatus } from "./types.js";
 
+/** Extension groups that register through the contribution loader, not core aggregation. */
+export const EXTENSION_GROUPS = new Set(["probuilder", "cinemachine", "vfx", "urp", "hdrp"]);
+
 /** Normalize a ToolMetadata entry to include P1 defaults for kind/source/category. */
 export function normalizeToolMetadata(tool: ToolMetadata): ToolMetadata & { kind: "tool"; source: ToolSource; category: string } {
   return {
@@ -51,7 +53,11 @@ export function normalizeToolMetadata(tool: ToolMetadata): ToolMetadata & { kind
   };
 }
 
-const BUILTIN_TOOLS: ToolMetadata[] = [
+/**
+ * Core built-in tools — no extension groups.
+ * Extension tools are registered separately via registerExtensionTools().
+ */
+const CORE_TOOLS: ToolMetadata[] = [
   ...SCENE_TOOLS,
   ...CAMERA_TOOLS,
   ...GO_TOOLS,
@@ -62,14 +68,9 @@ const BUILTIN_TOOLS: ToolMetadata[] = [
   ...GRAPHICS_TOOLS,
   ...PHYSICS_TOOLS,
   ...PROFILER_TOOLS,
-  ...PROBUILDER_TOOLS,
-  ...CINEMACHINE_TOOLS,
   ...SHADER_TOOLS,
   ...TEXTURE_TOOLS,
   ...ANIMATION_TOOLS,
-  ...VFX_TOOLS,
-  ...URP_TOOLS,
-  ...HDRP_TOOLS,
   ...UI_TOOLS,
   ...SCRIPT_TOOLS,
   ...EDITOR_TOOLS,
@@ -80,44 +81,87 @@ const BUILTIN_TOOLS: ToolMetadata[] = [
   ...TOOLS_DISCOVERY_TOOLS,
 ];
 
-validateBridgeRegistryContracts(bridgeCommandRegistry);
-validateBuiltinTools(BUILTIN_TOOLS);
-validateToolMetadataContracts(BUILTIN_TOOLS, bridgeCommandRegistry);
+/**
+ * Extension tool metadata — populated by the extension contribution loader.
+ * ProBuilder, Cinemachine, VFX, URP, HDRP and other optional extensions register
+ * their tools here rather than being statically aggregated in CORE_TOOLS.
+ */
+const extensionTools: ToolMetadata[] = [];
 
-/** Return all built-in tool metadata entries, normalized with P1 defaults. */
-export function builtinToolMetadata(): ToolMetadata[] {
-  return BUILTIN_TOOLS.map(normalizeToolMetadata);
+// Validate core tools at module level (no extension groups yet).
+validateBridgeRegistryContracts(bridgeCommandRegistry, EXTENSION_GROUPS);
+validateBuiltinTools(CORE_TOOLS);
+validateToolMetadataContracts(CORE_TOOLS, bridgeCommandRegistry);
+
+/** Register extension tool metadata. Called by the contribution loader. */
+export function registerExtensionTools(tools: ToolMetadata[]): void {
+  const existingNames = new Set([...CORE_TOOLS, ...extensionTools].map((t) => t.name));
+  for (const tool of tools) {
+    if (existingNames.has(tool.name)) {
+      throw new Error(`Duplicate extension tool metadata name: ${tool.name}`);
+    }
+    existingNames.add(tool.name);
+  }
+  extensionTools.push(...tools);
 }
 
-/** Return distinct group names from built-in metadata (uses category when set). */
+/** Validate extension tool metadata after registration. */
+export function validateExtensionToolMetadata(): void {
+  validateBuiltinTools(extensionTools);
+  validateToolMetadataContracts(extensionTools, bridgeCommandRegistry);
+}
+
+/** Return core built-in tool metadata entries (no extension tools). */
+export function builtinToolMetadata(): ToolMetadata[] {
+  return [...CORE_TOOLS];
+}
+
+/** Return extension tool metadata entries (registered by extension contributions). */
+export function extensionToolMetadata(): ToolMetadata[] {
+  return [...extensionTools];
+}
+
+/** Return all registered tool metadata entries (core + extension). */
+export function allRegisteredToolMetadata(): ToolMetadata[] {
+  return [...CORE_TOOLS, ...extensionTools];
+}
+
+/** Return distinct core group names from built-in metadata. */
 export function builtinToolGroups(): string[] {
   const groups = new Set<string>();
-  for (const tool of BUILTIN_TOOLS) {
-    groups.add(tool.category ?? tool.group);
+  for (const tool of CORE_TOOLS) {
+    groups.add(tool.group);
   }
   return [...groups].sort();
 }
 
-/** Find a single tool by its dotted name. */
+/** Return distinct group names including extension groups. */
+export function allRegisteredToolGroups(): string[] {
+  const groups = new Set<string>();
+  for (const tool of allRegisteredToolMetadata()) {
+    groups.add(tool.group);
+  }
+  return [...groups].sort();
+}
+
+/** Find a single tool by its dotted name (core + extension). */
 export function findToolByName(name: string): ToolMetadata | undefined {
-  const tool = BUILTIN_TOOLS.find((t) => t.name === name);
-  return tool ? normalizeToolMetadata(tool) : undefined;
+  return allRegisteredToolMetadata().find((t) => t.name === name);
 }
 
-/** Filter tools by group (matches both group and category). */
+/** Filter tools by group (core + extension). */
 export function filterToolsByGroup(group: string): ToolMetadata[] {
-  return BUILTIN_TOOLS.filter((t) => t.group === group || t.category === group).map(normalizeToolMetadata);
+  return allRegisteredToolMetadata().filter((t) => t.group === group);
 }
 
-/** Search tools by keyword across name, title, description, group. */
+/** Search tools by keyword across name, title, description, group (core + extension). */
 export function searchTools(keyword: string): ToolMetadata[] {
   const lower = keyword.toLowerCase();
-  return BUILTIN_TOOLS.filter((t) =>
+  return allRegisteredToolMetadata().filter((t) =>
     t.name.toLowerCase().includes(lower) ||
     t.title.toLowerCase().includes(lower) ||
     t.description.toLowerCase().includes(lower) ||
-    t.group.toLowerCase().includes(lower) ||
-    (t.category ?? "").toLowerCase().includes(lower)
+    t.group.toLowerCase().includes(lower)
   ).sort((a, b) => {
     const aScore = scoreSearch(a.name.toLowerCase(), lower) + scoreSearch(a.title.toLowerCase(), lower);
     const bScore = scoreSearch(b.name.toLowerCase(), lower) + scoreSearch(b.title.toLowerCase(), lower);

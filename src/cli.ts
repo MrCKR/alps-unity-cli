@@ -5,6 +5,7 @@ import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs, getBoolean, getString } from "./args.js";
 import { bridgeCommandRegistry, executeBridgeCommand, type BridgeRuntime } from "./bridge/index.js";
+import { registerBuiltinExtensionContributions } from "./extensions/index.js";
 import { handleBatch } from "./cli-commands/batch.js";
 import { handleBuild } from "./cli-commands/build.js";
 import { handleEditor } from "./cli-commands/editor.js";
@@ -50,6 +51,10 @@ const CLI_COMMANDS = new Map<string, CliCommandModule>([
 ]);
 
 export async function execute(argv: string[], runtime = createRuntime()): Promise<CliResult> {
+  // P10-R3: Register built-in extension contributions (ProBuilder, Cinemachine,
+  // VFX, URP, HDRP) before any tool discovery or bridge command routing.
+  registerBuiltinExtensionContributions();
+
   const requestId = createRequestId();
   const parsed = parseArgs(argv);
   const [group, command] = parsed.positional;

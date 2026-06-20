@@ -1,13 +1,17 @@
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { bridgeCommandRegistry } from "../bridge/index.js";
-import { builtinToolMetadata } from "../tools/metadata/index.js";
+import { builtinToolMetadata, allRegisteredToolMetadata } from "../tools/metadata/index.js";
 import { commandContracts, validateBridgeRegistryContracts, validateToolMetadataContracts, validateExtensionManifestContracts } from "./command-contract.js";
 import { BUILTIN_EXTENSION_MANIFESTS } from "../extensions/registry-data.js";
+import { registerBuiltinExtensionContributions } from "../extensions/contribution-loader.js";
+
+// P10-R3: Register extension contributions before validation
+registerBuiltinExtensionContributions();
 
 const contracts = commandContracts();
 validateBridgeRegistryContracts(bridgeCommandRegistry);
-validateToolMetadataContracts(builtinToolMetadata(), bridgeCommandRegistry);
+validateToolMetadataContracts(allRegisteredToolMetadata(), bridgeCommandRegistry);
 
 // P5-T04: Validate extension manifest tool contributions against contract
 validateExtensionManifestContracts(BUILTIN_EXTENSION_MANIFESTS, bridgeCommandRegistry);
@@ -25,7 +29,7 @@ console.log(JSON.stringify({
   contractCommands: contracts.length,
   bridgeRegistryCommands: new Set(bridgeCommandRegistry.specs().map((spec) => spec.bridgeCommand)).size,
   csharpRegisteredCommands: csharpCommands.length,
-  metadataTools: builtinToolMetadata().length
+  metadataTools: allRegisteredToolMetadata().length
 }, null, 2));
 
 function extractCSharpRegisteredCommands(root: string): string[] {

@@ -13,9 +13,11 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { builtinToolMetadata, filterToolsByGroup, findToolByName, type ToolMetadata } from "./tools/metadata/index.js";
+import { builtinToolMetadata, allRegisteredToolMetadata, filterToolsByGroup, findToolByName, extensionToolMetadata, EXTENSION_GROUPS, type ToolMetadata } from "./tools/metadata/index.js";
 import { bridgeCommandRegistry } from "./bridge/index.js";
 import { commandContracts, findCommandContract } from "./contracts/command-contract.js";
+// P10-R3: Ensure extension contributions (ProBuilder, Cinemachine, VFX, URP, HDRP) are registered
+import "./extensions/index.js";
 
 // ─── Expected 36 tool names per P7-T1 matrix ────────────────────────────
 
