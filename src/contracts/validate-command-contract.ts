@@ -31,8 +31,17 @@ console.log(JSON.stringify({
 function extractCSharpRegisteredCommands(root: string): string[] {
   const commands = new Set<string>();
   for (const file of listFiles(root, ".cs")) {
+    // Skip sample/demo tools — they are not part of the core contract
+    if (file.includes("/Samples/") || file.includes("\\Samples\\")) continue;
     const source = readFileSync(file, "utf8");
+    // Scan for RegisterCommand entries (core & legacy bridge commands)
     for (const match of source.matchAll(/RegisterCommand\(registry, "([^"]+)"/g)) {
+      commands.add(match[1]);
+    }
+    // Scan for UnityCliTool attributes (P7 ProBuilder extension & P3 Custom Context tools).
+    // These are discovered by ProjectToolRegistry at runtime, not registered via RegisterCommand.
+    // Format: [UnityCliTool( "probuilder.ping", Title = ...
+    for (const match of source.matchAll(/\[UnityCliTool\(\s*"([^"]+)"/g)) {
       commands.add(match[1]);
     }
   }

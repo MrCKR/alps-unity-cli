@@ -360,7 +360,7 @@ async function checkProjectContextDiscovery(flags: Record<string, string | boole
   const includeCustom = shouldDiscoverP3Contexts(flags, runtime);
   if (!includeCustom) {
     return {
-      name: "context_discovery",
+      name: "project_context_discovery",
       status: "pass",
       message: "Context discovery skipped (no bridge or include-custom flag). Built-in contexts are always available offline.",
       details: { mode: "skipped", projectCustomCount: 0, builtInCount: 0 }
@@ -370,7 +370,7 @@ async function checkProjectContextDiscovery(flags: Record<string, string | boole
   const discovery = await discoverProjectContexts(flags, runtime, `${requestId}_context`, { requireBridge: false });
   if (!discovery.ok) {
     return {
-      name: "context_discovery",
+      name: "project_context_discovery",
       status: "warn",
       message: `Context discovery failed: ${discovery.error?.code ?? "unknown"} — ${discovery.error?.message ?? "no message"}`,
       details: { mode: "error", projectCustomCount: 0, builtInCount: 0, errorCode: discovery.error?.code, errorMessage: discovery.error?.message }
@@ -385,7 +385,7 @@ async function checkProjectContextDiscovery(flags: Record<string, string | boole
 
   const status: DoctorCheck["status"] = conflictCount > 0 || unavailableCount > 0 ? "warn" : "pass";
   return {
-    name: "context_discovery",
+    name: "project_context_discovery",
     status,
     message: status === "pass"
       ? `Context discovery available: ${discovery.builtInCount} built-in, ${discovery.projectCustomCount} project custom (mode: ${discovery.mode}).`

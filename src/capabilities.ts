@@ -133,7 +133,6 @@ export async function handleCapabilitiesCommand(
     requiresUnity: false,
     static: staticCapabilities,
     ...(projectToolDiagnostics ? { projectTools: projectToolDiagnostics } : {}),
-    ...(extensionInfo ? { extensions: extensionInfo } : {}),
     ...(projectContextDiagnostics ? { customContexts: projectContextDiagnostics } : {}),
     ...(runtimeCapabilities ? { runtime: runtimeCapabilities } : {}),
     ...(bridgeCustomContexts ? { runtimeCustomContexts: bridgeCustomContexts } : {}),
@@ -145,7 +144,7 @@ export async function handleCapabilitiesCommand(
       customContext: projectContexts.some((c) => c.source === "project")
     },
     toolsGroupFirstDiscovery: true,
-    extensions: {
+    extensions: extensionInfo ?? {
       enabled: true,
       total: extensions.length,
       installed: installedExtensions,

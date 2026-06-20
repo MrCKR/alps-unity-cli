@@ -54,7 +54,7 @@ test("command contract marks ALP-306 C# handler gaps as present", async () => {
   }
 
   // TODO: recalculate after all P1-P9 merges
-  assert.equal(csharpCommands.size, 111);
+  assert.equal(csharpCommands.size, 171);
 });
 
 async function registeredCsharpCommands(): Promise<Set<string>> {

@@ -34,7 +34,9 @@ test("security policy covers all 19 destructive commands including CLI-only", as
   const policyCommands = destructiveCommands().map((e: { command: string }) => e.command);
   const expected = [
     "asset.delete", "go.delete", "scene.save", "code.exec", "component.remove",
-    "probuilder.csg", "cinemachine.extension", "urp.feature", "editor.menu", "script.edit", "cli.package.remove",
+    "probuilder.delete-faces", "probuilder.detach-faces", "probuilder.combine-meshes",
+    "probuilder.merge-objects", "probuilder.flip-normals",
+    "cinemachine.extension", "urp.feature", "editor.menu", "script.edit", "cli.package.remove",
     "cli.batch.run", "test.cancel", "build.cancel", "controller.remove-layer"
   ];
   assert.deepEqual(policyCommands.sort(), expected.sort());

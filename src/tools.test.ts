@@ -1099,8 +1099,8 @@ test("normalizeToolMetadata fills P1 defaults: kind, source, category", () => {
 });
 
 test("probuilder and vfx tools have source: extension (ALP-505 decision #10)", () => {
-  const probuilder = findToolByName("probuilder.shape");
-  assert.ok(probuilder, "probuilder.shape should exist");
+  const probuilder = findToolByName("probuilder.ping");
+  assert.ok(probuilder, "probuilder.ping should exist");
   assert.equal(probuilder.source, "extension");
 
   const vfx = findToolByName("vfx.graph");

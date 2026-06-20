@@ -73,7 +73,7 @@ test("doctor returns all-pass when registry has healthy instance and bridge is r
   // P3 adds project_context_fingerprint check
   assert.equal(data.summary, "warn");
   // TODO: recalculate after all P1-P9 merges — count includes checks from both P1+P2 and P5+P7
-  assert.equal(data.checks.length, 12);
+  assert.equal(data.checks.length, 13);
 
   const registryCheck = data.checks.find((c) => c.name === "instance_registry");
   assert.equal(registryCheck?.status, "pass");
@@ -319,7 +319,7 @@ test("doctor includes context_discovery check when bridge is reachable", async (
   assert.equal(result.ok, true);
   const data = result.data as { summary: string; checks: DoctorCheck[] };
 
-  const contextCheck = data.checks.find((c) => c.name === "context_discovery");
+  const contextCheck = data.checks.find((c) => c.name === "project_context_discovery");
   assert.ok(contextCheck, "context_discovery check should be present");
   assert.equal(contextCheck!.status, "pass");
 });
@@ -352,7 +352,7 @@ test("doctor context_discovery reports project custom contexts from runtime", as
   assert.equal(result.ok, true);
   const data = result.data as { checks: DoctorCheck[] };
 
-  const contextCheck = data.checks.find((c) => c.name === "context_discovery");
+  const contextCheck = data.checks.find((c) => c.name === "project_context_discovery");
   assert.ok(contextCheck, "context_discovery check should be present");
   assert.equal(contextCheck!.status, "pass");
   const details = contextCheck!.details as { mode: string; projectCustomCount: number; builtInCount: number; categories: string[] };

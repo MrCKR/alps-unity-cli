@@ -866,8 +866,8 @@
       "bridgeCommand": "extension.status",
       "group": "extension",
       "command": "status",
-      "handler_type": "bridge",
-      "csharp_handler": "planned",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
       "readOnly": true,
       "destructive": false,
       "timeout": 30000
