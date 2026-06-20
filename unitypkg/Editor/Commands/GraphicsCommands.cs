@@ -750,45 +750,111 @@ namespace UnityCli
 
         private static string RenderStatsJson()
         {
-            var stats = UnityStats_Stats();
+            var stats = CaptureRenderStats();
             return new UnityCliJsonWriter().BeginObject()
-                .Prop("drawCalls", (long)stats.drawCalls)
-                .Prop("batchedDrawCalls", (long)stats.batchedDrawCalls)
-                .Prop("batches", (long)stats.batches)
-                .Prop("savedByBatching", (long)stats.savedByBatches)
-                .Prop("triangles", stats.triangles)
-                .Prop("vertices", stats.vertices)
-                .Prop("screenRes", stats.screenRes)
-                .Prop("usedTextureMemory", stats.usedTextureMemory)
-                .Prop("renderTextureCount", (long)stats.renderTextureCount)
-                .Prop("renderTextureBytes", stats.renderTextureBytes)
-                .Prop("usedVertexBuffer", stats.usedVertexBuffer)
-                .Prop("usedVertexBufferVRAM", stats.usedVertexBufferVRAM)
-                .Prop("setPassCalls", (long)stats.setPass)
+                .Prop("drawCalls", stats.DrawCalls)
+                .Prop("batchedDrawCalls", stats.BatchedDrawCalls)
+                .Prop("batches", stats.Batches)
+                .Prop("savedByBatching", stats.SavedByBatches)
+                .Prop("triangles", stats.Triangles)
+                .Prop("vertices", stats.Vertices)
+                .Prop("screenRes", stats.ScreenRes)
+                .Prop("usedTextureMemory", stats.UsedTextureMemory)
+                .Prop("renderTextureCount", stats.RenderTextureCount)
+                .Prop("renderTextureBytes", stats.RenderTextureBytes)
+                .Prop("usedVertexBuffer", stats.UsedVertexBuffer)
+                .Prop("usedVertexBufferVRAM", stats.UsedVertexBufferVRAM)
+                .Prop("setPassCalls", stats.SetPassCalls)
                 .EndObject().ToString();
         }
 
-        private static UnityEngine.Rendering.RenderStats UnityStats_Stats()
+        // ── Version-adaptive render-stats capture ──
+        // UnityEngine.Rendering.RenderStats exists only on Unity 2023.2+ (Unity 6).
+        // On Unity 2022.3 LTS the equivalent data is exposed by UnityEditor.UnityStats.
+        // CaptureRenderStats unifies both sources into a snapshot so callers do not
+        // need to branch on Unity version.
+        private struct RenderStatsSnapshot
         {
-            return UnityStats_Stats_Static();
+            public long DrawCalls;
+            public long BatchedDrawCalls;
+            public long Batches;
+            public long SavedByBatches;
+            public long Triangles;
+            public long Vertices;
+            public string ScreenRes;
+            public long UsedTextureMemory;
+            public long RenderTextureCount;
+            public long RenderTextureBytes;
+            public long UsedVertexBuffer;
+            public long UsedVertexBufferVRAM;
+            public long SetPassCalls;
         }
 
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-        private static UnityEngine.Rendering.RenderStats UnityStats_Stats_Static()
+        private static RenderStatsSnapshot CaptureRenderStats()
         {
-            return UnityEngine.Rendering.RenderStats.current;
+            return CaptureRenderStats_Static();
+        }
+
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private static RenderStatsSnapshot CaptureRenderStats_Static()
+        {
+#if UNITY_2023_2_OR_NEWER
+            var stats = UnityEngine.Rendering.RenderStats.current;
+            return new RenderStatsSnapshot
+            {
+                DrawCalls = (long)stats.drawCalls,
+                BatchedDrawCalls = (long)stats.batchedDrawCalls,
+                Batches = (long)stats.batches,
+                SavedByBatches = (long)stats.savedByBatches,
+                Triangles = (long)stats.triangles,
+                Vertices = (long)stats.vertices,
+                ScreenRes = stats.screenRes,
+                UsedTextureMemory = (long)stats.usedTextureMemory,
+                RenderTextureCount = stats.renderTextureCount,
+                RenderTextureBytes = (long)stats.renderTextureBytes,
+                UsedVertexBuffer = (long)stats.usedVertexBuffer,
+                UsedVertexBufferVRAM = (long)stats.usedVertexBufferVRAM,
+                SetPassCalls = stats.setPass,
+            };
+#else
+            // Unity 2022.3 LTS: UnityEditor.UnityStats (public static class in UnityEditor).
+            // Property names differ from RenderStats; batched draw calls and
+            // saved-by-batching are derived because UnityStats exposes them per-category.
+            var drawCalls = UnityEditor.UnityStats.drawCalls;
+            var batches = UnityEditor.UnityStats.batches;
+            var batchedDrawCalls = UnityEditor.UnityStats.dynamicBatchedDrawCalls
+                + UnityEditor.UnityStats.staticBatchedDrawCalls
+                + UnityEditor.UnityStats.instancedBatchedDrawCalls;
+            return new RenderStatsSnapshot
+            {
+                DrawCalls = drawCalls,
+                BatchedDrawCalls = batchedDrawCalls,
+                Batches = batches,
+                SavedByBatches = drawCalls - batches,
+                Triangles = UnityEditor.UnityStats.triangles,
+                Vertices = UnityEditor.UnityStats.vertices,
+                ScreenRes = UnityEditor.UnityStats.screenRes,
+                UsedTextureMemory = UnityEditor.UnityStats.usedTextureMemorySize,
+                RenderTextureCount = UnityEditor.UnityStats.renderTextureCount,
+                RenderTextureBytes = UnityEditor.UnityStats.renderTextureBytes,
+                UsedVertexBuffer = UnityEditor.UnityStats.vboTotalBytes,
+                UsedVertexBufferVRAM = 0,
+                SetPassCalls = UnityEditor.UnityStats.setPassCalls,
+            };
+#endif
         }
 
         private static string GraphicsStatsCounters(BridgeRequest request)
         {
-            var stats = UnityStats_Stats();
+            var stats = CaptureRenderStats();
             var counters = new List<string>();
-            counters.Add(EffectJson("stats", "drawCalls", stats.drawCalls.ToString(CultureInfo.InvariantCulture)));
-            counters.Add(EffectJson("stats", "batches", stats.batches.ToString(CultureInfo.InvariantCulture)));
-            counters.Add(EffectJson("stats", "triangles", Number(stats.triangles)));
-            counters.Add(EffectJson("stats", "vertices", Number(stats.vertices)));
-            counters.Add(EffectJson("stats", "setPassCalls", stats.setPass.ToString(CultureInfo.InvariantCulture)));
-            counters.Add(EffectJson("stats", "renderTextureCount", stats.renderTextureCount.ToString(CultureInfo.InvariantCulture)));
+            counters.Add(EffectJson("stats", "drawCalls", stats.DrawCalls.ToString(CultureInfo.InvariantCulture)));
+            counters.Add(EffectJson("stats", "batches", stats.Batches.ToString(CultureInfo.InvariantCulture)));
+            counters.Add(EffectJson("stats", "triangles", Number((float)stats.Triangles)));
+            counters.Add(EffectJson("stats", "vertices", Number((float)stats.Vertices)));
+            counters.Add(EffectJson("stats", "setPassCalls", stats.SetPassCalls.ToString(CultureInfo.InvariantCulture)));
+            counters.Add(EffectJson("stats", "renderTextureCount", stats.RenderTextureCount.ToString(CultureInfo.InvariantCulture)));
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropArray("counters", arr => { foreach (var c in counters) arr.RawValue(c); })
                 .Prop("logPath", LogPath())
@@ -797,13 +863,13 @@ namespace UnityCli
 
         private static string GraphicsStatsMemory(BridgeRequest request)
         {
-            var stats = UnityStats_Stats();
+            var stats = CaptureRenderStats();
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
-                .Prop("usedTextureMemory", stats.usedTextureMemory)
-                .Prop("renderTextureBytes", stats.renderTextureBytes)
-                .Prop("usedVertexBuffer", stats.usedVertexBuffer)
-                .Prop("usedVertexBufferVRAM", stats.usedVertexBufferVRAM)
-                .Prop("renderTextureCount", (long)stats.renderTextureCount)
+                .Prop("usedTextureMemory", stats.UsedTextureMemory)
+                .Prop("renderTextureBytes", stats.RenderTextureBytes)
+                .Prop("usedVertexBuffer", stats.UsedVertexBuffer)
+                .Prop("usedVertexBufferVRAM", stats.UsedVertexBufferVRAM)
+                .Prop("renderTextureCount", stats.RenderTextureCount)
                 .Prop("logPath", LogPath())
                 .EndObject().ToString());
         }

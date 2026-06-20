@@ -42,7 +42,7 @@ namespace UnityCli
 
         // ── Built-in context definition ──
 
-        private sealed class BuiltInContextDefinition
+        internal sealed class BuiltInContextDefinition
         {
             public string Name;
             public string Title;
