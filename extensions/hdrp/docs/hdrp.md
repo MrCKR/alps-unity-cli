@@ -18,7 +18,7 @@ High Definition Render Pipeline 扩展工具集。提供 HDRP Volume 配置和�
 
 ```bash
 # 列出 HDRP 工具
-unity-cli tools list --group hdrp --project /path/to/project
+unity-cli tools group list hdrp
 
 # 列出 HDRP Volume
 unity-cli hdrp volume --action list

@@ -12,7 +12,7 @@ ProBuilder 扩展包（`unity-cli-extension-probuilder`）提供 36 个细粒度
 ### 列出所有 ProBuilder 工具
 
 ```bash
-unity_cli tools list --group probuilder
+unity_cli tools group list probuilder
 ```
 
 ### 查看某个工具的详细参数
@@ -70,29 +70,19 @@ unity_cli init --project /path/to/unity/project
 
 输出中的 `extensions.autoInstalled` 会包含 `["probuilder"]`。
 
-### 手动安装
+### 查看扩展状态
 
 ```bash
-unity_cli extensions install probuilder --project /path/to/unity/project
+unity_cli doctor --project /path/to/unity/project
 ```
 
-### 卸载
-
-```bash
-unity_cli extensions remove probuilder --project /path/to/unity/project
-```
-
-### 查看所有扩展
-
-```bash
-unity_cli extensions list --project /path/to/unity/project
-```
+> **注意**：独立的 `extensions install/remove/list/doctor` 命令正在规划中（P5 阶段）。当前扩展包通过 `init` 自动检测安装，无需手动操作。
 
 ## 依赖缺失时的行为
 
 当项目中未安装 `com.unity.probuilder` 包时：
 
-- `extensions install probuilder` 可以成功，但所有 36 个工具标记为 `available=false`
+- ProBuilder 工具在 `tools group list probuilder` 中标记为 `available=false`
 - `tools describe probuilder.*` 会显示 `requiresPackages: ["com.unity.probuilder"]`
 - `tools run probuilder.*` 返回 `E_EXTENSION_DEPENDENCY_MISSING` 错误，附带 `next_actions` 提示安装依赖
 
@@ -106,7 +96,7 @@ unity_cli package install com.unity.probuilder --project /path/to/project
 # 在 dependencies 中添加 "com.unity.probuilder": "latest"
 
 # 安装后重新检测
-unity_cli extensions doctor --project /path/to/project
+unity_cli doctor --project /path/to/project
 ```
 
 ## 诊断
@@ -129,7 +119,7 @@ doctor 会输出 `extension.probuilder` 检查项，包括：
 ### 扩展包专项诊断
 
 ```bash
-unity_cli extensions doctor --project /path/to/unity/project
+unity_cli doctor --project /path/to/unity/project
 ```
 
 ### capabilities 查看
@@ -146,9 +136,9 @@ unity_cli capabilities --project /path/to/unity/project
 
 A: 项目中未安装 `com.unity.probuilder` 包。请按上方"恢复路径"安装。
 
-### Q: `tools list` 中看不到 ProBuilder 工具
+### Q: `tools group list probuilder` 中看不到 ProBuilder 工具
 
-A: 可能未启用扩展包。运行 `unity_cli extensions install probuilder --project <path>`。
+A: 可能未启用扩展包。运行 `unity_cli init --project <path>` 确保 Bridge 包已安装，然后确认 `com.unity.probuilder` 已安装。
 
 ### Q: 运行工具时 Unity 报错
 
@@ -156,4 +146,4 @@ A: 确认 Unity Editor 正在运行，且 Bridge 连接正常。运行 `unity_cl
 
 ### Q: init 未自动安装 ProBuilder 扩展包
 
-A: `init` 仅在项目已包含 `com.unity.probuilder` 时自动安装。如果包是 init 之后安装的，请手动运行 `unity_cli extensions install probuilder`。
+A: `init` 仅在项目已包含 `com.unity.probuilder` 时自动安装。如果包是 init 之后安装的，重新运行 `unity_cli init --project <path>` 即可。

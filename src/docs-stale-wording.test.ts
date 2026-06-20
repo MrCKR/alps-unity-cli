@@ -43,6 +43,10 @@ function allDocFiles(): string[] {
   files.push("skills/unity_cli/SKILL.md");
   files.push(...listMarkdownFiles("docs"));
   files.push(...listMarkdownFiles("examples"));
+  files.push(...listMarkdownFiles("extensions/probuilder/docs"));
+  files.push(...listMarkdownFiles("extensions/cinemachine/docs"));
+  files.push(...listMarkdownFiles("extensions/urp/docs"));
+  files.push(...listMarkdownFiles("extensions/hdrp/docs"));
   return files;
 }
 
@@ -130,7 +134,9 @@ test("docs do not teach non-existent commands as available", () => {
           contextWindow.includes("已废弃") ||
           contextWindow.includes("不得") ||
           contextWindow.includes("不要") ||
-          contextWindow.includes("不要做")
+          contextWindow.includes("不要做") ||
+          contextWindow.includes("未实现") ||
+          contextWindow.includes("尚未实现")
         ) {
           continue; // allowed: it's clearly marked as planned or deprecated
         }

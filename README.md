@@ -75,8 +75,7 @@ unity_cli reflect type UnityEngine.Camera
 unity_cli reflect member UnityEngine.Camera.fieldOfView
 ```
 
-> **注意**：独立的 `context list / context describe / context read` 命令正在规划中（P3 阶段）。
-> 当前可通过 `tools group list` 输出中 `readOnlyHint: true` 的工具以及 `docs`/`reflect` 命令获取只读项目状态。
+> **注意**：`context list / context describe / context read` 命令尚未实现（规划中，P3 阶段）。当前可通过 `tools group list` 输出中 `readOnlyHint: true` 的工具以及 `docs`/`reflect` 命令获取只读项目状态。
 
 ### 4. 项目自定义工具
 
@@ -93,8 +92,7 @@ unity_cli tools describe my.custom-tool
 unity_cli tools run my.custom-tool --input '{"key":"value"}'
 ```
 
-> **注意**：独立的 `extensions list / extensions install / extensions remove / extensions doctor` 命令正在规划中（P5 阶段）。
-> 当前扩展包通过 `init` 命令安装 Bridge 包来启用，项目工具通过 `--include-custom` 标志发现。
+> **注意**：`extensions list / extensions install / extensions remove / extensions doctor` 命令尚未实现（规划中，P5 阶段）。当前扩展包通过 `init` 命令安装 Bridge 包来启用，项目工具通过 `--include-custom` 标志发现。
 
 ### 5. 诊断与健康检查
 

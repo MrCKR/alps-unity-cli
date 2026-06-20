@@ -2,9 +2,9 @@
 
 扩展包使用与开发指南。
 
-## 当前状态：部分实现（P5 已完成基础设施，独立命令规划中）
+## 当前状态：部分实现（P5 已完成基础设施，独立命令尚未实现）
 
-扩展包系统的基础设施已在 P5 阶段（[ALP-541](https://github.com/MrCKR/alps-unity-cli/issues)）完成，包括 Bridge 包安装、项目工具发现和 fingerprint 校验。独立的 `extensions` 命令组正在规划中。
+扩展包系统的基础设施已在 P5 阶段（[ALP-541](https://github.com/MrCKR/alps-unity-cli/issues)）完成，包括 Bridge 包安装、项目工具发现和 fingerprint 校验。独立的 `extensions` 命令组尚未实现。
 
 ## 当前扩展能力
 

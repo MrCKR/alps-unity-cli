@@ -19,7 +19,7 @@ Universal Render Pipeline 扩展工具集。提供渲染器特性管理、Volume
 
 ```bash
 # 列出 URP 工具
-unity-cli tools list --group urp --project /path/to/project
+unity-cli tools group list urp
 
 # 列出渲染器特性
 unity-cli urp feature --action list

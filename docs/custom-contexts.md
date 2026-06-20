@@ -13,9 +13,9 @@ Context 是 alps-unity-cli 中获取只读项目状态的核心机制。与 Tool
 | 修改 Unity 状态 | ❌ 禁止 | ✅ 可有 |
 | 执行前确认 | 不需要 | 破坏性需 `--yes` |
 
-## 当前状态：规划中（P3）
+## 当前状态：尚未实现（规划中，P3）
 
-独立的 `context list` / `context describe` / `context read` 命令正在规划中（P3 阶段，[ALP-539](https://github.com/MrCKR/alps-unity-cli/issues)）。
+`context list` / `context describe` / `context read` 命令尚未实现（规划中，P3 阶段，[ALP-539](https://github.com/MrCKR/alps-unity-cli/issues)）。当前只读状态通过只读工具获取。
 
 当前可通过以下方式获取只读项目状态：
 
@@ -82,11 +82,11 @@ Custom Context 实现必须严格遵守：
 P3 实现后（规划中）的 Context 发现路径：
 
 ```
-context list                    → 列出所有可用 Context（P3 规划中）
+context list                    → 列出所有可用 Context（P3 未实现）
        ↓
-context describe <name>         → 查看 Context schema 和来源（P3 规划中）
+context describe <name>         → 查看 Context schema 和来源（P3 未实现）
        ↓
-context read <name>             → 读取 Context 数据（P3 规划中）
+context read <name>             → 读取 Context 数据（P3 未实现）
 ```
 
 当前替代方案（P3 实现前）：

@@ -26,7 +26,7 @@ Unity Cinemachine 智能相机系统的 CLI 工具集。提供虚拟相机创建
 
 ```bash
 # 列出 Cinemachine 工具（需要 --project 指向已安装 Cinemachine 的 Unity 项目）
-unity-cli tools list --group cinemachine --project /path/to/project
+unity-cli tools group list cinemachine
 
 # 创建跟随相机
 unity-cli cinemachine create follow --name PlayerCam --follow Player
