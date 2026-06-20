@@ -1,0 +1,99 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://alps-unity-cli.dev/schemas/context-descriptor.schema.json",
+  "title": "Context Descriptor",
+  "description": "Schema for a Unity CLI context descriptor. All contexts are read-only and output unified envelope responses.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Dotted context name, e.g. 'project.info', 'editor.state'.",
+      "pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9-]*)+$"
+    },
+    "title": {
+      "type": "string",
+      "description": "Human-readable title."
+    },
+    "description": {
+      "type": "string",
+      "description": "One-paragraph description."
+    },
+    "category": {
+      "type": "string",
+      "description": "Logical category: project, editor, scene, prefab, menu, tests, or custom."
+    },
+    "source": {
+      "type": "string",
+      "enum": ["built-in", "custom"],
+      "description": "Whether this context is built into the CLI package or contributed by a project extension."
+    },
+    "target": {
+      "type": "string",
+      "enum": ["editor", "runtime"],
+      "description": "Execution target."
+    },
+    "availabilityScope": {
+      "type": "string",
+      "enum": ["editorSession", "playModeSession", "always"],
+      "description": "Availability scope for the context."
+    },
+    "requiresUnity": {
+      "type": "boolean",
+      "description": "Whether the context requires a live Unity Bridge connection."
+    },
+    "available": {
+      "type": "boolean",
+      "description": "Whether the context is currently available."
+    },
+    "inputSchema": {
+      "type": "object",
+      "description": "JSON Schema for context read input parameters."
+    },
+    "outputSchema": {
+      "type": "object",
+      "description": "JSON Schema for context read output."
+    },
+    "readOnlyHint": {
+      "type": "boolean",
+      "const": true,
+      "description": "All contexts are read-only."
+    },
+    "destructiveHint": {
+      "type": "boolean",
+      "const": false,
+      "description": "No context may be destructive."
+    },
+    "bridgeCommand": {
+      "type": "string",
+      "description": "Bridge command name for reading this context."
+    },
+    "cliCommand": {
+      "type": "string",
+      "description": "CLI command for reading this context."
+    },
+    "requiresPackages": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Unity package names required for this context to be available."
+    },
+    "extensionId": {
+      "type": "string",
+      "description": "Extension ID if this context comes from an extension."
+    },
+    "fingerprint": {
+      "type": "string",
+      "description": "Fingerprint hash of the descriptor for integrity verification."
+    },
+    "dependencies": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Names of other contexts this context depends on."
+    },
+    "docsTopic": {
+      "type": "string",
+      "description": "Documentation topic key."
+    }
+  },
+  "required": ["name", "title", "description", "category", "source", "target", "availabilityScope", "requiresUnity", "inputSchema", "outputSchema", "readOnlyHint", "destructiveHint", "bridgeCommand", "cliCommand"],
+  "additionalProperties": false
+}

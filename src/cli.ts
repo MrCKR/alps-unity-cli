@@ -9,6 +9,7 @@ import { handleBatch } from "./cli-commands/batch.js";
 import { handleBuild } from "./cli-commands/build.js";
 import { handleEditor } from "./cli-commands/editor.js";
 import { handleExtensionsCommand } from "./cli-commands/extensions.js";
+import { handleContextCommand } from "./context/index.js";
 import { handleJob } from "./cli-commands/job.js";
 import { handleInit, handlePackage } from "./cli-commands/package.js";
 import { handleTest } from "./cli-commands/test.js";
@@ -44,7 +45,8 @@ const CLI_COMMANDS = new Map<string, CliCommandModule>([
   ["editor", { run: ({ command, flags, runtime, requestId }) => handleEditor(command, flags, runtime, requestId) }],
   ["test", { run: ({ command, flags, runtime, requestId }) => handleTest(command, flags, runtime, requestId) }],
   ["build", { run: ({ command, flags, runtime, requestId }) => handleBuild(command, flags, runtime, requestId) }],
-  ["extensions", { run: ({ command, args, flags, runtime, requestId }) => handleExtensionsCommand(command, args, flags, runtime, requestId) }]
+  ["extensions", { run: ({ command, args, flags, runtime, requestId }) => handleExtensionsCommand(command, args, flags, runtime, requestId) }],
+  ["context", { run: ({ command, args, flags, runtime, requestId }) => handleContextCommand(command, args, flags, runtime, requestId) }]
 ]);
 
 export async function execute(argv: string[], runtime = createRuntime()): Promise<CliResult> {
@@ -319,7 +321,10 @@ function help(): Record<string, unknown> {
       "build run [--target StandaloneWindows64] [--output <path>] [--wait]",
       "build status --id <jobId>",
       "build logs --id <jobId> [--tail 100]",
-      "build cancel --id <jobId>"
+      "build cancel --id <jobId>",
+      "context list [--category <category>] [--include-custom] [--format json|text]",
+      "context describe <name>",
+      "context read <name> [--input <json>] [--bridge-endpoint <url>]"
     ],
     supportLegend: {
       "已路由可执行": "通过 live Unity Editor Bridge /bridge/execute 执行。",

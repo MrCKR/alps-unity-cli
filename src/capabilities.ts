@@ -7,6 +7,7 @@
  */
 
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
+import { builtinContextDescriptors, builtinContextCategories } from "./context/index.js";
 import { getString } from "./args.js";
 import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
 import { builtinToolGroups, builtinToolMetadata, type ToolMetadata } from "./tools/metadata/index.js";
@@ -104,7 +105,8 @@ export async function handleCapabilitiesCommand(
     ...(projectToolDiagnostics ? { projectTools: projectToolDiagnostics } : {}),
     ...(extensionInfo ? { extensions: extensionInfo } : {}),
     ...(runtimeCapabilities ? { runtime: runtimeCapabilities } : {}),
-    ...(runtimeCapabilities ? { bridgeEndpoint: endpoint ?? runtime.bridgeEndpoint } : {})
+    ...(runtimeCapabilities ? { bridgeEndpoint: endpoint ?? runtime.bridgeEndpoint } : {}),
+    contexts: buildContextCapabilities()
   };
 
   return success(requestId, data);
@@ -197,5 +199,23 @@ function buildStaticCapabilities(projectTools: ToolMetadata[] = [], extensionGro
       responseEnvelope: true,
       errorCode: true
     }
+  };
+}
+
+function buildContextCapabilities(): Record<string, unknown> {
+  const contexts = builtinContextDescriptors();
+  const categories = builtinContextCategories();
+
+  return {
+    contextCount: contexts.length,
+    categories,
+    categoryCounts: Object.fromEntries(
+      categories.map((cat) => [cat, contexts.filter((c) => c.category === cat).length])
+    ),
+    contextNames: contexts.map((c) => c.name),
+    allReadOnly: true,
+    customContextSupport: true,
+    bridgeCommand: "context.read",
+    discoveryCommands: ["context list", "context describe <name>", "context read <name>"]
   };
 }

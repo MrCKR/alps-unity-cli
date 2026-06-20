@@ -13,6 +13,7 @@
  * 6. Data directory exists
  */
 
+import { builtinContextDescriptors, builtinContextCategories, allContextDescriptors, discoverCustomContexts, type ContextBridgeRuntime } from "./context/index.js";
 import { getString, getBoolean } from "./args.js";
 import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
 import { readInstances, type UnityInstance } from "./instances.js";
@@ -90,6 +91,9 @@ export async function handleDoctorCommand(
 
   // ProBuilder extension specific check
   checks.push(await checkProBuilderExtension(flags));
+
+  // Context discovery check
+  checks.push(await checkContextDiscovery(flags, runtime, requestId));
 
   const allPassed = checks.every((c) => c.status === "pass");
   const hasWarnings = checks.some((c) => c.status === "warn");
@@ -565,6 +569,39 @@ async function checkProBuilderExtension(flags: Record<string, string | boolean>)
   };
 }
 
+async function checkContextDiscovery(flags: Record<string, string | boolean>, runtime: DoctorRuntime, requestId: string): Promise<DoctorCheck> {
+  const builtinCount = builtinContextDescriptors().length;
+  const categories = builtinContextCategories();
+  const includeCustom = shouldDiscoverProjectTools(flags, runtime);
+  let customCount = 0;
+  let customDiagnostics: Record<string, unknown> | undefined;
+
+  if (includeCustom) {
+    try {
+      const customContexts = await discoverCustomContexts(runtime as ContextBridgeRuntime, requestId);
+      customCount = customContexts.length;
+      customDiagnostics = { count: customCount, names: customContexts.map((c) => c.name) };
+    } catch {
+      customDiagnostics = { status: "error" };
+    }
+  }
+
+  const totalCount = builtinCount + customCount;
+
+  return {
+    name: "context_discovery",
+    status: "pass",
+    message: `Context discovery available: ${builtinCount} built-in context(s) in ${categories.length} categories${customCount > 0 ? `, ${customCount} custom context(s)` : ""}.`,
+    details: {
+      builtinCount,
+      categories,
+      customCount,
+      totalCount,
+      ...(customDiagnostics ? { custom: customDiagnostics } : {})
+    }
+  };
+}
+
 function buildSuggestions(checks: DoctorCheck[]): string[] {
   const suggestions: string[] = [];
 
@@ -608,6 +645,10 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
         case "extension.probuilder":
           suggestions.push("Run 'unity_cli extensions install probuilder --project <path>' to enable the ProBuilder extension.");
           suggestions.push("Run 'unity_cli package install com.unity.probuilder' to install the ProBuilder Unity package.");
+          break;
+        case "context_discovery":
+          suggestions.push("Run 'unity_cli context list' to see all available contexts.");
+          suggestions.push("Run 'unity_cli context list --include-custom' to discover project custom contexts.");
           break;
       }
     }

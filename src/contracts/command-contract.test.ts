@@ -28,10 +28,10 @@ const filledCsharpHandlerCommands = [
 test("command contract validates bridge registry and metadata", () => {
   assert.doesNotThrow(() => validateBridgeRegistryContracts(bridgeCommandRegistry));
   assert.doesNotThrow(() => validateToolMetadataContracts(builtinToolMetadata(), bridgeCommandRegistry));
-  // Built-in tool metadata count + runtime-tool commands + project-tool commands
-  // (runtime-tool.{list,run} + project-tool.{list,run} are bridge commands without tool metadata)
-  assert.equal(commandContracts().length, builtinToolMetadata().length + 4);
-  assert.equal(new Set(bridgeCommandRegistry.specs().map((spec) => spec.bridgeCommand)).size, 147);
+  // Built-in tool metadata count + runtime-tool commands + project-tool commands + context commands
+  // (runtime-tool.{list,run} + project-tool.{list,run} + context.{read,list} are bridge commands without tool metadata)
+  assert.equal(commandContracts().length, builtinToolMetadata().length + 6);
+  assert.equal(new Set(bridgeCommandRegistry.specs().map((spec) => spec.bridgeCommand)).size, 149);
 });
 
 test("command contract marks Profiler frozen coverage as architecture-sensitive", () => {

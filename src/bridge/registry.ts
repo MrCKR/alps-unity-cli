@@ -19,6 +19,7 @@ import { uiBridgeSpecs } from "./domains/ui.js";
 import { vfxBridgeSpecs } from "./domains/vfx.js";
 import { projectToolBridgeSpecs } from "./domains/project-tool.js";
 import { runtimeToolBridgeSpecs } from "./domains/runtime-tool.js";
+import { contextBridgeSpecs } from "./domains/context.js";
 import { securityPolicyForCommand } from "../security-policy.js";
 import type { BridgeCommandSpec } from "./types.js";
 
@@ -43,7 +44,8 @@ const DOMAIN_SPECS: BridgeCommandSpec[] = [
   ...diagnoseBridgeSpecs,
   ...codeBridgeSpecs,
   ...runtimeToolBridgeSpecs,
-  ...projectToolBridgeSpecs
+  ...projectToolBridgeSpecs,
+  ...contextBridgeSpecs
 ];
 
 export class BridgeCommandRegistry {
