@@ -13,6 +13,7 @@
  * 6. Data directory exists
  */
 
+import { builtinContextDescriptors, builtinContextCategories, discoverCustomContexts, type ContextBridgeRuntime } from "./context/index.js";
 import { getString, getBoolean } from "./args.js";
 import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
 import { shouldDiscoverContexts as shouldDiscoverP1Contexts } from "./context-discovery.js";
@@ -97,7 +98,7 @@ export async function handleDoctorCommand(
   // ProBuilder extension specific check (P5+P7)
   checks.push(await checkProBuilderExtension(flags));
 
-  // P1: Context discovery surface (built-in metadata check)
+ // P1: Context discovery surface (built-in metadata check)
   checks.push(checkContextDiscovery(flags, runtime));
 
   // P1: Extension registry
@@ -793,6 +794,7 @@ function tryReadSrcFile(filename: string): string | null {
     return null;
   }
 }
+
 function buildSuggestions(checks: DoctorCheck[]): string[] {
   const suggestions: string[] = [];
 
@@ -855,6 +857,10 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
         case "extension.probuilder":
           suggestions.push("Run 'unity_cli extensions install probuilder --project <path>' to enable the ProBuilder extension.");
           suggestions.push("Run 'unity_cli package install com.unity.probuilder' to install the ProBuilder Unity package.");
+          break;
+        case "context_discovery":
+          suggestions.push("Run 'unity_cli context list' to see all available contexts.");
+          suggestions.push("Run 'unity_cli context list --include-custom' to discover project custom contexts.");
           break;
       }
     }

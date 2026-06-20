@@ -2555,7 +2555,7 @@
       ]
     },
     {
-      "bridgeCommand": "vfx.line-create",
+"bridgeCommand": "vfx.line-create",
       "group": "vfx",
       "command": "line-create",
       "handler_type": "bridge",

@@ -31,7 +31,7 @@ test("command contract validates bridge registry and metadata", () => {
   // P10-R3: Full validation includes extension contributions registered via
   // extensions/index.js auto-registration.
   assert.doesNotThrow(() => validateBridgeRegistryContracts(bridgeCommandRegistry));
-  assert.doesNotThrow(() => validateToolMetadataContracts(allRegisteredToolMetadata(), bridgeCommandRegistry));
+ assert.doesNotThrow(() => validateToolMetadataContracts(allRegisteredToolMetadata(), bridgeCommandRegistry));
   // All registered tools (core + extension) + runtime-tool commands + project-tool commands + context commands + extension commands
   assert.equal(commandContracts().length, allRegisteredToolMetadata().length + 4 + 3 + 1 + 2);
   // Bridge registry includes core + extension specs

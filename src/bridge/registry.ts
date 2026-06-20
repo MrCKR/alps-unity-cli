@@ -46,7 +46,7 @@ const CORE_DOMAIN_SPECS: BridgeCommandSpec[] = [
   ...codeBridgeSpecs,
   ...runtimeToolBridgeSpecs,
   ...projectToolBridgeSpecs,
-  ...contextBridgeSpecs,
+...contextBridgeSpecs,
   ...extensionBridgeSpecs
 ];
 

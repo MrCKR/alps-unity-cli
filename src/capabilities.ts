@@ -7,11 +7,12 @@
  */
 
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
+import { builtinContextDescriptors, builtinContextCategories } from "./context/index.js";
 import { getString } from "./args.js";
 import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
 import { discoverProjectContexts, shouldDiscoverContexts, type ProjectContextRuntime, type ContextDescriptor } from "./project-context-discovery.js";
 import { builtinToolGroups, builtinToolMetadata, extensionToolMetadata, allRegisteredToolMetadata, EXTENSION_GROUPS, type ToolMetadata } from "./tools/metadata/index.js";
-import { builtinContextMetadata, builtinContextCategories, type ContextMetadata } from "./context/metadata/index.js";
+import { builtinContextMetadata, type ContextMetadata } from "./context/metadata/index.js";
 import { builtinExtensionMetadata, type ExtensionMetadata } from "./extensions/metadata/index.js";
 import { supportStatusForTool } from "./tools/metadata/status.js";
 import { ExtensionRegistry, extensionAvailabilitySummary, collectAvailableTools, collectAllTools } from "./extensions/index.js";
@@ -135,7 +136,7 @@ export async function handleCapabilitiesCommand(
     ...(projectToolDiagnostics ? { projectTools: projectToolDiagnostics } : {}),
     ...(projectContextDiagnostics ? { customContexts: projectContextDiagnostics } : {}),
     ...(runtimeCapabilities ? { runtime: runtimeCapabilities } : {}),
-    ...(bridgeCustomContexts ? { runtimeCustomContexts: bridgeCustomContexts } : {}),
+ ...(bridgeCustomContexts ? { runtimeCustomContexts: bridgeCustomContexts } : {}),
     ...(runtimeCapabilities ? { bridgeEndpoint: endpoint ?? runtime.bridgeEndpoint } : {}),
     contextDiscovery: {
       enabled: true,
@@ -245,5 +246,24 @@ function buildStaticCapabilities(projectTools: ToolMetadata[] = [], projectConte
       customContextDescriptor: true,
       contextFingerprint: true
     }
+  };
+}
+
+
+function buildContextCapabilities(): Record<string, unknown> {
+  const contexts = builtinContextDescriptors();
+  const categories = builtinContextCategories();
+
+  return {
+    contextCount: contexts.length,
+    categories,
+    categoryCounts: Object.fromEntries(
+      categories.map((cat) => [cat, contexts.filter((c) => c.category === cat).length])
+    ),
+    contextNames: contexts.map((c) => c.name),
+    allReadOnly: true,
+    customContextSupport: true,
+    bridgeCommand: "context.read",
+    discoveryCommands: ["context list", "context describe <name>", "context read <name>"]
   };
 }

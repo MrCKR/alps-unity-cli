@@ -72,7 +72,7 @@ test("doctor returns all-pass when registry has healthy instance and bridge is r
   // extension_availability warns when no --project provided; P1+P2 adds context_discovery, extension_registry, stale_tools_list_wording
   // P3 adds project_context_fingerprint check
   assert.equal(data.summary, "warn");
-  // TODO: recalculate after all P1-P9 merges — count includes checks from both P1+P2 and P5+P7
+ // TODO: recalculate after all P1-P9 merges — count includes checks from both P1+P2 and P5+P7
   assert.equal(data.checks.length, 13);
 
   const registryCheck = data.checks.find((c) => c.name === "instance_registry");
