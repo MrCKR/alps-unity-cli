@@ -145,7 +145,7 @@ test("every ProBuilder tool has a matching command contract", () => {
     assert.ok(contract, `${tool.name}: contract not found`);
     assert.equal(contract.group, "probuilder", `${tool.name}: contract group must be probuilder`);
     assert.equal(contract.handler_type, "hybrid", `${tool.name}: contract handler_type must be hybrid`);
-    assert.equal(contract.csharp_handler, "planned", `${tool.name}: contract csharp_handler must be planned (P7-T2b)`);
+    assert.equal(contract.csharp_handler, "present", `${tool.name}: contract csharp_handler must be present (P7-T2b delivered)`);
     assert.deepEqual(contract.requires_packages, ["com.unity.probuilder"], `${tool.name}: contract requires_packages mismatch`);
     assert.equal(contract.readOnly, tool.readOnlyHint, `${tool.name}: contract readOnly mismatch`);
     assert.equal(contract.destructive, tool.destructiveHint, `${tool.name}: contract destructive mismatch`);
