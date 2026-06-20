@@ -14,6 +14,7 @@ import { handleInit, handlePackage } from "./cli-commands/package.js";
 import { handleTest } from "./cli-commands/test.js";
 import type { CliCommandModule, Runtime } from "./cli-commands/types.js";
 import { startUnityJob, summarizeJob } from "./cli-commands/unity-job.js";
+import { handleContextCommand } from "./cli-commands/context.js";
 import { handleCapabilitiesCommand } from "./capabilities.js";
 import { handleDoctorCommand } from "./doctor.js";
 import { handleInstancesCommand, handleTargetCommand } from "./instances.js";
@@ -23,7 +24,6 @@ import { handleCode } from "./runtime-code.js";
 import { JobStore } from "./job-store.js";
 import { createRequestId, failure, printJson, success } from "./output.js";
 import { defaultDataDir, ensureWindows } from "./platform.js";
-import { handleContextCommand } from "./context.js";
 import { handleToolsCommand } from "./tools.js";
 import { confirmDestructiveExecution } from "./security.js";
 import { securityPolicyForCommand } from "./security-policy.js";
@@ -210,9 +210,9 @@ function help(): Record<string, unknown> {
       "tools describe <tool>",
       "tools run <name> [--input <json>] [--input-file <path>] [--timeout-ms <n>] [--fingerprint-mode warn|block] [--artifact-dir <path>] [--runtime] [--target <instance>]",
       "tools search <keyword> [--format json|text]",
-      "context list [--category <cat>] [--format json|text]",
-      "context describe <name>",
-      "context read <name> [--input <json>] [--target <instance>]",
+      "context list [--category <cat>] [--include-custom] [--bridge-endpoint <url>] [--format json|text]",
+      "context describe <name> [--fingerprint-mode warn|block] [--bridge-endpoint <url>]",
+      "context read <name> [--input <json>] [--fingerprint-mode warn|block] [--project-path <path>] [--target <instance>] [--bridge-endpoint <url>]",
       "extensions list [--project <path>] [--format json|text]",
       "extensions install <id|name> [--project <path>]",
       "extensions remove <id|name> [--project <path>]",

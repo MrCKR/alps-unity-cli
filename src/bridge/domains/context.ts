@@ -6,6 +6,7 @@
  * through the context.ts command handler, not directly through these.
  */
 
+import { compactArgs, stringFlag } from "../args.js";
 import type { BridgeCommandSpec } from "../types.js";
 
 export const contextBridgeSpecs: BridgeCommandSpec[] = [
@@ -13,7 +14,7 @@ export const contextBridgeSpecs: BridgeCommandSpec[] = [
     group: "context",
     command: "list",
     bridgeCommand: "context.list",
-    buildArgs: () => ({}),
+    buildArgs: contextListArgs,
     destructiveHint: false,
     internal: true
   },
@@ -21,7 +22,7 @@ export const contextBridgeSpecs: BridgeCommandSpec[] = [
     group: "context",
     command: "describe",
     bridgeCommand: "context.describe",
-    buildArgs: (ctx) => ({ contextName: ctx.flags["name"] ?? ctx.positionalTarget }),
+    buildArgs: contextDescribeArgs,
     destructiveHint: false,
     internal: true
   },
@@ -29,20 +30,40 @@ export const contextBridgeSpecs: BridgeCommandSpec[] = [
     group: "context",
     command: "read",
     bridgeCommand: "context.read",
-    buildArgs: (ctx) => {
-      const input: Record<string, unknown> = { contextName: ctx.flags["name"] ?? ctx.positionalTarget };
-      const inputJson = typeof ctx.flags["input"] === "string" ? ctx.flags["input"] : undefined;
-      if (inputJson) {
-        try {
-          const parsed = JSON.parse(inputJson);
-          if (typeof parsed === "object" && parsed !== null) {
-            Object.assign(input, parsed);
-          }
-        } catch { /* ignore invalid JSON */ }
-      }
-      return input;
-    },
+    buildArgs: contextReadArgs,
     destructiveHint: false,
     internal: true
   }
 ];
+
+function contextListArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({});
+}
+
+function contextDescribeArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({
+    name: positionalTarget ?? stringFlag(flags, "name"),
+    fingerprintMode: stringFlag(flags, "fingerprint-mode")
+  });
+}
+
+function contextReadArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  // The Bridge C# side uses RawJsonArg("input") which expects the input to be
+  // a raw JSON value (object), not a stringified JSON string.
+  let input: unknown;
+  const inputString = stringFlag(flags, "input");
+  if (inputString !== undefined) {
+    try {
+      input = JSON.parse(inputString);
+    } catch {
+      input = inputString;
+    }
+  }
+
+  return compactArgs({
+    name: positionalTarget ?? stringFlag(flags, "name"),
+    input,
+    fingerprintMode: stringFlag(flags, "fingerprint-mode"),
+    projectPath: stringFlag(flags, "project-path")
+  });
+}

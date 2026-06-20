@@ -587,30 +587,30 @@
       "group": "context",
       "command": "describe",
       "handler_type": "bridge",
-      "csharp_handler": "planned",
+      "csharp_handler": "present",
       "readOnly": true,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 10000
     },
     {
       "bridgeCommand": "context.list",
       "group": "context",
       "command": "list",
       "handler_type": "bridge",
-      "csharp_handler": "planned",
+      "csharp_handler": "present",
       "readOnly": true,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 10000
     },
     {
       "bridgeCommand": "context.read",
       "group": "context",
       "command": "read",
       "handler_type": "bridge",
-      "csharp_handler": "planned",
+      "csharp_handler": "present",
       "readOnly": true,
       "destructive": false,
-      "timeout": 30000
+      "timeout": 10000
     },
     {
       "bridgeCommand": "diagnose.preflight",

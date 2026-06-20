@@ -9,6 +9,7 @@
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
 import { getString } from "./args.js";
 import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
+import { discoverProjectContexts, shouldDiscoverContexts, type ProjectContextRuntime, type ContextDescriptor } from "./project-context-discovery.js";
 import { builtinToolGroups, builtinToolMetadata, type ToolMetadata } from "./tools/metadata/index.js";
 import { builtinContextMetadata, builtinContextCategories, type ContextMetadata } from "./context/metadata/index.js";
 import { builtinExtensionMetadata, type ExtensionMetadata } from "./extensions/metadata/index.js";
@@ -20,7 +21,7 @@ import type { CliResult } from "./types.js";
 
 export async function handleCapabilitiesCommand(
   flags: Record<string, string | boolean>,
-  runtime: BridgeRuntime & ProjectToolRuntime,
+  runtime: BridgeRuntime & ProjectToolRuntime & ProjectContextRuntime,
   requestId: string
 ): Promise<CliResult> {
   const jsonFormat = getString(flags, "format") === "json" || getBoolean(flags, "json");
@@ -76,7 +77,22 @@ export async function handleCapabilitiesCommand(
     }
   }
 
-  const staticCapabilities = buildStaticCapabilities(projectTools, extensionGroupFilter.size > 0 ? extensionGroupFilter : undefined);
+  // Custom context discovery (P3)
+  let projectContextDiagnostics: Record<string, unknown> | undefined;
+  let projectContexts: ContextDescriptor[] = [];
+  if (shouldDiscoverContexts(flags, runtime)) {
+    const contextDiscovery = await discoverProjectContexts(flags, runtime, requestId, { requireBridge: false });
+    if (contextDiscovery.ok) {
+      projectContexts = contextDiscovery.contexts;
+      const customContexts = projectContexts.filter((c) => c.source === "project");
+      const categories = [...new Set(customContexts.map((c) => c.category))];
+      projectContextDiagnostics = { mode: contextDiscovery.mode, count: customContexts.length, categories, builtInCount: contextDiscovery.builtInCount };
+    } else {
+      projectContextDiagnostics = { mode: "error", code: contextDiscovery.error?.code, message: contextDiscovery.error?.message };
+    }
+  }
+
+  const staticCapabilities = buildStaticCapabilities(projectTools, projectContexts, extensionGroupFilter.size > 0 ? extensionGroupFilter : undefined);
 
   // P1: Context and extension base counts
   const contextCount = builtinContextMetadata().length;
@@ -86,6 +102,7 @@ export async function handleCapabilitiesCommand(
   const availableExtensions = extensions.filter((e) => e.status === "available").length;
 
   let runtimeCapabilities: Record<string, unknown> | undefined;
+  let bridgeCustomContexts: Record<string, unknown> | undefined;
   const endpoint = getString(flags, "bridge-endpoint") ?? runtime.bridgeEndpoint ?? process.env.UNITY_CLI_BRIDGE_ENDPOINT;
 
   if (runtime.bridgeExecute || endpoint) {
@@ -99,6 +116,11 @@ export async function handleCapabilitiesCommand(
       );
       if (bridgeResult.ok) {
         runtimeCapabilities = bridgeResult.data as Record<string, unknown>;
+        // Extract customContexts from bridge preflight for runtime section
+        const customCtx = runtimeCapabilities.customContexts;
+        if (customCtx && typeof customCtx === "object") {
+          bridgeCustomContexts = customCtx as Record<string, unknown>;
+        }
       }
     } catch {
       // Bridge not reachable — runtime capabilities stay undefined
@@ -112,13 +134,15 @@ export async function handleCapabilitiesCommand(
     static: staticCapabilities,
     ...(projectToolDiagnostics ? { projectTools: projectToolDiagnostics } : {}),
     ...(extensionInfo ? { extensions: extensionInfo } : {}),
+    ...(projectContextDiagnostics ? { customContexts: projectContextDiagnostics } : {}),
     ...(runtimeCapabilities ? { runtime: runtimeCapabilities } : {}),
+    ...(bridgeCustomContexts ? { runtimeCustomContexts: bridgeCustomContexts } : {}),
     ...(runtimeCapabilities ? { bridgeEndpoint: endpoint ?? runtime.bridgeEndpoint } : {}),
     contextDiscovery: {
       enabled: true,
       contextCount,
       categories: contextCategories,
-      customContext: false
+      customContext: projectContexts.some((c) => c.source === "project")
     },
     toolsGroupFirstDiscovery: true,
     extensions: {
@@ -136,7 +160,7 @@ function getBoolean(flags: Record<string, string | boolean>, name: string): bool
   return flags[name] === true || flags[name] === "true";
 }
 
-function buildStaticCapabilities(projectTools: ToolMetadata[] = [], extensionGroupFilter?: Set<string>): Record<string, unknown> {
+function buildStaticCapabilities(projectTools: ToolMetadata[] = [], projectContexts: ContextDescriptor[] = [], extensionGroupFilter?: Set<string>): Record<string, unknown> {
   const builtinTools = builtinToolMetadata();
   // When extensionGroupFilter is provided, ProBuilder and other extension groups
   // are separated from the core built-in groups in the top-level `groups` map.
@@ -220,7 +244,9 @@ function buildStaticCapabilities(projectTools: ToolMetadata[] = [], extensionGro
       builtinDocs: true,
       requestEnvelope: true,
       responseEnvelope: true,
-      errorCode: true
+      errorCode: true,
+      customContextDescriptor: true,
+      contextFingerprint: true
     }
   };
 }

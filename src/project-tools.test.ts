@@ -115,3 +115,16 @@ test("Unity C# custom tool registry supports UnityCliToolAttribute descriptors a
   assert.match(sample, /\[UnityCliTool\(\s*"sample\.echo"/);
   assert.doesNotMatch(sample, /manifest\.json|config\.json|\.yaml|\.yml/);
 });
+
+test("SampleContext custom context is not registered as a tool", async () => {
+  const sampleContext = await readFile(new URL("../unitypkg/Editor/Samples/SampleContext.cs", import.meta.url), "utf8");
+  const registry = await readFile(new URL("../unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs", import.meta.url), "utf8");
+
+  // SampleContext uses [UnityCliContext], never [UnityCliTool]
+  assert.match(sampleContext, /\[UnityCliContext\(/);
+  assert.doesNotMatch(sampleContext, /\[UnityCliTool\(/);
+
+  // The tool registry does not discover UnityCliContextAttribute — only UnityCliToolAttribute
+  assert.match(registry, /typeof\(UnityCliToolAttribute\)/);
+  assert.doesNotMatch(registry, /typeof\(UnityCliContextAttribute\)/);
+});

@@ -36,6 +36,7 @@ namespace UnityCli
         private static string DiagnosePreflightJson(BridgeRequest request)
         {
             DiscoverProjectTools();
+            DiscoverProjectContexts();
             return new UnityCliJsonWriter().BeginObject()
                 .Prop("command", "diagnose.preflight")
                 .Prop("targetCommand", request.StringArg("command"))
@@ -56,11 +57,16 @@ namespace UnityCli
                 {
                     w.Prop("fingerprint", ProjectToolFingerprintSummaryJson());
                 })
+                .PropObject("customContexts", w =>
+                {
+                    w.PropRaw("fingerprint", ProjectContextFingerprintSummaryJson());
+                })
                 .PropArray("checks", arr =>
                 {
                     arr.RawValue(DiagnoseCheckJson("unityNotBusy", !(EditorApplication.isCompiling || EditorApplication.isUpdating || BuildPipeline.isBuildingPlayer)));
                     arr.RawValue(DiagnoseCheckJson("sceneLoaded", SceneManager.GetActiveScene().isLoaded));
                     arr.RawValue(DiagnoseCheckJson("projectToolFingerprint", !ProjectTools.Values.Any(definition => definition.FingerprintStatus == "blocked")));
+                    arr.RawValue(DiagnoseCheckJson("projectContextFingerprint", !ProjectContexts.Values.Any(definition => definition.FingerprintStatus == "blocked")));
                 })
                 .Prop("logPath", LogPath())
                 .EndObject().ToString();

@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { handleCapabilitiesCommand } from "./capabilities.js";
 import type { BridgeRuntime } from "./bridge/index.js";
+import type { ProjectContextRuntime } from "./project-context-discovery.js";
 
 const requestId = "test_req_caps_001";
 
@@ -171,4 +172,69 @@ test("capabilities includes custom tools in unified static manifest when availab
   assert.equal((data.projectTools as { count: number }).count, 1);
   assert.equal((staticData.groups as Record<string, number>).project, 1);
   assert.ok((staticData.liveBridgeTools as string[]).includes("project.audit"));
+});
+
+test("capabilities static data includes customContextDescriptor and contextFingerprint schema features", async () => {
+  const runtime: BridgeRuntime = {};
+  const result = await handleCapabilitiesCommand({}, runtime, requestId);
+  assert.equal(result.ok, true);
+
+  const data = result.data as Record<string, unknown>;
+  const staticData = data.static as Record<string, unknown>;
+  const schemaFeatures = staticData.schemaFeatures as Record<string, boolean>;
+
+  assert.equal(schemaFeatures.customContextDescriptor, true, "customContextDescriptor should be true");
+  assert.equal(schemaFeatures.contextFingerprint, true, "contextFingerprint should be true");
+});
+
+test("capabilities includes customContexts when project contexts are available", async () => {
+  const runtime: BridgeRuntime & ProjectContextRuntime = {
+    projectContexts: [
+      {
+        name: "sample.project-summary",
+        title: "Project Summary",
+        description: "Sample project summary context",
+        category: "sample",
+        kind: "context",
+        source: "project",
+        readOnlyHint: true,
+        requiresUnity: true,
+        inputSchema: { type: "object" }
+      }
+    ]
+  };
+  const result = await handleCapabilitiesCommand({ "include-custom": true }, runtime, requestId);
+  assert.equal(result.ok, true);
+
+  const data = result.data as Record<string, unknown>;
+  const customCtx = data.customContexts as { mode: string; count: number; categories: string[] };
+  assert.ok(customCtx, "customContexts should be present");
+  assert.equal(customCtx.count, 1);
+  assert.ok(customCtx.categories.includes("sample"));
+});
+
+test("capabilities passes bridge customContexts summary as runtimeCustomContexts", async () => {
+  const runtime: BridgeRuntime & ProjectContextRuntime = {
+    bridgeExecute: async () => ({
+      ok: true,
+      data: {
+        status: "ok",
+        bridgeVersion: "1.0",
+        customContexts: {
+          mode: "live",
+          count: 3,
+          categories: ["project", "editor", "sample"],
+          fingerprint: { algorithm: "sha256", mode: "pass", contextCount: 3, blockedCount: 0, warnCount: 0 }
+        }
+      }
+    })
+  };
+  const result = await handleCapabilitiesCommand({}, runtime, requestId);
+  assert.equal(result.ok, true);
+
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.mode, "hybrid");
+  assert.ok(data.runtimeCustomContexts, "runtimeCustomContexts should be present when bridge returns customContexts");
+  const rtCtx = data.runtimeCustomContexts as { count: number; categories: string[] };
+  assert.equal(rtCtx.count, 3);
 });
