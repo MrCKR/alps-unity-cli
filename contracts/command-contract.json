@@ -43,6 +43,66 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "animator.get-info",
+      "group": "animator",
+      "command": "get-info",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "animator.get-parameter",
+      "group": "animator",
+      "command": "get-parameter",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "animator.set-parameter",
+      "group": "animator",
+      "command": "set-parameter",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "animator.crossfade",
+      "group": "animator",
+      "command": "crossfade",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "animator.set-speed",
+      "group": "animator",
+      "command": "set-speed",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "animator.set-enabled",
+      "group": "animator",
+      "command": "set-enabled",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "asset.create",
       "group": "asset",
       "command": "create",

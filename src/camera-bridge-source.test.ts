@@ -81,7 +81,7 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /private static readonly string\[\] PhysicsCommands = \{ "physics\.settings", "physics\.raycast", "physics\.simulation" \}/);
   assert.match(source, /private static readonly string\[\] ProfilerCommands = \{ "profiler\.start", "profiler\.stop", "profiler\.pause", "profiler\.counter", "profiler\.memory", "profiler\.frame", "profiler\.capture", "profiler\.export", "profiler\.status" \}/);
   assert.match(source, /private static readonly string\[\] ProBuilderCommands = \{ "probuilder\.shape", "probuilder\.create", "probuilder\.csg", "probuilder\.edit" \}/);
-  assert.match(source, /private static readonly string\[\] AnimationCommands = \{ "animation\.clip", "animation\.state", "animation\.play", "animation\.stop" \}/);
+  assert.match(source, /private static readonly string\[\] AnimationCommands = \{ "animation\.clip", "animation\.state", "animation\.play", "animation\.stop", "animator\.get-info", "animator\.get-parameter", "animator\.set-parameter", "animator\.crossfade", "animator\.set-speed", "animator\.set-enabled" \}/);
   assert.match(source, /private static readonly string\[\] VfxCommands = \{ "vfx\.graph", "vfx\.effect" \}/);
   assert.match(source, /private static readonly string\[\] ShaderCommands = \{ "shader\.info", "shader\.read", "shader\.create", "shader\.update" \}/);
   assert.match(source, /private static readonly string\[\] TextureCommands = \{ "texture\.info", "texture\.create", "texture\.sprite", "texture\.import-settings" \}/);
@@ -153,6 +153,12 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /RegisterCommand\(registry, "animation\.state", "animation", false/);
   assert.match(source, /RegisterCommand\(registry, "animation\.play", "animation", true/);
   assert.match(source, /RegisterCommand\(registry, "animation\.stop", "animation", true/);
+  assert.match(source, /RegisterCommand\(registry, "animator\.get-info", "animation", false/);
+  assert.match(source, /RegisterCommand\(registry, "animator\.get-parameter", "animation", false/);
+  assert.match(source, /RegisterCommand\(registry, "animator\.set-parameter", "animation", true/);
+  assert.match(source, /RegisterCommand\(registry, "animator\.crossfade", "animation", true/);
+  assert.match(source, /RegisterCommand\(registry, "animator\.set-speed", "animation", true/);
+  assert.match(source, /RegisterCommand\(registry, "animator\.set-enabled", "animation", true/);
   assert.match(source, /RegisterCommand\(registry, "vfx\.graph", "vfx", true/);
   assert.match(source, /RegisterCommand\(registry, "vfx\.effect", "vfx", true/);
   assert.match(source, /RegisterCommand\(registry, "shader\.info", "shader", false/);
@@ -216,6 +222,10 @@ test("Unity Bridge animation and vfx commands expose assets, target resolver dia
   assert.match(source, /E_ANIMATION_CLIP_NOT_FOUND/);
   assert.match(source, /E_ANIMATION_STATE_REQUIRED/);
   assert.match(source, /E_ANIMATION_NO_CONTROLLER/);
+  assert.match(source, /E_ANIMATOR_NOT_FOUND/);
+  assert.match(source, /E_ANIMATOR_PARAMETER_NAME_REQUIRED/);
+  assert.match(source, /E_ANIMATOR_PARAMETER_NOT_FOUND/);
+  assert.match(source, /E_ANIMATOR_NO_CONTROLLER/);
   assert.match(source, /FindType\("UnityEngine\.VFX\.VisualEffectAsset"\)/);
   assert.match(source, /FindType\("UnityEngine\.VFX\.VisualEffect"\)/);
   assert.match(source, /E_VFX_PACKAGE_MISSING/);
