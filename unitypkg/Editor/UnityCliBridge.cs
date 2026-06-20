@@ -43,7 +43,8 @@ namespace UnityCli
         private static readonly string[] GraphicsCommands = { "graphics.quality", "graphics.settings", "graphics.pipeline", "graphics.volume", "graphics.screenshot" };
         private static readonly string[] PhysicsCommands = { "physics.settings", "physics.raycast", "physics.simulation" };
         private static readonly string[] ProfilerCommands = { "profiler.start", "profiler.stop", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export", "profiler.status" };
-        private static readonly string[] ProBuilderCommands = { "probuilder.shape", "probuilder.create", "probuilder.csg", "probuilder.edit" };
+        // ProBuilder commands removed from core — served by extension package (P7-T2b)
+        // private static readonly string[] ProBuilderCommands = { "probuilder.ping", "probuilder.create-shape", ... };
         private static readonly string[] AnimationCommands = { "animation.clip", "animation.state", "animation.play", "animation.stop" };
         private static readonly string[] VfxCommands = { "vfx.graph", "vfx.effect" };
         private static readonly string[] ShaderCommands = { "shader.info", "shader.read", "shader.create", "shader.update" };
@@ -269,7 +270,11 @@ namespace UnityCli
                 || command == "scene.save"
                 || command == "code.exec"
                 || command == "component.remove"
-                || command == "probuilder.csg"
+                // ProBuilder destructive commands served by extension package (P7-T2b)
+                // || command == "probuilder.csg"
+                || command == "probuilder.delete-faces"
+                || command == "probuilder.combine-meshes"
+                || command == "probuilder.merge-objects"
                 || command == "editor.menu"
                 || command == "script.edit";
         }

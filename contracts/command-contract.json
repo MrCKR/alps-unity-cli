@@ -723,11 +723,11 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "probuilder.create",
+      "bridgeCommand": "probuilder.append-vertices-to-edge",
       "group": "probuilder",
-      "command": "create",
+      "command": "append-vertices-to-edge",
       "handler_type": "hybrid",
-      "csharp_handler": "present",
+      "csharp_handler": "planned",
       "readOnly": false,
       "destructive": false,
       "timeout": 30000,
@@ -736,11 +736,63 @@
       ]
     },
     {
-      "bridgeCommand": "probuilder.csg",
+      "bridgeCommand": "probuilder.auto-smooth",
       "group": "probuilder",
-      "command": "csg",
+      "command": "auto-smooth",
       "handler_type": "hybrid",
-      "csharp_handler": "present",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.bevel-edges",
+      "group": "probuilder",
+      "command": "bevel-edges",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.bridge-edges",
+      "group": "probuilder",
+      "command": "bridge-edges",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.center-pivot",
+      "group": "probuilder",
+      "command": "center-pivot",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.combine-meshes",
+      "group": "probuilder",
+      "command": "combine-meshes",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
       "readOnly": false,
       "destructive": true,
       "timeout": 60000,
@@ -749,11 +801,11 @@
       ]
     },
     {
-      "bridgeCommand": "probuilder.edit",
+      "bridgeCommand": "probuilder.connect-elements",
       "group": "probuilder",
-      "command": "edit",
+      "command": "connect-elements",
       "handler_type": "hybrid",
-      "csharp_handler": "present",
+      "csharp_handler": "planned",
       "readOnly": false,
       "destructive": false,
       "timeout": 30000,
@@ -762,11 +814,375 @@
       ]
     },
     {
-      "bridgeCommand": "probuilder.shape",
+      "bridgeCommand": "probuilder.convert-to-probuilder",
       "group": "probuilder",
-      "command": "shape",
+      "command": "convert-to-probuilder",
       "handler_type": "hybrid",
-      "csharp_handler": "present",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.create-poly-shape",
+      "group": "probuilder",
+      "command": "create-poly-shape",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 60000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.create-polygon",
+      "group": "probuilder",
+      "command": "create-polygon",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.create-shape",
+      "group": "probuilder",
+      "command": "create-shape",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 60000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.delete-faces",
+      "group": "probuilder",
+      "command": "delete-faces",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": true,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.detach-faces",
+      "group": "probuilder",
+      "command": "detach-faces",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.duplicate-and-flip",
+      "group": "probuilder",
+      "command": "duplicate-and-flip",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.extrude-edges",
+      "group": "probuilder",
+      "command": "extrude-edges",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.extrude-faces",
+      "group": "probuilder",
+      "command": "extrude-faces",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.flip-normals",
+      "group": "probuilder",
+      "command": "flip-normals",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.freeze-transform",
+      "group": "probuilder",
+      "command": "freeze-transform",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.insert-vertex",
+      "group": "probuilder",
+      "command": "insert-vertex",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.merge-faces",
+      "group": "probuilder",
+      "command": "merge-faces",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.merge-objects",
+      "group": "probuilder",
+      "command": "merge-objects",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": true,
+      "timeout": 60000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.merge-vertices",
+      "group": "probuilder",
+      "command": "merge-vertices",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.mesh-info",
+      "group": "probuilder",
+      "command": "mesh-info",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.move-vertices",
+      "group": "probuilder",
+      "command": "move-vertices",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.ping",
+      "group": "probuilder",
+      "command": "ping",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.repair-mesh",
+      "group": "probuilder",
+      "command": "repair-mesh",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.select-faces",
+      "group": "probuilder",
+      "command": "select-faces",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.set-face-color",
+      "group": "probuilder",
+      "command": "set-face-color",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.set-face-material",
+      "group": "probuilder",
+      "command": "set-face-material",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.set-face-uvs",
+      "group": "probuilder",
+      "command": "set-face-uvs",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.set-pivot",
+      "group": "probuilder",
+      "command": "set-pivot",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.set-smoothing",
+      "group": "probuilder",
+      "command": "set-smoothing",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.split-vertices",
+      "group": "probuilder",
+      "command": "split-vertices",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.subdivide",
+      "group": "probuilder",
+      "command": "subdivide",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.validate-mesh",
+      "group": "probuilder",
+      "command": "validate-mesh",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.probuilder"
+      ]
+    },
+    {
+      "bridgeCommand": "probuilder.weld-vertices",
+      "group": "probuilder",
+      "command": "weld-vertices",
+      "handler_type": "hybrid",
+      "csharp_handler": "planned",
       "readOnly": false,
       "destructive": false,
       "timeout": 30000,
@@ -946,6 +1362,40 @@
       ]
     },
     {
+      "bridgeCommand": "project-tool.list",
+      "group": "project-tool",
+      "command": "list",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000,
+      "architectureSensitive": true,
+      "frozenDecision": "ALP-404-Q3",
+      "coverageScope": [
+        "project-tool",
+        "editor-session",
+        "availability-scope"
+      ]
+    },
+    {
+      "bridgeCommand": "project-tool.run",
+      "group": "project-tool",
+      "command": "run",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 60000,
+      "architectureSensitive": true,
+      "frozenDecision": "ALP-404-Q4",
+      "coverageScope": [
+        "project-tool",
+        "editor-session",
+        "custom-tool-execution"
+      ]
+    },
+    {
       "bridgeCommand": "runtime-tool.list",
       "group": "runtime-tool",
       "command": "list",
@@ -978,40 +1428,6 @@
         "play-mode-session",
         "cross-frame-wait",
         "timeout-semantics"
-      ]
-    },
-    {
-      "bridgeCommand": "project-tool.list",
-      "group": "project-tool",
-      "command": "list",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "readOnly": true,
-      "destructive": false,
-      "timeout": 30000,
-      "architectureSensitive": true,
-      "frozenDecision": "ALP-404-Q3",
-      "coverageScope": [
-        "project-tool",
-        "editor-session",
-        "availability-scope"
-      ]
-    },
-    {
-      "bridgeCommand": "project-tool.run",
-      "group": "project-tool",
-      "command": "run",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "readOnly": false,
-      "destructive": false,
-      "timeout": 60000,
-      "architectureSensitive": true,
-      "frozenDecision": "ALP-404-Q4",
-      "coverageScope": [
-        "project-tool",
-        "editor-session",
-        "custom-tool-execution"
       ]
     },
     {
@@ -1255,6 +1671,63 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "tools.describe",
+      "group": "tools",
+      "command": "describe",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 10000
+    },
+    {
+      "bridgeCommand": "tools.groups",
+      "group": "tools",
+      "command": "groups",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 5000
+    },
+    {
+      "bridgeCommand": "tools.list",
+      "group": "tools",
+      "command": "list",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 5000
+    },
+    {
+      "bridgeCommand": "tools.run",
+      "group": "tools",
+      "command": "run",
+      "handler_type": "hybrid",
+      "csharp_handler": "none",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "architectureSensitive": true,
+      "frozenDecision": "ALP-365-P6",
+      "coverageScope": [
+        "tools-run",
+        "runtime-target",
+        "play-mode-session"
+      ]
+    },
+    {
+      "bridgeCommand": "tools.search",
+      "group": "tools",
+      "command": "search",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 5000
+    },
+    {
       "bridgeCommand": "ui.button.create",
       "group": "ui",
       "command": "button/create",
@@ -1348,63 +1821,6 @@
       "timeout": 30000,
       "requires_packages": [
         "com.unity.visualeffectgraph"
-      ]
-    },
-    {
-      "bridgeCommand": "tools.list",
-      "group": "tools",
-      "command": "list",
-      "handler_type": "offline",
-      "csharp_handler": "none",
-      "readOnly": true,
-      "destructive": false,
-      "timeout": 5000
-    },
-    {
-      "bridgeCommand": "tools.groups",
-      "group": "tools",
-      "command": "groups",
-      "handler_type": "offline",
-      "csharp_handler": "none",
-      "readOnly": true,
-      "destructive": false,
-      "timeout": 5000
-    },
-    {
-      "bridgeCommand": "tools.search",
-      "group": "tools",
-      "command": "search",
-      "handler_type": "offline",
-      "csharp_handler": "none",
-      "readOnly": true,
-      "destructive": false,
-      "timeout": 5000
-    },
-    {
-      "bridgeCommand": "tools.describe",
-      "group": "tools",
-      "command": "describe",
-      "handler_type": "offline",
-      "csharp_handler": "none",
-      "readOnly": true,
-      "destructive": false,
-      "timeout": 10000
-    },
-    {
-      "bridgeCommand": "tools.run",
-      "group": "tools",
-      "command": "run",
-      "handler_type": "hybrid",
-      "csharp_handler": "none",
-      "readOnly": false,
-      "destructive": false,
-      "timeout": 30000,
-      "architectureSensitive": true,
-      "frozenDecision": "ALP-365-P6",
-      "coverageScope": [
-        "tools-run",
-        "runtime-target",
-        "play-mode-session"
       ]
     }
   ]

@@ -30,10 +30,10 @@ namespace UnityCli
     {
         private static void RegisterProBuilderCommands(BridgeCommandRegistry registry)
         {
-            RegisterCommand(registry, "probuilder.shape", "probuilder", true, ProBuilderCreate);
-            RegisterCommand(registry, "probuilder.create", "probuilder", true, ProBuilderCreate);
-            RegisterCommand(registry, "probuilder.csg", "probuilder", true, ProBuilderCsg);
-            RegisterCommand(registry, "probuilder.edit", "probuilder", true, ProBuilderEdit);
+            // ProBuilder core registration disabled — now served by extension package (P7-T2b)
+            // The 36 single-action ProBuilder tools will be implemented in the extension's
+            // ProBuilderCommands.cs by P2b. This file is retained for reference and
+            // to keep the partial class compilable until T2b migration is complete.
         }
 
         private static bool IsProBuilderInstalled()

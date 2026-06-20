@@ -107,7 +107,9 @@ test("capabilities static data separates live bridge, hybrid and planned tools",
   assert.equal(liveBridgeTools.includes("component.set"), false);
   assert.equal(bridgeTools.includes("component.set"), false);
 
-  for (const name of ["probuilder.shape", "probuilder.create", "probuilder.edit", "probuilder.csg", "profiler.start", "profiler.capture"]) {
+  const hybridProbuilderTools = hybridTools.filter((name) => name.startsWith("probuilder."));
+  assert.ok(hybridProbuilderTools.length >= 30, `expected >= 30 probuilder hybrid tools, got ${hybridProbuilderTools.length}`);
+  for (const name of ["probuilder.create-shape", "probuilder.extrude-faces", "profiler.start", "profiler.capture"]) {
     assert.ok(hybridTools.includes(name), `${name} should be listed as hybrid`);
     assert.equal(batchJobTools.includes(name), false, `${name} should not be listed as batch-only`);
     assert.ok(jobTools.includes(name), `${name} should be job-capable as a hybrid tool`);

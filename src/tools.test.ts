@@ -546,7 +546,7 @@ test("planned bridge contract tools expose planned support status", () => {
 });
 
 test("hybrid tools expose bridge plus job support status", () => {
-  const hybridNames = ["cli.package.install", "cli.package.remove", "cli.package.resolve", "code.exec", "profiler.start", "profiler.capture", "probuilder.shape", "probuilder.create", "probuilder.edit", "probuilder.csg"];
+  const hybridNames = ["cli.package.install", "cli.package.remove", "cli.package.resolve", "code.exec", "profiler.start", "profiler.capture", "probuilder.create-shape", "probuilder.create-poly-shape", "probuilder.extrude-faces", "probuilder.delete-faces", "probuilder.mesh-info"];
   for (const name of hybridNames) {
     const tool = findToolByName(name);
     assert.ok(tool, `${name} should exist`);

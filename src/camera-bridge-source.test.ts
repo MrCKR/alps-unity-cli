@@ -35,7 +35,7 @@ test("Unity Bridge source does not duplicate C# method signatures", async () => 
   assert.deepEqual(duplicateCSharpMethodSignatures(source), []);
 });
 
-test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, graphics, physics, profiler, probuilder, animation, vfx, shader, texture and editor commands", async () => {
+test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, graphics, physics, profiler, animation, vfx, shader, texture and editor commands", async () => {
   const source = await readUnityBridgeSources();
   const bridgeSource = await readFile(sourceUrl, "utf8");
   const readme = await readFile(readmeUrl, "utf8");
@@ -52,10 +52,10 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /CapabilityJson\("graphics", GraphicsCommands\)/);
   assert.match(source, /CapabilityJson\("physics", PhysicsCommands\)/);
   assert.match(source, /CapabilityJson\("profiler", ProfilerCommands\)/);
-  assert.match(source, /CapabilityJson\("probuilder", ProBuilderCommands\)/);
+  // ProBuilder removed from core capabilities — served by extension package (P7-T2b)
   assert.match(source, /CapabilityJson\("animation", AnimationCommands\)/);
   assert.match(source, /CapabilityJson\("vfx", VfxCommands\)/);
-  assert.match(source, /CapabilityJson\("physics", PhysicsCommands\) \+ ","\s+\+ CapabilityJson\("profiler", ProfilerCommands\) \+ ","\s+\+ CapabilityJson\("probuilder", ProBuilderCommands\) \+ ","\s+\+ CapabilityJson\("animation", AnimationCommands\) \+ ","\s+\+ CapabilityJson\("vfx", VfxCommands\) \+ ","\s+\+ CapabilityJson\("shader", ShaderCommands\) \+ ","/);
+  assert.match(source, /CapabilityJson\("profiler", ProfilerCommands\)[\s\S]*CapabilityJson\("animation", AnimationCommands\)/);
   assert.match(source, /CapabilityJson\("shader", ShaderCommands\)/);
   assert.match(source, /CapabilityJson\("texture", TextureCommands\)/);
   assert.match(source, /CapabilityJson\("script", ScriptCommands\)/);
@@ -80,7 +80,7 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /private static readonly string\[\] GraphicsCommands = \{ "graphics\.quality", "graphics\.settings", "graphics\.pipeline", "graphics\.volume", "graphics\.screenshot" \}/);
   assert.match(source, /private static readonly string\[\] PhysicsCommands = \{ "physics\.settings", "physics\.raycast", "physics\.simulation" \}/);
   assert.match(source, /private static readonly string\[\] ProfilerCommands = \{ "profiler\.start", "profiler\.stop", "profiler\.pause", "profiler\.counter", "profiler\.memory", "profiler\.frame", "profiler\.capture", "profiler\.export", "profiler\.status" \}/);
-  assert.match(source, /private static readonly string\[\] ProBuilderCommands = \{ "probuilder\.shape", "probuilder\.create", "probuilder\.csg", "probuilder\.edit" \}/);
+  // ProBuilder commands array removed from core — served by extension package (P7-T2b)
   assert.match(source, /private static readonly string\[\] AnimationCommands = \{ "animation\.clip", "animation\.state", "animation\.play", "animation\.stop" \}/);
   assert.match(source, /private static readonly string\[\] VfxCommands = \{ "vfx\.graph", "vfx\.effect" \}/);
   assert.match(source, /private static readonly string\[\] ShaderCommands = \{ "shader\.info", "shader\.read", "shader\.create", "shader\.update" \}/);
@@ -145,10 +145,7 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /\\"architectureSensitive\\":true/);
   assert.match(source, /\\"frozenDecision\\":/);
   assert.match(source, /\\"coverageScope\\":/);
-  assert.match(source, /RegisterCommand\(registry, "probuilder\.shape", "probuilder", true/);
-  assert.match(source, /RegisterCommand\(registry, "probuilder\.create", "probuilder", true/);
-  assert.match(source, /RegisterCommand\(registry, "probuilder\.csg", "probuilder", true/);
-  assert.match(source, /RegisterCommand\(registry, "probuilder\.edit", "probuilder", true/);
+  // ProBuilder RegisterCommand calls removed from core — served by extension package (P7-T2b)
   assert.match(source, /RegisterCommand\(registry, "animation\.clip", "animation", true/);
   assert.match(source, /RegisterCommand\(registry, "animation\.state", "animation", false/);
   assert.match(source, /RegisterCommand\(registry, "animation\.play", "animation", true/);

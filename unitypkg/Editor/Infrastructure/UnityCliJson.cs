@@ -43,7 +43,8 @@ namespace UnityCli
             w.RawValue(CapabilityJson("graphics", GraphicsCommands));
             w.RawValue(CapabilityJson("physics", PhysicsCommands));
             w.RawValue(CapabilityJson("profiler", ProfilerCommands));
-            w.RawValue(CapabilityJson("probuilder", ProBuilderCommands));
+            // ProBuilder served by extension package — removed from core capabilities (P7-T2b)
+            // w.RawValue(CapabilityJson("probuilder", ProBuilderCommands));
             w.RawValue(CapabilityJson("animation", AnimationCommands));
             w.RawValue(CapabilityJson("vfx", VfxCommands));
             w.RawValue(CapabilityJson("shader", ShaderCommands));
