@@ -32,6 +32,10 @@ namespace UnityCli
         {
             RegisterCommand(registry, "vfx.graph", "vfx", true, VfxGraph);
             RegisterCommand(registry, "vfx.effect", "vfx", true, VfxEffect);
+            RegisterCommand(registry, "vfx.parameter", "vfx", false, VfxParameter);
+            RegisterCommand(registry, "vfx.control", "vfx", false, VfxControl);
+            RegisterCommand(registry, "vfx.event", "vfx", false, VfxEvent);
+            RegisterCommand(registry, "vfx.template", "vfx", true, VfxTemplate);
         }
 
         private static string VfxGraph(BridgeRequest request)
@@ -279,6 +283,426 @@ namespace UnityCli
                     .Prop("path", graphPath)
                     .Prop("guid", string.IsNullOrEmpty(graphPath) ? null : AssetDatabase.AssetPathToGUID(graphPath)))
                 .EndObject().ToString();
+        }
+
+        // ── VFX Parameter ──────────────────────────────────────────────────────
+        // Critically references unity-mcp VfxGraphWrite.cs: SetFloat, SetInt, SetBool,
+        //   SetVector2, SetVector3, SetVector4, SetGradient, SetTexture, SetMesh,
+        //   SetAnimationCurve methods on UnityEngine.VFX.VisualEffect component.
+        //
+        // Adapted for alps-unity-cli: uses reflection-based method invocation
+        //   (FindType + GetMethod + Invoke) since we have no compile-time VFX dependency.
+        //   Parameter type is passed explicitly via --type to avoid guesswork.
+
+        private static string VfxParameter(BridgeRequest request)
+        {
+            RequireVfxPackageInstalled();
+            var visualEffectType = RequireVisualEffectType();
+            var go = ResolveUniqueTarget(request.StringArg("target"), "VFX parameter requires --target <go>.");
+            var component = go.GetComponent(visualEffectType);
+            if (component == null)
+                return ErrorJson("E_VFX_COMPONENT_NOT_FOUND", "VisualEffect component not found on target: " + HierarchyPath(go), "Pass --add to add one or choose a target with VisualEffect.");
+            var paramName = request.StringArg("name");
+            if (string.IsNullOrEmpty(paramName))
+                return ErrorJson("E_VFX_PARAMETER_NAME_REQUIRED", "VFX parameter requires --name <param>.", "Pass the exposed parameter name.");
+            var paramType = (request.StringArg("type") ?? "float").ToLowerInvariant();
+            var effects = new List<string>();
+
+            try
+            {
+                switch (paramType)
+                {
+                    case "float":
+                        {
+                            var value = request.FloatArg("value", 0f);
+                            var method = visualEffectType.GetMethod("SetFloat", new[] { typeof(string), typeof(float) });
+                            if (method != null) method.Invoke(component, new object[] { paramName, value });
+                            effects.Add(EffectJson("vfx.parameter", paramName, Number(value)));
+                        }
+                        break;
+                    case "int":
+                        {
+                            var value = request.IntArg("value", 0);
+                            var method = visualEffectType.GetMethod("SetInt", new[] { typeof(string), typeof(int) });
+                            if (method != null) method.Invoke(component, new object[] { paramName, value });
+                            effects.Add(EffectJson("vfx.parameter", paramName, value.ToString(CultureInfo.InvariantCulture)));
+                        }
+                        break;
+                    case "bool":
+                        {
+                            var value = request.BoolArg("value", false);
+                            var method = visualEffectType.GetMethod("SetBool", new[] { typeof(string), typeof(bool) });
+                            if (method != null) method.Invoke(component, new object[] { paramName, value });
+                            effects.Add(EffectJson("vfx.parameter", paramName, Bool(value)));
+                        }
+                        break;
+                    case "vector2":
+                        {
+                            var vec = new Vector2(request.FloatArg("x", 0f), request.FloatArg("y", 0f));
+                            var method = visualEffectType.GetMethod("SetVector2", new[] { typeof(string), typeof(Vector2) });
+                            if (method != null) method.Invoke(component, new object[] { paramName, vec });
+                            effects.Add(EffectJson("vfx.parameter", paramName, vec.ToString()));
+                        }
+                        break;
+                    case "vector3":
+                        {
+                            var vec = new Vector3(request.FloatArg("x", 0f), request.FloatArg("y", 0f), request.FloatArg("z", 0f));
+                            var method = visualEffectType.GetMethod("SetVector3", new[] { typeof(string), typeof(Vector3) });
+                            if (method != null) method.Invoke(component, new object[] { paramName, vec });
+                            effects.Add(EffectJson("vfx.parameter", paramName, vec.ToString()));
+                        }
+                        break;
+                    case "vector4":
+                    case "color":
+                        {
+                            if (paramType == "color")
+                            {
+                                var color = new Color(request.FloatArg("r", 0f), request.FloatArg("g", 0f), request.FloatArg("b", 0f), request.FloatArg("a", 1f));
+                                var method = visualEffectType.GetMethod("SetVector4", new[] { typeof(string), typeof(Vector4) });
+                                if (method != null) method.Invoke(component, new object[] { paramName, (Vector4)color });
+                                effects.Add(EffectJson("vfx.parameter", paramName, color.ToString()));
+                            }
+                            else
+                            {
+                                var vec = new Vector4(request.FloatArg("x", 0f), request.FloatArg("y", 0f), request.FloatArg("z", 0f), request.FloatArg("w", 0f));
+                                var method = visualEffectType.GetMethod("SetVector4", new[] { typeof(string), typeof(Vector4) });
+                                if (method != null) method.Invoke(component, new object[] { paramName, vec });
+                                effects.Add(EffectJson("vfx.parameter", paramName, vec.ToString()));
+                            }
+                        }
+                        break;
+                    case "texture":
+                        {
+                            var assetPath = request.StringArg("value");
+                            var texture = !string.IsNullOrEmpty(assetPath) ? AssetDatabase.LoadAssetAtPath<Texture>(NormalizeAssetPath(assetPath)) : null;
+                            if (texture == null && !string.IsNullOrEmpty(assetPath))
+                                return ErrorJson("E_VFX_TEXTURE_NOT_FOUND", "Texture not found: " + assetPath, "Pass a valid Assets/ texture path.");
+                            var method = visualEffectType.GetMethod("SetTexture", new[] { typeof(string), typeof(Texture) });
+                            if (method != null) method.Invoke(component, new object[] { paramName, texture });
+                            effects.Add(EffectJson("vfx.parameter", paramName, assetPath ?? "null"));
+                        }
+                        break;
+                    case "mesh":
+                        {
+                            var assetPath = request.StringArg("value");
+                            var mesh = !string.IsNullOrEmpty(assetPath) ? AssetDatabase.LoadAssetAtPath<Mesh>(NormalizeAssetPath(assetPath)) : null;
+                            if (mesh == null && !string.IsNullOrEmpty(assetPath))
+                                return ErrorJson("E_VFX_MESH_NOT_FOUND", "Mesh not found: " + assetPath, "Pass a valid Assets/ mesh path.");
+                            var method = visualEffectType.GetMethod("SetMesh", new[] { typeof(string), typeof(Mesh) });
+                            if (method != null) method.Invoke(component, new object[] { paramName, mesh });
+                            effects.Add(EffectJson("vfx.parameter", paramName, assetPath ?? "null"));
+                        }
+                        break;
+                    default:
+                        return ErrorJson("E_VFX_PARAMETER_TYPE_UNSUPPORTED", "Unsupported VFX parameter type: " + paramType, "Use float, int, bool, vector2, vector3, vector4, color, texture, mesh, gradient, or curve.");
+                }
+            }
+            catch (TargetInvocationException tie)
+            {
+                return ErrorJson("E_VFX_PARAMETER_SET_FAILED", "Failed to set VFX parameter: " + (tie.InnerException != null ? tie.InnerException.Message : tie.Message), "Check the parameter name and type match the VFX Graph exposed parameters.");
+            }
+
+            EditorUtility.SetDirty(component);
+            WriteLog("vfx_parameter target=" + HierarchyPath(go) + " name=" + paramName + " type=" + paramType);
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("target", GameObjectTargetJson(go))
+                .Prop("parameterName", paramName)
+                .Prop("parameterType", paramType)
+                .PropArray("plannedEffects", arr => { foreach (var e in effects) arr.RawValue(e); })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        // ── VFX Control ────────────────────────────────────────────────────────
+        // Critically references unity-mcp VfxGraphControl.cs: Play(), Stop(),
+        //   pause, Reinit(), playRate, startSeed, resetSeedOnPlay.
+
+        private static string VfxControl(BridgeRequest request)
+        {
+            RequireVfxPackageInstalled();
+            var visualEffectType = RequireVisualEffectType();
+            var go = ResolveUniqueTarget(request.StringArg("target"), "VFX control requires --target <go>.");
+            var component = go.GetComponent(visualEffectType);
+            if (component == null)
+                return ErrorJson("E_VFX_COMPONENT_NOT_FOUND", "VisualEffect component not found on target: " + HierarchyPath(go), "Pass a target with VisualEffect.");
+            var action = request.StringArg("action") ?? "play";
+            var effects = new List<string>();
+
+            switch (action.ToLowerInvariant())
+            {
+                case "play":
+                    {
+                        var method = visualEffectType.GetMethod("Play", Type.EmptyTypes);
+                        if (method != null) method.Invoke(component, null);
+                        effects.Add(EffectJson("vfx.control", "action", "play"));
+                    }
+                    break;
+                case "stop":
+                    {
+                        var method = visualEffectType.GetMethod("Stop", Type.EmptyTypes);
+                        if (method != null) method.Invoke(component, null);
+                        effects.Add(EffectJson("vfx.control", "action", "stop"));
+                    }
+                    break;
+                case "pause":
+                    {
+                        var pauseProp = visualEffectType.GetProperty("pause", BindingFlags.Instance | BindingFlags.Public);
+                        if (pauseProp != null && pauseProp.CanWrite)
+                        {
+                            var current = pauseProp.GetValue(component, null);
+                            pauseProp.SetValue(component, !(bool)current, null);
+                        }
+                        effects.Add(EffectJson("vfx.control", "action", "pause"));
+                    }
+                    break;
+                case "reinit":
+                    {
+                        var method = visualEffectType.GetMethod("Reinit", Type.EmptyTypes);
+                        if (method != null) method.Invoke(component, null);
+                        effects.Add(EffectJson("vfx.control", "action", "reinit"));
+                    }
+                    break;
+                case "rate":
+                    {
+                        var rate = request.OptionalFloatArg("rate");
+                        if (!rate.HasValue) return ErrorJson("E_VFX_RATE_REQUIRED", "Rate action requires --rate <value>.", "Pass a playback rate (1.0 = normal).");
+                        var playRateProp = visualEffectType.GetProperty("playRate", BindingFlags.Instance | BindingFlags.Public);
+                        if (playRateProp != null && playRateProp.CanWrite) playRateProp.SetValue(component, rate.Value, null);
+                        effects.Add(EffectJson("vfx.control", "playRate", Number(rate.Value)));
+                    }
+                    break;
+                case "seed":
+                    {
+                        var seed = request.OptionalIntArg("seed");
+                        if (!seed.HasValue) return ErrorJson("E_VFX_SEED_REQUIRED", "Seed action requires --seed <value>.", "Pass an integer seed.");
+                        var startSeedProp = visualEffectType.GetProperty("startSeed", BindingFlags.Instance | BindingFlags.Public);
+                        if (startSeedProp != null && startSeedProp.CanWrite) startSeedProp.SetValue(component, seed.Value, null);
+                        var resetProp = request.OptionalBoolArg("resetSeedOnPlay");
+                        if (resetProp.HasValue)
+                        {
+                            var resetSeedProp = visualEffectType.GetProperty("resetSeedOnPlay", BindingFlags.Instance | BindingFlags.Public);
+                            if (resetSeedProp != null && resetSeedProp.CanWrite) resetSeedProp.SetValue(component, resetProp.Value, null);
+                        }
+                        effects.Add(EffectJson("vfx.control", "startSeed", seed.Value.ToString(CultureInfo.InvariantCulture)));
+                    }
+                    break;
+                default:
+                    return ErrorJson("E_VFX_CONTROL_ACTION_UNSUPPORTED", "Unsupported VFX control action: " + action, "Use play, stop, pause, reinit, rate, or seed.");
+            }
+
+            EditorSceneManager.MarkSceneDirty(go.scene);
+            WriteLog("vfx_control target=" + HierarchyPath(go) + " action=" + action);
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("target", GameObjectTargetJson(go))
+                .Prop("action", action)
+                .PropArray("plannedEffects", arr => { foreach (var e in effects) arr.RawValue(e); })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        // ── VFX Event ──────────────────────────────────────────────────────────
+        // Critically references unity-mcp VfxGraphWrite.cs: SendEvent(eventName, attr)
+        //   and CreateVFXEventAttribute() + attr.SetVector3/SetFloat.
+
+        private static string VfxEvent(BridgeRequest request)
+        {
+            RequireVfxPackageInstalled();
+            var visualEffectType = RequireVisualEffectType();
+            var go = ResolveUniqueTarget(request.StringArg("target"), "VFX event requires --target <go>.");
+            var component = go.GetComponent(visualEffectType);
+            if (component == null)
+                return ErrorJson("E_VFX_COMPONENT_NOT_FOUND", "VisualEffect component not found on target: " + HierarchyPath(go), "Pass a target with VisualEffect.");
+            var eventName = request.StringArg("eventName");
+            if (string.IsNullOrEmpty(eventName))
+                return ErrorJson("E_VFX_EVENT_NAME_REQUIRED", "VFX event requires --event-name <name>.", "Pass the VFX Graph event name.");
+
+            // Check if there are attribute payloads
+            var hasAttrs = request.HasArg("attributeName");
+            object eventAttr = null;
+            Type vfxEventAttrType = null;
+
+            if (hasAttrs)
+            {
+                // Create VFXEventAttribute via CreateVFXEventAttribute()
+                var createMethod = visualEffectType.GetMethod("CreateVFXEventAttribute", Type.EmptyTypes);
+                if (createMethod != null)
+                {
+                    eventAttr = createMethod.Invoke(component, null);
+                    vfxEventAttrType = eventAttr?.GetType();
+                }
+
+                if (vfxEventAttrType != null && eventAttr != null)
+                {
+                    var attrName = request.StringArg("attributeName");
+                    if (!string.IsNullOrEmpty(attrName))
+                    {
+                        // Set Vector3 attributes (position, velocity, etc.)
+                        var hasVector = request.HasArg("attributeX") || request.HasArg("attributeY") || request.HasArg("attributeZ");
+                        if (hasVector)
+                        {
+                            var setVec3Method = vfxEventAttrType.GetMethod("SetVector3", new[] { typeof(string), typeof(Vector3) });
+                            if (setVec3Method != null)
+                            {
+                                var vec = new Vector3(request.FloatArg("attributeX", 0f), request.FloatArg("attributeY", 0f), request.FloatArg("attributeZ", 0f));
+                                setVec3Method.Invoke(eventAttr, new object[] { attrName, vec });
+                            }
+                        }
+                        // Set float attributes (size, etc.)
+                        var hasSize = request.HasArg("attributeSize");
+                        if (hasSize)
+                        {
+                            var setFloatMethod = vfxEventAttrType.GetMethod("SetFloat", new[] { typeof(string), typeof(float) });
+                            if (setFloatMethod != null)
+                            {
+                                setFloatMethod.Invoke(eventAttr, new object[] { attrName, request.FloatArg("attributeSize", 0f) });
+                            }
+                        }
+                    }
+                }
+            }
+
+            // SendEvent(string eventName, VFXEventAttribute eventAttribute)
+            var sendMethod = eventAttr != null
+                ? visualEffectType.GetMethod("SendEvent", new[] { typeof(string), vfxEventAttrType ?? typeof(object) })
+                : visualEffectType.GetMethod("SendEvent", new[] { typeof(string) });
+            if (sendMethod == null)
+                sendMethod = visualEffectType.GetMethod("SendEvent", new[] { typeof(string) });
+            if (sendMethod != null)
+            {
+                var args = eventAttr != null ? new object[] { eventName, eventAttr } : new object[] { eventName };
+                sendMethod.Invoke(component, args);
+            }
+
+            WriteLog("vfx_event target=" + HierarchyPath(go) + " event=" + eventName);
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("target", GameObjectTargetJson(go))
+                .Prop("eventName", eventName)
+                .Prop("hasAttributes", hasAttrs)
+                .PropArray("plannedEffects", arr => arr.BeginObject()
+                    .Prop("type", "vfx.event")
+                    .Prop("eventName", eventName)
+                    .Prop("target", HierarchyPath(go))
+                    .EndObject())
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        // ── VFX Template ──────────────────────────────────────────────────────
+        // Critically references unity-mcp VfxGraphAssets.cs: template search paths
+        //   in {packageResolvedPath}/Editor/Templates, {packageResolvedPath}/Samples.
+        //   Uses AssetDatabase.CopyAsset for template cloning.
+
+        private static string VfxTemplate(BridgeRequest request)
+        {
+            RequireVfxPackageInstalled();
+            var assetType = RequireVfxAssetType();
+            var destPath = RequireVfxGraphPath(request.StringArg("path"));
+            var templateName = request.StringArg("template");
+            if (string.IsNullOrEmpty(templateName))
+                return ErrorJson("E_VFX_TEMPLATE_NAME_REQUIRED", "VFX template requires --template <name>.", "Pass a template name (e.g. AR/AugmentedRealityTemplate, SimpleParticle). Use 'vfx template --template list' to discover templates.");
+
+            // List templates
+            if (string.Equals(templateName, "list", StringComparison.OrdinalIgnoreCase))
+            {
+                var templates = DiscoverVfxTemplates();
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .PropArray("templates", arr => { foreach (var t in templates) arr.Value(t); })
+                    .Prop("count", (long)templates.Count)
+                    .Prop("logPath", LogPath())
+                    .EndObject().ToString());
+            }
+
+            var overwrite = request.BoolArg("overwrite", false);
+            if (AssetDatabase.LoadAssetAtPath(destPath, assetType) != null && !overwrite)
+                return ErrorJson("E_VFX_GRAPH_EXISTS", "VFX Graph already exists: " + destPath, "Pass --overwrite or choose a different path.");
+
+            // Find template
+            var templatePath = ResolveVfxTemplatePath(templateName);
+            if (string.IsNullOrEmpty(templatePath))
+                return ErrorJson("E_VFX_TEMPLATE_NOT_FOUND", "VFX Graph template not found: " + templateName, "Use 'vfx template --template list' to discover available templates.");
+
+            CreateAssetDirectory(destPath);
+            if (!AssetDatabase.CopyAsset(templatePath, destPath))
+                return ErrorJson("E_VFX_TEMPLATE_COPY_FAILED", "Failed to copy template to: " + destPath, "Check destination path and Unity Console for errors.");
+
+            AssetDatabase.ImportAsset(destPath, ImportAssetOptions.ForceUpdate);
+            var created = AssetDatabase.LoadAssetAtPath(destPath, assetType);
+            WriteLog("vfx_template_created template=" + templateName + " path=" + destPath);
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("graph", VfxGraphJson(destPath, created))
+                .Prop("templateName", templateName)
+                .PropArray("plannedEffects", arr => arr.BeginObject()
+                    .Prop("type", "vfx.template")
+                    .Prop("template", templateName)
+                    .Prop("path", destPath)
+                    .EndObject())
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        private static List<string> DiscoverVfxTemplates()
+        {
+            var results = new List<string>();
+            var packageInfo = UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.visualeffectgraph");
+            if (packageInfo == null) return results;
+            var searchPaths = new[]
+            {
+                System.IO.Path.Combine(packageInfo.resolvedPath, "Editor", "Templates"),
+                System.IO.Path.Combine(packageInfo.resolvedPath, "Samples"),
+                System.IO.Path.Combine(packageInfo.resolvedPath, "Samples~")
+            };
+            foreach (var searchPath in searchPaths)
+            {
+                if (!Directory.Exists(searchPath)) continue;
+                foreach (var file in Directory.GetFiles(searchPath, "*.vfx", SearchOption.AllDirectories))
+                {
+                    var relative = file.Substring(searchPath.Length).TrimStart(System.IO.Path.DirectorySeparatorChar, '/');
+                    var name = System.IO.Path.GetFileNameWithoutExtension(relative);
+                    if (!results.Contains(name)) results.Add(name);
+                }
+            }
+            results.Sort();
+            return results;
+        }
+
+        private static string ResolveVfxTemplatePath(string templateName)
+        {
+            var packageInfo = UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.visualeffectgraph");
+            if (packageInfo == null) return null;
+            var searchPaths = new[]
+            {
+                System.IO.Path.Combine(packageInfo.resolvedPath, "Editor", "Templates"),
+                System.IO.Path.Combine(packageInfo.resolvedPath, "Samples"),
+                System.IO.Path.Combine(packageInfo.resolvedPath, "Samples~")
+            };
+            foreach (var searchPath in searchPaths)
+            {
+                if (!Directory.Exists(searchPath)) continue;
+                // Try exact file name match
+                var exactFile = System.IO.Path.Combine(searchPath, templateName + ".vfx");
+                if (File.Exists(exactFile)) return ToAssetPath(exactFile);
+                // Try nested path match
+                var nestedFiles = Directory.GetFiles(searchPath, "*.vfx", SearchOption.AllDirectories);
+                foreach (var file in nestedFiles)
+                {
+                    var name = System.IO.Path.GetFileNameWithoutExtension(file);
+                    if (string.Equals(name, templateName, StringComparison.OrdinalIgnoreCase)) return ToAssetPath(file);
+                    var relative = file.Substring(searchPath.Length).TrimStart(System.IO.Path.DirectorySeparatorChar, '/');
+                    if (string.Equals(relative, templateName + ".vfx", StringComparison.OrdinalIgnoreCase)) return ToAssetPath(file);
+                }
+            }
+            return null;
+        }
+
+        private static string ToAssetPath(string fullPath)
+        {
+            // Convert absolute path to Unity asset path if under Packages/
+            var projectRoot = ProjectRoot();
+            if (fullPath.StartsWith(projectRoot, StringComparison.OrdinalIgnoreCase))
+            {
+                return fullPath.Substring(projectRoot.Length).TrimStart(System.IO.Path.DirectorySeparatorChar, '/').Replace('\\', '/');
+            }
+            return fullPath.Replace('\\', '/');
         }
     }
 }

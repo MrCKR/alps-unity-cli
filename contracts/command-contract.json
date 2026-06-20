@@ -203,6 +203,136 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "cinemachine.aim",
+      "group": "cinemachine",
+      "command": "aim",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.cinemachine"
+      ]
+    },
+    {
+      "bridgeCommand": "cinemachine.blend",
+      "group": "cinemachine",
+      "command": "blend",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.cinemachine"
+      ]
+    },
+    {
+      "bridgeCommand": "cinemachine.body",
+      "group": "cinemachine",
+      "command": "body",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.cinemachine"
+      ]
+    },
+    {
+      "bridgeCommand": "cinemachine.brain",
+      "group": "cinemachine",
+      "command": "brain",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.cinemachine"
+      ]
+    },
+    {
+      "bridgeCommand": "cinemachine.create",
+      "group": "cinemachine",
+      "command": "create",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.cinemachine"
+      ]
+    },
+    {
+      "bridgeCommand": "cinemachine.extension",
+      "group": "cinemachine",
+      "command": "extension",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": true,
+      "timeout": 60000,
+      "requires_packages": [
+        "com.unity.cinemachine"
+      ]
+    },
+    {
+      "bridgeCommand": "cinemachine.lens",
+      "group": "cinemachine",
+      "command": "lens",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.cinemachine"
+      ]
+    },
+    {
+      "bridgeCommand": "cinemachine.noise",
+      "group": "cinemachine",
+      "command": "noise",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.cinemachine"
+      ]
+    },
+    {
+      "bridgeCommand": "cinemachine.priority",
+      "group": "cinemachine",
+      "command": "priority",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.cinemachine"
+      ]
+    },
+    {
+      "bridgeCommand": "cinemachine.target",
+      "group": "cinemachine",
+      "command": "target",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.cinemachine"
+      ]
+    },
+    {
       "bridgeCommand": "cli.batch.run",
       "group": "cli",
       "command": "run",
@@ -583,6 +713,32 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "hdrp.settings",
+      "group": "hdrp",
+      "command": "settings",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.render-pipelines.high-definition"
+      ]
+    },
+    {
+      "bridgeCommand": "hdrp.volume",
+      "group": "hdrp",
+      "command": "volume",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.render-pipelines.high-definition"
+      ]
+    },
+    {
       "bridgeCommand": "material.assign",
       "group": "material",
       "command": "assign",
@@ -946,6 +1102,40 @@
       ]
     },
     {
+      "bridgeCommand": "project-tool.list",
+      "group": "project-tool",
+      "command": "list",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000,
+      "architectureSensitive": true,
+      "frozenDecision": "ALP-404-Q3",
+      "coverageScope": [
+        "project-tool",
+        "editor-session",
+        "availability-scope"
+      ]
+    },
+    {
+      "bridgeCommand": "project-tool.run",
+      "group": "project-tool",
+      "command": "run",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 60000,
+      "architectureSensitive": true,
+      "frozenDecision": "ALP-404-Q4",
+      "coverageScope": [
+        "project-tool",
+        "editor-session",
+        "custom-tool-execution"
+      ]
+    },
+    {
       "bridgeCommand": "runtime-tool.list",
       "group": "runtime-tool",
       "command": "list",
@@ -978,40 +1168,6 @@
         "play-mode-session",
         "cross-frame-wait",
         "timeout-semantics"
-      ]
-    },
-    {
-      "bridgeCommand": "project-tool.list",
-      "group": "project-tool",
-      "command": "list",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "readOnly": true,
-      "destructive": false,
-      "timeout": 30000,
-      "architectureSensitive": true,
-      "frozenDecision": "ALP-404-Q3",
-      "coverageScope": [
-        "project-tool",
-        "editor-session",
-        "availability-scope"
-      ]
-    },
-    {
-      "bridgeCommand": "project-tool.run",
-      "group": "project-tool",
-      "command": "run",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "readOnly": false,
-      "destructive": false,
-      "timeout": 60000,
-      "architectureSensitive": true,
-      "frozenDecision": "ALP-404-Q4",
-      "coverageScope": [
-        "project-tool",
-        "editor-session",
-        "custom-tool-execution"
       ]
     },
     {
@@ -1255,6 +1411,63 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "tools.describe",
+      "group": "tools",
+      "command": "describe",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 10000
+    },
+    {
+      "bridgeCommand": "tools.groups",
+      "group": "tools",
+      "command": "groups",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 5000
+    },
+    {
+      "bridgeCommand": "tools.list",
+      "group": "tools",
+      "command": "list",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 5000
+    },
+    {
+      "bridgeCommand": "tools.run",
+      "group": "tools",
+      "command": "run",
+      "handler_type": "hybrid",
+      "csharp_handler": "none",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "architectureSensitive": true,
+      "frozenDecision": "ALP-365-P6",
+      "coverageScope": [
+        "tools-run",
+        "runtime-target",
+        "play-mode-session"
+      ]
+    },
+    {
+      "bridgeCommand": "tools.search",
+      "group": "tools",
+      "command": "search",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 5000
+    },
+    {
       "bridgeCommand": "ui.button.create",
       "group": "ui",
       "command": "button/create",
@@ -1325,9 +1538,74 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "urp.feature",
+      "group": "urp",
+      "command": "feature",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": true,
+      "timeout": 60000,
+      "requires_packages": [
+        "com.unity.render-pipelines.universal"
+      ]
+    },
+    {
+      "bridgeCommand": "urp.settings",
+      "group": "urp",
+      "command": "settings",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.render-pipelines.universal"
+      ]
+    },
+    {
+      "bridgeCommand": "urp.volume",
+      "group": "urp",
+      "command": "volume",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.render-pipelines.universal"
+      ]
+    },
+    {
+      "bridgeCommand": "vfx.control",
+      "group": "vfx",
+      "command": "control",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.visualeffectgraph"
+      ]
+    },
+    {
       "bridgeCommand": "vfx.effect",
       "group": "vfx",
       "command": "effect",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.visualeffectgraph"
+      ]
+    },
+    {
+      "bridgeCommand": "vfx.event",
+      "group": "vfx",
+      "command": "event",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "readOnly": false,
@@ -1351,60 +1629,29 @@
       ]
     },
     {
-      "bridgeCommand": "tools.list",
-      "group": "tools",
-      "command": "list",
-      "handler_type": "offline",
-      "csharp_handler": "none",
-      "readOnly": true,
-      "destructive": false,
-      "timeout": 5000
-    },
-    {
-      "bridgeCommand": "tools.groups",
-      "group": "tools",
-      "command": "groups",
-      "handler_type": "offline",
-      "csharp_handler": "none",
-      "readOnly": true,
-      "destructive": false,
-      "timeout": 5000
-    },
-    {
-      "bridgeCommand": "tools.search",
-      "group": "tools",
-      "command": "search",
-      "handler_type": "offline",
-      "csharp_handler": "none",
-      "readOnly": true,
-      "destructive": false,
-      "timeout": 5000
-    },
-    {
-      "bridgeCommand": "tools.describe",
-      "group": "tools",
-      "command": "describe",
-      "handler_type": "offline",
-      "csharp_handler": "none",
-      "readOnly": true,
-      "destructive": false,
-      "timeout": 10000
-    },
-    {
-      "bridgeCommand": "tools.run",
-      "group": "tools",
-      "command": "run",
-      "handler_type": "hybrid",
-      "csharp_handler": "none",
+      "bridgeCommand": "vfx.parameter",
+      "group": "vfx",
+      "command": "parameter",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
       "timeout": 30000,
-      "architectureSensitive": true,
-      "frozenDecision": "ALP-365-P6",
-      "coverageScope": [
-        "tools-run",
-        "runtime-target",
-        "play-mode-session"
+      "requires_packages": [
+        "com.unity.visualeffectgraph"
+      ]
+    },
+    {
+      "bridgeCommand": "vfx.template",
+      "group": "vfx",
+      "command": "template",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.visualeffectgraph"
       ]
     }
   ]

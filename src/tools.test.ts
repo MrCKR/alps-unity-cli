@@ -564,7 +564,7 @@ test("S3.2 physics group has settings, raycast and simulation tools", () => {
 
 test("S3.2 animation and vfx groups have required tools", () => {
   assert.deepEqual(filterToolsByGroup("animation").map((t) => t.name), ["animation.clip", "animation.state", "animation.play", "animation.stop"]);
-  assert.deepEqual(filterToolsByGroup("vfx").map((t) => t.name), ["vfx.graph", "vfx.effect"]);
+  assert.deepEqual(filterToolsByGroup("vfx").map((t) => t.name), ["vfx.graph", "vfx.effect", "vfx.parameter", "vfx.control", "vfx.event", "vfx.template"]);
 });
 
 test("tools describe graphics.volume returns bridge metadata", async () => {

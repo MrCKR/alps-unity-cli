@@ -239,6 +239,99 @@ After executing a tool, verify the outcome:
 - **Console check:** Use `tools run editor.console` to check for errors or warnings after mutations.
 - **Compilation check:** After script changes, wait for compilation, then use `tools run editor.console` to check for errors.
 
+## Optional Package Extensions
+
+Some tools require optional Unity packages to be installed in the target project. These tools declare `requiresPackages` in their descriptor and will return `E_*_PACKAGE_NOT_FOUND` with `unavailable + next_actions` when the package is missing.
+
+### Discovering Extension Tools
+
+Extension tools are exposed through the same group-first discovery workflow:
+
+```bash
+unity_cli tools groups                       # includes cinemachine, vfx, urp, hdrp, probuilder groups
+unity_cli tools list --group cinemachine     # list Cinemachine tools
+unity_cli tools list --group vfx             # list VFX Graph tools
+unity_cli tools list --group urp            # list URP tools
+unity_cli tools list --group hdrp           # list HDRP tools
+unity_cli tools describe cinemachine.create  # inspect a specific extension tool
+```
+
+### Cinemachine (com.unity.cinemachine)
+
+Requires the Cinemachine package. When missing, tools return `E_CINEMACHINE_PACKAGE_NOT_FOUND`.
+
+```bash
+# Create a follow camera preset (configures Body/Aim pipeline components)
+unity_cli tools run cinemachine.create --input '{"preset":"follow","name":"PlayerCam","follow":"Player"}'
+
+# Set lens properties via SerializedObject (survives internal field renames)
+unity_cli tools run cinemachine.lens --input '{"target":"PlayerCam","fieldOfView":60}'
+
+# Configure the Brain's default blend
+unity_cli tools run cinemachine.blend --input '{"target":"Main Camera","style":"ease_in_out","duration":2}'
+
+# Swap Body/Aim pipeline components
+unity_cli tools run cinemachine.body --input '{"target":"PlayerCam","body":"CinemachineFollow"}'
+unity_cli tools run cinemachine.aim --input '{"target":"PlayerCam","aim":"CinemachineRotationComposer"}'
+
+# Add/list/remove CinemachineExtension components
+unity_cli tools run cinemachine.extension --input '{"target":"PlayerCam","action":"list"}'
+```
+
+### VFX Graph (com.unity.visualeffectgraph)
+
+Requires the Visual Effect Graph package. When missing, tools return `E_VFX_PACKAGE_MISSING`.
+
+```bash
+# Create a VFX asset from a built-in template
+unity_cli tools run vfx.template --input '{"path":"Assets/VFX/Sparkle.vfx","template":"AR/AugmentedRealityTemplate"}'
+unity_cli tools run vfx.template --input '{"template":"list"}'   # discover available templates
+
+# Set exposed parameters (float, int, bool, vector2/3/4, color, texture, mesh)
+unity_cli tools run vfx.parameter --input '{"target":"VFXFire","name":"Intensity","type":"float","value":"2.5"}'
+unity_cli tools run vfx.parameter --input '{"target":"VFXFire","name":"Velocity","type":"vector3","x":0,"y":1,"z":0}'
+
+# Control playback
+unity_cli tools run vfx.control --input '{"target":"VFXFire","action":"play"}'
+unity_cli tools run vfx.control --input '{"target":"VFXFire","action":"rate","rate":0.5}'
+
+# Send named events with attribute payloads
+unity_cli tools run vfx.event --input '{"target":"VFXFire","eventName":"Explode","attributeName":"position","attributeX":1,"attributeY":2,"attributeZ":3}'
+```
+
+### URP (com.unity.render-pipelines.universal)
+
+Requires URP to be the active render pipeline. When not active, tools return `E_URP_PACKAGE_NOT_FOUND`.
+
+```bash
+# List/add/remove/toggle/configure Renderer Features
+unity_cli tools run urp.feature --input '{"action":"list"}'
+unity_cli tools run urp.feature --input '{"action":"add","featureType":"ScreenSpaceAmbientOcclusion"}'
+unity_cli tools run urp.feature --input '{"action":"toggle","index":0,"enabled":false}'
+
+# Create/list/configure Volumes
+unity_cli tools run urp.volume --input '{"action":"create","name":"GlobalVolume","isGlobal":true}'
+unity_cli tools run urp.volume --input '{"action":"add-effect","target":"GlobalVolume","effectType":"ColorAdjustments"}'
+
+# Get/set pipeline asset settings
+unity_cli tools run urp.settings --input '{}'
+unity_cli tools run urp.settings --input '{"property":"renderScale","value":"1.5"}'
+```
+
+### HDRP (com.unity.render-pipelines.high-definition)
+
+Requires HDRP to be the active render pipeline. When not active, tools return `E_HDRP_PACKAGE_NOT_FOUND`.
+
+```bash
+# Create/list/configure Volumes
+unity_cli tools run hdrp.volume --input '{"action":"create","name":"GlobalVolume","isGlobal":true}'
+unity_cli tools run hdrp.volume --input '{"action":"add-effect","target":"GlobalVolume","effectType":"HDShadowSettings"}'
+
+# Get/set pipeline asset settings
+unity_cli tools run hdrp.settings --input '{}'
+unity_cli tools run hdrp.settings --input '{"property":"shadowDistance","value":"500"}'
+```
+
 ---
 
 ## Common Patterns

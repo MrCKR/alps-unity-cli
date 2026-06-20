@@ -45,7 +45,10 @@ namespace UnityCli
         private static readonly string[] ProfilerCommands = { "profiler.start", "profiler.stop", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export", "profiler.status" };
         private static readonly string[] ProBuilderCommands = { "probuilder.shape", "probuilder.create", "probuilder.csg", "probuilder.edit" };
         private static readonly string[] AnimationCommands = { "animation.clip", "animation.state", "animation.play", "animation.stop" };
-        private static readonly string[] VfxCommands = { "vfx.graph", "vfx.effect" };
+        private static readonly string[] VfxCommands = { "vfx.graph", "vfx.effect", "vfx.parameter", "vfx.control", "vfx.event", "vfx.template" };
+        private static readonly string[] CinemachineCommands = { "cinemachine.create", "cinemachine.target", "cinemachine.lens", "cinemachine.priority", "cinemachine.blend", "cinemachine.body", "cinemachine.aim", "cinemachine.noise", "cinemachine.brain", "cinemachine.extension" };
+        private static readonly string[] UrpCommands = { "urp.feature", "urp.volume", "urp.settings" };
+        private static readonly string[] HdrpCommands = { "hdrp.volume", "hdrp.settings" };
         private static readonly string[] ShaderCommands = { "shader.info", "shader.read", "shader.create", "shader.update" };
         private static readonly string[] TextureCommands = { "texture.info", "texture.create", "texture.sprite", "texture.import-settings" };
         private static readonly string[] EditorCommands = { "editor.state", "editor.play", "editor.pause", "editor.stop", "editor.menu", "editor.console" };
@@ -270,6 +273,8 @@ namespace UnityCli
                 || command == "code.exec"
                 || command == "component.remove"
                 || command == "probuilder.csg"
+                || command == "cinemachine.extension"
+                || command == "urp.feature"
                 || command == "editor.menu"
                 || command == "script.edit";
         }

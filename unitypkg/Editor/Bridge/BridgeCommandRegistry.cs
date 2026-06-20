@@ -96,8 +96,11 @@ namespace UnityCli
             RegisterPhysicsCommands(registry);
             RegisterProfilerCommands(registry);
             RegisterProBuilderCommands(registry);
+            RegisterCinemachineCommands(registry);
             RegisterAnimationCommands(registry);
             RegisterVfxCommands(registry);
+            RegisterUrpCommands(registry);
+            RegisterHdrpCommands(registry);
             RegisterShaderCommands(registry);
             RegisterTextureCommands(registry);
             RegisterEditorCommands(registry);

@@ -44,8 +44,11 @@ namespace UnityCli
             w.RawValue(CapabilityJson("physics", PhysicsCommands));
             w.RawValue(CapabilityJson("profiler", ProfilerCommands));
             w.RawValue(CapabilityJson("probuilder", ProBuilderCommands));
+            w.RawValue(CapabilityJson("cinemachine", CinemachineCommands));
             w.RawValue(CapabilityJson("animation", AnimationCommands));
             w.RawValue(CapabilityJson("vfx", VfxCommands));
+            w.RawValue(CapabilityJson("urp", UrpCommands));
+            w.RawValue(CapabilityJson("hdrp", HdrpCommands));
             w.RawValue(CapabilityJson("shader", ShaderCommands));
             w.RawValue(CapabilityJson("texture", TextureCommands));
             w.RawValue(CapabilityJson("editor", EditorCommands));
