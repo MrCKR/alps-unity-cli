@@ -23,6 +23,7 @@ import { handleCode } from "./runtime-code.js";
 import { JobStore } from "./job-store.js";
 import { createRequestId, failure, printJson, success } from "./output.js";
 import { defaultDataDir, ensureWindows } from "./platform.js";
+import { handleContextCommand } from "./context.js";
 import { handleToolsCommand } from "./tools.js";
 import { confirmDestructiveExecution } from "./security.js";
 import { securityPolicyForCommand } from "./security-policy.js";
@@ -38,13 +39,14 @@ const CLI_COMMANDS = new Map<string, CliCommandModule>([
   ["target", { run: ({ command, args, flags, runtime, requestId }) => handleTargetCommand(command, args, flags, runtime.dataDir, requestId) }],
   ["code", { run: ({ command, flags, runtime, requestId }) => handleCode(command, flags, runtime, requestId) }],
   ["tools", { run: ({ command, args, flags, runtime, requestId }) => handleToolsCommand(command, args, flags, runtime, requestId) }],
+  ["context", { run: ({ command, args, flags, runtime, requestId }) => handleContextCommand(command, args, flags, runtime, requestId) }],
+  ["extensions", { run: ({ command, args, flags, runtime, requestId }) => handleExtensionsCommand(command, args, flags, runtime, requestId) }],
   ["capabilities", { run: ({ flags, runtime, requestId }) => handleCapabilitiesCommand(flags, runtime, requestId) }],
   ["docs", { run: ({ command, args, flags, runtime, requestId }) => handleDocsCommand(command, args, flags, runtime.dataDir, requestId, runtime) }],
   ["reflect", { run: ({ command, args, flags, runtime, requestId }) => handleReflectCommand(command, args, flags, runtime.dataDir, requestId) }],
   ["editor", { run: ({ command, flags, runtime, requestId }) => handleEditor(command, flags, runtime, requestId) }],
   ["test", { run: ({ command, flags, runtime, requestId }) => handleTest(command, flags, runtime, requestId) }],
-  ["build", { run: ({ command, flags, runtime, requestId }) => handleBuild(command, flags, runtime, requestId) }],
-  ["extensions", { run: ({ command, args, flags, runtime, requestId }) => handleExtensionsCommand(command, args, flags, runtime, requestId) }]
+  ["build", { run: ({ command, flags, runtime, requestId }) => handleBuild(command, flags, runtime, requestId) }]
 ]);
 
 export async function execute(argv: string[], runtime = createRuntime()): Promise<CliResult> {
@@ -201,15 +203,20 @@ function help(): Record<string, unknown> {
       "reflect type <name> [--reflect-dir <path>] [--unity-version <version>] [--format json|text]",
       "reflect member <type.member> [--reflect-dir <path>] [--format json|text]",
       "reflect search <query> [--reflect-dir <path>] [--page-size 20 --cursor 0] [--format json|text]",
+"tools group [--format json|text]",
+      "tools group list <group> [--format json|text]",
       "tools list [--group <group>] [--include-custom] [--format json|text]",
-      "extensions list [--project <path>] [--format json|text]",
-      "extensions install <name> [--project <path>]",
-      "extensions remove <name> [--project <path>]",
-      "extensions doctor [--project <path>] [--format json|text]",
       "tools groups",
-      "tools search <keyword> [--format json|text]",
       "tools describe <tool>",
       "tools run <name> [--input <json>] [--input-file <path>] [--timeout-ms <n>] [--fingerprint-mode warn|block] [--artifact-dir <path>] [--runtime] [--target <instance>]",
+      "tools search <keyword> [--format json|text]",
+      "context list [--category <cat>] [--format json|text]",
+      "context describe <name>",
+      "context read <name> [--input <json>] [--target <instance>]",
+      "extensions list [--project <path>] [--format json|text]",
+      "extensions install <id|name> [--project <path>]",
+      "extensions remove <id|name> [--project <path>]",
+      "extensions doctor [--project <path>] [--format json|text]",
       "capabilities [--json] [--bridge-endpoint <url>]",
       "code exec (--file <path>|--stdin|--code <text>) [--channel live|batchmode] [--refs <list>] [--define <symbol>] [--args <json>] [--timeout-ms <n>] [--job] [--artifact-dir <path>]",
       "scene active [规划中]",

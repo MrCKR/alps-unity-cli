@@ -583,6 +583,36 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "context.describe",
+      "group": "context",
+      "command": "describe",
+      "handler_type": "bridge",
+      "csharp_handler": "planned",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "context.list",
+      "group": "context",
+      "command": "list",
+      "handler_type": "bridge",
+      "csharp_handler": "planned",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "context.read",
+      "group": "context",
+      "command": "read",
+      "handler_type": "bridge",
+      "csharp_handler": "planned",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "diagnose.preflight",
       "group": "preflight",
       "command": "",
@@ -659,6 +689,16 @@
       "handler_type": "bridge",
       "csharp_handler": "present",
       "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "extension.status",
+      "group": "extension",
+      "command": "status",
+      "handler_type": "bridge",
+      "csharp_handler": "planned",
+      "readOnly": true,
       "destructive": false,
       "timeout": 30000
     },
@@ -1861,9 +1901,29 @@
       "timeout": 10000
     },
     {
+"bridgeCommand": "tools.group",
+      "group": "tools",
+      "command": "group",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 5000
+    },
+    {
       "bridgeCommand": "tools.groups",
       "group": "tools",
       "command": "groups",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 5000
+    },
+    {
+"bridgeCommand": "tools.group-list",
+      "group": "tools",
+      "command": "group-list",
       "handler_type": "offline",
       "csharp_handler": "none",
       "readOnly": true,

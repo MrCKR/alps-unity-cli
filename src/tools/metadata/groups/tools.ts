@@ -3,30 +3,30 @@ import { objSchema } from "../schemas.js";
 
 export const TOOLS_DISCOVERY_TOOLS: ToolMetadata[] = [
   {
-    name: "tools.list",
-    title: "List Tools",
-    description: "List all available Unity CLI tools, optionally filtered by group, with optional custom/project tool discovery.",
-    group: "tools",
-    inputSchema: objSchema({
-      group: { type: "string" },
-      includeCustom: { type: "boolean", default: false }
-    }),
-    readOnlyHint: true,
-    destructiveHint: false,
-    handler: "offline",
-    cliCommand: "tools list",
-    docsTopic: "tools"
-  },
-  {
-    name: "tools.groups",
+    name: "tools.group",
     title: "Tool Groups",
-    description: "List the available tool category groups.",
+    description: "List the available tool category groups. Primary discovery entry point in the group-first model.",
     group: "tools",
     inputSchema: objSchema({}),
     readOnlyHint: true,
     destructiveHint: false,
     handler: "offline",
-    cliCommand: "tools groups",
+    cliCommand: "tools group",
+    docsTopic: "tools"
+  },
+  {
+    name: "tools.group-list",
+    title: "List Tools in Group",
+    description: "List tools in a specific group with short summaries. Does NOT expand full schema.",
+    group: "tools",
+    inputSchema: objSchema({
+      group: { type: "string" },
+      includeCustom: { type: "boolean", default: false }
+    }, ["group"]),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "offline",
+    cliCommand: "tools group list",
     docsTopic: "tools"
   },
   {

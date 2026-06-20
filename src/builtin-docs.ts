@@ -23,8 +23,8 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   "tool-discovery": {
     title: "Tool Discovery",
-    summary: "Unified tools list/search/describe surface. All tools — built-in and project-local — share the same descriptor schema. Use `tools describe <name>` before executing any tool. Descriptor includes `target`, `availabilityScope`, `available` fields for P3-aligned routing. See docs/tool-discovery.md §Descriptor field coverage for current vs. P3 contract gap.",
-    guide: "Run `tools list --include-custom` for all available tools on the resolved target. Use `tools search <keyword>` when you know the domain. Always `tools describe <name>` before executing."
+    summary: "Group-first tool discovery surface. All tools — built-in and project-local — share the same descriptor schema. Use `tools describe <name>` before executing any tool. Descriptor includes `target`, `availabilityScope`, `available` fields for P3-aligned routing. See docs/tool-discovery.md §Descriptor field coverage for current vs. P3 contract gap.",
+    guide: "Run `tools group` to list all tool groups, then `tools group list <group>` to see tools in a group. Use `tools search <keyword>` when you know the domain. Always `tools describe <name>` before executing."
   },
   "tool-execution": {
     title: "Tool Execution",
@@ -34,7 +34,7 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   "availability-differences": {
     title: "Availability Differences",
     summary: "Why different Unity instances return different tool availability: package dependencies, project tool registration, Bridge reachability, PlayMode state (`available` field on runtime tools), and domain reload timing.",
-    guide: "Always resolve target first. Use `tools list --include-custom` against the specific instance. After package installs or domain reload, re-discover tools. Handle package-not-found and E_RUNTIME_NOT_READY errors using `next_actions`."
+    guide: "Always resolve target first. Use `tools group` then `tools group list <group> --include-custom` against the specific instance. After package installs or domain reload, re-discover tools. Handle package-not-found and E_RUNTIME_NOT_READY errors using `next_actions`."
   },
   "error-codes": {
     title: "Error Codes and next_actions",
@@ -172,8 +172,8 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   "project-tool": {
     title: "Project Tools (Custom)",
-    summary: "Tools registered by Unity project C# code via [UnityCliTool] attribute. Discovered through `tools list --include-custom`. Executed via `tools run <name>`. Handler: bridge or bridge-runtime. Target: editor or runtime. Availability depends on target instance and PlayMode state. Fingerprint-protected.",
-    guide: "Use `tools list --include-custom` to discover project tools. Use `tools describe <name>` for full schema, risk hints, and target/availability. Use `tools run <name>` to execute."
+    summary: "Tools registered by Unity project C# code via [UnityCliTool] attribute. Discovered through `tools group` and `tools group list <group> --include-custom`. Executed via `tools run <name>`. Handler: bridge or bridge-runtime. Target: editor or runtime. Availability depends on target instance and PlayMode state. Fingerprint-protected.",
+    guide: "Use `tools group` to list groups, then `tools group list <group> --include-custom` to discover project tools. Use `tools describe <name>` for full schema, risk hints, and target/availability. Use `tools run <name>` to execute."
   },
   "coverage-matrix": {
     title: "Coverage Matrix (v1.0 Archive — Engineering Reference Only)",
@@ -240,7 +240,7 @@ export function getBuiltinDocTopic(
     const available = buildTopics(runtime.projectTools).map((candidate) => candidate.key).sort();
     return failure(requestId, "DOCS_TOPIC_NOT_FOUND", `Documentation topic not found: ${topic}.`, [
       `Available topics: ${available.join(", ")}.`,
-      "Run unity_cli tools list to see tools grouped by topic."
+      "Run unity_cli tools group to see tool groups, then tools group list <group> to see tools in a group."
     ]);
   }
 

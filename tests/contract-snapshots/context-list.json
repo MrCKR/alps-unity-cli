@@ -1,0 +1,707 @@
+{
+  "command": "context.list",
+  "data": {
+    "ok": true,
+    "count": 16,
+    "contexts": [
+      {
+        "name": "project.info",
+        "title": "Project Info",
+        "description": "Project metadata: name, path, Unity version, and overall project structure.",
+        "kind": "context",
+        "source": "built-in",
+        "category": "project",
+        "readOnlyHint": true,
+        "refreshBehavior": "static",
+        "target": "editor",
+        "availabilityScope": "editorSession",
+        "resourceUri": "unity-cli://project/info",
+        "equivalentUnityMcp": "mcpforunity://project/info",
+        "handler": "bridge",
+        "inputSchema": {},
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "projectRoot": {
+              "type": "string"
+            },
+            "projectName": {
+              "type": "string"
+            },
+            "unityVersion": {
+              "type": "string"
+            },
+            "platform": {
+              "type": "string"
+            },
+            "assetsPath": {
+              "type": "string"
+            }
+          }
+        },
+        "cliCommand": "context read project.info"
+      },
+      {
+        "name": "project.tags",
+        "title": "Project Tags",
+        "description": "List all tags defined in the project's Tag Manager.",
+        "kind": "context",
+        "source": "built-in",
+        "category": "project",
+        "readOnlyHint": true,
+        "refreshBehavior": "on-demand",
+        "target": "editor",
+        "availabilityScope": "editorSession",
+        "resourceUri": "unity-cli://project/tags",
+        "equivalentUnityMcp": "mcpforunity://project/tags",
+        "handler": "bridge",
+        "inputSchema": {},
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "tags": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "count": {
+              "type": "integer"
+            }
+          }
+        },
+        "cliCommand": "context read project.tags"
+      },
+      {
+        "name": "project.layers",
+        "title": "Project Layers",
+        "description": "List all layers defined in the project's Tag Manager.",
+        "kind": "context",
+        "source": "built-in",
+        "category": "project",
+        "readOnlyHint": true,
+        "refreshBehavior": "on-demand",
+        "target": "editor",
+        "availabilityScope": "editorSession",
+        "resourceUri": "unity-cli://project/layers",
+        "equivalentUnityMcp": "mcpforunity://project/layers",
+        "handler": "bridge",
+        "inputSchema": {},
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "layers": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "index": {
+                    "type": "integer"
+                  },
+                  "name": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "count": {
+              "type": "integer"
+            }
+          }
+        },
+        "cliCommand": "context read project.layers"
+      },
+      {
+        "name": "editor.state",
+        "title": "Editor State",
+        "description": "Current editor state: compilation state, play mode, and general editor status.",
+        "kind": "context",
+        "source": "built-in",
+        "category": "editor",
+        "readOnlyHint": true,
+        "refreshBehavior": "live",
+        "target": "editor",
+        "availabilityScope": "editorSession",
+        "resourceUri": "unity-cli://editor/state",
+        "equivalentUnityMcp": "mcpforunity://editor/state",
+        "handler": "bridge",
+        "inputSchema": {},
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "playMode": {
+              "type": "string"
+            },
+            "busy": {
+              "type": "boolean"
+            },
+            "activeScene": {
+              "type": "string"
+            },
+            "prefabStage": {
+              "type": "object"
+            },
+            "bridge": {
+              "type": "object"
+            },
+            "runtime": {
+              "type": "object"
+            },
+            "schemaVersion": {
+              "type": "string"
+            },
+            "observedAt": {
+              "type": "string"
+            },
+            "availability": {
+              "type": "object"
+            },
+            "next_actions": {
+              "type": "array"
+            }
+          }
+        },
+        "cliCommand": "context read editor.state"
+      },
+      {
+        "name": "editor.selection",
+        "title": "Editor Selection",
+        "description": "Currently selected objects in the Unity Editor hierarchy or project browser.",
+        "kind": "context",
+        "source": "built-in",
+        "category": "editor",
+        "readOnlyHint": true,
+        "refreshBehavior": "live",
+        "target": "editor",
+        "availabilityScope": "editorSession",
+        "resourceUri": "unity-cli://editor/selection",
+        "equivalentUnityMcp": "mcpforunity://editor/selection",
+        "handler": "bridge",
+        "inputSchema": {},
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "activeObject": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "activeGameObject": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "activeTransform": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "objects": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "gameObjects": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "assetGUIDs": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            }
+          }
+        },
+        "cliCommand": "context read editor.selection"
+      },
+      {
+        "name": "editor.active-tool",
+        "title": "Active Tool",
+        "description": "Currently active editor tool (move, rotate, scale, rect, etc.).",
+        "kind": "context",
+        "source": "built-in",
+        "category": "editor",
+        "readOnlyHint": true,
+        "refreshBehavior": "live",
+        "target": "editor",
+        "availabilityScope": "editorSession",
+        "resourceUri": "unity-cli://editor/active-tool",
+        "equivalentUnityMcp": "mcpforunity://editor/active-tool",
+        "handler": "bridge",
+        "inputSchema": {},
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "activeTool": {
+              "type": "string"
+            },
+            "isCustom": {
+              "type": "boolean"
+            },
+            "pivotMode": {
+              "type": "string"
+            },
+            "pivotRotation": {
+              "type": "string"
+            },
+            "handlePosition": {
+              "type": "object"
+            },
+            "handleRotation": {
+              "type": "object"
+            }
+          }
+        },
+        "cliCommand": "context read editor.active-tool"
+      },
+      {
+        "name": "editor.windows",
+        "title": "Editor Windows",
+        "description": "List currently open editor windows and their types.",
+        "kind": "context",
+        "source": "built-in",
+        "category": "editor",
+        "readOnlyHint": true,
+        "refreshBehavior": "on-demand",
+        "target": "editor",
+        "availabilityScope": "editorSession",
+        "resourceUri": "unity-cli://editor/windows",
+        "equivalentUnityMcp": "mcpforunity://editor/windows",
+        "handler": "bridge",
+        "inputSchema": {},
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "windows": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "title": {
+                    "type": "string"
+                  },
+                  "typeName": {
+                    "type": "string"
+                  },
+                  "isFocused": {
+                    "type": "boolean"
+                  },
+                  "position": {
+                    "type": "object"
+                  },
+                  "instanceID": {
+                    "type": "integer"
+                  }
+                }
+              }
+            },
+            "count": {
+              "type": "integer"
+            }
+          }
+        },
+        "cliCommand": "context read editor.windows"
+      },
+      {
+        "name": "editor.tool-states",
+        "title": "Tool States",
+        "description": "Current state of editor tools (enabled/disabled, snap, grid settings).",
+        "kind": "context",
+        "source": "built-in",
+        "category": "editor",
+        "readOnlyHint": true,
+        "refreshBehavior": "live",
+        "target": "editor",
+        "availabilityScope": "editorSession",
+        "resourceUri": "unity-cli://editor/tool-states",
+        "equivalentUnityMcp": "none",
+        "equivalentUnityMcpNote": "unity-mcp 'get_tool_states' (mcpforunity://editor/tool-states) returns MCP tool discovery/enabled state (which MCP tools are available). This context returns Unity Editor tool settings (move/rotate/scale, pivot mode, snap, grid). No direct unity-mcp equivalent exists.",
+        "handler": "bridge",
+        "inputSchema": {},
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "transform": {
+              "type": "object"
+            },
+            "snap": {
+              "type": "object"
+            },
+            "grid": {
+              "type": "object"
+            },
+            "activeTool": {
+              "type": "string"
+            }
+          }
+        },
+        "cliCommand": "context read editor.tool-states"
+      },
+      {
+        "name": "prefab.stage",
+        "title": "Prefab Stage",
+        "description": "Current Prefab Mode / Prefab Stage state if a prefab is being edited.",
+        "kind": "context",
+        "source": "built-in",
+        "category": "prefab",
+        "readOnlyHint": true,
+        "refreshBehavior": "live",
+        "target": "editor",
+        "availabilityScope": "editorSession",
+        "resourceUri": "unity-cli://prefab/stage",
+        "equivalentUnityMcp": "mcpforunity://editor/prefab-stage",
+        "handler": "bridge",
+        "inputSchema": {},
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "isOpen": {
+              "type": "boolean"
+            },
+            "assetPath": {
+              "type": "string"
+            },
+            "prefabRootName": {
+              "type": "string"
+            },
+            "mode": {
+              "type": "string"
+            },
+            "isDirty": {
+              "type": "boolean"
+            }
+          }
+        },
+        "cliCommand": "context read prefab.stage"
+      },
+      {
+        "name": "editor.menu-items",
+        "title": "Menu Items",
+        "description": "Enumerate available menu items in the Unity Editor.",
+        "kind": "context",
+        "source": "built-in",
+        "category": "editor",
+        "readOnlyHint": true,
+        "refreshBehavior": "static",
+        "target": "editor",
+        "availabilityScope": "editorSession",
+        "resourceUri": "unity-cli://editor/menu-items",
+        "equivalentUnityMcp": "mcpforunity://menu-items",
+        "handler": "bridge",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "search": {
+              "type": "string",
+              "description": "Optional filter substring."
+            }
+          }
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "path": {
+                    "type": "string"
+                  },
+                  "label": {
+                    "type": "string"
+                  }
+                }
+              }
+            },
+            "count": {
+              "type": "integer"
+            }
+          }
+        },
+        "cliCommand": "context read editor.menu-items"
+      },
+      {
+        "name": "scene.gameobject",
+        "title": "Scene GameObject",
+        "description": "Read a specific GameObject's properties from the active scene.",
+        "kind": "context",
+        "source": "built-in",
+        "category": "scene",
+        "readOnlyHint": true,
+        "refreshBehavior": "on-demand",
+        "target": "editor",
+        "availabilityScope": "editorSession",
+        "resourceUri": "unity-cli://scene/gameobject/{instance_id}",
+        "equivalentUnityMcp": "mcpforunity://scene/gameobject/{instance_id}",
+        "handler": "bridge",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "description": "GameObject name or path."
+            },
+            "id": {
+              "type": "integer",
+              "description": "GameObject instance ID (takes priority over target/path)."
+            },
+            "path": {
+              "type": "string",
+              "description": "Hierarchy path, e.g. 'Main Camera/Directional Light'."
+            },
+            "includeComponents": {
+              "type": "boolean",
+              "description": "Include component summaries in the output."
+            }
+          }
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "gameObject": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "path": {
+                  "type": "string"
+                },
+                "instanceID": {
+                  "type": "integer"
+                },
+                "active": {
+                  "type": "boolean"
+                },
+                "components": {
+                  "type": "array"
+                }
+              }
+            }
+          }
+        },
+        "cliCommand": "context read scene.gameobject"
+      },
+      {
+        "name": "scene.cameras",
+        "title": "Scene Cameras",
+        "description": "List all cameras in the active scene with their key properties.",
+        "kind": "context",
+        "source": "built-in",
+        "category": "scene",
+        "readOnlyHint": true,
+        "refreshBehavior": "on-demand",
+        "target": "editor",
+        "availabilityScope": "editorSession",
+        "resourceUri": "unity-cli://scene/cameras",
+        "equivalentUnityMcp": "mcpforunity://scene/cameras",
+        "handler": "bridge",
+        "inputSchema": {},
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "cameras": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "count": {
+              "type": "integer"
+            }
+          }
+        },
+        "cliCommand": "context read scene.cameras"
+      },
+      {
+        "name": "scene.volumes",
+        "title": "Scene Volumes",
+        "description": "List all volume components in the active scene.",
+        "kind": "context",
+        "source": "built-in",
+        "category": "scene",
+        "readOnlyHint": true,
+        "refreshBehavior": "on-demand",
+        "target": "editor",
+        "availabilityScope": "editorSession",
+        "resourceUri": "unity-cli://scene/volumes",
+        "equivalentUnityMcp": "mcpforunity://scene/volumes",
+        "handler": "bridge",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "target": {
+              "type": "string",
+              "description": "Optional volume target filter."
+            },
+            "pageSize": {
+              "type": "integer",
+              "description": "Maximum number of volumes per page."
+            },
+            "cursor": {
+              "type": "string",
+              "description": "Opaque pagination cursor."
+            }
+          }
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "volumes": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "count": {
+              "type": "integer"
+            },
+            "pageInfo": {
+              "type": "object"
+            }
+          }
+        },
+        "cliCommand": "context read scene.volumes"
+      },
+      {
+        "name": "scene.renderer-features",
+        "title": "Renderer Features",
+        "description": "List URP renderer features configured in the project.",
+        "kind": "context",
+        "source": "built-in",
+        "category": "scene",
+        "readOnlyHint": true,
+        "refreshBehavior": "static",
+        "target": "editor",
+        "availabilityScope": "editorSession",
+        "resourceUri": "unity-cli://scene/renderer-features",
+        "equivalentUnityMcp": "mcpforunity://pipeline/renderer-features",
+        "handler": "bridge",
+        "inputSchema": {},
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "renderer": {
+              "type": "object"
+            },
+            "features": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "diagnostics": {
+              "type": "string"
+            }
+          }
+        },
+        "requiresPackages": [
+          "com.unity.render-pipelines.universal"
+        ],
+        "cliCommand": "context read scene.renderer-features"
+      },
+      {
+        "name": "scene.rendering-stats",
+        "title": "Rendering Stats",
+        "description": "Current rendering statistics from the active scene camera.",
+        "kind": "context",
+        "source": "built-in",
+        "category": "scene",
+        "readOnlyHint": true,
+        "refreshBehavior": "live",
+        "target": "editor",
+        "availabilityScope": "editorSession",
+        "resourceUri": "unity-cli://scene/rendering-stats",
+        "equivalentUnityMcp": "mcpforunity://rendering/stats",
+        "handler": "bridge",
+        "inputSchema": {},
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "stats": {
+              "type": "object"
+            },
+            "diagnostics": {
+              "type": "string"
+            }
+          }
+        },
+        "cliCommand": "context read scene.rendering-stats"
+      },
+      {
+        "name": "tests.list",
+        "title": "Test List",
+        "description": "List all test fixtures and test methods in the project.",
+        "kind": "context",
+        "source": "built-in",
+        "category": "tests",
+        "readOnlyHint": true,
+        "refreshBehavior": "on-demand",
+        "target": "editor",
+        "availabilityScope": "editorSession",
+        "resourceUri": "unity-cli://tests/list",
+        "equivalentUnityMcp": "mcpforunity://tests",
+        "handler": "bridge",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "EditMode",
+                "PlayMode"
+              ],
+              "description": "Test platform filter."
+            },
+            "pageSize": {
+              "type": "integer",
+              "description": "Maximum number of tests per page."
+            },
+            "cursor": {
+              "type": "string",
+              "description": "Opaque pagination cursor."
+            }
+          }
+        },
+        "outputSchema": {
+          "type": "object",
+          "properties": {
+            "available": {
+              "type": "boolean"
+            },
+            "tests": {
+              "type": "array",
+              "items": {
+                "type": "object"
+              }
+            },
+            "count": {
+              "type": "integer"
+            },
+            "pageInfo": {
+              "type": "object"
+            },
+            "diagnostics": {
+              "type": "string"
+            }
+          }
+        },
+        "cliCommand": "context read tests.list"
+      }
+    ]
+  }
+}

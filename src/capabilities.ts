@@ -10,6 +10,8 @@ import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
 import { getString } from "./args.js";
 import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
 import { builtinToolGroups, builtinToolMetadata, type ToolMetadata } from "./tools/metadata/index.js";
+import { builtinContextMetadata, builtinContextCategories, type ContextMetadata } from "./context/metadata/index.js";
+import { builtinExtensionMetadata, type ExtensionMetadata } from "./extensions/metadata/index.js";
 import { supportStatusForTool } from "./tools/metadata/status.js";
 import { ExtensionRegistry, extensionAvailabilitySummary, collectAvailableTools, collectAllTools } from "./extensions/index.js";
 import { readInstalledUnityPackages } from "./extensions/project-resolver.js";
@@ -76,6 +78,13 @@ export async function handleCapabilitiesCommand(
 
   const staticCapabilities = buildStaticCapabilities(projectTools, extensionGroupFilter.size > 0 ? extensionGroupFilter : undefined);
 
+  // P1: Context and extension base counts
+  const contextCount = builtinContextMetadata().length;
+  const contextCategories = builtinContextCategories();
+  const extensions = builtinExtensionMetadata();
+  const installedExtensions = extensions.filter((e) => e.status === "installed").length;
+  const availableExtensions = extensions.filter((e) => e.status === "available").length;
+
   let runtimeCapabilities: Record<string, unknown> | undefined;
   const endpoint = getString(flags, "bridge-endpoint") ?? runtime.bridgeEndpoint ?? process.env.UNITY_CLI_BRIDGE_ENDPOINT;
 
@@ -104,7 +113,20 @@ export async function handleCapabilitiesCommand(
     ...(projectToolDiagnostics ? { projectTools: projectToolDiagnostics } : {}),
     ...(extensionInfo ? { extensions: extensionInfo } : {}),
     ...(runtimeCapabilities ? { runtime: runtimeCapabilities } : {}),
-    ...(runtimeCapabilities ? { bridgeEndpoint: endpoint ?? runtime.bridgeEndpoint } : {})
+    ...(runtimeCapabilities ? { bridgeEndpoint: endpoint ?? runtime.bridgeEndpoint } : {}),
+    contextDiscovery: {
+      enabled: true,
+      contextCount,
+      categories: contextCategories,
+      customContext: false
+    },
+    toolsGroupFirstDiscovery: true,
+    extensions: {
+      enabled: true,
+      total: extensions.length,
+      installed: installedExtensions,
+      available: availableExtensions
+    }
   };
 
   return success(requestId, data);
@@ -191,7 +213,10 @@ function buildStaticCapabilities(projectTools: ToolMetadata[] = [], extensionGro
     schemaFeatures: {
       toolMetadata: true,
       projectToolDescriptor: true,
+      contextDescriptor: true,
+      extensionDescriptor: true,
       unifiedDiscovery: true,
+      groupFirstDiscovery: true,
       builtinDocs: true,
       requestEnvelope: true,
       responseEnvelope: true,

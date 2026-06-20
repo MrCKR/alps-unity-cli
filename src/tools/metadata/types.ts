@@ -6,16 +6,31 @@ export interface ToolExample {
 
 export type ToolHandler = "bridge" | "bridge-runtime" | "job" | "offline" | "hybrid";
 export type ToolSupportStatus = "live-bridge" | "live-bridge-runtime" | "bridge-job" | "batch-job" | "cli-only" | "planned";
+export type ToolSource = "built-in" | "project" | "extension";
+export type ToolRiskLevel = "safe" | "low" | "medium" | "high" | "critical";
 
 export interface ToolMetadata {
   name: string;
   title: string;
   description: string;
+  /** Discriminator: always 'tool' for ToolMetadata. Distinguishes from ContextMetadata (kind='context'). Defaults to 'tool' when omitted for backward compatibility with pre-P1 metadata. */
+  kind?: "tool";
+  /** Origin: built-in (shipped with CLI), project (custom tool in Unity project), extension (from extension package). Defaults to 'built-in' when omitted. */
+  source?: ToolSource;
+  /** Logical grouping for discovery, replacing the legacy 'group' field in new group-first discovery. Defaults to the value of 'group' when omitted. */
+  category?: string;
+  /** Legacy group field; maintained for backward compat in contract validation. Maps to category. */
   group: string;
   inputSchema: Record<string, unknown>;
   outputSchema?: Record<string, unknown>;
   readOnlyHint: boolean;
   destructiveHint: boolean;
+  /** Side effect categories this tool may produce, e.g. ['file-write', 'scene-modify']. */
+  sideEffects?: string[];
+  /** Risk level classification for safety disclosure. */
+  riskLevel?: ToolRiskLevel;
+  /** Mapping to equivalent unity-mcp tool name, for parity tracking. */
+  equivalentUnityMcp?: string;
   longRunning?: boolean;
   requiresMainThread?: boolean;
   supportsDryRun?: boolean;

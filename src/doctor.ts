@@ -15,14 +15,19 @@
 
 import { getString, getBoolean } from "./args.js";
 import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
+import { shouldDiscoverContexts } from "./context-discovery.js";
 import { readInstances, type UnityInstance } from "./instances.js";
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
 import { builtinToolMetadata, filterToolsByGroup } from "./tools/metadata/index.js";
+import { builtinContextMetadata } from "./context/metadata/index.js";
+import { builtinExtensionMetadata } from "./extensions/metadata/index.js";
 import { ExtensionRegistry, loadExtensionDescriptor, extensionAvailabilitySummary } from "./extensions/index.js";
 import { readInstalledUnityPackages } from "./extensions/project-resolver.js";
 import { readInstalledExtensions } from "./cli-commands/extensions.js";
 import { bridgeCommandRegistry } from "./bridge/index.js";
 import { failure, success } from "./output.js";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import type { CliResult } from "./types.js";
 
 export interface DoctorRuntime extends BridgeRuntime, ProjectToolRuntime {
@@ -85,11 +90,20 @@ export async function handleDoctorCommand(
   // Unified CLI/tools discovery surface
   checks.push(await checkUnifiedDiscovery(flags, runtime, requestId));
 
-  // Extension availability
+  // Extension availability (P5+P7)
   checks.push(await checkExtensionAvailability(flags));
 
-  // ProBuilder extension specific check
+  // ProBuilder extension specific check (P5+P7)
   checks.push(await checkProBuilderExtension(flags));
+
+  // P1: Context discovery surface
+  checks.push(checkContextDiscovery(flags, runtime));
+
+  // P1: Extension registry
+  checks.push(checkExtensionRegistry());
+
+  // P1: Stale "tools list" wording check
+  checks.push(checkStaleToolsListWording());
 
   const allPassed = checks.every((c) => c.status === "pass");
   const hasWarnings = checks.some((c) => c.status === "warn");
@@ -448,6 +462,48 @@ async function checkExtensionAvailability(flags: Record<string, string | boolean
   };
 }
 
+function checkContextDiscovery(flags: Record<string, string | boolean>, runtime: DoctorRuntime): DoctorCheck {
+  const contexts = builtinContextMetadata();
+  const builtinCount = contexts.length;
+  const includeCustom = shouldDiscoverContexts(flags, runtime);
+  if (builtinCount === 0) {
+    return {
+      name: "context_discovery",
+      status: "warn",
+      message: "No built-in context descriptors registered.",
+      details: { builtinCount }
+    };
+  }
+
+  // P2: Verify all contexts have required fields
+  const missingResourceUri = contexts.filter((c) => !c.resourceUri);
+  const missingEquivalent = contexts.filter((c) => !c.equivalentUnityMcp);
+  const missingOutputSchema = contexts.filter((c) => !c.outputSchema);
+  const notReadOnly = contexts.filter((c) => c.readOnlyHint !== true);
+
+  const warnings: string[] = [];
+  if (missingResourceUri.length > 0) warnings.push(`${missingResourceUri.length} context(s) missing resourceUri`);
+  if (missingEquivalent.length > 0) warnings.push(`${missingEquivalent.length} context(s) missing equivalentUnityMcp`);
+  if (missingOutputSchema.length > 0) warnings.push(`${missingOutputSchema.length} context(s) missing outputSchema`);
+  if (notReadOnly.length > 0) warnings.push(`${notReadOnly.length} context(s) not read-only`);
+
+  if (warnings.length > 0) {
+    return {
+      name: "context_discovery",
+      status: "warn",
+      message: `Context discovery available: ${builtinCount} built-in context(s), but ${warnings.join("; ")}.`,
+      details: { builtinCount, customDiscoveryEnabled: includeCustom, warnings }
+    };
+  }
+
+  return {
+    name: "context_discovery",
+    status: "pass",
+    message: `Context discovery is available: ${builtinCount} built-in context(s)${includeCustom ? ", custom context discovery enabled" : ""}.`,
+    details: { builtinCount, customDiscoveryEnabled: includeCustom }
+  };
+}
+
 /**
  * ProBuilder extension specific check.
  *
@@ -565,6 +621,81 @@ async function checkProBuilderExtension(flags: Record<string, string | boolean>)
   };
 }
 
+function checkExtensionRegistry(): DoctorCheck {
+  const extensions = builtinExtensionMetadata();
+  const installed = extensions.filter((e) => e.status === "installed").length;
+  const available = extensions.filter((e) => e.status === "available").length;
+  return {
+    name: "extension_registry",
+    status: "pass",
+    message: `Extension registry loaded: ${extensions.length} extension(s) (${installed} installed, ${available} available).`,
+    details: { total: extensions.length, installed, available }
+  };
+}
+
+function checkStaleToolsListWording(): DoctorCheck {
+  // P1 gate: scan key source files for stale 'tools list' / 'tools groups' references
+  // that contradict the group-first discovery model mandated by ALP-505.
+  const stalePatterns = [
+    /tools list(?:\s|--)/gi,
+    /tools groups(?![\w.-])/gi,  // match 'tools groups' but not 'tools.group-list' etc.
+  ];
+  // Files that should NOT contain stale references in user-visible output
+  const filesToCheck = [
+    { label: "package-info.ts", content: tryReadSrcFile("package-info.ts") },
+    { label: "builtin-docs.ts", content: tryReadSrcFile("builtin-docs.ts") },
+    { label: "batch.ts", content: tryReadSrcFile("batch.ts") },
+  ];
+
+  const findings: Array<{ file: string; line: number; match: string }> = [];
+  for (const { label, content } of filesToCheck) {
+    if (!content) continue;
+    const lines = content.split("\n");
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      // Skip comments and string literals that are part of the removed-command handling
+      if (line.trimStart().startsWith("//")) continue;
+      for (const pattern of stalePatterns) {
+        pattern.lastIndex = 0;
+        const match = pattern.exec(line);
+        if (match) {
+          // Exclude legitimate references inside E_TOOLS_LIST_REMOVED guidance strings
+          // and contract/metadata name patterns like "tools.group" / "tools.group-list"
+          const matched = match[0];
+          if (/tools\.group/i.test(matched)) continue;
+          findings.push({ file: label, line: i + 1, match: matched });
+        }
+      }
+    }
+  }
+
+  if (findings.length === 0) {
+    return {
+      name: "stale_tools_list_wording",
+      status: "pass",
+      message: "No stale 'tools list' or 'tools groups' references found in user-visible output files.",
+      details: { checked: filesToCheck.map((f) => f.label).join(", ") }
+    };
+  }
+
+  const details = findings.map((f) => `${f.file}:${f.line}: '${f.match}'`);
+  return {
+    name: "stale_tools_list_wording",
+    status: "warn",
+    message: `Found ${findings.length} stale 'tools list'/'tools groups' reference(s) in user-visible output files.`,
+    details: { findings: details, checked: filesToCheck.map((f) => f.label).join(", ") }
+  };
+}
+
+/** Try to read a source file from the src/ directory. Returns null if not found. */
+function tryReadSrcFile(filename: string): string | null {
+  try {
+    const path = fileURLToPath(new URL(`./${filename}`, import.meta.url));
+    return readFileSync(path, "utf8");
+  } catch {
+    return null;
+  }
+}
 function buildSuggestions(checks: DoctorCheck[]): string[] {
   const suggestions: string[] = [];
 
@@ -598,7 +729,18 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
           suggestions.push("Re-initialize the instance by restarting Unity Editor.");
           break;
         case "unified_tool_discovery":
-          suggestions.push("Run unity_cli tools list --include-custom with a reachable Unity Bridge to inspect project custom descriptors.");
+          suggestions.push("Run unity_cli tools group to see tool groups.");
+          suggestions.push("Run unity_cli tools group list <group> with a reachable Unity Bridge to inspect project custom descriptors.");
+          break;
+        case "context_discovery":
+          suggestions.push("Run unity_cli context list to see available contexts.");
+          break;
+        case "extension_registry":
+          suggestions.push("Run unity_cli extensions list to see available extensions.");
+          suggestions.push("Run unity_cli extensions doctor to check extension status.");
+          break;
+        case "stale_tools_list_wording":
+          suggestions.push("Update remaining references from 'tools list' to 'tools group' / 'tools group list <group>'.");
           break;
         case "extension_availability":
           suggestions.push("Run 'unity_cli extensions doctor --project <path>' for detailed extension diagnostics.");

@@ -8,7 +8,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { bridgeCommandRegistry, type BridgeRequest } from "./bridge/index.js";
 import { handleToolsCommand, type ToolsRuntime } from "./tools.js";
-import { builtinToolMetadata, builtinToolGroups, findToolByName, filterToolsByGroup, searchTools, supportStatusForTool } from "./tools/metadata/index.js";
+import { builtinToolMetadata, builtinToolGroups, findToolByName, filterToolsByGroup, searchTools, supportStatusForTool, normalizeToolMetadata } from "./tools/metadata/index.js";
 
 const requestId = "test_req_tools_001";
 const emptyRuntime: ToolsRuntime = {};
@@ -117,46 +117,43 @@ test("searchTools returns empty for no match", () => {
   assert.equal(results.length, 0);
 });
 
-// ── tools list ─────────────────────────────────────────────
+// ── tools group (replaces old tools list/groups) ───────────
 
-test("tools list returns all built-in tools", async () => {
-  const result = await handleToolsCommand("list", [], {}, emptyRuntime, requestId);
+test("tools group returns all tool groups", async () => {
+  const result = await handleToolsCommand("group", [], {}, emptyRuntime, requestId);
   assert.equal(result.ok, true);
-  const data = result.data as { count: number; tools: Array<{ name: string }> };
+  const data = result.data as { count: number; groups: Array<{ name: string; toolCount: number }> };
   assert.ok(data.count > 0);
-  assert.ok(data.tools.length > 0);
-  assert.equal((data.tools as Array<{ name: string; supportStatus: string }>).find((t) => t.name === "scene.active")?.supportStatus, "planned");
-  const names = data.tools.map((t) => t.name);
-  assert.ok(names.includes("scene.hierarchy"), "scene.hierarchy should be in list");
+  assert.ok(data.groups.length > 0);
+  const groupNames = data.groups.map((g) => g.name);
+  assert.ok(groupNames.includes("scene"), "scene group should exist");
+  assert.ok(groupNames.includes("camera"), "camera group should exist");
 });
 
-test("tools list with --group filters by group", async () => {
-  const result = await handleToolsCommand("list", [], { group: "scene" }, emptyRuntime, requestId);
+test("tools group list <group> filters by group", async () => {
+  const result = await handleToolsCommand("group", ["list", "scene"], {}, emptyRuntime, requestId);
   assert.equal(result.ok, true);
-  const data = result.data as { count: number; tools: Array<{ name: string; group: string }> };
+  const data = result.data as { count: number; tools: Array<{ name: string; source: string }> };
   assert.ok(data.count > 0);
   for (const t of data.tools) {
-    assert.equal(t.group, "scene");
+    assert.equal(t.source, "built-in");
   }
 });
 
-test("tools list with --group unknown returns empty", async () => {
-  const result = await handleToolsCommand("list", [], { group: "nonexistent" }, emptyRuntime, requestId);
-  assert.equal(result.ok, true);
-  const data = result.data as { count: number; tools: unknown[] };
-  assert.equal(data.count, 0);
-  assert.equal(data.tools.length, 0);
+test("tools group list <unknown> returns error", async () => {
+  const result = await handleToolsCommand("group", ["list", "nonexistent"], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, false);
 });
 
-test("tools list --format text includes text field", async () => {
-  const result = await handleToolsCommand("list", [], { format: "text" }, emptyRuntime, requestId);
+test("tools group list includes tools with short summaries", async () => {
+  const result = await handleToolsCommand("group", ["list", "scene"], {}, emptyRuntime, requestId);
   assert.equal(result.ok, true);
-  const data = result.data as { text: string };
-  assert.ok(data.text.length > 0);
-  assert.ok(data.text.includes("scene.hierarchy"));
+  const data = result.data as { count: number; tools: Array<{ name: string; title: string }> };
+  assert.ok(data.count > 0);
+  assert.ok(data.tools.some((t) => t.name === "scene.hierarchy"), "scene.hierarchy should be in scene group");
 });
 
-test("tools list --include-custom with runtime custom tools merges them", async () => {
+test("tools group list includes custom project tools when available", async () => {
   const customTool = {
     name: "custom.my-tool",
     title: "My Custom Tool",
@@ -167,7 +164,7 @@ test("tools list --include-custom with runtime custom tools merges them", async 
     destructiveHint: false
   };
   const runtime: ToolsRuntime = { projectTools: [customTool] };
-  const result = await handleToolsCommand("list", [], { "include-custom": true }, runtime, requestId);
+  const result = await handleToolsCommand("group", ["list", "custom"], { "include-custom": true }, runtime, requestId);
   assert.equal(result.ok, true);
   const data = result.data as { tools: Array<{ name: string }> };
   const names = data.tools.map((t) => t.name);
@@ -176,24 +173,26 @@ test("tools list --include-custom with runtime custom tools merges them", async 
 
 // ── tools groups ───────────────────────────────────────────
 
-test("tools groups returns group names", async () => {
-  const result = await handleToolsCommand("groups", [], {}, emptyRuntime, requestId);
+test("tools group returns group names with counts", async () => {
+  const result = await handleToolsCommand("group", [], {}, emptyRuntime, requestId);
   assert.equal(result.ok, true);
-  const data = result.data as { count: number; groups: string[] };
+  const data = result.data as { count: number; groups: Array<{ name: string; toolCount: number }> };
   assert.ok(data.count > 0);
-  assert.ok(data.groups.includes("scene"));
-  assert.ok(data.groups.includes("camera"));
+  const groupNames = data.groups.map((g) => g.name);
+  assert.ok(groupNames.includes("scene"));
+  assert.ok(groupNames.includes("camera"));
 });
 
-test("tools groups keeps built-in groups without custom context", async () => {
-  const result = await handleToolsCommand("groups", [], {}, emptyRuntime, requestId);
+test("tools group keeps built-in groups without custom context", async () => {
+  const result = await handleToolsCommand("group", [], {}, emptyRuntime, requestId);
   assert.equal(result.ok, true);
-  const data = result.data as { groups: string[] };
-  assert.ok(data.groups.includes("scene"));
-  assert.equal(data.groups.includes("project"), false);
+  const data = result.data as { groups: Array<{ name: string }> };
+  const groupNames = data.groups.map((g) => g.name);
+  assert.ok(groupNames.includes("scene"));
+  assert.equal(groupNames.includes("project"), false);
 });
 
-test("tools groups includes runtime custom tool groups", async () => {
+test("tools group includes runtime custom tool groups", async () => {
   const runtime: ToolsRuntime = { projectTools: [{
     name: "project.bake",
     title: "Project Bake",
@@ -203,10 +202,11 @@ test("tools groups includes runtime custom tool groups", async () => {
     readOnlyHint: false,
     destructiveHint: false
   }] };
-  const result = await handleToolsCommand("groups", [], {}, runtime, requestId);
+  const result = await handleToolsCommand("group", [], {}, runtime, requestId);
   assert.equal(result.ok, true);
-  const data = result.data as { groups: string[] };
-  assert.ok(data.groups.includes("project"));
+  const data = result.data as { groups: Array<{ name: string }> };
+  const groupNames = data.groups.map((g) => g.name);
+  assert.ok(groupNames.includes("project"));
 });
 
 // ── tools search ───────────────────────────────────────────
@@ -598,11 +598,22 @@ test("tools unknown subcommand returns error", async () => {
 
 // ── tools list is default subcommand ───────────────────────
 
-test("tools without subcommand defaults to list", async () => {
+test("tools without subcommand returns tools-list-removed guidance", async () => {
   const result = await handleToolsCommand(undefined, [], {}, emptyRuntime, requestId);
-  assert.equal(result.ok, true);
-  const data = result.data as { count: number; tools: unknown[] };
-  assert.ok(data.count > 0);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_TOOLS_LIST_REMOVED");
+});
+
+test("tools list returns tools-list-removed guidance", async () => {
+  const result = await handleToolsCommand("list", [], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_TOOLS_LIST_REMOVED");
+});
+
+test("tools groups returns tools-list-removed guidance (alias removed)", async () => {
+  const result = await handleToolsCommand("groups", [], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_TOOLS_LIST_REMOVED");
 });
 
 // ── tools run: handleToolsRun routing ─────────────────────
@@ -1058,4 +1069,45 @@ test("tools run discovers runtime tools when --runtime flag is provided", async 
   assert.equal(result.ok, true, `Expected ok=true, got error: ${result.error?.code} ${result.error?.message}`);
   assert.equal(requests[0].command, "runtime-tool.list");
   assert.equal(requests[1].command, "runtime-tool.run");
+});
+
+// ── P1: normalizeToolMetadata defaults and extension source ───────
+
+test("normalizeToolMetadata fills P1 defaults: kind, source, category", () => {
+  const normalized = normalizeToolMetadata({
+    name: "test.tool",
+    title: "Test",
+    description: "Test tool",
+    group: "test",
+    inputSchema: {},
+    readOnlyHint: true,
+    destructiveHint: false
+  });
+  assert.equal(normalized.kind, "tool");
+  assert.equal(normalized.source, "built-in");
+  assert.equal(normalized.category, "test");
+});
+
+test("probuilder and vfx tools have source: extension (ALP-505 decision #10)", () => {
+  const probuilder = findToolByName("probuilder.shape");
+  assert.ok(probuilder, "probuilder.shape should exist");
+  assert.equal(probuilder.source, "extension");
+
+  const vfx = findToolByName("vfx.graph");
+  assert.ok(vfx, "vfx.graph should exist");
+  assert.equal(vfx.source, "extension");
+});
+
+test("tools.group and tools.group-list descriptors replace tools.list and tools.groups", () => {
+  const group = findToolByName("tools.group");
+  assert.ok(group, "tools.group should exist");
+  assert.equal(group.cliCommand, "tools group");
+
+  const groupList = findToolByName("tools.group-list");
+  assert.ok(groupList, "tools.group-list should exist");
+  assert.equal(groupList.cliCommand, "tools group list");
+
+  // Old names should no longer exist
+  assert.equal(findToolByName("tools.list"), undefined, "tools.list should be removed");
+  assert.equal(findToolByName("tools.groups"), undefined, "tools.groups should be removed");
 });

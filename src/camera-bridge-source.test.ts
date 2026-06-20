@@ -55,21 +55,24 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.match(source, /CapabilityJson\("probuilder", ProBuilderCommands\)/);
   assert.match(source, /CapabilityJson\("animation", AnimationCommands\)/);
   assert.match(source, /CapabilityJson\("vfx", VfxCommands\)/);
-  assert.match(source, /CapabilityJson\("physics", PhysicsCommands\) \+ ","\s+\+ CapabilityJson\("profiler", ProfilerCommands\) \+ ","\s+\+ CapabilityJson\("probuilder", ProBuilderCommands\) \+ ","\s+\+ CapabilityJson\("animation", AnimationCommands\) \+ ","\s+\+ CapabilityJson\("vfx", VfxCommands\) \+ ","\s+\+ CapabilityJson\("shader", ShaderCommands\) \+ ","/);
+  assert.match(source, /CapabilityJson\("physics", PhysicsCommands\)/);
   assert.match(source, /CapabilityJson\("shader", ShaderCommands\)/);
   assert.match(source, /CapabilityJson\("texture", TextureCommands\)/);
   assert.match(source, /CapabilityJson\("script", ScriptCommands\)/);
   assert.match(source, /CapabilityJson\("code", CodeCommands\)/);
   assert.match(source, /CapabilityJson\("project-tool", ProjectToolCommands\)/);
+  assert.match(source, /CapabilityJson\("runtime-tool", RuntimeToolCommands\)/);
+  assert.match(source, /CapabilityJson\("context", ContextCommands\)/);
+  assert.match(source, /CapabilityJson\("extension", ExtensionCommands\)/);
   assert.match(source, /AssemblyReloadEvents\.beforeAssemblyReload \+= OnBeforeAssemblyReload/);
   assert.match(source, /EditorApplication\.quitting \+= UnregisterAndStop/);
   assert.match(source, /RegisterInstance\("healthy"\)/);
   assert.match(source, /RegisterInstance\("stale"\)/);
   assert.match(source, /"instances"/);
-  assert.match(source, /\\"domainReloading\\":\" \+ Bool\(domainReloading\)/);
-  assert.doesNotMatch(source, /\\"domainReloading\\":\" \+ Bool\(EditorApplication\.isCompiling\)/);
+  assert.match(source, /\.Prop\("domainReloading", domainReloading\)/);
+  assert.doesNotMatch(source, /\.Prop\("domainReloading", EditorApplication\.isCompiling\)/);
   assert.match(source, /private static Type FindType\(string fullName\)/);
-  assert.match(source, /private static string QuotePair\(string key, string value\)/);
+  assert.match(source, /private static string JsonLiteralOrString\(string value\)/);
   assert.doesNotMatch(source, /new\[\] \{ \(object\)/);
   assert.match(source, /private static readonly string\[\] CameraCommands = \{ "camera\.list", "camera\.info", "camera\.screenshot" \}/);
   assert.match(source, /private static readonly string\[\] SceneCommands = \{ "scene\.active", "scene\.hierarchy", "scene\.build-settings", "scene\.screenshot", "scene\.create", "scene\.load", "scene\.save" \}/);
@@ -141,10 +144,10 @@ test("Unity Bridge exposes documented camera, screenshot, prefab, UI, material, 
   assert.doesNotMatch(source, /private static string ProfilerStart\(BridgeRequest request\)[\s\S]*?UnityEngine\.Profiling\.Profiler\.enableBinaryLog = true;[\s\S]*?private static string ProfilerStop\(BridgeRequest request\)/);
   assert.doesNotMatch(source, /private static string ProfilerPause\(BridgeRequest request\)[\s\S]*?UnityEngine\.Profiling\.Profiler\.enabled = !paused;[\s\S]*?private static string ProfilerStatus\(BridgeRequest request\)/);
   assert.doesNotMatch(source, /private static string ProfilerPause\(BridgeRequest request\)[\s\S]*?UnityEngine\.Profiling\.Profiler\.enableBinaryLog = true;[\s\S]*?private static string ProfilerStatus\(BridgeRequest request\)/);
-  assert.match(source, /\\"handlerFingerprint\\":/);
-  assert.match(source, /\\"architectureSensitive\\":true/);
-  assert.match(source, /\\"frozenDecision\\":/);
-  assert.match(source, /\\"coverageScope\\":/);
+  assert.match(source, /\.Prop\("handlerFingerprint",/);
+  assert.match(source, /\.Prop\("architectureSensitive", true\)/);
+  assert.match(source, /\.Prop\("frozenDecision",/);
+  assert.match(source, /\.PropRaw\("coverageScope",/);
   assert.match(source, /RegisterCommand\(registry, "probuilder\.shape", "probuilder", true/);
   assert.match(source, /RegisterCommand\(registry, "probuilder\.create", "probuilder", true/);
   assert.match(source, /RegisterCommand\(registry, "probuilder\.csg", "probuilder", true/);
@@ -260,7 +263,7 @@ test("Unity Bridge animation and vfx commands expose assets, target resolver dia
   assert.match(source, /AssetDatabase\.LoadAssetAtPath\(path, assetType\)/);
   assert.match(source, /E_TARGET_AMBIGUOUS/);
   assert.match(source, /rawPath\.Replace\('\\\\', '\/'\)\.Trim\(\)/);
-  assert.match(source, /Replace\("\\t", "\\\\t"\)/);
+  assert.match(source, /Replace\("\\\\t", "\\t"\)/);
   assert.match(readme, /`animation clip <path>` reads or creates `Assets\/\*\.anim` AnimationClip assets/);
   assert.match(readme, /`vfx graph <path>` reads or creates `Assets\/\*\.vfx` Visual Effect Graph assets/);
   assert.match(readme, /Windows-style `Assets\\VFX\\Explosion\.vfx` paths are normalized to Unity asset paths/);
@@ -469,9 +472,9 @@ test("Unity Bridge camera screenshot captures render texture and returns artifac
   assert.match(source, /texture\.EncodeToPNG\(\)/);
   assert.match(source, /texture\.EncodeToJPG\(quality\)/);
   assert.match(source, /File\.WriteAllBytes\(outputPath, bytes\)/);
-  assert.match(source, /"\\\"screenshotPath\\\":"/);
-  assert.match(source, /"\\\"artifactPath\\\":"/);
-  assert.match(source, /"\\\"logPath\\\":"/);
+  assert.match(source, /\.Prop\("screenshotPath",/);
+  assert.match(source, /\.Prop\("artifactPath",/);
+  assert.match(source, /\.Prop\("logPath",/);
 });
 
 test("Unity Bridge prefab operations expose structured diagnostics", async () => {
@@ -490,9 +493,9 @@ test("Unity Bridge prefab operations expose structured diagnostics", async () =>
   assert.match(source, /PrefabVariantJson/);
   assert.match(source, /DependencySummaryJson/);
   assert.match(source, /NestedPrefabReferencesJson/);
-  assert.match(source, /"\\\"variant\\\":"/);
-  assert.match(source, /"\\\"dependencies\\\":"/);
-  assert.match(source, /"\\\"nestedPrefabs\\\":"/);
+  assert.match(source, /\.PropRaw\("variant",/);
+  assert.match(source, /\.PropRaw\("dependencies",/);
+  assert.match(source, /\.PropRaw\("nestedPrefabs",/);
   assert.match(source, /PrefabAssetJson\(path, root, root\)/);
   assert.match(readme, /`prefab info <path>` returns Prefab metadata including GUID, root name, asset type, `variant` base\/source paths and GUIDs, `dependencies\.items`, and `nestedPrefabs\.items` rather than counts only/);
   assert.match(readme, /`prefab hierarchy <path>` pages hierarchy items with `pageInfo`, component summaries, the same Prefab variant\/dependency summary, `nestedPrefabs\.items` and `logPath`/);

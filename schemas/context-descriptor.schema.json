@@ -1,0 +1,100 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://unity-cli.local/schemas/context-descriptor.schema.json",
+  "title": "Unity CLI Context Descriptor",
+  "description": "Describes a read-only context exposed by the Unity CLI. Context provides observation without mutation — if a capability modifies Unity state, it must be a Tool, not a Context. P1 baseline schema matching the ALP-505 architecture base.",
+  "type": "object",
+  "required": ["name", "title", "description", "kind", "source", "category", "inputSchema", "readOnlyHint"],
+  "properties": {
+    "name": {
+      "type": "string",
+      "minLength": 1,
+      "pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9-]*)+$",
+      "description": "Dotted context identifier, e.g. 'project.info'. Must be unique across all contexts."
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Short human-readable title."
+    },
+    "description": {
+      "type": "string",
+      "minLength": 1,
+      "description": "One-paragraph explanation of what the context provides."
+    },
+    "kind": {
+      "type": "string",
+      "const": "context",
+      "description": "Discriminator: always 'context' for ContextMetadata."
+    },
+    "source": {
+      "type": "string",
+      "enum": ["built-in", "project", "extension"],
+      "description": "Origin: built-in (shipped with CLI), project (custom context in Unity project), extension (from an extension package)."
+    },
+    "category": {
+      "type": "string",
+      "minLength": 1,
+      "description": "Logical grouping for discovery, e.g. 'project', 'editor', 'scene'."
+    },
+    "inputSchema": {
+      "type": "object",
+      "description": "JSON Schema for the context's input parameters."
+    },
+    "outputSchema": {
+      "type": "object",
+      "description": "JSON Schema for the context's output."
+    },
+    "readOnlyHint": {
+      "type": "boolean",
+      "const": true,
+      "description": "Always true for Context. If false, the capability must be a Tool."
+    },
+    "resourceUri": {
+      "type": "string",
+      "description": "URI template for resource identification, e.g. 'unity-cli://project/info'."
+    },
+    "refreshBehavior": {
+      "type": "string",
+      "enum": ["static", "on-demand", "live"],
+      "description": "Refresh behavior: 'static' (never changes), 'on-demand' (can be re-read), 'live' (subscribable)."
+    },
+    "target": {
+      "type": "string",
+      "enum": ["editor", "runtime", "both"],
+      "default": "editor",
+      "description": "Execution target: 'editor' (default), 'runtime', or 'both'."
+    },
+    "availabilityScope": {
+      "type": "string",
+      "description": "Availability scope for the context."
+    },
+    "available": {
+      "type": "boolean",
+      "description": "Whether the context is currently available based on session state."
+    },
+    "requiresPackages": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Unity package names required by this context at runtime."
+    },
+    "fingerprint": {
+      "type": "string",
+      "description": "Fingerprint material for detecting descriptor/handler drift. Project contexts only."
+    },
+    "equivalentUnityMcp": {
+      "type": "string",
+      "description": "Mapping to equivalent unity-mcp resource URI, for parity tracking."
+    },
+    "cliCommand": {
+      "type": "string",
+      "description": "CLI command to read this context, e.g. 'context read project.info'."
+    },
+    "handler": {
+      "type": "string",
+      "enum": ["bridge", "bridge-runtime", "offline"],
+      "description": "Handler type for bridge routing."
+    }
+  },
+  "additionalProperties": false
+}

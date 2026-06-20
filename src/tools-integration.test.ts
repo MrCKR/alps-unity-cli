@@ -19,44 +19,40 @@ async function makeRuntime() {
   return { dataDir, store, runner: new JobRunner(store, dataDir) };
 }
 
-test("integration: tools list via execute()", async () => {
+test("integration: tools group via execute()", async () => {
   const runtime = await makeRuntime();
-  const result = await execute(["tools", "list"], runtime);
+  const result = await execute(["tools", "group"], runtime);
   assert.equal(result.ok, true);
 
   const data = result.data as Record<string, unknown>;
-  assert.equal(data.command, "tools.list");
+  assert.equal(data.command, "tools.group");
   assert.ok(typeof data.count === "number");
   assert.ok(data.count > 0);
 
-  const tools = data.tools as Array<{ name: string; group: string }>;
-  const names = tools.map((t) => t.name);
-  assert.ok(names.includes("scene.hierarchy"));
+  const groups = data.groups as Array<{ name: string; toolCount: number }>;
+  const groupNames = groups.map((g) => g.name);
+  assert.ok(groupNames.includes("scene"));
 });
 
-test("integration: tools list --group scene", async () => {
+test("integration: tools group list scene via execute()", async () => {
   const runtime = await makeRuntime();
-  const result = await execute(["tools", "list", "--group", "scene"], runtime);
+  const result = await execute(["tools", "group", "list", "scene"], runtime);
   assert.equal(result.ok, true);
 
   const data = result.data as Record<string, unknown>;
-  const tools = data.tools as Array<{ name: string; group: string }>;
+  assert.equal(data.command, "tools.group.list");
+  const tools = data.tools as Array<{ name: string; source: string }>;
+  assert.ok(tools.length > 0);
   for (const t of tools) {
-    assert.equal(t.group, "scene");
+    assert.equal(t.source, "built-in");
   }
 });
 
-test("integration: tools groups via execute()", async () => {
+test("integration: tools groups returns tools-list-removed guidance", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["tools", "groups"], runtime);
-  assert.equal(result.ok, true);
-
-  const data = result.data as Record<string, unknown>;
-  assert.equal(data.command, "tools.groups");
-  const groups = data.groups as string[];
-  assert.ok(groups.includes("scene"));
-  assert.ok(groups.includes("camera"));
-  assert.ok(groups.includes("probuilder"));
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_TOOLS_LIST_REMOVED");
 });
 
 test("integration: tools search hierarchy via execute()", async () => {

@@ -21,7 +21,7 @@ async function makeRuntime() {
   return { dataDir, store, runner: new JobRunner(store, dataDir) };
 }
 
-test("tools list --include-custom discovers Unity project custom descriptors through the bridge", async () => {
+test("tools group list <sample> --include-custom discovers Unity project custom descriptors through the bridge", async () => {
   const runtime = await makeRuntime();
   const requests: BridgeRequest[] = [];
   const customDescriptor = {
@@ -41,7 +41,7 @@ test("tools list --include-custom discovers Unity project custom descriptors thr
     cliCommand: "tools run sample.echo"
   };
 
-  const result = await execute(["tools", "list", "--include-custom", "--group", "sample"], {
+  const result = await execute(["tools", "group", "list", "sample", "--include-custom"], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
@@ -52,10 +52,9 @@ test("tools list --include-custom discovers Unity project custom descriptors thr
   assert.equal(result.ok, true);
   assert.equal(requests.length, 1);
   assert.equal(requests[0].command, "project-tool.list");
-  const data = result.data as { tools: Array<{ name: string; group: string; architectureSensitive?: boolean }> };
+  const data = result.data as { tools: Array<{ name: string; source: string }> };
   assert.deepEqual(data.tools.map((tool) => tool.name), ["sample.echo"]);
-  assert.equal(data.tools[0].group, "sample");
-  assert.equal(data.tools[0].architectureSensitive, true);
+  assert.equal(data.tools[0].source, "project");
 });
 
 test("tools describe resolves custom descriptor without hand-written CLI metadata", async () => {
