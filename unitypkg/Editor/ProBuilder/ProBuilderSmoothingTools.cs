@@ -51,7 +51,14 @@ namespace UnityCli.ProBuilder
                 return ProBuilderErrors.OperationFailed("convert-to-probuilder", "Target already has a ProBuilderMesh component.");
 
             Undo.RecordObject(go, "ProBuilder Convert to ProBuilder");
-            var pbMesh = ProBuilderReflection.ConvertToProBuilderMesh(go);
+
+            // Add ProBuilderMesh component
+            var pbMesh = ProBuilderReflection.AddProBuilderMesh(go);
+            if (pbMesh == null)
+                return ProBuilderErrors.OperationFailed("convert-to-probuilder", "Failed to add ProBuilderMesh component.");
+
+            // Use MeshImporter to properly convert the mesh
+            var imported = ProBuilderReflection.ConvertViaMeshImporter(go, pbMesh);
 
             var converted = pbMesh != null;
             var vertexCount = converted ? ProBuilderReflection.GetVertexCount(pbMesh) : 0;
@@ -283,11 +290,37 @@ namespace UnityCli.ProBuilder
             var vertexCount = ProBuilderReflection.GetVertexCount(mesh);
             Undo.RecordObject(go, "ProBuilder Freeze Transform");
 
-            // Bake transform: apply ToMesh with world-space positions, then reset transform
-            ProBuilderReflection.RefreshMesh(mesh);
-            go.transform.position = Vector3.zero;
-            go.transform.rotation = Quaternion.identity;
-            go.transform.localScale = Vector3.one;
+            // Bake transform into vertex positions, then reset transform to identity
+            // Read positions, transform to world space, reset transform, write back
+            try
+            {
+                var positions = ProBuilderReflection.GetPositions(mesh);
+                if (positions != null)
+                {
+                    var posList = new List<Vector3>(positions);
+                    // Transform positions from local to world space
+                    for (int i = 0; i < posList.Count; i++)
+                        posList[i] = go.transform.TransformPoint(posList[i]);
+
+                    // Reset transform
+                    go.transform.position = Vector3.zero;
+                    go.transform.rotation = Quaternion.identity;
+                    go.transform.localScale = Vector3.one;
+
+                    // Write positions back (now in local space = world space since transform is identity)
+                    var positionsProp = ProBuilderReflection.GetProBuilderMeshType()?.GetProperty("positions");
+                    if (positionsProp != null && positionsProp.CanWrite)
+                        positionsProp.SetValue(mesh, posList);
+                    else
+                    {
+                        var setPositionsMethod = ProBuilderReflection.GetProBuilderMeshType()?.GetMethod("SetPositions",
+                            BindingFlags.Instance | BindingFlags.Public);
+                        if (setPositionsMethod != null)
+                            setPositionsMethod.Invoke(mesh, new object[] { posList.ToArray() });
+                    }
+                }
+            }
+            catch (Exception) { }
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);

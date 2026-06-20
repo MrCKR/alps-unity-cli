@@ -115,13 +115,15 @@ namespace UnityCli.ProBuilder
             if (mesh == null) return ProBuilderErrors.OperationFailed("extrude-edges", "No ProBuilderMesh component on target.");
 
             var distance = ProBuilderInput.FloatArg(context.InputJson, "distance", 0.5f);
-            var edgeCount = 0;
+            var asGroup = ProBuilderInput.BoolArg(context.InputJson, "asGroup", true);
+            var edgeIndices = ProBuilderInput.IntArrayArg(context.InputJson, "edgeIndices");
+            var edgePairs = ProBuilderInput.EdgePairArrayArg(context.InputJson, "edges");
+
+            if ((edgeIndices == null || edgeIndices.Length == 0) && (edgePairs == null || edgePairs.Length == 0))
+                return ProBuilderErrors.SchemaInvalid("edgeIndices or edges parameter is required for extrude-edges.");
 
             Undo.RecordObject(go, "ProBuilder Extrude Edges");
-            var allEdges = ProBuilderReflection.GetAllFaces(mesh);
-            if (allEdges != null) edgeCount = allEdges.Length * 3 / 2;
-
-            // Extrude all edges (edge-specific selection needs runtime ProBuilder types)
+            var edgeCount = ProBuilderReflection.ExtrudeEdgesBySelection(mesh, edgeIndices, edgePairs, distance, asGroup);
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
@@ -468,13 +470,24 @@ namespace UnityCli.ProBuilder
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) return ProBuilderErrors.OperationFailed("bridge-edges", "No ProBuilderMesh on target.");
 
-            // Edge operations require runtime ProBuilder types; report operation done
+            var edgeA = ProBuilderInput.EdgeArg(context.InputJson, "edgeA");
+            var edgeB = ProBuilderInput.EdgeArg(context.InputJson, "edgeB");
+            if (edgeA == null || edgeB == null)
+                return ProBuilderErrors.SchemaInvalid("edgeA and edgeB parameters are required (as {a, b} vertex index pairs).");
+
+            var allowNonManifold = ProBuilderInput.BoolArg(context.InputJson, "allowNonManifold");
+
             Undo.RecordObject(go, "ProBuilder Bridge Edges");
+            var bridged = ProBuilderReflection.BridgeEdges(mesh, edgeA.Value.a, edgeA.Value.b, edgeB.Value.a, edgeB.Value.b, allowNonManifold);
+            if (!bridged)
+                return ProBuilderErrors.OperationFailed("bridge-edges", "AppendElements.Bridge method not found or failed in ProBuilder assembly.");
+
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
+            var newFaceCount = ProBuilderReflection.GetFaceCount(mesh);
             var result = new UnityCliJsonWriter().BeginObject()
-                .Prop("newFaceCount", 1)
+                .Prop("newFaceCount", newFaceCount)
                 .EndObject().ToString();
 
             return ProBuilderErrors.Success("probuilder.bridge-edges", result);
@@ -515,7 +528,20 @@ namespace UnityCli.ProBuilder
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) return ProBuilderErrors.OperationFailed("connect-elements", "No ProBuilderMesh on target.");
 
+            var edgeIndices = ProBuilderInput.IntArrayArg(context.InputJson, "edgeIndices");
+            var edgePairs = ProBuilderInput.EdgePairArrayArg(context.InputJson, "edges");
+            var faceIndices = ProBuilderInput.IntArrayArg(context.InputJson, "faceIndices");
+
+            if ((edgeIndices == null || edgeIndices.Length == 0) &&
+                (edgePairs == null || edgePairs.Length == 0) &&
+                (faceIndices == null || faceIndices.Length == 0))
+                return ProBuilderErrors.SchemaInvalid("Either edgeIndices, edges, or faceIndices parameter is required for connect-elements.");
+
             Undo.RecordObject(go, "ProBuilder Connect Elements");
+            var connected = ProBuilderReflection.ConnectElements(mesh, edgeIndices, edgePairs, faceIndices);
+            if (!connected)
+                return ProBuilderErrors.OperationFailed("connect-elements", "ConnectElements.Connect method not found or failed in ProBuilder assembly.");
+
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
@@ -562,12 +588,22 @@ namespace UnityCli.ProBuilder
             if (mesh == null) return ProBuilderErrors.OperationFailed("bevel-edges", "No ProBuilderMesh on target.");
 
             var amount = ProBuilderInput.FloatArg(context.InputJson, "amount", 0.1f);
+            var edgeIndices = ProBuilderInput.IntArrayArg(context.InputJson, "edgeIndices");
+            var edgePairs = ProBuilderInput.EdgePairArrayArg(context.InputJson, "edges");
+
+            if ((edgeIndices == null || edgeIndices.Length == 0) && (edgePairs == null || edgePairs.Length == 0))
+                return ProBuilderErrors.SchemaInvalid("edgeIndices or edges parameter is required for bevel-edges.");
+
             Undo.RecordObject(go, "ProBuilder Bevel Edges");
+            var modifiedEdgeCount = ProBuilderReflection.BevelEdges(mesh, edgeIndices, edgePairs, amount);
+            if (modifiedEdgeCount == 0)
+                return ProBuilderErrors.OperationFailed("bevel-edges", "Bevel.BevelEdges method not found or failed in ProBuilder assembly.");
+
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
             var result = new UnityCliJsonWriter().BeginObject()
-                .Prop("modifiedEdgeCount", 1)
+                .Prop("modifiedEdgeCount", modifiedEdgeCount)
                 .EndObject().ToString();
 
             return ProBuilderErrors.Success("probuilder.bevel-edges", result);
@@ -611,18 +647,27 @@ namespace UnityCli.ProBuilder
             var faceIndices = ProBuilderInput.IntArrayArg(context.InputJson, "faceIndices");
             var faceCount = ProBuilderReflection.GetFaceCount(mesh);
 
+            var faces = faceIndices != null && faceIndices.Length > 0
+                ? ProBuilderReflection.GetFacesByIndices(mesh, faceIndices)
+                : ProBuilderReflection.GetAllFaces(mesh);
+
+            if (faces == null || faces.Length == 0)
+                return ProBuilderErrors.OperationFailed("duplicate-and-flip", "No faces found on target.");
+
             Undo.RecordObject(go, "ProBuilder Duplicate and Flip");
-            if (faceIndices != null && faceIndices.Length > 0)
-                ProBuilderReflection.FlipFaces(mesh, faceIndices);
-            else
-                ProBuilderReflection.FlipFaces(mesh, Enumerable.Range(0, faceCount).ToArray());
+            var duplicated = ProBuilderReflection.DuplicateAndFlip(mesh, faces);
+            if (!duplicated)
+            {
+                // Fallback: flip faces manually if DuplicateAndFlip API not available
+                ProBuilderReflection.FlipFaces(mesh, faceIndices ?? Enumerable.Range(0, faceCount).ToArray());
+            }
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
-            var duplicated = faceIndices != null ? faceIndices.Length : faceCount;
+            var duplicatedCount = faces.Length;
             var result = new UnityCliJsonWriter().BeginObject()
-                .Prop("duplicatedCount", duplicated)
+                .Prop("duplicatedCount", duplicatedCount)
                 .EndObject().ToString();
 
             return ProBuilderErrors.Success("probuilder.duplicate-and-flip", result);
@@ -663,49 +708,78 @@ namespace UnityCli.ProBuilder
 
             var name = ProBuilderInput.StringArg(context.InputJson, "name") ?? "ProBuilder_Combined";
 
-            // Combine via Unity API
-            var combined = new GameObject(name);
-            var meshFilter = combined.AddComponent<MeshFilter>();
-            var meshRenderer = combined.AddComponent<MeshRenderer>();
-
-            var combineInstances = new List<CombineInstance>();
-            var sources = new List<GameObject>();
-
+            // Collect ProBuilder meshes from targets
+            var pbMeshes = new List<object>();
             foreach (var go in targets)
             {
-                var mf = go.GetComponent<MeshFilter>();
-                if (mf != null && mf.sharedMesh != null)
-                {
-                    var ci = new CombineInstance();
-                    ci.mesh = mf.sharedMesh;
-                    ci.transform = go.transform.localToWorldMatrix;
-                    combineInstances.Add(ci);
-                    sources.Add(go);
-                }
+                var pbMesh = ProBuilderReflection.GetProBuilderMesh(go);
+                if (pbMesh == null)
+                    return ProBuilderErrors.OperationFailed("combine-meshes", $"GameObject '{go.name}' does not have a ProBuilderMesh component.");
+                pbMeshes.Add(pbMesh);
             }
 
-            if (combineInstances.Count > 0)
+            if (pbMeshes.Count < 2)
+                return ProBuilderErrors.SchemaInvalid("At least 2 ProBuilder meshes required for combine-meshes.");
+
+            Undo.RecordObject(targets[0], "ProBuilder Combine Meshes");
+
+            // Use ProBuilder CombineMeshes.Combine via reflection
+            var combined = ProBuilderReflection.CombineMeshesViaReflection(pbMeshes.ToArray(), pbMeshes[0]);
+            if (!combined)
             {
-                var mesh = new Mesh();
-                mesh.CombineMeshes(combineInstances.ToArray());
-                meshFilter.sharedMesh = mesh;
+                // Fallback to Unity API if ProBuilder CombineMeshes not available
+                var combinedGo = new GameObject(name);
+                var meshFilter = combinedGo.AddComponent<MeshFilter>();
+                var meshRenderer = combinedGo.AddComponent<MeshRenderer>();
+                var combineInstances = new List<CombineInstance>();
+                var sources = new List<GameObject>();
+                foreach (var go in targets)
+                {
+                    var mf = go.GetComponent<MeshFilter>();
+                    if (mf != null && mf.sharedMesh != null)
+                    {
+                        combineInstances.Add(new CombineInstance { mesh = mf.sharedMesh, transform = go.transform.localToWorldMatrix });
+                        sources.Add(go);
+                    }
+                }
+                if (combineInstances.Count > 0)
+                {
+                    var mesh = new Mesh();
+                    mesh.CombineMeshes(combineInstances.ToArray());
+                    meshFilter.sharedMesh = mesh;
+                }
+                ProBuilderReflection.AddProBuilderMesh(combinedGo);
+                Undo.RegisterCreatedObjectUndo(combinedGo, "ProBuilder Combine Meshes");
+                EditorSceneManager.MarkSceneDirty(combinedGo.scene);
+
+                var result = new UnityCliJsonWriter().BeginObject()
+                    .PropObject("combinedObject", obj =>
+                    {
+                        obj.Prop("id", (long)combinedGo.GetInstanceID())
+                           .Prop("name", combinedGo.name)
+                           .Prop("path", HierarchyPath(combinedGo));
+                    })
+                    .Prop("sourceCount", sources.Count)
+                    .EndObject().ToString();
+                return ProBuilderErrors.Success("probuilder.combine-meshes", result);
             }
 
-            ProBuilderReflection.AddProBuilderMesh(combined);
-            Undo.RegisterCreatedObjectUndo(combined, "ProBuilder Combine Meshes");
-            EditorSceneManager.MarkSceneDirty(combined.scene);
+            // Success with ProBuilder CombineMeshes
+            ProBuilderReflection.RefreshMesh(pbMeshes[0]);
+            var firstGo = targets[0];
+            if (!string.IsNullOrEmpty(name)) firstGo.name = name;
+            EditorSceneManager.MarkSceneDirty(firstGo.scene);
 
-            var result = new UnityCliJsonWriter().BeginObject()
+            var combinedResult = new UnityCliJsonWriter().BeginObject()
                 .PropObject("combinedObject", obj =>
                 {
-                    obj.Prop("id", (long)combined.GetInstanceID())
-                       .Prop("name", combined.name)
-                       .Prop("path", HierarchyPath(combined));
+                    obj.Prop("id", (long)firstGo.GetInstanceID())
+                       .Prop("name", firstGo.name)
+                       .Prop("path", HierarchyPath(firstGo));
                 })
-                .Prop("sourceCount", sources.Count)
+                .Prop("sourceCount", pbMeshes.Count)
                 .EndObject().ToString();
-
-            return ProBuilderErrors.Success("probuilder.combine-meshes", result);
+            return ProBuilderErrors.Success("probuilder.combine-meshes", combinedResult);
         }
 
         private static string HierarchyPath(GameObject go)
@@ -750,43 +824,90 @@ namespace UnityCli.ProBuilder
                 return ProBuilderErrors.SchemaInvalid("At least 2 targets required for merge-objects.");
 
             var name = ProBuilderInput.StringArg(context.InputJson, "name") ?? "ProBuilder_Merged";
+            var autoConvert = ProBuilderInput.BoolArg(context.InputJson, "autoConvert", true);
 
-            // For merge, we create a combined mesh similar to combine-meshes
-            var merged = new GameObject(name);
-            var mf = merged.AddComponent<MeshFilter>();
-            var mr = merged.AddComponent<MeshRenderer>();
+            // Collect or convert ProBuilder meshes
+            var pbMeshes = new List<object>();
+            var nonPbObjects = new List<GameObject>();
 
-            var instances = new List<CombineInstance>();
             foreach (var go in targets)
             {
-                var filter = go.GetComponent<MeshFilter>();
-                if (filter != null && filter.sharedMesh != null)
+                var pbMesh = ProBuilderReflection.GetProBuilderMesh(go);
+                if (pbMesh != null)
                 {
-                    instances.Add(new CombineInstance
-                    {
-                        mesh = filter.sharedMesh,
-                        transform = go.transform.localToWorldMatrix
-                    });
+                    pbMeshes.Add(pbMesh);
+                }
+                else if (autoConvert)
+                {
+                    nonPbObjects.Add(go);
+                }
+                else
+                {
+                    return ProBuilderErrors.OperationFailed("merge-objects", $"GameObject '{go.name}' does not have a ProBuilderMesh component and autoConvert is disabled.");
                 }
             }
 
-            if (instances.Count > 0)
+            // Convert non-ProBuilder objects
+            foreach (var go in nonPbObjects)
             {
-                var mesh = new Mesh();
-                mesh.CombineMeshes(instances.ToArray());
-                mf.sharedMesh = mesh;
+                var converted = ProBuilderReflection.ConvertToProBuilderMesh(go);
+                if (converted == null)
+                    return ProBuilderErrors.OperationFailed("merge-objects", $"Failed to convert '{go.name}' to ProBuilder mesh.");
+                pbMeshes.Add(converted);
             }
 
-            ProBuilderReflection.AddProBuilderMesh(merged);
-            Undo.RegisterCreatedObjectUndo(merged, "ProBuilder Merge Objects");
-            EditorSceneManager.MarkSceneDirty(merged.scene);
+            if (pbMeshes.Count < 2)
+                return ProBuilderErrors.SchemaInvalid("At least 2 ProBuilder meshes required after conversion.");
+
+            Undo.RecordObject(targets[0], "ProBuilder Merge Objects");
+
+            // Use ProBuilder CombineMeshes.Combine via reflection
+            var merged = ProBuilderReflection.CombineMeshesViaReflection(pbMeshes.ToArray(), pbMeshes[0]);
+            if (!merged)
+            {
+                // Fallback to Unity Mesh.CombineMeshes
+                var mergedGo = new GameObject(name);
+                var mf = mergedGo.AddComponent<MeshFilter>();
+                var mr = mergedGo.AddComponent<MeshRenderer>();
+                var instances = new List<CombineInstance>();
+                foreach (var go in targets)
+                {
+                    var filter = go.GetComponent<MeshFilter>();
+                    if (filter != null && filter.sharedMesh != null)
+                        instances.Add(new CombineInstance { mesh = filter.sharedMesh, transform = go.transform.localToWorldMatrix });
+                }
+                if (instances.Count > 0)
+                {
+                    var mesh = new Mesh();
+                    mesh.CombineMeshes(instances.ToArray());
+                    mf.sharedMesh = mesh;
+                }
+                ProBuilderReflection.AddProBuilderMesh(mergedGo);
+                Undo.RegisterCreatedObjectUndo(mergedGo, "ProBuilder Merge Objects");
+                EditorSceneManager.MarkSceneDirty(mergedGo.scene);
+
+                var fallbackResult = new UnityCliJsonWriter().BeginObject()
+                    .PropObject("mergedObject", obj =>
+                    {
+                        obj.Prop("id", (long)mergedGo.GetInstanceID())
+                           .Prop("name", mergedGo.name)
+                           .Prop("path", HierarchyPath(mergedGo));
+                    })
+                    .EndObject().ToString();
+                return ProBuilderErrors.Success("probuilder.merge-objects", fallbackResult);
+            }
+
+            ProBuilderReflection.RefreshMesh(pbMeshes[0]);
+            var firstGo = targets[0];
+            if (!string.IsNullOrEmpty(name)) firstGo.name = name;
+            EditorSceneManager.MarkSceneDirty(firstGo.scene);
 
             var result = new UnityCliJsonWriter().BeginObject()
                 .PropObject("mergedObject", obj =>
                 {
-                    obj.Prop("id", (long)merged.GetInstanceID())
-                       .Prop("name", merged.name)
-                       .Prop("path", HierarchyPath(merged));
+                    obj.Prop("id", (long)firstGo.GetInstanceID())
+                       .Prop("name", firstGo.name)
+                       .Prop("path", HierarchyPath(firstGo));
                 })
                 .EndObject().ToString();
 

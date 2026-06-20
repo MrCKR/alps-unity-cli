@@ -15,6 +15,14 @@ namespace UnityCli.ProBuilder
     /// </summary>
     internal static class ProBuilderInput
     {
+        /// <summary>
+        /// Represents an edge specified as a vertex pair {a, b}.
+        /// </summary>
+        public struct EdgePair
+        {
+            public int a;
+            public int b;
+        }
         public static string StringArg(string inputJson, string name)
         {
             if (string.IsNullOrEmpty(inputJson)) return null;
@@ -94,6 +102,94 @@ namespace UnityCli.ProBuilder
                         items.Add(val);
                 }
                 return items.ToArray();
+            }
+            catch (Exception) { return null; }
+        }
+
+        /// <summary>
+        /// Parse an array of edge vertex pair objects [{a:X,b:Y},...] from the input JSON.
+        /// </summary>
+        public static EdgePair[] EdgePairArrayArg(string inputJson, string name)
+        {
+            var raw = RawProperty(inputJson, name);
+            if (string.IsNullOrEmpty(raw)) return null;
+            try
+            {
+                raw = raw.Trim();
+                if (!raw.StartsWith("[", StringComparison.Ordinal)) return null;
+                var items = new List<EdgePair>();
+                // Extract each {a:X,b:Y} object
+                var objPattern = new System.Text.RegularExpressions.Regex(
+                    @"\{[^}]*\""a\""\s*:\s*(-?\d+)[^}]*\""b\""\s*:\s*(-?\d+)[^}]*\}");
+                var matches = objPattern.Matches(raw);
+                foreach (System.Text.RegularExpressions.Match m in matches)
+                {
+                    int a, b;
+                    if (int.TryParse(m.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out a) &&
+                        int.TryParse(m.Groups[2].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out b))
+                    {
+                        items.Add(new EdgePair { a = a, b = b });
+                    }
+                }
+                return items.Count > 0 ? items.ToArray() : null;
+            }
+            catch (Exception) { return null; }
+        }
+
+        /// <summary>
+        /// Parse a single edge pair {a:X,b:Y} from the input JSON.
+        /// </summary>
+        public static EdgePair? EdgeArg(string inputJson, string name)
+        {
+            var raw = RawProperty(inputJson, name);
+            if (string.IsNullOrEmpty(raw)) return null;
+            try
+            {
+                var aMatch = System.Text.RegularExpressions.Regex.Match(raw,
+                    @"\""a\""\s*:\s*(-?\d+)");
+                var bMatch = System.Text.RegularExpressions.Regex.Match(raw,
+                    @"\""b\""\s*:\s*(-?\d+)");
+                if (aMatch.Success && bMatch.Success)
+                {
+                    int a, b;
+                    if (int.TryParse(aMatch.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out a) &&
+                        int.TryParse(bMatch.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out b))
+                    {
+                        return new EdgePair { a = a, b = b };
+                    }
+                }
+            }
+            catch (Exception) { }
+            return null;
+        }
+
+        /// <summary>
+        /// Parse an array of 3D point objects [{x:1,y:2,z:3},...] from the input JSON.
+        /// </summary>
+        public static List<Vector3> Vector3ListArg(string inputJson, string name)
+        {
+            var raw = RawProperty(inputJson, name);
+            if (string.IsNullOrEmpty(raw)) return null;
+            try
+            {
+                raw = raw.Trim();
+                if (!raw.StartsWith("[", StringComparison.Ordinal)) return null;
+                var items = new List<Vector3>();
+                // Extract each {x:X,y:Y,z:Z} object
+                var objPattern = new System.Text.RegularExpressions.Regex(
+                    @"\{[^}]*\""x\""\s*:\s*(-?\d+(?:\.\d+)?)[^}]*\""y\""\s*:\s*(-?\d+(?:\.\d+)?)[^}]*\""z\""\s*:\s*(-?\d+(?:\.\d+)?)[^}]*\}");
+                var matches = objPattern.Matches(raw);
+                foreach (System.Text.RegularExpressions.Match m in matches)
+                {
+                    float x, y, z;
+                    if (float.TryParse(m.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out x) &&
+                        float.TryParse(m.Groups[2].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out y) &&
+                        float.TryParse(m.Groups[3].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out z))
+                    {
+                        items.Add(new Vector3(x, y, z));
+                    }
+                }
+                return items.Count > 0 ? items : null;
             }
             catch (Exception) { return null; }
         }
