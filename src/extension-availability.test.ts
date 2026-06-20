@@ -30,6 +30,7 @@ import { PROBUILDER_MANIFEST, VFX_GRAPH_MANIFEST, BUILTIN_EXTENSION_MANIFESTS } 
 import { validateExtensionManifestContracts } from "./contracts/command-contract.js";
 import { bridgeCommandRegistry } from "./bridge/index.js";
 import { checkToolExtensionAvailability, checkContextExtensionAvailability } from "./extension-availability.js";
+import { builtinToolMetadata, extensionToolMetadata, findToolByName, EXTENSION_GROUPS } from "./tools/metadata/index.js";
 
 const requestId = "test_p5t04_001";
 const emptyRuntime: ToolsRuntime = {};
@@ -542,4 +543,91 @@ test("tools describe for extension tool shows unavailable when Unity package pre
   assert.equal(result.ok, true);
   const data = result.data as Record<string, unknown>;
   assert.equal(data.extensionAvailability, "available");
+});
+
+// ── P10-R4: Cinemachine/URP/HDRP extension package capability tests ───────
+
+test("P10-R4: Cinemachine tools are in extensionToolMetadata, not builtinToolMetadata", () => {
+  const builtin = builtinToolMetadata();
+  const ext = extensionToolMetadata();
+  assert.equal(builtin.filter((t) => t.group === "cinemachine").length, 0, "Cinemachine tools should NOT be in core builtin metadata");
+  assert.equal(ext.filter((t) => t.group === "cinemachine").length, 10, "Cinemachine should have 10 extension tools");
+});
+
+test("P10-R4: URP tools are in extensionToolMetadata, not builtinToolMetadata", () => {
+  const builtin = builtinToolMetadata();
+  const ext = extensionToolMetadata();
+  assert.equal(builtin.filter((t) => t.group === "urp").length, 0, "URP tools should NOT be in core builtin metadata");
+  assert.equal(ext.filter((t) => t.group === "urp").length, 3, "URP should have 3 extension tools");
+});
+
+test("P10-R4: HDRP tools are in extensionToolMetadata, not builtinToolMetadata", () => {
+  const builtin = builtinToolMetadata();
+  const ext = extensionToolMetadata();
+  assert.equal(builtin.filter((t) => t.group === "hdrp").length, 0, "HDRP tools should NOT be in core builtin metadata");
+  assert.equal(ext.filter((t) => t.group === "hdrp").length, 2, "HDRP should have 2 extension tools");
+});
+
+test("P10-R4: Cinemachine tools are discoverable via findToolByName after registration", () => {
+  const create = findToolByName("cinemachine.create");
+  assert.ok(create, "cinemachine.create should be findable");
+  assert.equal(create?.group, "cinemachine");
+
+  const brain = findToolByName("cinemachine.brain");
+  assert.ok(brain, "cinemachine.brain should be findable");
+  assert.equal(brain?.group, "cinemachine");
+});
+
+test("P10-R4: URP and HDRP tools are discoverable via findToolByName after registration", () => {
+  const feature = findToolByName("urp.feature");
+  assert.ok(feature, "urp.feature should be findable");
+  assert.equal(feature?.group, "urp");
+
+  const volume = findToolByName("hdrp.volume");
+  assert.ok(volume, "hdrp.volume should be findable");
+  assert.equal(volume?.group, "hdrp");
+});
+
+test("P10-R4: EXTENSION_GROUPS includes cinemachine, urp, hdrp", () => {
+  assert.ok(EXTENSION_GROUPS.has("cinemachine"), "cinemachine should be in EXTENSION_GROUPS");
+  assert.ok(EXTENSION_GROUPS.has("urp"), "urp should be in EXTENSION_GROUPS");
+  assert.ok(EXTENSION_GROUPS.has("hdrp"), "hdrp should be in EXTENSION_GROUPS");
+  assert.ok(EXTENSION_GROUPS.has("probuilder"), "probuilder should still be in EXTENSION_GROUPS");
+  assert.ok(EXTENSION_GROUPS.has("vfx"), "vfx should still be in EXTENSION_GROUPS");
+});
+
+// ── P10-R4 返工: source: "extension" 验证 ──────────────────────────────────
+
+test("P10-R4 rework: all Cinemachine tools have source: extension", () => {
+  const ext = extensionToolMetadata();
+  const cinemachineTools = ext.filter((t) => t.group === "cinemachine");
+  assert.equal(cinemachineTools.length, 10, "Should have 10 Cinemachine extension tools");
+  for (const tool of cinemachineTools) {
+    assert.equal(tool.source, "extension", `${tool.name} should have source: "extension"`);
+  }
+});
+
+test("P10-R4 rework: all URP tools have source: extension", () => {
+  const ext = extensionToolMetadata();
+  const urpTools = ext.filter((t) => t.group === "urp");
+  assert.equal(urpTools.length, 3, "Should have 3 URP extension tools");
+  for (const tool of urpTools) {
+    assert.equal(tool.source, "extension", `${tool.name} should have source: "extension"`);
+  }
+});
+
+test("P10-R4 rework: all HDRP tools have source: extension", () => {
+  const ext = extensionToolMetadata();
+  const hdrpTools = ext.filter((t) => t.group === "hdrp");
+  assert.equal(hdrpTools.length, 2, "Should have 2 HDRP extension tools");
+  for (const tool of hdrpTools) {
+    assert.equal(tool.source, "extension", `${tool.name} should have source: "extension"`);
+  }
+});
+
+test("P10-R4 rework: no core built-in tools have source: extension", () => {
+  const core = builtinToolMetadata();
+  for (const tool of core) {
+    assert.ok(tool.source !== "extension", `Core tool ${tool.name} should NOT have source: "extension"`);
+  }
 });

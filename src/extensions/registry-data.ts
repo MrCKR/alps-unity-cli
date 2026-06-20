@@ -2,8 +2,11 @@
  * Initial registry data for the five built-in CLI extensions.
  *
  * ProBuilder has 36 fine-grained tool contributions (P7-T2a/T2b).
- * VFX Graph, Cinemachine, URP, and HDRP are registered as future extensions
- * whose tools will be implemented in P7/P8.
+ * Cinemachine has 10 camera tools (P10-R4).
+ * VFX Graph has 16 tools (graph, effect, parameter, control, event, template,
+ *   particle system, line renderer, trail renderer) (P8/P10-R4).
+ * URP has 3 tools (feature, volume, settings) (P10-R4).
+ * HDRP has 2 tools (volume, settings) (P10-R4).
  */
 
 import type { ExtensionManifest } from "./types.js";
@@ -114,8 +117,8 @@ export const VFX_GRAPH_MANIFEST: ExtensionManifest = {
 export const CINEMACHINE_MANIFEST: ExtensionManifest = {
   id: "cinemachine",
   name: "Cinemachine",
-  description: "Smart camera system for Unity. Provides camera composition, tracking, and blending through the Cinemachine package. Tools to be implemented in a future phase.",
-  version: "0.1.0",
+  description: "Smart camera system for Unity. Provides camera composition, tracking, blending, noise, and extension management through the Cinemachine package.",
+  version: "1.0.0",
   unityPackages: [
     {
       packageId: "com.unity.cinemachine",
@@ -123,14 +126,29 @@ export const CINEMACHINE_MANIFEST: ExtensionManifest = {
     }
   ],
   contributions: {
-    tools: [],
+    tools: [
+      { name: "cinemachine.create", title: "Cinemachine Create", description: "Create a Cinemachine virtual camera with an optional preset (follow, third_person, freelook, dolly, static, top_down, side_scroller).", group: "cinemachine", bridgeCommand: "cinemachine.create", cliCommand: "cinemachine create" },
+      { name: "cinemachine.target", title: "Cinemachine Target", description: "Set the Follow and/or LookAt targets on a Cinemachine virtual camera.", group: "cinemachine", bridgeCommand: "cinemachine.target", cliCommand: "cinemachine target" },
+      { name: "cinemachine.lens", title: "Cinemachine Lens", description: "Get or set lens properties (fieldOfView, nearClipPlane, farClipPlane, orthographicSize, dutch) on a Cinemachine virtual camera.", group: "cinemachine", bridgeCommand: "cinemachine.lens", cliCommand: "cinemachine lens" },
+      { name: "cinemachine.priority", title: "Cinemachine Priority", description: "Get or set the priority (and enabled flag) on a Cinemachine virtual camera.", group: "cinemachine", bridgeCommand: "cinemachine.priority", cliCommand: "cinemachine priority" },
+      { name: "cinemachine.blend", title: "Cinemachine Blend", description: "Get or set the DefaultBlend (style + duration) on the CinemachineBrain of a target camera owner.", group: "cinemachine", bridgeCommand: "cinemachine.blend", cliCommand: "cinemachine blend" },
+      { name: "cinemachine.body", title: "Cinemachine Body", description: "Swap or configure the Cinemachine Body pipeline component on a virtual camera.", group: "cinemachine", bridgeCommand: "cinemachine.body", cliCommand: "cinemachine body" },
+      { name: "cinemachine.aim", title: "Cinemachine Aim", description: "Swap or configure the Cinemachine Aim pipeline component on a virtual camera.", group: "cinemachine", bridgeCommand: "cinemachine.aim", cliCommand: "cinemachine aim" },
+      { name: "cinemachine.noise", title: "Cinemachine Noise", description: "Add, configure or remove a CinemachineBasicMultiChannelPerlin noise component on a virtual camera.", group: "cinemachine", bridgeCommand: "cinemachine.noise", cliCommand: "cinemachine noise" },
+      { name: "cinemachine.brain", title: "Cinemachine Brain", description: "Ensure a CinemachineBrain is attached to the target camera owner, or report the brain's active virtual camera and blending state.", group: "cinemachine", bridgeCommand: "cinemachine.brain", cliCommand: "cinemachine brain" },
+      { name: "cinemachine.extension", title: "Cinemachine Extension", description: "List, add or remove CinemachineExtension-derived components on a virtual camera.", group: "cinemachine", bridgeCommand: "cinemachine.extension", cliCommand: "cinemachine extension" }
+    ],
     contexts: [
       { key: "cinemachine.cameras", description: "Cinemachine virtual cameras and composition in the current scene." }
     ],
-    bridgeCommands: [],
-    csharpEntries: [],
+    bridgeCommands: [
+      { group: "cinemachine", commands: ["create", "target", "lens", "priority", "blend", "body", "aim", "noise", "brain", "extension"] }
+    ],
+    csharpEntries: [
+      { type: "UnityCli.Cinemachine.CinemachineCameraTools", description: "Bridge handlers for Cinemachine create, target, lens, priority, blend, body, aim, noise, brain, and extension operations." }
+    ],
     docs: [
-      { topic: "cinemachine", description: "Cinemachine smart camera system: virtual cameras, composition, and blending." }
+      { topic: "cinemachine", description: "Cinemachine smart camera system: virtual cameras, composition, blending, noise, and extensions." }
     ]
   },
   tags: ["camera", "cinematography", "animation"]
@@ -139,8 +157,8 @@ export const CINEMACHINE_MANIFEST: ExtensionManifest = {
 export const URP_MANIFEST: ExtensionManifest = {
   id: "urp",
   name: "Universal Render Pipeline",
-  description: "Universal Render Pipeline extension for Unity. Provides render pipeline asset management, shader configuration, and quality settings. Tools to be implemented in a future phase.",
-  version: "0.1.0",
+  description: "Universal Render Pipeline extension for Unity. Provides renderer feature management, volume configuration, and pipeline settings through the URP package.",
+  version: "1.0.0",
   unityPackages: [
     {
       packageId: "com.unity.render-pipelines.universal",
@@ -148,14 +166,24 @@ export const URP_MANIFEST: ExtensionManifest = {
     }
   ],
   contributions: {
-    tools: [],
+    tools: [
+      { name: "urp.feature", title: "URP Renderer Feature", description: "List, add, remove, toggle or configure URP Renderer Features on the active Universal Render Pipeline asset.", group: "urp", bridgeCommand: "urp.feature", cliCommand: "urp feature" },
+      { name: "urp.volume", title: "URP Volume", description: "List, create or configure URP Volume components and their profile effects.", group: "urp", bridgeCommand: "urp.volume", cliCommand: "urp volume" },
+      { name: "urp.settings", title: "URP Pipeline Settings", description: "Get or set Universal Render Pipeline asset settings (renderScale, supportsHDR, msaaSampleCount, shadowDistance, etc.).", group: "urp", bridgeCommand: "urp.settings", cliCommand: "urp settings" }
+    ],
     contexts: [
       { key: "urp.pipeline", description: "URP render pipeline assets, quality settings, and shader configuration." }
     ],
-    bridgeCommands: [],
-    csharpEntries: [],
+    bridgeCommands: [
+      { group: "urp", commands: ["feature", "volume", "settings"] }
+    ],
+    csharpEntries: [
+      { type: "UnityCli.URP.UrpRendererFeatureTools", description: "Bridge handlers for URP renderer feature operations." },
+      { type: "UnityCli.URP.UrpVolumeTools", description: "Bridge handlers for URP volume operations." },
+      { type: "UnityCli.URP.UrpSettingsTools", description: "Bridge handlers for URP pipeline settings operations." }
+    ],
     docs: [
-      { topic: "urp", description: "Universal Render Pipeline: asset management, quality settings, and shader configuration." }
+      { topic: "urp", description: "Universal Render Pipeline: renderer features, volumes, and pipeline settings." }
     ]
   },
   tags: ["rendering", "pipeline", "urp"]
@@ -164,8 +192,8 @@ export const URP_MANIFEST: ExtensionManifest = {
 export const HDRP_MANIFEST: ExtensionManifest = {
   id: "hdrp",
   name: "High Definition Render Pipeline",
-  description: "High Definition Render Pipeline extension for Unity. Provides HDRP-specific lighting, volume, and rendering configuration. Tools to be implemented in a future phase.",
-  version: "0.1.0",
+  description: "High Definition Render Pipeline extension for Unity. Provides HDRP volume configuration and pipeline settings through the HDRP package.",
+  version: "1.0.0",
   unityPackages: [
     {
       packageId: "com.unity.render-pipelines.high-definition",
@@ -173,14 +201,22 @@ export const HDRP_MANIFEST: ExtensionManifest = {
     }
   ],
   contributions: {
-    tools: [],
+    tools: [
+      { name: "hdrp.volume", title: "HDRP Volume", description: "List, create or configure HDRP Volume components and their profile effects.", group: "hdrp", bridgeCommand: "hdrp.volume", cliCommand: "hdrp volume" },
+      { name: "hdrp.settings", title: "HDRP Pipeline Settings", description: "Get or set High Definition Render Pipeline asset settings.", group: "hdrp", bridgeCommand: "hdrp.settings", cliCommand: "hdrp settings" }
+    ],
     contexts: [
       { key: "hdrp.pipeline", description: "HDRP render pipeline assets, volume profiles, and lighting configuration." }
     ],
-    bridgeCommands: [],
-    csharpEntries: [],
+    bridgeCommands: [
+      { group: "hdrp", commands: ["volume", "settings"] }
+    ],
+    csharpEntries: [
+      { type: "UnityCli.HDRP.HdrpVolumeTools", description: "Bridge handlers for HDRP volume operations." },
+      { type: "UnityCli.HDRP.HdrpSettingsTools", description: "Bridge handlers for HDRP pipeline settings operations." }
+    ],
     docs: [
-      { topic: "hdrp", description: "High Definition Render Pipeline: lighting, volumes, and rendering configuration." }
+      { topic: "hdrp", description: "High Definition Render Pipeline: volumes, lighting, and pipeline settings." }
     ]
   },
   tags: ["rendering", "pipeline", "hdrp"]

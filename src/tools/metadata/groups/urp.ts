@@ -18,12 +18,26 @@ import { objSchema } from "../schemas.js";
  *   m_RendererDataList → ScriptableRendererData's m_RendererFeatures array, mirroring
  *   unity-mcp's approach but without direct type references.
  */
+
+const URP_PACKAGE = "com.unity.render-pipelines.universal";
+
+/** Common fields shared by all URP extension tools (P10-R4: mirrors PB_COMMON pattern). */
+const URP_COMMON = {
+  group: "urp",
+  target: "editor" as const,
+  availabilityScope: "editorSession" as const,
+  requiresPackages: [URP_PACKAGE],
+  handler: "hybrid" as const,
+  source: "extension" as const,
+  docsTopic: "urp",
+};
+
 export const URP_TOOLS: ToolMetadata[] = [
   {
+    ...URP_COMMON,
     name: "urp.feature",
     title: "URP Renderer Feature",
     description: "List, add, remove, toggle or configure URP Renderer Features on the active Universal Render Pipeline asset. Requires URP (com.unity.render-pipelines.universal) to be the active render pipeline.",
-    group: "urp",
     inputSchema: objSchema({
       action: { type: "string", enum: ["list", "add", "remove", "toggle", "configure"] },
       featureType: { type: "string" },
@@ -35,20 +49,17 @@ export const URP_TOOLS: ToolMetadata[] = [
     }),
     readOnlyHint: false,
     destructiveHint: true,
-    handler: "hybrid",
     cliCommand: "urp feature",
-    docsTopic: "urp",
-    requiresPackages: ["com.unity.render-pipelines.universal"],
     examples: [
       { description: "List all renderer features", argv: ["urp", "feature", "--action", "list"] },
       { description: "Add a ScreenSpaceAmbientOcclusion feature", argv: ["urp", "feature", "--action", "add", "--feature-type", "ScreenSpaceAmbientOcclusion"] }
     ]
   },
   {
+    ...URP_COMMON,
     name: "urp.volume",
     title: "URP Volume",
     description: "List, create or configure URP Volume components and their profile effects. Requires URP (com.unity.render-pipelines.universal) to be the active render pipeline.",
-    group: "urp",
     inputSchema: objSchema({
       target: { type: "string" },
       action: { type: "string", enum: ["list", "create", "add-effect", "set", "info"] },
@@ -61,30 +72,24 @@ export const URP_TOOLS: ToolMetadata[] = [
     }),
     readOnlyHint: false,
     destructiveHint: false,
-    handler: "hybrid",
     cliCommand: "urp volume",
-    docsTopic: "urp",
-    requiresPackages: ["com.unity.render-pipelines.universal"],
     examples: [
       { description: "List URP volumes in scene", argv: ["urp", "volume", "--action", "list"] },
       { description: "Create a global URP volume", argv: ["urp", "volume", "--action", "create", "--is-global", "--name", "GlobalVolume"] }
     ]
   },
   {
+    ...URP_COMMON,
     name: "urp.settings",
     title: "URP Pipeline Settings",
     description: "Get or set Universal Render Pipeline asset settings (renderScale, supportsHDR, msaaSampleCount, shadowDistance, etc.). Requires URP (com.unity.render-pipelines.universal) to be the active render pipeline.",
-    group: "urp",
     inputSchema: objSchema({
       property: { type: "string" },
       value: { type: "string" }
     }),
     readOnlyHint: false,
     destructiveHint: false,
-    handler: "hybrid",
     cliCommand: "urp settings",
-    docsTopic: "urp",
-    requiresPackages: ["com.unity.render-pipelines.universal"],
     examples: [
       { description: "Read URP pipeline settings", argv: ["urp", "settings"] },
       { description: "Set render scale", argv: ["urp", "settings", "--property", "renderScale", "--value", "1.5"] }
