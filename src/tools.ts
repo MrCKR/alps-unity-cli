@@ -308,7 +308,6 @@ async function handleToolsDescribe(
     return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Tool not found for target: ${toolName}.`, [
       "Run unity_cli tools group to see tool groups.",
       "Run unity_cli tools group list <group> to see tools in a group.",
-      "Run unity_cli tools groups to see available tool categories.",
       "Run unity_cli tools list to see all available tools.",
       "Run unity_cli tools list --include-custom to discover Unity project Editor custom tools.",
       "Run unity_cli tools search <keyword> to find related tools."

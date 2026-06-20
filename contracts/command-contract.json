@@ -2337,6 +2337,26 @@
       "timeout": 5000
     },
     {
+      "bridgeCommand": "tools.group",
+      "group": "tools",
+      "command": "group",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 5000
+    },
+    {
+      "bridgeCommand": "tools.group-list",
+      "group": "tools",
+      "command": "group-list",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 5000
+    },
+    {
       "bridgeCommand": "tools.list",
       "group": "tools",
       "command": "list",

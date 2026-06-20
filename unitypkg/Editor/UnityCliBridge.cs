@@ -43,7 +43,20 @@ namespace UnityCli
         private static readonly string[] GraphicsCommands = { "graphics.quality", "graphics.settings", "graphics.pipeline", "graphics.volume", "graphics.screenshot", "graphics.bake-start", "graphics.bake-cancel", "graphics.bake-status", "graphics.bake-clear", "graphics.bake-reflection-probe", "graphics.bake-settings", "graphics.light-probe-group", "graphics.reflection-probe", "graphics.probe-positions", "graphics.stats", "graphics.stats-counters", "graphics.stats-memory", "graphics.scene-debug", "graphics.skybox-get", "graphics.skybox-set-material", "graphics.skybox-set-properties", "graphics.skybox-set-ambient", "graphics.skybox-set-fog", "graphics.skybox-set-reflection", "graphics.skybox-set-sun", "graphics.pipeline-settings", "graphics.pipeline-quality", "graphics.pipeline-info" };
         private static readonly string[] PhysicsCommands = { "physics.settings", "physics.raycast", "physics.simulation" };
         private static readonly string[] ProfilerCommands = { "profiler.start", "profiler.stop", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export", "profiler.status" };
-        private static readonly string[] ProBuilderCommands = { "probuilder.shape", "probuilder.create", "probuilder.csg", "probuilder.edit" };
+        private static readonly string[] ProBuilderCommands = {
+            "probuilder.ping", "probuilder.create-shape", "probuilder.create-poly-shape",
+            "probuilder.extrude-faces", "probuilder.delete-faces", "probuilder.detach-faces",
+            "probuilder.merge-faces", "probuilder.subdivide", "probuilder.flip-normals",
+            "probuilder.select-faces", "probuilder.set-face-material", "probuilder.set-face-color",
+            "probuilder.set-face-uvs", "probuilder.extrude-edges", "probuilder.bevel-edges",
+            "probuilder.bridge-edges", "probuilder.connect-elements", "probuilder.combine-meshes",
+            "probuilder.merge-objects", "probuilder.duplicate-and-flip", "probuilder.create-polygon",
+            "probuilder.merge-vertices", "probuilder.weld-vertices", "probuilder.split-vertices",
+            "probuilder.move-vertices", "probuilder.insert-vertex", "probuilder.append-vertices-to-edge",
+            "probuilder.mesh-info", "probuilder.validate-mesh", "probuilder.convert-to-probuilder",
+            "probuilder.set-smoothing", "probuilder.auto-smooth", "probuilder.center-pivot",
+            "probuilder.freeze-transform", "probuilder.set-pivot", "probuilder.repair-mesh"
+        };
         private static readonly string[] AnimationCommands = { "animation.clip", "animation.state", "animation.play", "animation.stop", "animator.get-info", "animator.get-parameter", "animator.set-parameter", "animator.crossfade", "animator.set-speed", "animator.set-enabled", "controller.create", "controller.add-state", "controller.add-transition", "controller.add-parameter", "controller.get-info", "controller.assign", "controller.add-layer", "controller.remove-layer", "controller.set-layer-weight", "controller.create-blend-tree-1d", "controller.create-blend-tree-2d", "controller.add-blend-tree-child" };
         private static readonly string[] VfxCommands = { "vfx.graph", "vfx.effect", "vfx.parameter", "vfx.control", "vfx.event", "vfx.template", "vfx.particle-create", "vfx.particle-info", "vfx.particle-main", "vfx.particle-emission", "vfx.particle-shape", "vfx.particle-play", "vfx.particle-module", "vfx.line-create", "vfx.line-positions", "vfx.trail" };
         private static readonly string[] CinemachineCommands = { "cinemachine.create", "cinemachine.target", "cinemachine.lens", "cinemachine.priority", "cinemachine.blend", "cinemachine.body", "cinemachine.aim", "cinemachine.noise", "cinemachine.brain", "cinemachine.extension" };
@@ -278,7 +291,7 @@ namespace UnityCli
                 || command == "scene.save"
                 || command == "code.exec"
                 || command == "component.remove"
-                || command == "probuilder.csg"
+                
                 || command == "cinemachine.extension"
                 || command == "urp.feature"
                 || command == "editor.menu"
