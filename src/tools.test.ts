@@ -425,7 +425,7 @@ test("S2.3 build group has all required tools", () => {
 
 test("S3.1 creation domains have frozen metadata coverage", () => {
   const expectedByGroup = new Map([
-    ["camera", ["camera.list", "camera.info", "camera.screenshot"]],
+    ["camera", ["camera.list", "camera.info", "camera.screenshot", "camera.create", "camera.target", "camera.lens", "camera.multiview"]],
     ["material", ["material.info", "material.create", "material.assign", "material.set"]],
     ["shader", ["shader.info", "shader.read", "shader.create", "shader.update"]],
     ["texture", ["texture.info", "texture.create", "texture.sprite", "texture.import-settings"]],
@@ -487,7 +487,7 @@ test("tools describe editor.refresh returns job metadata", async () => {
 
 test("S3.2 graphics group has quality, pipeline, volume and screenshot tools", () => {
   const names = filterToolsByGroup("graphics").map((t) => t.name);
-  assert.deepEqual(names, ["graphics.quality", "graphics.settings", "graphics.pipeline", "graphics.volume", "graphics.screenshot"]);
+  assert.deepEqual(names, ["graphics.quality", "graphics.settings", "graphics.pipeline", "graphics.volume", "graphics.screenshot", "graphics.bake-start", "graphics.bake-cancel", "graphics.bake-status", "graphics.bake-clear", "graphics.bake-reflection-probe", "graphics.bake-settings", "graphics.light-probe-group", "graphics.reflection-probe", "graphics.probe-positions", "graphics.stats", "graphics.stats-counters", "graphics.stats-memory", "graphics.scene-debug", "graphics.skybox-get", "graphics.skybox-set-material", "graphics.skybox-set-properties", "graphics.skybox-set-ambient", "graphics.skybox-set-fog", "graphics.skybox-set-reflection", "graphics.skybox-set-sun", "graphics.pipeline-settings", "graphics.pipeline-quality", "graphics.pipeline-info"]);
   assert.equal(findToolByName("graphics.pipeline")?.readOnlyHint, true);
   assert.equal(findToolByName("graphics.volume")?.readOnlyHint, true);
 });
@@ -564,7 +564,7 @@ test("S3.2 physics group has settings, raycast and simulation tools", () => {
 
 test("S3.2 animation and vfx groups have required tools", () => {
   assert.deepEqual(filterToolsByGroup("animation").map((t) => t.name), ["animation.clip", "animation.state", "animation.play", "animation.stop"]);
-  assert.deepEqual(filterToolsByGroup("vfx").map((t) => t.name), ["vfx.graph", "vfx.effect"]);
+  assert.deepEqual(filterToolsByGroup("vfx").map((t) => t.name), ["vfx.graph", "vfx.effect", "vfx.particle-create", "vfx.particle-info", "vfx.particle-main", "vfx.particle-emission", "vfx.particle-shape", "vfx.particle-play", "vfx.particle-module", "vfx.line-create", "vfx.line-positions", "vfx.trail"]);
 });
 
 test("tools describe graphics.volume returns bridge metadata", async () => {

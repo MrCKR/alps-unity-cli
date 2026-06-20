@@ -84,5 +84,323 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     handler: "bridge",
     cliCommand: "graphics screenshot",
     docsTopic: "graphics"
+  },
+  // ===== Light Baking =====
+  {
+    name: "graphics.bake-start",
+    title: "Start Light Bake",
+    description: "Start an asynchronous lighting bake.",
+    group: "graphics",
+    inputSchema: objSchema({}),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "graphics bake-start",
+    docsTopic: "graphics"
+  },
+  {
+    name: "graphics.bake-cancel",
+    title: "Cancel Light Bake",
+    description: "Cancel the current lighting bake.",
+    group: "graphics",
+    inputSchema: objSchema({}),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "graphics bake-cancel",
+    docsTopic: "graphics"
+  },
+  {
+    name: "graphics.bake-status",
+    title: "Light Bake Status",
+    description: "Query the current lighting bake progress and mode.",
+    group: "graphics",
+    inputSchema: objSchema({}),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "graphics bake-status",
+    docsTopic: "graphics"
+  },
+  {
+    name: "graphics.bake-clear",
+    title: "Clear Baked Lighting Data",
+    description: "Clear baked and/or realtime lighting data.",
+    group: "graphics",
+    inputSchema: objSchema({ bakedData: { type: "boolean" }, realtimeData: { type: "boolean" } }),
+    readOnlyHint: false,
+    destructiveHint: true,
+    handler: "bridge",
+    cliCommand: "graphics bake-clear",
+    docsTopic: "graphics"
+  },
+  {
+    name: "graphics.bake-reflection-probe",
+    title: "Bake Reflection Probe",
+    description: "Bake a single ReflectionProbe cubemap.",
+    group: "graphics",
+    inputSchema: objSchema({ target: { type: "string" } }, ["target"]),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "graphics bake-reflection-probe",
+    docsTopic: "graphics"
+  },
+  {
+    name: "graphics.bake-settings",
+    title: "Light Bake Settings",
+    description: "Get or set lighting bake settings for the active scene.",
+    group: "graphics",
+    inputSchema: objSchema({
+      scene: { type: "string" },
+      lightingMode: { type: "string" },
+      bakedGI: { type: "boolean" },
+      realtimeGI: { type: "boolean" },
+      directSamples: { type: "integer" },
+      indirectSamples: { type: "integer" },
+      environmentSamples: { type: "integer" },
+      bounces: { type: "integer" },
+      filtering: { type: "string" }
+    }),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "graphics bake-settings",
+    docsTopic: "graphics"
+  },
+  {
+    name: "graphics.light-probe-group",
+    title: "Light Probe Group",
+    description: "Create or modify a LightProbeGroup component.",
+    group: "graphics",
+    inputSchema: objSchema({ target: { type: "string" }, create: { type: "boolean" }, positions: { type: "string" } }),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "graphics light-probe-group",
+    docsTopic: "graphics"
+  },
+  {
+    name: "graphics.reflection-probe",
+    title: "Reflection Probe",
+    description: "Create or modify a ReflectionProbe component.",
+    group: "graphics",
+    inputSchema: objSchema({
+      target: { type: "string" },
+      create: { type: "boolean" },
+      mode: { type: "string" },
+      resolution: { type: "integer" },
+      bounces: { type: "integer" },
+      hdr: { type: "boolean" },
+      boxSize: { type: "string" },
+      boxOffset: { type: "string" }
+    }),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "graphics reflection-probe",
+    docsTopic: "graphics"
+  },
+  {
+    name: "graphics.probe-positions",
+    title: "Probe Positions",
+    description: "Set probe positions for LightProbeGroup or ReflectionProbe.",
+    group: "graphics",
+    inputSchema: objSchema({ target: { type: "string" }, type: { type: "string" }, positions: { type: "string" } }, ["target"]),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "graphics probe-positions",
+    docsTopic: "graphics"
+  },
+  // ===== Render Stats =====
+  {
+    name: "graphics.stats",
+    title: "Graphics Render Stats",
+    description: "Query current rendering statistics (draw calls, triangles, vertices, etc.).",
+    group: "graphics",
+    inputSchema: objSchema({}),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "graphics stats",
+    docsTopic: "graphics"
+  },
+  {
+    name: "graphics.stats-counters",
+    title: "Graphics Stats Counters",
+    description: "List render stat counters (draw calls, batches, triangles, vertices, set-pass calls, render textures).",
+    group: "graphics",
+    inputSchema: objSchema({}),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "graphics stats-counters",
+    docsTopic: "graphics"
+  },
+  {
+    name: "graphics.stats-memory",
+    title: "Graphics Stats Memory",
+    description: "Query GPU memory usage (texture memory, render texture bytes, vertex buffers).",
+    group: "graphics",
+    inputSchema: objSchema({}),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "graphics stats-memory",
+    docsTopic: "graphics"
+  },
+  {
+    name: "graphics.scene-debug",
+    title: "Scene Debug Mode",
+    description: "Set the SceneView shading or draw mode for debugging.",
+    group: "graphics",
+    inputSchema: objSchema({ shadingMode: { type: "string" }, drawMode: { type: "string" } }),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "graphics scene-debug",
+    docsTopic: "graphics"
+  },
+  // ===== Skybox / Environment =====
+  {
+    name: "graphics.skybox-get",
+    title: "Get Skybox Settings",
+    description: "Query current skybox material, sun, ambient, fog, and reflection settings.",
+    group: "graphics",
+    inputSchema: objSchema({}),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "graphics skybox-get",
+    docsTopic: "graphics"
+  },
+  {
+    name: "graphics.skybox-set-material",
+    title: "Set Skybox Material",
+    description: "Assign a skybox material to RenderSettings.",
+    group: "graphics",
+    inputSchema: objSchema({ material: { type: "string" } }, ["material"]),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "graphics skybox-set-material",
+    docsTopic: "graphics"
+  },
+  {
+    name: "graphics.skybox-set-properties",
+    title: "Set Skybox Properties",
+    description: "Set named properties on the current skybox material.",
+    group: "graphics",
+    inputSchema: objSchema({ property: { type: "string" }, value: { type: "string" } }),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "graphics skybox-set-properties",
+    docsTopic: "graphics"
+  },
+  {
+    name: "graphics.skybox-set-ambient",
+    title: "Set Ambient Light",
+    description: "Set ambient light mode, intensity, and color.",
+    group: "graphics",
+    inputSchema: objSchema({
+      mode: { type: "string" },
+      intensity: { type: "number" },
+      color: { type: "string" },
+      ambientEquatorColor: { type: "string" },
+      ambientGroundColor: { type: "string" },
+      ambientSkyColor: { type: "string" }
+    }),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "graphics skybox-set-ambient",
+    docsTopic: "graphics"
+  },
+  {
+    name: "graphics.skybox-set-fog",
+    title: "Set Fog Settings",
+    description: "Set fog enabled, mode, color, density, and distance.",
+    group: "graphics",
+    inputSchema: objSchema({
+      enabled: { type: "boolean" },
+      mode: { type: "string" },
+      color: { type: "string" },
+      density: { type: "number" },
+      startDistance: { type: "number" },
+      endDistance: { type: "number" }
+    }),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "graphics skybox-set-fog",
+    docsTopic: "graphics"
+  },
+  {
+    name: "graphics.skybox-set-reflection",
+    title: "Set Reflection Settings",
+    description: "Set environment reflection mode, bounces, intensity, and resolution.",
+    group: "graphics",
+    inputSchema: objSchema({
+      mode: { type: "string" },
+      bounces: { type: "integer" },
+      intensity: { type: "number" },
+      resolution: { type: "string" }
+    }),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "graphics skybox-set-reflection",
+    docsTopic: "graphics"
+  },
+  {
+    name: "graphics.skybox-set-sun",
+    title: "Set Sun Source",
+    description: "Set the sun source light for the scene.",
+    group: "graphics",
+    inputSchema: objSchema({ target: { type: "string" } }, ["target"]),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "graphics skybox-set-sun",
+    docsTopic: "graphics"
+  },
+  // ===== Pipeline =====
+  {
+    name: "graphics.pipeline-settings",
+    title: "Graphics Pipeline Settings",
+    description: "Get or set render pipeline asset assignment.",
+    group: "graphics",
+    inputSchema: objSchema({ renderPipeline: { type: "string" } }),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "graphics pipeline-settings",
+    docsTopic: "graphics"
+  },
+  {
+    name: "graphics.pipeline-quality",
+    title: "Graphics Pipeline Quality",
+    description: "Get or set the quality level for the current pipeline.",
+    group: "graphics",
+    inputSchema: objSchema({ qualityLevel: { type: "integer" } }),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "graphics pipeline-quality",
+    docsTopic: "graphics"
+  },
+  {
+    name: "graphics.pipeline-info",
+    title: "Graphics Pipeline Info",
+    description: "Query render pipeline and quality settings summary.",
+    group: "graphics",
+    inputSchema: objSchema({}),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    cliCommand: "graphics pipeline-info",
+    docsTopic: "graphics"
   }
 ];

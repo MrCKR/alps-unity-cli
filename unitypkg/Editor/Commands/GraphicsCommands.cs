@@ -35,6 +35,29 @@ namespace UnityCli
             RegisterCommand(registry, "graphics.pipeline", "graphics", false, GraphicsPipeline);
             RegisterCommand(registry, "graphics.volume", "graphics", false, GraphicsVolume);
             RegisterCommand(registry, "graphics.screenshot", "graphics", true, GraphicsScreenshot);
+            RegisterCommand(registry, "graphics.bake-start", "graphics", true, GraphicsBakeStart);
+            RegisterCommand(registry, "graphics.bake-cancel", "graphics", true, GraphicsBakeCancel);
+            RegisterCommand(registry, "graphics.bake-status", "graphics", false, GraphicsBakeStatus);
+            RegisterCommand(registry, "graphics.bake-clear", "graphics", true, GraphicsBakeClear);
+            RegisterCommand(registry, "graphics.bake-reflection-probe", "graphics", true, GraphicsBakeReflectionProbe);
+            RegisterCommand(registry, "graphics.bake-settings", "graphics", false, GraphicsBakeSettings);
+            RegisterCommand(registry, "graphics.light-probe-group", "graphics", true, GraphicsLightProbeGroup);
+            RegisterCommand(registry, "graphics.reflection-probe", "graphics", true, GraphicsReflectionProbe);
+            RegisterCommand(registry, "graphics.probe-positions", "graphics", true, GraphicsProbePositions);
+            RegisterCommand(registry, "graphics.stats", "graphics", false, GraphicsStats);
+            RegisterCommand(registry, "graphics.stats-counters", "graphics", false, GraphicsStatsCounters);
+            RegisterCommand(registry, "graphics.stats-memory", "graphics", false, GraphicsStatsMemory);
+            RegisterCommand(registry, "graphics.scene-debug", "graphics", true, GraphicsSceneDebug);
+            RegisterCommand(registry, "graphics.skybox-get", "graphics", false, GraphicsSkyboxGet);
+            RegisterCommand(registry, "graphics.skybox-set-material", "graphics", true, GraphicsSkyboxSetMaterial);
+            RegisterCommand(registry, "graphics.skybox-set-properties", "graphics", true, GraphicsSkyboxSetProperties);
+            RegisterCommand(registry, "graphics.skybox-set-ambient", "graphics", true, GraphicsSkyboxSetAmbient);
+            RegisterCommand(registry, "graphics.skybox-set-fog", "graphics", true, GraphicsSkyboxSetFog);
+            RegisterCommand(registry, "graphics.skybox-set-reflection", "graphics", true, GraphicsSkyboxSetReflection);
+            RegisterCommand(registry, "graphics.skybox-set-sun", "graphics", true, GraphicsSkyboxSetSun);
+            RegisterCommand(registry, "graphics.pipeline-settings", "graphics", false, GraphicsPipelineSettings);
+            RegisterCommand(registry, "graphics.pipeline-quality", "graphics", true, GraphicsPipelineQuality);
+            RegisterCommand(registry, "graphics.pipeline-info", "graphics", false, GraphicsPipelineInfo);
         }
 
         private static string GraphicsQuality(BridgeRequest request)
@@ -314,6 +337,857 @@ namespace UnityCli
                 throw new BridgeCommandException("E_PHYSICS_SETTING_UNSUPPORTED", "Unsupported physics setting: " + property, "Use named flags such as --gravity-y, --default-contact-offset or --queries-hit-triggers.");
             }
             effects.Add(EffectJson("physics.settings", property, value));
+        }
+
+        // ===== Light Baking =====
+
+        private static string GraphicsBakeStart(BridgeRequest request)
+        {
+            var baking = Lightmapping.isRunning;
+            if (baking)
+            {
+                return ErrorJson("E_BAKE_ALREADY_RUNNING", "Lightmapping bake is already running.", "Run unity_cli graphics bake-status to inspect progress or graphics bake-cancel to stop it.");
+            }
+            Lightmapping.BakeAsync();
+            WriteLog("graphics_bake_started");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("baking", Lightmapping.isRunning)
+                .PropArray("plannedEffects", arr => arr.RawValue(EffectJson("graphics.bake-start", "bake", "async")))
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        private static string GraphicsBakeCancel(BridgeRequest request)
+        {
+            var wasRunning = Lightmapping.isRunning;
+            if (wasRunning)
+            {
+                Lightmapping.Cancel();
+            }
+            WriteLog("graphics_bake_cancelled wasRunning=" + Bool(wasRunning));
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("baking", Lightmapping.isRunning)
+                .Prop("cancelled", wasRunning)
+                .PropArray("plannedEffects", arr => arr.RawValue(EffectJson("graphics.bake-cancel", "bake", "cancelled")))
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        private static string GraphicsBakeStatus(BridgeRequest request)
+        {
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("baking", Lightmapping.isRunning)
+                .Prop("progress", Lightmapping.bakeProgress)
+                .PropRaw("mode", BakeModeJson())
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        private static string BakeModeJson()
+        {
+            var mode = Lightmapping.lightingMode;
+            string modeStr;
+            switch (mode)
+            {
+                case LightingMode.Baked: modeStr = "baked"; break;
+                case LightingMode.Mixed: modeStr = "mixed"; break;
+                case LightingMode.Realtime: modeStr = "realtime"; break;
+                default: modeStr = mode.ToString(); break;
+            }
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("lightingMode", modeStr)
+                .Prop("giWorkflowMode", (long)Lightmapping.giWorkflowMode)
+                .EndObject().ToString();
+        }
+
+        private static string GraphicsBakeClear(BridgeRequest request)
+        {
+            var clearedBaked = request.OptionalBoolArg("bakedData") ?? true;
+            var clearedRealtime = request.OptionalBoolArg("realtimeData") ?? true;
+            if (clearedBaked)
+            {
+                Lightmapping.ClearLightingDataAsset();
+            }
+            if (clearedRealtime)
+            {
+                Lightmapping.Clear();
+            }
+            AssetDatabase.SaveAssets();
+            WriteLog("graphics_bake_cleared bakedData=" + Bool(clearedBaked) + " realtimeData=" + Bool(clearedRealtime));
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("clearedBakedData", clearedBaked)
+                .Prop("clearedRealtimeData", clearedRealtime)
+                .PropArray("plannedEffects", arr => arr.RawValue(EffectJson("graphics.bake-clear", "lightingData", "cleared")))
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        private static string GraphicsBakeReflectionProbe(BridgeRequest request)
+        {
+            var target = request.StringArg("target");
+            var probe = ResolveReflectionProbe(target);
+            if (probe == null)
+            {
+                return ErrorJson("E_REFLECTION_PROBE_NOT_FOUND", "ReflectionProbe not found: " + target, "Run unity_cli graphics reflection-probe to inspect probes or pass a GameObject name / hierarchy path with a ReflectionProbe component.");
+            }
+            var baked = Lightmapping.BakeReflectionProbe(probe);
+            WriteLog("graphics_bake_reflection_probe target=" + HierarchyPath(probe.gameObject) + " baked=" + Bool(baked));
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("probe", ReflectionProbeJson(probe))
+                .Prop("baked", baked)
+                .PropArray("plannedEffects", arr => arr.RawValue(EffectJson("graphics.bake-reflection-probe", "probe", HierarchyPath(probe.gameObject))))
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        private static string GraphicsBakeSettings(BridgeRequest request)
+        {
+            var scene = ResolveLightingScene(request);
+            var lightingSettings = Lightmapping.GetLightingSettingsForScene(scene);
+            var effects = new List<string>();
+            var changed = false;
+            if (request.HasArg("lightingMode"))
+            {
+                var value = request.StringArg("lightingMode");
+                if (Enum.TryParse<LightingMode>(value, true, out var parsed))
+                {
+                    lightingSettings.lightingMode = parsed;
+                    changed = true;
+                    effects.Add(EffectJson("graphics.bake-settings", "lightingMode", value));
+                }
+                else
+                {
+                    throw new BridgeCommandException("E_BAKE_SETTING_INVALID", "Invalid lightingMode: " + value, "Use baked, mixed, or realtime.");
+                }
+            }
+            if (request.HasArg("bakedGI"))
+            {
+                lightingSettings.bakedGI = request.OptionalBoolArg("bakedGI").Value;
+                changed = true;
+                effects.Add(EffectJson("graphics.bake-settings", "bakedGI", Bool(lightingSettings.bakedGI)));
+            }
+            if (request.HasArg("realtimeGI"))
+            {
+                lightingSettings.realtimeGI = request.OptionalBoolArg("realtimeGI").Value;
+                changed = true;
+                effects.Add(EffectJson("graphics.bake-settings", "realtimeGI", Bool(lightingSettings.realtimeGI)));
+            }
+            if (request.HasArg("directSamples"))
+            {
+                lightingSettings.directSamples = request.OptionalIntArg("directSamples").Value;
+                changed = true;
+            }
+            if (request.HasArg("indirectSamples"))
+            {
+                lightingSettings.indirectSamples = request.OptionalIntArg("indirectSamples").Value;
+                changed = true;
+            }
+            if (request.HasArg("environmentSamples"))
+            {
+                lightingSettings.environmentSamples = request.OptionalIntArg("environmentSamples").Value;
+                changed = true;
+            }
+            if (request.HasArg("bounces"))
+            {
+                lightingSettings.bounces = request.OptionalIntArg("bounces").Value;
+                changed = true;
+            }
+            if (request.HasArg("filtering"))
+            {
+                var value = request.StringArg("filtering");
+                if (Enum.TryParse<LightingSettings.FilterType>(value, true, out var parsed))
+                {
+                    lightingSettings.filtering = parsed;
+                    changed = true;
+                    effects.Add(EffectJson("graphics.bake-settings", "filtering", value));
+                }
+            }
+            if (changed)
+            {
+                Lightmapping.SetLightingSettingsForScene(scene, lightingSettings);
+                EditorUtility.SetDirty(scene);
+                EditorSceneManager.MarkSceneDirty(scene);
+            }
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("settings", LightingSettingsJson(lightingSettings))
+                .Prop("scene", scene.path)
+                .PropArray("plannedEffects", arr => { foreach (var e in effects) arr.RawValue(e); })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        private static Scene ResolveLightingScene(BridgeRequest request)
+        {
+            var path = request.StringArg("scene");
+            for (var i = 0; i < SceneManager.sceneCount; i++)
+            {
+                var scene = SceneManager.GetSceneAt(i);
+                if (string.IsNullOrEmpty(path) || scene.path == path || scene.name == path)
+                {
+                    return scene;
+                }
+            }
+            return SceneManager.GetActiveScene();
+        }
+
+        private static string LightingSettingsJson(LightingSettings settings)
+        {
+            if (settings == null)
+            {
+                return new UnityCliJsonWriter().BeginObject().EndObject().ToString();
+            }
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("lightingMode", settings.lightingMode.ToString())
+                .Prop("bakedGI", settings.bakedGI)
+                .Prop("realtimeGI", settings.realtimeGI)
+                .Prop("directSamples", (long)settings.directSamples)
+                .Prop("indirectSamples", (long)settings.indirectSamples)
+                .Prop("environmentSamples", (long)settings.environmentSamples)
+                .Prop("bounces", (long)settings.bounces)
+                .Prop("filtering", settings.filtering.ToString())
+                .Prop("indirectResolution", (long)settings.indirectResolution)
+                .EndObject().ToString();
+        }
+
+        private static string GraphicsLightProbeGroup(BridgeRequest request)
+        {
+            var target = request.StringArg("target");
+            var gameObject = string.IsNullOrEmpty(target) ? CreateGameObject("LightProbeGroup", null) : ResolveUniqueTarget(target, "graphics.light-probe-group requires --target <go> or create a new one with --create.");
+            var probe = gameObject.GetComponent<LightProbeGroup>();
+            var effects = new List<string>();
+            if (probe == null && request.OptionalBoolArg("create") == true)
+            {
+                probe = gameObject.AddComponent<LightProbeGroup>();
+                effects.Add(EffectJson("graphics.light-probe-group", "component", "added"));
+            }
+            if (probe == null)
+            {
+                return ErrorJson("E_LIGHT_PROBE_GROUP_NOT_FOUND", "LightProbeGroup component not found on target: " + HierarchyPath(gameObject), "Pass --create to add one or choose a target with LightProbeGroup.");
+            }
+            var positionsArg = request.StringArg("positions");
+            if (!string.IsNullOrEmpty(positionsArg))
+            {
+                var positions = ParseVector3Array(positionsArg);
+                probe.probePositions = positions;
+                EditorUtility.SetDirty(probe);
+                effects.Add(EffectJson("graphics.light-probe-group", "probePositions", positions.Length.ToString(CultureInfo.InvariantCulture)));
+            }
+            AssetDatabase.SaveAssets();
+            WriteLog("graphics_light_probe_group target=" + HierarchyPath(gameObject) + " effects=" + effects.Count.ToString(CultureInfo.InvariantCulture));
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("target", GameObjectTargetJson(gameObject))
+                .Prop("probeCount", (long)(probe.probePositions == null ? 0 : probe.probePositions.Length))
+                .PropArray("plannedEffects", arr => { foreach (var e in effects) arr.RawValue(e); })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        private static string GraphicsReflectionProbe(BridgeRequest request)
+        {
+            var target = request.StringArg("target");
+            var gameObject = string.IsNullOrEmpty(target) ? CreateGameObject("ReflectionProbe", null) : ResolveUniqueTarget(target, "graphics.reflection-probe requires --target <go> or create a new one with --create.");
+            var probe = gameObject.GetComponent<ReflectionProbe>();
+            var effects = new List<string>();
+            if (probe == null && request.OptionalBoolArg("create") == true)
+            {
+                probe = gameObject.AddComponent<ReflectionProbe>();
+                effects.Add(EffectJson("graphics.reflection-probe", "component", "added"));
+            }
+            if (probe == null)
+            {
+                return ErrorJson("E_REFLECTION_PROBE_NOT_FOUND", "ReflectionProbe component not found on target: " + HierarchyPath(gameObject), "Pass --create to add one or choose a target with ReflectionProbe.");
+            }
+            if (request.HasArg("mode"))
+            {
+                var value = request.StringArg("mode");
+                if (Enum.TryParse<ReflectionProbeMode>(value, true, out var parsed))
+                {
+                    probe.mode = parsed;
+                    effects.Add(EffectJson("graphics.reflection-probe", "mode", value));
+                }
+            }
+            if (request.HasArg("resolution"))
+            {
+                probe.resolution = request.OptionalIntArg("resolution").Value;
+                effects.Add(EffectJson("graphics.reflection-probe", "resolution", probe.resolution.ToString(CultureInfo.InvariantCulture)));
+            }
+            if (request.HasArg("bounces"))
+            {
+                probe.bounces = request.OptionalIntArg("bounces").Value;
+                effects.Add(EffectJson("graphics.reflection-probe", "bounces", probe.bounces.ToString(CultureInfo.InvariantCulture)));
+            }
+            if (request.HasArg("hdr"))
+            {
+                probe.hdr = request.OptionalBoolArg("hdr").Value;
+                effects.Add(EffectJson("graphics.reflection-probe", "hdr", Bool(probe.hdr)));
+            }
+            if (request.HasArg("box-size"))
+            {
+                probe.size = ParseVector3(request.StringArg("box-size"));
+                effects.Add(EffectJson("graphics.reflection-probe", "boxSize", request.StringArg("box-size")));
+            }
+            if (request.HasArg("box-offset"))
+            {
+                probe.center = ParseVector3(request.StringArg("box-offset"));
+                effects.Add(EffectJson("graphics.reflection-probe", "boxOffset", request.StringArg("box-offset")));
+            }
+            EditorUtility.SetDirty(probe);
+            AssetDatabase.SaveAssets();
+            WriteLog("graphics_reflection_probe target=" + HierarchyPath(gameObject) + " effects=" + effects.Count.ToString(CultureInfo.InvariantCulture));
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("target", GameObjectTargetJson(gameObject))
+                .PropRaw("probe", ReflectionProbeJson(probe))
+                .PropArray("plannedEffects", arr => { foreach (var e in effects) arr.RawValue(e); })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        private static string ReflectionProbeJson(ReflectionProbe probe)
+        {
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("mode", probe.mode.ToString())
+                .Prop("resolution", (long)probe.resolution)
+                .Prop("bounces", (long)probe.bounces)
+                .Prop("hdr", probe.hdr)
+                .Prop("importance", (long)probe.importance)
+                .PropRaw("size", Vector3Json(probe.size))
+                .PropRaw("center", Vector3Json(probe.center))
+                .EndObject().ToString();
+        }
+
+        private static ReflectionProbe ResolveReflectionProbe(string target)
+        {
+            var probes = UnityEngine.Object.FindObjectsByType<ReflectionProbe>(FindObjectsSortMode.None);
+            if (string.IsNullOrEmpty(target))
+            {
+                return probes.Length > 0 ? probes[0] : null;
+            }
+            foreach (var probe in probes)
+            {
+                if (HierarchyPath(probe.gameObject) == target || probe.gameObject.name == target || probe.GetInstanceID().ToString(CultureInfo.InvariantCulture) == target)
+                {
+                    return probe;
+                }
+            }
+            return null;
+        }
+
+        private static string GraphicsProbePositions(BridgeRequest request)
+        {
+            var target = request.StringArg("target");
+            var probeType = request.OptionalStringArg("type") ?? "reflection";
+            Component component = null;
+            if (string.Equals(probeType, "reflection", StringComparison.OrdinalIgnoreCase))
+            {
+                component = ResolveReflectionProbeComponent(target);
+            }
+            else
+            {
+                component = ResolveLightProbeGroupComponent(target);
+            }
+            if (component == null)
+            {
+                return ErrorJson("E_PROBE_NOT_FOUND", "Probe component not found: " + target + " (type=" + probeType + ")", "Pass a GameObject name / hierarchy path with a ReflectionProbe or LightProbeGroup component.");
+            }
+            var effects = new List<string>();
+            var positionsArg = request.StringArg("positions");
+            if (!string.IsNullOrEmpty(positionsArg))
+            {
+                var positions = ParseVector3Array(positionsArg);
+                if (component is ReflectionProbe rp)
+                {
+                    rp.center = positions.Length > 0 ? positions[0] : rp.center;
+                    effects.Add(EffectJson("graphics.probe-positions", "reflectionCenter", positions.Length.ToString(CultureInfo.InvariantCulture)));
+                }
+                else if (component is LightProbeGroup lpg)
+                {
+                    lpg.probePositions = positions;
+                    effects.Add(EffectJson("graphics.probe-positions", "lightProbePositions", positions.Length.ToString(CultureInfo.InvariantCulture)));
+                }
+                EditorUtility.SetDirty(component);
+                AssetDatabase.SaveAssets();
+            }
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("target", GameObjectTargetJson(component.gameObject))
+                .Prop("probeType", probeType)
+                .PropArray("plannedEffects", arr => { foreach (var e in effects) arr.RawValue(e); })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        private static Component ResolveReflectionProbeComponent(string target)
+        {
+            var probe = ResolveReflectionProbe(target);
+            return probe;
+        }
+
+        private static Component ResolveLightProbeGroupComponent(string target)
+        {
+            var groups = UnityEngine.Object.FindObjectsByType<LightProbeGroup>(FindObjectsSortMode.None);
+            if (string.IsNullOrEmpty(target))
+            {
+                return groups.Length > 0 ? groups[0] : null;
+            }
+            foreach (var group in groups)
+            {
+                if (HierarchyPath(group.gameObject) == target || group.gameObject.name == target || group.GetInstanceID().ToString(CultureInfo.InvariantCulture) == target)
+                {
+                    return group;
+                }
+            }
+            return null;
+        }
+
+        // ===== Render Stats =====
+
+        private static string GraphicsStats(BridgeRequest request)
+        {
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("stats", RenderStatsJson())
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        private static string RenderStatsJson()
+        {
+            var stats = UnityStats_Stats();
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("drawCalls", (long)stats.drawCalls)
+                .Prop("batchedDrawCalls", (long)stats.batchedDrawCalls)
+                .Prop("batches", (long)stats.batches)
+                .Prop("savedByBatching", (long)stats.savedByBatches)
+                .Prop("triangles", stats.triangles)
+                .Prop("vertices", stats.vertices)
+                .Prop("screenRes", stats.screenRes)
+                .Prop("usedTextureMemory", stats.usedTextureMemory)
+                .Prop("renderTextureCount", (long)stats.renderTextureCount)
+                .Prop("renderTextureBytes", stats.renderTextureBytes)
+                .Prop("usedVertexBuffer", stats.usedVertexBuffer)
+                .Prop("usedVertexBufferVRAM", stats.usedVertexBufferVRAM)
+                .Prop("setPassCalls", (long)stats.setPass)
+                .EndObject().ToString();
+        }
+
+        private static UnityEngine.Rendering.RenderStats UnityStats_Stats()
+        {
+            return UnityStats_Stats_Static();
+        }
+
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private static UnityEngine.Rendering.RenderStats UnityStats_Stats_Static()
+        {
+            return UnityEngine.Rendering.RenderStats.current;
+        }
+
+        private static string GraphicsStatsCounters(BridgeRequest request)
+        {
+            var stats = UnityStats_Stats();
+            var counters = new List<string>();
+            counters.Add(EffectJson("stats", "drawCalls", stats.drawCalls.ToString(CultureInfo.InvariantCulture)));
+            counters.Add(EffectJson("stats", "batches", stats.batches.ToString(CultureInfo.InvariantCulture)));
+            counters.Add(EffectJson("stats", "triangles", Number(stats.triangles)));
+            counters.Add(EffectJson("stats", "vertices", Number(stats.vertices)));
+            counters.Add(EffectJson("stats", "setPassCalls", stats.setPass.ToString(CultureInfo.InvariantCulture)));
+            counters.Add(EffectJson("stats", "renderTextureCount", stats.renderTextureCount.ToString(CultureInfo.InvariantCulture)));
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropArray("counters", arr => { foreach (var c in counters) arr.RawValue(c); })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        private static string GraphicsStatsMemory(BridgeRequest request)
+        {
+            var stats = UnityStats_Stats();
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("usedTextureMemory", stats.usedTextureMemory)
+                .Prop("renderTextureBytes", stats.renderTextureBytes)
+                .Prop("usedVertexBuffer", stats.usedVertexBuffer)
+                .Prop("usedVertexBufferVRAM", stats.usedVertexBufferVRAM)
+                .Prop("renderTextureCount", (long)stats.renderTextureCount)
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        private static string GraphicsSceneDebug(BridgeRequest request)
+        {
+            var effects = new List<string>();
+            if (request.HasArg("shadingMode"))
+            {
+                var value = request.StringArg("shadingMode");
+                if (Enum.TryParse<SceneView.ShadingMode>(value, true, out var parsed))
+                {
+                    if (SceneView.lastActiveSceneView != null)
+                    {
+                        SceneView.lastActiveSceneView.SetSceneViewMode(parsed, true);
+                        effects.Add(EffectJson("graphics.scene-debug", "shadingMode", value));
+                    }
+                }
+            }
+            if (request.HasArg("drawMode"))
+            {
+                var value = request.StringArg("drawMode");
+                if (Enum.TryParse<DrawCameraMode>(value, true, out var parsed))
+                {
+                    if (SceneView.lastActiveSceneView != null)
+                    {
+                        SceneView.lastActiveSceneView.cameraMode = new SceneView.CameraMode(parsed, value);
+                        effects.Add(EffectJson("graphics.scene-debug", "drawMode", value));
+                    }
+                }
+            }
+            var currentMode = SceneView.lastActiveSceneView != null ? SceneView.lastActiveSceneView.cameraMode.name : null;
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("sceneViewAvailable", SceneView.lastActiveSceneView != null)
+                .Prop("currentDrawMode", currentMode)
+                .PropArray("plannedEffects", arr => { foreach (var e in effects) arr.RawValue(e); })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        // ===== Skybox / Environment =====
+
+        private static string GraphicsSkyboxGet(BridgeRequest request)
+        {
+            var skybox = RenderSettings.skybox;
+            var sun = RenderSettings.sun;
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropObject("skybox", w => w
+                    .Prop("name", skybox == null ? null : skybox.name)
+                    .Prop("path", skybox == null ? null : NormalizeAssetPath(AssetDatabase.GetAssetPath(skybox)))
+                    .Prop("guid", skybox == null ? null : AssetDatabase.AssetPathToGUID(AssetDatabase.GetAssetPath(skybox))))
+                .PropObject("sun", w => w
+                    .Prop("name", sun == null ? null : sun.name)
+                    .Prop("path", sun == null ? null : HierarchyPath(sun.gameObject)))
+                .PropObject("ambient", w => w
+                    .Prop("ambientMode", RenderSettings.ambientMode.ToString())
+                    .Prop("ambientIntensity", RenderSettings.ambientIntensity)
+                    .PropRaw("ambientLight", ColorJson(RenderSettings.ambientLight)))
+                .PropObject("fog", w => w
+                    .Prop("enabled", RenderSettings.fog)
+                    .Prop("fogMode", RenderSettings.fogMode.ToString())
+                    .Prop("fogColor", ColorHtml(RenderSettings.fogColor))
+                    .Prop("fogDensity", RenderSettings.fogDensity)
+                    .Prop("fogStartDistance", RenderSettings.fogStartDistance)
+                    .Prop("fogEndDistance", RenderSettings.fogEndDistance))
+                .PropObject("reflection", w => w
+                    .Prop("ambientMode", RenderSettings.defaultReflectionMode.ToString())
+                    .Prop("reflectionBounces", (long)RenderSettings.reflectionBounces)
+                    .Prop("reflectionIntensity", RenderSettings.reflectionIntensity))
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        private static string GraphicsSkyboxSetMaterial(BridgeRequest request)
+        {
+            var path = request.StringArg("material");
+            if (string.IsNullOrEmpty(path))
+            {
+                throw new BridgeCommandException("E_MATERIAL_PATH_REQUIRED", "Pass --material <Assets/*.mat path>.", "Use unity_cli graphics skybox-set-material --material Assets/Skyboxes/Day.mat.");
+            }
+            var material = AssetDatabase.LoadAssetAtPath<Material>(NormalizeAssetPath(path));
+            if (material == null)
+            {
+                return ErrorJson("E_MATERIAL_NOT_FOUND", "Skybox material not found: " + path, "Pass an existing Assets/*.mat path.");
+            }
+            RenderSettings.skybox = material;
+            EditorUtility.SetDirty(RenderSettings.skybox);
+            AssetDatabase.SaveAssets();
+            WriteLog("graphics_skybox_set_material path=" + path);
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("skybox", material.name)
+                .PropArray("plannedEffects", arr => arr.RawValue(EffectJson("graphics.skybox-set-material", "skybox", path)))
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        private static string GraphicsSkyboxSetProperties(BridgeRequest request)
+        {
+            var skybox = RenderSettings.skybox;
+            if (skybox == null)
+            {
+                return ErrorJson("E_SKYBOX_NOT_SET", "No skybox material is assigned to RenderSettings.", "Use unity_cli graphics skybox-set-material --material <path> first.");
+            }
+            var effects = new List<string>();
+            var property = request.StringArg("property");
+            var value = request.StringArg("value");
+            if (!string.IsNullOrEmpty(property) && !string.IsNullOrEmpty(value))
+            {
+                ApplySkyboxMaterialProperty(skybox, property, value, effects);
+            }
+            EditorUtility.SetDirty(skybox);
+            AssetDatabase.SaveAssets();
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("skybox", skybox.name)
+                .PropArray("plannedEffects", arr => { foreach (var e in effects) arr.RawValue(e); })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        private static void ApplySkyboxMaterialProperty(Material material, string property, string value, List<string> effects)
+        {
+            if (material.HasProperty(property))
+            {
+                if (material.GetPropertyType(property) == UnityEngine.Rendering.ShaderPropertyType.Float || material.GetPropertyType(property) == UnityEngine.Rendering.ShaderPropertyType.Range)
+                {
+                    material.SetFloat(property, ParseFloat(value, property));
+                }
+                else if (material.GetPropertyType(property) == UnityEngine.Rendering.ShaderPropertyType.Color)
+                {
+                    material.SetColor(property, ParseColor(value));
+                }
+                effects.Add(EffectJson("graphics.skybox-set-properties", property, value));
+            }
+        }
+
+        private static string GraphicsSkyboxSetAmbient(BridgeRequest request)
+        {
+            var effects = new List<string>();
+            if (request.HasArg("mode"))
+            {
+                var value = request.StringArg("mode");
+                if (Enum.TryParse<AmbientMode>(value, true, out var parsed))
+                {
+                    RenderSettings.ambientMode = parsed;
+                    effects.Add(EffectJson("graphics.skybox-set-ambient", "ambientMode", value));
+                }
+            }
+            if (request.HasArg("intensity"))
+            {
+                RenderSettings.ambientIntensity = request.OptionalFloatArg("intensity").Value;
+                effects.Add(EffectJson("graphics.skybox-set-ambient", "ambientIntensity", Number(RenderSettings.ambientIntensity)));
+            }
+            if (request.HasArg("color"))
+            {
+                var color = ParseColor(request.StringArg("color"));
+                RenderSettings.ambientLight = color;
+                effects.Add(EffectJson("graphics.skybox-set-ambient", "ambientLight", ColorHtml(color)));
+            }
+            if (request.HasArg("ambientEquatorColor"))
+            {
+                RenderSettings.ambientEquatorColor = ParseColor(request.StringArg("ambientEquatorColor"));
+            }
+            if (request.HasArg("ambientGroundColor"))
+            {
+                RenderSettings.ambientGroundColor = ParseColor(request.StringArg("ambientGroundColor"));
+            }
+            if (request.HasArg("ambientSkyColor"))
+            {
+                RenderSettings.ambientSkyColor = ParseColor(request.StringArg("ambientSkyColor"));
+            }
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("ambientMode", RenderSettings.ambientMode.ToString())
+                .Prop("ambientIntensity", RenderSettings.ambientIntensity)
+                .PropArray("plannedEffects", arr => { foreach (var e in effects) arr.RawValue(e); })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        private static string GraphicsSkyboxSetFog(BridgeRequest request)
+        {
+            var effects = new List<string>();
+            if (request.HasArg("enabled"))
+            {
+                RenderSettings.fog = request.OptionalBoolArg("enabled").Value;
+                effects.Add(EffectJson("graphics.skybox-set-fog", "fog", Bool(RenderSettings.fog)));
+            }
+            if (request.HasArg("mode"))
+            {
+                var value = request.StringArg("mode");
+                if (Enum.TryParse<FogMode>(value, true, out var parsed))
+                {
+                    RenderSettings.fogMode = parsed;
+                    effects.Add(EffectJson("graphics.skybox-set-fog", "fogMode", value));
+                }
+            }
+            if (request.HasArg("color"))
+            {
+                var color = ParseColor(request.StringArg("color"));
+                RenderSettings.fogColor = color;
+                effects.Add(EffectJson("graphics.skybox-set-fog", "fogColor", ColorHtml(color)));
+            }
+            if (request.HasArg("density"))
+            {
+                RenderSettings.fogDensity = request.OptionalFloatArg("density").Value;
+                effects.Add(EffectJson("graphics.skybox-set-fog", "fogDensity", Number(RenderSettings.fogDensity)));
+            }
+            if (request.HasArg("startDistance"))
+            {
+                RenderSettings.fogStartDistance = request.OptionalFloatArg("startDistance").Value;
+                effects.Add(EffectJson("graphics.skybox-set-fog", "fogStartDistance", Number(RenderSettings.fogStartDistance)));
+            }
+            if (request.HasArg("endDistance"))
+            {
+                RenderSettings.fogEndDistance = request.OptionalFloatArg("endDistance").Value;
+                effects.Add(EffectJson("graphics.skybox-set-fog", "fogEndDistance", Number(RenderSettings.fogEndDistance)));
+            }
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("fog", RenderSettings.fog)
+                .Prop("fogMode", RenderSettings.fogMode.ToString())
+                .Prop("fogColor", ColorHtml(RenderSettings.fogColor))
+                .Prop("fogDensity", RenderSettings.fogDensity)
+                .Prop("fogStartDistance", RenderSettings.fogStartDistance)
+                .Prop("fogEndDistance", RenderSettings.fogEndDistance)
+                .PropArray("plannedEffects", arr => { foreach (var e in effects) arr.RawValue(e); })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        private static string GraphicsSkyboxSetReflection(BridgeRequest request)
+        {
+            var effects = new List<string>();
+            if (request.HasArg("mode"))
+            {
+                var value = request.StringArg("mode");
+                if (Enum.TryParse<DefaultReflectionMode>(value, true, out var parsed))
+                {
+                    RenderSettings.defaultReflectionMode = parsed;
+                    effects.Add(EffectJson("graphics.skybox-set-reflection", "defaultReflectionMode", value));
+                }
+            }
+            if (request.HasArg("bounces"))
+            {
+                RenderSettings.reflectionBounces = request.OptionalIntArg("bounces").Value;
+                effects.Add(EffectJson("graphics.skybox-set-reflection", "reflectionBounces", RenderSettings.reflectionBounces.ToString(CultureInfo.InvariantCulture)));
+            }
+            if (request.HasArg("intensity"))
+            {
+                RenderSettings.reflectionIntensity = request.OptionalFloatArg("intensity").Value;
+                effects.Add(EffectJson("graphics.skybox-set-reflection", "reflectionIntensity", Number(RenderSettings.reflectionIntensity)));
+            }
+            if (request.HasArg("resolution"))
+            {
+                var value = request.StringArg("resolution");
+                if (Enum.TryParse<DefaultReflectionResolution>(value, true, out var parsed))
+                {
+                    RenderSettings.defaultReflectionResolution = parsed;
+                    effects.Add(EffectJson("graphics.skybox-set-reflection", "defaultReflectionResolution", value));
+                }
+            }
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("defaultReflectionMode", RenderSettings.defaultReflectionMode.ToString())
+                .Prop("reflectionBounces", (long)RenderSettings.reflectionBounces)
+                .Prop("reflectionIntensity", RenderSettings.reflectionIntensity)
+                .PropArray("plannedEffects", arr => { foreach (var e in effects) arr.RawValue(e); })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        private static string GraphicsSkyboxSetSun(BridgeRequest request)
+        {
+            var target = request.StringArg("target");
+            Light sun = null;
+            if (!string.IsNullOrEmpty(target))
+            {
+                var gameObject = ResolveUniqueTarget(target, "graphics.skybox-set-sun requires --target <go>.");
+                sun = gameObject.GetComponent<Light>();
+                if (sun == null)
+                {
+                    return ErrorJson("E_LIGHT_NOT_FOUND", "No Light component on target: " + HierarchyPath(gameObject), "Pass a GameObject with a directional Light component.");
+                }
+            }
+            else
+            {
+                sun = RenderSettings.sun;
+            }
+            RenderSettings.sun = sun;
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("sun", sun == null ? null : HierarchyPath(sun.gameObject))
+                .PropArray("plannedEffects", arr => arr.RawValue(EffectJson("graphics.skybox-set-sun", "sun", sun == null ? "null" : HierarchyPath(sun.gameObject))))
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        // ===== Pipeline =====
+
+        private static string GraphicsPipelineSettings(BridgeRequest request)
+        {
+            var effects = new List<string>();
+            if (request.HasArg("renderPipeline"))
+            {
+                var value = request.StringArg("renderPipeline");
+                if (string.Equals(value, "null", StringComparison.OrdinalIgnoreCase) || string.Equals(value, "built-in", StringComparison.OrdinalIgnoreCase) || string.IsNullOrEmpty(value))
+                {
+                    GraphicsSettings.defaultRenderPipeline = null;
+                }
+                else
+                {
+                    var pipeline = AssetDatabase.LoadAssetAtPath<RenderPipelineAsset>(NormalizeAssetPath(value));
+                    if (pipeline == null)
+                    {
+                        return ErrorJson("E_RENDER_PIPELINE_NOT_FOUND", "RenderPipelineAsset not found: " + value, "Pass an Assets/*.asset RenderPipelineAsset path or use --render-pipeline built-in.");
+                    }
+                    GraphicsSettings.defaultRenderPipeline = pipeline;
+                }
+                effects.Add(EffectJson("graphics.pipeline-settings", "renderPipeline", value));
+            }
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("graphics", GraphicsSummaryJson())
+                .PropArray("plannedEffects", arr => { foreach (var e in effects) arr.RawValue(e); })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        private static string GraphicsPipelineQuality(BridgeRequest request)
+        {
+            var effects = new List<string>();
+            var level = request.OptionalIntArg("qualityLevel");
+            if (level.HasValue)
+            {
+                SetQualityLevel(level.Value, effects);
+                AssetDatabase.SaveAssets();
+            }
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("qualitySettings", QualitySettingsJson())
+                .PropArray("plannedEffects", arr => { foreach (var e in effects) arr.RawValue(e); })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        private static string GraphicsPipelineInfo(BridgeRequest request)
+        {
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("graphics", GraphicsSummaryJson())
+                .PropRaw("qualitySettings", QualitySettingsJson())
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        // ===== Helpers =====
+
+        private static string ColorHtml(Color color)
+        {
+            return string.Format(CultureInfo.InvariantCulture, "#{0:X2}{1:X2}{2:X2}{3:X2}", (int)(color.r * 255f), (int)(color.g * 255f), (int)(color.b * 255f), (int)(color.a * 255f));
+        }
+
+        private static Vector3[] ParseVector3Array(string value)
+        {
+            if (string.IsNullOrEmpty(value))
+            {
+                return new Vector3[0];
+            }
+            var items = value.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            var list = new List<Vector3>();
+            foreach (var item in items)
+            {
+                var trimmed = item.Trim(new[] { '[', ']', '(', ')' });
+                if (!string.IsNullOrEmpty(trimmed))
+                {
+                    list.Add(ParseVector3(trimmed));
+                }
+            }
+            return list.ToArray();
+        }
+
+        private static GameObject CreateGameObject(string name, Transform parent)
+        {
+            var gameObject = new GameObject(name);
+            if (parent != null)
+            {
+                gameObject.transform.SetParent(parent, false);
+            }
+            EditorUtility.SetDirty(gameObject);
+            EditorSceneManager.MarkSceneDirty(gameObject.scene);
+            return gameObject;
         }
 
         private static void ApplyQualityInt(BridgeRequest request, string arg, string property, Action<int> setter, List<string> effects)
