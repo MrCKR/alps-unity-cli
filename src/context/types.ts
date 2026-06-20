@@ -80,13 +80,15 @@ export interface ContextListEntry {
   available?: boolean;
 }
 
-/** Detailed descriptor returned by `context describe`. */
+/** Detailed descriptor returned by `context describe`.
+ * @planned Will be used as the explicit return type of handleContextDescribe. */
 export interface ContextDescribeEntry extends ContextDescriptor {
   /** Support status label for display. */
   supportStatusLabel?: string;
 }
 
-/** Result of reading a context value. */
+/** Result of reading a context value.
+ * @planned Will be used as the explicit return type of handleContextRead. */
 export interface ContextReadResult {
   context: string;
   data: unknown;

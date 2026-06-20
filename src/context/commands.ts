@@ -93,6 +93,32 @@ async function handleContextList(
   return success(requestId, data);
 }
 
+// ── Shared context resolution ───────────────────────────────────────────
+
+/** Resolve a context descriptor by name: built-in first, then custom via bridge. */
+async function resolveContextDescriptor(
+  contextName: string,
+  flags: Record<string, string | boolean>,
+  runtime: ContextRuntime,
+  requestId: string
+): Promise<{ found: true; descriptor: ContextDescriptor } | { found: false; includeCustom: boolean }> {
+  const builtin = findBuiltinContextByName(contextName);
+  if (builtin) {
+    return { found: true, descriptor: builtin };
+  }
+
+  const includeCustom = shouldDiscoverProjectTools(flags, runtime) || getBoolean(flags, "include-custom");
+  if (includeCustom) {
+    const customDescs = await discoverCustomContexts(runtime, requestId);
+    const custom = customDescs.find((c) => c.name === contextName);
+    if (custom) {
+      return { found: true, descriptor: customContextToDescriptor(custom) };
+    }
+  }
+
+  return { found: false, includeCustom };
+}
+
 // ── context describe ──────────────────────────────────────────────────────
 
 async function handleContextDescribe(
@@ -107,36 +133,23 @@ async function handleContextDescribe(
     ]);
   }
 
-  // Look up built-in first, then try custom contexts from bridge
-  const builtin = findBuiltinContextByName(contextName);
-  if (builtin) {
+  const resolved = await resolveContextDescriptor(contextName, flags, runtime, requestId);
+  if (resolved.found) {
     return success(requestId, {
       command: "context.describe",
-      ...builtin,
+      ...resolved.descriptor,
       supportStatusLabel: "已路由可执行",
     });
   }
 
-  // Try custom context discovery
-  const includeCustom = shouldDiscoverProjectTools(flags, runtime) || getBoolean(flags, "include-custom");
-  if (includeCustom) {
-    const customDescs = await discoverCustomContexts(runtime, requestId);
-    const custom = customDescs.find((c) => c.name === contextName);
-    if (custom) {
-      const descriptor = customContextToDescriptor(custom);
-      return success(requestId, {
-        command: "context.describe",
-        ...descriptor,
-        supportStatusLabel: "已路由可执行",
-      });
-    }
+  const nextActions = ["Run unity_cli context list to see all available contexts."];
+  if (resolved.includeCustom) {
+    nextActions.push("Run unity_cli context list --include-custom to discover project custom contexts.");
+  } else {
+    nextActions.push("Use --include-custom to discover project custom contexts.");
   }
-
-  return failure(requestId, "E_CONTEXT_NOT_FOUND", `Context not found: ${contextName}.`, [
-    "Run unity_cli context list to see all available contexts.",
-    "Run unity_cli context list --include-custom to discover project custom contexts.",
-    "Run unity_cli context list --category <category> to filter by category."
-  ]);
+  nextActions.push("Run unity_cli context list --category <category> to filter by category.");
+  return failure(requestId, "E_CONTEXT_NOT_FOUND", `Context not found: ${contextName}.`, nextActions);
 }
 
 // ── context read ──────────────────────────────────────────────────────────
@@ -155,23 +168,15 @@ async function handleContextRead(
   }
 
   // Verify the context exists (built-in or custom)
-  const builtin = findBuiltinContextByName(contextName);
-  if (!builtin) {
-    const includeCustom = shouldDiscoverProjectTools(flags, runtime) || getBoolean(flags, "include-custom");
-    if (includeCustom) {
-      const customDescs = await discoverCustomContexts(runtime, requestId);
-      const custom = customDescs.find((c) => c.name === contextName);
-      if (!custom) {
-        return failure(requestId, "E_CONTEXT_NOT_FOUND", `Context not found: ${contextName}.`, [
-          "Run unity_cli context list to see all available contexts."
-        ]);
-      }
+  const resolved = await resolveContextDescriptor(contextName, flags, runtime, requestId);
+  if (!resolved.found) {
+    const nextActions = ["Run unity_cli context list to see all available contexts."];
+    if (resolved.includeCustom) {
+      nextActions.push("Run unity_cli context list --include-custom to discover project custom contexts.");
     } else {
-      return failure(requestId, "E_CONTEXT_NOT_FOUND", `Context not found: ${contextName}.`, [
-        "Run unity_cli context list to see all available contexts.",
-        "Use --include-custom to discover project custom contexts."
-      ]);
+      nextActions.push("Use --include-custom to discover project custom contexts.");
     }
+    return failure(requestId, "E_CONTEXT_NOT_FOUND", `Context not found: ${contextName}.`, nextActions);
   }
 
   // Route through the bridge: context.read with the context name as argument

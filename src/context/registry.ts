@@ -9,7 +9,6 @@
 
 import { BUILTIN_CONTEXTS } from "./builtin.js";
 import { collectAvailableContexts, ExtensionRegistry } from "../extensions/index.js";
-import { readInstalledUnityPackages } from "../extensions/project-resolver.js";
 import { getString } from "../args.js";
 import type { ContextDescriptor, ContextListEntry, CustomContextDescriptor } from "./types.js";
 import type { ExtensionContextContribution } from "../extensions/types.js";
@@ -97,7 +96,7 @@ function extensionContributionToDescriptor(ec: ExtensionContextContribution): Co
     title: ec.key,
     description: ec.description,
     category: "extension",
-    source: "built-in",
+    source: "custom",
     target: "editor",
     availabilityScope: "editorSession",
     requiresUnity: true,
@@ -110,9 +109,7 @@ function extensionContributionToDescriptor(ec: ExtensionContextContribution): Co
   };
 }
 
-// ── Custom context discovery ──────────────────────────────────────────────
-
-/** Runtime type for the bridge execute function. */
+// ── Custom context discovery */
 export interface ContextBridgeRuntime {
   bridgeExecute?: (payload: { requestId: string; command: string; args: Record<string, unknown> }) => Promise<{ ok?: boolean; data?: Record<string, unknown>; error?: { code?: string; message?: string } }>;
   bridgeEndpoint?: string;

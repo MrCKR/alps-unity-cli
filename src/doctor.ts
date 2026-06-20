@@ -13,7 +13,7 @@
  * 6. Data directory exists
  */
 
-import { builtinContextDescriptors, builtinContextCategories, allContextDescriptors, discoverCustomContexts, type ContextBridgeRuntime } from "./context/index.js";
+import { builtinContextDescriptors, builtinContextCategories, discoverCustomContexts, type ContextBridgeRuntime } from "./context/index.js";
 import { getString, getBoolean } from "./args.js";
 import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
 import { readInstances, type UnityInstance } from "./instances.js";
