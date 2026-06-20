@@ -75,7 +75,7 @@ unity_cli reflect type UnityEngine.Camera
 unity_cli reflect member UnityEngine.Camera.fieldOfView
 ```
 
-> **注意**：`context list / context describe / context read` 命令尚未实现（规划中，P3 阶段）。当前可通过 `tools group list` 输出中 `readOnlyHint: true` 的工具以及 `docs`/`reflect` 命令获取只读项目状态。
+> **注意**：可通过 `context list` / `context describe <name>` / `context read <name>` 命令获取只读项目状态。也可通过 `tools group list` 输出中 `readOnlyHint: true` 的工具以及 `docs`/`reflect` 命令获取。
 
 ### 4. 项目自定义工具
 
@@ -92,7 +92,7 @@ unity_cli tools describe my.custom-tool
 unity_cli tools run my.custom-tool --input '{"key":"value"}'
 ```
 
-> **注意**：`extensions list / extensions install / extensions remove / extensions doctor` 命令尚未实现（规划中，P5 阶段）。当前扩展包通过 `init` 命令安装 Bridge 包来启用，项目工具通过 `--include-custom` 标志发现。
+> **注意**：可通过 `extensions list` 查看已安装扩展，`extensions install <id>` / `extensions remove <id>` 管理扩展，`extensions doctor` 诊断扩展状态。扩展包也可通过 `init` 命令安装 Bridge 包来启用。
 
 ### 5. 诊断与健康检查
 
@@ -385,6 +385,23 @@ unity_cli diagnose preflight
 unity_cli capabilities
 ```
 
+### Context（只读项目状态）
+
+```powershell
+unity_cli context list
+unity_cli context describe <name>
+unity_cli read <name> [--input '<json>']
+```
+
+### 扩展包
+
+```powershell
+unity_cli extensions list
+unity_cli extensions install <id>
+unity_cli extensions remove <id>
+unity_cli extensions doctor
+```
+
 ### 离线文档与反射
 
 ```powershell
@@ -593,8 +610,8 @@ unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --yes
 |----------|---------|---------|
 | 项目自定义 Tool (Editor) | ✅ 已实现 | `tools group list custom --include-custom` |
 | 项目自定义 Tool (Runtime) | ✅ 已实现 | `tools group list custom --include-custom`（Play Mode 下） |
-| 项目自定义 Context | 🔄 规划中（P3） | 待 `context` 命令实现 |
-| 扩展包管理 | 🔄 规划中（P5） | 待 `extensions` 命令实现 |
+| 项目自定义 Context | ✅ 已实现 | `context list/describe/read` |
+| 扩展包管理 | ✅ 已实现 | `extensions list/install/remove/doctor` |
 | ProBuilder 扩展 | ✅ 已实现 | 自动包含（需要 com.unity.probuilder） |
 | Cinemachine/VFX/URP/HDRP 扩展 | 📋 Backlog（P8） | 待实现 |
 

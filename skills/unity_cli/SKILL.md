@@ -45,9 +45,14 @@ unity_cli diagnose preflight
 
 # 场景层级
 unity_cli tools run scene.hierarchy --input '{}'
+
+# 使用 context 命令获取只读项目状态
+unity_cli context list
+unity_cli context describe <name>
+unity_cli context read <name>
 ```
 
-> 只读工具（`readOnlyHint: true`）不会修改 Unity 状态，可安全重复调用。
+> 只读工具（`readOnlyHint: true`）和 context 命令不会修改 Unity 状态，可安全重复调用。
 
 ## 步骤 3：发现工具能力
 
@@ -173,6 +178,15 @@ unity_cli diagnose preflight
 unity_cli tools describe <problematic-tool>
 ```
 
+### 管理扩展包
+
+```powershell
+unity_cli extensions list
+unity_cli extensions install <id> --project <path>
+unity_cli extensions remove <id> --project <path>
+unity_cli extensions doctor --project <path>
+```
+
 ## 错误处理
 
 ### 统一错误格式
@@ -247,6 +261,6 @@ unity_cli tools describe <problematic-tool>
 - [安全边界](../docs/safety-boundaries.md) — 风险模型与破坏性确认
 - [错误码](../docs/error-codes.md) — 结构化错误与 next_actions
 - [自定义工具](../docs/custom-tools.md) — 项目侧 Tool 注册开发
-- [自定义 Context](../docs/custom-contexts.md) — 项目侧只读 Context（规划中）
-- [扩展包](../docs/extensions.md) — 扩展包使用与开发（规划中）
+- [自定义 Context](../docs/custom-contexts.md) — 项目侧只读 Context
+- [扩展包](../docs/extensions.md) — 扩展包使用与开发
 - [示例](../examples/README.md) — 操作示例

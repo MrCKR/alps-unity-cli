@@ -78,16 +78,15 @@ unity_cli tools describe probuilder.shape
 | 测试 | 单元测试和集成测试 |
 | 文档片段 | 扩展使用说明 |
 
-## 3. 规划中的扩展命令
+## 3. 扩展命令
 
-独立的 `extensions` 命令组正在规划中（P5）：
+`extensions` 命令组已实现：
 
 ```powershell
-# 规划中（P5）的 API，实现后生效
-unity_cli extensions list                    # 列出已安装扩展（P5）
-unity_cli extensions install <name>          # 安装扩展（P5）
-unity_cli extensions remove <name>           # 卸载扩展（P5）
-unity_cli extensions doctor                  # 扩展诊断（P5）
+unity_cli extensions list                    # 列出已安装扩展
+unity_cli extensions install <name>          # 安装扩展
+unity_cli extensions remove <name>           # 卸载扩展
+unity_cli extensions doctor                  # 扩展诊断
 
 # init 自动检测
 unity_cli init --project <path>              # 检测项目 Package 并安装匹配扩展

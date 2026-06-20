@@ -33,8 +33,8 @@
 | 文档 | 内容 |
 |------|------|
 | [自定义工具](custom-tools.md) | 项目侧 Editor Tool / Runtime Tool 注册 |
-| [自定义 Context](custom-contexts.md) | 项目侧只读 Context 注册（规划中） |
-| [扩展包](extensions.md) | 扩展包使用与开发（规划中） |
+| [自定义 Context](custom-contexts.md) | 项目侧只读 Context 注册 |
+| [扩展包](extensions.md) | 扩展包使用与开发 |
 
 ## 维护
 

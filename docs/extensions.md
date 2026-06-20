@@ -2,9 +2,9 @@
 
 扩展包使用与开发指南。
 
-## 当前状态：部分实现（P5 已完成基础设施，独立命令尚未实现）
+## 当前状态：已实现
 
-扩展包系统的基础设施已在 P5 阶段（[ALP-541](https://github.com/MrCKR/alps-unity-cli/issues)）完成，包括 Bridge 包安装、项目工具发现和 fingerprint 校验。独立的 `extensions` 命令组尚未实现。
+扩展包系统已在 P5 阶段（[ALP-541](https://github.com/MrCKR/alps-unity-cli/issues)）完成，包括 Bridge 包安装、项目工具发现、fingerprint 校验，以及独立的 `extensions` 命令组。
 
 ## 当前扩展能力
 
@@ -49,21 +49,20 @@ unity_cli doctor
 unity_cli diagnose preflight
 ```
 
-## 规划中的扩展包命令
+## 扩展包命令
 
-P5 阶段规划了独立的 `extensions` 命令组（当前尚未实现）：
+P5 阶段已实现独立的 `extensions` 命令组：
 
 ```powershell
-# 规划中（P5）的 API，实现后生效
-unity_cli extensions list                          # 列出已安装扩展（P5）
-unity_cli extensions install <name>                 # 安装扩展（P5）
-unity_cli extensions remove <name>                  # 卸载扩展（P5）
-unity_cli extensions doctor                         # 扩展诊断（P5）
+unity_cli extensions list                          # 列出已安装扩展
+unity_cli extensions install <name>                 # 安装扩展
+unity_cli extensions remove <name>                  # 卸载扩展
+unity_cli extensions doctor                         # 扩展诊断
 ```
 
 ### init 自动检测
 
-规划中的 `init --auto-detect` 将根据 Unity 项目已安装的 Package 自动匹配并安装对应的 CLI 扩展：
+`init --auto-detect` 会根据 Unity 项目已安装的 Package 自动匹配并安装对应的 CLI 扩展：
 
 ```
 项目检测到 com.unity.probuilder → 安装 ProBuilder 扩展

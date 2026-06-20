@@ -1,15 +1,13 @@
-# 自定义 Context 示例（规划中）
+# 自定义 Context 示例
 
-> **注意**：`[UnityCliContext]` 特性和 `context list / describe / read` 命令正在规划中（P3 阶段）。
-> 本示例展示规划中的 API，P3 实现后生效。
+`[UnityCliContext]` 特性和 `context list / describe / read` 命令已实现。本示例展示注册和使用自定义 Context 的方式。
 
-## 1. 规划中的 C# 注册代码
+## 1. C# 注册代码
 
 ```csharp
 using UnityCli;
 using System.Collections.Generic;
 
-// 规划中的 API，P3 实现后生效
 [UnityCliContext("sample.project-summary",
     Title = "Project Summary",
     Description = "Read-only project overview including name, version, scene and package counts.",
@@ -33,22 +31,22 @@ public static class SampleProjectSummaryContext
 }
 ```
 
-## 2. 规划中（P3）的 CLI 发现与执行
+## 2. CLI 发现与执行
 
 ```powershell
-# 列出所有可用 Context（规划中 P3）
+# 列出所有可用 Context
 unity_cli context list
 
-# 查看 Context schema 和来源（规划中 P3）
+# 查看 Context schema 和来源
 unity_cli context describe sample.project-summary
 
-# 读取 Context 数据（规划中 P3）
+# 读取 Context 数据
 unity_cli context read sample.project-summary
 ```
 
-## 3. 当前替代方案（P3 实现前）
+## 3. 替代方案
 
-在 `context` 命令实现前，可通过只读工具获取类似信息：
+也可通过只读工具获取类似信息：
 
 ```powershell
 # 项目信息（通过诊断预检）

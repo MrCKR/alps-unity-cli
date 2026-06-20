@@ -53,17 +53,10 @@ function allDocFiles(): string[] {
 // ── Stale command names that must NOT appear as current/available ──
 
 // These commands do NOT exist in the current CLI implementation.
-// They may appear in "规划中/planned" context but must not be taught as available.
+// They may appear in deprecation/removal context but must not be taught as available.
 const NONEXISTENT_COMMANDS = [
   "tools list",              // removed; use "tools group" + "tools group list <group>"
   "tools groups",            // removed; use "tools group" (singular)
-  "context list",            // P3 planned; not a current command
-  "context describe",        // P3 planned
-  "context read",            // P3 planned
-  "extensions list",         // P5 planned
-  "extensions install",      // P5 planned
-  "extensions remove",       // P5 planned
-  "extensions doctor",       // P5 planned
 ];
 
 // ── Current commands that MUST appear in docs ──
@@ -75,6 +68,13 @@ const REQUIRED_COMMANDS = [
   "tools run",              // actual command to execute
   "tools search",           // actual command for keyword search
   "--include-custom",       // flag to discover project tools
+  "context list",           // actual command to list contexts
+  "context describe",       // actual command for context descriptor
+  "context read",           // actual command to read context
+  "extensions list",        // actual command to list extensions
+  "extensions install",     // actual command to install extension
+  "extensions remove",      // actual command to remove extension
+  "extensions doctor",      // actual command for extension diagnostics
 ];
 
 // ── Field naming conventions ──
@@ -327,18 +327,18 @@ test("docs use actual command names (tools group not tools groups)", () => {
 });
 
 test("docs distinguish between current and planned features", () => {
-  // Verify that planned features (P3 context, P5 extensions) are clearly marked
+  // Verify that context and extensions commands are documented as available
   const readme = readDocFile("README.md");
 
-  // Context commands should be marked as planned
+  // Context commands should be documented as available
   assert.ok(
-    readme.includes("规划中") || readme.includes("P3"),
-    "README must note that context commands are planned (P3)"
+    readme.includes("context list") || readme.includes("context describe"),
+    "README must document context commands as available"
   );
 
-  // Extensions commands should be marked as planned
+  // Extensions commands should be documented as available
   assert.ok(
-    readme.includes("规划中") || readme.includes("P5"),
-    "README must note that extensions commands are planned (P5)"
+    readme.includes("extensions list") || readme.includes("extensions install"),
+    "README must document extensions commands as available"
   );
 });

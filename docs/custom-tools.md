@@ -161,4 +161,4 @@ unity_cli tools run sample.runtime-echo --input '{"message":"ping"}'
 | `tools group list custom --include-custom` 发现 | ✅ 已实现 |
 | Fingerprint 校验 | ✅ 已实现 |
 | `--dry-run` 支持 | ✅ 已实现（descriptor 级别控制） |
-| 独立 `extensions` 命令组 | 🔄 规划中（P5） |
+| 独立 `extensions` 命令组 | ✅ 已实现 |

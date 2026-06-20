@@ -18,7 +18,7 @@ alps-unity-cli 操作示例，按类型组织。
 |------|------|------|
 | [custom-editor-tool.md](custom-editor-tool.md) | Custom Tool | 项目侧 Editor Tool 注册与执行 |
 | [custom-runtime-tool.md](custom-runtime-tool.md) | Custom Tool | 项目侧 Runtime Tool 注册与 Play Mode 执行 |
-| [custom-context.md](custom-context.md) | Custom Context | 项目侧只读 Context（规划中） |
+| [custom-context.md](custom-context.md) | Custom Context | 项目侧只读 Context |
 | [extension-tool.md](extension-tool.md) | Extension | 扩展包工具与缺依赖 unavailable |
 
 ## Batch 示例

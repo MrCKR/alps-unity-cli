@@ -76,7 +76,25 @@ unity_cli init --project /path/to/unity/project
 unity_cli doctor --project /path/to/unity/project
 ```
 
-> **注意**：独立的 `extensions install/remove/list/doctor` 命令正在规划中（P5 阶段）。当前扩展包通过 `init` 自动检测安装，无需手动操作。
+> 扩展包也可通过 `extensions install/remove/doctor` 命令管理。
+
+### 手动安装
+
+```bash
+unity_cli extensions install probuilder --project /path/to/unity/project
+```
+
+### 卸载
+
+```bash
+unity_cli extensions remove probuilder --project /path/to/unity/project
+```
+
+### 查看所有扩展
+
+```bash
+unity_cli extensions list --project /path/to/unity/project
+```
 
 ## 依赖缺失时的行为
 
@@ -146,4 +164,4 @@ A: 确认 Unity Editor 正在运行，且 Bridge 连接正常。运行 `unity_cl
 
 ### Q: init 未自动安装 ProBuilder 扩展包
 
-A: `init` 仅在项目已包含 `com.unity.probuilder` 时自动安装。如果包是 init 之后安装的，重新运行 `unity_cli init --project <path>` 即可。
+A: `init` 仅在项目已包含 `com.unity.probuilder` 时自动安装。如果包是 init 之后安装的，可重新运行 `unity_cli init --project <path>` 或手动运行 `unity_cli extensions install probuilder --project <path>`。
