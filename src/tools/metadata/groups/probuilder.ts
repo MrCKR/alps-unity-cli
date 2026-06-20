@@ -22,6 +22,7 @@ const PB_COMMON = {
   availabilityScope: "editorSession",
   requiresPackages: [PB],
   handler: "hybrid" as const,
+  source: "extension" as const,
   docsTopic: "probuilder",
   cancellationSemantics: "Live bridge execution is cooperative and usually short; --job execution can be cancelled with job cancel --id <jobId> using immediate Unity batchmode process termination semantics."
 };

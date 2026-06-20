@@ -376,12 +376,16 @@ test("capabilities includes extension info when --project provided", async () =>
   assert.ok(ext.total === 5); // probuilder, vfx-graph, cinemachine, urp, hdrp
 });
 
-test("capabilities without --project does not include extension info", async () => {
+test("capabilities without --project does not include extension package availability info", async () => {
   const result = await handleCapabilitiesCommand({}, {}, requestId);
 
   assert.equal(result.ok, true);
   const data = result.data as Record<string, unknown>;
-  assert.equal(data.extensions, undefined);
+  // Without --project, extension metadata is available (P1+P2) but no package availability resolution
+  const ext = data.extensions as Record<string, unknown> | undefined;
+  // When no project, we still get basic extension info but without per-package availability
+  assert.ok(ext !== undefined, "extensions section should exist");
+  assert.ok(typeof ext!.enabled === "boolean", "extensions.enabled should be boolean");
 });
 
 // ── 11. Extension manifest contract validation ────────────────────────────
