@@ -8,7 +8,9 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { bridgeCommandRegistry, type BridgeRequest } from "./bridge/index.js";
 import { handleToolsCommand, type ToolsRuntime } from "./tools.js";
-import { builtinToolMetadata, builtinToolGroups, findToolByName, filterToolsByGroup, searchTools, supportStatusForTool } from "./tools/metadata/index.js";
+import { builtinToolMetadata, builtinToolGroups, findToolByName, filterToolsByGroup, searchTools, allRegisteredToolMetadata, extensionToolMetadata, supportStatusForTool } from "./tools/metadata/index.js";
+// P10-R3: Ensure extension contributions (ProBuilder, VFX) are registered
+import "./extensions/index.js";
 
 const requestId = "test_req_tools_001";
 const emptyRuntime: ToolsRuntime = {};

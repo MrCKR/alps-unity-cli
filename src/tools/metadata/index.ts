@@ -6,6 +6,10 @@
  * CLI/UnityPkg release so that `tools describe` works without a live Unity instance.
  *
  * The schema is /schemas/tool-metadata.schema.json (ALP-164 frozen v1.0).
+ *
+ * P10-R3: ProBuilder and VFX Graph tool metadata is no longer statically
+ * aggregated here. These optional extensions register their tools through
+ * the extension contribution loader instead.
  */
 
 import { bridgeCommandRegistry } from "../../bridge/index.js";
@@ -20,11 +24,9 @@ import { MATERIAL_TOOLS } from "./groups/material.js";
 import { GRAPHICS_TOOLS } from "./groups/graphics.js";
 import { PHYSICS_TOOLS } from "./groups/physics.js";
 import { PROFILER_TOOLS } from "./groups/profiler.js";
-import { PROBUILDER_TOOLS } from "./groups/probuilder.js";
 import { SHADER_TOOLS } from "./groups/shader.js";
 import { TEXTURE_TOOLS } from "./groups/texture.js";
 import { ANIMATION_TOOLS } from "./groups/animation.js";
-import { VFX_TOOLS } from "./groups/vfx.js";
 import { UI_TOOLS } from "./groups/ui.js";
 import { SCRIPT_TOOLS } from "./groups/script.js";
 import { EDITOR_TOOLS } from "./groups/editor.js";
@@ -38,7 +40,14 @@ import type { ToolMetadata } from "./types.js";
 export { supportStatusDescription, supportStatusForTool, supportStatusLabel } from "./status.js";
 export type { ToolExample, ToolHandler, ToolMetadata, ToolSupportStatus } from "./types.js";
 
-const BUILTIN_TOOLS: ToolMetadata[] = [
+/** Extension groups that register through the contribution loader, not core aggregation. */
+export const EXTENSION_GROUPS = new Set(["probuilder", "vfx"]);
+
+/**
+ * Core built-in tools — no ProBuilder or VFX.
+ * Extension tools are registered separately via registerExtensionTools().
+ */
+const CORE_TOOLS: ToolMetadata[] = [
   ...SCENE_TOOLS,
   ...CAMERA_TOOLS,
   ...GO_TOOLS,
@@ -49,11 +58,9 @@ const BUILTIN_TOOLS: ToolMetadata[] = [
   ...GRAPHICS_TOOLS,
   ...PHYSICS_TOOLS,
   ...PROFILER_TOOLS,
-  ...PROBUILDER_TOOLS,
   ...SHADER_TOOLS,
   ...TEXTURE_TOOLS,
   ...ANIMATION_TOOLS,
-  ...VFX_TOOLS,
   ...UI_TOOLS,
   ...SCRIPT_TOOLS,
   ...EDITOR_TOOLS,
@@ -64,38 +71,83 @@ const BUILTIN_TOOLS: ToolMetadata[] = [
   ...TOOLS_DISCOVERY_TOOLS,
 ];
 
-validateBridgeRegistryContracts(bridgeCommandRegistry);
-validateBuiltinTools(BUILTIN_TOOLS);
-validateToolMetadataContracts(BUILTIN_TOOLS, bridgeCommandRegistry);
+/**
+ * Extension tool metadata — populated by the extension contribution loader.
+ * ProBuilder, VFX, and other optional extensions register their tools here
+ * rather than being statically aggregated in CORE_TOOLS.
+ */
+const extensionTools: ToolMetadata[] = [];
 
-/** Return all built-in tool metadata entries. */
-export function builtinToolMetadata(): ToolMetadata[] {
-  return BUILTIN_TOOLS;
+// Validate core tools at module level (no extension groups yet).
+validateBridgeRegistryContracts(bridgeCommandRegistry, EXTENSION_GROUPS);
+validateBuiltinTools(CORE_TOOLS);
+validateToolMetadataContracts(CORE_TOOLS, bridgeCommandRegistry);
+
+/** Register extension tool metadata. Called by the contribution loader. */
+export function registerExtensionTools(tools: ToolMetadata[]): void {
+  const existingNames = new Set([...CORE_TOOLS, ...extensionTools].map((t) => t.name));
+  for (const tool of tools) {
+    if (existingNames.has(tool.name)) {
+      throw new Error(`Duplicate extension tool metadata name: ${tool.name}`);
+    }
+    existingNames.add(tool.name);
+  }
+  extensionTools.push(...tools);
 }
 
-/** Return distinct group names from built-in metadata. */
+/** Validate extension tool metadata after registration. */
+export function validateExtensionToolMetadata(): void {
+  validateBuiltinTools(extensionTools);
+  validateToolMetadataContracts(extensionTools, bridgeCommandRegistry);
+}
+
+/** Return core built-in tool metadata entries (no extension tools). */
+export function builtinToolMetadata(): ToolMetadata[] {
+  return [...CORE_TOOLS];
+}
+
+/** Return extension tool metadata entries (registered by extension contributions). */
+export function extensionToolMetadata(): ToolMetadata[] {
+  return [...extensionTools];
+}
+
+/** Return all registered tool metadata entries (core + extension). */
+export function allRegisteredToolMetadata(): ToolMetadata[] {
+  return [...CORE_TOOLS, ...extensionTools];
+}
+
+/** Return distinct core group names from built-in metadata. */
 export function builtinToolGroups(): string[] {
   const groups = new Set<string>();
-  for (const tool of BUILTIN_TOOLS) {
+  for (const tool of CORE_TOOLS) {
     groups.add(tool.group);
   }
   return [...groups].sort();
 }
 
-/** Find a single tool by its dotted name. */
+/** Return distinct group names including extension groups. */
+export function allRegisteredToolGroups(): string[] {
+  const groups = new Set<string>();
+  for (const tool of allRegisteredToolMetadata()) {
+    groups.add(tool.group);
+  }
+  return [...groups].sort();
+}
+
+/** Find a single tool by its dotted name (core + extension). */
 export function findToolByName(name: string): ToolMetadata | undefined {
-  return BUILTIN_TOOLS.find((t) => t.name === name);
+  return allRegisteredToolMetadata().find((t) => t.name === name);
 }
 
-/** Filter tools by group. */
+/** Filter tools by group (core + extension). */
 export function filterToolsByGroup(group: string): ToolMetadata[] {
-  return BUILTIN_TOOLS.filter((t) => t.group === group);
+  return allRegisteredToolMetadata().filter((t) => t.group === group);
 }
 
-/** Search tools by keyword across name, title, description, group. */
+/** Search tools by keyword across name, title, description, group (core + extension). */
 export function searchTools(keyword: string): ToolMetadata[] {
   const lower = keyword.toLowerCase();
-  return BUILTIN_TOOLS.filter((t) =>
+  return allRegisteredToolMetadata().filter((t) =>
     t.name.toLowerCase().includes(lower) ||
     t.title.toLowerCase().includes(lower) ||
     t.description.toLowerCase().includes(lower) ||

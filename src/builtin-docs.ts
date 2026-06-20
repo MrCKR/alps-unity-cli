@@ -1,5 +1,5 @@
 import { getString } from "./args.js";
-import { builtinToolMetadata, supportStatusDescription, supportStatusForTool, supportStatusLabel, type ToolMetadata } from "./tools/metadata/index.js";
+import { builtinToolMetadata, extensionToolMetadata, allRegisteredToolMetadata, supportStatusDescription, supportStatusForTool, supportStatusLabel, type ToolMetadata } from "./tools/metadata/index.js";
 import { failure, success } from "./output.js";
 import type { CliResult } from "./types.js";
 
@@ -276,7 +276,7 @@ export function getBuiltinDocTopic(
 
 export function buildTopics(projectTools: ToolMetadata[] = []): DocTopic[] {
   const byTopic = new Map<string, ToolMetadata[]>();
-  for (const tool of [...builtinToolMetadata(), ...projectTools]) {
+  for (const tool of [...allRegisteredToolMetadata(), ...projectTools]) {
     const topic = tool.docsTopic ?? tool.group;
     const tools = byTopic.get(topic) ?? [];
     tools.push(tool);

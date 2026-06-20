@@ -12,6 +12,8 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { commandContracts, findCommandContract } from "./contracts/command-contract.js";
 import { filterToolsByGroup, findToolByName } from "./tools/metadata/index.js";
+// P10-R3: Ensure extension contributions (ProBuilder, VFX) are registered
+import "./extensions/index.js";
 
 const EXPECTED_PROBUILDER_TOOLS = [
   "probuilder.ping",

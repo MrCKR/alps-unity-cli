@@ -56,7 +56,11 @@ test("integration: tools groups via execute()", async () => {
   const groups = data.groups as string[];
   assert.ok(groups.includes("scene"));
   assert.ok(groups.includes("camera"));
-  assert.ok(groups.includes("probuilder"));
+  // P10-R3: Extension groups (probuilder, vfx) only appear when the
+  // extension's required Unity packages are installed (needs --project).
+  // Without project context, extension groups are NOT included.
+  assert.ok(!groups.includes("probuilder"));
+  assert.ok(!groups.includes("vfx"));
 });
 
 test("integration: tools search hierarchy via execute()", async () => {

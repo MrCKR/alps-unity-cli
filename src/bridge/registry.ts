@@ -9,20 +9,22 @@ import { graphicsBridgeSpecs } from "./domains/graphics.js";
 import { materialBridgeSpecs } from "./domains/material.js";
 import { physicsBridgeSpecs } from "./domains/physics.js";
 import { prefabBridgeSpecs } from "./domains/prefab.js";
-import { probuilderBridgeSpecs } from "./domains/probuilder.js";
 import { profilerBridgeSpecs } from "./domains/profiler.js";
 import { sceneBridgeSpecs } from "./domains/scene.js";
 import { scriptBridgeSpecs } from "./domains/script.js";
 import { shaderBridgeSpecs } from "./domains/shader.js";
 import { textureBridgeSpecs } from "./domains/texture.js";
 import { uiBridgeSpecs } from "./domains/ui.js";
-import { vfxBridgeSpecs } from "./domains/vfx.js";
 import { projectToolBridgeSpecs } from "./domains/project-tool.js";
 import { runtimeToolBridgeSpecs } from "./domains/runtime-tool.js";
 import { securityPolicyForCommand } from "../security-policy.js";
 import type { BridgeCommandSpec } from "./types.js";
 
-const DOMAIN_SPECS: BridgeCommandSpec[] = [
+/**
+ * Core domain specs — ProBuilder and VFX are excluded from core.
+ * They are registered via the extension contribution loader instead.
+ */
+const CORE_DOMAIN_SPECS: BridgeCommandSpec[] = [
   ...sceneBridgeSpecs,
   ...cameraBridgeSpecs,
   ...gameObjectBridgeSpecs,
@@ -32,11 +34,9 @@ const DOMAIN_SPECS: BridgeCommandSpec[] = [
   ...graphicsBridgeSpecs,
   ...physicsBridgeSpecs,
   ...profilerBridgeSpecs,
-  ...probuilderBridgeSpecs,
   ...shaderBridgeSpecs,
   ...textureBridgeSpecs,
   ...animationBridgeSpecs,
-  ...vfxBridgeSpecs,
   ...uiBridgeSpecs,
   ...scriptBridgeSpecs,
   ...editorBridgeSpecs,
@@ -51,6 +51,17 @@ export class BridgeCommandRegistry {
   private readonly byBridgeCommand = new Map<string, BridgeCommandSpec[]>();
 
   public constructor(specs: BridgeCommandSpec[]) {
+    this.registerSpecs(specs);
+  }
+
+  /**
+   * Dynamically register bridge command specs.
+   *
+   * Used by the extension contribution loader to register extension-provided
+   * bridge commands (e.g. ProBuilder, VFX) without statically importing
+   * them into the core DOMAIN_SPECS aggregation.
+   */
+  public registerSpecs(specs: BridgeCommandSpec[]): void {
     for (const spec of specs) {
       const policy = securityPolicyForCommand(spec.bridgeCommand);
       if (policy) {
@@ -92,4 +103,4 @@ export class BridgeCommandRegistry {
   }
 }
 
-export const bridgeCommandRegistry = new BridgeCommandRegistry(DOMAIN_SPECS);
+export const bridgeCommandRegistry = new BridgeCommandRegistry(CORE_DOMAIN_SPECS);

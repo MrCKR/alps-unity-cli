@@ -7,9 +7,18 @@
  * Unity packages. Extensions declare their Unity package requirements via
  * manifest, and the registry resolves availability against a project's
  * installed packages.
+ *
+ * P10-R3: Auto-registers built-in extension contributions (ProBuilder, VFX)
+ * when this module is first imported. This ensures both CLI and test
+ * environments have extension tools available without explicit registration.
  */
 
-export { ExtensionRegistry, ExtensionRegistryError, resolveExtensionAvailability, validateManifest } from "./registry.js";
+export {
+  ExtensionRegistry,
+  ExtensionRegistryError,
+  resolveExtensionAvailability,
+  validateManifest
+} from "./registry.js";
 export {
   loadAllExtensionDescriptors,
   loadExtensionDescriptor,
@@ -34,6 +43,17 @@ export {
   readInstalledUnityPackages,
   resolveExtensionAvailabilityForProject
 } from "./project-resolver.js";
+export {
+  registerBuiltinExtensionContributions,
+  isBuiltinExtensionContributionsRegistered
+} from "./contribution-loader.js";
+
+// P10-R3: Auto-register built-in extension contributions when the extension
+// module is loaded. This ensures both CLI startup and test environments have
+// extension bridge specs and tool metadata registered before any tool
+// discovery or bridge command routing.
+import { registerBuiltinExtensionContributions } from "./contribution-loader.js";
+registerBuiltinExtensionContributions();
 
 export type {
   ExtensionId,

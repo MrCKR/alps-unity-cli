@@ -7,13 +7,19 @@
 
 import { getBoolean, getString } from "./args.js";
 import { discoverProjectTools, discoverRuntimeTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
-import { executeBridgeCommand, executeBridgePayload } from "./bridge/index.js";import { checkToolExtensionAvailability, collectExtensionToolDescriptors } from "./extension-availability.js";
+import { executeBridgeCommand, executeBridgePayload } from "./bridge/index.js";
+import { checkToolExtensionAvailability, collectExtensionToolDescriptors } from "./extension-availability.js";
+import { ExtensionRegistry, collectAvailableTools, readInstalledUnityPackages } from "./extensions/index.js";
 import {
   builtinToolMetadata,
+  extensionToolMetadata,
+  allRegisteredToolMetadata,
   builtinToolGroups,
+  allRegisteredToolGroups,
   findToolByName,
   filterToolsByGroup,
   searchTools,
+  EXTENSION_GROUPS,
   type ToolMetadata
 } from "./tools/metadata/index.js";
 import { failure, success } from "./output.js";
@@ -72,7 +78,19 @@ async function handleToolsList(
   const explicitIncludeCustom = getBoolean(flags, "include-custom");
   const includeCustom = explicitIncludeCustom || shouldDiscoverProjectTools(flags, runtime);
 
-  let tools: ToolMetadata[] = groupFilter ? filterToolsByGroup(groupFilter) : builtinToolMetadata();
+  // P10-R3: Extension tools participate in discovery only when the
+  // extension's required Unity packages are installed in the target project.
+  const availableExtensionTools = await resolveAvailableExtensionTools(flags);
+
+  let tools: ToolMetadata[];
+  if (groupFilter) {
+    tools = [
+      ...builtinToolMetadata().filter((t) => t.group === groupFilter),
+      ...availableExtensionTools.filter((t) => t.group === groupFilter)
+    ];
+  } else {
+    tools = [...builtinToolMetadata(), ...availableExtensionTools];
+  }
 
   if (includeCustom) {
     const customTools = await discoverProjectTools(flags, runtime, requestId, { requireBridge: explicitIncludeCustom });
@@ -121,12 +139,16 @@ async function handleToolsList(
 }
 
 async function handleToolsGroups(flags: Record<string, string | boolean>, runtime: ToolsRuntime, requestId: string): Promise<CliResult> {
+  // P10-R3: Core groups are always present; extension groups are included
+  // only when their required Unity packages are installed in the target project.
+  const availableExtensionTools = await resolveAvailableExtensionTools(flags);
   const builtinGroups = builtinToolGroups();
+  const extensionGroupNames = [...new Set(availableExtensionTools.map((t) => t.group))].sort();
   const includeCustom = shouldDiscoverProjectTools(flags, runtime);
   const customDiscovery = includeCustom ? await discoverProjectTools(flags, runtime, requestId) : { ok: true as const, tools: [], mode: "skipped" as const };
   if (customDiscovery.ok === false) return customDiscovery;
   const customGroups: string[] = [];
-  const seen = new Set(builtinGroups);
+  const seen = new Set([...builtinGroups, ...extensionGroupNames]);
   for (const t of customDiscovery.tools) {
     if (!seen.has(t.group)) {
       customGroups.push(t.group);
@@ -134,7 +156,7 @@ async function handleToolsGroups(flags: Record<string, string | boolean>, runtim
     }
   }
 
-  const groups = [...builtinGroups, ...customGroups.sort()];
+  const groups = [...builtinGroups, ...extensionGroupNames, ...customGroups.sort()];
   const data: Record<string, unknown> = {
     command: "tools.groups",
     count: groups.length,
@@ -157,17 +179,28 @@ async function handleToolsSearch(
   }
 
   const builtinResults = searchTools(keyword);
-  const includeCustom = getBoolean(flags, "include-custom") || shouldDiscoverProjectTools(flags, runtime);
-  const customTools = includeCustom ? await discoverProjectTools(flags, runtime, requestId, { requireBridge: getBoolean(flags, "include-custom") }) : { ok: true as const, tools: [] };
-  if (customTools.ok === false) return customTools;
-  const customResults = customTools.tools.filter((t: ToolMetadata) =>
+  const availableExtensionTools = await resolveAvailableExtensionTools(flags);
+  const extensionResults = availableExtensionTools.filter((t: ToolMetadata) =>
     t.name.toLowerCase().includes(keyword.toLowerCase()) ||
     t.title.toLowerCase().includes(keyword.toLowerCase()) ||
     t.description.toLowerCase().includes(keyword.toLowerCase()) ||
     t.group.toLowerCase().includes(keyword.toLowerCase())
   );
 
-  const results = [...builtinResults, ...customResults];
+  let results = [...builtinResults, ...extensionResults];
+
+  const includeCustom = getBoolean(flags, "include-custom") || shouldDiscoverProjectTools(flags, runtime);
+  if (includeCustom) {
+    const customTools = await discoverProjectTools(flags, runtime, requestId, { requireBridge: getBoolean(flags, "include-custom") });
+    if (customTools.ok === false) return customTools;
+    const customResults = customTools.tools.filter((t: ToolMetadata) =>
+      t.name.toLowerCase().includes(keyword.toLowerCase()) ||
+      t.title.toLowerCase().includes(keyword.toLowerCase()) ||
+      t.description.toLowerCase().includes(keyword.toLowerCase()) ||
+      t.group.toLowerCase().includes(keyword.toLowerCase())
+    );
+    results = [...results, ...customResults];
+  }
 
   const summaries = results.map((t) => {
     const supportStatus = supportStatusForTool(t);
@@ -470,6 +503,48 @@ async function dispatchJobHandler(
     `Use the native command instead: ${cliCommand}`,
     "Run unity_cli tools describe <tool> for details."
   ]);
+}
+
+/**
+ * P10-R3: Resolve which extension tools are available for the target project.
+ *
+ * Extension tools (ProBuilder, VFX) are only shown in tools list/groups/search
+ * when their required Unity packages are installed in the target project.
+ * Without --project, extension tools are NOT included (no availability info).
+ */
+async function resolveAvailableExtensionTools(
+  flags: Record<string, string | boolean>
+): Promise<ToolMetadata[]> {
+  const allExtensionTools = extensionToolMetadata();
+  if (allExtensionTools.length === 0) return [];
+
+  const projectPath = getString(flags, "project");
+  if (!projectPath) {
+    // Without a project path, we cannot determine availability.
+    // Return NO extension tools — they are not part of core.
+    return [];
+  }
+
+  try {
+    const installedPackages = await readInstalledUnityPackages(projectPath);
+    const registry = new ExtensionRegistry();
+    const availableExtensionIds = new Set(
+      registry.availableExtensions(installedPackages).map((r) => r.extensionId)
+    );
+    return allExtensionTools.filter((t) => {
+      // Find which extension provides this tool's group
+      for (const extId of availableExtensionIds) {
+        const ext = registry.getExtension(extId)!;
+        if (ext.manifest.contributions.tools?.some((et) => et.group === t.group)) {
+          return true;
+        }
+      }
+      return false;
+    });
+  } catch {
+    // Cannot read packages — return no extension tools
+    return [];
+  }
 }
 
 async function optionalTargetSummary(flags: Record<string, string | boolean>, runtime: ToolsRuntime): Promise<Record<string, unknown> | null> {

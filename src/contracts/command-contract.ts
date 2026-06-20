@@ -46,9 +46,10 @@ export function findCommandContract(bridgeCommand: string): CommandContractEntry
   return contractByBridgeCommand.get(bridgeCommand);
 }
 
-export function validateBridgeRegistryContracts(registry: BridgeCommandRegistry): void {
+export function validateBridgeRegistryContracts(registry: BridgeCommandRegistry, skipGroups?: Set<string>): void {
   const registryCommands = new Set<string>();
   for (const spec of registry.specs()) {
+    if (skipGroups?.has(spec.group)) continue;
     registryCommands.add(spec.bridgeCommand);
     const contract = findCommandContract(spec.bridgeCommand);
     if (!contract) {
@@ -57,6 +58,7 @@ export function validateBridgeRegistryContracts(registry: BridgeCommandRegistry)
   }
 
   for (const contract of commandContracts()) {
+    if (skipGroups?.has(contract.group)) continue;
     if (contract.csharp_handler === "present" && (contract.handler_type === "bridge" || contract.handler_type === "hybrid") && !registryCommands.has(contract.bridgeCommand)) {
       throw new Error(`Contract command missing from BridgeCommandRegistry: ${contract.bridgeCommand}`);
     }

@@ -30,6 +30,7 @@ import { PROBUILDER_MANIFEST, VFX_GRAPH_MANIFEST, BUILTIN_EXTENSION_MANIFESTS } 
 import { validateExtensionManifestContracts } from "./contracts/command-contract.js";
 import { bridgeCommandRegistry } from "./bridge/index.js";
 import { checkToolExtensionAvailability, checkContextExtensionAvailability } from "./extension-availability.js";
+import { builtinToolMetadata, builtinToolGroups, extensionToolMetadata, findToolByName } from "./tools/metadata/index.js";
 
 const requestId = "test_p5t04_001";
 const emptyRuntime: ToolsRuntime = {};
@@ -519,7 +520,8 @@ test("tools describe shows unavailable when Unity pkg missing even for installed
 // as a built-in and will be checked for package deps.
 
 test("tools describe for extension tool shows unavailable when Unity package present but extension not installed in project state", async () => {
-  // In this CLI, extension tools like probuilder.ping are built-in metadata.
+  // In this CLI, extension tools like probuilder.ping are registered via
+  // the extension contribution loader, not core built-in metadata.
   // The availability check is package-based, not install-state-based.
   // When the Unity package IS installed, the tool is available regardless of
   // the extensions.json install state.
@@ -538,4 +540,99 @@ test("tools describe for extension tool shows unavailable when Unity package pre
   assert.equal(result.ok, true);
   const data = result.data as Record<string, unknown>;
   assert.equal(data.extensionAvailability, "available");
+});
+
+// ── P10-R3: Core/extension boundary decoupling tests ──────────────────────
+
+test("P10-R3: builtinToolMetadata does not include ProBuilder or VFX tools", () => {
+  const builtin = builtinToolMetadata();
+  const probuilderNames = builtin.filter((t) => t.group === "probuilder");
+  const vfxNames = builtin.filter((t) => t.group === "vfx");
+  assert.equal(probuilderNames.length, 0, "ProBuilder tools should NOT be in core builtin metadata");
+  assert.equal(vfxNames.length, 0, "VFX tools should NOT be in core builtin metadata");
+});
+
+test("P10-R3: extensionToolMetadata includes ProBuilder and VFX tools", () => {
+  const ext = extensionToolMetadata();
+  const probuilderNames = ext.filter((t) => t.group === "probuilder");
+  const vfxNames = ext.filter((t) => t.group === "vfx");
+  assert.equal(probuilderNames.length, 36, "ProBuilder should have 36 extension tools");
+  assert.equal(vfxNames.length, 2, "VFX should have 2 extension tools");
+});
+
+test("P10-R3: builtinToolGroups does not include probuilder or vfx", () => {
+  const groups = builtinToolGroups();
+  assert.ok(!groups.includes("probuilder"), "probuilder should NOT be in core groups");
+  assert.ok(!groups.includes("vfx"), "vfx should NOT be in core groups");
+});
+
+test("P10-R3: tools list without --project does not include extension tools", async () => {
+  const result = await handleToolsCommand("list", [], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as { tools: Array<{ name: string; group: string }> };
+  const probuilderTools = data.tools.filter((t) => t.group === "probuilder");
+  const vfxTools = data.tools.filter((t) => t.group === "vfx");
+  assert.equal(probuilderTools.length, 0, "ProBuilder tools should NOT appear without --project");
+  assert.equal(vfxTools.length, 0, "VFX tools should NOT appear without --project");
+});
+
+test("P10-R3: tools list with --project includes extension tools when packages installed", async () => {
+  const projectPath = await makeFakeProject({
+    "com.unity.probuilder": "5.0.0"
+  });
+
+  const result = await handleToolsCommand("list", [], { project: projectPath }, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as { tools: Array<{ name: string; group: string }> };
+  const probuilderTools = data.tools.filter((t) => t.group === "probuilder");
+  assert.ok(probuilderTools.length > 0, "ProBuilder tools should appear when package is installed");
+});
+
+test("P10-R3: tools list with --project excludes extension tools when packages NOT installed", async () => {
+  const projectPath = await makeFakeProject(); // no packages
+
+  const result = await handleToolsCommand("list", [], { project: projectPath }, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as { tools: Array<{ name: string; group: string }> };
+  const probuilderTools = data.tools.filter((t) => t.group === "probuilder");
+  assert.equal(probuilderTools.length, 0, "ProBuilder tools should NOT appear when package is not installed");
+});
+
+test("P10-R3: tools groups without --project does not include extension groups", async () => {
+  const result = await handleToolsCommand("groups", [], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as { groups: string[] };
+  assert.ok(!data.groups.includes("probuilder"), "probuilder group should NOT appear without --project");
+  assert.ok(!data.groups.includes("vfx"), "vfx group should NOT appear without --project");
+});
+
+test("P10-R3: tools groups with --project includes extension groups when packages installed", async () => {
+  const projectPath = await makeFakeProject({
+    "com.unity.probuilder": "5.0.0"
+  });
+
+  const result = await handleToolsCommand("groups", [], { project: projectPath }, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as { groups: string[] };
+  assert.ok(data.groups.includes("probuilder"), "probuilder group should appear when package is installed");
+});
+
+test("P10-R3: findToolByName still finds extension tools after registration", () => {
+  const ping = findToolByName("probuilder.ping");
+  assert.ok(ping, "probuilder.ping should be findable via findToolByName");
+  assert.equal(ping?.group, "probuilder");
+
+  const vfxGraph = findToolByName("vfx.graph");
+  assert.ok(vfxGraph, "vfx.graph should be findable via findToolByName");
+  assert.equal(vfxGraph?.group, "vfx");
+});
+
+test("P10-R3: core package does not hard-depend on optional Unity packages", () => {
+  const coreTools = builtinToolMetadata();
+  for (const tool of coreTools) {
+    assert.ok(
+      !tool.requiresPackages?.some((p) => p.startsWith("com.unity.probuilder") || p.startsWith("com.unity.visualeffectgraph")),
+      `Core tool ${tool.name} should not require optional extension packages`
+    );
+  }
 });

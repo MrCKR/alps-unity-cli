@@ -9,7 +9,7 @@
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
 import { getString } from "./args.js";
 import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
-import { builtinToolGroups, builtinToolMetadata, type ToolMetadata } from "./tools/metadata/index.js";
+import { builtinToolGroups, builtinToolMetadata, extensionToolMetadata, allRegisteredToolMetadata, EXTENSION_GROUPS, type ToolMetadata } from "./tools/metadata/index.js";
 import { supportStatusForTool } from "./tools/metadata/status.js";
 import { ExtensionRegistry, extensionAvailabilitySummary, collectAvailableTools, collectAllTools } from "./extensions/index.js";
 import { readInstalledUnityPackages } from "./extensions/project-resolver.js";
@@ -115,17 +115,15 @@ function getBoolean(flags: Record<string, string | boolean>, name: string): bool
 }
 
 function buildStaticCapabilities(projectTools: ToolMetadata[] = [], extensionGroupFilter?: Set<string>): Record<string, unknown> {
-  const builtinTools = builtinToolMetadata();
-  // When extensionGroupFilter is provided, ProBuilder and other extension groups
-  // are separated from the core built-in groups in the top-level `groups` map.
-  // Extension group counts are instead exposed through the extensions section.
-  const coreTools = extensionGroupFilter
-    ? builtinTools.filter((t) => !extensionGroupFilter.has(t.group))
-    : builtinTools;
-  const extensionTools = extensionGroupFilter
-    ? builtinTools.filter((t) => extensionGroupFilter.has(t.group))
-    : [];
-  const tools = [...coreTools, ...extensionTools, ...projectTools];
+  // P10-R3: builtinToolMetadata() returns core tools only.
+  // Extension tools are loaded from extensionToolMetadata() and merged based
+  // on availability (extensionGroupFilter determines which are active).
+  const coreTools = builtinToolMetadata();
+  const allExtensionTools = extensionToolMetadata();
+  const activeExtensionTools = extensionGroupFilter
+    ? allExtensionTools.filter((t) => extensionGroupFilter.has(t.group))
+    : allExtensionTools;
+  const tools = [...coreTools, ...activeExtensionTools, ...projectTools];
   const coreGroups = [...new Set([...coreTools, ...projectTools].map((tool) => tool.group))].sort();
 
   const destructiveTools = tools.filter((t) => t.destructiveHint).map((t) => t.name);
@@ -150,19 +148,19 @@ function buildStaticCapabilities(projectTools: ToolMetadata[] = [], extensionGro
     coreGroupCounts[group] = [...coreTools, ...projectTools].filter((t) => t.group === group).length;
   }
 
-  // Full group counts (used when no extension filter — backward compat)
+  // Full group counts (core + extension + project)
   const groupCounts: Record<string, number> = {};
-  const allGroups = [...new Set([...builtinTools, ...projectTools].map((tool) => tool.group))].sort();
+  const allGroups = [...new Set(tools.map((tool) => tool.group))].sort();
   for (const group of allGroups) {
-    groupCounts[group] = [...builtinTools, ...projectTools].filter((t) => t.group === group).length;
+    groupCounts[group] = tools.filter((t) => t.group === group).length;
   }
 
   // Extension group counts (e.g. probuilder=36) are surfaced separately
   // so that capabilities consumers can distinguish core from extension.
   const extensionGroupCounts: Record<string, number> = {};
-  if (extensionGroupFilter && extensionTools.length > 0) {
-    for (const group of [...new Set(extensionTools.map((t) => t.group))].sort()) {
-      extensionGroupCounts[group] = extensionTools.filter((t) => t.group === group).length;
+  if (activeExtensionTools.length > 0) {
+    for (const group of [...new Set(activeExtensionTools.map((t) => t.group))].sort()) {
+      extensionGroupCounts[group] = activeExtensionTools.filter((t) => t.group === group).length;
     }
   }
 
