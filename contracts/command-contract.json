@@ -1406,6 +1406,36 @@
         "runtime-target",
         "play-mode-session"
       ]
+    },
+    {
+      "bridgeCommand": "context.list",
+      "group": "context",
+      "command": "list",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 10000
+    },
+    {
+      "bridgeCommand": "context.describe",
+      "group": "context",
+      "command": "describe",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 10000
+    },
+    {
+      "bridgeCommand": "context.read",
+      "group": "context",
+      "command": "read",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 10000
     }
   ]
 }

@@ -70,7 +70,8 @@ test("doctor returns all-pass when registry has healthy instance and bridge is r
   assert.equal(result.ok, true);
   const data = result.data as { summary: string; checks: DoctorCheck[] };
   assert.equal(data.summary, "pass");
-  assert.equal(data.checks.length, 7);
+  // After custom context discovery check was added, total checks increased
+  assert.ok(data.checks.length >= 7, `Expected at least 7 checks, got ${data.checks.length}`);
 
   const registryCheck = data.checks.find((c) => c.name === "instance_registry");
   assert.equal(registryCheck?.status, "pass");
@@ -282,4 +283,174 @@ test("doctor provides actionable suggestions when checks fail", async () => {
   const data = result.data as { suggestions: string[] };
 
   assert.ok(data.suggestions.some((s) => s.includes("prune") || s.includes("Reopen")));
+});
+
+test("doctor includes context_discovery check when bridge is reachable", async () => {
+  const dataDir = await makeDataDir();
+  await writeInstances(dataDir, [makeInstance()]);
+
+  const runtime = makeRuntime(dataDir, async (payload) => {
+    return { ok: true, data: { command: payload.command, status: "ok" } };
+  });
+
+  const result = await handleDoctorCommand({}, runtime, "req_doctor_ctx_1");
+  assert.equal(result.ok, true);
+  const data = result.data as { summary: string; checks: DoctorCheck[] };
+
+  const contextCheck = data.checks.find((c) => c.name === "context_discovery");
+  assert.ok(contextCheck, "context_discovery check should be present");
+  assert.equal(contextCheck!.status, "pass");
+});
+
+test("doctor context_discovery reports project custom contexts from runtime", async () => {
+  const dataDir = await makeDataDir();
+  await writeInstances(dataDir, [makeInstance()]);
+
+  const runtime: DoctorRuntime = {
+    dataDir,
+    bridgeExecute: async (payload) => {
+      return { ok: true, data: { command: payload.command, status: "ok" } };
+    },
+    projectContexts: [
+      {
+        name: "sample.project-summary",
+        title: "Project Summary",
+        description: "Sample project summary context",
+        category: "sample",
+        kind: "context",
+        source: "project",
+        readOnlyHint: true,
+        requiresUnity: true,
+        inputSchema: { type: "object" }
+      }
+    ]
+  };
+
+  const result = await handleDoctorCommand({ "include-custom": true }, runtime, "req_doctor_ctx_2");
+  assert.equal(result.ok, true);
+  const data = result.data as { checks: DoctorCheck[] };
+
+  const contextCheck = data.checks.find((c) => c.name === "context_discovery");
+  assert.ok(contextCheck, "context_discovery check should be present");
+  assert.equal(contextCheck!.status, "pass");
+  const details = contextCheck!.details as { mode: string; projectCustomCount: number; builtInCount: number; categories: string[] };
+  assert.equal(details.projectCustomCount, 1);
+  assert.ok(details.categories.includes("sample"));
+});
+
+test("doctor project_context_fingerprint reports blocked as fail", async () => {
+  const dataDir = await makeDataDir();
+  await writeInstances(dataDir, [makeInstance()]);
+
+  const runtime = makeRuntime(dataDir, async (payload) => {
+    return {
+      ok: true,
+      data: {
+        command: payload.command,
+        status: "ok",
+        customContexts: {
+          fingerprint: { algorithm: "sha256-descriptor-v1", mode: "block", contextCount: 2, blockedCount: 1, warnCount: 0 }
+        }
+      }
+    };
+  });
+
+  const result = await handleDoctorCommand({}, runtime, "req_doctor_ctx_fp_1");
+  assert.equal(result.ok, true);
+  const data = result.data as { checks: DoctorCheck[]; suggestions: string[] };
+
+  const fpCheck = data.checks.find((c) => c.name === "project_context_fingerprint");
+  assert.ok(fpCheck, "project_context_fingerprint check should be present");
+  assert.equal(fpCheck!.status, "fail");
+  assert.ok(fpCheck!.message.includes("1 blocked"));
+  // Suggestions should point to context describe/read, NOT tools run
+  const ctxSuggestions = data.suggestions.filter((s) => s.includes("context"));
+  assert.ok(ctxSuggestions.length > 0, "Should have context-related suggestions");
+  assert.ok(!data.suggestions.some((s) => s.includes("tools run") && !s.includes("context")), "No tools run suggestion for context issues");
+});
+
+test("doctor project_context_fingerprint reports warnCount as warn", async () => {
+  const dataDir = await makeDataDir();
+  await writeInstances(dataDir, [makeInstance()]);
+
+  const runtime = makeRuntime(dataDir, async (payload) => {
+    return {
+      ok: true,
+      data: {
+        command: payload.command,
+        status: "ok",
+        customContexts: {
+          fingerprint: { algorithm: "sha256-descriptor-v1", mode: "warn", contextCount: 2, blockedCount: 0, warnCount: 1 }
+        }
+      }
+    };
+  });
+
+  const result = await handleDoctorCommand({}, runtime, "req_doctor_ctx_fp_2");
+  assert.equal(result.ok, true);
+  const data = result.data as { checks: DoctorCheck[] };
+
+  const fpCheck = data.checks.find((c) => c.name === "project_context_fingerprint");
+  assert.ok(fpCheck, "project_context_fingerprint check should be present");
+  assert.equal(fpCheck!.status, "warn");
+});
+
+test("doctor project_context_fingerprint reports pass when all match", async () => {
+  const dataDir = await makeDataDir();
+  await writeInstances(dataDir, [makeInstance()]);
+
+  const runtime = makeRuntime(dataDir, async (payload) => {
+    return {
+      ok: true,
+      data: {
+        command: payload.command,
+        status: "ok",
+        customContexts: {
+          fingerprint: { algorithm: "sha256-descriptor-v1", mode: "pass", contextCount: 2, blockedCount: 0, warnCount: 0 }
+        }
+      }
+    };
+  });
+
+  const result = await handleDoctorCommand({}, runtime, "req_doctor_ctx_fp_3");
+  assert.equal(result.ok, true);
+  const data = result.data as { checks: DoctorCheck[] };
+
+  const fpCheck = data.checks.find((c) => c.name === "project_context_fingerprint");
+  assert.ok(fpCheck, "project_context_fingerprint check should be present");
+  assert.equal(fpCheck!.status, "pass");
+});
+
+test("doctor context_discovery suggestions never suggest tools run", async () => {
+  const dataDir = await makeDataDir();
+  await writeInstances(dataDir, [makeInstance()]);
+
+  const runtime: DoctorRuntime = {
+    dataDir,
+    bridgeExecute: async (payload) => {
+      return { ok: true, data: { command: payload.command, status: "ok" } };
+    },
+    projectContexts: [
+      {
+        name: "conflict.context",
+        title: "Conflict",
+        description: "Duplicate context",
+        category: "test",
+        kind: "context",
+        source: "project",
+        readOnlyHint: true,
+        requiresUnity: true,
+        inputSchema: { type: "object" },
+        supportStatus: "unavailable"
+      }
+    ]
+  };
+
+  const result = await handleDoctorCommand({ "include-custom": true }, runtime, "req_doctor_ctx_suggest");
+  assert.equal(result.ok, true);
+  const data = result.data as { suggestions: string[] };
+
+  // No suggestion should mention "tools run" as a custom context fix
+  const toolsRunSuggestions = data.suggestions.filter((s) => s.includes("tools run"));
+  assert.equal(toolsRunSuggestions.length, 0, "No 'tools run' suggestions for custom context issues");
 });

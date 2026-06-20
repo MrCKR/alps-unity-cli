@@ -9,6 +9,7 @@
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
 import { getString } from "./args.js";
 import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
+import { discoverProjectContexts, shouldDiscoverContexts, type ProjectContextRuntime, type ContextDescriptor } from "./project-context-discovery.js";
 import { builtinToolGroups, builtinToolMetadata, type ToolMetadata } from "./tools/metadata/index.js";
 import { supportStatusForTool } from "./tools/metadata/status.js";
 import { failure, success } from "./output.js";
@@ -16,7 +17,7 @@ import type { CliResult } from "./types.js";
 
 export async function handleCapabilitiesCommand(
   flags: Record<string, string | boolean>,
-  runtime: BridgeRuntime & ProjectToolRuntime,
+  runtime: BridgeRuntime & ProjectToolRuntime & ProjectContextRuntime,
   requestId: string
 ): Promise<CliResult> {
   const jsonFormat = getString(flags, "format") === "json" || getBoolean(flags, "json");
@@ -33,9 +34,25 @@ export async function handleCapabilitiesCommand(
     }
   }
 
-  const staticCapabilities = buildStaticCapabilities(projectTools);
+  // Custom context discovery
+  let projectContextDiagnostics: Record<string, unknown> | undefined;
+  let projectContexts: ContextDescriptor[] = [];
+  if (shouldDiscoverContexts(flags, runtime)) {
+    const contextDiscovery = await discoverProjectContexts(flags, runtime, requestId, { requireBridge: false });
+    if (contextDiscovery.ok) {
+      projectContexts = contextDiscovery.contexts;
+      const customContexts = projectContexts.filter((c) => c.source === "project");
+      const categories = [...new Set(customContexts.map((c) => c.category))];
+      projectContextDiagnostics = { mode: contextDiscovery.mode, count: customContexts.length, categories, builtInCount: contextDiscovery.builtInCount };
+    } else {
+      projectContextDiagnostics = { mode: "error", code: contextDiscovery.error?.code, message: contextDiscovery.error?.message };
+    }
+  }
+
+  const staticCapabilities = buildStaticCapabilities(projectTools, projectContexts);
 
   let runtimeCapabilities: Record<string, unknown> | undefined;
+  let bridgeCustomContexts: Record<string, unknown> | undefined;
   const endpoint = getString(flags, "bridge-endpoint") ?? runtime.bridgeEndpoint ?? process.env.UNITY_CLI_BRIDGE_ENDPOINT;
 
   if (runtime.bridgeExecute || endpoint) {
@@ -49,6 +66,11 @@ export async function handleCapabilitiesCommand(
       );
       if (bridgeResult.ok) {
         runtimeCapabilities = bridgeResult.data as Record<string, unknown>;
+        // Extract customContexts from bridge preflight for runtime section
+        const customCtx = runtimeCapabilities.customContexts;
+        if (customCtx && typeof customCtx === "object") {
+          bridgeCustomContexts = customCtx as Record<string, unknown>;
+        }
       }
     } catch {
       // Bridge not reachable — runtime capabilities stay undefined
@@ -61,7 +83,9 @@ export async function handleCapabilitiesCommand(
     requiresUnity: false,
     static: staticCapabilities,
     ...(projectToolDiagnostics ? { projectTools: projectToolDiagnostics } : {}),
+    ...(projectContextDiagnostics ? { customContexts: projectContextDiagnostics } : {}),
     ...(runtimeCapabilities ? { runtime: runtimeCapabilities } : {}),
+    ...(bridgeCustomContexts ? { runtimeCustomContexts: bridgeCustomContexts } : {}),
     ...(runtimeCapabilities ? { bridgeEndpoint: endpoint ?? runtime.bridgeEndpoint } : {})
   };
 
@@ -72,7 +96,7 @@ function getBoolean(flags: Record<string, string | boolean>, name: string): bool
   return flags[name] === true || flags[name] === "true";
 }
 
-function buildStaticCapabilities(projectTools: ToolMetadata[] = []): Record<string, unknown> {
+function buildStaticCapabilities(projectTools: ToolMetadata[] = [], projectContexts: ContextDescriptor[] = []): Record<string, unknown> {
   const builtinTools = builtinToolMetadata();
   const tools = [...builtinTools, ...projectTools];
   const groups = [...new Set([...builtinToolGroups(), ...projectTools.map((tool) => tool.group)])].sort();
@@ -127,7 +151,9 @@ function buildStaticCapabilities(projectTools: ToolMetadata[] = []): Record<stri
       builtinDocs: true,
       requestEnvelope: true,
       responseEnvelope: true,
-      errorCode: true
+      errorCode: true,
+      customContextDescriptor: true,
+      contextFingerprint: true
     }
   };
 }

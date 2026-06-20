@@ -13,6 +13,7 @@ import { handleInit, handlePackage } from "./cli-commands/package.js";
 import { handleTest } from "./cli-commands/test.js";
 import type { CliCommandModule, Runtime } from "./cli-commands/types.js";
 import { startUnityJob, summarizeJob } from "./cli-commands/unity-job.js";
+import { handleContextCommand } from "./cli-commands/context.js";
 import { handleCapabilitiesCommand } from "./capabilities.js";
 import { handleDoctorCommand } from "./doctor.js";
 import { handleInstancesCommand, handleTargetCommand } from "./instances.js";
@@ -37,6 +38,7 @@ const CLI_COMMANDS = new Map<string, CliCommandModule>([
   ["target", { run: ({ command, args, flags, runtime, requestId }) => handleTargetCommand(command, args, flags, runtime.dataDir, requestId) }],
   ["code", { run: ({ command, flags, runtime, requestId }) => handleCode(command, flags, runtime, requestId) }],
   ["tools", { run: ({ command, args, flags, runtime, requestId }) => handleToolsCommand(command, args, flags, runtime, requestId) }],
+  ["context", { run: ({ command, args, flags, runtime, requestId }) => handleContextCommand(command, args, flags, runtime, requestId) }],
   ["capabilities", { run: ({ flags, runtime, requestId }) => handleCapabilitiesCommand(flags, runtime, requestId) }],
   ["docs", { run: ({ command, args, flags, runtime, requestId }) => handleDocsCommand(command, args, flags, runtime.dataDir, requestId, runtime) }],
   ["reflect", { run: ({ command, args, flags, runtime, requestId }) => handleReflectCommand(command, args, flags, runtime.dataDir, requestId) }],
@@ -204,6 +206,10 @@ function help(): Record<string, unknown> {
       "tools search <keyword> [--format json|text]",
       "tools describe <tool>",
       "tools run <name> [--input <json>] [--input-file <path>] [--timeout-ms <n>] [--fingerprint-mode warn|block] [--artifact-dir <path>] [--runtime] [--target <instance>]",
+      "context list [--include-custom] [--bridge-endpoint <url>]",
+      "context describe <name> [--bridge-endpoint <url>]",
+      "context read <name> [--input <json>] [--fingerprint-mode warn|block] [--bridge-endpoint <url>]",
+      "context read <name> [--project-path <path>] [--bridge-endpoint <url>]",
       "capabilities [--json] [--bridge-endpoint <url>]",
       "code exec (--file <path>|--stdin|--code <text>) [--channel live|batchmode] [--refs <list>] [--define <symbol>] [--args <json>] [--timeout-ms <n>] [--job] [--artifact-dir <path>]",
       "scene active [规划中]",

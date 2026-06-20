@@ -52,6 +52,7 @@ namespace UnityCli
             w.RawValue(CapabilityJson("script", ScriptCommands));
             w.RawValue(CapabilityJson("code", CodeCommands));
             w.RawValue(CapabilityJson("project-tool", ProjectToolCommands));
+            w.RawValue(CapabilityJson("context", ContextCommands));
             w.EndArray();
             return w.ToString();
         }
