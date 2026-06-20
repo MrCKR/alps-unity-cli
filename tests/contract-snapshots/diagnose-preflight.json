@@ -17,6 +17,9 @@
     "customTools": {
       "fingerprint": "<string>"
     },
+    "customContexts": {
+      "fingerprint": "<object: { algorithm, mode, contextCount, blockedCount, warnCount, contexts[] }>"
+    },
     "checks": "<array of {name: string, ok: boolean}>",
     "logPath": "<string>"
   }

@@ -690,4 +690,34 @@ test("SampleContext read handler only reads, no write operations", async () => {
       `SampleContext must not contain write operation: ${token}`
     );
   }
-});;
+});
+
+// ─── DiagnosePreflightJson customContexts contract tests ────────────────────
+
+test("DiagnosePreflightJson calls DiscoverProjectContexts and outputs customContexts with fingerprint", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const diagnose = await readFile(new URL("../unitypkg/Editor/Commands/DiagnoseCommands.cs", import.meta.url), "utf8");
+
+  // DiagnosePreflightJson must call DiscoverProjectContexts
+  assert.match(diagnose, /DiscoverProjectContexts\(\)/, "DiagnosePreflightJson must call DiscoverProjectContexts()");
+
+  // Must output customContexts object with fingerprint
+  assert.match(diagnose, /PropObject\("customContexts"/, "DiagnosePreflightJson must output customContexts object");
+  assert.match(diagnose, /PropRaw\("fingerprint",\s*ProjectContextFingerprintSummaryJson\(\)/, "customContexts must contain fingerprint from ProjectContextFingerprintSummaryJson()");
+
+  // Must include projectContextFingerprint in checks array
+  assert.match(diagnose, /projectContextFingerprint/, "DiagnosePreflightJson must include projectContextFingerprint in checks");
+});
+
+test("DiagnosePreflightJson customContexts fingerprint fields match TS doctor expectations", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const registry = await readFile(new URL("../unitypkg/Editor/ProjectContexts/ProjectContextRegistry.cs", import.meta.url), "utf8");
+
+  // ProjectContextFingerprintSummaryJson must output the fields that TS doctor reads:
+  // contextCount, blockedCount, warnCount, mode, algorithm
+  assert.match(registry, /Prop\("algorithm"/, "Fingerprint summary must include algorithm");
+  assert.match(registry, /Prop\("mode"/, "Fingerprint summary must include mode");
+  assert.match(registry, /Prop\("contextCount"/, "Fingerprint summary must include contextCount");
+  assert.match(registry, /Prop\("blockedCount"/, "Fingerprint summary must include blockedCount");
+  assert.match(registry, /Prop\("warnCount"/, "Fingerprint summary must include warnCount");
+});
