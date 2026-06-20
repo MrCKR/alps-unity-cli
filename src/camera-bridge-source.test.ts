@@ -621,6 +621,7 @@ test("Unity Bridge C# string literals stay balanced", async () => {
   const source = await readUnityBridgeSources();
   for (const [index, line] of source.split(/\r?\n/).entries()) {
     let inString = false;
+    let inVerbatim = false;
     let inChar = false;
     let escaped = false;
     for (let offset = 0; offset < line.length; offset += 1) {
@@ -629,8 +630,20 @@ test("Unity Bridge C# string literals stay balanced", async () => {
         escaped = false;
         continue;
       }
-      if (!inString && !inChar && char === "/" && line[offset + 1] === "/") {
+      if (!inString && !inChar && !inVerbatim && char === "/" && line[offset + 1] === "/") {
         break;
+      }
+      // C# verbatim strings: @"..." — backslash is literal, "" is an escaped quote
+      if (inVerbatim) {
+        if (char === '"') {
+          if (line[offset + 1] === '"') {
+            offset += 1; // skip escaped quote pair
+          } else {
+            inVerbatim = false;
+            inString = false;
+          }
+        }
+        continue;
       }
       if (char === "\\" && (inString || inChar)) {
         escaped = true;
@@ -641,7 +654,12 @@ test("Unity Bridge C# string literals stay balanced", async () => {
         continue;
       }
       if (char === '"' && !inChar) {
-        inString = !inString;
+        if (!inString && offset > 0 && line[offset - 1] === "@") {
+          inVerbatim = true;
+          inString = true;
+        } else {
+          inString = !inString;
+        }
       }
     }
     assert.equal(inString, false, `unterminated string literal on UnityCliBridge.cs:${index + 1}`);
