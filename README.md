@@ -1,21 +1,542 @@
 # unity_cli
 
-Windows-first npm CLI for Unity CLI automation, published as the npm package `@alps_ckr/unity_cli` and invoked through the `unity_cli` binary. The current scope follows the frozen ALP-22 direction: independent CLI implementation, Windows-only runtime target, npm-first installation, and fully open capabilities without default risk gates or secondary confirmation prompts.
+CLI-first Unity 自动化工具，不是 MCP server。通过 `unity_cli` 二进制命令行直接驱动 Unity Editor，无需额外协议层。
 
-## Requirements
+npm 包名：`@alps_ckr/unity_cli`  
+运行环境：Windows + Node.js 20+  
+当前方向：ALP-22 冻结决策 — 独立 CLI 实现、Windows-only、npm-first 安装、开放能力无默认风险门控。
 
-- Windows shell environment
-- Node.js 20 or newer
-- npm global install support
-
-## Install and Build
+## 快速开始
 
 ```powershell
+# 安装
 npm install -g @alps_ckr/unity_cli
+
+# 初始化项目（安装 Bridge 包 + Skill 文件）
+unity_cli init --project C:\path\MyProject
+
+# 查看帮助
 unity_cli --help
+unity_cli --version
 ```
 
-For local development:
+## 核心使用流程
+
+### 1. 发现目标实例
+
+```powershell
+# 列出运行中的 Unity 实例
+unity_cli instances list
+
+# 设置活动目标
+unity_cli target set <instanceId>
+# 或使用别名
+unity_cli target alias set <instanceId> my-project
+unity_cli target set my-project
+```
+
+### 2. 发现工具能力（group-first 路径）
+
+推荐按组逐层发现，避免一次展开全量工具：
+
+```powershell
+# 第一步：查看工具分组
+unity_cli tools groups
+
+# 第二步：按组查看工具摘要
+unity_cli tools list --group camera
+# 或搜索关键词
+unity_cli tools search screenshot
+
+# 第三步：查看工具完整描述（执行前必做）
+unity_cli tools describe camera.screenshot
+
+# 第四步：执行工具
+unity_cli tools run camera.screenshot --input '{"target":"Main Camera","output":"Artifacts/shot.png"}'
+```
+
+### 3. 获取只读项目信息
+
+当前版本通过 `docs` 和 `reflect` 命令访问离线文档和反射缓存：
+
+```powershell
+# 列出内置文档主题
+unity_cli docs
+
+# 查看特定主题
+unity_cli docs topic tool-discovery
+
+# 离线 Unity API 文档
+unity_cli docs get UnityEngine.Camera
+unity_cli docs search "Render Pipeline"
+
+# 离线类型反射
+unity_cli reflect type UnityEngine.Camera
+unity_cli reflect member UnityEngine.Camera.fieldOfView
+```
+
+> **注意**：独立的 `context list / context describe / context read` 命令正在规划中（P3 阶段）。
+> 当前可通过 `tools list` 中 `readOnlyHint: true` 的工具以及 `docs`/`reflect` 命令获取只读项目状态。
+
+### 4. 项目自定义工具
+
+Unity 项目可通过 C# `[UnityCliTool]` 特性注册自定义工具：
+
+```powershell
+# 发现项目自定义工具（需要 Bridge 连接）
+unity_cli tools list --include-custom
+
+# 查看自定义工具描述
+unity_cli tools describe my.custom-tool
+
+# 执行自定义工具
+unity_cli tools run my.custom-tool --input '{"key":"value"}'
+```
+
+> **注意**：独立的 `extensions list / extensions install / extensions remove / extensions doctor` 命令正在规划中（P5 阶段）。
+> 当前扩展包通过 `init` 命令安装 Bridge 包来启用，项目工具通过 `--include-custom` 标志发现。
+
+### 5. 诊断与健康检查
+
+```powershell
+# 运行完整诊断
+unity_cli doctor
+
+# 诊断预检（通过 Bridge）
+unity_cli diagnose preflight
+```
+
+## 安全边界
+
+| 规则 | 说明 |
+|------|------|
+| Tool 可有副作用 | `destructiveHint: true` 的工具需要 `--yes` 确认或 `--dry-run` 预览 |
+| Context 必须只读 | `readOnlyHint: true` 的工具不会修改 Unity 状态 |
+| Extension 不能绕过 descriptor/envelope | 项目工具必须可描述、可审计、可阻断 |
+| fingerprint mismatch 默认 block | 自定义工具的 handler 代码与 descriptor 指纹不匹配时，默认阻止执行 |
+
+## 安装与构建
+
+```powershell
+# 全局安装
+npm install -g @alps_ckr/unity_cli
+
+# 本地开发
+npm install
+npm run build
+npm test
+npm link
+```
+
+## 输出格式
+
+所有命令输出统一 JSON envelope：
+
+```json
+{
+  "ok": true,
+  "requestId": "req-xxx",
+  "data": { ... }
+}
+```
+
+错误输出：
+
+```json
+{
+  "ok": false,
+  "requestId": "req-xxx",
+  "error": {
+    "code": "E_TARGET_AMBIGUOUS",
+    "message": "...",
+    "transient": false,
+    "next_actions": ["Run unity_cli instances list to discover targets."],
+    "retry_after_ms": 0
+  }
+}
+```
+
+## Job 模型
+
+长时间运行的 Unity batchmode 操作在 `%LOCALAPPDATA%\UnityCli` 下创建持久 job。
+
+Job 状态：`queued` → `running` → `succeeded` / `failed` / `cancelled` / `timeout`
+
+```powershell
+unity_cli job status --id <jobId>
+unity_cli job logs --id <jobId> --tail 100
+unity_cli job cancel --id <jobId>
+```
+
+## 命令支持状态
+
+| 状态 | 含义 |
+|------|------|
+| 已路由可执行 | 通过 Bridge `POST /bridge/execute` 实时执行 |
+| 已路由可执行 + 可 batch/job | 支持 Bridge 实时 + batch/job 双通道 |
+| 仅 batch/job | 通过 Unity batchmode/job 执行 |
+| 仅 CLI 离线 | 本地 CLI 执行，无需 Unity 连接 |
+| 规划中 | CLI 命令合约已声明，Bridge 处理程序待实现 |
+
+## 全部命令参考
+
+### 工具发现与执行
+
+```powershell
+# 列出所有工具（默认子命令）
+unity_cli tools list
+
+# 按组过滤
+unity_cli tools list --group camera
+
+# 包含项目自定义工具
+unity_cli tools list --include-custom
+
+# 列出工具分组
+unity_cli tools groups
+
+# 搜索工具
+unity_cli tools search <keyword>
+unity_cli tools search screenshot --include-custom
+
+# 工具完整描述
+unity_cli tools describe <tool-name>
+
+# 执行工具
+unity_cli tools run <tool-name> --input '<json>'
+unity_cli tools run <tool-name> --input-file params.json
+unity_cli tools run <tool-name> --stdin
+```
+
+### 场景与截图
+
+```powershell
+unity_cli scene hierarchy --page-size 100
+unity_cli scene active
+unity_cli scene screenshot <output-path> --width 1920 --height 1080
+unity_cli scene screenshot <output-path> --format jpg --quality 90 --overwrite
+
+unity_cli camera list
+unity_cli camera info "Main Camera"
+unity_cli camera screenshot "Main Camera" --output shot.png --width 1920 --height 1080
+
+unity_cli screenshot capture <output-path>
+```
+
+### 资产与预制体
+
+```powershell
+unity_cli asset search <keyword> --type Prefab
+unity_cli asset info <path>
+unity_cli asset create <path> --content '{}' --overwrite
+unity_cli asset delete <path> --yes
+unity_cli asset duplicate <path> --to <new-path>
+unity_cli asset move <path> --to <new-path>
+unity_cli asset rename <path> --name <new-name>
+unity_cli asset import <source> --project <project-path>
+
+unity_cli prefab info <path>
+unity_cli prefab create <source> --path <prefab-path>
+unity_cli prefab modify <path> --name <new-name>
+unity_cli prefab stage-open <path>
+unity_cli prefab stage-save
+unity_cli prefab stage-close --save
+unity_cli prefab hierarchy <path> --page-size 100
+```
+
+### 材质、图形、物理
+
+```powershell
+unity_cli material info <path>
+unity_cli material create <path> --shader Standard
+unity_cli material assign --target <go> --material <path> --slot 0
+unity_cli material set <path> --property _Color --value "#ff00ffff" --type color
+
+unity_cli graphics quality --quality-level 2
+unity_cli graphics settings --anti-aliasing 4
+unity_cli graphics pipeline
+unity_cli graphics volume "Global Volume"
+unity_cli graphics screenshot <output-path>
+
+unity_cli physics settings
+unity_cli physics raycast --origin-x 0 --origin-y 2 --origin-z -5 --direction-z 1 --distance 100
+unity_cli physics simulation --steps 3 --delta-time 0.02 --simulate
+```
+
+### 动画、VFX、Shader、纹理
+
+```powershell
+unity_cli animation clip <path>
+unity_cli animation state <target>
+unity_cli animation play <target> --state Run
+unity_cli animation stop <target>
+
+unity_cli vfx graph <path>
+unity_cli vfx effect <target> --add --graph <vfx-path>
+
+unity_cli shader info <path>
+unity_cli shader read <path>
+unity_cli shader create <path> --content-file <source>
+unity_cli shader update <path> --content-file <source>
+
+unity_cli texture info <path>
+unity_cli texture create <path> --source <image>
+unity_cli texture sprite <path> --pixels-per-unit 128
+unity_cli texture import-settings <path> --readable false --mipmap false
+```
+
+### UI
+
+```powershell
+unity_cli ui canvas-create <name>
+unity_cli ui text-create <name> --parent <canvas> --text "Hello"
+unity_cli ui button-create <name> --parent <canvas> --label "Click"
+unity_cli ui image-create <name> --parent <canvas> --sprite <sprite-path>
+unity_cli ui document-create --name <name> --uxml <uxml-path> --uss <uss-path>
+unity_cli ui document-info <target>
+unity_cli ui hierarchy <target> --page-size 100
+```
+
+### GameObject 与组件
+
+```powershell
+unity_cli go find <keyword>
+unity_cli go inspect <target>
+unity_cli go create <name>
+unity_cli go modify <target>
+unity_cli go delete <target> --yes
+
+unity_cli component add --target <go> --type <component>
+unity_cli component remove --target <go> --type <component> --yes
+unity_cli component set --target <go> --type <component> --property <name> --value <value>
+```
+
+### 编辑器控制
+
+```powershell
+unity_cli editor state
+unity_cli editor play --timeout-ms 7000
+unity_cli editor pause
+unity_cli editor stop --timeout-ms 7000
+unity_cli editor menu <menu-path>
+unity_cli editor console --count 50
+unity_cli editor refresh --compile --wait
+```
+
+### 代码执行
+
+```powershell
+unity_cli code exec --file <script.csx>
+unity_cli code exec --stdin --channel live
+unity_cli code exec --code "return UnityEditor.EditorApplication.isPlaying;"
+unity_cli code exec --channel batchmode --project <path> --unity <unity-exe> --wait
+```
+
+### 包管理
+
+```powershell
+unity_cli package list --project <path>
+unity_cli package info <package-name> --project <path>
+unity_cli package search <keyword>
+unity_cli package install <package@version> --project <path> --unity <unity-exe> --wait
+unity_cli package remove <package-name> --project <path> --unity <unity-exe> --wait
+unity_cli package resolve --project <path> --unity <unity-exe> --wait
+unity_cli package registry get --project <path>
+unity_cli package registry set --url <url> --project <path>
+unity_cli package scoped-registry add --name <name> --url <url> --scope <scope> --project <path>
+```
+
+### 测试与构建
+
+```powershell
+unity_cli test run --platform EditMode --wait --project <path> --unity <unity-exe>
+unity_cli test poll --id <jobId>
+unity_cli test logs --id <jobId> --tail 100
+unity_cli test cancel --id <jobId>
+
+unity_cli build run --target StandaloneWindows64 --output <output-path> --wait
+unity_cli build status --id <jobId>
+unity_cli build logs --id <jobId> --tail 100
+unity_cli build cancel --id <jobId>
+```
+
+### Batch 自动化
+
+```powershell
+unity_cli batch schema
+unity_cli batch run <batch-file.json>
+unity_cli batch run <file> --preflight --parallel 4 --fail-fast false
+```
+
+### 实例与目标
+
+```powershell
+unity_cli instances list
+unity_cli instances prune
+
+unity_cli target get
+unity_cli target set <id|alias>
+unity_cli target clear
+unity_cli target alias set <instanceId> <alias>
+unity_cli target alias unset <alias>
+unity_cli target alias list
+```
+
+### 诊断与能力
+
+```powershell
+unity_cli doctor
+unity_cli diagnose preflight
+unity_cli capabilities
+```
+
+### 离线文档与反射
+
+```powershell
+unity_cli docs
+unity_cli docs topic <topic>
+unity_cli docs get <api-name>
+unity_cli docs search <query>
+
+unity_cli reflect type <type-name>
+unity_cli reflect member <type.member>
+unity_cli reflect search <query>
+```
+
+## 初始化（init）
+
+`init` 安装捆绑的 `com.unity_cli` Bridge 包到目标 Unity 项目，并可选安装 AI Agent Skill 文件。
+
+| 标志 | 含义 |
+|------|------|
+| *(none)* | 安装/更新 Bridge 包（copy 模式） |
+| `--pkg-only` | 仅安装 Bridge 包，不安装 Skill |
+| `--skill-only --agent <agent>` | 仅安装 Skill 文件 |
+| `--check` | 检查安装状态，不修改项目 |
+| `--agent <pi\|claude\|.agent,...>` | 指定 Skill 安装目标 |
+
+```powershell
+# 完整安装
+unity_cli init --project C:\path\MyProject
+
+# 仅 Bridge 包
+unity_cli init --project C:\path\MyProject --pkg-only
+
+# 仅安装 Skill 到 pi
+unity_cli init --project C:\path\MyProject --skill-only --agent pi
+
+# 检查安装状态
+unity_cli init --check --project C:\path\MyProject --agent pi
+```
+
+## Unity Editor Bridge
+
+Bridge 包（`com.unity_cli`）在 Unity Editor 中提供 `POST /bridge/execute` HTTP 端点。CLI 通过此端点路由实时命令。
+
+Bridge 生命周期：
+1. `init` 安装 Bridge 包到 `Packages/com.unity_cli/`（copy 模式）
+2. Unity Editor 打开时自动启动 Bridge HTTP 服务
+3. CLI 通过 `instances list` 发现运行中的 Bridge 端点
+4. Bridge 自动向 CLI 注册实例（心跳机制）
+
+## 项目自定义工具（Custom Tools）
+
+Unity 项目 C# 代码通过 `[UnityCliTool]` 特性注册自定义工具：
+
+```csharp
+[UnityCliTool("my.editor-tool", Title = "My Editor Tool", Group = "custom")]
+public static class MyEditorTool
+{
+    public static object Execute(Dictionary<string, object> input)
+    {
+        // 工具实现
+        return new { result = "done" };
+    }
+}
+```
+
+特性参数：
+- `name`：工具唯一标识（如 `my.editor-tool`）
+- `Title`：人类可读标题
+- `Group`：工具分组（如 `custom`）
+- `Description`：工具描述
+- `ReadOnlyHint`：是否只读（默认 false）
+- `DestructiveHint`：是否有破坏性（默认 false）
+
+发现与执行：
+```powershell
+unity_cli tools list --include-custom
+unity_cli tools describe my.editor-tool
+unity_cli tools run my.editor-tool --input '{"key":"value"}'
+```
+
+### Editor Tool 与 Runtime Tool
+
+- **Editor Tool**：`target: "editor"`，在编辑器主线程执行，适合资产/场景/配置修改
+- **Runtime Tool**：`target: "runtime"`，需要 Play Mode 活跃，适合运行时域操作
+
+Runtime Tool 在非 Play Mode 时返回 `E_RUNTIME_NOT_READY`（transient error）。
+
+### 安全机制
+
+- **Descriptor**：每个工具必须有完整的 inputSchema/outputSchema
+- **Envelope**：所有输入输出必须通过统一 envelope 格式
+- **Fingerprint**：handler 代码 + descriptor 的 SHA256 指纹，mismatch 时默认阻止执行
+- **target-scoped availability**：工具可用性依赖目标实例和 Play Mode 状态
+- **禁止项**：不允许任意方法调用、反射 escape hatch、绕过 registry 直接执行
+
+## ProBuilder 扩展
+
+ProBuilder 命令需要 `com.unity.probuilder` 包：
+
+```powershell
+unity_cli probuilder shape --type Cube --position-x 0 --position-y 1 --position-z 0
+unity_cli probuilder create --type Cube
+unity_cli probuilder edit <target> --action Extrude --amount 0.5
+unity_cli probuilder csg --operation Union --target-a <a> --target-b <b> --yes
+```
+
+## 风险与破坏性工具
+
+`destructiveHint: true` 的工具执行前需要确认：
+
+```powershell
+# 预览（如工具支持 dry-run）
+unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --dry-run
+
+# 确认执行
+unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --yes
+```
+
+支持 `--dry-run` 的破坏性工具：`asset.delete`、`prefab.save`、`go.delete`、`component.remove`、`probuilder.csg` 等。
+
+架构敏感工具（`architectureSensitive: true`）包括所有 `profiler.*` 工具，修改前需审查 `frozenDecision` 字段。
+
+## 扩展能力概览
+
+| 扩展类型 | 当前状态 | 发现方式 |
+|----------|---------|---------|
+| 项目自定义 Tool (Editor) | ✅ 已实现 | `tools list --include-custom` |
+| 项目自定义 Tool (Runtime) | ✅ 已实现 | `tools list --include-custom`（Play Mode 下） |
+| 项目自定义 Context | 🔄 规划中（P3） | 待 `context` 命令实现 |
+| 扩展包管理 | 🔄 规划中（P5） | 待 `extensions` 命令实现 |
+| ProBuilder 扩展 | ✅ 已实现 | 自动包含（需要 com.unity.probuilder） |
+| Cinemachine/VFX/URP/HDRP 扩展 | 📋 Backlog（P8） | 待实现 |
+
+## 更多文档
+
+- [文档索引](docs/README.md) — 按主题组织的详细文档
+- [工具发现](docs/tool-discovery.md) — group-first 分层发现详解
+- [工具执行](docs/tool-execution.md) — tools run 执行通道详解
+- [安全边界](docs/safety-boundaries.md) — 风险模型与破坏性确认
+- [错误码](docs/error-codes.md) — 结构化错误与 next_actions
+- [可用性差异](docs/availability-differences.md) — 不同实例的工具有效性
+- [Target 与 Instance](docs/target-and-instance.md) — 目标选择与实例管理
+- [自定义工具指南](docs/custom-tools.md) — 项目侧 Tool 注册开发
+- [AI Agent Skill](skills/unity_cli/SKILL.md) — Agent 操作手册
+- [示例](examples/README.md) — 编辑器/运行时/自定义工具示例
+
+## 本地开发
 
 ```bash
 npm install
@@ -23,416 +544,8 @@ npm run build
 npm test
 npm link
 unity_cli --help
-unity_cli --version
 ```
 
-## Help Output
+## 许可证
 
-`unity_cli --help` prints the standard JSON envelope. The basic output starts with:
-
-```json
-{
-  "ok": true,
-  "data": {
-    "usage": "unity_cli <command> [options]",
-    "commands": [
-      "job status --id <jobId>",
-      "job logs --id <jobId> [--tail 100]",
-      "job describe --id <jobId>",
-      "job cancel --id <jobId>"},{
-    ]
-  }
-}
-```
-
-`unity_cli --version` prints the package version in the same envelope:
-
-```json
-{
-  "ok": true,
-  "data": {
-    "version": "0.1.0"
-  }
-}
-```
-
-## Job Model
-
-Long-running Unity batchmode operations create durable jobs under `%LOCALAPPDATA%\\UnityCli` on Windows. Every command emits stable JSON with `ok`, `requestId`, `data` or `error`. Package manifest operations also use the same envelope and can return either a terminal manifest update result or a Unity resolve job.
-
-Job statuses:
-
-- `queued`
-- `running`
-- `succeeded`
-- `failed`
-- `cancelled`
-- `timeout`
-
-## Commands
-
-### Command Support Status
-
-`unity_cli --help` and `tools list --format text` use the same support labels as this README:
-
-| 状态 | 含义 |
-|---|---|
-| 已路由可执行 | The bundled Unity Editor Bridge handles the command through `POST /bridge/execute`. |
-| 已路由可执行 + 可 batch/job | The command supports both live Bridge `/bridge/execute` and batch/job runner channels. |
-| 仅 batch/job | The command runs through Unity batchmode/job execution rather than the live Bridge request path. |
-| 仅 CLI 离线 | The command runs locally without a Unity Editor Bridge connection. |
-| 规划中 | The CLI contract is declared and reserved for future coverage outside the current bundled Bridge contract. |
-
-Current live Bridge commands are listed in the Unity Editor Bridge section and are validated against `contracts/command-contract.json`. Hybrid live Bridge plus batch/job commands include `profiler capture --job`, `code exec --channel batchmode`/`--job`, and `package install/remove/resolve` when Unity resolve is requested. ProBuilder commands are served by the ProBuilder extension package (`unity-cli-extension-probuilder`) with hybrid live Bridge plus `--job` support. Pure batch/job commands are `editor refresh`, `test run` and `build run`. CLI-only commands include `doctor`, `instances`, `tools`, `capabilities`, `docs`, `reflect`, local package manifest reads/edits, job status/log/cancel and batch orchestration.
-
-```powershell
-unity_cli camera list --bridge-endpoint http://127.0.0.1:47392
-unity_cli camera info "Main Camera" --bridge-endpoint http://127.0.0.1:47392
-unity_cli camera screenshot "Main Camera" --output Artifacts\main-camera.png --width 1920 --height 1080 --format png --transparent --overwrite --bridge-endpoint http://127.0.0.1:47392
-unity_cli scene screenshot Artifacts\scene-view.jpg --width 1280 --height 720 --format jpg --quality 90 --overwrite --bridge-endpoint http://127.0.0.1:47392
-unity_cli screenshot capture Artifacts\after.png --bridge-endpoint http://127.0.0.1:47392
-unity_cli instances list
-unity_cli instances prune
-unity_cli target alias set <instanceId> alps-main
-unity_cli target set alps-main
-unity_cli asset search Player --type Prefab --bridge-endpoint http://127.0.0.1:47392
-unity_cli asset info Assets\Prefabs\Player.prefab --bridge-endpoint http://127.0.0.1:47392
-unity_cli asset create Assets\Generated\config.json --content "{}" --overwrite --bridge-endpoint http://127.0.0.1:47392
-unity_cli asset duplicate Assets\Generated\config.json --to Assets\Generated\config-copy.json --bridge-endpoint http://127.0.0.1:47392
-unity_cli prefab info Assets\Prefabs\Player.prefab --bridge-endpoint http://127.0.0.1:47392
-unity_cli prefab create Player --path Assets\Prefabs\Player.prefab --overwrite --bridge-endpoint http://127.0.0.1:47392
-unity_cli prefab modify Assets\Prefabs\Player.prefab --name Hero --add-child Socket --bridge-endpoint http://127.0.0.1:47392
-unity_cli prefab stage-open Assets\Prefabs\Player.prefab --bridge-endpoint http://127.0.0.1:47392
-unity_cli prefab hierarchy Assets\Prefabs\Player.prefab --page-size 100 --bridge-endpoint http://127.0.0.1:47392
-unity_cli prefab stage-save --bridge-endpoint http://127.0.0.1:47392
-unity_cli prefab stage-close --save --bridge-endpoint http://127.0.0.1:47392
-unity_cli material info Assets\Materials\Player.mat --bridge-endpoint http://127.0.0.1:47392
-unity_cli material create Assets\Materials\Player.mat --shader Standard --overwrite --bridge-endpoint http://127.0.0.1:47392
-unity_cli material assign --target Player --material Assets\Materials\Player.mat --slot 0 --bridge-endpoint http://127.0.0.1:47392
-unity_cli material set Assets\Materials\Player.mat --property _Color --value "#ff00ffff" --type color --bridge-endpoint http://127.0.0.1:47392
-unity_cli graphics quality --quality-level 2 --v-sync-count 1 --bridge-endpoint http://127.0.0.1:47392
-unity_cli graphics settings --anti-aliasing 4 --shadow-distance 75 --bridge-endpoint http://127.0.0.1:47392
-unity_cli graphics pipeline --bridge-endpoint http://127.0.0.1:47392
-unity_cli graphics volume "Global Volume" --bridge-endpoint http://127.0.0.1:47392
-unity_cli graphics screenshot Artifacts\graphics.png --include-diagnostics --overwrite --bridge-endpoint http://127.0.0.1:47392
-unity_cli physics settings --gravity-y -9.81 --queries-hit-triggers false --bridge-endpoint http://127.0.0.1:47392
-unity_cli physics raycast --origin-x 0 --origin-y 2 --origin-z -5 --direction-z 1 --distance 100 --bridge-endpoint http://127.0.0.1:47392
-unity_cli physics simulation --steps 3 --delta-time 0.02 --simulate --bridge-endpoint http://127.0.0.1:47392
-unity_cli animation clip Assets\Animations\Player.anim --create --overwrite --frame-rate 60 --bridge-endpoint http://127.0.0.1:47392
-unity_cli animation state Player --layer 0 --bridge-endpoint http://127.0.0.1:47392
-unity_cli animation play Player --state Run --layer 0 --normalized-time 0 --bridge-endpoint http://127.0.0.1:47392
-unity_cli animation stop Player --bridge-endpoint http://127.0.0.1:47392
-unity_cli vfx graph Assets\VFX\Explosion.vfx --create --overwrite --bridge-endpoint http://127.0.0.1:47392
-unity_cli vfx effect Effects\Emitter --graph Assets\VFX\Explosion.vfx --add --bridge-endpoint http://127.0.0.1:47392
-unity_cli shader info Assets\Shaders\Unlit.shader --bridge-endpoint http://127.0.0.1:47392
-unity_cli shader read Assets\Shaders\Unlit.shader --bridge-endpoint http://127.0.0.1:47392
-unity_cli shader create Assets\Shaders\Generated.shader --content-file .\Generated.shader --overwrite --bridge-endpoint http://127.0.0.1:47392
-unity_cli shader update Assets\Shaders\Unlit.shader --content-file .\Updated.shader --bridge-endpoint http://127.0.0.1:47392
-unity_cli texture info Assets\Textures\Icon.png --bridge-endpoint http://127.0.0.1:47392
-unity_cli texture create Assets\Textures\Icon.png --source C:\tmp\icon.png --overwrite --texture-type Sprite --bridge-endpoint http://127.0.0.1:47392
-unity_cli texture sprite Assets\Textures\Icon.png --pixels-per-unit 128 --pivot-x 0.5 --pivot-y 0.5 --bridge-endpoint http://127.0.0.1:47392
-unity_cli texture import-settings Assets\Textures\Icon.png --readable false --mipmap false --srgb true --bridge-endpoint http://127.0.0.1:47392
-unity_cli ui canvas/create HUD --bridge-endpoint http://127.0.0.1:47392
-unity_cli ui text/create Title --parent HUD --text "Start" --width 320 --height 80 --bridge-endpoint http://127.0.0.1:47392
-unity_cli ui button/create PlayButton --parent HUD --label "Play" --bridge-endpoint http://127.0.0.1:47392
-unity_cli ui image/create Logo --parent HUD --sprite Assets\UI\logo.png --bridge-endpoint http://127.0.0.1:47392
-unity_cli ui document/create --name MainUIDocument --uxml Assets\UI\Main.uxml --uss Assets\UI\Main.uss --panel-settings Assets\UI\Panel.asset --overwrite --bridge-endpoint http://127.0.0.1:47392
-unity_cli ui document/info MainUIDocument --bridge-endpoint http://127.0.0.1:47392
-unity_cli ui document/info Assets\UI\Main.uxml
-unity_cli ui hierarchy HUD --page-size 100 --bridge-endpoint http://127.0.0.1:47392
-unity_cli package --format text
-unity_cli package list --project C:\path\UnityProject
-unity_cli package info com.unity.textmeshpro --project C:\path\UnityProject
-unity_cli package search textmeshpro --registry https://packages.unity.com
-unity_cli package install com.acme.tool@1.2.3 --project C:\path\UnityProject --unity "C:\Program Files\Unity\Hub\Editor\2022.3.45f1\Editor\Unity.exe" --wait
-unity_cli package remove com.acme.tool --project C:\path\UnityProject --unity "C:\Program Files\Unity\Hub\Editor\2022.3.45f1\Editor\Unity.exe" --wait
-unity_cli package resolve --project C:\path\UnityProject --unity "C:\Program Files\Unity\Hub\Editor\2022.3.45f1\Editor\Unity.exe" --wait
-unity_cli package registry get --project C:\path\UnityProject
-unity_cli package registry set --url https://packages.unity.com --project C:\path\UnityProject
-unity_cli package scoped-registry add --name Acme --url https://registry.acme.test --scope com.acme --project C:\path\UnityProject
-unity_cli package scoped-registry list --project C:\path\UnityProject
-unity_cli tools list --include-custom --bridge-endpoint http://127.0.0.1:47392
-unity_cli tools groups --bridge-endpoint http://127.0.0.1:47392
-unity_cli tools search echo --include-custom --bridge-endpoint http://127.0.0.1:47392
-unity_cli tools describe sample.echo --bridge-endpoint http://127.0.0.1:47392
-unity_cli capabilities --bridge-endpoint http://127.0.0.1:47392
-unity_cli docs --format text
-unity_cli docs topic scene --format text
-unity_cli editor state --project C:\path\UnityProject
-unity_cli editor play --project C:\path\UnityProject --timeout-ms 7000
-unity_cli editor pause --project C:\path\UnityProject
-unity_cli editor stop --project C:\path\UnityProject --timeout-ms 7000
-unity_cli editor menu --project C:\path\UnityProject File/Save --timeout-ms 7000
-unity_cli code exec --file .\runtime-code.csx --project C:\path\UnityProject --bridge-endpoint http://127.0.0.1:47392
-unity_cli code exec --stdin --channel live --bridge-endpoint http://127.0.0.1:47392
-unity_cli code exec --code "return UnityEditor.EditorApplication.isPlaying;" --channel batchmode --project C:\path\UnityProject --unity "C:\Program Files\Unity\Hub\Editor\2022.3.45f1\Editor\Unity.exe" --wait
-unity_cli editor refresh --compile --wait --project C:\path\UnityProject --unity "C:\Program Files\Unity\Hub\Editor\2022.3.45f1\Editor\Unity.exe"
-unity_cli test run --platform EditMode --wait --project C:\path\UnityProject --unity "C:\Program Files\Unity\Hub\Editor\2022.3.45f1\Editor\Unity.exe"
-unity_cli test poll --id <jobId>
-unity_cli test logs --id <jobId> --tail 100
-unity_cli test cancel --id <jobId>
-unity_cli build run --target StandaloneWindows64 --output Builds\Windows\Game.exe --wait
-unity_cli build status --id <jobId>
-unity_cli build logs --id <jobId> --tail 100
-unity_cli build cancel --id <jobId>
-unity_cli job status --id <jobId>
-unity_cli job logs --id <jobId> --tail 100
-unity_cli job describe --id <jobId>
-unity_cli job cancel --id <jobId>
-```
-
-Use `--wait-timeout-ms <ms>` to limit synchronous waiting. Use `--timeout-ms <ms>` to time out the Unity batchmode process itself.
-
-`camera list` returns Camera summaries including hierarchy path, tag, enabled state, `targetTexture`, clear flags, projection, FOV/orthographic size and pixel dimensions. `camera info <target>` resolves by Camera name, hierarchy path or instance id. `camera screenshot <target>` and `scene screenshot` write PNG/JPG artifacts from the live Unity Editor Bridge and return `screenshotPath`, `artifactPath`, `format`, `width`, `height`, `requestId` and `logPath` in the shared envelope. Relative output paths are resolved under the Unity project root, output directories are created automatically, and existing files require `--overwrite`. Structured errors include `E_CAMERA_NOT_FOUND` for `camera info` when a target Camera cannot be resolved, `E_TARGET_NOT_FOUND` for `camera screenshot` when the target is empty or cannot be resolved, `E_SCENE_VIEW_NOT_AVAILABLE`, `E_OUTPUT_EXISTS`, `E_OUTPUT_PATH_REQUIRED`, `E_SCREENSHOT_FORMAT_UNSUPPORTED`, `E_IO_ERROR`, `E_UNITY_BUSY` and bridge connection diagnostics.
-
-`asset search <keyword>` pages AssetDatabase results by query/type/path. `asset info <path>` returns GUID, type, extension, folder flag and size. `asset create`, `asset import`, `asset modify`, `asset delete`, `asset duplicate`, `asset move` and `asset rename` perform AssetDatabase-backed project asset operations and return `plannedEffects`. `asset mkdir` remains a CLI alias for `asset create --type folder`. Structured errors include `E_ASSET_PATH_REQUIRED`, `E_ASSET_PATH_INVALID`, `E_ASSET_NOT_FOUND`, `E_ASSET_OUTPUT_EXISTS`, `E_ASSET_SOURCE_NOT_FOUND`, `E_ASSET_CONTENT_REQUIRED`, `E_ASSET_DELETE_FAILED`, `E_ASSET_DUPLICATE_FAILED`, `E_ASSET_MOVE_FAILED`, `E_ASSET_RENAME_FAILED` and `E_UNITY_BUSY`.
-
-`prefab info <path>` returns Prefab metadata including GUID, root name, asset type, `variant` base/source paths and GUIDs, `dependencies.items`, and `nestedPrefabs.items` rather than counts only. `prefab create <source> --path <path>` creates a Prefab from a scene GameObject target or copies an existing Prefab asset and returns `plannedEffects`. `prefab modify <path>` applies small asset edits such as root rename and direct child add/remove without opening a Prefab Stage. `prefab stage-open`, `prefab stage-save` and `prefab stage-close --save` manage Prefab Stage lifecycle through the live Unity Editor Bridge. `prefab hierarchy <path>` pages hierarchy items with `pageInfo`, component summaries, the same Prefab variant/dependency summary, `nestedPrefabs.items` and `logPath` to avoid blocking large Prefabs. Prefab paths must be `Assets/*.prefab`. Structured errors include `E_PREFAB_PATH_REQUIRED`, `E_PREFAB_PATH_INVALID`, `E_PREFAB_NOT_FOUND`, `E_ASSET_NOT_PREFAB`, `E_PREFAB_OUTPUT_EXISTS`, `E_PREFAB_MODIFY_NOOP`, `E_PREFAB_CHILD_EXISTS`, `E_PREFAB_CHILD_NOT_FOUND`, `E_PREFAB_DIRTY_CONFLICT`, `E_PREFAB_STAGE_NOT_OPEN`, `E_PREFAB_STAGE_MISMATCH` and `E_UNITY_BUSY`.
-
-`material info <path>` returns shader, keywords, ShaderUtil property metadata, current values, texture references, dependencies and `logPath`. `material create <path> --shader <name>` creates an `Assets/*.mat` Material and returns `plannedEffects`. `material assign --target <go> --material <path>` assigns to a Renderer shared material slot or a UI Graphic `material` property. `material set <path> --property <name> --value <value>` writes color (`#RRGGBB`, `#RRGGBBAA` or `r,g,b[,a]`), float/range, vector (`x,y,z,w`) and texture (`Assets/*` texture path or `null`) values according to the Shader property type. Structured errors include `E_MATERIAL_PATH_REQUIRED`, `E_MATERIAL_PATH_INVALID`, `E_MATERIAL_NOT_FOUND`, `E_SHADER_NOT_FOUND`, `E_MATERIAL_PROPERTY_NOT_FOUND`, `E_MATERIAL_PROPERTY_TYPE_MISMATCH`, `E_TARGET_AMBIGUOUS`, `E_MATERIAL_SLOT_INVALID`, `E_TEXTURE_NOT_FOUND` and `E_UNITY_BUSY`.
-
-`graphics quality` reads and updates `QualitySettings` values including quality level, v-sync, anti-aliasing, shadows, texture limits, LOD bias, realtime reflection probes and soft particles. `graphics settings` returns GraphicsSettings and render pipeline summaries, can clear to built-in pipeline or set an `Assets/*.asset` `RenderPipelineAsset`, and supports generic `--property/--value` edits for selected settings. `graphics pipeline` returns the current/default render pipeline summary without mutating project settings. `graphics volume [target]` lists active scene Volume components and their assigned profiles using optional render pipeline APIs when present. `graphics screenshot` reuses live screenshot capture and returns the artifact plus graphically relevant diagnostics. Structured errors include `E_RENDER_PIPELINE_NOT_FOUND`, `E_QUALITY_LEVEL_INVALID`, `E_GRAPHICS_SETTING_UNSUPPORTED`, `E_GRAPHICS_SETTING_INVALID`, `E_SETTING_VALUE_INVALID`, screenshot IO/path errors and `E_UNITY_BUSY`.
-
-`physics settings` reads and updates Physics/Physics2D project settings including 3D/2D gravity, solver iterations, contact offset, bounce threshold, ray query flags and auto simulation. `physics raycast` supports 3D and 2D ray queries with origin, direction, distance, layer mask and `--all`, returning hit summaries or `nextActions` when no collider matches. `physics simulation` reports simulation state and can run explicit 3D/2D simulation steps with `--simulate`. Structured errors include `E_PHYSICS_SETTING_UNSUPPORTED`, `E_SETTING_VALUE_INVALID` and `E_UNITY_BUSY`.
-
-`profiler status/start/stop/pause/counter/memory/frame/capture/export` reads Profiler state, controls a profiling session, reads stable counter and memory diagnostics, and writes JSON or raw profiler artifacts through the live Bridge or Local Agent job path for capture. Returned envelopes include `profiler`, `counters`, `memory`, `frame`, `artifactPath`, `profilerPath`, duration, requestId-compatible logs and `plannedEffects`. Structured errors include `E_OUTPUT_PATH_REQUIRED`, `E_OUTPUT_EXISTS`, `E_PROFILER_FORMAT_UNSUPPORTED`, `E_PROFILER_CAPTURE_FAILED`, `E_IO_ERROR` and `E_UNITY_BUSY`.
-
-`probuilder ping/create-shape/create-poly-shape/extrude-faces/delete-faces/detach-faces/merge-faces/subdivide/flip-normals/select-faces/set-face-material/set-face-color/set-face-uvs/extrude-edges/bevel-edges/bridge-edges/connect-elements/combine-meshes/merge-objects/duplicate-and-flip/create-polygon/merge-vertices/weld-vertices/split-vertices/move-vertices/insert-vertex/append-vertices-to-edge/mesh-info/validate-mesh/convert-to-probuilder/set-smoothing/auto-smooth/center-pivot/freeze-transform/set-pivot/repair-mesh` are 36 single-action ProBuilder mesh editing tools served by the ProBuilder extension package. They require the `com.unity.probuilder` package installed in the target Unity project; when absent the CLI returns `E_PROBUILDER_PACKAGE_NOT_FOUND`. Structured errors include `E_PROBUILDER_PACKAGE_NOT_FOUND`, `E_PROBUILDER_SHAPE_UNSUPPORTED`, `E_TARGET_NOT_FOUND`, `E_SCHEMA_INVALID` and `E_UNITY_BUSY`.
-
-`animation clip <path>` reads or creates `Assets/*.anim` AnimationClip assets and returns clip metadata, frame rate, legacy flag and editor curve binding summaries. `animation state/play/stop <target>` resolves a unique GameObject, reads Animator state, plays an Animator state by name/path/hash-compatible string, or rebinds/stops the Animator. Structured errors include `E_ANIMATION_CLIP_PATH_REQUIRED`, `E_ANIMATION_CLIP_PATH_INVALID`, `E_ANIMATION_CLIP_NOT_FOUND`, `E_ANIMATION_CLIP_EXISTS`, `E_ANIMATOR_NOT_FOUND`, `E_ANIMATION_STATE_REQUIRED`, `E_ANIMATION_LAYER_INVALID`, `E_TARGET_AMBIGUOUS` and `E_UNITY_BUSY`.
-
-`vfx graph <path>` reads or creates `Assets/*.vfx` Visual Effect Graph assets when `com.unity.visualeffectgraph` is installed. `vfx effect <target>` reads a VisualEffect component, can `--add` one to a resolved GameObject, and can assign `--graph <Assets/*.vfx>`, returning target/component metadata and `plannedEffects`. Windows-style `Assets\VFX\Explosion.vfx` paths are normalized to Unity asset paths. Structured errors include `E_VFX_PACKAGE_MISSING`, `E_VFX_GRAPH_PATH_REQUIRED`, `E_VFX_GRAPH_PATH_INVALID`, `E_VFX_GRAPH_NOT_FOUND`, `E_VFX_GRAPH_CREATE_FAILED`, `E_VFX_COMPONENT_NOT_FOUND`, `E_VFX_ASSIGN_UNSUPPORTED`, `E_TARGET_AMBIGUOUS` and `E_UNITY_BUSY`.
-
-`shader info/read/create/update` targets `Assets/*.shader` and `Assets/*.shadergraph` files through the live Unity Editor Bridge. `shader read` returns UTF-8 content plus GUID, file metadata and ShaderUtil compile diagnostics when Unity imports the asset as a `Shader`. `shader create` writes supplied content or a minimal default `.shader`, refreshes/imports it and returns `plannedEffects`; ShaderGraph creation requires explicit content. Structured errors include `E_SHADER_PATH_REQUIRED`, `E_SHADER_PATH_INVALID`, `E_SHADER_NOT_FOUND`, `E_SHADER_OUTPUT_EXISTS`, `E_SHADER_CONTENT_REQUIRED`, `E_IO_ERROR` and `E_UNITY_BUSY`.
-
-`texture info/create/sprite/import-settings` targets texture assets under `Assets/`. `texture create` copies `--source` or generates a solid PNG/JPG from `--width`, `--height` and `--color`, refreshes the AssetDatabase and returns texture metadata plus importer settings. `texture sprite` configures Sprite import mode, pixels-per-unit and pivot. `texture import-settings` updates TextureImporter fields such as readability, mipmaps, sRGB, alpha transparency, wrap/filter mode, max size and compression. Structured errors include `E_TEXTURE_PATH_REQUIRED`, `E_TEXTURE_PATH_INVALID`, `E_TEXTURE_NOT_FOUND`, `E_TEXTURE_OUTPUT_EXISTS`, `E_TEXTURE_SOURCE_NOT_FOUND`, `E_TEXTURE_FORMAT_UNSUPPORTED`, `E_TEXTURE_COLOR_INVALID`, `E_IMPORT_FAILED`, `E_IO_ERROR` and `E_UNITY_BUSY`.
-
-`ui canvas/create`, `ui text/create`, `ui button/create` and `ui image/create` create uGUI objects through the live Unity Editor Bridge. They return `created`, `rectTransform`, `plannedEffects`, `requestId` and `logPath`; text/button/image commands accept parent/canvas targets, dimensions, anchored position, text/label, color and sprite asset options. `ui document/create` creates or overwrites `.uxml`/`.uss` assets, links them to a `UIDocument`, optionally assigns `PanelSettings`, and returns resource references. `ui document/info` supports live UIDocument inspection and offline `.uxml`/`.uss` file reads without a Bridge endpoint for basic file diagnostics. `ui hierarchy` pages Canvas, RectTransform and UIDocument summaries with `pageInfo`. Ambiguous UI parent, UIDocument and hierarchy targets return `E_TARGET_AMBIGUOUS` with `matchCount` and candidate summaries so callers can retry with hierarchy path or instance id. UI structured errors include `E_UI_PARENT_NOT_FOUND`, `E_UI_SPRITE_NOT_FOUND`, `E_UI_UXML_NOT_FOUND`, `E_UI_USS_NOT_FOUND`, `E_UI_PANEL_SETTINGS_NOT_FOUND`, `E_TARGET_NOT_FOUND`, `E_TARGET_AMBIGUOUS` and `E_UNITY_BUSY`.
-
-`package` without a subcommand returns CLI/npm package identity (`unity_cli`), bundled Unity package identity (`com.unity_cli`) and the docs/discovery entry points. `package list` and `package info` read `Packages/manifest.json` and `Packages/packages-lock.json`. `package install`, `package remove`, `package registry` and `package scoped-registry` update `manifest.json` directly. When `--unity` or `UNITY_EXE` is available, `package install/remove/resolve` create a `package` job that invokes Unity batchmode with `UnityCli.UnityCliBatch.ResolvePackages`; otherwise install/remove return a terminal `manifest_updated` result with a `nextActions` hint to run Unity resolve.
-
-`docs` lists built-in CLI documentation topics generated from the shipped tool metadata; `docs topic <topic>` returns one built-in topic. `docs get/search` continue to query an offline Unity API documentation cache via `--docs-dir`, and `reflect type/member/search` remains the offline reflection cache path.
-
-`instances list` reads `instances/*.json` under the local Unity CLI data directory and reports target id/alias, project, process id, state and endpoint. `instances prune` removes stale or unreachable registrations after the 30s heartbeat window. `target get/set/clear` stores the active target in `config.json`, while `target alias set/unset/list` stores aliases in `aliases.json`. Target resolution prefers explicit `--target <id|alias>` where supported, then active target, then the only ready instance; multiple ready instances return `E_TARGET_AMBIGUOUS` instead of guessing. Existing scene/object commands keep their command-specific `--target` meaning.
-
-`editor state` returns playMode, pause, busy, activeScene and Prefab Stage status through the live Unity Editor Bridge. `editor play`, `editor pause` and `editor stop` control Editor PlayMode and pause state with optional `--timeout-ms`. `editor menu <path>` executes a Unity Editor menu item and returns execution result, elapsed time and structured diagnostics. `editor console --count <n>` returns recent Unity Console entries and can clear them with `--clear`. Editor commands do not require a risk-confirmation flag; `plannedEffects` is returned as observable output. Structured target errors include `E_TARGET_NOT_FOUND`, `E_TARGET_STALE`, `E_TARGET_UNREACHABLE` and `E_TARGET_AMBIGUOUS`; Unity state errors include `E_UNITY_BUSY`, `E_PLAYMODE_TIMEOUT`, `E_MENU_NOT_FOUND` and `E_MENU_TIMEOUT` with `nextActions` to resolve.
-
-`code exec` executes Runtime Code from exactly one source: `--file <path>`, `--stdin`, or `--code <text>`. Live mode sends `code.exec` to the Unity Editor Bridge and returns `compile.diagnostics`, `runtime.stdout`, `runtime.stderr`, `runtime.returnValue`, `requestId`, `logs`, `audit`, `artifacts`, and `nextActions` in the shared envelope. `--channel batchmode` or `--job` deploys the bundled bridge package and creates a durable `code` job that invokes `UnityCli.UnityCliBatch.ExecuteCode`, writes a `manifest.json` under the artifact directory, and loads the batchmode result artifact back into job status. Runtime Code references UnityEngine, UnityEditor and loaded project/Unity assemblies by default; `--refs <comma-list>`, `--define <symbol>`, `--args <json>`, `--timeout-ms <ms>` and `--artifact-dir <path>` extend the request without adding default disablement, `--yes`, secondary confirmation, bottom-layer pass-through or risk gates. Structured errors include `E_CODE_SOURCE_INVALID`, `E_CODE_COMPILE_FAILED`, `E_CODE_RUNTIME_EXCEPTION`, `E_REFERENCE_RESOLUTION_FAILED`, `E_EXECUTION_TIMEOUT`, `E_UNITY_BUSY` and bridge/job diagnostics.
-
-`tools list --include-custom`, `tools groups`, `tools search --include-custom <keyword>` and `tools describe <name>` discover Unity project-local tool descriptors through the shared project tool discovery adapter backed by `project-tool.list`, so project tools appear in the same CLI discovery chain as built-ins without hand-written CLI config. Each descriptor includes `name`, `title`, `description`, `group`, `inputSchema`, `outputSchema`, read-only/destructive hints, architecture markers, capability type, timeout limits, artifact kinds, registration provenance and `fingerprint` (`sha256-handler-code-plus-descriptor-v1`). `capabilities` merges reachable project tool descriptors into group/tool counts and advertises `projectToolDescriptor`, `unifiedDiscovery` and `builtinDocs` schema features. `doctor` checks project tool fingerprint status and the unified discovery surface, reporting descriptor/handler tampering plus built-in/project tool discovery counts or bridge diagnostics. `tools run <name>` will accept `--input`, `--input-file` or `--stdin`, forward `timeoutMs`, explicit `--job` preference, `artifactDir` and `--fingerprint-mode warn|block`, validate the supplied input against the registered `inputSchema`, check the current handler-code + descriptor fingerprint before dispatch, and return `command`, `tool`, `execution`, `result`, `artifacts`, `audit` and `logs.bridge` in the shared envelope. Mismatches are blocked by default with `E_TOOL_FINGERPRINT_MISMATCH`; set `UNITY_CLI_PROJECT_TOOL_FINGERPRINT_MODE=warn` or pass `--fingerprint-mode warn` only for audited intentional changes. Project Editor C# code registers first-class tools by marking a static class or static method with `[UnityCliTool("sample.echo", ...)]`; class-level attributes require exactly one static `Execute` or `Run` candidate, while classes with multiple candidates should put `[UnityCliTool]` on the intended method. The Bridge scans loaded Unity Editor assemblies and derives the runtime registry entry plus descriptor automatically (Class/Attribute-first, zero hand-written config). Only Unity project C# Editor tools are in scope; shell, npm and external scripts are intentionally not discovered. The Bridge only dispatches registered names and does not expose bottom-layer pass-through, arbitrary method names or hidden tool escape hatches.
-
-## Unity Editor Bridge
-
-`init` installs the bundled `com.unity_cli` package by copying the contents of the CLI's `unitypkg/` directory into the target project's `Packages/com.unity_cli/` (copy mode). No `file:` reference or scoped registry is written to `Packages/manifest.json`. `init` also writes `Packages/unity_cli.install.json` with the project hash, package version and CLI compatibility range, while `init --check` verifies those values without mutating the project. `init` supports the following flags:
-
-| Flag | Meaning |
-|------|----------|
-| *(none)* | Install/update unitypkg only (copy mode) |
-| `--agent <values>` | Install unitypkg + skill for each listed agent (comma-separated: `pi`, `claude`, `.agent`) |
-| `--pkg-only` | Install/update unitypkg only (explicit) |
-| `--skill-only` | Install skill files only; requires `--agent` |
-| `--check` | Verify installation status; can combine with `--agent` |
-
-Examples:
-
-```powershell
-unity_cli init                         # Install/update unitypkg only
-unity_cli init --agent pi              # Install unitypkg + Pi skill
-unity_cli init --agent claude          # Install unitypkg + Claude skill
-unity_cli init --agent .agent          # Install unitypkg + .agent skill (codex)
-unity_cli init --agent pi,claude       # Install unitypkg + multiple agent skills
-unity_cli init --skill-only --agent pi # Install Pi skill only
-unity_cli init --pkg-only              # Install/update unitypkg explicitly
-unity_cli init --check                 # Check unitypkg status
-unity_cli init --check --agent pi      # Check unitypkg + Pi skill status
-```
-
-Agent skill paths:
-
-| Agent | Target path |
-|-------|-------------|
-| `pi` | `<unityProjectRoot>/.pi/skills/unity_cli/SKILL.md` |
-| `claude` | `<unityProjectRoot>/.claude/skills/unity_cli/SKILL.md` |
-| `.agent` | `<unityProjectRoot>/.agent/skills/unity_cli/SKILL.md` |
-
-`--skill-only` must be used with `--agent`; `--agent` values are restricted to the whitelist `pi / claude / .agent`. When a live Bridge endpoint is already reachable, `init` asks the open Editor to run `Assets/Refresh` so a resident Editor sees the package update. When the Editor compiles that package, `UnityCliBridge` starts a Windows loopback HTTP listener on `http://127.0.0.1:47392` (probing later ports when needed), writes `instances/<instanceId>.json` under `%LOCALAPPDATA%\UnityCli` or `UNITY_CLI_DATA_DIR`, and refreshes `lastSeenAt` every 5 seconds. During domain reload it marks the target stale; during normal Editor quit it tries to delete the registration so the CLI can report stale/unreachable state or remove old entries with `instances prune`. The bridge serves `POST /bridge/execute` for the live Bridge commands declared in `contracts/command-contract.json`: `camera.list`, `camera.info`, `camera.screenshot`, `scene.active`, `scene.hierarchy`, `scene.build-settings`, `scene.screenshot`, `scene.create`, `scene.load`, `scene.save`, `go.find`, `go.inspect`, `go.create`, `go.modify`, `go.delete`, `component.add`, `component.remove`, `component.set`, `asset.search`, `asset.info`, `asset.create`, `asset.import`, `asset.modify`, `asset.delete`, `asset.duplicate`, `asset.move`, `asset.rename`, `diagnose.preflight`, `screenshot.capture`, `prefab.info`, `prefab.hierarchy`, `prefab.create`, `prefab.modify`, `prefab.stage-open`, `prefab.stage-save`, `prefab.stage-close`, `ui.canvas.create`, `ui.text.create`, `ui.button.create`, `ui.image.create`, `ui.document.info`, `ui.document.create`, `ui.hierarchy`, `material.info`, `material.create`, `material.assign`, `material.set`, `graphics.quality`, `graphics.settings`, `graphics.pipeline`, `graphics.volume`, `graphics.screenshot`, `physics.settings`, `physics.raycast`, `physics.simulation`, `profiler.start`, `profiler.stop`, `profiler.pause`, `profiler.counter`, `profiler.memory`, `profiler.frame`, `profiler.capture`, `profiler.export`, `profiler.status`, `probuilder.ping`, `probuilder.create-shape`, `probuilder.create-poly-shape`, `probuilder.extrude-faces`, `probuilder.delete-faces`, `probuilder.detach-faces`, `probuilder.merge-faces`, `probuilder.subdivide`, `probuilder.flip-normals`, `probuilder.select-faces`, `probuilder.set-face-material`, `probuilder.set-face-color`, `probuilder.set-face-uvs`, `probuilder.extrude-edges`, `probuilder.bevel-edges`, `probuilder.bridge-edges`, `probuilder.connect-elements`, `probuilder.combine-meshes`, `probuilder.merge-objects`, `probuilder.duplicate-and-flip`, `probuilder.create-polygon`, `probuilder.merge-vertices`, `probuilder.weld-vertices`, `probuilder.split-vertices`, `probuilder.move-vertices`, `probuilder.insert-vertex`, `probuilder.append-vertices-to-edge`, `probuilder.mesh-info`, `probuilder.validate-mesh`, `probuilder.convert-to-probuilder`, `probuilder.set-smoothing`, `probuilder.auto-smooth`, `probuilder.center-pivot`, `probuilder.freeze-transform`, `probuilder.set-pivot`, `probuilder.repair-mesh`, `animation.clip`, `animation.state`, `animation.play`, `animation.stop`, `vfx.graph`, `vfx.effect`, `shader.info`, `shader.read`, `shader.create`, `shader.update`, `texture.info`, `texture.create`, `texture.sprite`, `texture.import-settings`, `editor.state`, `editor.play`, `editor.pause`, `editor.stop`, `editor.menu`, `editor.console`, `script.create`, `script.read`, `script.edit`, `script.validate`, `code.exec`. Run `npm run contracts:validate` to compare the contract file with the TypeScript bridge registry, built-in metadata and C# `BridgeCommandRegistry` registrations. The bridge executes Unity APIs on the Editor main thread and writes diagnostics to `<project>\Logs\UnityCliBridge.log`. If a request waits 60 seconds before Unity starts it, the bridge cancels that queued work before execution and returns `E_UNITY_BUSY` with no side effects applied. If a mutating request already started before the HTTP timeout, the bridge returns a success envelope with `status: "running"`, `sideEffectSemantics: "started-before-http-timeout"`, the original `requestId` and `logPath` so callers do not treat a possible in-flight side effect as a failed/no-op request. During Unity domain reload or Editor quit, the Bridge stops its loopback listener before the new assembly starts it again; on startup it also asks any older loaded `UnityCliBridge` type in the same Editor process to stop its listener before binding the port, preventing stale runtime capabilities from serving `/health` after package replacement. A compiled bridge runtime also writes `<project>\Logs\UnityCliBridgeRuntime.json` and `bridge_runtime_loaded` log lines with `diagnosticsFingerprint`, listener id, assembly MVID and Unity PackageManager `com.unity_cli` resolved path, so a live Editor can prove whether the new package was actually compiled/loaded even when an older listener is still answering a port.
-
-## Tools Run — Unified Execution Entry Point
-
-`tools run <toolName>` is the unified entry point for executing any tool — built-in or project-defined, editor-domain or runtime-domain. It replaces all previous per-domain command invocations with a single consistent interface.
-
-```powershell
-# Discover available tools
-unity_cli tools list
-unity_cli tools search screenshot
-unity_cli tools describe camera.screenshot
-
-# Run an editor-domain tool (target=editor, default)
-unity_cli tools run editor.console
-unity_cli tools run camera.screenshot --input "{\"target\":\"Main Camera\",\"output\":\"shot.png\",\"overwrite\":true}"
-
-# Run a runtime-domain tool (target=runtime, requires Play Mode)
-unity_cli tools run editor.play
-unity_cli tools run sample.echo --input "{\"message\":\"hello\"}" --include-custom
-unity_cli tools run editor.stop
-
-# Run with input file
-unity_cli tools run camera.screenshot --input-file screenshot-input.json
-
-# Run with timeout for long operations
-unity_cli tools run sample.wait --input "{\"durationMs\":500}" --include-custom --timeout-ms 5000
-```
-
-### Target Routing
-
-`tools run` automatically routes based on the tool's `target` field:
-
-| Target | Availability | Routing |
-|--------|-------------|----------|
-| `editor` (default) | `editorSession` — always available when Bridge is connected | Routes through `project-tool.run` bridge command |
-| `runtime` | `playModeSession` — only available during Play Mode | Routes through `runtime-tool.run` bridge command |
-| `both` | Depends on current mode | Uses `editor` by default; pass `--runtime` to force runtime routing |
-
-### AI Usage Workflow
-
-The complete discovery-to-verification chain:
-
-```
-instances list → target set <alias> → tools search <keyword> → tools describe <name> → tools run <name> [--input <json>] → verify ok
-```
-
-## Examples
-
-Runnable examples are in the [`examples/`](examples/) directory:
-
-| Example | Category | Description |
-|---------|----------|-------------|
-| `01-editor-tool-echo.md` | Editor tool | Run a built-in editor-domain tool via `tools run` |
-| `02-editor-tool-camera.md` | Editor tool | List cameras and capture a screenshot via `tools run` |
-| `03-runtime-tool-echo.md` | Runtime tool | Run a runtime-domain tool in Play Mode via `tools run` |
-| `04-runtime-tool-verify.md` | Runtime tool | Execute runtime code and verify the result |
-| `05-verify-workflow.md` | Verification | Full discovery → describe → run → verify workflow |
-| `06-batch-editor-only.json` | Batch | Editor-only batch automation via `tools run` |
-| `07-batch-runtime-only.json` | Batch | Runtime-only batch automation in Play Mode via `tools run` |
-| `08-batch-editor-plus-runtime.json` | Batch | Combined editor + runtime batch via `tools run` |
-| `09-batch-parallel-readonly.json` | Batch | Parallel batch of read-only editor queries via `tools run` |
-
-## Batch Automation
-
-`batch run <file.json>` composes registered Unity CLI first-class commands only. It does not provide hidden bottom-layer commands, arbitrary tool calls, or capability-gap escape hatches. Batch steps can use `tools run` as the unified command entry point.
-
-```powershell
-unity_cli batch schema
-unity_cli batch run .\examples\08-batch-editor-plus-runtime.json --preflight
-unity_cli batch run .\examples\08-batch-editor-plus-runtime.json --fail-fast true --parallel 1
-```
-
-Example batch with `tools run` — editor + runtime combined (`08-batch-editor-plus-runtime.json`):
-
-```json
-{
-  "defaults": {
-    "project": "C:/work/Game",
-    "unity": "C:/Program Files/Unity/Hub/Editor/2022.3.45f1/Editor/Unity.exe",
-    "wait": true,
-    "timeoutMs": 600000,
-    "waitTimeoutMs": 600000,
-    "env": {
-      "UNITY_CLI_BRIDGE_ENDPOINT": "http://127.0.0.1:18080"
-    }
-  },
-  "envAllowlist": ["UNITY_CLI_BRIDGE_ENDPOINT"],
-  "failFast": true,
-  "parallel": 1,
-  "steps": [
-    { "id": "read-console", "command": ["tools", "run", "editor.console"] },
-    { "id": "list-cameras", "command": ["tools", "run", "camera.list"] },
-    { "id": "capture", "command": ["tools", "run", "camera.screenshot"],
-      "args": ["--input", "{\"target\":\"Main Camera\",\"output\":\"Artifacts/pre.png\",\"overwrite\":true}"],
-      "dependsOn": ["list-cameras"] },
-    { "id": "enter-play", "command": ["tools", "run", "editor.play"],
-      "dependsOn": ["read-console", "capture"] },
-    { "id": "runtime-echo", "command": ["tools", "run", "sample.echo"],
-      "args": ["--input", "{\"message\":\"hello\"}", "--include-custom"],
-      "dependsOn": ["enter-play"] },
-    { "id": "exit-play", "command": ["tools", "run", "editor.stop"],
-      "dependsOn": ["runtime-echo"] },
-    { "id": "verify", "command": ["tools", "run", "editor.console"],
-      "dependsOn": ["exit-play"] }
-  ]
-}
-```
-
-Legacy batch example using direct domain commands (`camera-test-screenshot.json`):
-
-```json
-{
-  "defaults": {
-    "project": "C:/work/Game",
-    "unity": "C:/Program Files/Unity/Hub/Editor/2022.3.45f1/Editor/Unity.exe",
-    "wait": true,
-    "timeoutMs": 600000,
-    "waitTimeoutMs": 600000,
-    "env": {
-      "UNITY_CLI_BRIDGE_ENDPOINT": "http://127.0.0.1:18080"
-    }
-  },
-  "envAllowlist": ["UNITY_CLI_BRIDGE_ENDPOINT"],
-  "failFast": true,
-  "parallel": 1,
-  "steps": [
-    {
-      "id": "list-cameras",
-      "command": ["camera", "list"]
-    },
-    {
-      "id": "inspect-main-camera",
-      "command": ["camera", "info", "Main Camera"],
-      "dependsOn": ["list-cameras"]
-    },
-    {
-      "id": "run-editmode-tests",
-      "command": ["test", "run"],
-      "args": ["--platform", "EditMode"],
-      "dependsOn": ["inspect-main-camera"]
-    },
-    {
-      "id": "capture-after-test",
-      "command": ["camera", "screenshot", "Main Camera"],
-      "args": ["--output", "Artifacts/after-test.png", "--overwrite"],
-      "dependsOn": ["run-editmode-tests"]
-    }
-  ]
-}
-```
-
-Batch output includes a batch requestId, each step requestId/envelope, summary counts, aggregated `plannedEffects`, and a `logIndex` that links batch record path, step requestIds, jobIds, and Unity log paths. `batch schema` is also exposed through `tools describe cli.batch.schema`, while `batch run` describe output includes the batch output shape and child-job cancellation guidance.
-
-Job cancellation semantics are visible through `tools describe` for long-running/job-capable commands and through `job describe --id <jobId>` for a concrete job. Current Unity batchmode jobs use immediate process cancellation when a pid is known; if a job is still queued or Unity is already cleaning up, the CLI records the job as cancelled and callers should inspect `job logs` for the final filesystem/project state. Live bridge work that has already started is cooperative and may finish before cancellation can take effect.
-
-`--parallel` is intentionally restricted to commands declared parallel-safe. `material info`, `shader info`, `shader read`, `texture info`, `ui document/info`, `ui hierarchy`, `animation state`, `physics raycast`, `profiler status`, `profiler counter`, `profiler memory` and `profiler frame` are parallel-safe. Mutating/artifact commands such as `screenshot capture`, `camera screenshot`, `scene screenshot`, `prefab create`, `prefab stage-open`, `prefab stage-save`, `prefab stage-close`, `graphics quality`, `graphics settings`, `graphics screenshot`, `physics settings`, `physics simulation`, `profiler start`, `profiler stop`, `profiler pause`, `profiler capture`, `profiler export`, `probuilder create-shape`, `probuilder create-poly-shape`, `probuilder extrude-faces`, `probuilder delete-faces`, `probuilder detach-faces`, `probuilder merge-faces`, `probuilder subdivide`, `probuilder flip-normals`, `probuilder set-face-material`, `probuilder set-face-color`, `probuilder set-face-uvs`, `probuilder extrude-edges`, `probuilder bevel-edges`, `probuilder bridge-edges`, `probuilder connect-elements`, `probuilder combine-meshes`, `probuilder merge-objects`, `probuilder duplicate-and-flip`, `probuilder create-polygon`, `probuilder merge-vertices`, `probuilder weld-vertices`, `probuilder split-vertices`, `probuilder move-vertices`, `probuilder insert-vertex`, `probuilder append-vertices-to-edge`, `probuilder convert-to-probuilder`, `probuilder set-smoothing`, `probuilder auto-smooth`, `probuilder center-pivot`, `probuilder freeze-transform`, `probuilder set-pivot`, `probuilder repair-mesh`, `material create`, `material assign`, `material set`, `animation clip`, `animation play`, `animation stop`, `vfx graph`, `vfx effect`, `shader create`, `shader update`, `texture create`, `texture sprite`, `texture import-settings`, `ui canvas/create`, `ui text/create`, `ui button/create`, `ui image/create`, `ui document/create`, `code exec`, `editor refresh`, `test run`, and `build run` must run serially; preflight returns a structured `BATCH_PARALLEL_CONFLICT` if a batch requests unsafe parallelism.
-
-## Windows logs and diagnostics
-
-The default diagnostic data and log directory is:
-
-```text
-%LOCALAPPDATA%\UnityCli
-```
-
-`requestId`, `stepRequestId`, `jobId`, batch record paths and log paths are observability fields only. They do not enable risk controls, confirmation prompts, or high-risk command blocking.
-
-## Windows + Unity Editor Follow-up Verification
-
-Automated tests use fake Unity and injected bridge executors to verify CLI behavior without requiring Unity. TypeScript tests cover CLI protocol forwarding, offline UI Toolkit file reads and failure-envelope preservation for Bridge responses; `src/camera-bridge-source.test.ts` is a source-level guard for the bundled C# Bridge implementation. These tests do not instantiate Unity Editor, so C# runtime behavior for empty camera targets, missing Cameras, screenshot IO failures, actual PNG/JPG artifacts, Prefab Stage open/save/close, Prefab dirty conflicts, nested/variant Prefab summaries, Material asset creation, Renderer/UI Graphic assignment, Material property writes, GraphicsSettings/QualitySettings persistence, render pipeline asset resolution, Physics/Physics2D project setting persistence, raycast collision hits, explicit simulation steps, AnimationClip asset creation/binding summaries, Animator state/play/stop behavior, VFX Graph asset creation, VisualEffect assignment, Shader import diagnostics, TextureImporter mutations, uGUI object creation, UIDocument/PanelSettings linking, UI hierarchy summaries and Runtime Code live execution must still be proven by real Windows + Unity Editor validation before release.
-
-- Unity Hub / `Unity.exe` discovery across installed Editor versions.
-- Unity Bridge endpoint discovery and live camera/scene/screenshot execution against an open Editor.
-- `editor refresh --compile --wait` against a real project compilation cycle.
-- EditMode and PlayMode result XML parsing against a real Unity project.
-- Build output path creation and module-missing diagnostics for `StandaloneWindows64`.
-- Process cancellation behavior for Unity batchmode under Windows shells and CI.
-- Unity PackageManager resolve hook `UnityCli.UnityCliBatch.ResolvePackages` against a real Unity project after manifest/scoped registry changes.
-- Registry reachability and credential behavior for private scoped registries.
-
-Advanced or custom extension commands should enter a later backlog as registered first-class commands; this batch intentionally does not provide bottom-layer pass-through.
+MIT

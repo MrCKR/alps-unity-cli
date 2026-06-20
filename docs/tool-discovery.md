@@ -1,127 +1,183 @@
-# Tool Discovery
+# 工具发现（Tool Discovery）
 
-> **Discovery path**: `tools list → tools search → tools describe → tools run`
+alps-unity-cli 使用 group-first 分层发现模型：先看分组概览，再按组深入，最后查看单个工具完整描述。
 
-## The Unified Tools Surface
+## 推荐发现流程
 
-The CLI exposes a single, unified discovery surface through the `tools` command. There is no separate `custom-tool` command group, no independent `runtime` command group, and no per-domain registry. All tools — built-in and project-local — share the same descriptor schema and the same discovery commands.
-
-```powershell
-unity_cli tools list                         # All built-in tools
-unity_cli tools list --include-custom        # Built-in + project tools (requires Bridge)
-unity_cli tools list --group scene           # Filter by group
-unity_cli tools groups                       # List all groups
-unity_cli tools search camera                # Search by keyword
-unity_cli tools search echo --include-custom # Include project tools in search
-unity_cli tools describe scene.hierarchy     # Full descriptor for one tool
-unity_cli tools describe sample.echo         # Project tool descriptor
+```
+tools groups                    → 查看所有工具分组
+       ↓
+tools list --group <group>      → 查看某个分组的工具摘要
+       ↓
+tools describe <tool>           → 查看工具完整描述（执行前必做）
+       ↓
+tools run <tool>                → 执行工具
 ```
 
-## What `tools describe` Returns
+辅助发现：
 
-`tools describe <name>` is the single source of truth for any tool. It returns the tool descriptor based on [tool-metadata.schema.json](../schemas/tool-metadata.schema.json).
-
-### Current descriptor fields
-
-| Field | Meaning |
-|-------|---------|
-| `name` | Dotted identifier, e.g. `scene.hierarchy`, `sample.echo` |
-| `title` | Human-readable short title |
-| `description` | One-paragraph explanation |
-| `group` | Logical grouping, e.g. `scene`, `camera`, `probuilder` |
-| `inputSchema` | JSON Schema for input parameters |
-| `outputSchema` | JSON Schema for successful output (when available) |
-| `readOnlyHint` | `true` if the tool never mutates Unity state |
-| `destructiveHint` | `true` if the tool may irreversibly modify or delete data |
-| `supportsDryRun` | `true` if `--dry-run` is supported |
-| `handler` | Execution mode: `bridge`, `bridge-runtime`, `job`, `offline`, or `hybrid` |
-| `supportStatus` | User-facing label: `live-bridge`, `live-bridge-runtime`, `bridge-job`, `batch-job`, `cli-only`, or `planned` |
-| `cliCommand` | The CLI argv prefix, e.g. `scene hierarchy` |
-| `architectureSensitive` | `true` if tied to a frozen architecture decision |
-| `frozenDecision` | Reference to the frozen decision (e.g. `ALP-165-Q4`) |
-| `coverageScope` | Frozen coverage facets this tool contributes to |
-| `cancellationSemantics` | How cancellation works for long-running tools |
-| `timeoutMs` | Suggested timeout |
-| `permissions` | Permission tokens required |
-| `examples` | Representative invocations with argv and expected output |
-| `docsTopic` | Key for `unity_cli docs topic <key>` |
-| `target` | Execution target: `editor` (default), `runtime`, or `both` |
-| `availabilityScope` | `editorSession` (default) or `playModeSession` (runtime tools) |
-| `available` | Whether the tool is currently available based on session state |
-
-### Descriptor field coverage vs. P3 contract
-
-The P3 frozen contract (`ALP-369`) defines additional descriptor fields that are not yet in the current `tool-metadata.schema.json` or `ToolMetadata` interface. The current fields map to P3 concepts as follows:
-
-| P3 field | Current mapping | Gap |
-|----------|----------------|-----|
-| `source` | `builtin` if in shipped metadata; `project` if discovered via `--include-custom` | Not an explicit field; inferred from discovery mode |
-| `target` | `target` field on `ToolMetadata` | ✅ Implemented |
-| `execution` | `handler` field maps directly: `bridge` → `editorBridge`, `bridge-runtime` → `runtimeExecutor`, `hybrid` → both | Naming differs from P3; semantics match |
-| `availabilityScope` | `availabilityScope` field on `ToolMetadata` | ✅ Implemented |
-| `requiresPlayMode` | Implied by `target: "runtime"` and `availabilityScope: "playModeSession"` | Not a separate boolean; derived from `target` + `availabilityScope` |
-| `risk` | `destructiveHint` + `readOnlyHint` + `supportsDryRun` + `permissions` | Structured differently; same information |
-| `validation` | Not yet in schema | P3 field not implemented |
-| `fingerprint` | Project tools carry `fingerprint` at runtime; not in static metadata | Partially implemented (project tools only) |
-| `version` | Not in schema | P3 field not implemented |
-
-**Do not assume the current descriptor fully matches the P3 contract.** Always use `tools describe <name>` to see the actual fields returned for a specific tool. The mapping above is provided for architecture review purposes only.
-
-## Handler and Support Status
-
-Every tool has a `handler` (internal execution path) and a `supportStatus` (user-facing label). The mapping is:
-
-| `handler` | `supportStatus` | Label | Meaning |
-|-----------|-----------------|-------|---------|
-| `bridge` | `live-bridge` | 已路由可执行 | Live Bridge `/bridge/execute` (editor domain) |
-| `bridge-runtime` | `live-bridge-runtime` | 已路由可执行 (Runtime) | Runtime tool via Bridge with Play Mode session validation |
-| `hybrid` | `bridge-job` | 已路由可执行 + 可 batch/job | Live Bridge + batch/job channels |
-| `job` | `batch-job` | 仅 batch/job | Unity batchmode job only |
-| `offline` | `cli-only` | 仅 CLI 离线 | No Unity connection needed |
-| — | `planned` | 规划中 | Declared but not yet implemented |
-
-## Target Context in Discovery
-
-`tools list` and `tools search` include an optional `target` field when a target instance is resolved. This shows which instance's tool catalog is being reported. They also include `target`, `availabilityScope`, and `available` per tool so callers can determine whether a tool is currently usable.
-
-When `--include-custom` is used and a Bridge is reachable, project tools registered by `[UnityCliTool]` C# attributes in the target Unity project are merged into the discovery results. Project tools share the same schema as built-in tools — they are not a separate category.
-
-## How to Use Discovery as an AI Agent
-
-1. **List tools** — `unity_cli tools list --include-custom` gives you all available tools for the resolved target, including `target` and `availabilityScope` per tool.
-2. **Search by keyword** — `unity_cli tools search <keyword> --include-custom` when you know the domain but not the exact tool name.
-3. **Describe before executing** — Always run `unity_cli tools describe <name>` before executing any tool. The descriptor tells you:
-   - What parameters are required (`inputSchema`)
-   - Whether the tool is safe to call (`readOnlyHint`, `destructiveHint`)
-   - How the tool executes (`handler`, `supportStatus`, `target`)
-   - Whether the tool is currently available (`available`, `availabilityScope`)
-   - What to expect in the result (`outputSchema`, `examples`)
-   - What to do if something goes wrong (see [error-codes](./error-codes.md))
-   - How to verify the result (see [tool-execution](./tool-execution.md))
-4. **Run the tool** — `unity_cli tools run <name>` executes the tool through the unified entry point (see [tool-execution](./tool-execution.md)).
-
-## Built-in Documentation Topics
-
-`unity_cli docs` lists built-in topic summaries derived from tool metadata. `unity_cli docs topic <key>` returns a topic with its summary and the list of tools it contains. This is an offline command and does not require a Unity instance.
-
-## Capabilities Manifest
-
-```powershell
-unity_cli capabilities
-unity_cli capabilities --bridge-endpoint http://127.0.0.1:47392
+```
+tools search <keyword>          → 按关键词搜索工具
 ```
 
-Returns a merged manifest of:
-- **Static capabilities**: tool counts, group breakdown, destructive/read-only/long-running tool lists, schema features
-- **Runtime capabilities** (when Bridge is reachable): bridge health and diagnostics
+## tools groups
 
-The `capabilities` command is useful for quickly checking what a target instance supports without listing every tool individually.
+列出所有工具分组名称。
 
-## Cross-Reference
+```powershell
+unity_cli tools groups
+```
 
-- Target selection: [target-and-instance](./target-and-instance.md)
-- Availability differences across instances: [availability-differences](./availability-differences.md)
-- Execution model and verification: [tool-execution](./tool-execution.md)
-- Tool metadata schema: [../schemas/tool-metadata.schema.json](../schemas/tool-metadata.schema.json)
-- AI skill (compact version): [/skills/unity_cli/SKILL.md](../skills/unity_cli/SKILL.md)
-- Examples (runnable): [/examples/](../examples/)
+输出：
+
+```json
+{
+  "ok": true,
+  "data": {
+    "command": "tools.groups",
+    "count": 25,
+    "groups": ["scene", "camera", "go", "component", "asset", "prefab", "material", "graphics", "physics", "profiler", "probuilder", "shader", "texture", "animation", "vfx", "ui", "script", "editor", "diagnose", "screenshot", "code", "cli", "test", "build", "tools"]
+  }
+}
+```
+
+### 包含项目自定义工具分组
+
+当 Bridge 可达时，`tools groups` 会自动发现项目自定义工具的分组：
+
+```powershell
+unity_cli tools groups --bridge-endpoint http://127.0.0.1:47392
+```
+
+## tools list
+
+列出工具摘要信息。
+
+```powershell
+# 列出所有工具
+unity_cli tools list
+
+# 按分组过滤（推荐）
+unity_cli tools list --group camera
+
+# 包含项目自定义工具
+unity_cli tools list --include-custom
+
+# 按分组 + 自定义工具
+unity_cli tools list --group custom --include-custom
+
+# 文本格式
+unity_cli tools list --group camera --format text
+```
+
+输出摘要包含：
+
+| 字段 | 说明 |
+|------|------|
+| `name` | 工具唯一标识 |
+| `title` | 人类可读标题 |
+| `group` | 所属分组 |
+| `readOnlyHint` | 是否只读 |
+| `destructiveHint` | 是否有破坏性 |
+| `handler` | 执行通道类型 |
+| `supportStatus` | 支持状态标签 |
+| `target` | 目标类型（editor/runtime/both） |
+| `availabilityScope` | 可用性范围 |
+| `requiresPackages` | 依赖的 Unity 包 |
+
+### 为什么不推荐 tools list 无过滤全量展开
+
+`tools list` 不带 `--group` 参数时会返回所有 100+ 工具的完整摘要，这对 AI Agent 来说信息量过大，容易导致上下文溢出或误选工具。推荐使用 `--group` 参数逐组查看。
+
+## tools search
+
+按关键词搜索工具名称、标题、描述和分组。
+
+```powershell
+unity_cli tools search screenshot
+unity_cli tools search camera --include-custom
+```
+
+搜索是辅助手段，不应替代 group-first 发现流程。当你知道关键词但不确定分组时使用。
+
+## tools describe
+
+查看单个工具的完整描述。**执行任何工具前必须先 describe。**
+
+```powershell
+unity_cli tools describe camera.screenshot
+```
+
+输出包含完整的工具 descriptor：
+
+| 字段 | 说明 |
+|------|------|
+| `name` | 工具唯一标识 |
+| `title` | 人类可读标题 |
+| `description` | 详细说明 |
+| `group` | 所属分组 |
+| `inputSchema` | 输入参数 JSON Schema |
+| `outputSchema` | 输出格式 JSON Schema |
+| `readOnlyHint` | 是否只读 |
+| `destructiveHint` | 是否有破坏性 |
+| `supportsDryRun` | 是否支持 `--dry-run` |
+| `longRunning` | 是否长时间运行 |
+| `architectureSensitive` | 是否架构敏感 |
+| `frozenDecision` | 冻结决策编号 |
+| `handler` | 执行通道 |
+| `supportStatus` | 支持状态 |
+| `target` | 目标类型 |
+| `availabilityScope` | 可用性范围 |
+| `available` | 当前是否可用 |
+| `requiresPackages` | 依赖的 Unity 包 |
+| `examples` | 使用示例 |
+| `docsTopic` | 相关文档主题 |
+| `permissions` | 所需权限 |
+| `cancellationSemantics` | 取消行为说明 |
+| `timeoutMs` | 超时时间 |
+
+### 自定义工具描述
+
+当工具名不在内置列表中时，`tools describe` 会自动查询项目自定义工具：
+
+```powershell
+unity_cli tools describe my.custom-tool --bridge-endpoint http://127.0.0.1:47392
+```
+
+## Descriptor 字段用途
+
+### 安全判断
+
+- `destructiveHint: true` → 执行前必须确认风险、使用 `--dry-run` 或 `--yes`
+- `readOnlyHint: true` → 只读操作，不会修改 Unity 状态
+- `architectureSensitive: true` → 修改前需审查 `frozenDecision`
+
+### 执行通道判断
+
+- `handler: "bridge"` → 实时 Bridge 执行
+- `handler: "bridge-runtime"` → 需要 Play Mode 的 Runtime 工具
+- `handler: "hybrid"` → 支持 Bridge + job 双通道
+- `handler: "job"` → batchmode/job 执行
+- `handler: "offline"` → 本地 CLI 执行
+
+### 可用性判断
+
+- `target: "editor"` → 编辑器主线程可用
+- `target: "runtime"` → Play Mode 下可用
+- `target: "both"` → 编辑器和运行时都可用
+- `availabilityScope` → 详细可用性范围
+- `available` → 当前目标实例上是否可用
+- `requiresPackages` → 需要安装的 Unity 包
+
+## AI Agent 发现工作流
+
+1. `tools groups` — 了解能力分类
+2. `tools list --group <relevant-group>` — 查看相关分组工具
+3. `tools describe <tool>` — 获取完整 descriptor，确认 inputSchema、安全提示和可用性
+4. `tools run <tool> --input '...'` — 执行
+
+### 错误处理
+
+- `E_TOOL_NOT_FOUND_FOR_TARGET` → 工具在当前目标不可用，检查 `requiresPackages` 和 `available`
+- `E_RUNTIME_NOT_READY` → Runtime 工具需要 Play Mode 活跃，检查 `target: "runtime"`
+- `E_TARGET_AMBIGUOUS` → 多个实例可用，需要显式指定 `--target`

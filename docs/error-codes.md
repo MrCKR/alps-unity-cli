@@ -1,137 +1,108 @@
-# Error Codes and next_actions
+# 错误码（Error Codes）
 
-> **Structured error taxonomy for recovery and retry**
+alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transient` 标记、`retry_after_ms` 和 `next_actions` 自动恢复指引。
 
-## The Error Envelope
-
-Every CLI command that fails returns a standardized error envelope (see [../schemas/error-code.schema.json](../schemas/error-code.schema.json) and [../schemas/response-envelope.schema.json](../schemas/response-envelope.schema.json)):
+## 错误格式
 
 ```json
 {
   "ok": false,
-  "requestId": "req_01234567-89ab-cdef",
+  "requestId": "req-xxx",
   "error": {
-    "code": "E_UNITY_BUSY",
-    "message": "Unity Editor is busy (compiling or executing a long operation).",
-    "details": { "timeoutMs": 60000, "bridgeEndpoint": "http://127.0.0.1:47392" },
+    "code": "E_TARGET_AMBIGUOUS",
+    "message": "Multiple ready instances found.",
+    "details": "...",
     "next_actions": [
-      "Retry the same command after Unity finishes the current operation.",
-      "Check editor state with unity_cli editor state.",
-      "Increase timeout with --timeout-ms."
+      "Run unity_cli instances list to discover targets.",
+      "Run unity_cli target set <id|alias> to select a target."
     ],
-    "transient": true,
-    "retry_after_ms": 5000
+    "transient": false,
+    "retry_after_ms": 0
   }
 }
 ```
 
-## Error Code Fields
+## 错误分类
 
-| Field | Type | Meaning |
-|-------|------|---------|
-| `code` | string | Machine-readable error code from the taxonomy (e.g. `E_UNITY_BUSY`, `E_TARGET_AMBIGUOUS`) |
-| `message` | string | Human-readable error description |
-| `details` | object | Additional structured context (e.g. `jobId`, `timeoutMs`, `targets`) |
-| `next_actions` | string[] | Suggested recovery actions the caller can take |
-| `transient` | boolean | `true` if the same request may succeed after retry |
-| `retry_after_ms` | integer | Suggested minimum retry delay for transient errors; `0` = no specific recommendation |
-| `requestId` | string | Echoed from the original request for audit correlation |
+### Target / Instance 错误
 
-> **Note**: The JSON field names are `next_actions` and `retry_after_ms` (snake_case), matching `schemas/error-code.schema.json`. In prose we write "next actions" for readability, but AI agents must use the JSON field names `next_actions` and `retry_after_ms` when parsing error responses.
+| 错误码 | 含义 | 恢复 |
+|--------|------|------|
+| `E_TARGET_NOT_FOUND` | 无可用目标实例 | `instances list` 检查实例 |
+| `E_TARGET_STALE` | 目标实例过期 | `instances prune` 清理后重连 |
+| `E_TARGET_UNREACHABLE` | 目标不可达 | 检查 Bridge 端点和 Unity 进程 |
+| `E_TARGET_AMBIGUOUS` | 多个就绪实例 | `target set <id>` 显式选择 |
 
-## Error Code Taxonomy
+### Runtime / Play Mode 错误
 
-### Target and Instance Errors
+| 错误码 | 含义 | 恢复 |
+|--------|------|------|
+| `E_RUNTIME_NOT_READY` | Runtime 工具需 Play Mode | 先 `editor play`，transient 可重试 |
+| `E_RUNTIME_SESSION_STALE` | 运行时会话过期 | 重新进入 Play Mode |
+| `E_RUNTIME_TIMEOUT` | 运行时操作超时 | 增加 `--timeout-ms` 或重试 |
 
-| Code | Meaning | Transient? | next_actions |
-|------|---------|------------|-------------|
-| `E_TARGET_NOT_FOUND` | No Unity target matches the selector | No | Run `instances list`; use `target set` |
-| `E_TARGET_AMBIGUOUS` | Multiple ready targets match | No | Pass `--target <id|alias>`; run `target set` |
-| `E_TARGET_STALE` | Target heartbeat expired | Yes | Reopen Unity Editor; run `instances prune` |
-| `E_TARGET_UNREACHABLE` | Target `/health` not responding | Yes | Check Editor process; run `instances prune` |
-| `E_TARGET_ALIAS_CONFLICT` | Alias already points to another instance | No | Run `target alias unset <alias>` first, or use `--force` |
-| `BRIDGE_CONNECTION_FAILED` | Cannot connect to Bridge endpoint | Yes | Check `--bridge-endpoint`; ensure Editor is running |
-| `E_UNITY_BUSY` | Unity is compiling or executing | Yes | Retry after delay; check `editor state` |
-| `UNITY_BUSY` | Project is locked by open Unity Editor (batchmode cannot start) | Yes | Close Unity Editor; delete stale `<project>/Temp/UnityLockfile` if Unity is not running |
-| `E_UNITY_COMPILING` | Domain reload in progress | Yes | Wait for compilation to finish |
+### Tool / Discovery 错误
 
-### Runtime Tool Errors
+| 错误码 | 含义 | 恢复 |
+|--------|------|------|
+| `E_TOOL_NOT_FOUND_FOR_TARGET` | 工具在目标不可用 | `tools describe` 检查可用性 |
+| `E_TOOL_FINGERPRINT_MISMATCH` | handler 代码变更 | 审计后 `--fingerprint-mode warn` |
+| `E_INPUT_VALIDATION_FAILED` | 输入不符合 schema | 查看 `tools describe` 的 inputSchema |
 
-| Code | Meaning | Transient? | next_actions |
-|------|---------|------------|-------------|
-| `E_RUNTIME_NOT_READY` | Runtime tools require Play Mode, which is not active | Yes | Run `tools run editor.play` to enter Play Mode, then retry |
-| `E_RUNTIME_SESSION_STALE` | Runtime session is stale (domain reload during Play Mode) | Yes | Exit and re-enter Play Mode; check `editor.state` |
-| `E_RUNTIME_TIMEOUT` | Runtime tool execution timed out | No | Increase `--timeout-ms`; simplify the operation |
-| `E_RUNTIME_TOOL_TARGET_MISMATCH` | Runtime tool called with editor target context | No | Use `--runtime` flag or ensure the tool's `target` matches the execution context |
+### 安全确认错误
 
-### Scene and Object Errors
+| 错误码 | 含义 | 恢复 |
+|--------|------|------|
+| `E_DESTRUCTIVE_CONFIRMATION_REQUIRED` | 破坏性工具未确认 | 添加 `--yes` |
+| `E_DRY_RUN_UNSUPPORTED` | 工具不支持 dry-run | 直接用 `--yes` 确认 |
 
-| Code | Meaning | Transient? | next_actions |
-|------|---------|------------|-------------|
-| `E_SCENE_VIEW_NOT_AVAILABLE` | Scene view not available for screenshot | No | Use `camera screenshot` instead |
-| `E_TARGET_AMBIGUOUS` (domain) | Multiple objects match the selector | No | Use hierarchy path or instance ID |
-| `E_TARGET_NOT_FOUND` (domain) | Specified object not found | No | Use `go find` or `scene hierarchy` |
-| `E_ANIMATOR_NOT_FOUND` | No Animator on target object | No | Check `go inspect` for component list |
-| `E_ANIMATION_NO_CONTROLLER` | Animator has no RuntimeAnimatorController (layerCount=0) | No | Assign a RuntimeAnimatorController with at least one layer, then retry |
-| `E_ANIMATION_LAYER_INVALID` | Animator layer index out of range | No | Run `animation state --target <go>` to inspect layer count |
+### Scene / Asset / Prefab 错误
 
-### Asset Errors
+| 错误码 | 含义 |
+|--------|------|
+| `E_ASSET_PATH_REQUIRED` | 资产路径缺失 |
+| `E_ASSET_NOT_FOUND` | 资产未找到 |
+| `E_ASSET_OUTPUT_EXISTS` | 输出已存在（用 `--overwrite`） |
+| `E_PREFAB_NOT_FOUND` | Prefab 未找到 |
+| `E_PREFAB_STAGE_NOT_OPEN` | Prefab Stage 未打开 |
+| `E_CAMERA_NOT_FOUND` | 相机未找到 |
+| `E_SCENE_VIEW_NOT_AVAILABLE` | Scene 视图不可用 |
 
-| Code | Meaning | Transient? | next_actions |
-|------|---------|------------|-------------|
-| `E_ASSET_PATH_REQUIRED` | Asset path argument missing | No | Provide `Assets/...` path |
-| `E_ASSET_NOT_FOUND` | Asset does not exist at path | No | Use `asset search` to find correct path |
-| `E_ASSET_OUTPUT_EXISTS` | Output path already exists | No | Add `--overwrite` or choose different path |
-| `E_ASSET_DELETE_FAILED` | AssetDatabase delete failed | No | Check asset is not locked; use `asset info` |
+### Package 错误
 
-### Package Errors
+| 错误码 | 含义 |
+|--------|------|
+| `E_PACKAGE_NOT_FOUND` | 包未安装 |
+| `E_PROBUILDER_PACKAGE_NOT_FOUND` | ProBuilder 包未安装 |
+| `E_VFX_PACKAGE_MISSING` | VFX Graph 包未安装 |
 
-| Code | Meaning | Transient? | next_actions |
-|------|---------|------------|-------------|
-| `E_SHADER_NOT_FOUND` | Shader asset not found | No | Use `asset search --type Shader` |
-| `E_VFX_PACKAGE_MISSING` | Visual Effect Graph not installed | No | Install `com.unity.visualeffectgraph` |
-| `E_PROBUILDER_PACKAGE_NOT_FOUND` | ProBuilder not installed | No | Install `com.unity.probuilder` |
+### 执行错误
 
-### Execution Errors
+| 错误码 | 含义 |
+|--------|------|
+| `E_UNITY_BUSY` | Unity 正忙 |
+| `E_EXECUTION_TIMEOUT` | 执行超时 |
+| `E_CODE_COMPILE_FAILED` | 代码编译失败 |
+| `E_CODE_RUNTIME_EXCEPTION` | 代码运行时异常 |
+| `E_IO_ERROR` | IO 错误 |
 
-| Code | Meaning | Transient? | next_actions |
-|------|---------|------------|-------------|
-| `E_CODE_SOURCE_INVALID` | Invalid code source specification | No | Use `--file`, `--stdin`, or `--code` (exactly one) |
-| `E_CODE_COMPILE_FAILED` | C# compilation error in runtime code | No | Check `compile.diagnostics` in response |
-| `E_CODE_RUNTIME_EXCEPTION` | Runtime exception during code execution | No | Review `runtime.stderr` in response |
-| `E_EXECUTION_TIMEOUT` | Execution exceeded timeout | No | Increase `--timeout-ms` or simplify the code |
-| `E_REFERENCE_RESOLUTION_FAILED` | Assembly reference not found | No | Check `--refs`; ensure referenced assemblies are loaded |
+## AI Agent 错误处理流程
 
-### Security and Confirmation Errors
+1. 读取 `error.code` 确定错误类别
+2. 检查 `transient` — 若为 true，等待 `retry_after_ms` 后重试
+3. 遵循 `next_actions` 的建议恢复
+4. 不要猜测恢复方式，使用建议的命令
 
-| Code | Meaning | Transient? | next_actions |
-|------|---------|------------|-------------|
-| `E_DESTRUCTIVE_CONFIRMATION_REQUIRED` | Destructive command needs `--yes` | No | Add `--yes` to confirm; use `--dry-run` for preview if supported |
-| `E_DRY_RUN_UNSUPPORTED` | `--dry-run` not supported for this command | No | Remove `--dry-run`; use `tools describe` to check `supportsDryRun` |
-| `E_TOOL_FINGERPRINT_MISMATCH` | Project tool descriptor/handler fingerprint changed | No | Review code changes; use `--fingerprint-mode warn` for intentional changes |
-| `BATCH_PARALLEL_CONFLICT` | Batch step declares unsafe parallelism | No | Reduce `--parallel` or mark steps as `parallel-safe` |
+### next_actions 规则
 
-### IO and Path Errors
+- Target 错误的 `next_actions` 必须指向 `instances list` 或 `target set`
+- Runtime 错误的 `next_actions` 必须指向 `editor play` 或 Play Mode 相关操作
+- Discovery 错误的 `next_actions` 必须指向 `tools list`、`tools search` 或 `tools describe`
+- 诊断错误的 `next_actions` 必须指向 `doctor` 或 `diagnose preflight`
+- **不得使用旧 `tools list` 无过滤全量发现作为唯一恢复建议**
 
-| Code | Meaning | Transient? | next_actions |
-|------|---------|------------|-------------|
-| `E_OUTPUT_EXISTS` | Output file already exists | No | Add `--overwrite` |
-| `E_OUTPUT_PATH_REQUIRED` | Output path argument missing | No | Provide `--output <path>` |
-| `E_IO_ERROR` | File system IO error | No | Check path validity and permissions |
-| `E_CAMERA_NOT_FOUND` | Camera target not found | No | Use `camera list` to find camera names |
+## JSON 字段命名
 
-## How to Use next_actions as an AI Agent
-
-1. **Read the `code` first.** It tells you the category of the problem.
-2. **Check `transient`.** If `true`, retry after `retry_after_ms` (or a reasonable delay if `0`). If `false`, the error requires a different action.
-3. **Follow `next_actions`.** Each suggestion is a concrete CLI command or action you can take.
-4. **Inspect `details`.** Structured context like `targets`, `timeoutMs`, `diagnostics` provides additional information for decision-making.
-5. **Never guess.** If `next_actions` suggests running `instances list`, run `instances list` — don't assume you know which instances are available.
-
-## Cross-Reference
-
-- Target errors: [target-and-instance](./target-and-instance.md)
-- Runtime tool availability: [availability-differences](./availability-differences.md)
-- Risk and side effects: [risk-and-side-effects](./risk-and-side-effects.md)
-- Error schema: [../schemas/error-code.schema.json](../schemas/error-code.schema.json)
-- Response envelope schema: [../schemas/response-envelope.schema.json](../schemas/response-envelope.schema.json)
+所有错误响应使用 snake_case：
+- `next_actions`（不是 `nextActions`）
+- `retry_after_ms`（不是 `retryAfterMs`）

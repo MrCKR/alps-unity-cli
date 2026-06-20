@@ -1,463 +1,252 @@
 ---
 name: unity_cli
-description: Operate Unity Editor via the alps-unity-cli target-first discovery and unified tools workflow. Use when you need to discover, inspect, or control Unity instances, scenes, assets, or any Editor capability through the CLI's unified tool model.
+description: 通过 alps-unity-cli 操作 Unity Editor
 ---
 
-# Unity CLI — AI Operator Skill
+# unity_cli — Agent 操作手册
 
-This skill teaches you how to operate the Unity Editor through `unity_cli` using the **target-first discovery** and **unified tools** workflow. The only execution entry point you need is `tools run <toolName>`. You do not need to memorize domain-specific command groups — the CLI discovers, describes, and runs everything through the unified `tools` interface.
+本 Skill 指导 AI Agent 如何通过 `unity_cli` CLI 安全高效地操作 Unity Editor。
 
-## Core Workflow
-
-Every interaction follows this loop:
+## 核心工作流
 
 ```
-instances list  →  target set  →  tools search  →  tools describe  →  tools run  →  verify
+instances list → target set → tools groups → tools list --group <group> → tools describe <tool> → tools run <tool> → verify
 ```
 
-You always start from instances and target selection, then discover and execute tools. Never skip ahead.
+## 步骤 1：发现目标
 
----
-
-## Step 1: Discover Available Instances
-
-```bash
+```powershell
 unity_cli instances list
 ```
 
-This returns all registered Unity Editor instances with their status:
+检查返回的实例列表。选择一个 `status: ready` 的实例：
 
-| Field | Meaning |
-|-------|---------|
-| `id` | Unique instance identifier |
-| `alias` | Human-readable alias (if set) |
-| `project` | Project name |
-| `state` | `ready`, `stale`, or `unreachable` |
-| `endpoint` | Bridge endpoint URL |
-
-**If no instances are listed or all are stale/unreachable:**
-- The Unity Editor is not running or the bridge is not connected.
-- Suggest the user open the Unity project and ensure the UnityPkg bridge is active.
-- Use `unity_cli instances prune` to clean up stale entries, then retry.
-
-**If multiple ready instances exist**, proceed to Step 2 to select one.
-
-## Step 2: Select a Target
-
-```bash
-# Set the active target by id or alias
-unity_cli target set <id|alias>
-
-# Or check the current active target
-unity_cli target get
+```powershell
+unity_cli target set <instanceId>
+# 或使用别名
+unity_cli target alias set <instanceId> my-project
+unity_cli target set my-project
 ```
 
-Target selection is required when multiple instances exist. Once set, all subsequent `tools` commands are scoped to that target.
+**如果没有就绪实例**：Unity Editor 未运行或未加载 Bridge 包。通知用户打开 Unity Editor 并运行 `unity_cli init`。
 
-**Convenience — use --target flag:**
+**如果多个就绪实例**：必须显式 `target set`，CLI 会返回 `E_TARGET_AMBIGUOUS` 而不猜测。
 
-```bash
-unity_cli tools list --target <id|alias>
-unity_cli tools describe scene.hierarchy --target <id|alias>
-unity_cli tools run scene.hierarchy --target <id|alias>
-```
+## 步骤 2：获取只读上下文
 
-**Alias management:**
+在执行任何操作前，先了解项目状态：
 
-```bash
-unity_cli target alias set <instanceId> <alias>
-unity_cli target alias list
-unity_cli target alias unset <alias>
-```
-
-Use aliases for stable, memorable names instead of raw instance IDs.
-
-## Step 3: Search for Tools
-
-```bash
-# Search by keyword across name, title, description, and group
-unity_cli tools search <query>
-
-# List all tools, optionally filtered by group
-unity_cli tools list
-unity_cli tools list --group scene
-
-# List available tool groups
-unity_cli tools groups
-```
-
-Each search result shows:
-
-| Field | Meaning |
-|-------|---------|
-| `name` | Dotted tool identifier (e.g. `scene.hierarchy`) |
-| `title` | Short human-readable title |
-| `group` | Category (scene, camera, editor, etc.) |
-| `supportStatusLabel` | Availability status |
-| `readOnlyHint` | True = no side effects |
-| `destructiveHint` | True = may irreversibly modify/delete |
-| `target` | Execution target: `editor`, `runtime`, or `both` |
-| `availabilityScope` | `editorSession` or `playModeSession` |
-| `available` | Whether the tool is currently available for this target |
-
-**Tip:** Use `tools list --include-custom` to discover project-specific Editor tools registered by the connected Unity instance.
-
-## Step 4: Describe a Tool Before Running
-
-```bash
-unity_cli tools describe <toolName>
-```
-
-**Always describe a tool before running it.** The response contains everything you need to construct the `tools run` invocation:
-
-| Field | Purpose |
-|-------|---------|
-| `inputSchema` | JSON Schema for parameters — use this to build `--input` |
-| `outputSchema` | JSON Schema for successful output |
-| `target` | Whether this tool targets `editor`, `runtime`, or `both` |
-| `handler` | Execution mode: `bridge`, `bridge-runtime`, `job`, `offline`, or `hybrid` |
-| `supportStatus` | Availability label: `live-bridge`, `live-bridge-runtime`, `bridge-job`, `batch-job`, `cli-only`, or `planned` |
-| `availabilityScope` | `editorSession` or `playModeSession` |
-| `available` | Whether the tool is currently available for this target |
-| `readOnlyHint` | Whether the tool mutates state |
-| `destructiveHint` | Whether changes are irreversible |
-| `supportsDryRun` | Whether `--dry-run` is available |
-| `longRunning` | Whether to expect delays |
-| `examples` | Ready-to-use command examples |
-| `next_actions` | Suggested follow-up actions after running (JSON field: `next_actions`, prose: "next actions") |
-| `docsTopic` | Topic key for `unity_cli docs topic <key>` for deeper docs |
-
-**Key behavioral hints from describe:**
-
-- **`destructiveHint: true`** → Confirm with the user before executing. Use `--dry-run` if `supportsDryRun: true`.
-- **`target: runtime`** and **`availabilityScope: playModeSession`** → The tool needs Play Mode active. If `available: false`, enter Play Mode first.
-- **`available: false`** → The tool cannot run on this target in the current state. Check `next_actions` for guidance.
-- **`longRunning: true`** → May take seconds or minutes. Poll job status with `unity_cli job status --id <jobId>`.
-- **`target: runtime`** → This tool executes through the runtime executor in Play Mode. Still use `tools run` — the router handles the execution path internally.
-- **`target: both`** → This tool can execute on either the editor or runtime path. Use `--runtime` to force the runtime path.
-
-**About `cliCommand`**: The descriptor may include a `cliCommand` field (e.g. `scene hierarchy`) for backward-compatibility or low-level debugging. **Do not use `cliCommand` as your primary execution path.** Always use `tools run <toolName>` instead.
-
-## Step 5: Execute a Tool with `tools run`
-
-```bash
-unity_cli tools run <toolName> [--input '<json>'] [--input-file <path>] [--target <id|alias>] [--timeout-ms <n>] [--fingerprint-mode warn|block] [--runtime]
-```
-
-This is the **only** execution entry point you need. The invocation router internally selects the correct execution path (editor bridge, runtime executor, CLI local, or job runner) based on the tool's descriptor.
-
-### Input Methods
-
-Parameters come from `tools describe.inputSchema`. Pass them using one of:
-
-```bash
-# Inline JSON (most common) — use --input
-unity_cli tools run camera.screenshot --input '{"target":"MainCamera","output":"screenshot.png","width":1280,"height":720}'
-
-# From a file — use --input-file
-unity_cli tools run code.exec --input-file params.json
-
-# Via stdin
-echo '{"code":"Debug.Log(\"hello\");"}' | unity_cli tools run code.exec --stdin
-
-# No parameters needed
-unity_cli tools run scene.hierarchy
-unity_cli tools run editor.console
+```powershell
+# 编辑器状态
 unity_cli tools run editor.state
+
+# 诊断预检
+unity_cli diagnose preflight
+
+# 场景层级
+unity_cli tools run scene.hierarchy --input '{}'
 ```
 
-### Target Selection
+> 只读工具（`readOnlyHint: true`）不会修改 Unity 状态，可安全重复调用。
 
-```bash
-# Use the active target (set via target set)
-unity_cli tools run scene.hierarchy
+## 步骤 3：发现工具能力
 
-# Override target for this invocation
-unity_cli tools run scene.hierarchy --target <id|alias>
-```
+### 推荐：group-first 分层发现
 
-### Destructive Tool Confirmation
-
-For tools with `destructiveHint: true`:
-
-```bash
-# The CLI will prompt for confirmation before executing
-unity_cli tools run asset.delete --input '{"path":"Assets/Old.asset"}'
-
-# Use --dry-run to preview without executing (if supportsDryRun is true)
-unity_cli tools run asset.delete --input '{"path":"Assets/Old.asset"}' --dry-run
-
-# Add --yes to confirm in non-TTY / CI environments
-unity_cli tools run asset.delete --input '{"path":"Assets/Old.asset"}' --yes
-```
-
-Always confirm destructive operations with the user before running them.
-
-### Runtime Tools
-
-Runtime tools (`target: runtime` or `target: both`) also use `tools run` — no separate command:
-
-```bash
-# Runtime tool — the router handles Play Mode and session checks
-unity_cli tools run <runtimeToolName> --input '<params>'
-```
-
-If `available: false` for a runtime tool (Editor not in Play Mode), `tools run` will return `E_RUNTIME_NOT_READY` (transient) with `next_actions` telling you to enter Play Mode first. Enter Play Mode, then retry:
-
-```bash
-unity_cli tools run editor.play
-unity_cli tools run <runtimeToolName> --input '<params>'
-```
-
-### Long-Running Tools and Job Polling
-
-Tools that run as jobs return a `jobId`. Track progress:
-
-```bash
-unity_cli job status --id <jobId>
-unity_cli job logs --id <jobId> --tail 50
-unity_cli job cancel --id <jobId>
-```
-
-### Timeout Control
-
-```bash
-# Override default timeout
-unity_cli tools run code.exec --input '{"code":"..."}' --timeout-ms 120000
-```
-
-## Step 6: Verify Results
-
-After executing a tool, verify the outcome:
-
-- **Read-only tools:** Check the response data directly.
-- **State-changing tools:** Use a corresponding read-only tool to confirm.
-  - After `tools run editor.play` → `tools run editor.state`
-  - After `tools run scene.load` → `tools run scene.hierarchy`
-  - After `tools run <package tool>` → `tools run cli.package.list`
-- **Visual verification:** Use `tools run camera.screenshot` or `tools run screenshot.capture` to visually confirm scene changes.
-- **Console check:** Use `tools run editor.console` to check for errors or warnings after mutations.
-- **Compilation check:** After script changes, wait for compilation, then use `tools run editor.console` to check for errors.
-
-## Optional Package Extensions
-
-Some tools require optional Unity packages to be installed in the target project. These tools declare `requiresPackages` in their descriptor and will return `E_*_PACKAGE_NOT_FOUND` with `unavailable + next_actions` when the package is missing.
-
-### Discovering Extension Tools
-
-Extension tools are exposed through the same group-first discovery workflow:
-
-```bash
-unity_cli tools groups                       # includes cinemachine, vfx, urp, hdrp, probuilder groups
-unity_cli tools list --group cinemachine     # list Cinemachine tools
-unity_cli tools list --group vfx             # list VFX Graph tools
-unity_cli tools list --group urp            # list URP tools
-unity_cli tools list --group hdrp           # list HDRP tools
-unity_cli tools describe cinemachine.create  # inspect a specific extension tool
-```
-
-### Cinemachine (com.unity.cinemachine)
-
-Requires the Cinemachine package. When missing, tools return `E_CINEMACHINE_PACKAGE_NOT_FOUND`.
-
-```bash
-# Create a follow camera preset (configures Body/Aim pipeline components)
-unity_cli tools run cinemachine.create --input '{"preset":"follow","name":"PlayerCam","follow":"Player"}'
-
-# Set lens properties via SerializedObject (survives internal field renames)
-unity_cli tools run cinemachine.lens --input '{"target":"PlayerCam","fieldOfView":60}'
-
-# Configure the Brain's default blend
-unity_cli tools run cinemachine.blend --input '{"target":"Main Camera","style":"ease_in_out","duration":2}'
-
-# Swap Body/Aim pipeline components
-unity_cli tools run cinemachine.body --input '{"target":"PlayerCam","body":"CinemachineFollow"}'
-unity_cli tools run cinemachine.aim --input '{"target":"PlayerCam","aim":"CinemachineRotationComposer"}'
-
-# Add/list/remove CinemachineExtension components
-unity_cli tools run cinemachine.extension --input '{"target":"PlayerCam","action":"list"}'
-```
-
-### VFX Graph (com.unity.visualeffectgraph)
-
-Requires the Visual Effect Graph package. When missing, tools return `E_VFX_PACKAGE_MISSING`.
-
-```bash
-# Create a VFX asset from a built-in template
-unity_cli tools run vfx.template --input '{"path":"Assets/VFX/Sparkle.vfx","template":"AR/AugmentedRealityTemplate"}'
-unity_cli tools run vfx.template --input '{"template":"list"}'   # discover available templates
-
-# Set exposed parameters (float, int, bool, vector2/3/4, color, texture, mesh)
-unity_cli tools run vfx.parameter --input '{"target":"VFXFire","name":"Intensity","type":"float","value":"2.5"}'
-unity_cli tools run vfx.parameter --input '{"target":"VFXFire","name":"Velocity","type":"vector3","x":0,"y":1,"z":0}'
-
-# Control playback
-unity_cli tools run vfx.control --input '{"target":"VFXFire","action":"play"}'
-unity_cli tools run vfx.control --input '{"target":"VFXFire","action":"rate","rate":0.5}'
-
-# Send named events with attribute payloads
-unity_cli tools run vfx.event --input '{"target":"VFXFire","eventName":"Explode","attributeName":"position","attributeX":1,"attributeY":2,"attributeZ":3}'
-```
-
-### URP (com.unity.render-pipelines.universal)
-
-Requires URP to be the active render pipeline. When not active, tools return `E_URP_PACKAGE_NOT_FOUND`.
-
-```bash
-# List/add/remove/toggle/configure Renderer Features
-unity_cli tools run urp.feature --input '{"action":"list"}'
-unity_cli tools run urp.feature --input '{"action":"add","featureType":"ScreenSpaceAmbientOcclusion"}'
-unity_cli tools run urp.feature --input '{"action":"toggle","index":0,"enabled":false}'
-
-# Create/list/configure Volumes
-unity_cli tools run urp.volume --input '{"action":"create","name":"GlobalVolume","isGlobal":true}'
-unity_cli tools run urp.volume --input '{"action":"add-effect","target":"GlobalVolume","effectType":"ColorAdjustments"}'
-
-# Get/set pipeline asset settings
-unity_cli tools run urp.settings --input '{}'
-unity_cli tools run urp.settings --input '{"property":"renderScale","value":"1.5"}'
-```
-
-### HDRP (com.unity.render-pipelines.high-definition)
-
-Requires HDRP to be the active render pipeline. When not active, tools return `E_HDRP_PACKAGE_NOT_FOUND`.
-
-```bash
-# Create/list/configure Volumes
-unity_cli tools run hdrp.volume --input '{"action":"create","name":"GlobalVolume","isGlobal":true}'
-unity_cli tools run hdrp.volume --input '{"action":"add-effect","target":"GlobalVolume","effectType":"HDShadowSettings"}'
-
-# Get/set pipeline asset settings
-unity_cli tools run hdrp.settings --input '{}'
-unity_cli tools run hdrp.settings --input '{"property":"shadowDistance","value":"500"}'
-```
-
----
-
-## Common Patterns
-
-### Starting a Session
-
-```bash
-unity_cli instances list
-unity_cli target set <id|alias>
-unity_cli tools search scene
-unity_cli tools describe scene.hierarchy
-unity_cli tools run scene.hierarchy
-```
-
-### Making a Scene Change and Verifying
-
-```bash
-unity_cli tools describe scene.load
-unity_cli tools run scene.load --input '{"path":"Assets/Scenes/Main.unity"}'
-unity_cli tools run scene.hierarchy
-unity_cli tools run screenshot.capture --input '{"output":"verify.png"}'
-unity_cli tools run editor.console
-```
-
-### Exploring Available Capabilities
-
-```bash
-unity_cli capabilities
+```powershell
+# 查看工具分组
 unity_cli tools groups
-unity_cli tools search camera
+
+# 按组查看工具摘要
+unity_cli tools list --group camera
+
+# 查看单个工具完整描述
 unity_cli tools describe camera.screenshot
-unity_cli tools run camera.screenshot --input '{"target":"MainCamera","output":"shot.png","width":1280,"height":720}'
 ```
 
-### Running a Runtime Tool
+### 辅助：关键词搜索
 
-```bash
-# Describe first to check requirements
-unity_cli tools describe <runtimeToolName>
-# If available: false (requires Play Mode), enter Play Mode
-unity_cli tools run editor.play
-# Then run the runtime tool
-unity_cli tools run <runtimeToolName> --input '<params>'
+```powershell
+unity_cli tools search screenshot
 ```
 
-### Checking Editor State Before Operations
+### 包含项目自定义工具
 
-```bash
-unity_cli tools describe editor.state
-unity_cli tools run editor.state
-# If compiling/importing — wait and retry
-unity_cli tools run editor.console
+```powershell
+unity_cli tools list --include-custom
+unity_cli tools list --group custom --include-custom
 ```
 
----
+## 步骤 4：执行工具
 
-## Error Handling
+```powershell
+# 基本执行
+unity_cli tools run <tool-name> --input '<json>'
 
-All CLI output follows a structured envelope:
+# 从文件读取输入
+unity_cli tools run <tool-name> --input-file params.json
+
+# 从 stdin 读取输入
+echo '<json>' | unity_cli tools run <tool-name> --stdin
+```
+
+### 破坏性工具
+
+执行前必须确认：
+
+```powershell
+# 1. describe 确认风险
+unity_cli tools describe asset.delete
+
+# 2. dry-run 预览（如支持）
+unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --dry-run
+
+# 3. 确认执行
+unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --yes
+```
+
+### Runtime 工具
+
+需要 Play Mode：
+
+```powershell
+unity_cli tools run editor.play --input '{}'
+unity_cli tools run <runtime-tool> --input '<json>'
+# 完成后
+unity_cli tools run editor.stop --input '{}'
+```
+
+## 步骤 5：验证结果
+
+```powershell
+# 只读验证
+unity_cli tools run camera.list --input '{}'
+unity_cli tools run editor.state --input '{}'
+unity_cli tools run scene.hierarchy --input '{}'
+
+# 诊断验证
+unity_cli doctor
+```
+
+## 常见模式
+
+### 开始会话
+
+```powershell
+unity_cli instances list
+unity_cli target set <instanceId>
+unity_cli tools run editor.state --input '{}'
+unity_cli tools groups
+```
+
+### 场景修改
+
+```powershell
+unity_cli tools describe asset.create
+unity_cli tools run asset.create --input '{"path":"Assets/NewFolder","type":"folder"}'
+unity_cli tools run editor.refresh --input '{"compile":true}' --job
+```
+
+### 使用 Runtime 工具
+
+```powershell
+unity_cli tools run editor.state --input '{}'
+# 确认当前不在 Play Mode
+unity_cli tools run editor.play --input '{}'
+unity_cli tools run <runtime-tool> --input '<json>'
+unity_cli tools run editor.stop --input '{}'
+```
+
+### 处理自定义工具
+
+```powershell
+unity_cli tools list --include-custom
+unity_cli tools describe my.custom-tool
+unity_cli tools run my.custom-tool --input '<json>'
+```
+
+### 诊断问题
+
+```powershell
+unity_cli doctor
+unity_cli diagnose preflight
+unity_cli tools describe <problematic-tool>
+```
+
+## 错误处理
+
+### 统一错误格式
 
 ```json
 {
-  "ok": true|false,
-  "requestId": "req_...",
-  "data": { ... },
+  "ok": false,
+  "requestId": "req-xxx",
   "error": {
-    "code": "ERROR_CODE",
-    "message": "Human-readable message",
-    "next_actions": ["Suggested recovery steps"],
-    "details": { ... },
+    "code": "E_RUNTIME_NOT_READY",
+    "message": "...",
     "transient": true,
-    "retry_after_ms": 5000
+    "retry_after_ms": 3000,
+    "next_actions": ["Enter Play Mode first: unity_cli tools run editor.play --input '{}'"]
   }
 }
 ```
 
-**Note:** JSON field names are `next_actions` and `retry_after_ms` (snake_case), matching the error envelope schema. In prose we write "next actions" for readability, but always use `next_actions` when parsing error responses.
+### 关键规则
 
-**Transient errors** (compiling, importing, domain reload, busy, runtime not ready):
-- `error.transient === true` means the Editor is temporarily unavailable.
-- Respect `retry_after_ms` before retrying.
-- Common transient codes: `E_UNITY_COMPILING`, `E_UNITY_IMPORTING`, `E_UNITY_DOMAIN_RELOAD`, `E_UNITY_BUSY`, `E_RUNTIME_NOT_READY`.
+1. 读取 `error.code` 确定错误类别
+2. 检查 `transient` — 若为 true，等待 `retry_after_ms` 后重试
+3. 遵循 `next_actions` 恢复，不要猜测
+4. `E_TARGET_AMBIGUOUS` → 显式 `target set`
+5. `E_RUNTIME_NOT_READY` → 先 `editor.play`
+6. `E_TOOL_FINGERPRINT_MISMATCH` → 通知用户，审计后可 `--fingerprint-mode warn`
 
-**Target errors:**
-- `E_TARGET_AMBIGUOUS` → Multiple instances; pass `--target` or run `target set`.
-- `E_TARGET_STALE` → Instance heartbeat is stale; reopen the Editor.
-- `E_TARGET_UNREACHABLE` → Bridge endpoint not responding; check the Editor process.
-- `BRIDGE_CONNECTION_FAILED` → Cannot connect to Bridge; ensure Editor is running.
+### 瞬态错误重试
 
-**Runtime/session errors:**
-- `E_RUNTIME_NOT_READY` → Runtime tool requires Play Mode; enter Play Mode first (`tools run editor.play`), then retry.
-- `E_RUNTIME_SESSION_STALE` → Runtime session is no longer valid; re-enter Play Mode and retry.
-- `E_RUNTIME_TIMEOUT` → Runtime tool execution timed out; increase `--timeout-ms`.
+`transient: true` 的错误可以自动重试（如 `E_RUNTIME_NOT_READY`、`E_UNITY_BUSY`）：
 
-**Tool discovery errors:**
-- `E_TOOL_NOT_FOUND_FOR_TARGET` → Tool not available on this target instance; use `tools list` to see what's available.
-
-**Execution errors:**
-- `E_DESTRUCTIVE_CONFIRMATION_REQUIRED` → Destructive tool requires `--yes`; use `--dry-run` first if supported.
-- `E_EXECUTION_TIMEOUT` → Execution exceeded timeout; increase `--timeout-ms`.
-- `E_CODE_SOURCE_INVALID` → Invalid code source; use exactly one of `--file`, `--stdin`, or `--code`.
-
-**Always follow `next_actions`** — the CLI provides actionable recovery steps for every error.
-
----
-
-## What NOT to Do
-
-- **Do not** use `custom-tool` commands — they have been removed. Use `tools` commands exclusively.
-- **Do not** use domain-specific commands (e.g. `unity_cli scene hierarchy`, `unity_cli editor console`, `unity_cli code exec`) as your primary execution path — use `tools run <toolName>` instead. The `cliCommand` field in descriptors exists only for backward-compatibility and debugging, not as the user-facing execution entry point.
-- **Do not** use standalone `runtime` commands — runtime capabilities are expressed through tool descriptors (`target: runtime`, `availabilityScope: playModeSession`, `available`) and executed via `tools run`.
-- **Do not** manually ping bridge endpoints or read instance registry files — use `instances list` and `target` commands.
-- **Do not** skip `tools describe` before running a tool you haven't used before — always check schema, hints, and examples first.
-- **Do not** assume all tools are available on every instance — different Unity projects expose different tool sets. Use `tools list` to discover what's available per target.
-- **Do not** use `--input-json` — the CLI parameter is `--input`. Use `--input-file` for file input.
-
----
-
-## Deep Documentation
-
-For detailed parameter schemas, extended examples, and architecture notes, use:
-
-```bash
-unity_cli docs                        # List available documentation topics
-unity_cli docs topic <topic>          # Read a topic
-unity_cli docs search <query>         # Search documentation
+```
+等待 retry_after_ms → 重试原命令 → 最多重试 3 次
 ```
 
-The `docsTopic` field in `tools describe` output links to the relevant deep documentation topic for each tool.
+## 安全规则
+
+### 必须遵守
+
+- 执行 mutating tool 前必须先 `tools describe` 确认风险
+- `destructiveHint: true` 的工具必须使用 `--dry-run`（如支持）+ `--yes`
+- 检查 `target` 和 `availabilityScope` 确保工具在当前状态可用
+- 检查 `requiresPackages` 确保所需 Unity Package 已安装
+- Context（`readOnlyHint: true`）不能产生副作用
+
+### 不得违反
+
+- 不得在未 `target set` 的情况下假设目标
+- 不得跳过 `tools describe` 直接执行未知工具
+- 不得忽略 `E_TARGET_AMBIGUOUS` 错误
+- 不得在非 Play Mode 调用 `target: "runtime"` 工具（除非处理 `E_RUNTIME_NOT_READY` 重试）
+- 不得手动读取 Bridge 注册文件或 ping 端点
+
+## 不要做的事
+
+| ❌ 不要 | ✅ 应该 |
+|---------|---------|
+| 用 `tools list` 无过滤全量展开作为首选发现 | 先 `tools groups`，再 `tools list --group <group>` |
+| 混用 Context 和 Tool 概念 | Tool 可有副作用；Context 必须只读 |
+| 跳过 `tools describe` 直接 `tools run` | 先 describe 确认 schema、风险、可用性 |
+| 假设所有工具在所有实例可用 | 检查 `available` 和 `requiresPackages` |
+| 用 `--input-json` 传参 | 使用 `--input`、`--input-file` 或 `--stdin` |
+| 使用 `nextActions`（camelCase） | 使用 `next_actions`（snake_case） |
+| 使用 `E_PLAYMODE_NOT_READY` | 使用 `E_RUNTIME_NOT_READY` |
+| 手动读取 Bridge 端点或注册文件 | 使用 CLI 命令（`instances list`、`target get`） |
+| 绕过 fingerprint 校验 | 默认 block，审计后可用 `--fingerprint-mode warn` |
+
+## 详细文档
+
+- [工具发现](../docs/tool-discovery.md) — group-first 分层发现详解
+- [工具执行](../docs/tool-execution.md) — tools run 执行通道与安全确认
+- [安全边界](../docs/safety-boundaries.md) — 风险模型与破坏性确认
+- [错误码](../docs/error-codes.md) — 结构化错误与 next_actions
+- [自定义工具](../docs/custom-tools.md) — 项目侧 Tool 注册开发
+- [自定义 Context](../docs/custom-contexts.md) — 项目侧只读 Context（规划中）
+- [扩展包](../docs/extensions.md) — 扩展包使用与开发（规划中）
+- [示例](../examples/README.md) — 操作示例

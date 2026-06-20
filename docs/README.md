@@ -1,45 +1,55 @@
-# Unity CLI Documentation
+# 文档索引
 
-> **Discovery path for AI agents**: `instances → select target → tools search/describe → tools run → verify`
+按"快速开始 / 使用 / 扩展 / 诊断 / 维护"组织的 alps-unity-cli 文档。
 
-This documentation follows the **target-first discovery** model. The only external entry point is the unified `tools` command surface. There is no independent `custom-tool` command group and no independent `runtime` command group; runtime capabilities are expressed through tool descriptors and internal router branches.
+## 快速开始
 
-## Topic Index
+| 文档 | 内容 |
+|------|------|
+| [Target 与 Instance](target-and-instance.md) | 实例发现、目标选择、别名管理 |
+| [工具发现](tool-discovery.md) | group-first 分层发现流程 |
 
-| Topic | Title | Discovery Path |
-|-------|-------|----------------|
-| [target-and-instance](./target-and-instance.md) | Targets and Instances | Start here |
-| [tool-discovery](./tool-discovery.md) | Tool Discovery | `instances → tools list/search/describe` |
-| [tool-execution](./tool-execution.md) | Tool Execution | `tools describe → tools run → verify` |
-| [availability-differences](./availability-differences.md) | Availability Differences | Why different instances show different tools |
-| [error-codes](./error-codes.md) | Error Codes and next_actions | Structured error recovery |
-| [risk-and-side-effects](./risk-and-side-effects.md) | Risk and Side Effects | `destructiveHint`, `readOnlyHint`, `--yes`, `--dry-run` |
+## 使用
 
-## v1.0 Archive (Engineering Reference Only)
+| 文档 | 内容 |
+|------|------|
+| [工具执行](tool-execution.md) | `tools run` 统一执行入口与执行通道 |
+| [安全边界](safety-boundaries.md) | 风险模型、破坏性确认、fingerprint |
+| [错误码](error-codes.md) | 结构化错误码与 `next_actions` |
+| [可用性差异](availability-differences.md) | 不同实例/状态的工具有效性 |
 
-The following documents are **v1.0 engineering archives**, not current user-side guides. They contain pre-P3 legacy terminology (e.g. `custom-tool` command group, independent `runtime` command references). **Do not use them as AI calling guides**; use the topic index above instead.
+## 扩展
 
-| Archive | Title | Scope |
-|---------|-------|-------|
-| [coverage-matrix](./coverage-matrix.md) | Coverage Matrix (v1.0 Archive) | P0-P2 function domain coverage status — contains legacy `project-tool list/run` and pre-unified-command terminology |
-| [risk-register-v1.0](./risk-register-v1.0.md) | Risk Register (v1.0 Archive) | P0-P2 known risks and limitations — contains pre-P3 framing |
+| 文档 | 内容 |
+|------|------|
+| [自定义工具](custom-tools.md) | 项目侧 Editor Tool / Runtime Tool 注册 |
+| [自定义 Context](custom-contexts.md) | 项目侧只读 Context 注册（规划中） |
+| [扩展包](extensions.md) | 扩展包使用与开发（规划中） |
 
-## Reading Order for AI Agents
+## 维护
 
-1. **`target-and-instance`** — Learn what a Unity instance is, how to discover available instances, and how to select a target before any tool call.
-2. **`tool-discovery`** — Learn the unified `tools list/search/describe` surface, how tool metadata reveals `handler`, `supportStatus`, `target`, `availabilityScope`, `inputSchema`, and risk context.
-3. **`tool-execution`** — Learn how to execute tools via `tools run <name>`, how `target=editor|runtime|both` affects execution routing, and how to verify results.
-4. **`availability-differences`** — Understand why different Unity instances may show different tool availability (installed packages, editor state, PlayMode session scope).
-5. **`error-codes`** — Read the structured error taxonomy, `next_actions` recovery suggestions, and `transient` / `retry_after_ms` fields.
-6. **`risk-and-side-effects`** — Understand `destructiveHint`, `readOnlyHint`, `supportsDryRun`, the `--yes` confirmation gate, and `plannedEffects` previews.
+| 文档 | 内容 |
+|------|------|
+| [覆盖率矩阵](coverage-matrix.md) | v1.0 归档：功能域覆盖状态 |
+| [风险登记册](risk-register-v1.0.md) | v1.0 归档：已知风险与缓解措施 |
 
-## Cross-References
+> **归档文档**标记为 v1.0 archive，不代表当前用户指南。请以主题索引中的文档为准。
 
-- **Skill**: `/skills/unity_cli/SKILL.md` ([ALP-417](https://github.com/MrCKR/alps-unity-cli/tree/agent/agent/8c59c737/skills/unity_cli/SKILL.md) on branch `agent/agent/8c59c737`) teaches the same discovery path in a compact, agent-ready format. See that file for the canonical AI skill.
-- **Examples**: `/examples/` ([ALP-419](https://github.com/MrCKR/alps-unity-cli/tree/agent/agent/c7f7740a/examples/) on branch `agent/agent/c7f7740a`) contains 9 runnable examples covering editor tool, runtime tool, verify workflow, and batch scenarios. Key files:
-  - `examples/01-editor-tool-echo.md` — Editor tool via `tools run`
-  - `examples/03-runtime-tool-echo.md` — Runtime tool via `tools run`
-  - `examples/05-verify-workflow.md` — Full discovery → run → verify cycle
-  - `examples/08-batch-editor-plus-runtime.json` — Batch combining editor + runtime
-  - See `examples/README.md` for the full index
-- **Schemas**: `/schemas/tool-metadata.schema.json`, `/schemas/error-code.schema.json`, `/schemas/response-envelope.schema.json` define the contract shapes that `tools describe` and error responses follow. See [tool-discovery](./tool-discovery.md) §Descriptor field coverage for the current vs. P3 contract gap.
+## AI Agent 阅读顺序
+
+1. 先读 `skills/unity_cli/SKILL.md` 了解操作流程
+2. 需要细节时按主题查阅本目录
+3. 示例代码见 `examples/`
+4. Schema 定义见 `schemas/`
+
+## 废弃路径说明
+
+以下发现路径已废弃，不得作为使用指导：
+
+| 废弃路径 | 替代路径 |
+|----------|---------|
+| `tools list` 无过滤全量展开 | `tools groups` → `tools list --group <group>` 分层发现 |
+| `tools list --include-custom` 作为首选发现 | 先 `tools groups` 确认分组，再 `tools list --group <group> --include-custom` |
+| `tools search` 作为唯一发现手段 | `tools search` 仅作为辅助搜索，不应替代 group-first 流程 |
+
+> **注意**：`tools list` 和 `tools list --include-custom` 命令仍然可用，但不推荐作为 AI Agent 的首选发现方式。推荐使用 group-first 分层发现。

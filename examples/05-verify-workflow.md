@@ -88,7 +88,7 @@ Response:
 unity_cli tools describe camera.screenshot
 ```
 
-Review the full metadata including `inputSchema`, `outputSchema`, `examples`, `nextActions`, `cancellationSemantics`, and `supportStatus`.
+Review the full metadata including `inputSchema`, `outputSchema`, `examples`, `next_actions`, `cancellationSemantics`, and `supportStatus`.
 
 ## Step 5: Run the tool
 
