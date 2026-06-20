@@ -4,7 +4,7 @@
 
 ## Core Principle
 
-Tool availability is **per-instance**, not global. `tools list` and `tools describe` reflect the capabilities of the resolved target instance. Different instances may show different tool sets for the following reasons.
+Tool availability is **per-instance**, not global. `tools group list` and `tools describe` reflect the capabilities of the resolved target instance. Different instances may show different tool sets for the following reasons.
 
 ## Reasons for Availability Differences
 
@@ -17,9 +17,9 @@ Tools backed by specific Unity packages are only available when the target proje
 | `probuilder.shape/create/edit/csg` | `com.unity.probuilder` | Returns `E_PROBUILDER_PACKAGE_NOT_FOUND` |
 | `vfx.graph/vfx.effect` | `com.unity.visualeffectgraph` | Returns `E_VFX_PACKAGE_MISSING` |
 
-When `tools list --include-custom` is called against an instance whose project lacks these packages, the corresponding tools still appear in the built-in metadata (because built-in metadata is shipped with the CLI), but executing them against that instance returns a package-not-found error.
+When `tools group list <group> --include-custom` is called against an instance whose project lacks these packages, the corresponding tools still appear in the built-in metadata (because built-in metadata is shipped with the CLI), but executing them against that instance returns a package-not-found error.
 
-**Package prerequisites are declared in tool metadata** via the `requiresPackages` field. Tools with this field will include it in `tools list` and `tools describe` output, making it possible to detect package dependencies before execution:
+**Package prerequisites are declared in tool metadata** via the `requiresPackages` field. Tools with this field will include it in `tools group list` and `tools describe` output, making it possible to detect package dependencies before execution:
 
 ```json
 {
@@ -33,7 +33,7 @@ If `requiresPackages` is present and non-empty, the tool requires all listed pac
 
 ### 2. Project Tool Registration
 
-Project tools (`[UnityCliTool]` C# attributes) are discovered by querying the Bridge at runtime. Different projects register different project tools. `tools list --include-custom` against Instance A may show `sample.echo` while Instance B shows `acme.custom-builder` — or no project tools at all.
+Project tools (`[UnityCliTool]` C# attributes) are discovered by querying the Bridge at runtime. Different projects register different project tools. `tools group list <group> --include-custom` against Instance A may show `sample.echo` while Instance B shows `acme.custom-builder` — or no project tools at all.
 
 Project tool discovery requires a reachable Bridge. Without a Bridge connection, only built-in tools are discoverable.
 
@@ -88,7 +88,7 @@ Each instance carries a `toolCatalogFingerprint` that captures the current tool 
 1. **Always resolve target first.** Run `instances list` and `target set` before any tool call.
 2. **Use `tools describe` before executing.** The descriptor shows `handler`, `supportStatus`, `target`, `availabilityScope`, and `available`.
 3. **Handle errors gracefully.** Package-not-found, Bridge-unreachable, and `E_RUNTIME_NOT_READY` errors include `next_actions` that suggest recovery steps.
-4. **Re-discover after state changes.** After installing packages or domain reload, re-run `tools list --include-custom` to see updated availability.
+4. **Re-discover after state changes.** After installing packages or domain reload, re-run `tools group list <group> --include-custom` to see updated availability.
 5. **Check `editor.state`** before calling tools that are PlayMode-sensitive. Enter Play Mode first if `target: "runtime"`.
 
 ### Error Response Pattern

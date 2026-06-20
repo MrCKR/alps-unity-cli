@@ -19,7 +19,37 @@ async function makeRuntime() {
   return { dataDir, store, runner: new JobRunner(store, dataDir) };
 }
 
-test("integration: tools list via execute()", async () => {
+test("integration: tools group via execute()", async () => {
+  const runtime = await makeRuntime();
+  const result = await execute(["tools", "group"], runtime);
+  assert.equal(result.ok, true);
+
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.command, "tools.group");
+  assert.ok(typeof data.count === "number");
+  assert.ok(data.count > 0);
+
+  const groups = data.groups as string[];
+  assert.ok(groups.includes("scene"));
+  assert.ok(groups.includes("camera"));
+  assert.ok(groups.includes("probuilder"));
+});
+
+test("integration: tools group list scene via execute()", async () => {
+  const runtime = await makeRuntime();
+  const result = await execute(["tools", "group", "list", "scene"], runtime);
+  assert.equal(result.ok, true);
+
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.command, "tools.group.list");
+  assert.equal(data.group, "scene");
+  const tools = data.tools as Array<{ name: string; group: string }>;
+  for (const t of tools) {
+    assert.equal(t.group, "scene");
+  }
+});
+
+test("integration: tools list via execute() (compat)", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["tools", "list"], runtime);
   assert.equal(result.ok, true);
@@ -34,7 +64,7 @@ test("integration: tools list via execute()", async () => {
   assert.ok(names.includes("scene.hierarchy"));
 });
 
-test("integration: tools list --group scene", async () => {
+test("integration: tools list --group scene (compat)", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["tools", "list", "--group", "scene"], runtime);
   assert.equal(result.ok, true);
@@ -46,7 +76,7 @@ test("integration: tools list --group scene", async () => {
   }
 });
 
-test("integration: tools groups via execute()", async () => {
+test("integration: tools groups via execute() (compat)", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["tools", "groups"], runtime);
   assert.equal(result.ok, true);

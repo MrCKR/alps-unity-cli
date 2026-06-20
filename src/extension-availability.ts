@@ -244,7 +244,7 @@ export async function checkContextExtensionAvailability(
 
 /**
  * Build the full list of extension tool descriptors, including unavailable
- * ones with their availability status. Used by tools list/describe to surface
+ * extension tools alongside built-in tools. Used by tools group list/describe to surface
  * extension tools alongside built-in tools.
  */
 export async function collectExtensionToolDescriptors(

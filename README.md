@@ -73,7 +73,7 @@ Job statuses:
 
 ### Command Support Status
 
-`unity_cli --help` and `tools list --format text` use the same support labels as this README:
+`unity_cli --help` and `tools group list <group> --format text` use the same support labels as this README:
 
 | 状态 | 含义 |
 |---|---|
@@ -151,8 +151,8 @@ unity_cli package registry get --project C:\path\UnityProject
 unity_cli package registry set --url https://packages.unity.com --project C:\path\UnityProject
 unity_cli package scoped-registry add --name Acme --url https://registry.acme.test --scope com.acme --project C:\path\UnityProject
 unity_cli package scoped-registry list --project C:\path\UnityProject
-unity_cli tools list --include-custom --bridge-endpoint http://127.0.0.1:47392
-unity_cli tools groups --bridge-endpoint http://127.0.0.1:47392
+unity_cli tools group --include-custom --bridge-endpoint http://127.0.0.1:47392
+unity_cli tools group list scene --include-custom --bridge-endpoint http://127.0.0.1:47392
 unity_cli tools search echo --include-custom --bridge-endpoint http://127.0.0.1:47392
 unity_cli tools describe sample.echo --bridge-endpoint http://127.0.0.1:47392
 unity_cli capabilities --bridge-endpoint http://127.0.0.1:47392
@@ -219,7 +219,7 @@ Use `--wait-timeout-ms <ms>` to limit synchronous waiting. Use `--timeout-ms <ms
 
 `code exec` executes Runtime Code from exactly one source: `--file <path>`, `--stdin`, or `--code <text>`. Live mode sends `code.exec` to the Unity Editor Bridge and returns `compile.diagnostics`, `runtime.stdout`, `runtime.stderr`, `runtime.returnValue`, `requestId`, `logs`, `audit`, `artifacts`, and `nextActions` in the shared envelope. `--channel batchmode` or `--job` deploys the bundled bridge package and creates a durable `code` job that invokes `UnityCli.UnityCliBatch.ExecuteCode`, writes a `manifest.json` under the artifact directory, and loads the batchmode result artifact back into job status. Runtime Code references UnityEngine, UnityEditor and loaded project/Unity assemblies by default; `--refs <comma-list>`, `--define <symbol>`, `--args <json>`, `--timeout-ms <ms>` and `--artifact-dir <path>` extend the request without adding default disablement, `--yes`, secondary confirmation, bottom-layer pass-through or risk gates. Structured errors include `E_CODE_SOURCE_INVALID`, `E_CODE_COMPILE_FAILED`, `E_CODE_RUNTIME_EXCEPTION`, `E_REFERENCE_RESOLUTION_FAILED`, `E_EXECUTION_TIMEOUT`, `E_UNITY_BUSY` and bridge/job diagnostics.
 
-`tools list --include-custom`, `tools groups`, `tools search --include-custom <keyword>` and `tools describe <name>` discover Unity project-local tool descriptors through the shared project tool discovery adapter backed by `project-tool.list`, so project tools appear in the same CLI discovery chain as built-ins without hand-written CLI config. Each descriptor includes `name`, `title`, `description`, `group`, `inputSchema`, `outputSchema`, read-only/destructive hints, architecture markers, capability type, timeout limits, artifact kinds, registration provenance and `fingerprint` (`sha256-handler-code-plus-descriptor-v1`). `capabilities` merges reachable project tool descriptors into group/tool counts and advertises `projectToolDescriptor`, `unifiedDiscovery` and `builtinDocs` schema features. `doctor` checks project tool fingerprint status and the unified discovery surface, reporting descriptor/handler tampering plus built-in/project tool discovery counts or bridge diagnostics. `tools run <name>` will accept `--input`, `--input-file` or `--stdin`, forward `timeoutMs`, explicit `--job` preference, `artifactDir` and `--fingerprint-mode warn|block`, validate the supplied input against the registered `inputSchema`, check the current handler-code + descriptor fingerprint before dispatch, and return `command`, `tool`, `execution`, `result`, `artifacts`, `audit` and `logs.bridge` in the shared envelope. Mismatches are blocked by default with `E_TOOL_FINGERPRINT_MISMATCH`; set `UNITY_CLI_PROJECT_TOOL_FINGERPRINT_MODE=warn` or pass `--fingerprint-mode warn` only for audited intentional changes. Project Editor C# code registers first-class tools by marking a static class or static method with `[UnityCliTool("sample.echo", ...)]`; class-level attributes require exactly one static `Execute` or `Run` candidate, while classes with multiple candidates should put `[UnityCliTool]` on the intended method. The Bridge scans loaded Unity Editor assemblies and derives the runtime registry entry plus descriptor automatically (Class/Attribute-first, zero hand-written config). Only Unity project C# Editor tools are in scope; shell, npm and external scripts are intentionally not discovered. The Bridge only dispatches registered names and does not expose bottom-layer pass-through, arbitrary method names or hidden tool escape hatches.
+`tools group`, `tools group list <group> --include-custom`, `tools search --include-custom <keyword>` and `tools describe <name>` discover Unity project-local tool descriptors through the shared project tool discovery adapter backed by `project-tool.list`, so project tools appear in the same CLI discovery chain as built-ins without hand-written CLI config. Each descriptor includes `name`, `title`, `description`, `group`, `inputSchema`, `outputSchema`, read-only/destructive hints, architecture markers, capability type, timeout limits, artifact kinds, registration provenance and `fingerprint` (`sha256-handler-code-plus-descriptor-v1`). `capabilities` merges reachable project tool descriptors into group/tool counts and advertises `projectToolDescriptor`, `unifiedDiscovery` and `builtinDocs` schema features. `doctor` checks project tool fingerprint status and the unified discovery surface, reporting descriptor/handler tampering plus built-in/project tool discovery counts or bridge diagnostics. `tools run <name>` will accept `--input`, `--input-file` or `--stdin`, forward `timeoutMs`, explicit `--job` preference, `artifactDir` and `--fingerprint-mode warn|block`, validate the supplied input against the registered `inputSchema`, check the current handler-code + descriptor fingerprint before dispatch, and return `command`, `tool`, `execution`, `result`, `artifacts`, `audit` and `logs.bridge` in the shared envelope. Mismatches are blocked by default with `E_TOOL_FINGERPRINT_MISMATCH`; set `UNITY_CLI_PROJECT_TOOL_FINGERPRINT_MODE=warn` or pass `--fingerprint-mode warn` only for audited intentional changes. Project Editor C# code registers first-class tools by marking a static class or static method with `[UnityCliTool("sample.echo", ...)]`; class-level attributes require exactly one static `Execute` or `Run` candidate, while classes with multiple candidates should put `[UnityCliTool]` on the intended method. The Bridge scans loaded Unity Editor assemblies and derives the runtime registry entry plus descriptor automatically (Class/Attribute-first, zero hand-written config). Only Unity project C# Editor tools are in scope; shell, npm and external scripts are intentionally not discovered. The Bridge only dispatches registered names and does not expose bottom-layer pass-through, arbitrary method names or hidden tool escape hatches.
 
 ## Unity Editor Bridge
 
@@ -262,8 +262,9 @@ Agent skill paths:
 `tools run <toolName>` is the unified entry point for executing any tool — built-in or project-defined, editor-domain or runtime-domain. It replaces all previous per-domain command invocations with a single consistent interface.
 
 ```powershell
-# Discover available tools
-unity_cli tools list
+# Discover available tools (group-first)
+unity_cli tools group
+unity_cli tools group list scene
 unity_cli tools search screenshot
 unity_cli tools describe camera.screenshot
 
@@ -298,7 +299,7 @@ unity_cli tools run sample.wait --input "{\"durationMs\":500}" --include-custom 
 The complete discovery-to-verification chain:
 
 ```
-instances list → target set <alias> → tools search <keyword> → tools describe <name> → tools run <name> [--input <json>] → verify ok
+instances list → target set <alias> → tools group → tools group list <group> → tools describe <name> → tools run <name> [--input <json>] → verify ok
 ```
 
 ## Examples

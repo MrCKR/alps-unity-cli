@@ -1,6 +1,6 @@
 # Unity CLI Documentation
 
-> **Discovery path for AI agents**: `instances → select target → tools search/describe → tools run → verify`
+> **Discovery path for AI agents**: `instances → select target → tools group → tools group list <group> → tools describe → tools run → verify`
 
 This documentation follows the **target-first discovery** model. The only external entry point is the unified `tools` command surface. There is no independent `custom-tool` command group and no independent `runtime` command group; runtime capabilities are expressed through tool descriptors and internal router branches.
 
@@ -9,7 +9,7 @@ This documentation follows the **target-first discovery** model. The only extern
 | Topic | Title | Discovery Path |
 |-------|-------|----------------|
 | [target-and-instance](./target-and-instance.md) | Targets and Instances | Start here |
-| [tool-discovery](./tool-discovery.md) | Tool Discovery | `instances → tools list/search/describe` |
+| [tool-discovery](./tool-discovery.md) | Tool Discovery | `instances → tools group → tools group list <group>/search/describe` |
 | [tool-execution](./tool-execution.md) | Tool Execution | `tools describe → tools run → verify` |
 | [availability-differences](./availability-differences.md) | Availability Differences | Why different instances show different tools |
 | [error-codes](./error-codes.md) | Error Codes and next_actions | Structured error recovery |
@@ -27,7 +27,7 @@ The following documents are **v1.0 engineering archives**, not current user-side
 ## Reading Order for AI Agents
 
 1. **`target-and-instance`** — Learn what a Unity instance is, how to discover available instances, and how to select a target before any tool call.
-2. **`tool-discovery`** — Learn the unified `tools list/search/describe` surface, how tool metadata reveals `handler`, `supportStatus`, `target`, `availabilityScope`, `inputSchema`, and risk context.
+2. **`tool-discovery`** — Learn the group-first `tools group → tools group list <group> → tools search/describe` surface, how tool metadata reveals `handler`, `supportStatus`, `target`, `availabilityScope`, `inputSchema`, and risk context.
 3. **`tool-execution`** — Learn how to execute tools via `tools run <name>`, how `target=editor|runtime|both` affects execution routing, and how to verify results.
 4. **`availability-differences`** — Understand why different Unity instances may show different tool availability (installed packages, editor state, PlayMode session scope).
 5. **`error-codes`** — Read the structured error taxonomy, `next_actions` recovery suggestions, and `transient` / `retry_after_ms` fields.

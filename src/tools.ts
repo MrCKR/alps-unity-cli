@@ -1,8 +1,8 @@
 /**
- * CLI sub-commands: tools list, tools groups, tools search, tools describe.
+ * CLI sub-commands: tools group, tools group list, tools search, tools describe, tools run.
  *
- * These commands expose the built-in tool metadata so that agents and
- * users can discover available capabilities without guessing.
+ * Primary discovery chain: tools group → tools group list <group> → tools describe → tools run.
+ * Legacy compat: tools list (deprecated full discovery), tools groups (deprecated, use tools group).
  */
 
 import { getBoolean, getString } from "./args.js";
@@ -34,15 +34,35 @@ export async function handleToolsCommand(
   runtime: ToolsRuntime,
   requestId: string
 ): Promise<CliResult> {
-  if (!command || command === "list") {
-    return handleToolsList(flags, runtime, requestId);
+  if (!command) {
+    return handleToolsGroupList(flags, runtime, requestId);
+  }
+
+  if (command === "group") {
+    // tools group → list groups; tools group list <group> → list tools in group
+    const subCommand = positional[0];
+    if (!subCommand || subCommand === "list") {
+      const groupName = positional[1] ?? getString(flags, "group");
+      if (groupName) {
+        return handleToolsGroupListByName(groupName, flags, runtime, requestId);
+      }
+      return handleToolsGroup(flags, runtime, requestId);
+    }
+    // tools group <name> → shorthand for tools group list <name>
+    return handleToolsGroupListByName(subCommand, flags, runtime, requestId);
   }
 
   if (command === "run") {
     return handleToolsRun(positional, flags, runtime, requestId);
   }
 
+  if (command === "list") {
+    // Deprecated: tools list is a compat path. Use "tools group list <group>" instead.
+    return handleToolsList(flags, runtime, requestId);
+  }
+
   if (command === "groups") {
+    // Deprecated: tools groups is a compat path. Use "tools group" instead.
     return handleToolsGroups(flags, runtime, requestId);
   }
 
@@ -56,9 +76,9 @@ export async function handleToolsCommand(
     return handleToolsDescribe(toolName, flags, runtime, requestId);
   }
 
-  return failure(requestId, "UNKNOWN_TOOLS_COMMAND", "Expected tools list, tools groups, tools search <keyword> or tools describe <tool>.", [
-    "Run unity_cli tools list to see all available tools.",
-    "Run unity_cli tools groups to see tool categories.",
+  return failure(requestId, "UNKNOWN_TOOLS_COMMAND", "Expected tools group, tools group list <group>, tools search <keyword>, tools describe <tool>, or tools run <tool>.", [
+    "Run unity_cli tools group to see tool categories.",
+    "Run unity_cli tools group list <group> to see tools in a category.",
     "Run unity_cli tools describe <tool> for full metadata."
   ]);
 }
@@ -138,8 +158,105 @@ async function handleToolsGroups(flags: Record<string, string | boolean>, runtim
   const data: Record<string, unknown> = {
     command: "tools.groups",
     count: groups.length,
+    groups,
+    deprecated: true,
+    deprecationMessage: "tools groups is deprecated. Use tools group instead."
+  };
+
+  return success(requestId, data);
+}
+
+async function handleToolsGroup(
+  flags: Record<string, string | boolean>,
+  runtime: ToolsRuntime,
+  requestId: string
+): Promise<CliResult> {
+  const builtinGroups = builtinToolGroups();
+  const includeCustom = shouldDiscoverProjectTools(flags, runtime);
+  const customDiscovery = includeCustom ? await discoverProjectTools(flags, runtime, requestId) : { ok: true as const, tools: [], mode: "skipped" as const };
+  if (customDiscovery.ok === false) return customDiscovery;
+  const customGroups: string[] = [];
+  const seen = new Set(builtinGroups);
+  for (const t of customDiscovery.tools) {
+    if (!seen.has(t.group)) {
+      customGroups.push(t.group);
+      seen.add(t.group);
+    }
+  }
+
+  const groups = [...builtinGroups, ...customGroups.sort()];
+  const data: Record<string, unknown> = {
+    command: "tools.group",
+    count: groups.length,
     groups
   };
+
+  return success(requestId, data);
+}
+
+async function handleToolsGroupList(
+  flags: Record<string, string | boolean>,
+  runtime: ToolsRuntime,
+  requestId: string
+): Promise<CliResult> {
+  // Default behavior when no group is specified: list all groups (same as tools group)
+  return handleToolsGroup(flags, runtime, requestId);
+}
+
+async function handleToolsGroupListByName(
+  groupName: string,
+  flags: Record<string, string | boolean>,
+  runtime: ToolsRuntime,
+  requestId: string
+): Promise<CliResult> {
+  const explicitIncludeCustom = getBoolean(flags, "include-custom");
+  const includeCustom = explicitIncludeCustom || shouldDiscoverProjectTools(flags, runtime);
+
+  let tools: ToolMetadata[] = filterToolsByGroup(groupName);
+
+  if (includeCustom) {
+    const customTools = await discoverProjectTools(flags, runtime, requestId, { requireBridge: explicitIncludeCustom });
+    if (customTools.ok === false) return customTools;
+    tools = [...tools, ...customTools.tools.filter((tool: ToolMetadata) => tool.group === groupName)];
+  }
+
+  const format = getString(flags, "format");
+
+  const summaries = tools.map((t) => {
+    const supportStatus = supportStatusForTool(t);
+    return {
+      name: t.name,
+      title: t.title,
+      description: t.description,
+      group: t.group,
+      readOnlyHint: t.readOnlyHint,
+      destructiveHint: t.destructiveHint,
+      handler: t.handler,
+      supportStatus,
+      supportStatusLabel: supportStatusLabel(supportStatus),
+      cliCommand: t.cliCommand,
+      architectureSensitive: t.architectureSensitive,
+      frozenDecision: t.frozenDecision,
+      coverageScope: t.coverageScope,
+      target: t.target ?? "editor",
+      availabilityScope: t.availabilityScope ?? (t.target === "runtime" ? "playModeSession" : "editorSession"),
+      available: t.available,
+      requiresPackages: t.requiresPackages
+    };
+  });
+
+  const data: Record<string, unknown> = {
+    command: "tools.group.list",
+    group: groupName,
+    target: await optionalTargetSummary(flags, runtime),
+    count: summaries.length,
+    tools: summaries
+  };
+
+  if (format === "text") {
+    const lines = summaries.map((s) => `${s.name} [${s.group}] ${s.supportStatusLabel} ${s.readOnlyHint ? "read-only" : "write"} ${s.destructiveHint ? "⚠ destructive" : ""} — ${s.title}`);
+    data.text = lines.join("\n");
+  }
 
   return success(requestId, data);
 }
@@ -152,7 +269,7 @@ async function handleToolsSearch(
 ): Promise<CliResult> {
   if (!keyword) {
     return failure(requestId, "TOOLS_SEARCH_KEYWORD_REQUIRED", "Pass a keyword: unity_cli tools search <keyword>.", [
-      "Run unity_cli tools list to see all available tools."
+      "Run unity_cli tools group to see tool categories."
     ]);
   }
 
@@ -214,7 +331,8 @@ async function handleToolsDescribe(
 ): Promise<CliResult> {
   if (!toolName) {
     return failure(requestId, "TOOLS_DESCRIBE_NAME_REQUIRED", "Pass a tool name: unity_cli tools describe <tool>.", [
-      "Run unity_cli tools list to see all available tools."
+      "Run unity_cli tools group to see tool categories.",
+      "Run unity_cli tools group list <group> to see tools in a category."
     ]);
   }
 
@@ -222,9 +340,9 @@ async function handleToolsDescribe(
   const tool = builtinTool ?? await findProjectToolByName(toolName, flags, runtime, requestId);
   if (!tool) {
     return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Tool not found for target: ${toolName}.`, [
-      "Run unity_cli tools groups to see available tool categories.",
-      "Run unity_cli tools list to see all available tools.",
-      "Run unity_cli tools list --include-custom to discover Unity project Editor custom tools.",
+      "Run unity_cli tools group to see available tool categories.",
+      "Run unity_cli tools group list <group> to see tools in a category.",
+      "Run unity_cli tools group list <group> --include-custom to discover Unity project Editor custom tools.",
       "Run unity_cli tools search <keyword> to find related tools."
     ]);
   }
@@ -271,7 +389,8 @@ async function handleToolsRun(
   const toolName = positional[0] ?? getString(flags, "name") ?? getString(flags, "tool");
   if (!toolName) {
     return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", "Tool name is required for tools run.", [
-      "Run unity_cli tools list to see available tools.",
+      "Run unity_cli tools group to see tool categories.",
+      "Run unity_cli tools group list <group> to see tools in a category.",
       "Run unity_cli tools run <name> [--input <json>] [--target <instance>]."
     ]);
   }
@@ -299,7 +418,7 @@ async function handleToolsRun(
   const tool = builtinTool ?? projectTool;
   if (!tool) {
     return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Tool not found: ${toolName}.`, [
-      "Run unity_cli tools list --include-custom to see all available tools.",
+      "Run unity_cli tools group list <group> --include-custom to see all available tools in a category.",
       "Run unity_cli tools search <keyword> to find related tools."
     ]);
   }

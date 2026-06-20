@@ -1,21 +1,87 @@
 # Tool Discovery
 
-> **Discovery path**: `tools list → tools search → tools describe → tools run`
+> **Discovery path**: `tools group` → `tools group list <group>` → `tools describe <tool>` → `tools run <tool>`
 
-## The Unified Tools Surface
+## The Group-First Discovery Surface
 
-The CLI exposes a single, unified discovery surface through the `tools` command. There is no separate `custom-tool` command group, no independent `runtime` command group, and no per-domain registry. All tools — built-in and project-local — share the same descriptor schema and the same discovery commands.
+The CLI exposes a **group-first** discovery surface through the `tools` command. Instead of listing all tools at once, you start by discovering capability groups, then drill into a specific group, then describe a tool before running it.
 
 ```powershell
-unity_cli tools list                         # All built-in tools
-unity_cli tools list --include-custom        # Built-in + project tools (requires Bridge)
-unity_cli tools list --group scene           # Filter by group
-unity_cli tools groups                       # List all groups
-unity_cli tools search camera                # Search by keyword
-unity_cli tools search echo --include-custom # Include project tools in search
-unity_cli tools describe scene.hierarchy     # Full descriptor for one tool
-unity_cli tools describe sample.echo         # Project tool descriptor
+unity_cli tools group                            # List all capability groups
+unity_cli tools group list scene                 # List tools in the "scene" group
+unity_cli tools group list scene --include-custom # Include project tools in the scene group
+unity_cli tools search camera                    # Search by keyword across all tools
+unity_cli tools describe scene.hierarchy         # Full descriptor for one tool
+unity_cli tools run scene.hierarchy              # Execute a tool
 ```
+
+### Why Group-First?
+
+The old `tools list` returned every tool in a flat list — potentially hundreds of entries. Group-first discovery makes it easy to find relevant tools by starting from capability domains (scene, camera, editor, etc.) and narrowing down.
+
+## Discovery Commands
+
+### `tools group`
+
+List all available tool capability groups.
+
+```powershell
+unity_cli tools group
+unity_cli tools group --include-custom   # Include groups from project tools
+```
+
+Returns a list of group names like `scene`, `camera`, `editor`, `probuilder`, etc.
+
+### `tools group list <group>`
+
+List all tools within a specific capability group.
+
+```powershell
+unity_cli tools group list scene
+unity_cli tools group list scene --include-custom
+unity_cli tools group list scene --format text
+```
+
+Each result includes the tool name, title, group, support status, read-only/destructive hints, target, and availability scope.
+
+### `tools search <keyword>`
+
+Search across all tools by keyword (name, title, description, group).
+
+```powershell
+unity_cli tools search camera
+unity_cli tools search echo --include-custom
+```
+
+### `tools describe <tool>`
+
+Full descriptor for a single tool. **Always describe before running.**
+
+```powershell
+unity_cli tools describe scene.hierarchy
+unity_cli tools describe sample.echo
+```
+
+### `tools run <tool>`
+
+Execute a tool by its dotted name. See [tool-execution](./tool-execution.md) for details.
+
+```powershell
+unity_cli tools run scene.hierarchy
+unity_cli tools run camera.screenshot --input '{"target":"MainCamera","output":"shot.png"}'
+```
+
+## Deprecated Commands
+
+The following commands are retained as compat paths but should not be used in new workflows:
+
+| Deprecated Command | Replacement |
+|---|---|
+| `tools list` | `tools group list <group>` (or `tools group` to see groups first) |
+| `tools list --group <group>` | `tools group list <group>` |
+| `tools groups` | `tools group` |
+
+`tools list` without `--group` performs flat full discovery of all tools, which does not follow the group-first discovery model. Use `tools group` to list groups, then `tools group list <group>` to list tools within a specific group.
 
 ## What `tools describe` Returns
 
@@ -82,15 +148,16 @@ Every tool has a `handler` (internal execution path) and a `supportStatus` (user
 
 ## Target Context in Discovery
 
-`tools list` and `tools search` include an optional `target` field when a target instance is resolved. This shows which instance's tool catalog is being reported. They also include `target`, `availabilityScope`, and `available` per tool so callers can determine whether a tool is currently usable.
+`tools group list` and `tools search` include an optional `target` field when a target instance is resolved. This shows which instance's tool catalog is being reported. They also include `target`, `availabilityScope`, and `available` per tool so callers can determine whether a tool is currently usable.
 
 When `--include-custom` is used and a Bridge is reachable, project tools registered by `[UnityCliTool]` C# attributes in the target Unity project are merged into the discovery results. Project tools share the same schema as built-in tools — they are not a separate category.
 
 ## How to Use Discovery as an AI Agent
 
-1. **List tools** — `unity_cli tools list --include-custom` gives you all available tools for the resolved target, including `target` and `availabilityScope` per tool.
-2. **Search by keyword** — `unity_cli tools search <keyword> --include-custom` when you know the domain but not the exact tool name.
-3. **Describe before executing** — Always run `unity_cli tools describe <name>` before executing any tool. The descriptor tells you:
+1. **List groups** — `unity_cli tools group` gives you all capability domains.
+2. **List tools in a group** — `unity_cli tools group list <group> --include-custom` gives you all available tools for that group on the resolved target, including `target` and `availabilityScope` per tool.
+3. **Search by keyword** — `unity_cli tools search <keyword> --include-custom` when you know the domain but not the exact tool name.
+4. **Describe before executing** — Always run `unity_cli tools describe <name>` before executing any tool. The descriptor tells you:
    - What parameters are required (`inputSchema`)
    - Whether the tool is safe to call (`readOnlyHint`, `destructiveHint`)
    - How the tool executes (`handler`, `supportStatus`, `target`)
@@ -98,7 +165,7 @@ When `--include-custom` is used and a Bridge is reachable, project tools registe
    - What to expect in the result (`outputSchema`, `examples`)
    - What to do if something goes wrong (see [error-codes](./error-codes.md))
    - How to verify the result (see [tool-execution](./tool-execution.md))
-4. **Run the tool** — `unity_cli tools run <name>` executes the tool through the unified entry point (see [tool-execution](./tool-execution.md)).
+5. **Run the tool** — `unity_cli tools run <name>` executes the tool through the unified entry point (see [tool-execution](./tool-execution.md)).
 
 ## Built-in Documentation Topics
 

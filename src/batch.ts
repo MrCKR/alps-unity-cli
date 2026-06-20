@@ -193,10 +193,13 @@ const commandRegistry = new Map<string, { parallelSafe: boolean }>([
   ["editor menu", { parallelSafe: false }],
   // ─── Tools discovery / unified run ───
   ["tools run", { parallelSafe: false }],
-  ["tools list", { parallelSafe: true }],
-  ["tools groups", { parallelSafe: true }],
+  ["tools group", { parallelSafe: true }],
+  ["tools group list", { parallelSafe: true }],
   ["tools search", { parallelSafe: true }],
-  ["tools describe", { parallelSafe: true }]
+  ["tools describe", { parallelSafe: true }],
+  // ─── Deprecated compat paths ───
+  ["tools list", { parallelSafe: true }],
+  ["tools groups", { parallelSafe: true }]
 ]);
 
 export function batchJsonSchema(): Record<string, unknown> {

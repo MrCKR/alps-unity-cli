@@ -51,7 +51,7 @@ Before executing any bridge tool, the CLI must know **which Unity instance** to 
 ### 1. Explicit `--target <id|alias>`
 
 ```powershell
-unity_cli tools list --target <instanceId|alias>
+unity_cli tools group list scene --target <instanceId|alias>
 unity_cli camera list --target <instanceId|alias>
 ```
 

@@ -598,7 +598,7 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
           suggestions.push("Re-initialize the instance by restarting Unity Editor.");
           break;
         case "unified_tool_discovery":
-          suggestions.push("Run unity_cli tools list --include-custom with a reachable Unity Bridge to inspect project custom descriptors.");
+          suggestions.push("Run unity_cli tools group list <group> --include-custom with a reachable Unity Bridge to inspect project custom descriptors in a group.");
           break;
         case "extension_availability":
           suggestions.push("Run 'unity_cli extensions doctor --project <path>' for detailed extension diagnostics.");

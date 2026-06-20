@@ -3,9 +3,35 @@ import { objSchema } from "../schemas.js";
 
 export const TOOLS_DISCOVERY_TOOLS: ToolMetadata[] = [
   {
+    name: "tools.group",
+    title: "Tool Groups",
+    description: "List the available tool category groups. This is the primary entry point for tool discovery — start here to find which capability domains are available, then use tools group list <group> to see tools within a group.",
+    group: "tools",
+    inputSchema: objSchema({}),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "offline",
+    cliCommand: "tools group",
+    docsTopic: "tools"
+  },
+  {
+    name: "tools.group.list",
+    title: "List Tools in Group",
+    description: "List all tools in a specific capability group. Use tools group first to discover available groups, then tools group list <group> to see the tools within that group.",
+    group: "tools",
+    inputSchema: objSchema({
+      group: { type: "string", description: "Tool group name (e.g. 'scene', 'camera', 'editor')" }
+    }, ["group"]),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "offline",
+    cliCommand: "tools group list",
+    docsTopic: "tools"
+  },
+  {
     name: "tools.list",
-    title: "List Tools",
-    description: "List all available Unity CLI tools, optionally filtered by group, with optional custom/project tool discovery.",
+    title: "List Tools (Deprecated)",
+    description: "[Deprecated] List all available Unity CLI tools. Use tools group → tools group list <group> instead for group-first discovery. This command is retained as a compat path.",
     group: "tools",
     inputSchema: objSchema({
       group: { type: "string" },
@@ -15,19 +41,21 @@ export const TOOLS_DISCOVERY_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "offline",
     cliCommand: "tools list",
-    docsTopic: "tools"
+    docsTopic: "tools",
+    supportStatus: "cli-only"
   },
   {
     name: "tools.groups",
-    title: "Tool Groups",
-    description: "List the available tool category groups.",
+    title: "Tool Groups (Deprecated)",
+    description: "[Deprecated] List the available tool category groups. Use tools group instead. This command is retained as a compat path.",
     group: "tools",
     inputSchema: objSchema({}),
     readOnlyHint: true,
     destructiveHint: false,
     handler: "offline",
     cliCommand: "tools groups",
-    docsTopic: "tools"
+    docsTopic: "tools",
+    supportStatus: "cli-only"
   },
   {
     name: "tools.search",

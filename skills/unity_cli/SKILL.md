@@ -5,14 +5,14 @@ description: Operate Unity Editor via the alps-unity-cli target-first discovery 
 
 # Unity CLI — AI Operator Skill
 
-This skill teaches you how to operate the Unity Editor through `unity_cli` using the **target-first discovery** and **unified tools** workflow. The only execution entry point you need is `tools run <toolName>`. You do not need to memorize domain-specific command groups — the CLI discovers, describes, and runs everything through the unified `tools` interface.
+This skill teaches you how to operate the Unity Editor through `unity_cli` using the **target-first, group-first discovery** and **unified tools** workflow. The only execution entry point you need is `tools run <toolName>`. You do not need to memorize domain-specific command groups — the CLI discovers, describes, and runs everything through the unified `tools` interface.
 
 ## Core Workflow
 
 Every interaction follows this loop:
 
 ```
-instances list  →  target set  →  tools search  →  tools describe  →  tools run  →  verify
+instances list  →  target set  →  tools group  →  tools group list <group>  →  tools describe  →  tools run  →  verify
 ```
 
 You always start from instances and target selection, then discover and execute tools. Never skip ahead.
@@ -57,7 +57,7 @@ Target selection is required when multiple instances exist. Once set, all subseq
 **Convenience — use --target flag:**
 
 ```bash
-unity_cli tools list --target <id|alias>
+unity_cli tools group list scene --target <id|alias>
 unity_cli tools describe scene.hierarchy --target <id|alias>
 unity_cli tools run scene.hierarchy --target <id|alias>
 ```
@@ -72,21 +72,33 @@ unity_cli target alias unset <alias>
 
 Use aliases for stable, memorable names instead of raw instance IDs.
 
-## Step 3: Search for Tools
+## Step 3: Discover Tool Groups
 
 ```bash
-# Search by keyword across name, title, description, and group
-unity_cli tools search <query>
+# List all tool capability groups
+unity_cli tools group
 
-# List all tools, optionally filtered by group
-unity_cli tools list
-unity_cli tools list --group scene
-
-# List available tool groups
-unity_cli tools groups
+# Include groups from project tools
+unity_cli tools group --include-custom
 ```
 
-Each search result shows:
+Returns a list of groups like `scene`, `camera`, `editor`, `probuilder`, etc.
+
+## Step 4: List Tools in a Group
+
+```bash
+# List tools in a specific group
+unity_cli tools group list scene
+
+# Include project tools
+unity_cli tools group list scene --include-custom
+
+# Search by keyword across all tools
+unity_cli tools search camera
+unity_cli tools search echo --include-custom
+```
+
+Each result shows:
 
 | Field | Meaning |
 |-------|---------|
@@ -100,9 +112,9 @@ Each search result shows:
 | `availabilityScope` | `editorSession` or `playModeSession` |
 | `available` | Whether the tool is currently available for this target |
 
-**Tip:** Use `tools list --include-custom` to discover project-specific Editor tools registered by the connected Unity instance.
+**Tip:** Use `tools group list <group> --include-custom` to discover project-specific Editor tools registered by the connected Unity instance.
 
-## Step 4: Describe a Tool Before Running
+## Step 5: Describe a Tool Before Running
 
 ```bash
 unity_cli tools describe <toolName>
@@ -138,7 +150,7 @@ unity_cli tools describe <toolName>
 
 **About `cliCommand`**: The descriptor may include a `cliCommand` field (e.g. `scene hierarchy`) for backward-compatibility or low-level debugging. **Do not use `cliCommand` as your primary execution path.** Always use `tools run <toolName>` instead.
 
-## Step 5: Execute a Tool with `tools run`
+## Step 6: Execute a Tool with `tools run`
 
 ```bash
 unity_cli tools run <toolName> [--input '<json>'] [--input-file <path>] [--target <id|alias>] [--timeout-ms <n>] [--fingerprint-mode warn|block] [--runtime]
@@ -226,7 +238,7 @@ unity_cli job cancel --id <jobId>
 unity_cli tools run code.exec --input '{"code":"..."}' --timeout-ms 120000
 ```
 
-## Step 6: Verify Results
+## Step 7: Verify Results
 
 After executing a tool, verify the outcome:
 
@@ -248,7 +260,8 @@ After executing a tool, verify the outcome:
 ```bash
 unity_cli instances list
 unity_cli target set <id|alias>
-unity_cli tools search scene
+unity_cli tools group
+unity_cli tools group list scene
 unity_cli tools describe scene.hierarchy
 unity_cli tools run scene.hierarchy
 ```
@@ -267,8 +280,8 @@ unity_cli tools run editor.console
 
 ```bash
 unity_cli capabilities
-unity_cli tools groups
-unity_cli tools search camera
+unity_cli tools group
+unity_cli tools group list camera
 unity_cli tools describe camera.screenshot
 unity_cli tools run camera.screenshot --input '{"target":"MainCamera","output":"shot.png","width":1280,"height":720}'
 ```
@@ -334,7 +347,7 @@ All CLI output follows a structured envelope:
 - `E_RUNTIME_TIMEOUT` → Runtime tool execution timed out; increase `--timeout-ms`.
 
 **Tool discovery errors:**
-- `E_TOOL_NOT_FOUND_FOR_TARGET` → Tool not available on this target instance; use `tools list` to see what's available.
+- `E_TOOL_NOT_FOUND_FOR_TARGET` → Tool not available on this target instance; use `tools group list <group>` to see what's available.
 
 **Execution errors:**
 - `E_DESTRUCTIVE_CONFIRMATION_REQUIRED` → Destructive tool requires `--yes`; use `--dry-run` first if supported.
@@ -349,10 +362,12 @@ All CLI output follows a structured envelope:
 
 - **Do not** use `custom-tool` commands — they have been removed. Use `tools` commands exclusively.
 - **Do not** use domain-specific commands (e.g. `unity_cli scene hierarchy`, `unity_cli editor console`, `unity_cli code exec`) as your primary execution path — use `tools run <toolName>` instead. The `cliCommand` field in descriptors exists only for backward-compatibility and debugging, not as the user-facing execution entry point.
+- **Do not** use `tools list` as the primary discovery command — it is deprecated. Use `tools group` to list groups and `tools group list <group>` to list tools in a group.
+- **Do not** use `tools groups` — it is deprecated. Use `tools group` instead.
 - **Do not** use standalone `runtime` commands — runtime capabilities are expressed through tool descriptors (`target: runtime`, `availabilityScope: playModeSession`, `available`) and executed via `tools run`.
 - **Do not** manually ping bridge endpoints or read instance registry files — use `instances list` and `target` commands.
 - **Do not** skip `tools describe` before running a tool you haven't used before — always check schema, hints, and examples first.
-- **Do not** assume all tools are available on every instance — different Unity projects expose different tool sets. Use `tools list` to discover what's available per target.
+- **Do not** assume all tools are available on every instance — different Unity projects expose different tool sets. Use `tools group list <group>` to discover what's available per target.
 - **Do not** use `--input-json` — the CLI parameter is `--input`. Use `--input-file` for file input.
 
 ---

@@ -95,7 +95,7 @@ export function loadUnavailableDescriptors(
 /**
  * Collect all tool contributions across available extensions.
  *
- * This is the primary entry point for tools list / tools search to discover
+ * This is the primary entry point for tools group list / tools search to discover
  * extension-provided tools without scanning unavailable extensions.
  */
 export function collectAvailableTools(
@@ -109,7 +109,7 @@ export function collectAvailableTools(
 /**
  * Collect all tool contributions across ALL extensions (including unavailable).
  *
- * Used by `tools list` when the user explicitly wants to see all tools
+ * Used by `tools list` (compat) and `tools group list` when the user explicitly wants to see all tools
  * regardless of availability.
  */
 export function collectAllTools(
