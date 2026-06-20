@@ -14,6 +14,7 @@ This documentation follows the **target-first discovery** model. The only extern
 | [availability-differences](./availability-differences.md) | Availability Differences | Why different instances show different tools |
 | [error-codes](./error-codes.md) | Error Codes and next_actions | Structured error recovery |
 | [risk-and-side-effects](./risk-and-side-effects.md) | Risk and Side Effects | `destructiveHint`, `readOnlyHint`, `--yes`, `--dry-run` |
+| [critical-references](./critical-references/README.md) | C# Critical References | What was referenced, rejected, and adapted from unity-mcp |
 
 ## v1.0 Archive (Engineering Reference Only)
 
