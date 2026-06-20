@@ -9,6 +9,16 @@
 | [Target 与 Instance](target-and-instance.md) | 实例发现、目标选择、别名管理 |
 | [工具发现](tool-discovery.md) | group-first 分层发现流程 |
 
+| Topic | Title | Discovery Path |
+|-------|-------|----------------|
+| [target-and-instance](./target-and-instance.md) | Targets and Instances | Start here |
+| [tool-discovery](./tool-discovery.md) | Tool Discovery | `instances → tools list/search/describe` |
+| [tool-execution](./tool-execution.md) | Tool Execution | `tools describe → tools run → verify` |
+| [availability-differences](./availability-differences.md) | Availability Differences | Why different instances show different tools |
+| [error-codes](./error-codes.md) | Error Codes and next_actions | Structured error recovery |
+| [risk-and-side-effects](./risk-and-side-effects.md) | Risk and Side Effects | `destructiveHint`, `readOnlyHint`, `--yes`, `--dry-run` |
+| [critical-references](./critical-references/README.md) | C# Critical References | What was referenced, rejected, and adapted from unity-mcp |
+
 ## 使用
 
 | 文档 | 内容 |
