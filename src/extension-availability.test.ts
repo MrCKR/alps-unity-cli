@@ -444,10 +444,10 @@ test("tools describe error messages do not mention old 'tools list' as sole disc
 
   assert.equal(result.ok, false);
   const nextActions = result.error?.next_actions ?? [];
-  // The first suggestion should reference groups or search, not just tools list
+  // The first suggestion should reference group or search, not just tools list
   assert.ok(
-    nextActions.some((a) => a.includes("tools groups") || a.includes("tools search")),
-    "Error next_actions should reference groups or search, not just 'tools list'"
+    nextActions.some((a) => a.includes("tools group") || a.includes("tools search")),
+    "Error next_actions should reference group or search, not just 'tools list'"
   );
 });
 

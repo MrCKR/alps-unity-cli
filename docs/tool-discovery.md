@@ -5,13 +5,13 @@ alps-unity-cli 使用 group-first 分层发现模型：先看分组概览，再�
 ## 推荐发现流程
 
 ```
-tools groups                    → 查看所有工具分组
+tools group                     → 查看所有工具分组
        ↓
-tools list --group <group>      → 查看某个分组的工具摘要
+tools group list <group>       → 查看某个分组的工具摘要
        ↓
-tools describe <tool>           → 查看工具完整描述（执行前必做）
+tools describe <tool>          → 查看工具完整描述（执行前必做）
        ↓
-tools run <tool>                → 执行工具
+tools run <tool>               → 执行工具
 ```
 
 辅助发现：
@@ -20,12 +20,12 @@ tools run <tool>                → 执行工具
 tools search <keyword>          → 按关键词搜索工具
 ```
 
-## tools groups
+## tools group
 
 列出所有工具分组名称。
 
 ```powershell
-unity_cli tools groups
+unity_cli tools group
 ```
 
 输出：
@@ -34,60 +34,40 @@ unity_cli tools groups
 {
   "ok": true,
   "data": {
-    "command": "tools.groups",
+    "command": "tools.group",
     "count": 25,
-    "groups": ["scene", "camera", "go", "component", "asset", "prefab", "material", "graphics", "physics", "profiler", "probuilder", "shader", "texture", "animation", "vfx", "ui", "script", "editor", "diagnose", "screenshot", "code", "cli", "test", "build", "tools"]
+    "groups": [
+      { "name": "scene", "title": "...", "toolCount": 7, "source": "core", "cliCommand": "tools group list scene" },
+      { "name": "camera", "title": "...", "toolCount": 3, "source": "core", "cliCommand": "tools group list camera" }
+    ]
   }
 }
 ```
 
 ### 包含项目自定义工具分组
 
-当 Bridge 可达时，`tools groups` 会自动发现项目自定义工具的分组：
+当 Bridge 可达时，`tools group` 会自动发现项目自定义工具的分组：
 
 ```powershell
-unity_cli tools groups --bridge-endpoint http://127.0.0.1:47392
+unity_cli tools group --bridge-endpoint http://127.0.0.1:47392
 ```
 
-## tools list
+## tools group list
 
-列出工具摘要信息。
+列出指定分组的工具摘要信息。
 
 ```powershell
-# 列出所有工具
-unity_cli tools list
-
-# 按分组过滤（推荐）
-unity_cli tools list --group camera
+# 按分组查看工具（必填分组名）
+unity_cli tools group list camera
 
 # 包含项目自定义工具
-unity_cli tools list --include-custom
-
-# 按分组 + 自定义工具
-unity_cli tools list --group custom --include-custom
+unity_cli tools group list custom --include-custom
 
 # 文本格式
-unity_cli tools list --group camera --format text
+unity_cli tools group list camera --format text
 ```
 
-输出摘要包含：
-
-| 字段 | 说明 |
-|------|------|
-| `name` | 工具唯一标识 |
-| `title` | 人类可读标题 |
-| `group` | 所属分组 |
-| `readOnlyHint` | 是否只读 |
-| `destructiveHint` | 是否有破坏性 |
-| `handler` | 执行通道类型 |
-| `supportStatus` | 支持状态标签 |
-| `target` | 目标类型（editor/runtime/both） |
-| `availabilityScope` | 可用性范围 |
-| `requiresPackages` | 依赖的 Unity 包 |
-
-### 为什么不推荐 tools list 无过滤全量展开
-
-`tools list` 不带 `--group` 参数时会返回所有 100+ 工具的完整摘要，这对 AI Agent 来说信息量过大，容易导致上下文溢出或误选工具。推荐使用 `--group` 参数逐组查看。
+> **注意**：旧 `tools list`（无过滤全量展开）和 `tools list --group <group>` 已移除。使用 `tools group` 查看所有分组，再用 `tools group list <group>` 按组查看。
 
 ## tools search
 
@@ -171,8 +151,8 @@ unity_cli tools describe my.custom-tool --bridge-endpoint http://127.0.0.1:47392
 
 ## AI Agent 发现工作流
 
-1. `tools groups` — 了解能力分类
-2. `tools list --group <relevant-group>` — 查看相关分组工具
+1. `tools group` — 了解能力分类
+2. `tools group list <relevant-group>` — 查看相关分组工具
 3. `tools describe <tool>` — 获取完整 descriptor，确认 inputSchema、安全提示和可用性
 4. `tools run <tool> --input '...'` — 执行
 

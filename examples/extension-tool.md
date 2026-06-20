@@ -20,10 +20,10 @@ unity_cli package install com.unity.probuilder --project C:\path\MyProject --wai
 
 ```powershell
 # 查看分组（包含 probuilder）
-unity_cli tools groups
+unity_cli tools group
 
 # 查看 ProBuilder 工具
-unity_cli tools list --group probuilder
+unity_cli tools group list probuilder
 
 # 描述工具
 unity_cli tools describe probuilder.shape

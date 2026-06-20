@@ -10,7 +10,7 @@ description: 通过 alps-unity-cli 操作 Unity Editor
 ## 核心工作流
 
 ```
-instances list → target set → tools groups → tools list --group <group> → tools describe <tool> → tools run <tool> → verify
+instances list → target set → tools group → tools group list <group> → tools describe <tool> → tools run <tool> → verify
 ```
 
 ## 步骤 1：发现目标
@@ -55,10 +55,10 @@ unity_cli tools run scene.hierarchy --input '{}'
 
 ```powershell
 # 查看工具分组
-unity_cli tools groups
+unity_cli tools group
 
 # 按组查看工具摘要
-unity_cli tools list --group camera
+unity_cli tools group list camera
 
 # 查看单个工具完整描述
 unity_cli tools describe camera.screenshot
@@ -73,8 +73,8 @@ unity_cli tools search screenshot
 ### 包含项目自定义工具
 
 ```powershell
-unity_cli tools list --include-custom
-unity_cli tools list --group custom --include-custom
+unity_cli tools group list custom --include-custom
+unity_cli tools group list <group> --include-custom
 ```
 
 ## 步骤 4：执行工具
@@ -136,7 +136,7 @@ unity_cli doctor
 unity_cli instances list
 unity_cli target set <instanceId>
 unity_cli tools run editor.state --input '{}'
-unity_cli tools groups
+unity_cli tools group
 ```
 
 ### 场景修改
@@ -160,7 +160,7 @@ unity_cli tools run editor.stop --input '{}'
 ### 处理自定义工具
 
 ```powershell
-unity_cli tools list --include-custom
+unity_cli tools group list custom --include-custom
 unity_cli tools describe my.custom-tool
 unity_cli tools run my.custom-tool --input '<json>'
 ```
@@ -230,7 +230,7 @@ unity_cli tools describe <problematic-tool>
 
 | ❌ 不要 | ✅ 应该 |
 |---------|---------|
-| 用 `tools list` 无过滤全量展开作为首选发现 | 先 `tools groups`，再 `tools list --group <group>` |
+| 用 `tools list` 无过滤全量展开作为首选发现 | 先 `tools group`，再 `tools group list <group>` |
 | 混用 Context 和 Tool 概念 | Tool 可有副作用；Context 必须只读 |
 | 跳过 `tools describe` 直接 `tools run` | 先 describe 确认 schema、风险、可用性 |
 | 假设所有工具在所有实例可用 | 检查 `available` 和 `requiresPackages` |

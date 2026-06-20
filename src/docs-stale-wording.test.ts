@@ -51,21 +51,22 @@ function allDocFiles(): string[] {
 // These commands do NOT exist in the current CLI implementation.
 // They may appear in "规划中/planned" context but must not be taught as available.
 const NONEXISTENT_COMMANDS = [
-  "tools group list",       // does not exist; use "tools list --group <group>"
-  "context list",           // P3 planned; not a current command
-  "context describe",       // P3 planned
-  "context read",           // P3 planned
-  "extensions list",        // P5 planned
-  "extensions install",     // P5 planned
-  "extensions remove",      // P5 planned
-  "extensions doctor",      // P5 planned
+  "tools list",              // removed; use "tools group" + "tools group list <group>"
+  "tools groups",            // removed; use "tools group" (singular)
+  "context list",            // P3 planned; not a current command
+  "context describe",        // P3 planned
+  "context read",            // P3 planned
+  "extensions list",         // P5 planned
+  "extensions install",      // P5 planned
+  "extensions remove",       // P5 planned
+  "extensions doctor",       // P5 planned
 ];
 
 // ── Current commands that MUST appear in docs ──
 
 const REQUIRED_COMMANDS = [
-  "tools groups",           // actual command to list groups
-  "tools list",             // actual command to list tools
+  "tools group",            // actual command to list groups
+  "tools group list",       // actual command to list tools in a group
   "tools describe",         // actual command for full descriptor
   "tools run",              // actual command to execute
   "tools search",           // actual command for keyword search
@@ -102,13 +103,15 @@ test("docs do not teach non-existent commands as available", () => {
 
     for (const cmd of NONEXISTENT_COMMANDS) {
       // Allow mentions in "规划中/planned/规划中（P3）/规划中（P5）" context
-      // But NOT in code blocks without a planned marker nearby
+      // and in explicit deprecation/removal context (废弃/移除/deprecated/removed)
+      // But NOT in code blocks without a planned or deprecation marker nearby
       const lines = content.split("\n");
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i];
         if (!line.includes(cmd)) continue;
 
         // Skip if line or nearby context mentions "规划中/planned/规划/P3/P5"
+        // or deprecation markers (废弃/移除/deprecated/removed/替代路径/已移除)
         const contextWindow = lines.slice(Math.max(0, i - 3), i + 4).join(" ");
         if (
           contextWindow.includes("规划中") ||
@@ -117,12 +120,22 @@ test("docs do not teach non-existent commands as available", () => {
           contextWindow.includes("P3") ||
           contextWindow.includes("P5") ||
           contextWindow.includes("待实现") ||
-          contextWindow.includes("实现后生效")
+          contextWindow.includes("实现后生效") ||
+          contextWindow.includes("废弃") ||
+          contextWindow.includes("移除") ||
+          contextWindow.includes("removed") ||
+          contextWindow.includes("deprecated") ||
+          contextWindow.includes("替代路径") ||
+          contextWindow.includes("已移除") ||
+          contextWindow.includes("已废弃") ||
+          contextWindow.includes("不得") ||
+          contextWindow.includes("不要") ||
+          contextWindow.includes("不要做")
         ) {
-          continue; // allowed: it's clearly marked as planned
+          continue; // allowed: it's clearly marked as planned or deprecated
         }
 
-        violations.push(`${file}:${i + 1}: "${cmd}" appears without planned marker`);
+        violations.push(`${file}:${i + 1}: "${cmd}" appears without planned or deprecation marker`);
       }
     }
   }
@@ -258,7 +271,7 @@ test("docs use snake_case for error response fields", () => {
   );
 });
 
-test("docs use actual command names (tools groups not tools group)", () => {
+test("docs use actual command names (tools group not tools groups)", () => {
   const files = allDocFiles();
   const violations: string[] = [];
 
@@ -270,14 +283,14 @@ test("docs use actual command names (tools groups not tools group)", () => {
       continue;
     }
 
-    // "tools group" (singular) as a command reference — the actual command is "tools groups" (plural)
-    // Allow in "规划中/planned" context
+    // "tools groups" (plural) is a removed legacy alias — the actual command is "tools group" (singular)
+    // "tools list" is a removed command — use "tools group" + "tools group list <group>"
+    // Allow in "规划中/planned/deprecated/废弃/移除" context
     const lines = content.split("\n");
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
-      // Match "tools group" as a command but NOT "tools groups"
-      // and NOT "tools group list" (already caught above)
-      if (/tools group(?!s| list)/.test(line) && line.includes("tools group")) {
+      // Check for removed commands used as current guidance
+      if (/tools groups(?![\w.-])/i.test(line)) {
         const contextWindow = lines.slice(Math.max(0, i - 3), i + 4).join(" ");
         if (
           contextWindow.includes("规划中") ||
@@ -285,15 +298,17 @@ test("docs use actual command names (tools groups not tools group)", () => {
           contextWindow.includes("P4") ||
           contextWindow.includes("P9-T1") ||
           contextWindow.includes("方案") ||
-          contextWindow.includes("计划")
+          contextWindow.includes("计划") ||
+          contextWindow.includes("废弃") ||
+          contextWindow.includes("移除") ||
+          contextWindow.includes("removed") ||
+          contextWindow.includes("deprecated") ||
+          contextWindow.includes("已移除") ||
+          contextWindow.includes("替代路径")
         ) {
           continue;
         }
-        // Allow mentions in the context of "group-first" as a concept
-        if (line.includes("group-first") || line.includes("分组")) {
-          continue;
-        }
-        violations.push(`${file}:${i + 1}: uses "tools group" (singular) — actual command is "tools groups" (plural)`);
+        violations.push(`${file}:${i + 1}: uses "tools groups" (removed) — actual command is "tools group" (singular)`);
       }
     }
   }
@@ -301,7 +316,7 @@ test("docs use actual command names (tools groups not tools group)", () => {
   assert.equal(
     violations.length,
     0,
-    `Incorrect command names found:\n${violations.join("\n")}`
+    `Removed commands found without deprecation markers:\n${violations.join("\n")}`
   );
 });
 

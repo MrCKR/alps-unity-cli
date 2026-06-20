@@ -10,7 +10,7 @@
 | Runtime Tool | `runtime` | Play Mode 下执行，适合运行时域操作 |
 
 项目自定义工具：
-- 通过 `tools list --include-custom` 发现
+- 通过 `tools group list custom --include-custom` 发现
 - 通过 `tools describe <name>` 查看完整描述
 - 通过 `tools run <name>` 执行
 - 与内置工具使用相同的 descriptor schema 和 envelope 格式
@@ -94,7 +94,7 @@ public static class SampleRuntimeTool
 Runtime Tool 行为：
 - 仅在 Play Mode 活跃时可用
 - 非 Play Mode 时返回 `E_RUNTIME_NOT_READY`（transient error）
-- 通过 `tools list --include-custom` 发现（Play Mode 下自动标记 `available: true/false`）
+- 通过 `tools group list custom --include-custom` 发现（Play Mode 下自动标记 `available: true/false`）
 
 ## 特性参数
 
@@ -139,10 +139,7 @@ Bridge 扫描已加载的 Unity Editor 程序集，自动从 `[UnityCliTool]` �
 
 ```powershell
 # 发现所有自定义工具（需要 Bridge 连接）
-unity_cli tools list --include-custom
-
-# 按组过滤自定义工具
-unity_cli tools list --group custom --include-custom
+unity_cli tools group list custom --include-custom
 
 # 查看自定义工具完整描述
 unity_cli tools describe my.editor-tool
@@ -161,7 +158,7 @@ unity_cli tools run sample.runtime-echo --input '{"message":"ping"}'
 |------|------|
 | Editor Tool 注册与执行 | ✅ 已实现 |
 | Runtime Tool 注册与执行 | ✅ 已实现 |
-| `tools list --include-custom` 发现 | ✅ 已实现 |
+| `tools group list custom --include-custom` 发现 | ✅ 已实现 |
 | Fingerprint 校验 | ✅ 已实现 |
 | `--dry-run` 支持 | ✅ 已实现（descriptor 级别控制） |
 | 独立 `extensions` 命令组 | 🔄 规划中（P5） |

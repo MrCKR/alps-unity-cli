@@ -17,7 +17,7 @@ unity_cli tools run editor.play
 ## Step 2: Discover runtime tools
 
 ```powershell
-unity_cli tools list --include-custom --group custom
+unity_cli tools group list custom --include-custom
 ```
 
 Filter for tools with `target: "runtime"`.
@@ -69,7 +69,7 @@ If you attempt to run a runtime tool when Unity is not in Play Mode:
     "code": "E_TOOL_NOT_FOUND_FOR_TARGET",
     "message": "Tool not found: sample.wait.",
     "next_actions": [
-      "Run unity_cli tools list --include-custom to see all available tools.",
+      "Run unity_cli tools group list custom --include-custom to see available tools.",
       "Run unity_cli tools search <keyword> to find related tools."
     ]
   }

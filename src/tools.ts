@@ -336,8 +336,8 @@ async function handleToolsDescribe(
     return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Tool not found for target: ${toolName}.`, [
       "Run unity_cli tools group to see tool groups.",
       "Run unity_cli tools group list <group> to see tools in a group.",
-      "Run unity_cli tools list to see all available tools.",
-      "Run unity_cli tools list --include-custom to discover Unity project Editor custom tools.",
+      "Run unity_cli tools group to see all tool groups.",
+      "Run unity_cli tools group list custom --include-custom to discover Unity project Editor custom tools.",
       "Run unity_cli tools search <keyword> to find related tools."
     ]);
   }
@@ -589,7 +589,7 @@ async function dispatchJobHandler(
  * P10-R3: Resolve which extension tools are available for the target project.
  *
  * Extension tools (ProBuilder, Cinemachine, VFX, URP, HDRP) are only shown in
- * tools list/groups/search when their required Unity packages are installed
+ * tools group/group list/search when their required Unity packages are installed
  * in the target project. Without --project, extension tools are NOT included.
  */
 async function optionalTargetSummary(flags: Record<string, string | boolean>, runtime: ToolsRuntime): Promise<Record<string, unknown> | null> {

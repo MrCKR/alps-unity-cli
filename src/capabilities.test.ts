@@ -74,7 +74,7 @@ test("capabilities with bridge error falls back to offline", async () => {
   assert.ok(data.static !== undefined);
 });
 
-test("capabilities static data includes destructive tools list", async () => {
+test("capabilities static data includes destructive tools", async () => {
   const runtime: BridgeRuntime = {};
   const result = await handleCapabilitiesCommand({}, runtime, requestId);
   assert.equal(result.ok, true);

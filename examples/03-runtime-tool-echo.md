@@ -23,7 +23,7 @@ Or enter Play Mode manually in the Unity Editor.
 Runtime tools are only listed when Unity is in Play Mode:
 
 ```powershell
-unity_cli tools list --include-custom
+unity_cli tools group list custom --include-custom
 ```
 
 Look for tools with `target: "runtime"` and `availabilityScope: "playModeSession"`. If Unity is not in Play Mode, `available` will be `false`.

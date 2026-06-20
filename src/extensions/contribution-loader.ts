@@ -8,7 +8,7 @@
  *
  * 1. Core metadata/registry does not directly aggregate extension tools
  * 2. Extension contributions are registered through the extension mechanism
- * 3. Core `tools group` / `tools list` can filter extension tools by availability
+ * 3. Core `tools group` / `tools group list` can filter extension tools by availability
  * 4. After extension registration, bridge routing and contract validation work normally
  *
  * P10-R4: Cinemachine, URP, HDRP extension tools and bridge specs are now

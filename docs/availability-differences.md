@@ -4,7 +4,7 @@
 
 ## 核心原则
 
-工具可用性是 **per-instance** 的，不是全局的。`tools list` 和 `tools describe` 反映已解析目标实例的能力。不同实例可能显示不同的工具集。
+工具可用性是 **per-instance** 的，不是全局的。`tools group list` 和 `tools describe` 反映已解析目标实例的能力。不同实例可能显示不同的工具集。
 
 ## 可用性差异原因
 
@@ -30,7 +30,7 @@ Package 依赖通过 `requiresPackages` 字段声明在工具 descriptor 中：
 
 ### 2. 项目工具注册
 
-项目工具（`[UnityCliTool]` C# 特性）通过 Bridge 运行时发现。不同项目注册不同工具。`tools list --include-custom` 对实例 A 可能显示 `sample.echo`，对实例 B 可能显示 `acme.custom-builder`。
+项目工具（`[UnityCliTool]` C# 特性）通过 Bridge 运行时发现。不同项目注册不同工具。`tools group list custom --include-custom` 对实例 A 可能显示 `sample.echo`，对实例 B 可能显示 `acme.custom-builder`。
 
 项目工具发现需要可达的 Bridge。无 Bridge 连接时，只能发现内置工具。
 
@@ -78,7 +78,7 @@ Unity domain reload 期间（如脚本编译后），Bridge 标记目标为过�
 1. **先解析目标。** 执行任何工具前先 `instances list` + `target set`
 2. **执行前先 describe。** descriptor 显示 `handler`、`supportStatus`、`target`、`availabilityScope`、`available`
 3. **优雅处理错误。** Package-not-found、Bridge-unreachable 和 `E_RUNTIME_NOT_READY` 包含 `next_actions`
-4. **状态变化后重新发现。** 安装包或 domain reload 后，重新 `tools list --include-custom`
+4. **状态变化后重新发现。** 安装包或 domain reload 后，重新 `tools group list custom --include-custom`
 5. **检查 `editor.state`** 再调用 PlayMode 敏感工具。`target: "runtime"` 需先进入 Play Mode
 
 ## 交叉引用

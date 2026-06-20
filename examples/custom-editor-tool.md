@@ -38,7 +38,7 @@ public static class SampleEditorTool
 
 ```powershell
 # 发现自定义工具
-unity_cli tools list --include-custom
+unity_cli tools group list custom --include-custom
 
 # 查看完整描述（执行前必做）
 unity_cli tools describe sample.editor-tool

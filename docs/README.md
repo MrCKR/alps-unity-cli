@@ -12,7 +12,7 @@
 | Topic | Title | Discovery Path |
 |-------|-------|----------------|
 | [target-and-instance](./target-and-instance.md) | Targets and Instances | Start here |
-| [tool-discovery](./tool-discovery.md) | Tool Discovery | `instances → tools list/search/describe` |
+| [tool-discovery](./tool-discovery.md) | Tool Discovery | `instances → tools group/group list/search/describe` |
 | [tool-execution](./tool-execution.md) | Tool Execution | `tools describe → tools run → verify` |
 | [availability-differences](./availability-differences.md) | Availability Differences | Why different instances show different tools |
 | [error-codes](./error-codes.md) | Error Codes and next_actions | Structured error recovery |
@@ -58,8 +58,9 @@
 
 | 废弃路径 | 替代路径 |
 |----------|---------|
-| `tools list` 无过滤全量展开 | `tools groups` → `tools list --group <group>` 分层发现 |
-| `tools list --include-custom` 作为首选发现 | 先 `tools groups` 确认分组，再 `tools list --group <group> --include-custom` |
+| `tools list` 无过滤全量展开 | `tools group` → `tools group list <group>` 分层发现 |
+| `tools list --include-custom` 作为首选发现 | 先 `tools group` 确认分组，再 `tools group list <group> --include-custom` |
+| `tools groups` | `tools group`（`tools groups` 已移除，返回 E_TOOLS_LIST_REMOVED） |
 | `tools search` 作为唯一发现手段 | `tools search` 仅作为辅助搜索，不应替代 group-first 流程 |
 
-> **注意**：`tools list` 和 `tools list --include-custom` 命令仍然可用，但不推荐作为 AI Agent 的首选发现方式。推荐使用 group-first 分层发现。
+> **注意**：`tools list` 和 `tools groups` 命令已被移除，调用时返回 `E_TOOLS_LIST_REMOVED` 引导错误。请使用 `tools group` + `tools group list <group>` 的 group-first 分层发现。

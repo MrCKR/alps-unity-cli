@@ -47,7 +47,7 @@ unity_cli instances prune
 ### 1. 显式 `--target <id|alias>`
 
 ```powershell
-unity_cli tools list --target <instanceId|alias>
+unity_cli tools group list <group> --target <instanceId|alias>
 unity_cli camera list --target my-project
 ```
 

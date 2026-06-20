@@ -32,7 +32,7 @@ unity_cli init --check --project C:\path\MyProject
 Bridge 包安装后，项目可以通过 `[UnityCliTool]` 注册自定义工具，通过 `--include-custom` 标志发现：
 
 ```powershell
-unity_cli tools list --include-custom
+unity_cli tools group list custom --include-custom
 unity_cli tools describe my.custom-tool
 unity_cli tools run my.custom-tool --input '{}'
 ```
@@ -88,7 +88,7 @@ unity_cli extensions doctor                         # 扩展诊断（P5）
 
 当扩展依赖的 Unity Package 未安装时：
 
-- 扩展工具在 `tools list --include-custom` 中可见但标记为 `available: false`
+- 扩展工具在 `tools group list custom --include-custom` 中可见但标记为 `available: false`
 - 执行时返回错误，`next_actions` 指向安装所需 Package
 - 不产生静默失败
 

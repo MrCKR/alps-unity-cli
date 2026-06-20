@@ -41,10 +41,10 @@ unity_cli target set my-project
 
 ```powershell
 # 第一步：查看工具分组
-unity_cli tools groups
+unity_cli tools group
 
 # 第二步：按组查看工具摘要
-unity_cli tools list --group camera
+unity_cli tools group list camera
 # 或搜索关键词
 unity_cli tools search screenshot
 
@@ -76,7 +76,7 @@ unity_cli reflect member UnityEngine.Camera.fieldOfView
 ```
 
 > **注意**：独立的 `context list / context describe / context read` 命令正在规划中（P3 阶段）。
-> 当前可通过 `tools list` 中 `readOnlyHint: true` 的工具以及 `docs`/`reflect` 命令获取只读项目状态。
+> 当前可通过 `tools group list` 输出中 `readOnlyHint: true` 的工具以及 `docs`/`reflect` 命令获取只读项目状态。
 
 ### 4. 项目自定义工具
 
@@ -84,7 +84,7 @@ Unity 项目可通过 C# `[UnityCliTool]` 特性注册自定义工具：
 
 ```powershell
 # 发现项目自定义工具（需要 Bridge 连接）
-unity_cli tools list --include-custom
+unity_cli tools group list custom --include-custom
 
 # 查看自定义工具描述
 unity_cli tools describe my.custom-tool
@@ -183,17 +183,14 @@ unity_cli job cancel --id <jobId>
 ### 工具发现与执行
 
 ```powershell
-# 列出所有工具（默认子命令）
-unity_cli tools list
+# 列出工具分组
+unity_cli tools group
 
-# 按组过滤
-unity_cli tools list --group camera
+# 按组列出工具
+unity_cli tools group list camera
 
 # 包含项目自定义工具
-unity_cli tools list --include-custom
-
-# 列出工具分组
-unity_cli tools groups
+unity_cli tools group list custom --include-custom
 
 # 搜索工具
 unity_cli tools search <keyword>
@@ -545,7 +542,7 @@ public static class MyEditorTool
 
 发现与执行：
 ```powershell
-unity_cli tools list --include-custom
+unity_cli tools group list custom --include-custom
 unity_cli tools describe my.editor-tool
 unity_cli tools run my.editor-tool --input '{"key":"value"}'
 ```
@@ -596,8 +593,8 @@ unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --yes
 
 | 扩展类型 | 当前状态 | 发现方式 |
 |----------|---------|---------|
-| 项目自定义 Tool (Editor) | ✅ 已实现 | `tools list --include-custom` |
-| 项目自定义 Tool (Runtime) | ✅ 已实现 | `tools list --include-custom`（Play Mode 下） |
+| 项目自定义 Tool (Editor) | ✅ 已实现 | `tools group list custom --include-custom` |
+| 项目自定义 Tool (Runtime) | ✅ 已实现 | `tools group list custom --include-custom`（Play Mode 下） |
 | 项目自定义 Context | 🔄 规划中（P3） | 待 `context` 命令实现 |
 | 扩展包管理 | 🔄 规划中（P5） | 待 `extensions` 命令实现 |
 | ProBuilder 扩展 | ✅ 已实现 | 自动包含（需要 com.unity.probuilder） |

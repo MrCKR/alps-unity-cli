@@ -17,7 +17,7 @@
 
 ### 统一适配
 
-- 所有 C# 域都通过 Bridge command registry、项目工具 registry 或 runtime executor 接入 CLI 的 `tools list/search/describe/run` 路径。
+- 所有 C# 域都通过 Bridge command registry、项目工具 registry 或 runtime executor 接入 CLI 的 `tools group/group list/search/describe/run` 路径。
 - 每个可执行面都要能映射到 descriptor 元数据：`handler`、`supportStatus`、`target`、`availabilityScope`、风险提示、输入输出 schema、文档 topic 与示例。
 - 对 Unity 状态变更优先保留可审计输出：成功 envelope、结构化错误、`plannedEffects`、`logPath`，以及在可行处支持 `--dry-run` 或显式 destructive/read-only 标记。
 

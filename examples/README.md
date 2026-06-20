@@ -35,9 +35,9 @@ alps-unity-cli 操作示例，按类型组织。
 所有示例遵循 group-first 分层发现：
 
 ```
-tools groups                    → 查看分组
+tools group                      → 查看分组
        ↓
-tools list --group <group>      → 按组查看
+tools group list <group>        → 按组查看
        ↓
 tools describe <tool>           → 完整描述（必做）
        ↓

@@ -188,7 +188,7 @@
 
 | unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
 |---|---|---|---|---|---|
-| project-tool.list | `project-tool list [--project] [--instance]` | bridge (UnityCliBridge) | ✅ `project-tool.list` in CUSTOM_TOOL_TOOLS | bridge-commands.test.ts: project-tool list and run; project-tools.test.ts: descriptor forwarding; tools.test.ts: tools list --include-custom | ✅ |
+| project-tool.list | `project-tool list [--project] [--instance]` | bridge (UnityCliBridge) | ✅ `project-tool.list` in CUSTOM_TOOL_TOOLS | bridge-commands.test.ts: project-tool list and run; project-tools.test.ts: descriptor forwarding; tools.test.ts: tools group list custom --include-custom | ✅ |
 | project-tool.run | `project-tool run <name> [--input/--input-file/--stdin] [--timeout-ms] [--fingerprint-mode] [--artifact-dir] [--job]` | bridge (UnityCliBridge) | ✅ `project-tool.run` in CUSTOM_TOOL_TOOLS | bridge-commands.test.ts: project-tool list and run; project-tools.test.ts: C# attribute source validation; security.test.ts: fingerprint proof | ✅ |
 
 ## Diagnose 域（S4.3 P2-4 新增）
@@ -232,7 +232,7 @@
 | destructiveHint + `--yes` 确认 | 12 个 destructive 命令均需 `--yes` 或 `--dry-run` 放行（含 cli.batch.run/test.cancel/build.cancel，P2-6 补齐） | security.test.ts: destructive commands require --yes; bridge-commands.test.ts: destructive bridge commands; batch.test.ts: batch --yes; cli.test.ts: build cancel --yes | ✅ |
 | dry-run 预览 | `asset.delete`/`go.delete`/`scene.save`/`code.exec` 支持 supportsDryRun | security.test.ts: destructive dry-run; runtime-code.test.ts: code exec dry-run | ✅ |
 | fingerprint 拦截 | project tool SHA-256 fingerprint 校验 + destructive security proof | security.test.ts: fingerprint proof; project-tools.test.ts: C# attribute fingerprint | ✅ |
-| group 可见性 | tools list --group 按功能域过滤 | tools.test.ts: filterToolsByGroup; capabilities.test.ts: static data includes destructive tools list | ✅ |
+| group 可见性 | tools group list 按功能域过滤 | tools.test.ts: filterToolsByGroup; capabilities.test.ts: static data includes destructive tools | ✅ |
 | readOnlyHint | readOnly 命令标记和传播 | contracts:validate: readOnly 标记一致性 | ✅ |
 | 黑名单/网络策略 | v1.0 已知限制，未独立实现 | — | 🔶 v1.0 限制 |
 | 敏感信息保护 | 零风险面：不处理 token/secret/credential | 代码审查确认零风险面 | ✅ |
@@ -310,6 +310,6 @@
 - **P2-1 S3.5 Batch/Job 完整化** (2026-06-16): 新增 `cli.batch.run/schema` metadata，补齐 batch orchestration 全链路（preflight/parallel/fail-fast/env allowlist），job lifecycle（status/logs/cancel/timeout）。
 - **P2-2 S4.1 Project tool 注册 + descriptor** (2026-06-16): 新增 `project-tool.list/run` 覆盖矩阵行；实现 Attribute-first `[UnityCliTool]` 注册 + 自动 descriptor 生成 + schema 校验。
 - **P2-3 S4.2 Fingerprint runtime 拦截** (2026-06-16): 新增 Fingerprint 域覆盖矩阵；实现 SHA-256 fingerprint 校验 + `E_TOOL_FINGERPRINT_MISMATCH` 拦截 + destructive security proof。
-- **P2-4 S4.3 CLI 命令 + tools 统一发现** (2026-06-16): 新增 Diagnose 域、ProBuilder 域、Screenshot 域、CLI 离线能力域覆盖矩阵；实现 `tools list/groups/search/describe` 统一发现 + `capabilities` 静态/混合 manifest + `diagnose.preflight`。
+- **P2-4 S4.3 CLI 命令 + tools 统一发现** (2026-06-16): 新增 Diagnose 域、ProBuilder 域、Screenshot 域、CLI 离线能力域覆盖矩阵；实现 `tools group/group list/search/describe/run` 统一发现 + `capabilities` 静态/混合 manifest + `diagnose.preflight`。
 - **P2-5 S4.4 安全模型全链路验证** (2026-06-16): 新增安全模型域覆盖矩阵；9 个 destructive 命令 `--yes` 确认机制 + representative dry-run + fingerprint + destructive security proof + group 可见性 + readOnlyHint + 敏感信息保护零风险面。黑名单和网络策略为 v1.0 已知限制。
 - **P2-6 S4.5 覆盖矩阵收口** (2026-06-16): 全量收口；120 contract commands / 95 bridge / 95 C# / 120 metadata / 270 npm tests / contracts:validate ok；更新 smoke 验证状态（P1-2 + P2-4 + P2-5 实机证据合并）；补齐 security-policy.ts 3 条缺失（cli.batch.run/test.cancel/build.cancel）；补齐 smoke 表 7 个域。
