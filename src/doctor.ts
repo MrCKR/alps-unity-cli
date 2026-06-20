@@ -17,9 +17,11 @@ import { getString, getBoolean } from "./args.js";
 import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
 import { readInstances, type UnityInstance } from "./instances.js";
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
-import { builtinToolMetadata } from "./tools/metadata/index.js";
+import { builtinToolMetadata, filterToolsByGroup } from "./tools/metadata/index.js";
 import { ExtensionRegistry, loadExtensionDescriptor, extensionAvailabilitySummary } from "./extensions/index.js";
 import { readInstalledUnityPackages } from "./extensions/project-resolver.js";
+import { readInstalledExtensions } from "./cli-commands/extensions.js";
+import { bridgeCommandRegistry } from "./bridge/index.js";
 import { failure, success } from "./output.js";
 import type { CliResult } from "./types.js";
 
@@ -85,6 +87,9 @@ export async function handleDoctorCommand(
 
   // Extension availability
   checks.push(await checkExtensionAvailability(flags));
+
+  // ProBuilder extension specific check
+  checks.push(await checkProBuilderExtension(flags));
 
   const allPassed = checks.every((c) => c.status === "pass");
   const hasWarnings = checks.some((c) => c.status === "warn");
@@ -443,6 +448,123 @@ async function checkExtensionAvailability(flags: Record<string, string | boolean
   };
 }
 
+/**
+ * ProBuilder extension specific check.
+ *
+ * Diagnoses the ProBuilder extension specifically: installed status,
+ * Unity package present/version, descriptor count=36, bridge command
+ * count=36, C# handler availability. Used by `doctor` to surface ProBuilder
+ * extension health alongside the generic extension_availability check.
+ */
+async function checkProBuilderExtension(flags: Record<string, string | boolean>): Promise<DoctorCheck> {
+  const projectPath = getString(flags, "project");
+  const registry = new ExtensionRegistry();
+
+  // Determine whether the ProBuilder extension is registered.
+  if (!registry.hasExtension("probuilder")) {
+    return {
+      name: "extension.probuilder",
+      status: "warn",
+      message: "ProBuilder extension is not registered in the CLI extension registry.",
+      details: { registered: false }
+    };
+  }
+
+  // Determine whether the extension is enabled in the project.
+  let enabled = false;
+  if (projectPath) {
+    const enabledSet = await readInstalledExtensions(projectPath);
+    enabled = enabledSet.has("probuilder");
+  }
+
+  // Resolve Unity package presence/version.
+  let unityPackagePresent = false;
+  let unityPackageVersion: string | undefined;
+  if (projectPath) {
+    try {
+      const installedPackages = await readInstalledUnityPackages(projectPath);
+      unityPackagePresent = installedPackages.has("com.unity.probuilder");
+      unityPackageVersion = installedPackages.get("com.unity.probuilder");
+    } catch {
+      // Cannot read packages — leave present=false
+    }
+  }
+
+  // Count descriptors (built-in metadata path) and bridge specs.
+  const probuilderTools = filterToolsByGroup("probuilder");
+  const descriptorCount = probuilderTools.length;
+  const bridgeSpecs = bridgeCommandRegistry.specs().filter((s) => s.group === "probuilder");
+  const bridgeCommandCount = bridgeSpecs.length;
+
+  // Expected counts from P7-T1 alignment matrix.
+  const expectedCount = 36;
+
+  // C# handler availability — the descriptor path is built-in, so
+  // handlers are "present" in code when descriptorCount matches and
+  // the bridge domain registers commands. Real runtime availability
+  // requires the Unity package; this check reports "code_present".
+  const csharpHandlerPresent = descriptorCount === expectedCount && bridgeCommandCount === expectedCount;
+
+  const details: Record<string, unknown> = {
+    registered: true,
+    enabled,
+    extensionId: "probuilder",
+    unityPackage: {
+      packageId: "com.unity.probuilder",
+      present: unityPackagePresent,
+      version: unityPackageVersion
+    },
+    descriptorCount,
+    expectedDescriptorCount: expectedCount,
+    bridgeCommandCount,
+    expectedBridgeCommandCount: expectedCount,
+    csharpHandlerPresent,
+    projectResolved: projectPath !== undefined
+  };
+
+  // Determine status.
+  const issues: string[] = [];
+
+  if (descriptorCount !== expectedCount) {
+    issues.push(`descriptor count ${descriptorCount} does not match expected ${expectedCount}`);
+  }
+  if (bridgeCommandCount !== expectedCount) {
+    issues.push(`bridge command count ${bridgeCommandCount} does not match expected ${expectedCount}`);
+  }
+  if (projectPath && !unityPackagePresent && enabled) {
+    issues.push("ProBuilder extension is enabled but com.unity.probuilder is not installed in the project");
+  }
+  if (projectPath && unityPackagePresent && !enabled) {
+    issues.push("com.unity.probuilder is installed but ProBuilder extension is not enabled");
+  }
+
+  if (issues.length > 0) {
+    return {
+      name: "extension.probuilder",
+      status: "fail",
+      message: `ProBuilder extension has ${issues.length} issue(s): ${issues.join("; ")}.`,
+      details: { ...details, issues }
+    };
+  }
+
+  // When no project context, we can only verify code-side counts.
+  if (!projectPath) {
+    return {
+      name: "extension.probuilder",
+      status: "pass",
+      message: `ProBuilder extension registered with ${descriptorCount} descriptors and ${bridgeCommandCount} bridge commands. Pass --project to verify Unity package availability.`,
+      details
+    };
+  }
+
+  return {
+    name: "extension.probuilder",
+    status: "pass",
+    message: `ProBuilder extension is ${enabled ? "enabled" : "disabled"}; com.unity.probuilder ${unityPackagePresent ? `present (v${unityPackageVersion ?? "unknown"})` : "not installed"}; ${descriptorCount} descriptors, ${bridgeCommandCount} bridge commands.`,
+    details
+  };
+}
+
 function buildSuggestions(checks: DoctorCheck[]): string[] {
   const suggestions: string[] = [];
 
@@ -482,6 +604,10 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
           suggestions.push("Run 'unity_cli extensions doctor --project <path>' for detailed extension diagnostics.");
           suggestions.push("Run 'unity_cli extensions list --project <path>' to see all extensions and their status.");
           suggestions.push("Install missing packages with 'unity_cli package install <package-id>'.");
+          break;
+        case "extension.probuilder":
+          suggestions.push("Run 'unity_cli extensions install probuilder --project <path>' to enable the ProBuilder extension.");
+          suggestions.push("Run 'unity_cli package install com.unity.probuilder' to install the ProBuilder Unity package.");
           break;
       }
     }

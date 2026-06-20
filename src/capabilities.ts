@@ -35,22 +35,37 @@ export async function handleCapabilitiesCommand(
     }
   }
 
-  const staticCapabilities = buildStaticCapabilities(projectTools);
-
   // ── Extension availability ──
   const projectPath = getString(flags, "project");
   let extensionInfo: Record<string, unknown> | undefined;
+  // Determine which groups belong to extensions (not core built-in).
+  // When a project path is available, we can determine which extensions
+  // are enabled and separate their groups from the core `groups` map.
+  const extensionGroupFilter = new Set<string>();
+  const registry = new ExtensionRegistry();
+  // All registered extension tool groups are extension groups
+  for (const extId of registry.extensionIds()) {
+    const ext = registry.getExtension(extId)!;
+    const toolGroups = [...new Set(ext.manifest.contributions.tools?.map((t) => t.group) ?? [])];
+    for (const group of toolGroups) {
+      extensionGroupFilter.add(group);
+    }
+  }
   if (projectPath) {
     try {
-      const registry = new ExtensionRegistry();
       const installedPackages = await readInstalledUnityPackages(projectPath);
       const summary = extensionAvailabilitySummary(registry, installedPackages);
+      const { readInstalledExtensions } = await import("./cli-commands/extensions.js");
+      const enabledExtensions = await readInstalledExtensions(projectPath);
       extensionInfo = {
         total: summary.total,
         available: summary.available,
         unavailable: summary.unavailable,
         unknown: summary.unknown,
-        extensions: summary.extensions,
+        extensions: summary.extensions.map((e) => ({
+          ...e,
+          enabled: enabledExtensions.has(e.id)
+        })),
         extensionToolCount: collectAvailableTools(registry, installedPackages).length,
         allExtensionToolCount: collectAllTools(registry, installedPackages).length
       };
@@ -58,6 +73,8 @@ export async function handleCapabilitiesCommand(
       // Extension info is best-effort; failures should not break capabilities.
     }
   }
+
+  const staticCapabilities = buildStaticCapabilities(projectTools, extensionGroupFilter.size > 0 ? extensionGroupFilter : undefined);
 
   let runtimeCapabilities: Record<string, unknown> | undefined;
   const endpoint = getString(flags, "bridge-endpoint") ?? runtime.bridgeEndpoint ?? process.env.UNITY_CLI_BRIDGE_ENDPOINT;
@@ -97,10 +114,19 @@ function getBoolean(flags: Record<string, string | boolean>, name: string): bool
   return flags[name] === true || flags[name] === "true";
 }
 
-function buildStaticCapabilities(projectTools: ToolMetadata[] = []): Record<string, unknown> {
+function buildStaticCapabilities(projectTools: ToolMetadata[] = [], extensionGroupFilter?: Set<string>): Record<string, unknown> {
   const builtinTools = builtinToolMetadata();
-  const tools = [...builtinTools, ...projectTools];
-  const groups = [...new Set([...builtinToolGroups(), ...projectTools.map((tool) => tool.group)])].sort();
+  // When extensionGroupFilter is provided, ProBuilder and other extension groups
+  // are separated from the core built-in groups in the top-level `groups` map.
+  // Extension group counts are instead exposed through the extensions section.
+  const coreTools = extensionGroupFilter
+    ? builtinTools.filter((t) => !extensionGroupFilter.has(t.group))
+    : builtinTools;
+  const extensionTools = extensionGroupFilter
+    ? builtinTools.filter((t) => extensionGroupFilter.has(t.group))
+    : [];
+  const tools = [...coreTools, ...extensionTools, ...projectTools];
+  const coreGroups = [...new Set([...coreTools, ...projectTools].map((tool) => tool.group))].sort();
 
   const destructiveTools = tools.filter((t) => t.destructiveHint).map((t) => t.name);
   const readOnlyTools = tools.filter((t) => t.readOnlyHint).map((t) => t.name);
@@ -119,14 +145,31 @@ function buildStaticCapabilities(projectTools: ToolMetadata[] = []): Record<stri
   const offlineTools = cliOnlyTools;
   const jobTools = [...batchJobTools, ...hybridTools];
 
+  const coreGroupCounts: Record<string, number> = {};
+  for (const group of coreGroups) {
+    coreGroupCounts[group] = [...coreTools, ...projectTools].filter((t) => t.group === group).length;
+  }
+
+  // Full group counts (used when no extension filter — backward compat)
   const groupCounts: Record<string, number> = {};
-  for (const group of groups) {
-    groupCounts[group] = tools.filter((t) => t.group === group).length;
+  const allGroups = [...new Set([...builtinTools, ...projectTools].map((tool) => tool.group))].sort();
+  for (const group of allGroups) {
+    groupCounts[group] = [...builtinTools, ...projectTools].filter((t) => t.group === group).length;
+  }
+
+  // Extension group counts (e.g. probuilder=36) are surfaced separately
+  // so that capabilities consumers can distinguish core from extension.
+  const extensionGroupCounts: Record<string, number> = {};
+  if (extensionGroupFilter && extensionTools.length > 0) {
+    for (const group of [...new Set(extensionTools.map((t) => t.group))].sort()) {
+      extensionGroupCounts[group] = extensionTools.filter((t) => t.group === group).length;
+    }
   }
 
   return {
     toolCount: tools.length,
-    groups: groupCounts,
+    groups: extensionGroupFilter ? coreGroupCounts : groupCounts,
+    ...(Object.keys(extensionGroupCounts).length > 0 ? { extensionGroups: extensionGroupCounts } : {}),
     liveBridgeTools,
     hybridTools,
     batchJobTools,

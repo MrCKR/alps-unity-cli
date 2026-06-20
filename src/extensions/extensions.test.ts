@@ -321,10 +321,10 @@ test("loadExtensionDescriptor loads a specific extension", () => {
   });
   assert.equal(desc.manifest.id, "probuilder");
   assert.equal(desc.availability.status, "available");
-  assert.equal(desc.tools.length, 4);
+  assert.equal(desc.tools.length, 36);
   assert.equal(desc.contexts.length, 1);
   assert.equal(desc.bridgeCommands.length, 1);
-  assert.equal(desc.csharpEntries.length, 1);
+  assert.equal(desc.csharpEntries.length, 6);
   assert.equal(desc.docs.length, 1);
 });
 
@@ -332,7 +332,7 @@ test("loadExtensionDescriptor for unavailable extension has unavailable status",
   const registry = new ExtensionRegistry();
   const desc = loadExtensionDescriptor(registry, "probuilder", {});
   assert.equal(desc.availability.status, "unavailable");
-  assert.equal(desc.tools.length, 4); // Tools are still listed
+  assert.equal(desc.tools.length, 36); // Tools are still listed
   assert.ok(desc.availability.missingPackageIds.length > 0);
 });
 
@@ -370,7 +370,7 @@ test("collectAvailableTools returns tools from available extensions only", () =>
     "com.unity.probuilder": "5.2.0"
   });
   assert.ok(tools.every((t) => t.group === "probuilder"));
-  assert.equal(tools.length, 4);
+  assert.equal(tools.length, 36);
 });
 
 test("collectAvailableTools returns empty when no extensions available", () => {
@@ -384,10 +384,10 @@ test("collectAllTools includes unavailable extension tools with availability fla
   const tools = collectAllTools(registry, {
     "com.unity.probuilder": "5.2.0"
   });
-  assert.ok(tools.length >= 4); // At least ProBuilder's tools
+  assert.ok(tools.length >= 36); // At least ProBuilder's tools
 
   const probuilderTools = tools.filter((t) => t.extensionId === "probuilder");
-  assert.equal(probuilderTools.length, 4);
+  assert.equal(probuilderTools.length, 36);
   assert.ok(probuilderTools.every((t) => t.available));
 
   const cinemachineTools = tools.filter((t) => t.extensionId === "cinemachine");
@@ -421,7 +421,7 @@ test("collectAvailableCSharpEntries returns entries from available extensions", 
     "com.unity.probuilder": "5.2.0",
     "com.unity.visualeffectgraph": "14.0.0"
   });
-  assert.ok(entries.some((e) => e.type === "UnityCli.ProBuilderCommands"));
+  assert.ok(entries.some((e) => e.type.startsWith("UnityCli.ProBuilder.")));
   assert.ok(entries.some((e) => e.type === "UnityCli.VfxCommands"));
 });
 
@@ -554,9 +554,17 @@ test("resolveExtensionAvailabilityForProject resolves against real project", asy
 // ── Registry data: specific manifest content checks ────────────────────────
 
 test("ProBuilder manifest has correct tool contributions", () => {
-  assert.equal(PROBUILDER_MANIFEST.contributions.tools!.length, 4);
+  assert.equal(PROBUILDER_MANIFEST.contributions.tools!.length, 36);
   const toolNames = PROBUILDER_MANIFEST.contributions.tools!.map((t) => t.name);
-  assert.deepEqual(toolNames, ["probuilder.shape", "probuilder.create", "probuilder.edit", "probuilder.csg"]);
+  assert.ok(toolNames.includes("probuilder.ping"));
+  assert.ok(toolNames.includes("probuilder.create-shape"));
+  assert.ok(toolNames.includes("probuilder.extrude-faces"));
+  assert.ok(toolNames.includes("probuilder.repair-mesh"));
+  // Old 4 coarse-grained tools should NOT be present
+  assert.ok(!toolNames.includes("probuilder.shape"));
+  assert.ok(!toolNames.includes("probuilder.create"));
+  assert.ok(!toolNames.includes("probuilder.edit"));
+  assert.ok(!toolNames.includes("probuilder.csg"));
 });
 
 test("VFX Graph manifest has correct tool contributions", () => {

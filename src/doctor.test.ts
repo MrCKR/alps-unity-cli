@@ -71,7 +71,7 @@ test("doctor returns all-pass when registry has healthy instance and bridge is r
   const data = result.data as { summary: string; checks: DoctorCheck[] };
   // extension_availability warns when no --project provided
   assert.equal(data.summary, "warn");
-  assert.equal(data.checks.length, 8);
+  assert.equal(data.checks.length, 9); // 8 original + extension.probuilder check
 
   const registryCheck = data.checks.find((c) => c.name === "instance_registry");
   assert.equal(registryCheck?.status, "pass");

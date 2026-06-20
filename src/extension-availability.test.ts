@@ -54,7 +54,7 @@ test("tools describe returns unavailable when extension deps are missing", async
 
   const result = await handleToolsCommand(
     "describe",
-    ["probuilder.shape"],
+    ["probuilder.ping"],
     { project: projectPath },
     emptyRuntime,
     requestId
@@ -76,7 +76,7 @@ test("tools describe returns E_EXTENSION_UNAVAILABLE for tools run when deps mis
 
   const result = await handleToolsCommand(
     "run",
-    ["probuilder.shape"],
+    ["probuilder.ping"],
     { project: projectPath },
     emptyRuntime,
     requestId
@@ -100,7 +100,7 @@ test("tools describe returns available when extension deps are installed", async
 
   const result = await handleToolsCommand(
     "describe",
-    ["probuilder.shape"],
+    ["probuilder.ping"],
     { project: projectPath },
     emptyRuntime,
     requestId
@@ -118,7 +118,7 @@ test("tools describe returns available when extension deps are installed", async
 test("tools describe works without --project flag", async () => {
   const result = await handleToolsCommand(
     "describe",
-    ["probuilder.shape"],
+    ["probuilder.ping"],
     {},
     emptyRuntime,
     requestId
@@ -128,7 +128,7 @@ test("tools describe works without --project flag", async () => {
   const data = result.data as Record<string, unknown>;
   // Without project, we can't determine availability → no extensionAvailability field
   // or it should be present without blocking.
-  assert.ok(data.name === "probuilder.shape");
+  assert.ok(data.name === "probuilder.ping");
 });
 
 // ── 4. tools run: proceeds without --project (bridge will fail naturally) ──
@@ -138,7 +138,7 @@ test("tools run without --project does not block with E_EXTENSION_UNAVAILABLE", 
   // The tool will fail naturally at the bridge if the package is missing.
   const result = await handleToolsCommand(
     "run",
-    ["probuilder.shape"],
+    ["probuilder.ping"],
     {},
     emptyRuntime,
     requestId
@@ -196,7 +196,7 @@ test("checkToolExtensionAvailability returns unavailable for tool with missing p
 
   const result = await checkToolExtensionAvailability(
     {
-      name: "probuilder.shape",
+      name: "probuilder.ping",
       title: "ProBuilder Shape",
       description: "Create shape",
       group: "probuilder",
@@ -221,7 +221,7 @@ test("checkToolExtensionAvailability returns available when packages present", a
 
   const result = await checkToolExtensionAvailability(
     {
-      name: "probuilder.shape",
+      name: "probuilder.ping",
       title: "ProBuilder Shape",
       description: "Create shape",
       group: "probuilder",
@@ -397,11 +397,11 @@ test("validateExtensionManifestContracts detects group mismatch", () => {
     contributions: {
       ...PROBUILDER_MANIFEST.contributions,
       tools: [{
-        name: "probuilder.shape",
+        name: "probuilder.ping",
         title: "ProBuilder Shape",
         description: "Create shape",
         group: "wrong-group", // mismatch!
-        bridgeCommand: "probuilder.shape",
+        bridgeCommand: "probuilder.ping",
         cliCommand: "probuilder shape"
       }]
     }
@@ -451,7 +451,7 @@ test("tools run error for unavailable extension mentions extensions doctor", asy
 
   const result = await handleToolsCommand(
     "run",
-    ["probuilder.shape"],
+    ["probuilder.ping"],
     { project: projectPath },
     emptyRuntime,
     requestId
@@ -500,7 +500,7 @@ test("tools describe shows unavailable when Unity pkg missing even for installed
 
   const result = await handleToolsCommand(
     "describe",
-    ["probuilder.csg"],
+    ["probuilder.delete-faces"],
     { project: projectPath },
     emptyRuntime,
     requestId
@@ -519,7 +519,7 @@ test("tools describe shows unavailable when Unity pkg missing even for installed
 // as a built-in and will be checked for package deps.
 
 test("tools describe for extension tool shows unavailable when Unity package present but extension not installed in project state", async () => {
-  // In this CLI, extension tools like probuilder.shape are built-in metadata.
+  // In this CLI, extension tools like probuilder.ping are built-in metadata.
   // The availability check is package-based, not install-state-based.
   // When the Unity package IS installed, the tool is available regardless of
   // the extensions.json install state.
@@ -529,7 +529,7 @@ test("tools describe for extension tool shows unavailable when Unity package pre
 
   const result = await handleToolsCommand(
     "describe",
-    ["probuilder.shape"],
+    ["probuilder.ping"],
     { project: projectPath },
     emptyRuntime,
     requestId
