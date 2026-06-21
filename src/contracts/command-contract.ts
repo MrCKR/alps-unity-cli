@@ -48,18 +48,20 @@ export function findCommandContract(bridgeCommand: string): CommandContractEntry
 
 export function validateBridgeRegistryContracts(registry: BridgeCommandRegistry, skipGroups?: Set<string>): void {
   const registryCommands = new Set<string>();
+  const registryToolNames = new Set<string>();
   for (const spec of registry.specs()) {
     if (skipGroups?.has(spec.group)) continue;
     registryCommands.add(spec.bridgeCommand);
-    const contract = findCommandContract(spec.bridgeCommand);
+    if (spec.toolName) registryToolNames.add(spec.toolName);
+    const contract = findCommandContract(spec.toolName ?? spec.bridgeCommand);
     if (!contract) {
-      throw new Error(`Bridge command missing from contract: ${spec.bridgeCommand}`);
+      throw new Error(`Bridge command missing from contract: ${spec.toolName ?? spec.bridgeCommand}`);
     }
   }
 
   for (const contract of commandContracts()) {
     if (skipGroups?.has(contract.group)) continue;
-    if (contract.csharp_handler === "present" && (contract.handler_type === "bridge" || contract.handler_type === "hybrid") && !registryCommands.has(contract.bridgeCommand)) {
+    if (contract.csharp_handler === "present" && (contract.handler_type === "bridge" || contract.handler_type === "hybrid") && !registryCommands.has(contract.bridgeCommand) && !registryToolNames.has(contract.bridgeCommand)) {
       throw new Error(`Contract command missing from BridgeCommandRegistry: ${contract.bridgeCommand}`);
     }
   }
@@ -92,8 +94,9 @@ export function validateToolMetadataContracts(tools: ToolMetadata[], registry: B
     if (tool.cliCommand && (tool.handler === "bridge" || tool.handler === "hybrid")) {
       const [group, ...commandParts] = tool.cliCommand.split(" ");
       const spec = registry.lookup(group, commandParts.join(" ")) as BridgeCommandSpec | undefined;
-      if (spec && spec.bridgeCommand !== tool.name) {
-        throw new Error(`Tool metadata contract mismatch: ${tool.name} uses cliCommand=\"${tool.cliCommand}\" but registry resolves ${spec.bridgeCommand}`);
+      const resolvedCommand = spec?.toolName ?? spec?.bridgeCommand;
+      if (spec && resolvedCommand !== tool.name) {
+        throw new Error(`Tool metadata contract mismatch: ${tool.name} uses cliCommand=\"${tool.cliCommand}\" but registry resolves ${resolvedCommand}`);
       }
     }
   }
@@ -161,10 +164,11 @@ export function validateExtensionManifestContracts(
       if (tool.cliCommand) {
         const [group, ...commandParts] = tool.cliCommand.split(" ");
         const spec = registry.lookup(group, commandParts.join(" ")) as BridgeCommandSpec | undefined;
-        if (spec && spec.bridgeCommand !== tool.bridgeCommand) {
+        const specResolvedCommand = spec?.toolName ?? spec?.bridgeCommand;
+        if (spec && specResolvedCommand !== tool.bridgeCommand) {
           throw new Error(
             `Extension '${manifest.id}' tool '${tool.name}' cliCommand mismatch: ` +
-            `cliCommand="${tool.cliCommand}" resolves to ${spec.bridgeCommand}, ` +
+            `cliCommand="${tool.cliCommand}" resolves to ${specResolvedCommand}, ` +
             `expected ${tool.bridgeCommand}`
           );
         }

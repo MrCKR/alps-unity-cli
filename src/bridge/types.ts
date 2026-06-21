@@ -39,6 +39,8 @@ export interface BridgeCommandSpec {
   group: string;
   command: string;
   bridgeCommand: string;
+  /** When bridgeCommand is "project-tool.run", this carries the underlying tool name (e.g. "probuilder.ping"). */
+  toolName?: string;
   buildArgs: ArgBuilder;
   supportsJob?: boolean;
   destructiveHint?: boolean;

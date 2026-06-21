@@ -31,8 +31,15 @@ export async function executeBridgeCommand(
     if (confirmation) {
       return confirmation;
     }
-    const args = spec ? await spec.buildArgs({ command, flags, positionalTarget }) : {};
-    return executeBridgePayload(requestId, command, args, flags, runtime);
+    let args = spec ? await spec.buildArgs({ command, flags, positionalTarget }) : {};
+    // When the spec routes through project-tool.run, wrap the args into
+    // { name: <toolName>, input: <original args> } and change the command.
+    let bridgeCommand = command;
+    if (spec?.toolName) {
+      args = { name: spec.toolName, input: args };
+      bridgeCommand = spec.bridgeCommand;
+    }
+    return executeBridgePayload(requestId, bridgeCommand, args, flags, runtime);
   } catch (error) {
     if (error instanceof BridgeArgumentError) {
       return failure(requestId, error.code, error.message, error.nextActions);

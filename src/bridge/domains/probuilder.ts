@@ -4,70 +4,75 @@ import type { BridgeCommandSpec } from "../types.js";
 /**
  * ProBuilder extension bridge specs — 36 single-action tools.
  *
- * Each CLI command maps to a bridge command with explicit arg builders.
- * Replaces the previous 4 coarse-grained probuilder bridge specs.
+ * Each CLI command is routed through the project-tool.run bridge command
+ * to reach the ProBuilder handlers registered via [UnityCliTool] in the
+ * Unity package. The bridgeCommand field is always "project-tool.run";
+ * the toolName field carries the underlying project-tool name (e.g.
+ * "probuilder.ping"). The buildArgs output is wrapped into { name, input }
+ * so the C# ProjectToolRun handler receives both the tool name and its
+ * JSON input payload.
  *
  * Source: P7-T1 alignment matrix (ALP-596)
  */
 
 export const probuilderBridgeSpecs: BridgeCommandSpec[] = [
   // ─── Utility ───────────────────────────────────────────
-  { group: "probuilder", command: "ping", bridgeCommand: "probuilder.ping", buildArgs: probuilderPingArgs, supportsJob: false },
+  { group: "probuilder", command: "ping", bridgeCommand: "project-tool.run", toolName: "probuilder.ping", buildArgs: probuilderPingArgs, supportsJob: false },
 
   // ─── Shape Creation ────────────────────────────────────
-  { group: "probuilder", command: "create-shape", bridgeCommand: "probuilder.create-shape", buildArgs: probuilderCreateShapeArgs, supportsJob: true },
-  { group: "probuilder", command: "create-poly-shape", bridgeCommand: "probuilder.create-poly-shape", buildArgs: probuilderCreatePolyShapeArgs, supportsJob: true },
+  { group: "probuilder", command: "create-shape", bridgeCommand: "project-tool.run", toolName: "probuilder.create-shape", buildArgs: probuilderCreateShapeArgs, supportsJob: true },
+  { group: "probuilder", command: "create-poly-shape", bridgeCommand: "project-tool.run", toolName: "probuilder.create-poly-shape", buildArgs: probuilderCreatePolyShapeArgs, supportsJob: true },
 
   // ─── Face Operations ──────────────────────────────────
-  { group: "probuilder", command: "extrude-faces", bridgeCommand: "probuilder.extrude-faces", buildArgs: probuilderTargetWithIndicesArgs, supportsJob: true },
-  { group: "probuilder", command: "delete-faces", bridgeCommand: "probuilder.delete-faces", buildArgs: probuilderTargetWithIndicesArgs, supportsJob: true, destructiveHint: true },
-  { group: "probuilder", command: "detach-faces", bridgeCommand: "probuilder.detach-faces", buildArgs: probuilderDetachFacesArgs, supportsJob: true },
-  { group: "probuilder", command: "merge-faces", bridgeCommand: "probuilder.merge-faces", buildArgs: probuilderTargetWithIndicesArgs, supportsJob: true },
-  { group: "probuilder", command: "subdivide", bridgeCommand: "probuilder.subdivide", buildArgs: probuilderTargetWithOptionalIndicesArgs, supportsJob: true },
-  { group: "probuilder", command: "flip-normals", bridgeCommand: "probuilder.flip-normals", buildArgs: probuilderTargetWithOptionalIndicesArgs, supportsJob: true },
-  { group: "probuilder", command: "select-faces", bridgeCommand: "probuilder.select-faces", buildArgs: probuilderSelectFacesArgs, supportsJob: false },
-  { group: "probuilder", command: "set-face-material", bridgeCommand: "probuilder.set-face-material", buildArgs: probuilderSetFaceMaterialArgs, supportsJob: true },
-  { group: "probuilder", command: "set-face-color", bridgeCommand: "probuilder.set-face-color", buildArgs: probuilderSetFaceColorArgs, supportsJob: true },
-  { group: "probuilder", command: "set-face-uvs", bridgeCommand: "probuilder.set-face-uvs", buildArgs: probuilderSetFaceUvsArgs, supportsJob: true },
+  { group: "probuilder", command: "extrude-faces", bridgeCommand: "project-tool.run", toolName: "probuilder.extrude-faces", buildArgs: probuilderTargetWithIndicesArgs, supportsJob: true },
+  { group: "probuilder", command: "delete-faces", bridgeCommand: "project-tool.run", toolName: "probuilder.delete-faces", buildArgs: probuilderTargetWithIndicesArgs, supportsJob: true, destructiveHint: true },
+  { group: "probuilder", command: "detach-faces", bridgeCommand: "project-tool.run", toolName: "probuilder.detach-faces", buildArgs: probuilderDetachFacesArgs, supportsJob: true },
+  { group: "probuilder", command: "merge-faces", bridgeCommand: "project-tool.run", toolName: "probuilder.merge-faces", buildArgs: probuilderTargetWithIndicesArgs, supportsJob: true },
+  { group: "probuilder", command: "subdivide", bridgeCommand: "project-tool.run", toolName: "probuilder.subdivide", buildArgs: probuilderTargetWithOptionalIndicesArgs, supportsJob: true },
+  { group: "probuilder", command: "flip-normals", bridgeCommand: "project-tool.run", toolName: "probuilder.flip-normals", buildArgs: probuilderTargetWithOptionalIndicesArgs, supportsJob: true },
+  { group: "probuilder", command: "select-faces", bridgeCommand: "project-tool.run", toolName: "probuilder.select-faces", buildArgs: probuilderSelectFacesArgs, supportsJob: false },
+  { group: "probuilder", command: "set-face-material", bridgeCommand: "project-tool.run", toolName: "probuilder.set-face-material", buildArgs: probuilderSetFaceMaterialArgs, supportsJob: true },
+  { group: "probuilder", command: "set-face-color", bridgeCommand: "project-tool.run", toolName: "probuilder.set-face-color", buildArgs: probuilderSetFaceColorArgs, supportsJob: true },
+  { group: "probuilder", command: "set-face-uvs", bridgeCommand: "project-tool.run", toolName: "probuilder.set-face-uvs", buildArgs: probuilderSetFaceUvsArgs, supportsJob: true },
 
   // ─── Edge Operations ──────────────────────────────────
-  { group: "probuilder", command: "extrude-edges", bridgeCommand: "probuilder.extrude-edges", buildArgs: probuilderEdgeArgs, supportsJob: true },
-  { group: "probuilder", command: "bevel-edges", bridgeCommand: "probuilder.bevel-edges", buildArgs: probuilderBevelArgs, supportsJob: true },
-  { group: "probuilder", command: "bridge-edges", bridgeCommand: "probuilder.bridge-edges", buildArgs: probuilderBridgeEdgesArgs, supportsJob: true },
-  { group: "probuilder", command: "connect-elements", bridgeCommand: "probuilder.connect-elements", buildArgs: probuilderConnectArgs, supportsJob: true },
+  { group: "probuilder", command: "extrude-edges", bridgeCommand: "project-tool.run", toolName: "probuilder.extrude-edges", buildArgs: probuilderEdgeArgs, supportsJob: true },
+  { group: "probuilder", command: "bevel-edges", bridgeCommand: "project-tool.run", toolName: "probuilder.bevel-edges", buildArgs: probuilderBevelArgs, supportsJob: true },
+  { group: "probuilder", command: "bridge-edges", bridgeCommand: "project-tool.run", toolName: "probuilder.bridge-edges", buildArgs: probuilderBridgeEdgesArgs, supportsJob: true },
+  { group: "probuilder", command: "connect-elements", bridgeCommand: "project-tool.run", toolName: "probuilder.connect-elements", buildArgs: probuilderConnectArgs, supportsJob: true },
 
   // ─── Mesh Combine / Merge ─────────────────────────────
-  { group: "probuilder", command: "combine-meshes", bridgeCommand: "probuilder.combine-meshes", buildArgs: probuilderMultiTargetArgs, supportsJob: true, destructiveHint: true },
-  { group: "probuilder", command: "merge-objects", bridgeCommand: "probuilder.merge-objects", buildArgs: probuilderMergeObjectsArgs, supportsJob: true, destructiveHint: true },
-  { group: "probuilder", command: "duplicate-and-flip", bridgeCommand: "probuilder.duplicate-and-flip", buildArgs: probuilderTargetWithOptionalIndicesArgs, supportsJob: true },
-  { group: "probuilder", command: "create-polygon", bridgeCommand: "probuilder.create-polygon", buildArgs: probuilderCreatePolygonArgs, supportsJob: true },
+  { group: "probuilder", command: "combine-meshes", bridgeCommand: "project-tool.run", toolName: "probuilder.combine-meshes", buildArgs: probuilderMultiTargetArgs, supportsJob: true, destructiveHint: true },
+  { group: "probuilder", command: "merge-objects", bridgeCommand: "project-tool.run", toolName: "probuilder.merge-objects", buildArgs: probuilderMergeObjectsArgs, supportsJob: true, destructiveHint: true },
+  { group: "probuilder", command: "duplicate-and-flip", bridgeCommand: "project-tool.run", toolName: "probuilder.duplicate-and-flip", buildArgs: probuilderTargetWithOptionalIndicesArgs, supportsJob: true },
+  { group: "probuilder", command: "create-polygon", bridgeCommand: "project-tool.run", toolName: "probuilder.create-polygon", buildArgs: probuilderCreatePolygonArgs, supportsJob: true },
 
   // ─── Vertex Operations ────────────────────────────────
-  { group: "probuilder", command: "merge-vertices", bridgeCommand: "probuilder.merge-vertices", buildArgs: probuilderVertexIndicesArgs, supportsJob: true },
-  { group: "probuilder", command: "weld-vertices", bridgeCommand: "probuilder.weld-vertices", buildArgs: probuilderWeldArgs, supportsJob: true },
-  { group: "probuilder", command: "split-vertices", bridgeCommand: "probuilder.split-vertices", buildArgs: probuilderVertexIndicesArgs, supportsJob: true },
-  { group: "probuilder", command: "move-vertices", bridgeCommand: "probuilder.move-vertices", buildArgs: probuilderMoveVerticesArgs, supportsJob: true },
-  { group: "probuilder", command: "insert-vertex", bridgeCommand: "probuilder.insert-vertex", buildArgs: probuilderInsertVertexArgs, supportsJob: true },
-  { group: "probuilder", command: "append-vertices-to-edge", bridgeCommand: "probuilder.append-vertices-to-edge", buildArgs: probuilderAppendVerticesArgs, supportsJob: true },
+  { group: "probuilder", command: "merge-vertices", bridgeCommand: "project-tool.run", toolName: "probuilder.merge-vertices", buildArgs: probuilderVertexIndicesArgs, supportsJob: true },
+  { group: "probuilder", command: "weld-vertices", bridgeCommand: "project-tool.run", toolName: "probuilder.weld-vertices", buildArgs: probuilderWeldArgs, supportsJob: true },
+  { group: "probuilder", command: "split-vertices", bridgeCommand: "project-tool.run", toolName: "probuilder.split-vertices", buildArgs: probuilderVertexIndicesArgs, supportsJob: true },
+  { group: "probuilder", command: "move-vertices", bridgeCommand: "project-tool.run", toolName: "probuilder.move-vertices", buildArgs: probuilderMoveVerticesArgs, supportsJob: true },
+  { group: "probuilder", command: "insert-vertex", bridgeCommand: "project-tool.run", toolName: "probuilder.insert-vertex", buildArgs: probuilderInsertVertexArgs, supportsJob: true },
+  { group: "probuilder", command: "append-vertices-to-edge", bridgeCommand: "project-tool.run", toolName: "probuilder.append-vertices-to-edge", buildArgs: probuilderAppendVerticesArgs, supportsJob: true },
 
   // ─── Info / Inspection ────────────────────────────────
-  { group: "probuilder", command: "mesh-info", bridgeCommand: "probuilder.mesh-info", buildArgs: probuilderMeshInfoArgs, supportsJob: false },
-  { group: "probuilder", command: "validate-mesh", bridgeCommand: "probuilder.validate-mesh", buildArgs: probuilderTargetOnlyArgs, supportsJob: false },
+  { group: "probuilder", command: "mesh-info", bridgeCommand: "project-tool.run", toolName: "probuilder.mesh-info", buildArgs: probuilderMeshInfoArgs, supportsJob: false },
+  { group: "probuilder", command: "validate-mesh", bridgeCommand: "project-tool.run", toolName: "probuilder.validate-mesh", buildArgs: probuilderTargetOnlyArgs, supportsJob: false },
 
   // ─── Conversion ───────────────────────────────────────
-  { group: "probuilder", command: "convert-to-probuilder", bridgeCommand: "probuilder.convert-to-probuilder", buildArgs: probuilderTargetOnlyArgs, supportsJob: true },
+  { group: "probuilder", command: "convert-to-probuilder", bridgeCommand: "project-tool.run", toolName: "probuilder.convert-to-probuilder", buildArgs: probuilderTargetOnlyArgs, supportsJob: true },
 
   // ─── Smoothing ────────────────────────────────────────
-  { group: "probuilder", command: "set-smoothing", bridgeCommand: "probuilder.set-smoothing", buildArgs: probuilderSetSmoothingArgs, supportsJob: true },
-  { group: "probuilder", command: "auto-smooth", bridgeCommand: "probuilder.auto-smooth", buildArgs: probuilderAutoSmoothArgs, supportsJob: true },
+  { group: "probuilder", command: "set-smoothing", bridgeCommand: "project-tool.run", toolName: "probuilder.set-smoothing", buildArgs: probuilderSetSmoothingArgs, supportsJob: true },
+  { group: "probuilder", command: "auto-smooth", bridgeCommand: "project-tool.run", toolName: "probuilder.auto-smooth", buildArgs: probuilderAutoSmoothArgs, supportsJob: true },
 
   // ─── Pivot / Transform ────────────────────────────────
-  { group: "probuilder", command: "center-pivot", bridgeCommand: "probuilder.center-pivot", buildArgs: probuilderTargetOnlyArgs, supportsJob: true },
-  { group: "probuilder", command: "freeze-transform", bridgeCommand: "probuilder.freeze-transform", buildArgs: probuilderTargetOnlyArgs, supportsJob: true },
-  { group: "probuilder", command: "set-pivot", bridgeCommand: "probuilder.set-pivot", buildArgs: probuilderSetPivotArgs, supportsJob: true },
+  { group: "probuilder", command: "center-pivot", bridgeCommand: "project-tool.run", toolName: "probuilder.center-pivot", buildArgs: probuilderTargetOnlyArgs, supportsJob: true },
+  { group: "probuilder", command: "freeze-transform", bridgeCommand: "project-tool.run", toolName: "probuilder.freeze-transform", buildArgs: probuilderTargetOnlyArgs, supportsJob: true },
+  { group: "probuilder", command: "set-pivot", bridgeCommand: "project-tool.run", toolName: "probuilder.set-pivot", buildArgs: probuilderSetPivotArgs, supportsJob: true },
 
   // ─── Repair ───────────────────────────────────────────
-  { group: "probuilder", command: "repair-mesh", bridgeCommand: "probuilder.repair-mesh", buildArgs: probuilderTargetOnlyArgs, supportsJob: true }
+  { group: "probuilder", command: "repair-mesh", bridgeCommand: "project-tool.run", toolName: "probuilder.repair-mesh", buildArgs: probuilderTargetOnlyArgs, supportsJob: true }
 ];
 
 // ─── Arg builder functions ──────────────────────────────────

@@ -42,6 +42,8 @@ export interface ExtensionToolContribution {
   group: string;
   /** Bridge command name for execution routing. */
   bridgeCommand: string;
+  /** When bridgeCommand is "project-tool.run", the underlying tool name. */
+  toolName?: string;
   /** CLI argv prefix, e.g. "probuilder shape". */
   cliCommand: string;
 }
