@@ -474,14 +474,17 @@ namespace UnityCli
                 if (Enum.TryParse<LightingMode>(value, true, out var parsed))
                 {
                     lightingSettings.lightingMode = parsed;
+                    changed = true;
+                    effects.Add(EffectJson("graphics.bake-settings", "lightingMode", value));
+                }
 #else
                 if (Enum.TryParse<MixedLightingMode>(value, true, out var parsed))
                 {
                     lightingSettings.mixedBakeMode = parsed;
-#endif
                     changed = true;
                     effects.Add(EffectJson("graphics.bake-settings", "lightingMode", value));
                 }
+#endif
                 else
                 {
                     throw new BridgeCommandException("E_BAKE_SETTING_INVALID", "Invalid lightingMode: " + value, "Use baked, mixed, or realtime.");
@@ -1247,6 +1250,8 @@ namespace UnityCli
                 if (Enum.TryParse<DefaultReflectionResolution>(value, true, out var parsed))
                 {
                     RenderSettings.defaultReflectionResolution = parsed;
+                    effects.Add(EffectJson("graphics.skybox-set-reflection", "defaultReflectionResolution", value));
+                }
 #else
                 // Unity 2022.3: RenderSettings.defaultReflectionResolution is int, not an enum.
                 // Parse as integer (common values: 16, 32, 64, 128, 256, 512, 1024, 2048).
@@ -1254,9 +1259,9 @@ namespace UnityCli
                 if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed))
                 {
                     RenderSettings.defaultReflectionResolution = parsed;
-#endif
                     effects.Add(EffectJson("graphics.skybox-set-reflection", "defaultReflectionResolution", value));
                 }
+#endif
             }
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .Prop("defaultReflectionMode", RenderSettings.defaultReflectionMode.ToString())

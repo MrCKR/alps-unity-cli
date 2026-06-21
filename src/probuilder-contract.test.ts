@@ -134,7 +134,13 @@ test("every ProBuilder tool has a matching bridge spec", () => {
     const command = commandParts.join(" ");
     const spec = bridgeCommandRegistry.lookup(group, command);
     assert.ok(spec, `${tool.name}: bridge spec not found for cliCommand "${tool.cliCommand}"`);
-    assert.equal(spec.bridgeCommand, tool.name, `${tool.name}: bridgeCommand mismatch — spec has "${spec.bridgeCommand}"`);
+    // ALP-664 / ALP-505: ProBuilder tools route through the unified
+    // project-tool.run bridge command with toolName carrying the underlying
+    // tool identity. The legacy probuilder.* direct bridge commands were
+    // retired because they produced E_BRIDGE_COMMAND_UNSUPPORTED /
+    // E_TOOL_NOT_FOUND on the real Unity bridge.
+    assert.equal(spec.bridgeCommand, "project-tool.run", `${tool.name}: ProBuilder bridgeCommand must be "project-tool.run" (unified routing)`);
+    assert.equal(spec.toolName, tool.name, `${tool.name}: toolName must match tool name`);
     assert.equal(spec.group, "probuilder", `${tool.name}: bridge spec group must be probuilder`);
   }
 });
@@ -159,10 +165,18 @@ test("ProBuilder bridge specs count matches tool count", () => {
   const probuilderSpecs = bridgeCommandRegistry.specs().filter((s) => s.group === "probuilder");
   assert.equal(probuilderSpecs.length, 36, `Expected 36 probuilder bridge specs, got ${probuilderSpecs.length}`);
 
-  // Verify one-to-one mapping
+  // ALP-664 / ALP-505: Every ProBuilder spec routes through project-tool.run
+  // and carries the underlying tool identity in the toolName field. The
+  // one-to-one mapping is therefore validated against toolName (not the
+  // shared project-tool.run bridgeCommand).
+  for (const spec of probuilderSpecs) {
+    assert.equal(spec.bridgeCommand, "project-tool.run", `${spec.group}.${spec.command}: ProBuilder bridgeCommand must be "project-tool.run"`);
+    assert.ok(spec.toolName, `${spec.group}.${spec.command}: ProBuilder spec must carry toolName`);
+  }
+
   const toolNames = new Set(probuilderTools.map((t) => t.name));
-  const specBridgeCommands = new Set(probuilderSpecs.map((s) => s.bridgeCommand));
-  assert.deepEqual(toolNames, specBridgeCommands, "tool names and bridge command names must match");
+  const specToolNames = new Set(probuilderSpecs.map((s) => s.toolName!));
+  assert.deepEqual(toolNames, specToolNames, "tool names and spec toolNames must match");
 });
 
 test("ProBuilder contract entries count is 36", () => {
