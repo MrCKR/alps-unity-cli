@@ -59,7 +59,7 @@ namespace UnityCli
             public string InputSchema;
             public string OutputSchema;
             public string[] RequiresPackages;
-            public Func<BridgeRequest, string> ReadHandler;
+            private Func<BridgeRequest, string> ReadHandler;
         }
 
         private static readonly BuiltInContextDefinition[] BuiltInContexts = BuildBuiltInContextTable();
