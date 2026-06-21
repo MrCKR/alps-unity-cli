@@ -377,7 +377,11 @@ namespace UnityCli
         {
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .Prop("baking", Lightmapping.isRunning)
+#if UNITY_2023_2_OR_NEWER
+                .Prop("progress", Lightmapping.bakeProgress)
+#else
                 .Prop("progress", Lightmapping.buildProgress)
+#endif
                 .PropRaw("mode", BakeModeJson())
                 .Prop("logPath", LogPath())
                 .EndObject().ToString());
