@@ -28,11 +28,11 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
-        private sealed class BridgeRequest
+        internal sealed class BridgeRequest
         {
             private readonly string body;
 
-            private BridgeRequest(string body, string requestId, string command)
+            internal BridgeRequest(string body, string requestId, string command)
             {
                 this.body = body;
                 RequestId = requestId;
@@ -51,6 +51,15 @@ namespace UnityCli
             public string StringArg(string name)
             {
                 return ExtractString(body, name);
+            }
+
+            /// <summary>
+            /// Alias for StringArg that returns null for missing arguments.
+            /// Provides naming consistency with OptionalIntArg/OptionalFloatArg/OptionalBoolArg.
+            /// </summary>
+            public string OptionalStringArg(string name)
+            {
+                return StringArg(name);
             }
 
             public int IntArg(string name, int fallback)

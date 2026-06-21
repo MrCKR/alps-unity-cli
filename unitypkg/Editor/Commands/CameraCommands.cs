@@ -390,17 +390,12 @@ namespace UnityCli
             foreach (var camera in cameras)
             {
                 var outputPath = System.IO.Path.Combine(outputDir, camera.name + "." + format);
-                var capture = CaptureCamera(camera, new BridgeRequest
-                {
-                    Args = new Dictionary<string, string>
-                    {
-                        { "path", outputPath },
-                        { "width", width.ToString(CultureInfo.InvariantCulture) },
-                        { "height", height.ToString(CultureInfo.InvariantCulture) },
-                        { "format", format },
-                        { "overwrite", "true" }
-                    }
-                });
+                var captureBody = "{\"path\":\"" + outputPath.Replace("\\", "\\\\").Replace("\"", "\\\"")
+                    + "\",\"width\":" + width.ToString(CultureInfo.InvariantCulture)
+                    + ",\"height\":" + height.ToString(CultureInfo.InvariantCulture)
+                    + ",\"format\":\"" + format + "\""
+                    + ",\"overwrite\":true" + "}";
+                var capture = CaptureCamera(camera, BridgeRequest.Parse(captureBody));
                 captures.Add(ScreenshotDataJson(capture, "camera.multiview", camera.name));
                 effects.Add(EffectJson("camera.multiview", "capture", outputPath));
             }

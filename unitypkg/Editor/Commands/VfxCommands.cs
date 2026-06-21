@@ -1166,7 +1166,7 @@ private static string VfxTemplate(BridgeRequest request)
         {
             if (string.IsNullOrEmpty(target))
             {
-                var first = UnityEngine.Object.FindObjectsByType<ParticleSystem>(FindObjectsSortMode.None);
+                var first = UnityEngine.Object.FindObjectsOfType<ParticleSystem>();
                 return first.Length > 0 ? first[0] : null;
             }
             var go = FindGameObjectByTarget(target);
@@ -1181,7 +1181,7 @@ private static string VfxTemplate(BridgeRequest request)
         {
             if (string.IsNullOrEmpty(target))
             {
-                var first = UnityEngine.Object.FindObjectsByType<LineRenderer>(FindObjectsSortMode.None);
+                var first = UnityEngine.Object.FindObjectsOfType<LineRenderer>();
                 return first.Length > 0 ? first[0] : null;
             }
             var go = FindGameObjectByTarget(target);
@@ -1196,7 +1196,7 @@ private static string VfxTemplate(BridgeRequest request)
         {
             var go = GameObject.Find(target);
             if (go != null) return go;
-            var all = GameObject.FindObjectsByType<GameObject>(FindObjectsSortMode.None);
+            var all = GameObject.FindObjectsOfType<GameObject>();
             foreach (var obj in all)
             {
                 if (HierarchyPath(obj) == target) return obj;

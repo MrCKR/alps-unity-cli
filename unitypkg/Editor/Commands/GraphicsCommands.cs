@@ -385,6 +385,7 @@ namespace UnityCli
 
         private static string BakeModeJson()
         {
+#if UNITY_2023_2_OR_NEWER
             var mode = Lightmapping.lightingMode;
             string modeStr;
             switch (mode)
@@ -394,6 +395,17 @@ namespace UnityCli
                 case LightingMode.Realtime: modeStr = "realtime"; break;
                 default: modeStr = mode.ToString(); break;
             }
+#else
+            // Unity 2022.3: Lightmapping.lightingMode does not exist.
+            // Derive mode from the active scene's lighting settings.
+            var modeStr = "unknown";
+            var activeScene = SceneManager.GetActiveScene();
+            var ls = Lightmapping.GetLightingSettingsForScene(activeScene);
+            if (ls != null)
+            {
+                modeStr = ls.mixedBakeMode.ToString();
+            }
+#endif
             return new UnityCliJsonWriter().BeginObject()
                 .Prop("lightingMode", modeStr)
                 .Prop("giWorkflowMode", (long)Lightmapping.giWorkflowMode)
@@ -449,9 +461,15 @@ namespace UnityCli
             if (request.HasArg("lightingMode"))
             {
                 var value = request.StringArg("lightingMode");
+#if UNITY_2023_2_OR_NEWER
                 if (Enum.TryParse<LightingMode>(value, true, out var parsed))
                 {
                     lightingSettings.lightingMode = parsed;
+#else
+                if (Enum.TryParse<LightingSettings.MixedBakeMode>(value, true, out var parsed))
+                {
+                    lightingSettings.mixedBakeMode = parsed;
+#endif
                     changed = true;
                     effects.Add(EffectJson("graphics.bake-settings", "lightingMode", value));
                 }
@@ -474,22 +492,38 @@ namespace UnityCli
             }
             if (request.HasArg("directSamples"))
             {
+#if UNITY_2023_2_OR_NEWER
                 lightingSettings.directSamples = request.OptionalIntArg("directSamples").Value;
+#else
+                lightingSettings.directSampleCount = request.OptionalIntArg("directSamples").Value;
+#endif
                 changed = true;
             }
             if (request.HasArg("indirectSamples"))
             {
+#if UNITY_2023_2_OR_NEWER
                 lightingSettings.indirectSamples = request.OptionalIntArg("indirectSamples").Value;
+#else
+                lightingSettings.indirectSampleCount = request.OptionalIntArg("indirectSamples").Value;
+#endif
                 changed = true;
             }
             if (request.HasArg("environmentSamples"))
             {
+#if UNITY_2023_2_OR_NEWER
                 lightingSettings.environmentSamples = request.OptionalIntArg("environmentSamples").Value;
+#else
+                lightingSettings.environmentSampleCount = request.OptionalIntArg("environmentSamples").Value;
+#endif
                 changed = true;
             }
             if (request.HasArg("bounces"))
             {
+#if UNITY_2023_2_OR_NEWER
                 lightingSettings.bounces = request.OptionalIntArg("bounces").Value;
+#else
+                lightingSettings.maxBounces = request.OptionalIntArg("bounces").Value;
+#endif
                 changed = true;
             }
             if (request.HasArg("filtering"))
@@ -497,7 +531,13 @@ namespace UnityCli
                 var value = request.StringArg("filtering");
                 if (Enum.TryParse<LightingSettings.FilterType>(value, true, out var parsed))
                 {
+#if UNITY_2023_2_OR_NEWER
                     lightingSettings.filtering = parsed;
+#else
+                    lightingSettings.filterTypeDirect = parsed;
+                    lightingSettings.filterTypeIndirect = parsed;
+                    lightingSettings.filterTypeAO = parsed;
+#endif
                     changed = true;
                     effects.Add(EffectJson("graphics.bake-settings", "filtering", value));
                 }
@@ -536,6 +576,7 @@ namespace UnityCli
             {
                 return new UnityCliJsonWriter().BeginObject().EndObject().ToString();
             }
+#if UNITY_2023_2_OR_NEWER
             return new UnityCliJsonWriter().BeginObject()
                 .Prop("lightingMode", settings.lightingMode.ToString())
                 .Prop("bakedGI", settings.bakedGI)
@@ -547,6 +588,19 @@ namespace UnityCli
                 .Prop("filtering", settings.filtering.ToString())
                 .Prop("indirectResolution", (long)settings.indirectResolution)
                 .EndObject().ToString();
+#else
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("lightingMode", settings.mixedBakeMode.ToString())
+                .Prop("bakedGI", settings.bakedGI)
+                .Prop("realtimeGI", settings.realtimeGI)
+                .Prop("directSamples", (long)settings.directSampleCount)
+                .Prop("indirectSamples", (long)settings.indirectSampleCount)
+                .Prop("environmentSamples", (long)settings.environmentSampleCount)
+                .Prop("bounces", (long)settings.maxBounces)
+                .Prop("filtering", settings.filterTypeDirect.ToString())
+                .Prop("indirectResolution", (long)settings.indirectResolution)
+                .EndObject().ToString();
+#endif
         }
 
         private static string GraphicsLightProbeGroup(BridgeRequest request)
@@ -613,8 +667,15 @@ namespace UnityCli
             }
             if (request.HasArg("bounces"))
             {
+                // ReflectionProbe.bounces only exists in Unity 2023.2+.
+                // In Unity 2022.3, reflection bounces are set globally via RenderSettings.reflectionBounces.
+#if UNITY_2023_2_OR_NEWER
                 probe.bounces = request.OptionalIntArg("bounces").Value;
                 effects.Add(EffectJson("graphics.reflection-probe", "bounces", probe.bounces.ToString(CultureInfo.InvariantCulture)));
+#else
+                RenderSettings.reflectionBounces = request.OptionalIntArg("bounces").Value;
+                effects.Add(EffectJson("graphics.reflection-probe", "bounces", RenderSettings.reflectionBounces.ToString(CultureInfo.InvariantCulture)));
+#endif
             }
             if (request.HasArg("hdr"))
             {
@@ -644,6 +705,7 @@ namespace UnityCli
 
         private static string ReflectionProbeJson(ReflectionProbe probe)
         {
+#if UNITY_2023_2_OR_NEWER
             return new UnityCliJsonWriter().BeginObject()
                 .Prop("mode", probe.mode.ToString())
                 .Prop("resolution", (long)probe.resolution)
@@ -653,11 +715,22 @@ namespace UnityCli
                 .PropRaw("size", Vector3Json(probe.size))
                 .PropRaw("center", Vector3Json(probe.center))
                 .EndObject().ToString();
+#else
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("mode", probe.mode.ToString())
+                .Prop("resolution", (long)probe.resolution)
+                .Prop("bounces", (long)RenderSettings.reflectionBounces)
+                .Prop("hdr", probe.hdr)
+                .Prop("importance", (long)probe.importance)
+                .PropRaw("size", Vector3Json(probe.size))
+                .PropRaw("center", Vector3Json(probe.center))
+                .EndObject().ToString();
+#endif
         }
 
         private static ReflectionProbe ResolveReflectionProbe(string target)
         {
-            var probes = UnityEngine.Object.FindObjectsByType<ReflectionProbe>(FindObjectsSortMode.None);
+            var probes = UnityEngine.Object.FindObjectsOfType<ReflectionProbe>();
             if (string.IsNullOrEmpty(target))
             {
                 return probes.Length > 0 ? probes[0] : null;
@@ -723,7 +796,7 @@ namespace UnityCli
 
         private static Component ResolveLightProbeGroupComponent(string target)
         {
-            var groups = UnityEngine.Object.FindObjectsByType<LightProbeGroup>(FindObjectsSortMode.None);
+            var groups = UnityEngine.Object.FindObjectsOfType<LightProbeGroup>();
             if (string.IsNullOrEmpty(target))
             {
                 return groups.Length > 0 ? groups[0] : null;
@@ -880,6 +953,7 @@ namespace UnityCli
             if (request.HasArg("shadingMode"))
             {
                 var value = request.StringArg("shadingMode");
+#if UNITY_2023_2_OR_NEWER
                 if (Enum.TryParse<SceneView.ShadingMode>(value, true, out var parsed))
                 {
                     if (SceneView.lastActiveSceneView != null)
@@ -888,6 +962,18 @@ namespace UnityCli
                         effects.Add(EffectJson("graphics.scene-debug", "shadingMode", value));
                     }
                 }
+#else
+                // Unity 2022.3: SceneView.ShadingMode does not exist.
+                // Use DrawCameraMode as a fallback for common shading modes.
+                if (Enum.TryParse<DrawCameraMode>(value, true, out var drawMode))
+                {
+                    if (SceneView.lastActiveSceneView != null)
+                    {
+                        SceneView.lastActiveSceneView.cameraMode = new SceneView.CameraMode(drawMode, value);
+                        effects.Add(EffectJson("graphics.scene-debug", "shadingMode", value));
+                    }
+                }
+#endif
             }
             if (request.HasArg("drawMode"))
             {
@@ -991,18 +1077,43 @@ namespace UnityCli
 
         private static void ApplySkyboxMaterialProperty(Material material, string property, string value, List<string> effects)
         {
-            if (material.HasProperty(property))
+            if (!material.HasProperty(property)) return;
+
+            // Material.GetPropertyType / UnityEngine.Rendering.ShaderPropertyType only exist in Unity 2023.1+.
+            // Unity 2022.3 uses ShaderUtil.ShaderPropertyType from the UnityEditor namespace.
+#if UNITY_2023_2_OR_NEWER
+            var propType = material.GetPropertyType(property);
+            if (propType == UnityEngine.Rendering.ShaderPropertyType.Float || propType == UnityEngine.Rendering.ShaderPropertyType.Range)
             {
-                if (material.GetPropertyType(property) == UnityEngine.Rendering.ShaderPropertyType.Float || material.GetPropertyType(property) == UnityEngine.Rendering.ShaderPropertyType.Range)
-                {
-                    material.SetFloat(property, ParseFloat(value, property));
-                }
-                else if (material.GetPropertyType(property) == UnityEngine.Rendering.ShaderPropertyType.Color)
-                {
-                    material.SetColor(property, ParseColor(value));
-                }
-                effects.Add(EffectJson("graphics.skybox-set-properties", property, value));
+                material.SetFloat(property, ParseFloat(value, property));
             }
+            else if (propType == UnityEngine.Rendering.ShaderPropertyType.Color)
+            {
+                material.SetColor(property, ParseColor(value));
+            }
+            else
+            {
+                material.SetFloat(property, ParseFloat(value, property));
+            }
+#else
+            // Unity 2022.3: use ShaderUtil to get the property type by index.
+            var shader = material.shader;
+            var propIndex = shader.FindPropertyIndex(property);
+            var propType = ShaderUtil.GetPropertyType(shader, propIndex);
+            if (propType == ShaderUtil.ShaderPropertyType.Float || propType == ShaderUtil.ShaderPropertyType.Range)
+            {
+                material.SetFloat(property, ParseFloat(value, property));
+            }
+            else if (propType == ShaderUtil.ShaderPropertyType.Color)
+            {
+                material.SetColor(property, ParseColor(value));
+            }
+            else
+            {
+                material.SetFloat(property, ParseFloat(value, property));
+            }
+#endif
+            effects.Add(EffectJson("graphics.skybox-set-properties", property, value));
         }
 
         private static string GraphicsSkyboxSetAmbient(BridgeRequest request)
@@ -1123,9 +1234,18 @@ namespace UnityCli
             if (request.HasArg("resolution"))
             {
                 var value = request.StringArg("resolution");
+#if UNITY_2023_2_OR_NEWER
                 if (Enum.TryParse<DefaultReflectionResolution>(value, true, out var parsed))
                 {
                     RenderSettings.defaultReflectionResolution = parsed;
+#else
+                // Unity 2022.3: RenderSettings.defaultReflectionResolution is int, not an enum.
+                // Parse as integer (common values: 16, 32, 64, 128, 256, 512, 1024, 2048).
+                int parsed;
+                if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed))
+                {
+                    RenderSettings.defaultReflectionResolution = parsed;
+#endif
                     effects.Add(EffectJson("graphics.skybox-set-reflection", "defaultReflectionResolution", value));
                 }
             }
