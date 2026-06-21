@@ -69,10 +69,18 @@ const NONEXISTENT_COMMANDS = [
 // - "probuilder.create" must not match "probuilder.create-shape"
 // - "probuilder.edit" must not match "probuilder.editor"
 const STALE_PROBUILDER_PATTERNS: [string, RegExp][] = [
+  // Dot-format: probuilder.shape, probuilder.create, probuilder.edit, probuilder.csg
   ["probuilder.shape", /probuilder\.shape(?![\w-])/g],
   ["probuilder.create", /probuilder\.create(?![\w-])/g],
   ["probuilder.edit", /probuilder\.edit(?![\w-])/g],
   ["probuilder.csg", /probuilder\.csg(?![\w-])/g],
+  // Space-format: "probuilder shape", "probuilder create", "probuilder edit", "probuilder csg"
+  // These are CLI shortcut forms that no longer exist (replaced by fine-grained extension tools).
+  // Must not match valid forms like "probuilder create-shape" or "probuilder extrude-faces".
+  ["probuilder shape ", /probuilder\s+shape(?![\w-])/g],
+  ["probuilder create ", /probuilder\s+create(?![\w-])/g],
+  ["probuilder edit ", /probuilder\s+edit(?![\w-])/g],
+  ["probuilder csg ", /probuilder\s+csg(?![\w-])/g],
 ];
 
 // ── Current commands that MUST appear in docs ──

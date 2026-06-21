@@ -582,10 +582,10 @@ Runtime Tool 在非 Play Mode 时返回 `E_RUNTIME_NOT_READY`（transient error�
 ProBuilder 命令需要 `com.unity.probuilder` 包：
 
 ```powershell
-unity_cli probuilder shape --type Cube --position-x 0 --position-y 1 --position-z 0
-unity_cli probuilder create --type Cube
-unity_cli probuilder edit <target> --action Extrude --amount 0.5
-unity_cli probuilder csg --operation Union --target-a <a> --target-b <b> --yes
+unity_cli probuilder create-shape cube --name "MyCube"
+unity_cli probuilder extrude-faces <target> --indices 1,2,3 --distance 0.5
+unity_cli probuilder combine-meshes --targets "ObjA,ObjB" --name "Combined"
+unity_cli probuilder delete-faces <target> --indices 4,5 --yes
 ```
 
 ## 风险与破坏性工具
