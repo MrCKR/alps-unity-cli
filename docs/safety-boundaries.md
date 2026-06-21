@@ -41,7 +41,9 @@ alps-unity-cli 的安全模型围绕三个核心原则：Tool 可有副作用但
 | `asset.delete` | 删除资产 |
 | `go.delete` | 删除 GameObject |
 | `component.remove` | 移除组件 |
-| `probuilder.csg` | CSG 布尔运算 |
+| `probuilder.delete-faces` | ProBuilder Delete Faces |
+| `probuilder.combine-meshes` | ProBuilder Combine Meshes |
+| `probuilder.merge-objects` | ProBuilder Merge Objects |
 | `editor.menu` | 执行编辑器菜单项 |
 | `script.edit` | 编辑脚本文件 |
 | `cli.package.remove` | 移除包 |

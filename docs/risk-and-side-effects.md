@@ -28,7 +28,9 @@ The CLI enforces a confirmation gate for all tools with `destructiveHint: true`.
 | `code exec` | Execute Live Code | ✅ |
 | `cli.batch.run` | Batch Run | ✅ (preflight) |
 | `component remove` | Remove Component | ❌ |
-| `probuilder.csg` | ProBuilder CSG | ❌ |
+| `probuilder.delete-faces` | ProBuilder Delete Faces | ❌ |
+| `probuilder.combine-meshes` | ProBuilder Combine Meshes | ❌ |
+| `probuilder.merge-objects` | ProBuilder Merge Objects | ❌ |
 | `editor.menu` | Execute Editor Menu | ❌ |
 | `script.edit` | Edit Script | ❌ |
 | `cli.package.remove` | Package Remove | ❌ |

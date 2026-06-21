@@ -88,10 +88,10 @@ handler 为 `hybrid` 的工具支持 `--job` 标志，切换为 batchmode/job �
 
 ```powershell
 # 实时 Bridge 执行（默认）
-unity_cli tools run probuilder.shape --input '{"type":"Cube"}'
+unity_cli tools run probuilder.create-shape --input '{"type":"Cube"}'
 
 # Job 模式
-unity_cli tools run probuilder.shape --input '{"type":"Cube"}' --job
+unity_cli tools run probuilder.create-shape --input '{"type":"Cube"}' --job
 
 # 查看任务状态
 unity_cli job status --id <jobId>

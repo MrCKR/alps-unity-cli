@@ -79,11 +79,11 @@ test("scene.hierarchy is in the built-in tools", () => {
   assert.equal(tool.destructiveHint, false);
 });
 
-test("scene.save is marked destructive and planned", () => {
+test("scene.save is marked destructive and live-bridge", () => {
   const tool = findToolByName("scene.save");
   assert.ok(tool, "scene.save should exist");
   assert.equal(tool.destructiveHint, true);
-  assert.equal(tool.supportStatus, "planned");
+  assert.equal(tool.supportStatus, "live-bridge");
 });
 
 test("findToolByName returns undefined for unknown tool", () => {
@@ -537,13 +537,13 @@ test("tools describe profiler.memory returns full metadata", async () => {
   assert.deepEqual(data.coverageScope, ["session", "counter", "memory", "frame-debugger", "export"]);
 });
 
-test("planned bridge contract tools expose planned support status", () => {
-  const plannedNames = ["scene.active", "scene.build-settings", "scene.create", "scene.load", "scene.save", "go.inspect", "go.create", "go.modify", "go.delete", "component.add", "component.remove", "component.set", "script.create", "script.read", "script.edit", "script.validate"];
-  for (const name of plannedNames) {
+test("core bridge contract tools expose live-bridge support status", () => {
+  const liveBridgeNames = ["scene.active", "scene.build-settings", "scene.create", "scene.load", "scene.save", "go.inspect", "go.create", "go.modify", "go.delete", "component.add", "component.remove", "component.set", "script.create", "script.read", "script.edit", "script.validate"];
+  for (const name of liveBridgeNames) {
     const tool = findToolByName(name);
     assert.ok(tool, `${name} should exist`);
     assert.equal(tool.handler, "bridge", `${name} keeps bridge handler contract classification`);
-    assert.equal(supportStatusForTool(tool), "planned", `${name} should be user-facing planned`);
+    assert.equal(supportStatusForTool(tool), "live-bridge", `${name} should be user-facing live-bridge`);
   }
 });
 

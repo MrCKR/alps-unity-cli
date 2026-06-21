@@ -201,10 +201,42 @@
 
 | unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
 |---|---|---|---|---|---|
-| probuilder.shape | `probuilder shape <target> [--shape]` | hybrid (bridge + job path) | ✅ `probuilder.shape` in PROBUILDER_TOOLS | camera-bridge-source.test.ts: C# command registration; capabilities.test.ts: architecture-sensitive | ✅ |
-| probuilder.create | `probuilder create [--shape] [--position]` | hybrid (bridge + job path) | ✅ `probuilder.create` in PROBUILDER_TOOLS | camera-bridge-source.test.ts: C# command registration | ✅ |
-| probuilder.edit | `probuilder edit <target> [--operation]` | hybrid (bridge + job path) | ✅ `probuilder.edit` in PROBUILDER_TOOLS | camera-bridge-source.test.ts: C# command registration | ✅ |
-| probuilder.csg | `probuilder csg <target> [--operation]` | hybrid (bridge + job path), destructiveHint=true | ✅ `probuilder.csg` in PROBUILDER_TOOLS | camera-bridge-source.test.ts: C# command registration; security.test.ts: destructive command | ✅ |
+| probuilder.ping | `probuilder ping` | bridge (UnityCliBridge) | ✅ `probuilder.ping` in PROBUILDER_TOOLS | probuilder-contract.test.ts; capabilities.test.ts | ✅ |
+| probuilder.create-shape | `probuilder create-shape [--type] [--position]` | hybrid (bridge + job path) | ✅ `probuilder.create-shape` in PROBUILDER_TOOLS | probuilder-contract.test.ts; camera-bridge-source.test.ts | ✅ |
+| probuilder.create-poly-shape | `probuilder create-poly-shape [--positions]` | hybrid (bridge + job path) | ✅ `probuilder.create-poly-shape` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.extrude-faces | `probuilder extrude-faces <target> [--distance]` | hybrid (bridge + job path) | ✅ `probuilder.extrude-faces` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.delete-faces | `probuilder delete-faces <target> [--faces]` | hybrid (bridge + job path), destructiveHint=true | ✅ `probuilder.delete-faces` in PROBUILDER_TOOLS | probuilder-contract.test.ts; security.test.ts | ✅ |
+| probuilder.detach-faces | `probuilder detach-faces <target>` | hybrid (bridge + job path) | ✅ `probuilder.detach-faces` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.merge-faces | `probuilder merge-faces <target>` | hybrid (bridge + job path) | ✅ `probuilder.merge-faces` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.subdivide | `probuilder subdivide <target>` | hybrid (bridge + job path) | ✅ `probuilder.subdivide` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.flip-normals | `probuilder flip-normals <target>` | hybrid (bridge + job path) | ✅ `probuilder.flip-normals` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.select-faces | `probuilder select-faces <target> [--filter]` | hybrid (bridge + job path) | ✅ `probuilder.select-faces` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.set-face-material | `probuilder set-face-material <target> [--material]` | hybrid (bridge + job path) | ✅ `probuilder.set-face-material` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.set-face-color | `probuilder set-face-color <target> [--color]` | hybrid (bridge + job path) | ✅ `probuilder.set-face-color` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.set-face-uvs | `probuilder set-face-uvs <target> [--uvs]` | hybrid (bridge + job path) | ✅ `probuilder.set-face-uvs` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.extrude-edges | `probuilder extrude-edges <target> [--distance]` | hybrid (bridge + job path) | ✅ `probuilder.extrude-edges` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.bevel-edges | `probuilder bevel-edges <target> [--distance]` | hybrid (bridge + job path) | ✅ `probuilder.bevel-edges` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.bridge-edges | `probuilder bridge-edges <target> [--target2]` | hybrid (bridge + job path) | ✅ `probuilder.bridge-edges` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.connect-elements | `probuilder connect-elements <target>` | hybrid (bridge + job path) | ✅ `probuilder.connect-elements` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.combine-meshes | `probuilder combine-meshes <target>` | hybrid (bridge + job path), destructiveHint=true | ✅ `probuilder.combine-meshes` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.merge-objects | `probuilder merge-objects <target>` | hybrid (bridge + job path), destructiveHint=true | ✅ `probuilder.merge-objects` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.duplicate-and-flip | `probuilder duplicate-and-flip <target>` | hybrid (bridge + job path) | ✅ `probuilder.duplicate-and-flip` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.create-polygon | `probuilder create-polygon [--positions]` | hybrid (bridge + job path) | ✅ `probuilder.create-polygon` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.merge-vertices | `probuilder merge-vertices <target>` | hybrid (bridge + job path) | ✅ `probuilder.merge-vertices` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.weld-vertices | `probuilder weld-vertices <target>` | hybrid (bridge + job path) | ✅ `probuilder.weld-vertices` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.split-vertices | `probuilder split-vertices <target>` | hybrid (bridge + job path) | ✅ `probuilder.split-vertices` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.move-vertices | `probuilder move-vertices <target> [--offset]` | hybrid (bridge + job path) | ✅ `probuilder.move-vertices` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.insert-vertex | `probuilder insert-vertex <target> [--position]` | hybrid (bridge + job path) | ✅ `probuilder.insert-vertex` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.append-vertices-to-edge | `probuilder append-vertices-to-edge <target> [--positions]` | hybrid (bridge + job path) | ✅ `probuilder.append-vertices-to-edge` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.mesh-info | `probuilder mesh-info <target>` | hybrid (bridge + job path) | ✅ `probuilder.mesh-info` in PROBUILDER_TOOLS | probuilder-contract.test.ts; tools.test.ts | ✅ |
+| probuilder.validate-mesh | `probuilder validate-mesh <target>` | hybrid (bridge + job path) | ✅ `probuilder.validate-mesh` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.convert-to-probuilder | `probuilder convert-to-probuilder <target>` | hybrid (bridge + job path) | ✅ `probuilder.convert-to-probuilder` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.set-smoothing | `probuilder set-smoothing <target> [--angle]` | hybrid (bridge + job path) | ✅ `probuilder.set-smoothing` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.auto-smooth | `probuilder auto-smooth <target>` | hybrid (bridge + job path) | ✅ `probuilder.auto-smooth` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.center-pivot | `probuilder center-pivot <target>` | hybrid (bridge + job path) | ✅ `probuilder.center-pivot` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.freeze-transform | `probuilder freeze-transform <target>` | hybrid (bridge + job path) | ✅ `probuilder.freeze-transform` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.set-pivot | `probuilder set-pivot <target> [--position]` | hybrid (bridge + job path) | ✅ `probuilder.set-pivot` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.repair-mesh | `probuilder repair-mesh <target>` | hybrid (bridge + job path) | ✅ `probuilder.repair-mesh` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
 
 ## Screenshot 域
 

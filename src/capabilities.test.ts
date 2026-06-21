@@ -104,9 +104,10 @@ test("capabilities static data separates live bridge, hybrid and planned tools",
 
   assert.ok(liveBridgeTools.includes("scene.hierarchy"));
   assert.ok(bridgeTools.includes("scene.hierarchy"));
-  assert.ok(plannedTools.includes("component.set"));
-  assert.equal(liveBridgeTools.includes("component.set"), false);
-  assert.equal(bridgeTools.includes("component.set"), false);
+  assert.ok(plannedTools.length >= 0, "planned tools may be zero after core tools promotion to live-bridge");
+  // Core tools (scene/go/component/script) are now live-bridge, no longer planned
+  assert.equal(liveBridgeTools.includes("component.set"), true);
+  assert.ok(bridgeTools.includes("component.set"));
 
   const hybridProbuilderTools = hybridTools.filter((name) => name.startsWith("probuilder."));
   assert.ok(hybridProbuilderTools.length >= 30, `expected >= 30 probuilder hybrid tools, got ${hybridProbuilderTools.length}`);

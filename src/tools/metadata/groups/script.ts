@@ -11,7 +11,7 @@ export const SCRIPT_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    supportStatus: "planned",
+    supportStatus: "live-bridge",
     cliCommand: "script create",
     docsTopic: "script"
   },
@@ -24,7 +24,7 @@ export const SCRIPT_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    supportStatus: "planned",
+    supportStatus: "live-bridge",
     cliCommand: "script read",
     docsTopic: "script"
   },
@@ -37,7 +37,7 @@ export const SCRIPT_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: true,
     handler: "bridge",
-    supportStatus: "planned",
+    supportStatus: "live-bridge",
     cliCommand: "script edit",
     docsTopic: "script"
   },
@@ -50,7 +50,7 @@ export const SCRIPT_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    supportStatus: "planned",
+    supportStatus: "live-bridge",
     cliCommand: "script validate",
     docsTopic: "script"
   }

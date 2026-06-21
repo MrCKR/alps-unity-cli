@@ -10,7 +10,7 @@ import { handleBatch } from "./cli-commands/batch.js";
 import { handleBuild } from "./cli-commands/build.js";
 import { handleEditor } from "./cli-commands/editor.js";
 import { handleExtensionsCommand } from "./cli-commands/extensions.js";
-import { handleContextCommand } from "./cli-commands/context.js";
+import { handleContextCommand } from "./context/commands.js";
 import { handleInit, handlePackage } from "./cli-commands/package.js";
 import { handleTest } from "./cli-commands/test.js";
 import type { CliCommandModule, Runtime } from "./cli-commands/types.js";

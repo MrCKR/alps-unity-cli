@@ -14,7 +14,7 @@
 
 | 工具 | Package 依赖 | 不可用时行为 |
 |------|-------------|-------------|
-| `probuilder.shape/create/edit/csg` | `com.unity.probuilder` | 返回 `E_PROBUILDER_PACKAGE_NOT_FOUND` |
+| ProBuilder 扩展工具（create-shape/extrude-faces/delete-faces 等） | `com.unity.probuilder` | 返回 `E_PROBUILDER_PACKAGE_NOT_FOUND` |
 | `vfx.graph/vfx.effect` | `com.unity.visualeffectgraph` | 返回 `E_VFX_PACKAGE_MISSING` |
 
 Package 依赖通过 `requiresPackages` 字段声明在工具 descriptor 中：

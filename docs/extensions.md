@@ -93,7 +93,7 @@ unity_cli extensions doctor                         # 扩展诊断
 
 ```json
 {
-  "name": "probuilder.shape",
+  "name": "probuilder.create-shape",
   "available": false,
   "requiresPackages": ["com.unity.probuilder"],
   "next_actions": ["Install com.unity.probuilder via Package Manager."]
@@ -104,7 +104,7 @@ unity_cli extensions doctor                         # 扩展诊断
 
 | 扩展 | 状态 | 说明 |
 |------|------|------|
-| ProBuilder | ✅ 已完成（P7） | shape/create/edit/csg，需要 com.unity.probuilder |
+| ProBuilder | ✅ 已完成（P7） | 36 个扩展工具（create-shape/extrude-faces/delete-faces 等），需要 com.unity.probuilder |
 | Cinemachine | 📋 Backlog（P8） | 待实现 |
 | VFX Graph | 📋 Backlog（P8） | 仅基础 vfx 命令，扩展包待实现 |
 | URP/HDRP | 📋 Backlog（P8） | 待实现 |

@@ -19,7 +19,7 @@
 |---|------|------|----------|------|
 | R5 | 黑名单机制未独立实现 | Q6 要求"局部黑名单"但 v1.0 无独立命令黑名单 | 中 | destructive `--yes` 确认 + fingerprint 校验提供等效保护；后续补黑名单 |
 | R6 | 网络默认安全未独立实现 | Q6 要求"网络默认安全"但 v1.0 无独立网络安全策略 | 中 | Bridge 仅监听 127.0.0.1；无外部网络调用；后续补网络策略 |
-| R7 | Dry-run 仅覆盖 5/12 destructive 命令 | `asset.delete`/`go.delete`/`scene.save`/`code.exec`/`cli.batch.run` 支持 dry-run；`component.remove`/`probuilder.csg`/`editor.menu`/`script.edit`/`cli.package.remove`/`test.cancel`/`build.cancel` 不支持 | 中 | 所有 destructive 命令均需 `--yes` 确认；dry-run 后续补齐 |
+| R7 | Dry-run 仅覆盖 5/12 destructive 命令 | `asset.delete`/`go.delete`/`scene.save`/`code.exec`/`cli.batch.run` 支持 dry-run；`component.remove`/`probuilder.delete-faces`/`probuilder.combine-meshes`/`probuilder.merge-objects`/`editor.menu`/`script.edit`/`cli.package.remove`/`test.cancel`/`build.cancel` 不支持 | 中 | 所有 destructive 命令均需 `--yes` 确认；dry-run 后续补齐 |
 | R8 | Fingerprint 仅覆盖 custom tool | 内置命令无 fingerprint 完整性校验 | 低 | 内置命令受合约校验（contracts:validate）+ destructive security proof + security-policy（12 条已补齐）双重保护 |
 
 ## 稳定性风险

@@ -59,6 +59,22 @@ const NONEXISTENT_COMMANDS = [
   "tools groups",            // removed; use "tools group" (singular)
 ];
 
+// Old ProBuilder coarse tool names replaced by fine-grained extension tools.
+// probuilder.shape → probuilder.create-shape
+// probuilder.create → probuilder.create-shape / probuilder.create-poly-shape
+// probuilder.edit → probuilder.extrude-faces / probuilder.delete-faces / etc.
+// probuilder.csg → probuilder.delete-faces / probuilder.combine-meshes / probuilder.merge-objects
+//
+// Each entry is [staleName, regexPattern] to avoid false positives:
+// - "probuilder.create" must not match "probuilder.create-shape"
+// - "probuilder.edit" must not match "probuilder.editor"
+const STALE_PROBUILDER_PATTERNS: [string, RegExp][] = [
+  ["probuilder.shape", /probuilder\.shape(?![\w-])/g],
+  ["probuilder.create", /probuilder\.create(?![\w-])/g],
+  ["probuilder.edit", /probuilder\.edit(?![\w-])/g],
+  ["probuilder.csg", /probuilder\.csg(?![\w-])/g],
+];
+
 // ── Current commands that MUST appear in docs ──
 
 const REQUIRED_COMMANDS = [
@@ -150,6 +166,60 @@ test("docs do not teach non-existent commands as available", () => {
     violations.length,
     0,
     `Non-existent commands found without planned markers:\n${violations.join("\n")}`
+  );
+});
+
+test("docs do not use stale ProBuilder coarse tool names", () => {
+  const files = allDocFiles();
+  const violations: string[] = [];
+
+  for (const file of files) {
+    let content: string;
+    try {
+      content = readDocFile(file);
+    } catch {
+      continue;
+    }
+
+    for (const [name, pattern] of STALE_PROBUILDER_PATTERNS) {
+      const lines = content.split("\n");
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // Use a fresh regex (global flag is stateful); reset lastIndex
+        pattern.lastIndex = 0;
+        if (!pattern.test(line)) continue;
+
+        // Allow in explicit deprecation/historical context
+        const contextWindow = lines.slice(Math.max(0, i - 3), i + 4).join(" ");
+        if (
+          contextWindow.includes("废弃") ||
+          contextWindow.includes("移除") ||
+          contextWindow.includes("removed") ||
+          contextWindow.includes("deprecated") ||
+          contextWindow.includes("已移除") ||
+          contextWindow.includes("已废弃") ||
+          contextWindow.includes("历史") ||
+          contextWindow.includes("旧名") ||
+          contextWindow.includes("替代") ||
+          contextWindow.includes("不得") ||
+          contextWindow.includes("不要") ||
+          contextWindow.includes("旧") ||
+          contextWindow.includes("coarse") ||
+          contextWindow.includes("规划中") ||
+          contextWindow.includes("planned")
+        ) {
+          continue;
+        }
+
+        violations.push(`${file}:${i + 1}: "${name}" appears without deprecation or historical marker`);
+      }
+    }
+  }
+
+  assert.equal(
+    violations.length,
+    0,
+    `Stale ProBuilder names found without markers:\n${violations.join("\n")}`
   );
 });
 

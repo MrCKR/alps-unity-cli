@@ -31,7 +31,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     requiresMainThread: true,
     handler: "bridge",
-    supportStatus: "planned",
+    supportStatus: "live-bridge",
     cliCommand: "scene active",
     docsTopic: "scene"
   },
@@ -44,7 +44,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    supportStatus: "planned",
+    supportStatus: "live-bridge",
     cliCommand: "scene build-settings",
     docsTopic: "scene"
   },
@@ -72,7 +72,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    supportStatus: "planned",
+    supportStatus: "live-bridge",
     cliCommand: "scene create",
     docsTopic: "scene"
   },
@@ -85,7 +85,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    supportStatus: "planned",
+    supportStatus: "live-bridge",
     cliCommand: "scene load",
     docsTopic: "scene"
   },
@@ -99,7 +99,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     destructiveHint: true,
     supportsDryRun: true,
     handler: "bridge",
-    supportStatus: "planned",
+    supportStatus: "live-bridge",
     cliCommand: "scene save",
     docsTopic: "scene"
   }

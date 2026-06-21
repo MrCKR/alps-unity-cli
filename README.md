@@ -600,7 +600,7 @@ unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --dry-run
 unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --yes
 ```
 
-支持 `--dry-run` 的破坏性工具：`asset.delete`、`prefab.save`、`go.delete`、`component.remove`、`probuilder.csg` 等。
+支持 `--dry-run` 的破坏性工具：`asset.delete`、`prefab.save`、`go.delete`、`component.remove`、`probuilder.delete-faces` 等。
 
 架构敏感工具（`architectureSensitive: true`）包括所有 `profiler.*` 工具，修改前需审查 `frozenDecision` 字段。
 

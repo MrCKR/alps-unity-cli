@@ -26,10 +26,10 @@ unity_cli tools group
 unity_cli tools group list probuilder
 
 # 描述工具
-unity_cli tools describe probuilder.shape
+unity_cli tools describe probuilder.create-shape
 
 # 执行
-unity_cli tools run probuilder.shape --input '{"type":"Cube","positionX":0,"positionY":1,"positionZ":0}'
+unity_cli tools run probuilder.create-shape --input '{"type":"Cube","positionX":0,"positionY":1,"positionZ":0}'
 ```
 
 ### 缺依赖行为
@@ -37,13 +37,13 @@ unity_cli tools run probuilder.shape --input '{"type":"Cube","positionX":0,"posi
 当项目未安装 `com.unity.probuilder` 时：
 
 ```powershell
-unity_cli tools describe probuilder.shape
+unity_cli tools describe probuilder.create-shape
 ```
 
 输出中：
 ```json
 {
-  "name": "probuilder.shape",
+  "name": "probuilder.create-shape",
   "requiresPackages": ["com.unity.probuilder"],
   "available": false
 }
@@ -105,7 +105,7 @@ unity_cli init --project <path>              # 检测项目 Package 并安装匹
 
 | 扩展 | 状态 | 说明 |
 |------|------|------|
-| ProBuilder | ✅ 已完成 | shape/create/edit/csg |
+| ProBuilder | ✅ 已完成 | 36 个扩展工具（create-shape/extrude-faces/delete-faces 等） |
 | Cinemachine | 📋 Backlog | 待实现（P8） |
 | VFX Graph | 📋 Backlog | 基础 vfx 命令已有，扩展包待实现（P8） |
 | URP/HDRP | 📋 Backlog | 待实现（P8） |

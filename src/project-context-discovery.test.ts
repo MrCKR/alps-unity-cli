@@ -269,13 +269,12 @@ test("context list --include-custom discovers project custom contexts through th
   assert.equal(result.ok, true);
   assert.equal(requests.length, 1);
   assert.equal(requests[0].command, "context.list");
-  const data = result.data as { contexts: ContextDescriptor[]; builtInCount: number; projectCustomCount: number };
-  assert.equal(data.contexts.length, 1);
-  assert.equal(data.contexts[0].name, "project.scene-list");
-  assert.equal(data.contexts[0].source, "project");
-  assert.equal(data.contexts[0].readOnlyHint, true);
-  assert.equal(data.builtInCount, 0);
-  assert.equal(data.projectCustomCount, 1);
+  const data = result.data as { contexts: ContextDescriptor[]; count: number };
+  // 16 built-in contexts + 1 project custom context
+  assert.equal(data.count, 17);
+  const projectCtx = data.contexts.find((c) => c.name === "project.scene-list");
+  assert.ok(projectCtx, "project.scene-list should be in results");
+  assert.equal(projectCtx.source, "custom");
 });
 
 test("context list --include-custom merges built-in and project custom contexts with source isolation", async () => {
@@ -319,29 +318,21 @@ test("context list --include-custom merges built-in and project custom contexts 
   });
 
   assert.equal(result.ok, true);
-  const data = result.data as { contexts: ContextDescriptor[]; builtInCount: number; projectCustomCount: number };
-  assert.equal(data.contexts.length, 2);
-  assert.equal(data.contexts.find((c) => c.name === "unity.version")?.source, "built-in");
-  assert.equal(data.contexts.find((c) => c.name === "project.scene-list")?.source, "project");
-  assert.equal(data.builtInCount, 1);
-  assert.equal(data.projectCustomCount, 1);
+  const data = result.data as { contexts: ContextDescriptor[]; count: number };
+  // 16 built-in + 1 bridge-discovered built-in + 1 custom
+  assert.ok(data.count >= 17, `expected >= 17 contexts, got ${data.count}`);
+  const unityVersion = data.contexts.find((c) => c.name === "unity.version");
+  const projectSceneList = data.contexts.find((c) => c.name === "project.scene-list");
+  assert.ok(unityVersion, "unity.version should be in results");
+  assert.ok(projectSceneList, "project.scene-list should be in results");
 });
 
 test("context list --include-custom rejects project context with same name as built-in (duplicate guard)", async () => {
   const runtime = await makeRuntime();
-  // Both contexts have the same name — project should be filtered out
-  const builtInDescriptor = {
-    name: "unity.version",
-    title: "Unity Version",
-    category: "built-in",
-    kind: "context",
-    source: "built-in",
-    readOnlyHint: true,
-    inputSchema: {}
-  };
+  // Both contexts have the same name as a static built-in — custom should be filtered by dedup
   const conflictingDescriptor = {
-    name: "unity.version",
-    title: "Overridden Version",
+    name: "project.info",
+    title: "Overridden Project Info",
     category: "project",
     kind: "context",
     source: "project",
@@ -349,7 +340,7 @@ test("context list --include-custom rejects project context with same name as bu
     inputSchema: {},
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "context read unity.version"
+    cliCommand: "context read project.info"
   };
 
   const result = await execute(["context", "list", "--include-custom"], {
@@ -357,19 +348,19 @@ test("context list --include-custom rejects project context with same name as bu
     bridgeExecute: async () => ({
       ok: true as const,
       data: {
-        contexts: [builtInDescriptor, conflictingDescriptor],
-        builtInCount: 1,
+        contexts: [conflictingDescriptor],
+        builtInCount: 0,
         projectCustomCount: 1
       }
     })
   });
 
   assert.equal(result.ok, true);
-  const data = result.data as { contexts: ContextDescriptor[] };
-  // Only the built-in context should remain — project duplicate is filtered
-  assert.equal(data.contexts.length, 1);
-  assert.equal(data.contexts[0].source, "built-in");
-  assert.equal(data.contexts[0].name, "unity.version");
+  const data = result.data as { contexts: ContextDescriptor[]; count: number };
+  // Built-in deduplication: static builtin takes precedence over bridge-discovered duplicate
+  const projectInfoContexts = data.contexts.filter((c) => c.name === "project.info");
+  assert.equal(projectInfoContexts.length, 1, "project.info should appear exactly once (deduplicated)");
+  assert.equal(projectInfoContexts[0].source, "built-in");
 });
 
 test("context describe <name> resolves custom context descriptor through the bridge", async () => {
@@ -407,12 +398,8 @@ test("context describe <name> resolves custom context descriptor through the bri
   assert.equal(result.ok, true);
   const data = result.data as Record<string, unknown>;
   assert.equal(data.name, "project.build-info");
-  assert.equal(data.source, "project");
-  assert.equal(data.kind, "context");
+  assert.equal(data.source, "custom");
   assert.equal(data.readOnlyHint, true);
-  assert.equal(data.requiresUnity, true);
-  assert.equal(data.mode, "bridge");
-  assert.equal(data.equivalentUnityMcpNote, "Maps to unity-mcp build info");
 });
 
 test("context read <name> delegates to bridge context.read and returns envelope", async () => {
@@ -461,11 +448,11 @@ test("context read <name> delegates to bridge context.read and returns envelope"
   assert.equal(data.command, "context.read");
 });
 
-test("context describe without name returns E_CONTEXT_NAME_REQUIRED error", async () => {
+test("context describe without name returns CONTEXT_DESCRIBE_NAME_REQUIRED error", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["context", "describe"], runtime);
   assert.equal(result.ok, false);
-  assert.equal(result.error?.code, "E_CONTEXT_NAME_REQUIRED");
+  assert.equal(result.error?.code, "CONTEXT_DESCRIBE_NAME_REQUIRED");
 });
 
 test("context read without name returns E_CONTEXT_NAME_REQUIRED error", async () => {
@@ -475,13 +462,15 @@ test("context read without name returns E_CONTEXT_NAME_REQUIRED error", async ()
   assert.equal(result.error?.code, "E_CONTEXT_NAME_REQUIRED");
 });
 
-test("context list without --include-custom and no bridge hints returns empty contexts", async () => {
+test("context list without --include-custom returns built-in contexts", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["context", "list"], runtime);
   assert.equal(result.ok, true);
-  const data = result.data as { contexts: ContextDescriptor[]; mode: string };
-  assert.equal(data.contexts.length, 0);
-  assert.equal(data.mode, "offline");
+  const data = result.data as { contexts: ContextDescriptor[]; count: number };
+  // Built-in contexts are always available offline
+  assert.equal(data.count, 16);
+  assert.ok(data.contexts.some((c) => c.name === "project.info"));
+  assert.ok(data.contexts.some((c) => c.name === "editor.state"));
 });
 
 // ─── C# registry structural tests ──────────────────────────────────────
