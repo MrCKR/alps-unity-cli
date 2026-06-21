@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs, getBoolean, getString } from "./args.js";
-import { bridgeCommandRegistry, executeBridgeCommand, type BridgeRuntime } from "./bridge/index.js";
+import { bridgeCommandRegistry, executeBridgeCommand, executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
 import { registerBuiltinExtensionContributions } from "./extensions/index.js";
 import { handleBatch } from "./cli-commands/batch.js";
 import { handleBuild } from "./cli-commands/build.js";
@@ -94,8 +94,8 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
       }
       if (shouldRunBridgeAsJob(group, command, parsed.flags)) {
         const confirmation = await confirmDestructiveExecution(parsed.flags, {
-          command: bridgeSpec.bridgeCommand,
-          title: bridgeSpec.bridgeCommand,
+          command: bridgeSpec.toolName ?? bridgeSpec.bridgeCommand,
+          title: bridgeSpec.toolName ?? bridgeSpec.bridgeCommand,
           destructiveHint: bridgeSpec.destructiveHint,
           supportsDryRun: bridgeSpec.supportsDryRun,
           requestId
@@ -103,13 +103,24 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
         if (confirmation) {
           return confirmation;
         }
-        const args = await bridgeJobArgs(bridgeSpec.bridgeCommand, parsed.flags, parsed.positional[2]);
-        const jobArgs = ["-executeMethod", "UnityCli.UnityCliBatch.RunBridgeCommand", "-unityCliBridgeCommand", bridgeSpec.bridgeCommand, "-unityCliBridgeRequestId", requestId, "-unityCliBridgeArgs", JSON.stringify(args)];
-        return startUnityJob(group === "profiler" ? "profiler" : "probuilder", parsed.flags, runtime, requestId, jobArgs, {
-          action: bridgeSpec.bridgeCommand,
-          bridgeCommand: bridgeSpec.bridgeCommand,
-          args
+        const args = await bridgeSpec.buildArgs({ command: bridgeSpec.bridgeCommand, flags: parsed.flags, positionalTarget: parsed.positional[2] });
+        // When routing through project-tool.run, wrap args into { name: toolName, input: args }
+        const jobBridgeCommand = bridgeSpec.bridgeCommand;
+        const jobArgs = bridgeSpec.toolName
+          ? { name: bridgeSpec.toolName, input: args }
+          : args;
+        const cliJobArgs = ["-executeMethod", "UnityCli.UnityCliBatch.RunBridgeCommand", "-unityCliBridgeCommand", jobBridgeCommand, "-unityCliBridgeRequestId", requestId, "-unityCliBridgeArgs", JSON.stringify(jobArgs)];
+        return startUnityJob(group === "profiler" ? "profiler" : "probuilder", parsed.flags, runtime, requestId, cliJobArgs, {
+          action: bridgeSpec.toolName ?? bridgeSpec.bridgeCommand,
+          bridgeCommand: jobBridgeCommand,
+          args: jobArgs
         });
+      }
+      // When the spec routes through project-tool.run, build args and wrap them directly
+      if (bridgeSpec.toolName) {
+        const innerArgs = await bridgeSpec.buildArgs({ command: bridgeSpec.bridgeCommand, flags: parsed.flags, positionalTarget: parsed.positional[2] });
+        const wrappedArgs = { name: bridgeSpec.toolName, input: innerArgs };
+        return executeBridgePayload(requestId, bridgeSpec.bridgeCommand, wrappedArgs, parsed.flags, runtime);
       }
       return executeBridgeCommand(requestId, bridgeSpec.bridgeCommand, parsed.flags, parsed.positional[2], runtime);
     }
