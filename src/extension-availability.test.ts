@@ -45,6 +45,16 @@ async function makeFakeProject(packages: Record<string, string> = {}): Promise<s
     join(pkgDir, "manifest.json"),
     JSON.stringify({ dependencies: packages }, null, 2)
   );
+  // Write packages-lock.json mirroring manifest so that packages are
+  // recognized as resolved (installed) by readInstalledUnityPackages.
+  const lockDeps: Record<string, { version: string }> = {};
+  for (const [id, version] of Object.entries(packages)) {
+    lockDeps[id] = { version };
+  }
+  await writeFile(
+    join(pkgDir, "packages-lock.json"),
+    JSON.stringify({ dependencies: lockDeps }, null, 2)
+  );
   return dir;
 }
 

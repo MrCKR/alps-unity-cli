@@ -4,7 +4,7 @@
  * Covers the 16 contexts aligned with unity-mcp reference project built-in Resources:
  *   project/info, project/tags, project/layers,
  *   editor/state, editor/selection, editor/active-tool, editor/windows,
- *   editor/tool-states, editor/menu-items, editor/prefab-stage,
+ *   editor/tool-states, editor/menu-items, prefab.stage,
  *   scene/gameobject, scene/cameras, scene/volumes,
  *   scene/renderer-features, scene/rendering-stats, tests/list
  *
@@ -258,11 +258,11 @@ const EDITOR_MENU_ITEMS: ContextDescriptor = {
 };
 
 const EDITOR_PREFAB_STAGE: ContextDescriptor = {
-  name: "editor.prefab-stage",
+  name: "prefab.stage",
   title: "Prefab Stage",
   description: "Current Prefab editing stage state: whether a prefab is being edited, its path, and dirty status.",
   category: "prefab",
-  cliCommand: "context read editor.prefab-stage",
+  cliCommand: "context read prefab.stage",
   inputSchema: { type: "object", properties: {} },
   outputSchema: {
     type: "object",

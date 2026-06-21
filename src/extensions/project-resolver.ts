@@ -12,34 +12,25 @@ import { ExtensionRegistry } from "./registry.js";
 import type { ExtensionAvailabilityResult } from "./types.js";
 
 /**
- * Read installed Unity packages from a project's manifest.json and
- * packages-lock.json.
+ * Read installed (resolved) Unity packages from a project's packages-lock.json.
  *
- * Returns a Map of package ID → locked version string.
+ * Only packages that appear in packages-lock.json are considered "installed" —
+ * this is the authoritative record of what Unity's package manager has actually
+ * resolved and made available. A package declared in manifest.json with version
+ * "latest" but absent from packages-lock.json has NOT been resolved and cannot
+ * be used; reporting it as installed would produce false-positive diagnostics.
+ *
+ * Returns a Map of package ID → resolved version string.
  *
  * @param projectPath - Root of the Unity project.
- * @returns Map of installed package IDs to their locked versions.
+ * @returns Map of installed package IDs to their resolved versions.
  */
 export async function readInstalledUnityPackages(projectPath: string): Promise<Map<string, string>> {
   const packages = new Map<string, string>();
 
-  // Read manifest.json for declared dependencies
-  const manifestPath = join(resolve(projectPath), "Packages", "manifest.json");
-  try {
-    const manifestContent = await readFile(manifestPath, "utf8");
-    const manifest = JSON.parse(stripBom(manifestContent)) as { dependencies?: Record<string, string> };
-    if (manifest.dependencies) {
-      for (const [id, version] of Object.entries(manifest.dependencies)) {
-        if (typeof version === "string") {
-          packages.set(id, version);
-        }
-      }
-    }
-  } catch {
-    // manifest.json may not exist; continue with empty
-  }
-
-  // Read packages-lock.json for resolved versions (overrides manifest versions)
+  // Only read packages-lock.json for RESOLVED (installed) packages.
+  // manifest.json declares intent but not resolution; a package listed as
+  // "latest" in manifest but absent from lock has not been resolved by Unity.
   const lockPath = join(resolve(projectPath), "Packages", "packages-lock.json");
   try {
     const lockContent = await readFile(lockPath, "utf8");
@@ -52,7 +43,7 @@ export async function readInstalledUnityPackages(projectPath: string): Promise<M
       }
     }
   } catch {
-    // packages-lock.json may not exist; use manifest-only data
+    // packages-lock.json may not exist; return empty
   }
 
   return packages;

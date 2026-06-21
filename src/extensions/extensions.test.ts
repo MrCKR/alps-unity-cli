@@ -497,9 +497,10 @@ test("readInstalledUnityPackages handles missing lock file", async () => {
     })
   );
 
+  // When packages-lock.json is missing, no packages are considered installed.
+  // manifest.json declares intent but only packages-lock.json records resolved packages.
   const packages = await readInstalledUnityPackages(projectDir);
-  assert.equal(packages.get("com.unity.probuilder"), "5.0.0");
-  assert.equal(packages.size, 1);
+  assert.equal(packages.size, 0);
 });
 
 test("readInstalledUnityPackages handles missing manifest file", async () => {
@@ -513,10 +514,11 @@ test("readInstalledUnityPackages handles BOM in JSON", async () => {
 
   await mkdir(join(projectDir, "Packages"), { recursive: true });
   const bom = "\uFEFF";
+  // Test BOM handling in packages-lock.json (the authoritative source)
   await writeFile(
-    join(projectDir, "Packages", "manifest.json"),
+    join(projectDir, "Packages", "packages-lock.json"),
     bom + JSON.stringify({
-      dependencies: { "com.unity.probuilder": "5.2.0" }
+      dependencies: { "com.unity.probuilder": { version: "5.2.0" } }
     })
   );
 

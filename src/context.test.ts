@@ -56,7 +56,7 @@ test("specific required contexts exist", () => {
     "project.info", "project.tags", "project.layers",
     "editor.state", "editor.selection", "editor.active-tool",
     "editor.windows", "editor.tool-states", "editor.menu-items",
-    "editor.prefab-stage", "scene.gameobject", "scene.cameras",
+    "prefab.stage", "scene.gameobject", "scene.cameras",
     "scene.volumes", "scene.renderer-features", "scene.rendering-stats",
     "tests.list",
   ];

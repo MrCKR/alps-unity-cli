@@ -1013,10 +1013,13 @@ test("ALP-466: tools run built-in hybrid tool routes to native bridge command", 
   };
 
   // code.exec is a hybrid handler tool with bridgeCommand "code.exec"
+  // After the bridge-spec routing fix, --input is merged into flags and
+  // buildArgs translates "code" → "sourceText" + "sourceKind: inline".
   const result = await handleToolsCommand("run", ["code.exec"], { input: '{"code":"return 42;"}' }, runtime, requestId);
   assert.equal(result.ok, true);
   assert.equal(requests[0].command, "code.exec");
-  assert.deepEqual((requests[0].args as Record<string, unknown>).code, "return 42;");
+  assert.deepEqual((requests[0].args as Record<string, unknown>).sourceText, "return 42;");
+  assert.deepEqual((requests[0].args as Record<string, unknown>).sourceKind, "inline");
 });
 
 // ── ALP-467 Regression: Play Mode tool discovery and --target/--runtime flags ──

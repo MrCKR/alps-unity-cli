@@ -14,7 +14,7 @@
 
 import { getBoolean, getString } from "./args.js";
 import { discoverProjectTools, discoverRuntimeTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
-import { executeBridgeCommand, executeBridgePayload } from "./bridge/index.js";
+import { bridgeCommandRegistry, executeBridgeCommand, executeBridgePayload } from "./bridge/index.js";
 import { checkToolExtensionAvailability, collectExtensionToolDescriptors } from "./extension-availability.js";
 import { ExtensionRegistry, collectAvailableTools, readInstalledUnityPackages } from "./extensions/index.js";
 import {
@@ -444,10 +444,28 @@ async function handleToolsRun(
   }
 
   // ── Built-in bridge/hybrid tools: route through native bridge command ──
-  // The tool name (e.g. "scene.hierarchy") IS the bridge command name.
-  // Parse --input as the args payload directly.
+  // Look up the bridge spec by CLI key (group + command) to get the correct
+  // buildArgs transformation and bridge command routing. This ensures:
+  // - Extension tools (e.g. probuilder.ping) route through project-tool.run
+  //   with proper { name, input } wrapping
+  // - Parameter names are translated (e.g. --output → path, --create → action:create)
+  // - Core tools (e.g. scene.hierarchy) route directly as before
   if (builtinTool && (tool.handler === "bridge" || tool.handler === "hybrid")) {
     const input = await parseToolInput(flags);
+    const mergedFlags = mergeInputToFlags(input, flags);
+    const dotIndex = toolName.indexOf(".");
+    const group = dotIndex > 0 ? toolName.substring(0, dotIndex) : toolName;
+    const command = dotIndex > 0 ? toolName.substring(dotIndex + 1) : "";
+    const spec = bridgeCommandRegistry.lookup(group, command);
+    if (spec) {
+      let args = await spec.buildArgs({ command: toolName, flags: mergedFlags, positionalTarget: undefined });
+      let bridgeCommand = spec.bridgeCommand;
+      if (spec.toolName) {
+        args = { name: spec.toolName, input: args };
+      }
+      return executeBridgePayload(requestId, bridgeCommand, args, mergedFlags, runtime);
+    }
+    // No bridge spec found — fall back to sending input directly
     return executeBridgePayload(requestId, toolName, input, flags, runtime);
   }
 
