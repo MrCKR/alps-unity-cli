@@ -71,7 +71,19 @@ namespace UnityCli
                 }
             }
 
-            return Json(new { ok = true, installed, packageAvailability });
+            var pkgItems = new List<string>();
+            foreach (var kv in packageAvailability.OrderBy(kv => kv.Key, StringComparer.Ordinal))
+            {
+                pkgItems.Add(new UnityCliJsonWriter().BeginObject()
+                    .Prop("name", kv.Key)
+                    .Prop("available", kv.Value)
+                    .EndObject().ToString());
+            }
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("ok", true)
+                .PropArray("installed", arr => { foreach (var i in installed) arr.Value(i); })
+                .PropArray("packages", arr => { foreach (var item in pkgItems) arr.RawValue(item); })
+                .EndObject().ToString());
         }
     }
 }

@@ -726,7 +726,7 @@ namespace UnityCli
                 ?? FindType("Cinemachine." + typeName);
         }
 
-        private static void SetCinemachineFollowTarget(object cmCamera, Transform target)
+        private static void SetCinemachineFollowTarget(Component cmCamera, Transform target)
         {
             // References unity-mcp CameraHelpers.SetTransformTarget:
             //   Uses reflection PropertyInfo.SetValue for Follow/LookAt.
@@ -736,7 +736,7 @@ namespace UnityCli
                 followProp.SetValue(cmCamera, target, null);
         }
 
-        private static void SetCinemachineLookAtTarget(object cmCamera, Transform target)
+        private static void SetCinemachineLookAtTarget(Component cmCamera, Transform target)
         {
             var lookAtProp = cmCamera.GetType().GetProperty("LookAt", BindingFlags.Instance | BindingFlags.Public)
                           ?? cmCamera.GetType().GetProperty("m_LookAt", BindingFlags.Instance | BindingFlags.NonPublic);
@@ -744,7 +744,7 @@ namespace UnityCli
                 lookAtProp.SetValue(cmCamera, target, null);
         }
 
-        private static void SetCinemachinePriority(object cmCamera, int priority)
+        private static void SetCinemachinePriority(Component cmCamera, int priority)
         {
             // References unity-mcp's SerializedObject approach for PrioritySettings struct
             using (var so = new SerializedObject(cmCamera))
@@ -766,7 +766,7 @@ namespace UnityCli
             }
         }
 
-        private static void SetCinemachinePriorityEnabled(object cmCamera, bool enabled)
+        private static void SetCinemachinePriorityEnabled(Component cmCamera, bool enabled)
         {
             using (var so = new SerializedObject(cmCamera))
             {
@@ -780,7 +780,7 @@ namespace UnityCli
             }
         }
 
-        private static void SwapPipelineComponent(GameObject go, object cmCamera, string stage, Type newType)
+        private static void SwapPipelineComponent(GameObject go, Component cmCamera, string stage, Type newType)
         {
             // References unity-mcp CameraConfigure: get existing via GetCinemachineComponent(Stage),
             // destroy if type differs, add new via Undo.AddComponent.
@@ -790,7 +790,7 @@ namespace UnityCli
             Undo.AddComponent(go, newType);
         }
 
-        private static Component GetPipelineComponent(object cmCamera, string stage)
+        private static Component GetPipelineComponent(Component cmCamera, string stage)
         {
             // References unity-mcp: CinemachineCamera.GetCinemachineComponent(CinemachineCore.Stage.Body/Aim)
             // Adapted: resolves Stage enum via reflection, calls GetCinemachineComponent method.

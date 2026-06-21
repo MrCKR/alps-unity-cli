@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Linq;
 using System.Reflection;
 using UnityEngine;
+using UnityEditor;
 
 namespace UnityCli.ProBuilder
 {

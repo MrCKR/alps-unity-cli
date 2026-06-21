@@ -352,7 +352,7 @@ namespace UnityCli
                 return ErrorJson("E_ANIMATOR_PARAMETER_NAME_REQUIRED", "Animator get-parameter requires --parameter-name <name>.", "Pass the name of an Animator parameter.");
             }
             // Find the parameter definition to determine its type
-            AnimatorControllerParameter? foundParam = null;
+            AnimatorControllerParameter foundParam = null;
             for (var i = 0; i < animator.parameterCount; i++)
             {
                 var p = animator.GetParameter(i);
@@ -366,7 +366,7 @@ namespace UnityCli
             {
                 return ErrorJson("E_ANIMATOR_PARAMETER_NOT_FOUND", "Parameter '" + parameterName + "' not found on Animator: " + HierarchyPath(gameObject), "Run animator.get-info --target <go> to list available parameters.");
             }
-            var param = foundParam.Value;
+            var param = foundParam;
             object value;
             switch (param.type)
             {
@@ -408,7 +408,7 @@ namespace UnityCli
                 return ErrorJson("E_ANIMATOR_PARAMETER_NAME_REQUIRED", "Animator set-parameter requires --parameter-name <name>.", "Pass the name of an Animator parameter.");
             }
             // Find parameter definition to determine type
-            AnimatorControllerParameter? foundParam = null;
+            AnimatorControllerParameter foundParam = null;
             for (var i = 0; i < animator.parameterCount; i++)
             {
                 var p = animator.GetParameter(i);
@@ -422,7 +422,7 @@ namespace UnityCli
             {
                 return ErrorJson("E_ANIMATOR_PARAMETER_NOT_FOUND", "Parameter '" + parameterName + "' not found on Animator: " + HierarchyPath(gameObject), "Run animator.get-info --target <go> to list available parameters.");
             }
-            var param = foundParam.Value;
+            var param = foundParam;
             var paramType = request.StringArg("parameterType");
             // In edit mode, modify the AnimatorController asset defaults.
             // unity-mcp also has a play-mode path (runtime SetFloat/SetInteger/SetBool),

@@ -285,7 +285,7 @@ namespace UnityCli
 
         private static string ReadProjectTags(BridgeRequest request)
         {
-            var tags = InternalEditorUtility.tags;
+            var tags = UnityEditorInternal.InternalEditorUtility.tags;
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropArray("tags", arr => { foreach (var tag in tags) { arr.Value(tag); } })
                 .Prop("count", (long)tags.Length)
@@ -431,12 +431,12 @@ namespace UnityCli
                     .Prop("pivotMode", Tools.pivotMode.ToString())
                     .Prop("pivotRotation", Tools.pivotRotation.ToString()))
                 .PropObject("snap", obj => obj
-                    .Prop("moveSnapEnabled", moveSnapEnabled)
-                    .Prop("rotationSnapEnabled", rotationSnapEnabled)
-                    .Prop("scaleSnapEnabled", scaleSnapEnabled)
-                    .Prop("moveSnap", moveSnapEnabled.HasValue && moveSnapEnabled.Value ? moveSnap : null)
-                    .Prop("rotationSnap", rotationSnapEnabled.HasValue && rotationSnapEnabled.Value ? rotationSnap : null)
-                    .Prop("scaleSnap", scaleSnapEnabled.HasValue && scaleSnapEnabled.Value ? scaleSnap : null))
+                    .Prop("moveSnapEnabled", moveSnapEnabled ?? false)
+                    .Prop("rotationSnapEnabled", rotationSnapEnabled ?? false)
+                    .Prop("scaleSnapEnabled", scaleSnapEnabled ?? false)
+                    .Prop("moveSnap", moveSnapEnabled.HasValue && moveSnapEnabled.Value && moveSnap.HasValue ? moveSnap.Value : 0f)
+                    .Prop("rotationSnap", rotationSnapEnabled.HasValue && rotationSnapEnabled.Value && rotationSnap.HasValue ? rotationSnap.Value : 0f)
+                    .Prop("scaleSnap", scaleSnapEnabled.HasValue && scaleSnapEnabled.Value && scaleSnap.HasValue ? scaleSnap.Value : 0f))
                 .Prop("gridAvailable", snapSettingsType != null)
                 .Prop("readOnlyHint", true)
                 .EndObject();

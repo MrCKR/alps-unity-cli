@@ -377,7 +377,7 @@ namespace UnityCli
         {
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .Prop("baking", Lightmapping.isRunning)
-                .Prop("progress", Lightmapping.bakeProgress)
+                .Prop("progress", Lightmapping.buildProgress)
                 .PropRaw("mode", BakeModeJson())
                 .Prop("logPath", LogPath())
                 .EndObject().ToString());
@@ -442,7 +442,12 @@ namespace UnityCli
             {
                 return ErrorJson("E_REFLECTION_PROBE_NOT_FOUND", "ReflectionProbe not found: " + target, "Run unity_cli graphics reflection-probe to inspect probes or pass a GameObject name / hierarchy path with a ReflectionProbe component.");
             }
-            var baked = Lightmapping.BakeReflectionProbe(probe);
+            var probePath = request.StringArg("path");
+            if (string.IsNullOrEmpty(probePath))
+            {
+                probePath = "Assets/" + probe.gameObject.name + "_reflection.exr";
+            }
+            var baked = Lightmapping.BakeReflectionProbe(probe, probePath);
             WriteLog("graphics_bake_reflection_probe target=" + HierarchyPath(probe.gameObject) + " baked=" + Bool(baked));
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropRaw("probe", ReflectionProbeJson(probe))
@@ -466,7 +471,7 @@ namespace UnityCli
                 {
                     lightingSettings.lightingMode = parsed;
 #else
-                if (Enum.TryParse<LightingSettings.MixedBakeMode>(value, true, out var parsed))
+                if (Enum.TryParse<MixedLightingMode>(value, true, out var parsed))
                 {
                     lightingSettings.mixedBakeMode = parsed;
 #endif
@@ -965,12 +970,17 @@ namespace UnityCli
 #else
                 // Unity 2022.3: SceneView.ShadingMode does not exist.
                 // Use DrawCameraMode as a fallback for common shading modes.
+                // CameraMode constructor is internal; find matching mode from GetCameraModes().
                 if (Enum.TryParse<DrawCameraMode>(value, true, out var drawMode))
                 {
                     if (SceneView.lastActiveSceneView != null)
                     {
-                        SceneView.lastActiveSceneView.cameraMode = new SceneView.CameraMode(drawMode, value);
-                        effects.Add(EffectJson("graphics.scene-debug", "shadingMode", value));
+                        var match = SceneView.GetCameraModes().FirstOrDefault(m => m.drawMode == drawMode);
+                        if (match.drawMode == drawMode)
+                        {
+                            SceneView.lastActiveSceneView.cameraMode = match;
+                            effects.Add(EffectJson("graphics.scene-debug", "shadingMode", value));
+                        }
                     }
                 }
 #endif
@@ -982,8 +992,12 @@ namespace UnityCli
                 {
                     if (SceneView.lastActiveSceneView != null)
                     {
-                        SceneView.lastActiveSceneView.cameraMode = new SceneView.CameraMode(parsed, value);
-                        effects.Add(EffectJson("graphics.scene-debug", "drawMode", value));
+                        var match = SceneView.GetCameraModes().FirstOrDefault(m => m.drawMode == parsed);
+                        if (match.drawMode == parsed)
+                        {
+                            SceneView.lastActiveSceneView.cameraMode = match;
+                            effects.Add(EffectJson("graphics.scene-debug", "drawMode", value));
+                        }
                     }
                 }
             }
