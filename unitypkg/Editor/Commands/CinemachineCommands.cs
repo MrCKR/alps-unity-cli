@@ -459,13 +459,13 @@ namespace UnityCli
             // Remove noise if requested
             if (request.BoolArg("remove", false))
             {
-                var noiseType = ResolveCinemachineComponentType("CinemachineBasicMultiChannelPerlin");
-                if (noiseType != null)
+                var removeNoiseType = ResolveCinemachineComponentType("CinemachineBasicMultiChannelPerlin");
+                if (removeNoiseType != null)
                 {
-                    var noiseComp = go.GetComponent(noiseType);
-                    if (noiseComp != null)
+                    var removeNoiseComp = go.GetComponent(removeNoiseType);
+                    if (removeNoiseComp != null)
                     {
-                        Undo.DestroyObjectImmediate(noiseComp);
+                        Undo.DestroyObjectImmediate(removeNoiseComp);
                         EditorSceneManager.MarkSceneDirty(go.scene);
                         WriteLog("cinemachine_noise_removed target=" + HierarchyPath(go));
                         return SuccessJson(new UnityCliJsonWriter().BeginObject()
@@ -582,15 +582,15 @@ namespace UnityCli
                 return ErrorJson("E_CINEMACHINE_BRAIN_NOT_FOUND",
                     "No CinemachineBrain found in the scene.",
                     "Use cinemachine brain --action ensure to add one.");
-            var brain = brainGo.GetComponent(_cmBrainType);
-            if (brain == null)
+            var statusBrain = brainGo.GetComponent(_cmBrainType);
+            if (statusBrain == null)
                 return ErrorJson("E_CINEMACHINE_BRAIN_NOT_FOUND",
                     "GameObject does not have CinemachineBrain: " + HierarchyPath(brainGo),
                     "Use cinemachine brain --action ensure to add one.");
             WriteLog("cinemachine_brain_status target=" + HierarchyPath(brainGo));
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropRaw("cinemachine", CinemachinePackageJson())
-                .PropRaw("brain", CinemachineBrainJson(brain))
+                .PropRaw("brain", CinemachineBrainJson(statusBrain))
                 .Prop("logPath", LogPath())
                 .EndObject().ToString());
         }

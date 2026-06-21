@@ -516,7 +516,7 @@ namespace UnityCli
             else if (!string.IsNullOrEmpty(target))
             {
                 var resolution = ResolveGameObjectTarget(target);
-                if (resolution.IsMatch && resolution.Matches.Count == 1)
+                if (resolution.Matches.Count == 1)
                 {
                     gameObject = resolution.Target;
                 }

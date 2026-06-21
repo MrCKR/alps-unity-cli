@@ -389,7 +389,7 @@ namespace UnityCli
                 .PropObject("parameter", obj => obj
                     .Prop("name", param.name)
                     .Prop("type", param.type.ToString())
-                    .Prop("value", value))
+                    .PropRaw("value", value is bool b ? (b ? "true" : "false") : value is long l ? l.ToString(CultureInfo.InvariantCulture) : value is float f ? f.ToString(CultureInfo.InvariantCulture) : value is int i ? i.ToString(CultureInfo.InvariantCulture) : value != null ? value.ToString() : "null"))
                 .Prop("logPath", LogPath())
                 .EndObject().ToString());
         }

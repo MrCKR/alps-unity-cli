@@ -550,7 +550,6 @@ namespace UnityCli
             if (changed)
             {
                 Lightmapping.SetLightingSettingsForScene(scene, lightingSettings);
-                EditorUtility.SetDirty(scene);
                 EditorSceneManager.MarkSceneDirty(scene);
             }
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
@@ -970,17 +969,13 @@ namespace UnityCli
 #else
                 // Unity 2022.3: SceneView.ShadingMode does not exist.
                 // Use DrawCameraMode as a fallback for common shading modes.
-                // CameraMode constructor is internal; find matching mode from GetCameraModes().
+                // CameraMode constructor is internal; use GetBuiltinCameraMode to obtain mode.
                 if (Enum.TryParse<DrawCameraMode>(value, true, out var drawMode))
                 {
                     if (SceneView.lastActiveSceneView != null)
                     {
-                        var match = SceneView.GetCameraModes().FirstOrDefault(m => m.drawMode == drawMode);
-                        if (match.drawMode == drawMode)
-                        {
-                            SceneView.lastActiveSceneView.cameraMode = match;
-                            effects.Add(EffectJson("graphics.scene-debug", "shadingMode", value));
-                        }
+                        SceneView.lastActiveSceneView.cameraMode = SceneView.GetBuiltinCameraMode(drawMode);
+                        effects.Add(EffectJson("graphics.scene-debug", "shadingMode", value));
                     }
                 }
 #endif
@@ -992,12 +987,8 @@ namespace UnityCli
                 {
                     if (SceneView.lastActiveSceneView != null)
                     {
-                        var match = SceneView.GetCameraModes().FirstOrDefault(m => m.drawMode == parsed);
-                        if (match.drawMode == parsed)
-                        {
-                            SceneView.lastActiveSceneView.cameraMode = match;
-                            effects.Add(EffectJson("graphics.scene-debug", "drawMode", value));
-                        }
+                        SceneView.lastActiveSceneView.cameraMode = SceneView.GetBuiltinCameraMode(parsed);
+                        effects.Add(EffectJson("graphics.scene-debug", "drawMode", value));
                     }
                 }
             }
