@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir } from "node:fs/promises";
+import { mkdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { getBoolean, getNumber, getString } from "../args.js";
 import { failure, success } from "../output.js";
@@ -93,7 +93,6 @@ export async function summarizeJob(job: JobRecord): Promise<Record<string, unkno
   // reason without a separate `job logs` round-trip.
   if (terminalStatuses.has(job.status) && job.logPath) {
     try {
-      const { readFile } = await import("node:fs/promises");
       const raw = await readFile(job.logPath, "utf8");
       const lines = raw.split(/\r?\n/).filter(Boolean);
       base.logTail = lines.slice(Math.max(0, lines.length - 40));

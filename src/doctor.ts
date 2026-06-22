@@ -15,6 +15,8 @@
 
 import { builtinContextDescriptors, builtinContextCategories, discoverCustomContexts, type ContextBridgeRuntime } from "./context/index.js";
 import { getString, getBoolean } from "./args.js";
+import { access, readFile, stat } from "node:fs/promises";
+import { join } from "node:path";
 import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
 import { shouldDiscoverContexts as shouldDiscoverBuiltInContexts } from "./context-discovery.js";
 import { discoverProjectContexts, shouldDiscoverContexts as shouldDiscoverProjectContexts, type ProjectContextRuntime, type ContextDescriptor } from "./project-context-discovery.js";
@@ -263,7 +265,6 @@ function stringProp(value: unknown, key: string): string | undefined {
 
 async function checkDataDirectory(dataDir: string): Promise<DoctorCheck> {
   try {
-    const { access, stat } = await import("node:fs/promises");
     await access(dataDir);
     const stats = await stat(dataDir);
     if (!stats.isDirectory()) {
@@ -295,8 +296,6 @@ async function checkDataDirectory(dataDir: string): Promise<DoctorCheck> {
 
 async function checkJobStore(dataDir: string): Promise<DoctorCheck> {
   try {
-    const { readFile } = await import("node:fs/promises");
-    const { join } = await import("node:path");
     const jobStorePath = join(dataDir, "jobs.json");
     const raw = await readFile(jobStorePath, "utf8");
     const parsed = JSON.parse(raw) as { jobs?: unknown[] };
@@ -751,8 +750,9 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
           suggestions.push("Run unity_cli context describe <name> to review a specific custom context descriptor and fingerprint.");
           break;
         case "context_discovery":
-          suggestions.push("Run unity_cli context list --include-custom to enumerate built-in and project custom contexts.");
-          suggestions.push("Run unity_cli context describe <name> or context read <name> to inspect a specific custom context.");
+          suggestions.push("Run unity_cli context list to see available contexts.");
+          suggestions.push("Run unity_cli context list --include-custom to discover project custom contexts.");
+          suggestions.push("Run unity_cli context describe <name> or context read <name> to inspect a specific context.");
           break;
         case "data_directory":
           suggestions.push("Run any unity_cli command to auto-create the data directory.");
@@ -763,9 +763,6 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
         case "unified_tool_discovery":
           suggestions.push("Run unity_cli tools group to see tool groups.");
           suggestions.push("Run unity_cli tools group list <group> with a reachable Unity Bridge to inspect project custom descriptors.");
-          break;
-        case "context_discovery":
-          suggestions.push("Run unity_cli context list to see available contexts.");
           break;
         case "extension_registry":
           suggestions.push("Run unity_cli extensions list to see available extensions.");
@@ -779,10 +776,6 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
         case "extension.probuilder":
           suggestions.push("Run 'unity_cli extensions install probuilder --project <path>' to enable the ProBuilder extension.");
           suggestions.push("Install com.unity.probuilder manually via Unity Package Manager or Packages/manifest.json before installing the ProBuilder extension bundle.");
-          break;
-        case "context_discovery":
-          suggestions.push("Run 'unity_cli context list' to see all available contexts.");
-          suggestions.push("Run 'unity_cli context list --include-custom' to discover project custom contexts.");
           break;
       }
     }

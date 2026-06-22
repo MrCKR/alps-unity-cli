@@ -7,8 +7,8 @@
  */
 
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
-import { builtinContextDescriptors, builtinContextCategories } from "./context/index.js";
-import { getString } from "./args.js";
+import { builtinContextCategories } from "./context/index.js";
+import { getBoolean, getString } from "./args.js";
 import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
 import { discoverProjectContexts, shouldDiscoverContexts, type ProjectContextRuntime, type ContextDescriptor } from "./project-context-discovery.js";
 import { builtinToolGroups, builtinToolMetadata, extensionToolMetadata, allRegisteredToolMetadata, EXTENSION_GROUPS, type ToolMetadata } from "./tools/metadata/index.js";
@@ -156,10 +156,6 @@ export async function handleCapabilitiesCommand(
   return success(requestId, data);
 }
 
-function getBoolean(flags: Record<string, string | boolean>, name: string): boolean {
-  return flags[name] === true || flags[name] === "true";
-}
-
 function buildStaticCapabilities(projectTools: ToolMetadata[] = [], projectContexts: ContextDescriptor[] = [], extensionGroupFilter?: Set<string>): Record<string, unknown> {
   // builtinToolMetadata() returns core tools only. Extension tools are loaded
   // from extensionToolMetadata() and merged based on availability.
@@ -239,24 +235,5 @@ function buildStaticCapabilities(projectTools: ToolMetadata[] = [], projectConte
       customContextDescriptor: true,
       contextFingerprint: true
     }
-  };
-}
-
-
-function buildContextCapabilities(): Record<string, unknown> {
-  const contexts = builtinContextDescriptors();
-  const categories = builtinContextCategories();
-
-  return {
-    contextCount: contexts.length,
-    categories,
-    categoryCounts: Object.fromEntries(
-      categories.map((cat) => [cat, contexts.filter((c) => c.category === cat).length])
-    ),
-    contextNames: contexts.map((c) => c.name),
-    allReadOnly: true,
-    customContextSupport: true,
-    bridgeCommand: "context.read",
-    discoveryCommands: ["context list", "context describe <name>", "context read <name>"]
   };
 }

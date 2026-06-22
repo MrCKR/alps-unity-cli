@@ -10,6 +10,7 @@
 import { builtinContextMetadata } from "./metadata/index.js";
 import { collectAvailableContexts, ExtensionRegistry, readInstalledUnityPackages } from "../extensions/index.js";
 import { getString } from "../args.js";
+import { scoreSearch } from "../util.js";
 import type { ContextDescriptor, ContextListEntry, CustomContextDescriptor } from "./types.js";
 import type { ContextMetadata } from "./metadata/types.js";
 import type { ExtensionContextContribution } from "../extensions/types.js";
@@ -53,13 +54,6 @@ export function searchContexts(keyword: string): ContextDescriptor[] {
     const bScore = scoreSearch(b.name.toLowerCase(), lower) + scoreSearch(b.title.toLowerCase(), lower);
     return bScore - aScore;
   });
-}
-
-function scoreSearch(text: string, query: string): number {
-  if (text === query) return 8;
-  if (text.startsWith(query)) return 4;
-  if (text.includes(query)) return 2;
-  return 0;
 }
 
 // ── Extension context contributions ───────────────────────────────────────

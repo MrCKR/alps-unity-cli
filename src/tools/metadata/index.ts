@@ -14,6 +14,7 @@
 
 import { bridgeCommandRegistry } from "../../bridge/index.js";
 import { validateBridgeRegistryContracts, validateToolMetadataContracts } from "../../contracts/command-contract.js";
+import { scoreSearch } from "../../util.js";
 import { SCENE_TOOLS } from "./groups/scene.js";
 import { CAMERA_TOOLS } from "./groups/camera.js";
 import { GO_TOOLS } from "./groups/game-object.js";
@@ -168,13 +169,6 @@ export function searchTools(keyword: string): ToolMetadata[] {
     const bScore = scoreSearch(b.name.toLowerCase(), lower) + scoreSearch(b.title.toLowerCase(), lower);
     return bScore - aScore;
   });
-}
-
-function scoreSearch(text: string, query: string): number {
-  if (text === query) return 8;
-  if (text.startsWith(query)) return 4;
-  if (text.includes(query)) return 2;
-  return 0;
 }
 
 function validateBuiltinTools(tools: ToolMetadata[], skipCliCommandBridgeCheck: boolean): void {

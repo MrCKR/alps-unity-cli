@@ -10,6 +10,7 @@ import { readFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { ExtensionRegistry } from "./registry.js";
 import type { ExtensionAvailabilityResult } from "./types.js";
+import { stripBom } from "../util.js";
 
 /**
  * Read installed (resolved) Unity packages from a project's packages-lock.json.
@@ -65,8 +66,4 @@ export async function resolveExtensionAvailabilityForProject(
 ): Promise<ExtensionAvailabilityResult[]> {
   const installedPackages = await readInstalledUnityPackages(projectPath);
   return registry.resolveAllAvailability(installedPackages);
-}
-
-function stripBom(value: string): string {
-  return value.charCodeAt(0) === 0xfeff ? value.slice(1) : value;
 }

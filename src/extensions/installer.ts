@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { readInstalledUnityPackages } from "./project-resolver.js";
 import { ExtensionRegistry } from "./registry.js";
 import type { ExtensionAvailabilityResult, ExtensionId, ExtensionManifest } from "./types.js";
+import { stripBom } from "../util.js";
 
 export type ExtensionInstallStatus = "installed" | "available_not_installed" | "missing_dependency" | "outdated" | "unknown_files";
 
@@ -394,10 +395,6 @@ function safeManagedPath(targetRoot: string, relPath: string): string {
 
 function normalizePath(path: string): string {
   return path.split("\\").join("/");
-}
-
-function stripBom(value: string): string {
-  return value.charCodeAt(0) === 0xfeff ? value.slice(1) : value;
 }
 
 function emptyManifest(): ExtensionInstallManifest {

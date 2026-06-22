@@ -111,17 +111,3 @@ export function floatFlag(flags: BridgeFlags, key: string): number | undefined {
 export function compactArgs(args: Record<string, unknown>): Record<string, unknown> {
   return Object.fromEntries(Object.entries(args).filter(([, value]) => value !== undefined));
 }
-
-
-
-function timeoutFlag(flags: BridgeFlags, fallback: number, max: number): number {
-  const raw = stringFlag(flags, "timeout-ms");
-  if (!raw) {
-    return fallback;
-  }
-  const parsed = Number(raw);
-  if (!Number.isInteger(parsed) || parsed <= 0 || parsed > max) {
-    throw new BridgeArgumentError("E_SCHEMA_INVALID", `--timeout-ms must be an integer between 1 and ${max}.`);
-  }
-  return parsed;
-}

@@ -3,11 +3,23 @@ import { dirname, join, resolve, sep } from "node:path";
 import { defaultDataDir } from "./platform.js";
 import type { CliResult } from "./types.js";
 import { failure, success } from "./output.js";
+import { stripBom } from "./util.js";
+import { getBoolean } from "./args.js";
+import { stringFlag } from "./bridge/args.js";
 
 export const STALE_AFTER_MS = 10_000;
 export const HEALTH_CHECK_TIMEOUT_MS = 500;
 export const HEALTH_CHECK_RETRIES = 1;
 export const HEALTH_CHECK_TOTAL_BUDGET_MS = 1_200;
+/** bridge /health 探测结果的短时缓存，避免每次 bridge 命令都 ping 所有实例。 */
+export const HEALTH_CACHE_TTL_MS = 5_000;
+
+const healthCache = new Map<string, { reachable: boolean; checkedAt: number }>();
+
+/** 清空 bridge 健康检查缓存。供需要强制实时的场景（如 instances prune/doctor）或测试调用。 */
+export function clearInstanceHealthCache(): void {
+  healthCache.clear();
+}
 
 export interface UnityInstance {
   instanceId: string;
@@ -169,7 +181,7 @@ async function handleTargetAliasCommand(
       return failure(requestId, "E_TARGET_NOT_FOUND", `Unity target not found: ${instanceId}.`, ["Run unity_cli instances list to inspect registered targets."]);
     }
     const existingInstanceId = aliases[alias];
-    if (existingInstanceId && existingInstanceId !== instance.instanceId && !booleanFlag(flags, "force")) {
+    if (existingInstanceId && existingInstanceId !== instance.instanceId && !getBoolean(flags, "force")) {
       return failure(requestId, "E_TARGET_ALIAS_CONFLICT", `Target alias already points to another instance: ${alias}.`, [
         "Run unity_cli target alias unset <alias> before assigning it to another instance.",
         "Run unity_cli target alias set <instanceId> <alias> --force to overwrite the existing alias."
@@ -203,7 +215,7 @@ export async function selectInstanceForFlags(
     return undefined;
   }
 
-  const instances = await readInstances(dataDir);
+  const instances = await readInstances(dataDir, Date.now(), { useCache: true });
   const aliases = await readAliases(dataDir);
   if (explicit) {
     return resolveRequiredTarget(instances, aliases, explicit, "target");
@@ -259,9 +271,9 @@ export function instancesDir(dataDir = defaultDataDir()): string {
   return resolve(dataDir, "instances");
 }
 
-export async function readInstances(dataDir = defaultDataDir(), now = Date.now()): Promise<UnityInstance[]> {
+export async function readInstances(dataDir = defaultDataDir(), now = Date.now(), options?: { useCache?: boolean }): Promise<UnityInstance[]> {
   const [fileInstances, registryFileInstances] = await Promise.all([readInstanceFiles(dataDir), readRegistryFileInstances(dataDir)]);
-  return checkInstanceHealth(normalizeInstances([...registryFileInstances, ...fileInstances], now));
+  return checkInstanceHealth(normalizeInstances([...registryFileInstances, ...fileInstances], now), options?.useCache ?? false);
 }
 
 export async function writeInstances(dataDir: string, instances: UnityInstance[]): Promise<void> {
@@ -477,14 +489,20 @@ function instanceTimestamp(instance: UnityInstance): number {
   return Number.isFinite(registered) ? registered : 0;
 }
 
-async function checkInstanceHealth(instances: UnityInstance[]): Promise<UnityInstance[]> {
+async function checkInstanceHealth(instances: UnityInstance[], useCache = false): Promise<UnityInstance[]> {
   return Promise.all(instances.map(async (instance) => {
     if (instance.status === "stale" || instance.status === "unreachable") {
       return instance;
     }
-    return await isBridgeHealthReachable(instance.bridgeEndpoint)
-      ? instance
-      : { ...instance, status: "unreachable" as const };
+    if (useCache) {
+      const cached = healthCache.get(instance.bridgeEndpoint);
+      if (cached && Date.now() - cached.checkedAt < HEALTH_CACHE_TTL_MS) {
+        return cached.reachable ? instance : { ...instance, status: "unreachable" as const };
+      }
+    }
+    const reachable = await isBridgeHealthReachable(instance.bridgeEndpoint);
+    healthCache.set(instance.bridgeEndpoint, { reachable, checkedAt: Date.now() });
+    return reachable ? instance : { ...instance, status: "unreachable" as const };
   }));
 }
 
@@ -528,14 +546,6 @@ function normalizedPath(path: string): string {
   return resolve(path).toLowerCase();
 }
 
-function stringFlag(flags: Record<string, string | boolean>, key: string): string | undefined {
-  return typeof flags[key] === "string" ? flags[key] : undefined;
-}
-
-function booleanFlag(flags: Record<string, string | boolean>, key: string): boolean {
-  return flags[key] === true || flags[key] === "true";
-}
-
 function attemptKillPid(pid: number | undefined): boolean {
   if (!pid) {
     return false;
@@ -572,11 +582,6 @@ function endpointPort(endpoint: string): number | undefined {
 
 function safeFileName(value: string): string {
   return value.replace(/[^A-Za-z0-9._-]/g, "_");
-}
-
-/** Strip UTF-8 BOM (\xEF\xBB\xBF) prefix if present. */
-function stripBom(text: string): string {
-  return text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text;
 }
 
 function projectHash(projectPath: string): string {

@@ -10,6 +10,8 @@
  */
 
 import { getBoolean, getString } from "./args.js";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { discoverProjectTools, discoverRuntimeTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
 import { bridgeCommandRegistry, executeBridgeCommand, executeBridgePayload } from "./bridge/index.js";
 import { checkToolExtensionAvailability, collectExtensionToolDescriptors } from "./extension-availability.js";
@@ -464,8 +466,6 @@ export function findBridgeSpecForTool(toolName: string) {
 async function parseToolInput(flags: Record<string, string | boolean>): Promise<Record<string, unknown>> {
   const inputFilePath = getString(flags, "input-file");
   if (inputFilePath) {
-    const { readFile } = await import("node:fs/promises");
-    const { resolve } = await import("node:path");
     const content = await readFile(resolve(inputFilePath), "utf8");
     try {
       const parsed = JSON.parse(content);

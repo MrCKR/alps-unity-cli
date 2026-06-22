@@ -4,7 +4,7 @@ import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { parseArgs, getBoolean, getString } from "./args.js";
-import { bridgeCommandRegistry, executeBridgeCommand, executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
+import { bridgeCommandRegistry, executeBridgeCommand, executeBridgePayload } from "./bridge/index.js";
 import { registerBuiltinExtensionContributions } from "./extensions/index.js";
 import { handleBatch } from "./cli-commands/batch.js";
 import { handleBuild } from "./cli-commands/build.js";
@@ -137,7 +137,10 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
     if (isPackageManagerError(error)) {
       return failure(requestId, error.code, error.message, error.nextActions);
     }
-    return failure(requestId, "COMMAND_FAILED", error instanceof Error ? error.message : String(error));
+    return failure(requestId, "COMMAND_FAILED", error instanceof Error ? error.message : String(error), [
+      "Run unity_cli --help for available commands.",
+      "Run unity_cli doctor to diagnose the environment."
+    ]);
   }
 }
 
@@ -160,12 +163,6 @@ async function runJobWorker(flags: Record<string, string | boolean>, requestId: 
   } catch (error) {
     return failure(requestId, "WORKER_FAILED", error instanceof Error ? error.message : String(error));
   }
-}
-
-async function bridgeJobArgs(command: string, flags: Record<string, string | boolean>, positionalTarget: string | undefined): Promise<Record<string, unknown>> {
-  const runtime: BridgeRuntime = { bridgeExecute: async (payload) => ({ ok: true, data: { bridgeArgs: payload.args, dryRun: payload.dryRun, security: payload.security } }) };
-  const result = await executeBridgeCommand("dry_run", command, flags, positionalTarget, runtime);
-  return ((result.data as { bridgeArgs?: Record<string, unknown> } | undefined)?.bridgeArgs ?? {}) as Record<string, unknown>;
 }
 
 function shouldRunBridgeAsJob(group: string | undefined, command: string | undefined, flags: Record<string, string | boolean>): boolean {

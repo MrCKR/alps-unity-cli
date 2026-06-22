@@ -182,16 +182,9 @@ export interface CliError {
   [key: string]: unknown;
 }
 
-export interface CliResult<T = unknown> {
-  ok: boolean;
-  requestId: string;
-  data?: T;
-  warnings?: string[];
-  logsRef?: string;
-  jobId?: string;
-  durationMs?: number;
-  error?: CliError;
-}
+// CliResult 的唯一定义在 ./types.ts；此处仅按需引入以供 success/failure 等辅助函数使用。
+import type { CliResult } from "./types.js";
+export type { CliResult };
 
 import { randomUUID } from "node:crypto";
 
