@@ -2,7 +2,7 @@
  * Extension system types for the Unity CLI.
  *
  * Defines the manifest schema, registry types, and descriptor loader types
- * for the extension package system (P5-T01).
+ * for the extension package system.
  *
  * Extensions are optional packages that contribute capabilities (tools,
  * bridge commands, context descriptors, docs fragments) to the CLI without

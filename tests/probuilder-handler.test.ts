@@ -1,5 +1,5 @@
 /**
- * ProBuilder C# handler contract tests — P7-T2b.
+ * ProBuilder C# handler contract tests.
  *
  * Validates:
  * - All 36 ProBuilder tools have csharp_handler = "present" in contract
@@ -12,7 +12,6 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { commandContracts, findCommandContract } from "../src/contracts/command-contract.js";
 import { filterToolsByGroup, findToolByName } from "../src/tools/metadata/index.js";
-// P10-R3: Ensure extension contributions (ProBuilder, Cinemachine, VFX, URP, HDRP) are registered
 import "../src/extensions/index.js";
 
 const EXPECTED_PROBUILDER_TOOLS = [

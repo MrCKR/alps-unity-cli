@@ -2,7 +2,7 @@
  * Unit tests for init auto-detect: extension auto-detection and auto-install
  * based on Unity project's installed packages.
  *
- * P5-T03: init auto-detect Unity packages and install matching extensions.
+ * Tests init auto-detect Unity packages and install matching extensions.
  */
 
 import assert from "node:assert/strict";

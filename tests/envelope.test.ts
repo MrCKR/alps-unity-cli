@@ -199,7 +199,7 @@ describe("ERROR_CODES taxonomy", () => {
     }
   });
 
-  it("includes P5/P6 target/runtime placeholder codes", () => {
+  it("includes target/runtime error codes", () => {
     assert.equal(ERROR_CODES.E_TARGET_BUSY, "E_TARGET_BUSY");
     assert.equal(ERROR_CODES.E_RUNTIME_SESSION_STALE, "E_RUNTIME_SESSION_STALE");
     assert.equal(ERROR_CODES.E_RUNTIME_NOT_READY, "E_RUNTIME_NOT_READY");
@@ -472,7 +472,7 @@ describe("DEFAULT_RETRY_AFTER_MS", () => {
     }
   });
 });
-// ─── P5 Runtime Error Codes ───
+// ─── Runtime Error Codes ───
 
 describe("E_RUNTIME_NOT_READY is transient with retry_after_ms=3000", () => {
   it("E_RUNTIME_NOT_READY is in TRANSIENT_ERROR_CODES", () => {

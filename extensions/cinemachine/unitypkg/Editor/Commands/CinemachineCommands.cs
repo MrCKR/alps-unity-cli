@@ -21,7 +21,7 @@ namespace UnityCli
         // Adapted for alps-unity-cli: uses FindType() (same reflection-based pattern
         // as ProBuilder) instead of UnityTypeResolver. No #if UNITY_CINEMACHINE
         // conditional compilation — purely runtime detection. Both CinemachineCamera
-        // (CM3 new name) and CinemachineVirtualCamera (legacy CM2) are considered.
+        // (CM3 name) and CinemachineVirtualCamera (CM2 name) are considered.
 
         private static Type _cmCameraType;
         private static Type _cmBrainType;

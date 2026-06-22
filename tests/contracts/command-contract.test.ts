@@ -4,7 +4,6 @@ import { readFile, readdir } from "node:fs/promises";
 import { bridgeCommandRegistry } from "../../src/bridge/index.js";
 import { builtinToolMetadata, allRegisteredToolMetadata } from "../../src/tools/metadata/index.js";
 import { commandContracts, validateBridgeRegistryContracts, validateToolMetadataContracts } from "../../src/contracts/command-contract.js";
-// P10-R3: Ensure extension contributions (ProBuilder, Cinemachine, VFX, URP, HDRP) are registered
 import "../../src/extensions/index.js";
 
 const editorUrl = new URL("../../../unitypkg/Editor/", import.meta.url);
@@ -48,8 +47,7 @@ const filledCsharpHandlerCommands = [
 ];
 
 test("command contract validates bridge registry and metadata", () => {
-  // P10-R3: Full validation includes extension contributions registered via
-  // extensions/index.js auto-registration.
+  // Full validation includes extension contributions registered via extensions/index.js.
   assert.doesNotThrow(() => validateBridgeRegistryContracts(bridgeCommandRegistry));
  assert.doesNotThrow(() => validateToolMetadataContracts(allRegisteredToolMetadata(), bridgeCommandRegistry));
   // All registered tools (core + extension) + runtime-tool commands + project-tool commands + context commands + extension commands

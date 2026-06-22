@@ -35,7 +35,7 @@ namespace UnityCli
         /// They are always allowed in Play Mode because they never mutate state.
         /// If a capability has side effects, it must be a Tool, not a Context.
         ///
-        /// P2: Built-in context registry with 16 contexts and read handlers.
+        /// Built-in context registry with context definitions and read handlers.
         /// Registration is handled by ProjectContextRegistry which unifies built-in
         /// and project custom context commands into a single handler.
         /// </summary>

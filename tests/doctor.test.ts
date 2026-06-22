@@ -69,11 +69,9 @@ test("doctor returns all-pass when registry has healthy instance and bridge is r
   const result = await handleDoctorCommand({}, runtime, "req_doctor_1");
   assert.equal(result.ok, true);
   const data = result.data as { summary: string; checks: DoctorCheck[] };
-  // extension_availability warns when no --project provided; P1+P2 adds context_discovery, extension_registry, stale_tools_list_wording
-  // P3 adds project_context_fingerprint check
+  // extension_availability warns when no --project is provided.
   assert.equal(data.summary, "warn");
- // TODO: recalculate after all P1-P9 merges — count includes checks from both P1+P2 and P5+P7
-  assert.equal(data.checks.length, 13);
+  assert.equal(data.checks.length, 12);
 
   const registryCheck = data.checks.find((c) => c.name === "instance_registry");
   assert.equal(registryCheck?.status, "pass");
@@ -289,22 +287,6 @@ test("doctor provides actionable suggestions when checks fail", async () => {
   const data = result.data as { suggestions: string[] };
 
   assert.ok(data.suggestions.some((s) => s.includes("prune") || s.includes("Reopen")));
-});
-
-test("doctor stale_tools_list_wording check passes when no stale references exist", async () => {
-  const dataDir = await makeDataDir();
-  await writeInstances(dataDir, [makeInstance()]);
-
-  const runtime = makeRuntime(dataDir, async (payload) => {
-    return { ok: true, data: { command: payload.command, status: "ok" } };
-  });
-
-  const result = await handleDoctorCommand({}, runtime, "req_doctor_stale_1");
-  assert.equal(result.ok, true);
-  const data = result.data as { checks: DoctorCheck[] };
-  const staleCheck = data.checks.find((c) => c.name === "stale_tools_list_wording");
-  assert.equal(staleCheck?.status, "pass");
-  assert.ok(staleCheck?.message.includes("No stale"));
 });
 
 test("doctor includes context_discovery check when bridge is reachable", async () => {

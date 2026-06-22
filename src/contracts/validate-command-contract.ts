@@ -6,14 +6,14 @@ import { commandContracts, validateBridgeRegistryContracts, validateToolMetadata
 import { BUILTIN_EXTENSION_MANIFESTS } from "../extensions/registry-data.js";
 import { registerBuiltinExtensionContributions } from "../extensions/contribution-loader.js";
 
-// P10-R3: Register extension contributions before validation
+// Register extension contributions before validation.
 registerBuiltinExtensionContributions();
 
 const contracts = commandContracts();
 validateBridgeRegistryContracts(bridgeCommandRegistry);
 validateToolMetadataContracts(allRegisteredToolMetadata(), bridgeCommandRegistry);
 
-// P5-T04: Validate extension manifest tool contributions against contract
+// Validate extension manifest tool contributions against the contract.
 validateExtensionManifestContracts(BUILTIN_EXTENSION_MANIFESTS, bridgeCommandRegistry);
 
 const csharpCommands = extractAllCSharpRegisteredCommands();
@@ -54,11 +54,11 @@ function extractCSharpRegisteredCommands(root: string): string[] {
     // Skip sample/demo tools — they are not part of the core contract
     if (file.includes("/Samples/") || file.includes("\\Samples\\")) continue;
     const source = readFileSync(file, "utf8");
-    // Scan for RegisterCommand entries (core & legacy bridge commands)
+    // Scan for RegisterCommand entries.
     for (const match of source.matchAll(/RegisterCommand\(registry, "([^"]+)"/g)) {
       commands.add(match[1]);
     }
-    // Scan for UnityCliTool attributes (P7 ProBuilder extension & P3 Custom Context tools).
+    // Scan for UnityCliTool attributes discovered by ProjectToolRegistry.
     // These are discovered by ProjectToolRegistry at runtime, not registered via RegisterCommand.
     // Format: [UnityCliTool( "probuilder.ping", Title = ...
     for (const match of source.matchAll(/\[UnityCliTool\(\s*"([^"]+)"/g)) {

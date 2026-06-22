@@ -1,15 +1,12 @@
 /**
  * CLI sub-commands: tools group, tools group list, tools search, tools describe, tools run.
  *
- * P1 group-first discovery model:
+ * Group-first discovery model:
  *   tools group               → list tool groups with counts
  *   tools group list <group>  → list tools in a group (short summary)
  *   tools describe <name>     → full metadata for a tool
  *   tools run <name>          → execute a tool
  *   tools search <keyword>    → auxiliary search across tools
- *
- * Old `tools list` (full flat enumeration) is REMOVED.
- * Calling `tools list` or bare `tools` returns a guidance error pointing to group-first.
  */
 
 import { getBoolean, getString } from "./args.js";
@@ -47,12 +44,6 @@ export async function handleToolsCommand(
   runtime: ToolsRuntime,
   requestId: string
 ): Promise<CliResult> {
-  // Old `tools list` is REMOVED. Both bare `tools` and `tools list` return
-  // a guidance error pointing to the new group-first discovery path.
-  if (!command || command === "list") {
-    return handleToolsListRemoved(requestId);
-  }
-
   if (command === "run") {
     return handleToolsRun(positional, flags, runtime, requestId);
   }
@@ -64,11 +55,6 @@ export async function handleToolsCommand(
       return handleToolsGroupList(positional.slice(1), flags, runtime, requestId);
     }
     return handleToolsGroup(flags, runtime, requestId);
-  }
-
-  // `tools groups` is a removed legacy alias — treat as unknown command.
-  if (command === "groups") {
-    return handleToolsListRemoved(requestId);
   }
 
   if (command === "search") {
@@ -90,19 +76,6 @@ export async function handleToolsCommand(
 }
 
 /**
- * Old `tools list` is REMOVED in P1. Return a guidance error
- * pointing to the new group-first discovery path.
- */
-function handleToolsListRemoved(requestId: string): CliResult {
-  return failure(requestId, "E_TOOLS_LIST_REMOVED", "The 'tools list' command has been removed. Use group-first discovery instead.", [
-    "Run unity_cli tools group to list all tool groups.",
-    "Run unity_cli tools group list <group> to list tools in a group.",
-    "Run unity_cli tools describe <tool> for full metadata.",
-    "Run unity_cli tools search <keyword> to search across all tools."
-  ]);
-}
-
-/**
  * `tools group` — list all tool groups with short descriptions and tool counts.
  * This is the primary discovery entry point.
  */
@@ -111,8 +84,8 @@ async function handleToolsGroup(
   runtime: ToolsRuntime,
   requestId: string
 ): Promise<CliResult> {
-  // P10-R3: Core groups always present; extension groups are included
-  // only when their required Unity packages are installed in the target project.
+  // Core groups are always present; extension groups are included only when
+  // their required Unity packages are installed in the target project.
   const availableExtensionTools = await resolveAvailableExtensionTools(flags);
   const builtinGroups = builtinToolGroups();
   const extensionGroupNames = [...new Set(availableExtensionTools.map((t) => t.group))].sort();
@@ -199,7 +172,7 @@ async function handleToolsGroupList(
   }
 
   const builtinTools = builtinToolMetadata().filter((t) => t.group === groupName);
-  // P10-R3: Include available extension tools for this group
+  // Include extension tools only when they are available for the target project.
   const availableExtensionTools = await resolveAvailableExtensionTools(flags);
   const extensionTools = availableExtensionTools.filter((t) => t.group === groupName);
   const includeCustom = shouldDiscoverProjectTools(flags, runtime);
@@ -612,11 +585,7 @@ async function dispatchJobHandler(
 }
 
 /**
- * P10-R3: Resolve which extension tools are available for the target project.
- *
- * Extension tools (ProBuilder, Cinemachine, VFX, URP, HDRP) are only shown in
- * tools group/group list/search when their required Unity packages are installed
- * in the target project. Without --project, extension tools are NOT included.
+ * Resolve a target summary when flags identify a reachable Unity instance.
  */
 async function optionalTargetSummary(flags: Record<string, string | boolean>, runtime: ToolsRuntime): Promise<Record<string, unknown> | null> {
   try {
@@ -645,11 +614,10 @@ async function findProjectToolByName(
 }
 
 /**
- * P10-R3: Resolve which extension tools are available for the target project.
+ * Resolve which extension tools are available for the target project.
  *
- * Extension tools (ProBuilder, Cinemachine, VFX, URP, HDRP) are only shown in
- * tools group/list/search when their required Unity packages are installed
- * in the target project. Without --project, extension tools are NOT included.
+ * Extension tools are shown only when their required Unity packages are installed
+ * in the target project. Without --project, extension tools are not included.
  */
 async function resolveAvailableExtensionTools(
   flags: Record<string, string | boolean>

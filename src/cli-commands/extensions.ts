@@ -2,9 +2,6 @@
  * CLI sub-commands: extensions list, extensions install, extensions remove,
  * extensions doctor.
  *
- * P5-T02: extensions command surface built on top of the P5-T01 registry /
- * descriptor loader.
- *
  * `extensions list`     — list available extensions, install state, Unity
  *                         package mappings, availability and next_actions.
  * `extensions install`  — install (enable) an extension in the current project.

@@ -25,7 +25,7 @@ unity_cli init --check --project C:\path\MyProject
 
 安装内容：
 - `Packages/com.unity_cli/` — Bridge 包（copy 模式）
-- `Packages/unity_cli.install.json` — 安装元数据（项目 hash、版本、兼容性范围）
+- `Packages/unity_cli.install.json` — 安装元数据（项目 hash、版本、支持范围）
 
 ### 项目自定义工具发现
 
@@ -51,7 +51,7 @@ unity_cli diagnose preflight
 
 ## 扩展包命令
 
-P5 阶段已实现独立的 `extensions` 命令组：
+`extensions` 命令组负责扩展包状态、复制和诊断：
 
 ```powershell
 unity_cli extensions list --project <path>          # 列出扩展状态

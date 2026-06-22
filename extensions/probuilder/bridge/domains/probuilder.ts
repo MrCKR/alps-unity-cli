@@ -6,8 +6,6 @@ import type { BridgeCommandSpec } from "../types.js";
  *
  * Each CLI command maps to a bridge command with explicit arg builders.
  * Replaces the previous 4 coarse-grained probuilder bridge specs.
- *
- * Source: P7-T1 alignment matrix
  */
 
 export const probuilderBridgeSpecs: BridgeCommandSpec[] = [

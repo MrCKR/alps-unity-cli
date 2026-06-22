@@ -1,9 +1,7 @@
 /**
  * Static built-in extension metadata for the Unity CLI.
  *
- * P1 baseline: skeleton registry with extension descriptors for
- * ProBuilder, Cinemachine, VFX Graph, URP, HDRP.
- * P5 will implement install/remove/init-detection full flow.
+ * Built-in extension descriptors for ProBuilder, Cinemachine, VFX Graph, URP, HDRP.
  *
  * Extensions are optional capability packs that depend on optional
  * Unity packages. They provide tools and contexts but must not

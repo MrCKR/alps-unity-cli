@@ -18,7 +18,7 @@ import { objSchema } from "../schemas.js";
 
 const HDRP_PACKAGE = "com.unity.render-pipelines.high-definition";
 
-/** Common fields shared by all HDRP extension tools (P10-R4: mirrors PB_COMMON pattern). */
+/** Common fields shared by all HDRP extension tools. */
 const HDRP_COMMON = {
   group: "hdrp",
   target: "editor" as const,

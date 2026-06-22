@@ -49,6 +49,6 @@ export interface BridgeCommandSpec {
   internal?: boolean;
   /** If true, native top-level CLI routing is disabled; tools run may still use the spec for argument mapping. */
   toolsOnly?: boolean;
-  /** Legacy/native argv mapping used internally by tools run for argument builders. */
+  /** Native argv mapping used internally by tools run for argument builders. */
   nativeCliCommand?: string;
 }

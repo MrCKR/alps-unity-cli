@@ -97,7 +97,7 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
       result.skills = skillResults;
     }
 
-    // P5-T03: Check extension auto-detect plan (dry-run in check mode)
+    // Check extension auto-detect plan in dry-run check mode.
     if (!skillOnly) {
       const { autoDetectExtensions, autoDetectSummary } = await import("./extension-auto-detect.js");
       const detectResult = await autoDetectExtensions(projectPath, true);
@@ -151,7 +151,7 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
     }
   }
 
-  // P5-T03: Auto-detect and install matching extensions (unless --skill-only or --pkg-only)
+  // Auto-detect and install matching extensions unless skipped by flags.
   if (!skillOnly && !pkgOnly) {
     const { autoDetectExtensions, autoDetectSummary } = await import("./extension-auto-detect.js");
     const detectResult = await autoDetectExtensions(projectPath);

@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 const editorUrl = new URL("../../unitypkg/Editor/", import.meta.url);
 
 test("Context commands register context.list, context.describe, context.read", async () => {
-  // Registration is in ProjectContextRegistry.cs since P10-R7 (unified handler)
+  // Registration is in ProjectContextRegistry.cs through the unified handler.
   const source = await readContextCommandsSource();
   const allSources = await readUnityBridgeSources();
   // ContextCommands.cs has the built-in context definitions and read handlers

@@ -38,7 +38,7 @@ export const ERROR_CODES = {
   E_TARGET_ALIAS_CONFLICT: "E_TARGET_ALIAS_CONFLICT",
   // Target preflight busy state; E_UNITY_BUSY remains the Bridge execution-layer busy signal.
   E_TARGET_BUSY: "E_TARGET_BUSY",
-  // P5/P6 runtime executor/session lifecycle placeholders.
+  // Runtime executor and session lifecycle error codes.
   E_RUNTIME_NOT_READY: "E_RUNTIME_NOT_READY",
   E_RUNTIME_SESSION_STALE: "E_RUNTIME_SESSION_STALE",
   E_RUNTIME_TOOL_TARGET_MISMATCH: "E_RUNTIME_TOOL_TARGET_MISMATCH",

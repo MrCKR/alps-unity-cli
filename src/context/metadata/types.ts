@@ -5,8 +5,7 @@
  * editor state, scene data, selections, etc. Context never modifies
  * Unity state; if a capability has side effects it MUST be a Tool.
  *
- * P1 baseline: type + schema + registry skeleton.
- * P2 will populate built-in context descriptors covering unity-mcp Resources.
+ * Defines the typed descriptor surface for built-in, project, and extension contexts.
  */
 
 export type ContextSource = "built-in" | "project" | "extension";

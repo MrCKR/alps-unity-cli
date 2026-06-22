@@ -5,8 +5,7 @@
  * tools, contexts, or both. Extensions depend on optional Unity packages
  * (e.g. com.unity.probuilder) and are not part of the core CLI package.
  *
- * P1 baseline: type + schema + registry skeleton.
- * P5 will implement install/remove/init-detection full flow.
+ * Defines the typed descriptor surface for extension metadata.
  */
 
 export type ExtensionSource = "built-in" | "package";

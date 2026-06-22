@@ -4,15 +4,12 @@ import { objSchema } from "../schemas.js";
 /**
  * ProBuilder extension tool descriptors — 36 single-action tools.
  *
- * Replaces the previous 4 coarse-grained probuilder.* built-in tools
- * with fine-grained single-action tools per the P7-T1 alignment matrix.
+ * Uses fine-grained single-action tools instead of coarse-grained probuilder.* entries.
  *
  * Unified constraints:
  *   group=probuilder, target=editor, availabilityScope=editorSession,
  *   requiresPackages=["com.unity.probuilder"], handler=hybrid,
  *   docsTopic=probuilder
- *
- * Source: P7-T1 technical spec (commit a6dee9e)
  */
 
 const PB = "com.unity.probuilder";

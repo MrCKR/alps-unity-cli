@@ -238,8 +238,8 @@ namespace UnityCli
                     WriteLog("execute_play_mode_guard_blocked requestId=" + request.RequestId + " command=" + request.Command + " isPlaying=" + Bool(EditorApplication.isPlaying));
                     if (!EditorApplication.isPlaying)
                     {
-                        // Transition phase: isPlayingOrWillChangePlaymode is true but
-                        // isPlaying is not yet true (entering) or already false (exiting).
+                        // During Play Mode state changes, isPlayingOrWillChangePlaymode is true
+                        // while isPlaying may still be false on enter or exit.
                         // Transient — callers should wait and retry.
                         return TransientErrorJson("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode. (execute-guard-v2)", "Wait for Play mode transition to complete and retry.", 3000);
                     }

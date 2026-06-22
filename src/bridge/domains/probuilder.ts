@@ -11,8 +11,6 @@ import type { BridgeCommandSpec } from "../types.js";
  * "probuilder.ping"). The buildArgs output is wrapped into { name, input }
  * so the C# ProjectToolRun handler receives both the tool name and its
  * JSON input payload.
- *
- * Source: P7-T1 alignment matrix
  */
 
 export const probuilderBridgeSpecs: BridgeCommandSpec[] = markToolsOnly([

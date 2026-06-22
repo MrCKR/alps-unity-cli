@@ -1,5 +1,5 @@
 /**
- * Real-behavior tests for ProBuilder C# handlers — P10-R5.
+ * Real-behavior tests for ProBuilder C# handlers.
  *
  * These tests validate that the ProBuilder C# tool handlers use the REAL
  * ProBuilder API via reflection, rather than approximating the operation

@@ -126,8 +126,6 @@ doctor 将额外检查 `customContexts.fingerprint`。
 
 本文档内容来源：
 - 总架构：Context 只读硬边界
-- P3 Custom Context 设计：in_progress
-- P2 内置 Context 等价映射：done
-- doctor/customContexts.fingerprint 诊断闭环：等待 pending review 复审
-
-> **注意**：`diagnose.preflight` 的 `customContexts.fingerprint` 诊断闭环正在等待 / 复审，确认 Bridge 真实透传后再写成完成事实。
+- 项目自定义 Context 设计
+- 内置 Context 等价映射
+- `doctor` 与 `customContexts.fingerprint` 诊断闭环

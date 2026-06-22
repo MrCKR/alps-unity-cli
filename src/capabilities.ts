@@ -78,7 +78,7 @@ export async function handleCapabilitiesCommand(
     }
   }
 
-  // Custom context discovery (P3)
+  // Project custom context discovery.
   let projectContextDiagnostics: Record<string, unknown> | undefined;
   let projectContexts: ContextDescriptor[] = [];
   if (shouldDiscoverContexts(flags, runtime)) {
@@ -95,7 +95,7 @@ export async function handleCapabilitiesCommand(
 
   const staticCapabilities = buildStaticCapabilities(projectTools, projectContexts, extensionGroupFilter.size > 0 ? extensionGroupFilter : undefined);
 
-  // P1: Context and extension base counts
+  // Context and extension base counts.
   const contextCount = builtinContextMetadata().length;
   const contextCategories = builtinContextCategories();
   const extensions = builtinExtensionMetadata();
@@ -161,9 +161,8 @@ function getBoolean(flags: Record<string, string | boolean>, name: string): bool
 }
 
 function buildStaticCapabilities(projectTools: ToolMetadata[] = [], projectContexts: ContextDescriptor[] = [], extensionGroupFilter?: Set<string>): Record<string, unknown> {
-  // P10-R3: builtinToolMetadata() returns core tools only.
-  // Extension tools are loaded from extensionToolMetadata() and merged based
-  // on availability (extensionGroupFilter determines which are active).
+  // builtinToolMetadata() returns core tools only. Extension tools are loaded
+  // from extensionToolMetadata() and merged based on availability.
   const coreTools = builtinToolMetadata();
   const allExtensionTools = extensionToolMetadata();
   const activeExtensionTools = extensionGroupFilter

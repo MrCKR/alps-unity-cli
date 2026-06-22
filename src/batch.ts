@@ -190,10 +190,7 @@ const commandRegistry = new Map<string, { parallelSafe: boolean }>([
   ["tools group", { parallelSafe: true }],
   ["tools group list", { parallelSafe: true }],
   ["tools search", { parallelSafe: true }],
-  ["tools describe", { parallelSafe: true }],
-  // ─── Deprecated compat paths ───
-  ["tools list", { parallelSafe: true }],
-  ["tools groups", { parallelSafe: true }]
+  ["tools describe", { parallelSafe: true }]
 ]);
 
 export function batchJsonSchema(): Record<string, unknown> {

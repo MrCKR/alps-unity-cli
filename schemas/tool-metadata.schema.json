@@ -58,16 +58,16 @@
     "sideEffects": {
       "type": "array",
       "items": { "type": "string" },
-      "description": "Side effect categories this tool may produce, e.g. ['file-write', 'scene-modify']. P1 addition."
+      "description": "Side effect categories this tool may produce, e.g. ['file-write', 'scene-modify']."
     },
     "riskLevel": {
       "type": "string",
       "enum": ["safe", "low", "medium", "high", "critical"],
-      "description": "Risk level classification for safety disclosure. P1 addition."
+      "description": "Risk level classification for safety disclosure."
     },
     "equivalentUnityMcp": {
       "type": "string",
-      "description": "Mapping to equivalent unity-mcp tool name, for parity tracking. P1 addition."
+      "description": "Mapping to equivalent unity-mcp tool name, for parity tracking."
     },
     "longRunning": {
       "type": "boolean",
@@ -136,15 +136,15 @@
       "type": "string",
       "enum": ["editor", "runtime", "both"],
       "default": "editor",
-      "description": "Execution target: 'editor' (default, edit-mode APIs), 'runtime' (Play Mode APIs, requires Play Mode active), or 'both' (router checks editorState to decide). P3 contract field."
+      "description": "Execution target: 'editor' (default, edit-mode APIs), 'runtime' (Play Mode APIs, requires Play Mode active), or 'both' (router checks editorState to decide)."
     },
     "availabilityScope": {
       "type": "string",
-      "description": "Availability scope for the tool. 'editorSession' (default) for editor-domain tools, 'playModeSession' for runtime tools that are only available when Unity is in Play Mode. P3 contract field."
+      "description": "Availability scope for the tool. 'editorSession' (default) for editor-domain tools, 'playModeSession' for runtime tools that are only available when Unity is in Play Mode."
     },
     "available": {
       "type": "boolean",
-      "description": "Whether the tool is currently available based on the resolved target's session state. Runtime tools are only available when Play Mode is active. Populated by tools list/search at runtime, not in static metadata. P3 contract field."
+      "description": "Whether the tool is currently available based on the resolved target's session state. Runtime tools are only available when Play Mode is active. Populated by discovery responses at runtime, not in static metadata."
     },
     "requiresPackages": {
       "type": "array",

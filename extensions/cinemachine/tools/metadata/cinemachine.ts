@@ -23,7 +23,7 @@ import { objSchema } from "../schemas.js";
 
 const CM_PACKAGE = "com.unity.cinemachine";
 
-/** Common fields shared by all Cinemachine extension tools (P10-R4: mirrors PB_COMMON pattern). */
+/** Common fields shared by all Cinemachine extension tools. */
 const CM_COMMON = {
   group: "cinemachine",
   target: "editor" as const,

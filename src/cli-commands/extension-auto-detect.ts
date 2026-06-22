@@ -3,8 +3,6 @@
  * matches known Unity package IDs to CLI extensions, and auto-installs
  * matching extensions.
  *
- * P5-T03: init auto-detect Unity packages and install matching extensions.
- *
  * Rules:
  * - Only installs an extension when its required Unity packages are all
  *   present in the project's manifest/lock.
@@ -126,7 +124,7 @@ export async function autoDetectExtensions(
     });
   }
 
-  // 写入兼容状态文件；真实安装清单由 installer 负责维护。
+  // 写入扩展状态文件；真实安装清单由 installer 负责维护。
   if (!dryRun && (result.installed.length > 0 || result.skipped.length > 0)) {
     await writeInstalledExtensions(projectPath, enabled);
   }

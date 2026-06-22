@@ -1,5 +1,5 @@
 /**
- * Tests for P5-T04: Extension unavailability graceful degradation.
+ * Tests for extension unavailability graceful degradation.
  *
  * Covers:
  * 1. tools describe returns unavailable + next_actions when extension deps missing
@@ -11,7 +11,7 @@
  * 7. capabilities includes extension info when --project provided
  * 8. Extension manifest contract validation
  * 9. Descriptor load failure handling
- * 10. No old "tools list" full-discovery wording in error messages
+ * 10. Tool lookup errors include group-first recovery hints
  */
 
 import assert from "node:assert/strict";
@@ -392,7 +392,7 @@ test("capabilities without --project does not include extension package availabi
 
   assert.equal(result.ok, true);
   const data = result.data as Record<string, unknown>;
-  // Without --project, extension metadata is available (P1+P2) but no package availability resolution
+  // Without --project, extension metadata is available but package availability is not resolved.
   const ext = data.extensions as Record<string, unknown> | undefined;
   // When no project, we still get basic extension info but without per-package availability
   assert.ok(ext !== undefined, "extensions section should exist");
@@ -438,9 +438,9 @@ test("loadExtensionDescriptor for unknown extension throws", () => {
   );
 });
 
-// ── 13. No old "tools list" full-discovery wording ─────────────────────────
+// ── 13. Group-first discovery hints ───────────────────────────────────────
 
-test("tools describe error messages do not mention old 'tools list' as sole discovery path", async () => {
+test("tools describe error messages include group-first discovery hints", async () => {
   const projectPath = await makeFakeProject();
 
   // Test error for tool not found — should mention groups first
@@ -454,10 +454,9 @@ test("tools describe error messages do not mention old 'tools list' as sole disc
 
   assert.equal(result.ok, false);
   const nextActions = result.error?.next_actions ?? [];
-  // The first suggestion should reference group or search, not just tools list
   assert.ok(
     nextActions.some((a) => a.includes("tools group") || a.includes("tools search")),
-    "Error next_actions should reference group or search, not just 'tools list'"
+    "Error next_actions should reference group or search"
   );
 });
 
@@ -556,30 +555,30 @@ test("tools describe for extension tool shows unavailable when Unity package pre
   assert.equal(data.extensionAvailability, "available");
 });
 
-// ── P10-R4: Cinemachine/URP/HDRP extension package capability tests ───────
+// ── Cinemachine/URP/HDRP extension package capability tests ───────────────
 
-test("P10-R4: Cinemachine tools are in extensionToolMetadata, not builtinToolMetadata", () => {
+test("Cinemachine tools are in extensionToolMetadata, not builtinToolMetadata", () => {
   const builtin = builtinToolMetadata();
   const ext = extensionToolMetadata();
   assert.equal(builtin.filter((t) => t.group === "cinemachine").length, 0, "Cinemachine tools should NOT be in core builtin metadata");
   assert.equal(ext.filter((t) => t.group === "cinemachine").length, 10, "Cinemachine should have 10 extension tools");
 });
 
-test("P10-R4: URP tools are in extensionToolMetadata, not builtinToolMetadata", () => {
+test("URP tools are in extensionToolMetadata, not builtinToolMetadata", () => {
   const builtin = builtinToolMetadata();
   const ext = extensionToolMetadata();
   assert.equal(builtin.filter((t) => t.group === "urp").length, 0, "URP tools should NOT be in core builtin metadata");
   assert.equal(ext.filter((t) => t.group === "urp").length, 3, "URP should have 3 extension tools");
 });
 
-test("P10-R4: HDRP tools are in extensionToolMetadata, not builtinToolMetadata", () => {
+test("HDRP tools are in extensionToolMetadata, not builtinToolMetadata", () => {
   const builtin = builtinToolMetadata();
   const ext = extensionToolMetadata();
   assert.equal(builtin.filter((t) => t.group === "hdrp").length, 0, "HDRP tools should NOT be in core builtin metadata");
   assert.equal(ext.filter((t) => t.group === "hdrp").length, 2, "HDRP should have 2 extension tools");
 });
 
-test("P10-R4: Cinemachine tools are discoverable via findToolByName after registration", () => {
+test("Cinemachine tools are discoverable via findToolByName after registration", () => {
   const create = findToolByName("cinemachine.create");
   assert.ok(create, "cinemachine.create should be findable");
   assert.equal(create?.group, "cinemachine");
@@ -589,7 +588,7 @@ test("P10-R4: Cinemachine tools are discoverable via findToolByName after regist
   assert.equal(brain?.group, "cinemachine");
 });
 
-test("P10-R4: URP and HDRP tools are discoverable via findToolByName after registration", () => {
+test("URP and HDRP tools are discoverable via findToolByName after registration", () => {
   const feature = findToolByName("urp.feature");
   assert.ok(feature, "urp.feature should be findable");
   assert.equal(feature?.group, "urp");
@@ -599,7 +598,7 @@ test("P10-R4: URP and HDRP tools are discoverable via findToolByName after regis
   assert.equal(volume?.group, "hdrp");
 });
 
-test("P10-R4: EXTENSION_GROUPS includes cinemachine, urp, hdrp", () => {
+test("EXTENSION_GROUPS includes cinemachine, urp, hdrp", () => {
   assert.ok(EXTENSION_GROUPS.has("cinemachine"), "cinemachine should be in EXTENSION_GROUPS");
   assert.ok(EXTENSION_GROUPS.has("urp"), "urp should be in EXTENSION_GROUPS");
   assert.ok(EXTENSION_GROUPS.has("hdrp"), "hdrp should be in EXTENSION_GROUPS");
@@ -607,9 +606,9 @@ test("P10-R4: EXTENSION_GROUPS includes cinemachine, urp, hdrp", () => {
   assert.ok(EXTENSION_GROUPS.has("vfx"), "vfx should still be in EXTENSION_GROUPS");
 });
 
-// ── P10-R4 返工: source: "extension" 验证 ──────────────────────────────────
+// ── Extension source validation ───────────────────────────────────────────
 
-test("P10-R4 rework: all Cinemachine tools have source: extension", () => {
+test("all Cinemachine tools have source: extension", () => {
   const ext = extensionToolMetadata();
   const cinemachineTools = ext.filter((t) => t.group === "cinemachine");
   assert.equal(cinemachineTools.length, 10, "Should have 10 Cinemachine extension tools");
@@ -618,7 +617,7 @@ test("P10-R4 rework: all Cinemachine tools have source: extension", () => {
   }
 });
 
-test("P10-R4 rework: all URP tools have source: extension", () => {
+test("all URP tools have source: extension", () => {
   const ext = extensionToolMetadata();
   const urpTools = ext.filter((t) => t.group === "urp");
   assert.equal(urpTools.length, 3, "Should have 3 URP extension tools");
@@ -627,7 +626,7 @@ test("P10-R4 rework: all URP tools have source: extension", () => {
   }
 });
 
-test("P10-R4 rework: all HDRP tools have source: extension", () => {
+test("all HDRP tools have source: extension", () => {
   const ext = extensionToolMetadata();
   const hdrpTools = ext.filter((t) => t.group === "hdrp");
   assert.equal(hdrpTools.length, 2, "Should have 2 HDRP extension tools");
@@ -636,16 +635,16 @@ test("P10-R4 rework: all HDRP tools have source: extension", () => {
   }
 });
 
-test("P10-R4 rework: no core built-in tools have source: extension", () => {
+test("no core built-in tools have source: extension", () => {
   const core = builtinToolMetadata();
   for (const tool of core) {
     assert.ok(tool.source !== "extension", `Core tool ${tool.name} should NOT have source: "extension"`);
   }
 });
 
-// ── P10-R3: Core/extension boundary decoupling tests ──────────────────────
+// ── Core/extension boundary decoupling tests ──────────────────────────────
 
-test("P10-R3: builtinToolMetadata does not include ProBuilder or VFX tools", () => {
+test("builtinToolMetadata does not include ProBuilder or VFX tools", () => {
   const builtin = builtinToolMetadata();
   const probuilderNames = builtin.filter((t) => t.group === "probuilder");
   const vfxNames = builtin.filter((t) => t.group === "vfx");
@@ -653,7 +652,7 @@ test("P10-R3: builtinToolMetadata does not include ProBuilder or VFX tools", () 
   assert.equal(vfxNames.length, 0, "VFX tools should NOT be in core builtin metadata");
 });
 
-test("P10-R3: extensionToolMetadata includes ProBuilder and VFX tools", () => {
+test("extensionToolMetadata includes ProBuilder and VFX tools", () => {
   const ext = extensionToolMetadata();
   const probuilderNames = ext.filter((t) => t.group === "probuilder");
   const vfxNames = ext.filter((t) => t.group === "vfx");
@@ -661,13 +660,13 @@ test("P10-R3: extensionToolMetadata includes ProBuilder and VFX tools", () => {
   assert.equal(vfxNames.length, 16, "VFX should have 16 extension tools");
 });
 
-test("P10-R3: builtinToolGroups does not include probuilder or vfx", () => {
+test("builtinToolGroups does not include probuilder or vfx", () => {
   const groups = builtinToolGroups();
   assert.ok(!groups.includes("probuilder"), "probuilder should NOT be in core groups");
   assert.ok(!groups.includes("vfx"), "vfx should NOT be in core groups");
 });
 
-test("P10-R3: tools group list without --project does not include extension tools", async () => {
+test("tools group list without --project does not include extension tools", async () => {
   const result = await handleToolsCommand("group", ["list", "scene"], {}, emptyRuntime, requestId);
   assert.equal(result.ok, true);
   const data = result.data as { tools: Array<{ name: string; group: string }> };
@@ -677,7 +676,7 @@ test("P10-R3: tools group list without --project does not include extension tool
   assert.equal(vfxTools.length, 0, "VFX tools should NOT appear without --project");
 });
 
-test("P10-R3: tools group list with --project includes extension tools when packages installed", async () => {
+test("tools group list with --project includes extension tools when packages installed", async () => {
   const projectPath = await makeFakeProject({
     "com.unity.probuilder": "5.0.0"
   });
@@ -689,7 +688,7 @@ test("P10-R3: tools group list with --project includes extension tools when pack
   assert.ok(probuilderTools.length > 0, "ProBuilder tools should appear when package is installed");
 });
 
-test("P10-R3: tools group list with --project excludes extension tools when packages NOT installed", async () => {
+test("tools group list with --project excludes extension tools when packages are not installed", async () => {
   const projectPath = await makeFakeProject(); // no packages
 
   const result = await handleToolsCommand("group", ["list", "probuilder"], { project: projectPath }, emptyRuntime, requestId);
@@ -698,7 +697,7 @@ test("P10-R3: tools group list with --project excludes extension tools when pack
   assert.equal(result.error?.code, "E_TOOL_GROUP_NOT_FOUND");
 });
 
-test("P10-R3: tools group without --project does not include extension groups", async () => {
+test("tools group without --project does not include extension groups", async () => {
   const result = await handleToolsCommand("group", [], {}, emptyRuntime, requestId);
   assert.equal(result.ok, true);
   const data = result.data as { groups: Array<{ name: string }> };
@@ -707,7 +706,7 @@ test("P10-R3: tools group without --project does not include extension groups", 
   assert.ok(!groupNames.includes("vfx"), "vfx group should NOT appear without --project");
 });
 
-test("P10-R3: tools group with --project includes extension groups when packages installed", async () => {
+test("tools group with --project includes extension groups when packages installed", async () => {
   const projectPath = await makeFakeProject({
     "com.unity.probuilder": "5.0.0"
   });
@@ -719,7 +718,7 @@ test("P10-R3: tools group with --project includes extension groups when packages
   assert.ok(groupNames.includes("probuilder"), "probuilder group should appear when package is installed");
 });
 
-test("P10-R3: findToolByName still finds extension tools after registration", () => {
+test("findToolByName still finds extension tools after registration", () => {
   const ping = findToolByName("probuilder.ping");
   assert.ok(ping, "probuilder.ping should be findable via findToolByName");
   assert.equal(ping?.group, "probuilder");
@@ -729,7 +728,7 @@ test("P10-R3: findToolByName still finds extension tools after registration", ()
   assert.equal(vfxGraph?.group, "vfx");
 });
 
-test("P10-R3: core package does not hard-depend on optional Unity packages", () => {
+test("core package does not hard-depend on optional Unity packages", () => {
   const coreTools = builtinToolMetadata();
   for (const tool of coreTools) {
     assert.ok(

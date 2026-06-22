@@ -67,7 +67,7 @@ unity_cli tools group list custom --include-custom
 unity_cli tools group list camera --format text
 ```
 
-> **注意**：旧 `tools list`（无过滤全量展开）和 `tools list --group <group>` 已移除。使用 `tools group` 查看所有分组，再用 `tools group list <group>` 按组查看。
+`tools group list` 是按分组查看工具的标准入口；需要全量视图时先用 `tools group` 获取分组，再逐组展开。
 
 ## tools search
 

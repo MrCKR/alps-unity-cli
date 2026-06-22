@@ -269,8 +269,8 @@ namespace UnityCli
                 {
                     if (!cachedIsPlaying)
                     {
-                        // Transition phase: cachedIsPlayingOrWillChangePlaymode is true but
-                        // cachedIsPlaying is not yet true (entering) or already false (exiting).
+                        // During Play Mode state changes, cachedIsPlayingOrWillChangePlaymode is true
+                        // while cachedIsPlaying may still be false on enter or exit.
                         // Transient — callers should wait and retry.
                         WriteLog("http_play_mode_guard_blocked_transition requestId=" + request.RequestId + " command=" + request.Command);
                         WriteJson(context, TransientErrorJson("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode. (http-guard-v2)", "Wait for Play mode transition to complete and retry.", 3000), 200);

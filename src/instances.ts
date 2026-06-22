@@ -69,7 +69,7 @@ export async function handleInstancesCommand(
     const before = await readInstances(dataDir);
     const stale = before.filter((instance) => instance.status === "stale" || instance.status === "unreachable");
     const staleIds = new Set(stale.map((instance) => instance.instanceId));
-    const legacyRemaining = before.filter((instance) => !staleIds.has(instance.instanceId));
+    const registryRemaining = before.filter((instance) => !staleIds.has(instance.instanceId));
 
     const killResults = stale.map((instance) => {
       const killed = attemptKillPid(instance.processId ?? instance.pid);
@@ -77,12 +77,12 @@ export async function handleInstancesCommand(
     });
 
     await Promise.all(stale.map((instance) => deleteInstanceFile(dataDir, instance.instanceId)));
-    await writeLegacyInstances(dataDir, legacyRemaining);
+    await writeRegistryFileInstances(dataDir, registryRemaining);
     return success(requestId, {
       registryPath: instancesDir(dataDir),
       removed: stale.length,
-      remaining: legacyRemaining.length,
-      instances: legacyRemaining.map(instanceListSummary),
+      remaining: registryRemaining.length,
+      instances: registryRemaining.map(instanceListSummary),
       staleCleaned: killResults
     });
   }
@@ -260,12 +260,12 @@ export function instancesDir(dataDir = defaultDataDir()): string {
 }
 
 export async function readInstances(dataDir = defaultDataDir(), now = Date.now()): Promise<UnityInstance[]> {
-  const [fileInstances, legacyInstances] = await Promise.all([readInstanceFiles(dataDir), readLegacyInstances(dataDir)]);
-  return checkInstanceHealth(normalizeInstances([...legacyInstances, ...fileInstances], now));
+  const [fileInstances, registryFileInstances] = await Promise.all([readInstanceFiles(dataDir), readRegistryFileInstances(dataDir)]);
+  return checkInstanceHealth(normalizeInstances([...registryFileInstances, ...fileInstances], now));
 }
 
 export async function writeInstances(dataDir: string, instances: UnityInstance[]): Promise<void> {
-  await writeLegacyInstances(dataDir, instances);
+  await writeRegistryFileInstances(dataDir, instances);
 }
 
 export function normalizeInstances(instances: UnityInstance[], now = Date.now()): UnityInstance[] {
@@ -338,7 +338,7 @@ async function readInstanceFiles(dataDir: string): Promise<UnityInstance[]> {
   }
 }
 
-async function readLegacyInstances(dataDir: string): Promise<UnityInstance[]> {
+async function readRegistryFileInstances(dataDir: string): Promise<UnityInstance[]> {
   try {
     const raw = await readFile(registryPath(dataDir), "utf8");
     const parsed = JSON.parse(stripBom(raw)) as RegistryFile;
@@ -349,7 +349,7 @@ async function readLegacyInstances(dataDir: string): Promise<UnityInstance[]> {
   }
 }
 
-async function writeLegacyInstances(dataDir: string, instances: UnityInstance[]): Promise<void> {
+async function writeRegistryFileInstances(dataDir: string, instances: UnityInstance[]): Promise<void> {
   const filePath = registryPath(dataDir);
   await mkdir(dirname(filePath), { recursive: true });
   await writeFile(filePath, JSON.stringify({ version: 1, instances }) + "\n", "utf8");

@@ -97,21 +97,17 @@ The `doctor` command reports fingerprint status for all project tools. Use it to
 4. **For long-running tools**: Set appropriate `--timeout-ms`; understand `cancellationSemantics` before starting.
 5. **For project tools**: Check fingerprint status with `doctor`; use `--fingerprint-mode block` (default) to ensure integrity.
 
-## v1.0 Known Limitations
+## Known Limitations
 
 | Limitation | Risk Level | Mitigation |
 |-----------|-----------|------------|
-| Dry-run covers 5/14 destructive commands | Medium | All destructive commands require `--yes`; dry-run is supplemental |
-| No independent command blacklist | Medium | `destructiveHint` + `--yes` + fingerprint provide equivalent protection |
-| No independent network security policy | Medium | Bridge listens only on `127.0.0.1`; no external network calls |
-| Fingerprint only covers project tools | Low | Built-in commands protected by contract validation + security policy |
-
-See the v1.0 archive [coverage-matrix](./coverage-matrix.md) (engineering reference only, not a user-side guide) for the full v1.0 security model coverage.
+| Dry-run is not available for every destructive tool | Medium | All destructive commands require `--yes`; dry-run is supplemental |
+| Built-in tools do not use project-tool fingerprints | Low | Built-in commands are protected by contract validation and security policy checks |
 
 ## Cross-Reference
 
 - Error codes including `E_DESTRUCTIVE_CONFIRMATION_REQUIRED`, `E_RUNTIME_NOT_READY`, and `E_TOOL_FINGERPRINT_MISMATCH`: [error-codes](./error-codes.md)
-- Tool descriptor field coverage vs. P3 contract: [tool-discovery](./tool-discovery.md) §Descriptor field coverage
+- Tool descriptor field coverage: [tool-discovery](./tool-discovery.md) §Descriptor field coverage
 - Tool metadata schema: [../schemas/tool-metadata.schema.json](../schemas/tool-metadata.schema.json)
 - Security policy source: `src/security-policy.ts` and `src/security.ts`
 - AI skill (compact version): [/skills/unity_cli/SKILL.md](../skills/unity_cli/SKILL.md)

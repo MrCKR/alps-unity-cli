@@ -1,7 +1,7 @@
 /**
  * Unit tests for the extensions CLI command surface (list/install/remove/doctor).
  *
- * P5-T02: extensions list/install/remove/doctor commands.
+ * Tests extensions list/install/remove/doctor commands.
  */
 
 import assert from "node:assert/strict";

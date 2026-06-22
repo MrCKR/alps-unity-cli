@@ -37,7 +37,7 @@
 | `covered-adapted` | 功能语义等价，但接口形态不同，例如 `manage_scene` 拆成多个 dotted tools |
 | `partial` | 主链路存在，但参数、细节、metadata、测试、风险标记或可用性不完整 |
 | `not-covered` | 属于目标范围，但当前没有等价能力 |
-| `deferred` | 有意延后，需说明依赖和阶段 |
+| `deferred` | 有意延后，需说明依赖和下一步 |
 | `excluded` | 不属于本文目标范围 |
 | `unknown` | 已识别来源但尚未判定 |
 
@@ -62,7 +62,7 @@
 - 可选包能力必须作为 extension group 建模，而不是混入 core group。
 - 每个 extension 必须声明：Unity package id、tool group、tool count、requiresPackages、availability/unavailable 行为、bridge routing、C# entry。
 - 运行时准源以 `src/tools/metadata/groups/*`、`src/bridge/domains/*`、`unitypkg/Editor/Commands|ProBuilder/*` 和 `src/extensions/contribution-loader.ts` 为准。
-- `extensions/*`、`src/extensions/registry-data.ts`、`src/extensions/metadata/index.ts` 若保留，必须与运行时准源一致，或明确标注为 descriptor/legacy/diagnostic 来源。
+- `extensions/*`、`src/extensions/registry-data.ts`、`src/extensions/metadata/index.ts` 若保留，必须与运行时准源一致，或明确标注为 descriptor/diagnostic 来源。
 
 ## Tools 功能点矩阵
 
@@ -201,8 +201,8 @@
 | `mcpforunity://menu-items` | Unity 菜单项 | `context read editor.menu-items` | covered | 已有 |
 | `mcpforunity://scene/gameobject-api` | GameObject Resource 使用说明 | docs topic 或新增 `scene.gameobject-api` | partial | 建议补 context/docs 明确入口 |
 | `mcpforunity://scene/gameobject/{instance_id}` | 单个 GameObject 基础数据 | `context read scene.gameobject --input '{"instanceId":...}'` | covered | 已有 |
-| `mcpforunity://scene/gameobject/{id}/components` | GameObject 全组件与属性分页 | `context read scene.gameobject.components --input '{"instanceId":...}'` | covered | P1 context 已补齐 |
-| `mcpforunity://scene/gameobject/{id}/component/{name}` | 单组件完整属性 | `context read scene.gameobject.component --input '{"instanceId":...,"component":"..."}'` | covered | P1 context 已补齐 |
+| `mcpforunity://scene/gameobject/{id}/components` | GameObject 全组件与属性分页 | `context read scene.gameobject.components --input '{"instanceId":...}'` | covered | Context 已补齐 |
+| `mcpforunity://scene/gameobject/{id}/component/{name}` | 单组件完整属性 | `context read scene.gameobject.component --input '{"instanceId":...,"component":"..."}'` | covered | Context 已补齐 |
 | `mcpforunity://scene/cameras` | 场景 Camera/Cinemachine 概览 | `context read scene.cameras` | covered | 已有 |
 | `mcpforunity://scene/volumes` | 场景 Volume 列表 | `context read scene.volumes` | covered | 已有 |
 | `mcpforunity://rendering/stats` | 渲染统计 | `context read scene.rendering-stats` | covered | 已有 |
@@ -221,8 +221,8 @@
 | extension | unity-mcp 对应分类 | unity_cli 运行时准源 | 状态 | 缺口/风险 |
 |---|---|---|---|---|
 | ProBuilder | optional `probuilder` tool group / `com.unity.probuilder` | `src/tools/metadata/groups/probuilder.ts`, `src/bridge/domains/probuilder.ts`, `extensions/probuilder/unitypkg/*`, `src/extensions/contribution-loader.ts` | covered-adapted | 运行时通过 `project-tool.run` 适配；Unity 侧代码作为物理 extension bundle 安装 |
-| Cinemachine | camera/Cinemachine optional capability / `com.unity.cinemachine` | `src/tools/metadata/groups/cinemachine.ts`, `src/bridge/domains/cinemachine.ts`, `extensions/cinemachine/unitypkg/Editor/Commands/CinemachineCommands.cs`, `src/extensions/metadata/index.ts` | partial | `providesTools` 已从 runtime metadata 派生；`force_camera/release_override` 等 convenience action 延后到 P2 子矩阵 |
-| VFX Graph / VFX | `vfx` tool group / VisualEffect、ParticleSystem、LineRenderer、TrailRenderer | `src/tools/metadata/groups/vfx.ts`, `src/bridge/domains/vfx.ts`, `extensions/vfx-graph/unitypkg/Editor/Commands/VfxCommands.cs`, `src/extensions/metadata/index.ts` | partial | `providesTools` 已从 runtime metadata 派生；60+ action 逐项 parity 和 Particle/Line/Trail 包依赖策略延后到 P2 |
+| Cinemachine | camera/Cinemachine optional capability / `com.unity.cinemachine` | `src/tools/metadata/groups/cinemachine.ts`, `src/bridge/domains/cinemachine.ts`, `extensions/cinemachine/unitypkg/Editor/Commands/CinemachineCommands.cs`, `src/extensions/metadata/index.ts` | partial | `providesTools` 已从 runtime metadata 派生；`force_camera/release_override` 等 convenience action 仍需单独子矩阵 |
+| VFX Graph / VFX | `vfx` tool group / VisualEffect、ParticleSystem、LineRenderer、TrailRenderer | `src/tools/metadata/groups/vfx.ts`, `src/bridge/domains/vfx.ts`, `extensions/vfx-graph/unitypkg/Editor/Commands/VfxCommands.cs`, `src/extensions/metadata/index.ts` | partial | `providesTools` 已从 runtime metadata 派生；60+ action 逐项 parity 和 Particle/Line/Trail 包依赖策略仍需单独子矩阵 |
 | URP | graphics/URP optional capability / `com.unity.render-pipelines.universal` | `src/tools/metadata/groups/urp.ts`, `src/bridge/domains/urp.ts`, `extensions/urp/unitypkg/Editor/Commands/UrpCommands.cs`, `src/extensions/metadata/index.ts` | covered-adapted | 从 graphics 拆为 `urp` group；`providesTools` 已从 runtime metadata 派生 |
 | HDRP | graphics/HDRP optional capability / `com.unity.render-pipelines.high-definition` | `src/tools/metadata/groups/hdrp.ts`, `src/bridge/domains/hdrp.ts`, `extensions/hdrp/unitypkg/Editor/Commands/HdrpCommands.cs`, `src/extensions/metadata/index.ts` | covered-adapted | 从 graphics 拆为 `hdrp` group；`providesTools` 已从 runtime metadata 派生 |
 
@@ -234,7 +234,7 @@
 | `src/extensions/metadata/index.ts` 旧分支 | 曾存在 Cinemachine/URP/HDRP `providesTools` 为空、VFX 仅 2 个 | 已改为从 runtime tool arrays 派生 |
 | `src/extensions/registry-data.ts` 与运行时数量不一致 | contributions 是 descriptor/availability 发现入口，不是 runtime tool 完整清单 | 以 `src/tools/metadata/groups/*` 和 `src/extensions/metadata/index.ts` 为运行时工具准源 |
 | `extensions/*` 外置副本分叉 | 当前仓库未使用外置 `extensions/*` 作为 runtime 准源 | 保留运行时准源说明，后续若恢复外置包再生成同步 |
-| VFX group 依赖语义混杂 | ParticleSystem/LineRenderer/TrailRenderer 不一定需要 VFX Graph 包 | 延后到 P2：拆分包依赖或写明 group 级依赖策略 |
+| VFX group 依赖语义混杂 | ParticleSystem/LineRenderer/TrailRenderer 不一定需要 VFX Graph 包 | 拆分包依赖或写明 group 级依赖策略 |
 
 ## 缺口队列
 
@@ -249,13 +249,13 @@
 | Done | Editor undo/redo / tag/layer 管理 | unity-mcp tools 有操作能力 | 已新增 `editor.undo/redo`、`editor.resolution`、`project.tag/layer` | bridge tests |
 | Done | Physics 高级能力 | collision matrix/material/joint/force/query/rigidbody | 已新增 collision matrix/material/joint/force/overlap/rigidbody | contract + C# source tests |
 | Deferred | `embed_package` | package management 等价缺口 | 保留评估；当前 copy-mode Bridge 安装是 `init` 不变量，避免引入冲突语义；`package status` 已完成 | CLI tests |
-| P2 | VFX 60+ action 逐项 parity | 可选包域当前 partial | 建 VFX 子矩阵，补缺口 | extension contract tests |
-| P2 | UI PanelSettings / visual element modify | UI Toolkit workflow 细颗粒度 | 核对并补 `ui.*` 子命令 | bridge + source tests |
-| P2 | Texture pattern/gradient/noise | 程序化美术生成 | 补 `texture.pattern/gradient/noise` 或确认已有参数 | artifact smoke |
-| P2 | Scene advanced operations | loaded scenes / set active / move / validate / templates | 补 scene 子命令 | bridge + smoke |
-| P2 | Build profile/settings/scenes 管理 | build workflow 完整性 | 补 build profile/settings 子命令 | CLI job tests |
-| P3 | Audio convenience tools | 可由 component 间接完成，但智能体体验差 | 新增 `audio.source.play/stop/volume` wrapper | metadata + bridge tests |
-| P3 | SceneView frame / multiview screenshot | 调试体验能力 | 新增 view-frame / multiview | screenshot smoke |
+| Extension follow-up | VFX 60+ action 逐项 parity | 可选包域当前 partial | 建 VFX 子矩阵，补缺口 | extension contract tests |
+| UI follow-up | UI PanelSettings / visual element modify | UI Toolkit workflow 细颗粒度 | 核对并补 `ui.*` 子命令 | bridge + source tests |
+| Texture follow-up | Texture pattern/gradient/noise | 程序化美术生成 | 补 `texture.pattern/gradient/noise` 或确认已有参数 | artifact smoke |
+| Scene follow-up | Scene advanced operations | loaded scenes / set active / move / validate / templates | 补 scene 子命令 | bridge + smoke |
+| Build follow-up | Build profile/settings/scenes 管理 | build workflow 完整性 | 补 build profile/settings 子命令 | CLI job tests |
+| UX follow-up | Audio convenience tools | 可由 component 间接完成，但智能体体验差 | 新增 `audio.source.play/stop/volume` wrapper | metadata + bridge tests |
+| UX follow-up | SceneView frame / multiview screenshot | 调试体验能力 | 新增 view-frame / multiview | screenshot smoke |
 
 ## 维护规则
 
@@ -265,5 +265,4 @@
 - 如果实际参考新的 `unity-mcp` 文件，应同步更新 `docs/critical-references/README.md` 的“参考/舍弃/适配”记录。
 - `covered` 必须至少有 handler、metadata/contract、测试或 smoke 证据；缺任一关键环节应标为 `partial`。
 - `covered-adapted` 必须写明适配方式，避免后续误判为缺失。
-- 每次发布前应清理 `unknown`，所有 `not-covered/partial` 必须有优先级和下一步。
-- 本文不替代 `docs/coverage-matrix.md`；后者是 v1.0 archive，本文是当前等价追踪表。
+- 每次发布前应清理 `unknown`，所有 `not-covered/partial` 必须有负责人、验证方式和下一步。

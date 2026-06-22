@@ -7,8 +7,6 @@
  * - tools group list probuilder discovers 36 tools
  * - tools describe probuilder.* works for each tool
  * - Core capabilities no longer lists ProBuilder as a built-in C# domain
- *
- * Source: P7-T1 alignment matrix, P7-T2a scope
  */
 
 import assert from "node:assert/strict";
@@ -16,10 +14,9 @@ import test from "node:test";
 import { builtinToolMetadata, allRegisteredToolMetadata, filterToolsByGroup, findToolByName, extensionToolMetadata, EXTENSION_GROUPS, type ToolMetadata } from "../src/tools/metadata/index.js";
 import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { commandContracts, findCommandContract } from "../src/contracts/command-contract.js";
-// P10-R3: Ensure extension contributions (ProBuilder, Cinemachine, VFX, URP, HDRP) are registered
 import "../src/extensions/index.js";
 
-// ─── Expected 36 tool names per P7-T1 matrix ────────────────────────────
+// ─── Expected 36 tool names ─────────────────────────────────────────────
 
 const EXPECTED_PROBUILDER_TOOLS = [
   "probuilder.ping",
@@ -60,7 +57,7 @@ const EXPECTED_PROBUILDER_TOOLS = [
   "probuilder.repair-mesh"
 ] as const;
 
-// Read-only tools per P7-T1 matrix
+// Read-only ProBuilder tools.
 const READ_ONLY_TOOLS = new Set([
   "probuilder.ping",
   "probuilder.select-faces",
@@ -68,7 +65,7 @@ const READ_ONLY_TOOLS = new Set([
   "probuilder.validate-mesh"
 ]);
 
-// Destructive tools per P7-T1 matrix
+// Destructive ProBuilder tools.
 const DESTRUCTIVE_TOOLS = new Set([
   "probuilder.delete-faces",
   "probuilder.combine-meshes",
@@ -80,7 +77,7 @@ test("ProBuilder extension has exactly 36 tools", () => {
   assert.equal(probuilderTools.length, 36, `Expected 36 probuilder tools, got ${probuilderTools.length}`);
 });
 
-test("ProBuilder tool names match P7-T1 alignment matrix exactly", () => {
+test("ProBuilder tool names match expected extension contract exactly", () => {
   const probuilderTools = filterToolsByGroup("probuilder");
   const actualNames = probuilderTools.map((t) => t.name).sort();
   const expectedNames = [...EXPECTED_PROBUILDER_TOOLS].sort();
@@ -91,7 +88,7 @@ test("every ProBuilder tool has consistent metadata", () => {
   const probuilderTools = filterToolsByGroup("probuilder");
 
   for (const tool of probuilderTools) {
-    // Unified constraints per P7-T1
+    // Unified ProBuilder tool constraints.
     assert.equal(tool.group, "probuilder", `${tool.name}: group must be probuilder`);
     assert.equal(tool.target, "editor", `${tool.name}: target must be editor`);
     assert.equal(tool.availabilityScope, "editorSession", `${tool.name}: availabilityScope must be editorSession`);
@@ -132,11 +129,8 @@ test("every ProBuilder tool has a matching bridge spec", () => {
     assert.ok(tool.cliCommand, `${tool.name}: must have cliCommand`);
     const spec = bridgeCommandRegistry.specs().find((candidate) => candidate.toolName === tool.name);
     assert.ok(spec, `${tool.name}: bridge spec not found for tool "${tool.name}"`);
-    // ProBuilder tools route through the unified
-    // project-tool.run bridge command with toolName carrying the underlying
-    // tool identity. The legacy probuilder.* direct bridge commands were
-    // retired because they produced E_BRIDGE_COMMAND_UNSUPPORTED /
-    // E_TOOL_NOT_FOUND on the real Unity bridge.
+    // ProBuilder tools route through project-tool.run with toolName carrying
+    // the underlying tool identity.
     assert.equal(spec.bridgeCommand, "project-tool.run", `${tool.name}: ProBuilder bridgeCommand must be "project-tool.run" (unified routing)`);
     assert.equal(spec.toolName, tool.name, `${tool.name}: toolName must match tool name`);
     assert.equal(spec.group, "probuilder", `${tool.name}: bridge spec group must be probuilder`);
@@ -151,7 +145,7 @@ test("every ProBuilder tool has a matching command contract", () => {
     assert.ok(contract, `${tool.name}: contract not found`);
     assert.equal(contract.group, "probuilder", `${tool.name}: contract group must be probuilder`);
     assert.equal(contract.handler_type, "hybrid", `${tool.name}: contract handler_type must be hybrid`);
-    assert.equal(contract.csharp_handler, "present", `${tool.name}: contract csharp_handler must be present (P7-T2b delivered)`);
+    assert.equal(contract.csharp_handler, "present", `${tool.name}: contract csharp_handler must be present`);
     assert.deepEqual(contract.requires_packages, ["com.unity.probuilder"], `${tool.name}: contract requires_packages mismatch`);
     assert.equal(contract.readOnly, tool.readOnlyHint, `${tool.name}: contract readOnly mismatch`);
     assert.equal(contract.destructive, tool.destructiveHint, `${tool.name}: contract destructive mismatch`);

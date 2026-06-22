@@ -80,7 +80,7 @@ namespace UnityCli
                 Directory.CreateDirectory(InstancesDir());
                 var instanceJson = InstanceJson(status);
                 File.WriteAllText(InstancePath(), instanceJson, Encoding.UTF8);
-                WriteLegacyRegistry(instanceJson);
+                WriteRegistryFile(instanceJson);
                 WriteLog("instance_registered id=" + InstanceId() + " status=" + status + " endpoint=http://127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture) + " listenerId=" + ListenerId + " diagnosticsFingerprint=" + BridgeDiagnosticsFingerprint + " assemblyMvid=" + AssemblyMvid() + " packageName=" + BridgePackageName() + " packageAssetPath=" + BridgePackageAssetPath() + " packageResolvedPath=" + BridgePackageResolvedPath());
             }
             catch (Exception exception)
@@ -97,7 +97,7 @@ namespace UnityCli
                 {
                     File.Delete(InstancePath());
                 }
-                WriteLegacyRegistry(null);
+                WriteRegistryFile(null);
                 WriteLog("instance_unregistered id=" + InstanceId());
             }
             catch (Exception exception)
@@ -106,7 +106,7 @@ namespace UnityCli
             }
         }
 
-        private static void WriteLegacyRegistry(string instanceJson)
+        private static void WriteRegistryFile(string instanceJson)
         {
             Directory.CreateDirectory(DataDir());
             var existing = File.Exists(RegistryPath()) ? File.ReadAllText(RegistryPath()) : string.Empty;

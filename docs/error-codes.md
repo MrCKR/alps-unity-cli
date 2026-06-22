@@ -99,7 +99,6 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 - Runtime 错误的 `next_actions` 必须指向 `editor play` 或 Play Mode 相关操作
 - Discovery 错误的 `next_actions` 必须指向 `tools group`、`tools group list`、`tools search` 或 `tools describe`
 - 诊断错误的 `next_actions` 必须指向 `doctor` 或 `diagnose preflight`
-- **不得使用旧 `tools list` 无过滤全量发现作为唯一恢复建议**
 
 ## JSON 字段命名
 

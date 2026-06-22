@@ -1,8 +1,7 @@
 /**
  * Static built-in context metadata for the Unity CLI.
  *
- * P1 baseline: skeleton registry with placeholder built-in contexts
- * that map to unity-mcp Resources. P2 will populate C# handlers.
+ * Built-in contexts map Unity project and editor state into read-only descriptors.
  *
  * Context is always read-only. If a capability has side effects,
  * it must be a Tool, not a Context.

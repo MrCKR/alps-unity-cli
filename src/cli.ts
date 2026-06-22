@@ -51,8 +51,7 @@ const CLI_COMMANDS = new Map<string, CliCommandModule>([
 ]);
 
 export async function execute(argv: string[], runtime = createRuntime()): Promise<CliResult> {
-  // P10-R3: Register built-in extension contributions (ProBuilder, Cinemachine,
-  // VFX, URP, HDRP) before any tool discovery or bridge command routing.
+  // Register built-in extension contributions before any tool discovery or bridge command routing.
   registerBuiltinExtensionContributions();
 
   const requestId = createRequestId();

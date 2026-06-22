@@ -99,7 +99,7 @@ namespace UnityCli
             var content = request.StringArg("content");
             if (content == null)
             {
-                content = ApplyLegacyScriptEdit(request, originalContent);
+                content = ApplyReplacementScriptEdit(request, originalContent);
             }
             WriteScriptContent(path, fullPath, content);
             return SuccessJson(ScriptMutationJson("script.edit", path, originalContent, content));
@@ -230,7 +230,7 @@ namespace UnityCli
             }
         }
 
-        private static string ApplyLegacyScriptEdit(BridgeRequest request, string originalContent)
+        private static string ApplyReplacementScriptEdit(BridgeRequest request, string originalContent)
         {
             var find = request.StringArg("find");
             var replace = request.StringArg("replace") ?? string.Empty;
@@ -251,8 +251,8 @@ namespace UnityCli
             var editsJson = request.RawJsonArg("edits");
             if (string.IsNullOrWhiteSpace(editsJson))
             {
-                var legacyContent = request.StringArg("content");
-                return legacyContent ?? ApplyLegacyScriptEdit(request, content);
+                var replacementContent = request.StringArg("content");
+                return replacementContent ?? ApplyReplacementScriptEdit(request, content);
             }
             foreach (var editBody in EnumerateStructuredScriptEditBodies(editsJson))
             {

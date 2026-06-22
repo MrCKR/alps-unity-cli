@@ -7,9 +7,9 @@
  *
  * The schema is /schemas/tool-metadata.schema.json v1.0.
  *
- * P10-R3: ProBuilder, Cinemachine, VFX, URP, and HDRP tool metadata is no longer
- * statically aggregated here. These optional extensions register their tools
- * through the extension contribution loader instead.
+ * ProBuilder, Cinemachine, VFX, URP, and HDRP tool metadata is not statically
+ * aggregated here. These optional extensions register their tools through the
+ * extension contribution loader instead.
  */
 
 import { bridgeCommandRegistry } from "../../bridge/index.js";

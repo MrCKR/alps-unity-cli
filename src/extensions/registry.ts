@@ -171,8 +171,7 @@ export function resolveExtensionAvailability(
   installedPackages?: ReadonlyMap<string, string> | Readonly<Record<string, string>>
 ): ExtensionAvailabilityResult {
   // Only `undefined` (no project context) yields "unknown". An empty
-  // collection means "we checked the project, nothing is installed" →
-  // unavailable, which is what T02/T03 need for install/doctor flows.
+  // collection means "we checked the project, nothing is installed" → unavailable.
   if (installedPackages === undefined) {
     return {
       extensionId: manifest.id,

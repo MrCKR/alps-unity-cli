@@ -30,17 +30,10 @@ namespace UnityCli
     {
         private static void RegisterProBuilderCommands(BridgeCommandRegistry registry)
         {
-            // ProBuilder core bridge commands disabled — now served by 36 single-action
-            // extension tools discovered via [UnityCliTool] attribute in the
-            // UnityCli.ProBuilder namespace (P7-T2b).
-            //
-            // The tools are registered by ProjectToolRegistry.DiscoverProjectTools()
-            // which scans all loaded assemblies for [UnityCliTool] attributes.
-            // No manual registration is needed here.
-            //
-            // Legacy helpers retained for backward compatibility:
-
-            // Legacy: IsProBuilderInstalled() — now delegates to ProBuilderReflection
+            // ProBuilder bridge commands are served by single-action extension tools
+            // discovered via [UnityCliTool] attributes in the UnityCli.ProBuilder namespace.
+            // ProjectToolRegistry.DiscoverProjectTools() scans loaded assemblies, so no
+            // manual registration is needed here.
         }
 
         private static bool IsProBuilderInstalled()

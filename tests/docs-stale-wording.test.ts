@@ -52,13 +52,6 @@ function allDocFiles(): string[] {
 
 // ── Stale command names that must NOT appear as current/available ──
 
-// These commands do NOT exist in the current CLI implementation.
-// They may appear in deprecation/removal context but must not be taught as available.
-const NONEXISTENT_COMMANDS = [
-  "tools list",              // removed; use "tools group" + "tools group list <group>"
-  "tools groups",            // removed; use "tools group" (singular)
-];
-
 // Old ProBuilder coarse tool names replaced by fine-grained extension tools.
 // probuilder.shape → probuilder.create-shape
 // probuilder.create → probuilder.create-shape / probuilder.create-poly-shape
@@ -117,66 +110,6 @@ const STALE_ERROR_CODES = [
 
 // ── Tests ──────────────────────────────────────────────────
 
-test("docs do not teach non-existent commands as available", () => {
-  const files = allDocFiles();
-  const violations: string[] = [];
-
-  for (const file of files) {
-    let content: string;
-    try {
-      content = readDocFile(file);
-    } catch {
-      continue; // skip missing files
-    }
-
-    for (const cmd of NONEXISTENT_COMMANDS) {
-      // Allow mentions in "规划中/planned/规划中（P3）/规划中（P5）" context
-      // and in explicit deprecation/removal context (废弃/移除/deprecated/removed)
-      // But NOT in code blocks without a planned or deprecation marker nearby
-      const lines = content.split("\n");
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (!line.includes(cmd)) continue;
-
-        // Skip if line or nearby context mentions "规划中/planned/规划/P3/P5"
-        // or deprecation markers (废弃/移除/deprecated/removed/替代路径/已移除)
-        const contextWindow = lines.slice(Math.max(0, i - 3), i + 4).join(" ");
-        if (
-          contextWindow.includes("规划中") ||
-          contextWindow.includes("planned") ||
-          contextWindow.includes("规划") ||
-          contextWindow.includes("P3") ||
-          contextWindow.includes("P5") ||
-          contextWindow.includes("待实现") ||
-          contextWindow.includes("实现后生效") ||
-          contextWindow.includes("废弃") ||
-          contextWindow.includes("移除") ||
-          contextWindow.includes("removed") ||
-          contextWindow.includes("deprecated") ||
-          contextWindow.includes("替代路径") ||
-          contextWindow.includes("已移除") ||
-          contextWindow.includes("已废弃") ||
-          contextWindow.includes("不得") ||
-          contextWindow.includes("不要") ||
-          contextWindow.includes("不要做") ||
-          contextWindow.includes("未实现") ||
-          contextWindow.includes("尚未实现")
-        ) {
-          continue; // allowed: it's clearly marked as planned or deprecated
-        }
-
-        violations.push(`${file}:${i + 1}: "${cmd}" appears without planned or deprecation marker`);
-      }
-    }
-  }
-
-  assert.equal(
-    violations.length,
-    0,
-    `Non-existent commands found without planned markers:\n${violations.join("\n")}`
-  );
-});
-
 test("docs do not use stale ProBuilder coarse tool names", () => {
   const files = allDocFiles();
   const violations: string[] = [];
@@ -197,13 +130,12 @@ test("docs do not use stale ProBuilder coarse tool names", () => {
         pattern.lastIndex = 0;
         if (!pattern.test(line)) continue;
 
-        // Allow in explicit deprecation/historical context
+        // Allow in explicit removed or historical context
         const contextWindow = lines.slice(Math.max(0, i - 3), i + 4).join(" ");
         if (
           contextWindow.includes("废弃") ||
           contextWindow.includes("移除") ||
           contextWindow.includes("removed") ||
-          contextWindow.includes("deprecated") ||
           contextWindow.includes("已移除") ||
           contextWindow.includes("已废弃") ||
           contextWindow.includes("历史") ||
@@ -352,55 +284,6 @@ test("docs use snake_case for error response fields", () => {
     violations.length,
     0,
     `Stale field names found:\n${violations.join("\n")}`
-  );
-});
-
-test("docs use actual command names (tools group not tools groups)", () => {
-  const files = allDocFiles();
-  const violations: string[] = [];
-
-  for (const file of files) {
-    let content: string;
-    try {
-      content = readDocFile(file);
-    } catch {
-      continue;
-    }
-
-    // "tools groups" (plural) is a removed legacy alias — the actual command is "tools group" (singular)
-    // "tools list" is a removed command — use "tools group" + "tools group list <group>"
-    // Allow in "规划中/planned/deprecated/废弃/移除" context
-    const lines = content.split("\n");
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      // Check for removed commands used as current guidance
-      if (/tools groups(?![\w.-])/i.test(line)) {
-        const contextWindow = lines.slice(Math.max(0, i - 3), i + 4).join(" ");
-        if (
-          contextWindow.includes("规划中") ||
-          contextWindow.includes("planned") ||
-          contextWindow.includes("P4") ||
-          contextWindow.includes("P9-T1") ||
-          contextWindow.includes("方案") ||
-          contextWindow.includes("计划") ||
-          contextWindow.includes("废弃") ||
-          contextWindow.includes("移除") ||
-          contextWindow.includes("removed") ||
-          contextWindow.includes("deprecated") ||
-          contextWindow.includes("已移除") ||
-          contextWindow.includes("替代路径")
-        ) {
-          continue;
-        }
-        violations.push(`${file}:${i + 1}: uses "tools groups" (removed) — actual command is "tools group" (singular)`);
-      }
-    }
-  }
-
-  assert.equal(
-    violations.length,
-    0,
-    `Removed commands found without deprecation markers:\n${violations.join("\n")}`
   );
 });
 

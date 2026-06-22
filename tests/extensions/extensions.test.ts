@@ -1,7 +1,5 @@
 /**
  * Tests for the extension system: registry, descriptor loader, project resolver.
- *
- * P5-T01: Extension package manifest / registry / descriptor loader.
  */
 
 import assert from "node:assert/strict";
@@ -391,7 +389,7 @@ test("collectAllTools includes unavailable extension tools with availability fla
   assert.equal(probuilderTools.length, 36);
   assert.ok(probuilderTools.every((t) => t.available));
 
-  // P10-R4: Cinemachine now has 10 tools in its manifest
+  // Cinemachine has 10 tools in its manifest.
   const cinemachineTools = tools.filter((t) => t.extensionId === "cinemachine");
   assert.equal(cinemachineTools.length, 10);
   assert.ok(cinemachineTools.every((t) => !t.available)); // Not installed
@@ -578,15 +576,15 @@ test("VFX Graph manifest has correct tool contributions", () => {
   assert.deepEqual(toolNames, ["vfx.graph", "vfx.effect"]);
 });
 
-test("Cinemachine manifest has 10 tools (P10-R4)", () => {
+test("Cinemachine manifest has 10 tools", () => {
   assert.equal(CINEMACHINE_MANIFEST.contributions.tools!.length, 10);
 });
 
-test("URP manifest has 3 tools (P10-R4)", () => {
+test("URP manifest has 3 tools", () => {
   assert.equal(URP_MANIFEST.contributions.tools!.length, 3);
 });
 
-test("HDRP manifest has 2 tools (P10-R4)", () => {
+test("HDRP manifest has 2 tools", () => {
   assert.equal(HDRP_MANIFEST.contributions.tools!.length, 2);
 });
 
@@ -636,7 +634,7 @@ test("core package extension types do not reference optional Unity packages at c
 
 // ── Missing dependency state and next_actions ──────────────────────────────
 
-test("unavailable extension expresses missing state with next_actions for T02/T03", () => {
+test("unavailable extension expresses missing state with next_actions", () => {
   const registry = new ExtensionRegistry();
   const result = registry.resolveAvailability("cinemachine", {});
 

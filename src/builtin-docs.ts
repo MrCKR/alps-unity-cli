@@ -23,7 +23,7 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   "tool-discovery": {
     title: "Tool Discovery",
-    summary: "Group-first tool discovery surface. All tools — built-in and project-local — share the same descriptor schema. Use `tools describe <name>` before executing any tool. Descriptor includes `target`, `availabilityScope`, `available` fields for P3-aligned routing. See docs/tool-discovery.md §Descriptor field coverage for current vs. P3 contract gap.",
+    summary: "Group-first tool discovery surface. All tools — built-in and project-local — share the same descriptor schema. Use `tools describe <name>` before executing any tool. Descriptor includes `target`, `availabilityScope`, and `available` fields for runtime-aware routing.",
     guide: "Run `tools group` to list all tool groups, then `tools group list <group>` to see tools in a group. Use `tools search <keyword>` when you know the domain. Always `tools describe <name>` before executing."
   },
   "tool-execution": {
@@ -174,14 +174,6 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
     title: "Project Tools (Custom)",
     summary: "Tools registered by Unity project C# code via [UnityCliTool] attribute. Discovered through `tools group` and `tools group list <group> --include-custom`. Executed via `tools run <name>`. Handler: bridge or bridge-runtime. Target: editor or runtime. Availability depends on target instance and PlayMode state. Fingerprint-protected.",
     guide: "Use `tools group` to list groups, then `tools group list <group> --include-custom` to discover project tools. Use `tools describe <name>` for full schema, risk hints, and target/availability. Use `tools run <name>` to execute."
-  },
-  "coverage-matrix": {
-    title: "Coverage Matrix (v1.0 Archive — Engineering Reference Only)",
-    summary: "v1.0 archive: P0-P2 function domain coverage status. Contains pre-P3 legacy terminology (custom-tool commands, project-tool list/run). Not a current user-side guide; use the main topic index for AI calling instructions."
-  },
-  "risk-register-v1.0": {
-    title: "Risk Register (v1.0 Archive — Engineering Reference Only)",
-    summary: "v1.0 archive: P0-P2 known risks and limitations. Contains pre-P3 framing. Not a current user-side guide; use risk-and-side-effects topic for current risk model."
   }
 };
 

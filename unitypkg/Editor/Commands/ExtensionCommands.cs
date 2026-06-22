@@ -31,9 +31,9 @@ namespace UnityCli
         /// <summary>
         /// Register extension.* internal bridge commands.
         ///
-        /// P1 baseline: extension.status provides read-only diagnostic of extension
-        /// availability based on Unity packages installed in the project.
-        /// Install/remove are reserved for P5 and not exposed as bridge commands.
+        /// extension.status provides read-only diagnostic of extension availability
+        /// based on Unity packages installed in the project. Install/remove are
+        /// handled by the CLI command layer and are not exposed as bridge commands.
         /// </summary>
         private static void RegisterExtensionCommands(BridgeCommandRegistry registry)
         {
@@ -42,8 +42,7 @@ namespace UnityCli
 
         private static string ExtensionStatus(BridgeRequest request)
         {
-            // P1 skeleton: return basic package availability status.
-            // P5 will implement full extension lifecycle (install/remove/auto-detect).
+            // Return basic package availability status for CLI-side extension flows.
             var extensionId = request.StringArg("extensionId") ?? request.StringArg("id");
             var installed = new List<string>();
             var packageAvailability = new Dictionary<string, bool>();

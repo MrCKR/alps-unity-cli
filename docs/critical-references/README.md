@@ -52,8 +52,8 @@
 ### 舍弃点
 
 - 舍弃 `UNITY_VFX_GRAPH` 预处理符号作为唯一可用性判定，原因是本项目 Bridge 包需要尽量在不同 Unity/UPM 状态下稳定加载，并通过运行期探测给出结构化错误。
-- 舍弃 60+ VFX action 一次性全部搬迁；当前实现只收敛到本阶段冻结范围内需要的 `vfx.graph` 与 `vfx.effect`，避免扩大 P10 交付范围。
-- 舍弃 unity-mcp 的 `properties` 参数内嵌和 snake/camel alias 大量兼容层；本项目优先由 descriptor 的 input schema 明确参数形态。
+- 舍弃 60+ VFX action 一次性全部搬迁；当前实现聚焦 `vfx.graph` 与 `vfx.effect`，避免扩大 VFX 扩展边界。
+- 舍弃 unity-mcp 的 `properties` 参数内嵌和 snake/camel alias 大量宽松输入层；本项目优先由 descriptor 的 input schema 明确参数形态。
 
 ### 适配点
 
@@ -109,7 +109,7 @@
 
 ### 舍弃点
 
-- 舍弃 `searchMethod` 和多种宽松 target 输入兼容矩阵的完整复制；本项目当前聚焦 name、hierarchy path、instance id 三类高确定性 target，降低歧义。
+- 舍弃 `searchMethod` 和多种宽松 target 输入矩阵的完整复制；本项目当前聚焦 name、hierarchy path、instance id 三类高确定性 target，降低歧义。
 - 舍弃把 GameObject 与 Component 操作混在一个 MCP action router 中；本项目将 `go.*` 与 `component.*` 拆成不同 descriptor，以便风险标记和文档更清晰。
 - 舍弃返回 unity-mcp 风格 helper response；本项目统一输出 target、plannedEffects、logPath 与结构化 error envelope。
 
@@ -161,4 +161,4 @@
 
 - 新增 C# 工具域时，应在本目录补充对应域的参考点、舍弃点、适配点。
 - 如果后续实际参考了新的 unity-mcp 路径，应记录具体文件路径和参考维度；不要只写“参考 unity-mcp”。
-- 如果实现已偏离本记录，应优先更新本记录或在方案审查中说明偏离原因，避免文档成为阶段来源说明而非批判性参考记录。
+- 如果实现已偏离本记录，应优先更新本记录或在方案审查中说明偏离原因，避免文档成为历史过程说明。

@@ -1,12 +1,12 @@
 /**
  * Initial registry data for the five built-in CLI extensions.
  *
- * ProBuilder has 36 fine-grained tool contributions (P7-T2a/T2b).
- * Cinemachine has 10 camera tools (P10-R4).
+ * ProBuilder has 36 fine-grained tool contributions.
+ * Cinemachine has 10 camera tools.
  * VFX Graph has 16 tools (graph, effect, parameter, control, event, template,
- *   particle system, line renderer, trail renderer) (P8/P10-R4).
- * URP has 3 tools (feature, volume, settings) (P10-R4).
- * HDRP has 2 tools (volume, settings) (P10-R4).
+ *   particle system, line renderer, trail renderer).
+ * URP has 3 tools (feature, volume, settings).
+ * HDRP has 2 tools (volume, settings).
  */
 
 import type { ExtensionManifest } from "./types.js";

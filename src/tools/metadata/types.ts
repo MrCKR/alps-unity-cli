@@ -13,7 +13,7 @@ export interface ToolMetadata {
   name: string;
   title: string;
   description: string;
-  /** Discriminator: always 'tool' for ToolMetadata. Distinguishes from ContextMetadata (kind='context'). Defaults to 'tool' when omitted for backward compatibility with pre-P1 metadata. */
+  /** Discriminator: always 'tool' for ToolMetadata. Distinguishes from ContextMetadata (kind='context'). Defaults to 'tool' when omitted. */
   kind?: "tool";
   /** Origin: built-in (shipped with CLI), project (custom tool in Unity project), extension (from extension package). Defaults to 'built-in' when omitted. */
   source?: ToolSource;

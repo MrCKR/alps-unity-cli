@@ -40,7 +40,7 @@ export interface ContextDescriptor {
   outputSchema?: Record<string, unknown>;
   /** Always "context" for any context. */
   kind: "context";
-  /** "built-in" for P2 built-in contexts, "project" for custom project contexts. */
+  /** "built-in" for built-in contexts, "project" for custom project contexts. */
   source: "built-in" | "project";
   /** Always true — contexts are read-only by definition. */
   readOnlyHint: true;

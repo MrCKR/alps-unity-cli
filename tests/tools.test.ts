@@ -1,5 +1,5 @@
 /**
- * Unit tests for tools list/groups/search/describe CLI commands.
+ * Unit tests for tools group/search/describe/run CLI commands.
  */
 
 import assert from "node:assert/strict";
@@ -9,7 +9,6 @@ import { fileURLToPath } from "node:url";
 import { bridgeCommandRegistry, type BridgeRequest } from "../src/bridge/index.js";
 import { handleToolsCommand, type ToolsRuntime } from "../src/tools.js";
 import { builtinToolMetadata, builtinToolGroups, findToolByName, filterToolsByGroup, searchTools, allRegisteredToolMetadata, extensionToolMetadata, allRegisteredToolGroups, EXTENSION_GROUPS, supportStatusForTool, normalizeToolMetadata } from "../src/tools/metadata/index.js";
-// P10-R3: Ensure extension contributions (ProBuilder, Cinemachine, VFX, URP, HDRP) are registered
 import "../src/extensions/index.js";
 
 const requestId = "test_req_tools_001";
@@ -119,7 +118,7 @@ test("searchTools returns empty for no match", () => {
   assert.equal(results.length, 0);
 });
 
-// ── tools group (replaces old tools list/groups) ───────────
+// ── tools group ────────────────────────────────────────────
 
 test("tools group returns all tool groups", async () => {
   const result = await handleToolsCommand("group", [], {}, emptyRuntime, requestId);
@@ -173,7 +172,7 @@ test("tools group list includes custom project tools when available", async () =
   assert.ok(names.includes("custom.my-tool"));
 });
 
-// ── tools groups ───────────────────────────────────────────
+// ── tools group summary ────────────────────────────────────
 
 test("tools group returns group names with counts", async () => {
   const result = await handleToolsCommand("group", [], {}, emptyRuntime, requestId);
@@ -593,24 +592,16 @@ test("tools unknown subcommand returns error", async () => {
   assert.equal(result.error?.code, "UNKNOWN_TOOLS_COMMAND");
 });
 
-// ── tools list is default subcommand ───────────────────────
-
-test("tools without subcommand returns tools-list-removed guidance", async () => {
+test("tools without subcommand returns unknown-command error", async () => {
   const result = await handleToolsCommand(undefined, [], {}, emptyRuntime, requestId);
   assert.equal(result.ok, false);
-  assert.equal(result.error?.code, "E_TOOLS_LIST_REMOVED");
+  assert.equal(result.error?.code, "UNKNOWN_TOOLS_COMMAND");
 });
 
-test("tools list returns tools-list-removed guidance", async () => {
-  const result = await handleToolsCommand("list", [], {}, emptyRuntime, requestId);
+test("unregistered tools subcommand returns unknown-command error", async () => {
+  const result = await handleToolsCommand("catalog", [], {}, emptyRuntime, requestId);
   assert.equal(result.ok, false);
-  assert.equal(result.error?.code, "E_TOOLS_LIST_REMOVED");
-});
-
-test("tools groups returns tools-list-removed guidance (alias removed)", async () => {
-  const result = await handleToolsCommand("groups", [], {}, emptyRuntime, requestId);
-  assert.equal(result.ok, false);
-  assert.equal(result.error?.code, "E_TOOLS_LIST_REMOVED");
+  assert.equal(result.error?.code, "UNKNOWN_TOOLS_COMMAND");
 });
 
 // ── tools run: handleToolsRun routing ─────────────────────
@@ -788,14 +779,14 @@ test("tools run editor-domain tool discovery falls back to project-tool.list", a
   assert.equal((requests[2].args as Record<string, unknown>).name, "my.editor-tool");
 });
 
-// ── tools.run descriptor is not planned/stub ──────────────
+// ── tools.run descriptor is executable ────────────────────
 
-test("tools.run descriptor is not planned/stub", () => {
+test("tools.run descriptor is executable", () => {
   const tool = findToolByName("tools.run");
   assert.ok(tool, "tools.run must exist in builtin metadata");
   assert.equal(tool.supportStatus, "live-bridge", "tools.run supportStatus must be live-bridge, not planned");
   assert.equal(tool.handler, "hybrid", "tools.run handler must be hybrid (routes dynamically)");
-  assert.ok(!tool.description.includes("Reserved for P3"), "description must not say Reserved for P3");
+  assert.ok(!tool.description.includes("Reserved for"), "description must not contain reserved-status wording");
   assert.ok(!tool.description.includes("currently returns"), "description must not say currently returns stub error");
 });
 
@@ -1081,7 +1072,7 @@ test("tools run discovers runtime tools when --runtime flag is provided", async 
   assert.equal(requests[1].command, "runtime-tool.run");
 });
 
-// ── P1: normalizeToolMetadata defaults and extension source ───────
+// ── normalizeToolMetadata defaults and extension source ───────
 
 test("normalizeToolMetadata fills default kind and source", () => {
   const normalized = normalizeToolMetadata({

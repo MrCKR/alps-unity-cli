@@ -21,7 +21,7 @@ import { objSchema } from "../schemas.js";
 
 const URP_PACKAGE = "com.unity.render-pipelines.universal";
 
-/** Common fields shared by all URP extension tools (P10-R4: mirrors PB_COMMON pattern). */
+/** Common fields shared by all URP extension tools. */
 const URP_COMMON = {
   group: "urp",
   target: "editor" as const,

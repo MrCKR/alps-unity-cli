@@ -2,17 +2,14 @@
  * Extension contribution loader: registers ProBuilder, Cinemachine, VFX, URP,
  * HDRP and other built-in extension contributions into the core registries.
  *
- * P10-R3: Extension contributions (bridge specs, tool metadata) are loaded
- * through this module rather than being statically imported into the core
- * aggregation arrays. This separates the core/extension boundary so that:
+ * Extension contributions (bridge specs, tool metadata) are loaded through
+ * this module rather than being statically imported into the core aggregation
+ * arrays. This separates the core/extension boundary so that:
  *
  * 1. Core metadata/registry does not directly aggregate extension tools
  * 2. Extension contributions are registered through the extension mechanism
  * 3. Core `tools group` / `tools group list` can filter extension tools by availability
  * 4. After extension registration, bridge routing and contract validation work normally
- *
- * P10-R4: Cinemachine, URP, HDRP extension tools and bridge specs are now
- * registered through this loader alongside ProBuilder and VFX Graph.
  */
 
 import { probuilderBridgeSpecs } from "../bridge/domains/probuilder.js";
@@ -56,7 +53,7 @@ export function registerBuiltinExtensionContributions(): void {
   ]);
 
   // Register extension tool metadata. User-facing execution always goes
-  // through tools run, even though argument builders preserve legacy argv mapping internally.
+  // through tools run, while argument builders preserve native argv mapping internally.
   registerExtensionTools(markToolsRunCommands([
     ...PROBUILDER_TOOLS,
     ...CINEMACHINE_TOOLS,

@@ -110,7 +110,7 @@ export function collectAvailableTools(
  * Collect all tool contributions across ALL extensions (including unavailable).
  *
  * Used by `tools group list` when the user explicitly wants to see all tools
- * regardless of availability. (Old `tools list` compat path also uses this.)
+ * regardless of availability.
  */
 export function collectAllTools(
   registry: ExtensionRegistry,

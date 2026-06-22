@@ -40,12 +40,7 @@
 
 | 文档 | 内容 |
 |------|------|
-| [unity-mcp 对齐执行计划](unity-mcp-alignment-plan.md) | 当前：功能、Context、扩展、测试和结构整理的长任务计划 |
-| [功能等价追踪](unity-mcp-functional-parity.md) | 当前：unity-mcp 操作能力到 unity_cli 的功能等价矩阵 |
-| [覆盖率矩阵](coverage-matrix.md) | v1.0 归档：功能域覆盖状态 |
-| [风险登记册](risk-register-v1.0.md) | v1.0 归档：已知风险与缓解措施 |
-
-> **归档文档**标记为 v1.0 archive，不代表当前用户指南。请以主题索引中的文档为准。
+| [功能等价追踪](unity-mcp-functional-parity.md) | unity-mcp 操作能力到 unity_cli 的功能等价矩阵 |
 
 ## AI Agent 阅读顺序
 
@@ -54,15 +49,6 @@
 3. 示例代码见 `examples/`
 4. Schema 定义见 `schemas/`
 
-## 废弃路径说明
+## 工具发现规则
 
-以下发现路径已废弃，不得作为使用指导：
-
-| 废弃路径 | 替代路径 |
-|----------|---------|
-| `tools list` 无过滤全量展开 | `tools group` → `tools group list <group>` 分层发现 |
-| `tools list --include-custom` 作为首选发现 | 先 `tools group` 确认分组，再 `tools group list <group> --include-custom` |
-| `tools groups` | `tools group`（`tools groups` 已移除，返回 E_TOOLS_LIST_REMOVED） |
-| `tools search` 作为唯一发现手段 | `tools search` 仅作为辅助搜索，不应替代 group-first 流程 |
-
-> **注意**：`tools list` 和 `tools groups` 命令已被移除，调用时返回 `E_TOOLS_LIST_REMOVED` 引导错误。请使用 `tools group` + `tools group list <group>` 的 group-first 分层发现。
+工具发现以 `tools group` → `tools group list <group>` → `tools describe <tool>` 为主路径；`tools search <keyword>` 仅用于辅助定位。

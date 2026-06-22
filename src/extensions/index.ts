@@ -1,17 +1,14 @@
 /**
  * Extension system public API.
  *
- * P5-T01: Extension package manifest / registry / descriptor loader.
- *
  * The core CLI package does not import or compile-time depend on any optional
  * Unity packages. Extensions declare their Unity package requirements via
  * manifest, and the registry resolves availability against a project's
  * installed packages.
  *
- * P10-R3: Auto-registers built-in extension contributions (ProBuilder,
- * Cinemachine, VFX, URP, HDRP) when this module is first imported.
- * This ensures both CLI and test environments have extension tools
- * available without explicit registration.
+ * Built-in extension contributions are auto-registered when this module is
+ * imported so CLI and test environments have extension tools available without
+ * explicit registration.
  */
 
 export {
@@ -49,10 +46,8 @@ export {
   isBuiltinExtensionContributionsRegistered
 } from "./contribution-loader.js";
 
-// P10-R3: Auto-register built-in extension contributions when the extension
-// module is loaded. This ensures both CLI startup and test environments have
-// extension bridge specs and tool metadata registered before any tool
-// discovery or bridge command routing.
+// Auto-register built-in extension contributions when the extension module is
+// loaded so bridge specs and tool metadata exist before discovery or routing.
 import { registerBuiltinExtensionContributions } from "./contribution-loader.js";
 registerBuiltinExtensionContributions();
 

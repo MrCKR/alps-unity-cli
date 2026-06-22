@@ -5,8 +5,6 @@
  * optional Unity package), this module resolves whether the extension
  * is available against a target project. If not, it returns a structured
  * unavailable result with next_actions instead of attempting execution.
- *
- * P5-T04: Extension unavailability graceful degradation.
  */
 
 import { ExtensionRegistry, resolveExtensionAvailability } from "./extensions/index.js";

@@ -48,11 +48,11 @@ test("integration: tools group list scene via execute()", async () => {
   }
 });
 
-test("integration: tools groups returns tools-list-removed guidance", async () => {
+test("integration: unregistered tools subcommand returns unknown-command error", async () => {
   const runtime = await makeRuntime();
-  const result = await execute(["tools", "groups"], runtime);
- assert.equal(result.ok, false);
-  assert.equal(result.error?.code, "E_TOOLS_LIST_REMOVED");
+  const result = await execute(["tools", "catalog"], runtime);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "UNKNOWN_TOOLS_COMMAND");
 });
 
 test("integration: tools search hierarchy via execute()", async () => {
