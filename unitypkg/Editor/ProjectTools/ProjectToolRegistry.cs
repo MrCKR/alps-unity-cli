@@ -46,8 +46,7 @@ namespace UnityCli
             {
                 definition.RequiredInput = new string[0];
             }
-            definition.DisplayName = string.IsNullOrEmpty(definition.DisplayName) ? definition.Name : definition.DisplayName;
-            definition.Title = string.IsNullOrEmpty(definition.Title) ? definition.DisplayName : definition.Title;
+            definition.Title = string.IsNullOrEmpty(definition.Title) ? definition.Name : definition.Title;
             definition.Group = string.IsNullOrEmpty(definition.Group) ? ProjectToolGroupFromName(definition.Name) : definition.Group;
             definition.Version = string.IsNullOrEmpty(definition.Version) ? "1.0.0" : definition.Version;
             definition.InputSchema = string.IsNullOrEmpty(definition.InputSchema) ? "{}" : definition.InputSchema;
@@ -55,7 +54,6 @@ namespace UnityCli
             definition.CapabilityType = string.IsNullOrEmpty(definition.CapabilityType) ? "project-write" : definition.CapabilityType;
             definition.Target = string.IsNullOrEmpty(definition.Target) ? "editor" : definition.Target;
             definition.AvailabilityScope = string.IsNullOrEmpty(definition.AvailabilityScope) ? (definition.Target == "runtime" ? "playModeSession" : "editorSession") : definition.AvailabilityScope;
-            definition.CoverageScope = definition.CoverageScope ?? new string[0];
             definition.DefaultTimeoutMs = definition.DefaultTimeoutMs <= 0 ? 30000 : definition.DefaultTimeoutMs;
             definition.MaxTimeoutMs = definition.MaxTimeoutMs <= 0 ? 600000 : definition.MaxTimeoutMs;
             definition.RegisteredBy = string.IsNullOrEmpty(definition.RegisteredBy) ? "unity-editor-package" : definition.RegisteredBy;
@@ -130,8 +128,7 @@ namespace UnityCli
             RegisterProjectTool(new UnityCliProjectToolDefinition
             {
                 Name = attribute.Name,
-                DisplayName = string.IsNullOrEmpty(attribute.DisplayName) ? attribute.Title : attribute.DisplayName,
-                Title = string.IsNullOrEmpty(attribute.Title) ? attribute.DisplayName : attribute.Title,
+                Title = string.IsNullOrEmpty(attribute.Title) ? attribute.Name : attribute.Title,
                 Description = attribute.Description,
                 Group = attribute.Group,
                 Version = attribute.Version,
@@ -140,9 +137,6 @@ namespace UnityCli
                 CapabilityType = attribute.CapabilityType,
                 ReadOnlyHint = attribute.ReadOnlyHint,
                 DestructiveHint = attribute.DestructiveHint,
-                ArchitectureSensitive = attribute.ArchitectureSensitive,
-                FrozenDecision = attribute.FrozenDecision,
-                CoverageScope = SplitCsv(attribute.CoverageScope).ToArray(),
                 Target = attribute.Target ?? "editor",
                 DefaultTimeoutMs = attribute.DefaultTimeoutMs,
                 MaxTimeoutMs = attribute.MaxTimeoutMs,
@@ -343,7 +337,6 @@ namespace UnityCli
         {
             return new UnityCliJsonWriter().BeginObject()
                 .Prop("name", definition.Name)
-                .Prop("displayName", definition.DisplayName)
                 .Prop("title", definition.Title)
                 .Prop("description", definition.Description)
                 .Prop("group", definition.Group)
@@ -359,9 +352,6 @@ namespace UnityCli
                 .Prop("maxTimeoutMs", definition.MaxTimeoutMs)
                 .Prop("supportsJob", definition.SupportsJob)
                 .PropRaw("artifactKinds", StringArrayJson(definition.ArtifactKinds))
-                .Prop("architectureSensitive", definition.ArchitectureSensitive)
-                .Prop("frozenDecision", definition.FrozenDecision)
-                .PropRaw("coverageScope", StringArrayJson(definition.CoverageScope))
                 .Prop("handler", "bridge")
                 .Prop("supportStatus", "live-bridge")
                 .Prop("cliCommand", "tools run " + definition.Name)
@@ -565,9 +555,6 @@ namespace UnityCli
                 + "\ncapabilityType=" + (definition.CapabilityType ?? string.Empty)
                 + "\nreadOnlyHint=" + Bool(definition.ReadOnlyHint)
                 + "\ndestructiveHint=" + Bool(definition.DestructiveHint)
-                + "\narchitectureSensitive=" + Bool(definition.ArchitectureSensitive)
-                + "\nfrozenDecision=" + (definition.FrozenDecision ?? string.Empty)
-                + "\ncoverageScope=" + string.Join(",", (definition.CoverageScope ?? new string[0]).OrderBy(value => value, StringComparer.Ordinal).ToArray())
                 + "\ndefaultTimeoutMs=" + definition.DefaultTimeoutMs.ToString(CultureInfo.InvariantCulture)
                 + "\nmaxTimeoutMs=" + definition.MaxTimeoutMs.ToString(CultureInfo.InvariantCulture)
                 + "\nsupportsJob=" + Bool(definition.SupportsJob)
@@ -665,7 +652,6 @@ namespace UnityCli
                 items.Add(new UnityCliJsonWriter().BeginObject()
                     .Prop("name", definition.Name)
                     .PropRaw("fingerprint", ProjectToolFingerprintJson(definition))
-                    .Prop("architectureSensitive", true)
                     .EndObject()
                     .ToString());
             }
@@ -686,7 +672,6 @@ namespace UnityCli
             return new UnityCliJsonWriter().BeginObject()
                 .Prop("tool", definition.Name)
                 .PropRaw("fingerprint", ProjectToolFingerprintJson(definition))
-                .Prop("architectureSensitive", true)
                 .EndObject()
                 .ToString();
         }

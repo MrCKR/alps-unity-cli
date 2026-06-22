@@ -7,23 +7,24 @@
  * and from installed extensions.
  */
 
-import { BUILTIN_CONTEXTS } from "./builtin.js";
-import { collectAvailableContexts, ExtensionRegistry } from "../extensions/index.js";
+import { builtinContextMetadata } from "./metadata/index.js";
+import { collectAvailableContexts, ExtensionRegistry, readInstalledUnityPackages } from "../extensions/index.js";
 import { getString } from "../args.js";
 import type { ContextDescriptor, ContextListEntry, CustomContextDescriptor } from "./types.js";
+import type { ContextMetadata } from "./metadata/types.js";
 import type { ExtensionContextContribution } from "../extensions/types.js";
 
 // ── Built-in query functions ──────────────────────────────────────────────
 
-/** Return all built-in context descriptors. */
+/** Return all built-in context descriptors from the canonical metadata registry. */
 export function builtinContextDescriptors(): ContextDescriptor[] {
-  return BUILTIN_CONTEXTS;
+  return builtinContextMetadata().map(contextMetadataToDescriptor);
 }
 
 /** Return distinct category names from built-in contexts. */
 export function builtinContextCategories(): string[] {
   const categories = new Set<string>();
-  for (const ctx of BUILTIN_CONTEXTS) {
+  for (const ctx of builtinContextDescriptors()) {
     categories.add(ctx.category);
   }
   return [...categories].sort();
@@ -31,18 +32,18 @@ export function builtinContextCategories(): string[] {
 
 /** Find a single built-in context by dotted name. */
 export function findBuiltinContextByName(name: string): ContextDescriptor | undefined {
-  return BUILTIN_CONTEXTS.find((c) => c.name === name);
+  return builtinContextDescriptors().find((c) => c.name === name);
 }
 
 /** Filter built-in contexts by category. */
 export function filterContextsByCategory(category: string): ContextDescriptor[] {
-  return BUILTIN_CONTEXTS.filter((c) => c.category === category);
+  return builtinContextDescriptors().filter((c) => c.category === category);
 }
 
 /** Search built-in contexts by keyword. */
 export function searchContexts(keyword: string): ContextDescriptor[] {
   const lower = keyword.toLowerCase();
-  return BUILTIN_CONTEXTS.filter((c) =>
+  return builtinContextDescriptors().filter((c) =>
     c.name.toLowerCase().includes(lower) ||
     c.title.toLowerCase().includes(lower) ||
     c.description.toLowerCase().includes(lower) ||
@@ -64,30 +65,47 @@ function scoreSearch(text: string, query: string): number {
 // ── Extension context contributions ───────────────────────────────────────
 
 /** Collect context descriptors from installed extensions. */
-export function extensionContextDescriptors(
+export async function extensionContextDescriptors(
   flags: Record<string, string | boolean>
-): ContextDescriptor[] {
+): Promise<ContextDescriptor[]> {
   const registry = new ExtensionRegistry();
   const projectPath = getString(flags, "project");
-  const extensionContexts = collectAvailableContexts(registry);
-
-  if (projectPath) {
-    // If we have a project path, resolve extension availability
-    return resolveExtensionContextDescriptors(registry, extensionContexts, flags);
+  if (!projectPath) {
+    return [];
   }
 
-  // Without project path, return all extension contexts as potentially available
-  return extensionContexts.map((ec) => extensionContributionToDescriptor(ec));
+  try {
+    const installedPackages = await readInstalledUnityPackages(projectPath);
+    return collectAvailableContexts(registry, installedPackages).map((ec) => extensionContributionToDescriptor(ec));
+  } catch {
+    return [];
+  }
 }
 
-function resolveExtensionContextDescriptors(
-  registry: ExtensionRegistry,
-  contexts: ExtensionContextContribution[],
-  _flags: Record<string, string | boolean>
-): ContextDescriptor[] {
-  // For now, return extension contexts as built-in-like descriptors
-  // Extension availability is resolved at read time
-  return contexts.map((ec) => extensionContributionToDescriptor(ec));
+function contextMetadataToDescriptor(metadata: ContextMetadata): ContextDescriptor {
+  return {
+    name: metadata.name,
+    title: metadata.title,
+    description: metadata.description,
+    category: metadata.category,
+    source: metadata.source === "built-in" ? "built-in" : "custom",
+    target: metadata.target === "runtime" ? "runtime" : "editor",
+    availabilityScope: metadata.availabilityScope === "playModeSession" || metadata.availabilityScope === "always" ? metadata.availabilityScope : "editorSession",
+    requiresUnity: metadata.handler === "bridge" || metadata.handler === "bridge-runtime",
+    available: metadata.available,
+    inputSchema: metadata.inputSchema,
+    outputSchema: metadata.outputSchema ?? { type: "object", properties: {} },
+    readOnlyHint: true,
+    destructiveHint: false,
+    bridgeCommand: "context.read",
+    cliCommand: metadata.cliCommand ?? `context read ${metadata.name}`,
+    requiresPackages: metadata.requiresPackages,
+    docsTopic: metadata.category,
+    resourceUri: metadata.resourceUri,
+    equivalentUnityMcp: metadata.equivalentUnityMcp,
+    equivalentUnityMcpNote: metadata.equivalentUnityMcpNote,
+    fingerprint: metadata.fingerprint
+  };
 }
 
 function extensionContributionToDescriptor(ec: ExtensionContextContribution): ContextDescriptor {
@@ -197,7 +215,7 @@ export async function allContextDescriptors(
   options?: { includeCustom?: boolean }
 ): Promise<ContextDescriptor[]> {
   const builtin = builtinContextDescriptors();
-  const extension = extensionContextDescriptors(flags);
+  const extension = await extensionContextDescriptors(flags);
 
   let custom: ContextDescriptor[] = [];
   if (options?.includeCustom) {

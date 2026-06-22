@@ -1,0 +1,40 @@
+{
+  "id": "vfx-graph",
+  "name": "vfx-graph",
+  "title": "VFX Graph",
+  "version": "1.0.0",
+  "description": "VFX Graph extension for alps-unity-cli",
+  "packageName": "unity-cli-extension-vfx-graph",
+  "requiresUnityPackages": ["com.unity.visualeffectgraph"],
+  "unityPackages": [
+    {
+      "name": "com.unity.visualeffectgraph"
+    }
+  ],
+  "providesTools": [
+    "vfx.graph",
+    "vfx.effect",
+    "vfx.parameter",
+    "vfx.control",
+    "vfx.event",
+    "vfx.template",
+    "vfx.particle-create",
+    "vfx.particle-info",
+    "vfx.particle-main",
+    "vfx.particle-emission",
+    "vfx.particle-shape",
+    "vfx.particle-play",
+    "vfx.particle-module",
+    "vfx.line-create",
+    "vfx.line-positions",
+    "vfx.trail"
+  ],
+  "copyRoot": "unitypkg",
+  "installMode": "copy-if-package-present",
+  "toolGroups": ["vfx"],
+  "descriptorEntry": "tools/metadata/vfx.js",
+  "bridgeEntry": "bridge/domains/vfx.js",
+  "unityPackageFiles": ["unitypkg/"],
+  "docsTopic": "vfx",
+  "docsEntry": "docs/vfx.md"
+}

@@ -30,6 +30,19 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     docsTopic: "package"
   },
   {
+    name: "cli.package.status",
+    title: "Package Status",
+    description: "Summarize manifest and lock state for Unity packages in the project.",
+    group: "cli",
+    inputSchema: objSchema({ project: { type: "string" } }),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "offline",
+    cliCommand: "package status",
+    docsTopic: "package",
+    equivalentUnityMcp: "manage_package.status"
+  },
+  {
     name: "cli.package.info",
     title: "Package Info",
     description: "Show detailed info for an installed package.",

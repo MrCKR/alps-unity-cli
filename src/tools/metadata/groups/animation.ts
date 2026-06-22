@@ -122,7 +122,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     cliCommand: "animator set-enabled",
     docsTopic: "animation"
   },
-  // ── controller.* AnimatorController editing tools (ALP-603 P6-T6b) ───
+  // ── controller.* AnimatorController editing tools ───
   {
     name: "controller.create",
     title: "Create AnimatorController",

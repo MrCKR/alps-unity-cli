@@ -43,13 +43,7 @@ namespace UnityCli
             w.RawValue(CapabilityJson("graphics", GraphicsCommands));
             w.RawValue(CapabilityJson("physics", PhysicsCommands));
             w.RawValue(CapabilityJson("profiler", ProfilerCommands));
-            // ProBuilder served by extension package — removed from core capabilities (P7-T2b)
-            // w.RawValue(CapabilityJson("probuilder", ProBuilderCommands));
-            w.RawValue(CapabilityJson("cinemachine", CinemachineCommands));
             w.RawValue(CapabilityJson("animation", AnimationCommands));
-            w.RawValue(CapabilityJson("vfx", VfxCommands));
-            w.RawValue(CapabilityJson("urp", UrpCommands));
-            w.RawValue(CapabilityJson("hdrp", HdrpCommands));
             w.RawValue(CapabilityJson("shader", ShaderCommands));
             w.RawValue(CapabilityJson("texture", TextureCommands));
             w.RawValue(CapabilityJson("editor", EditorCommands));
@@ -166,7 +160,7 @@ namespace UnityCli
         /// <summary>
         /// Transient error JSON with transient=true and retry_after_ms.
         /// Used for compile, import, domain reload, and play mode states.
-        /// Matches ALP-164 frozen spec §安全、性能与生命周期 / transient 状态.
+        /// Documents transient response state.
         /// </summary>
         private static string TransientErrorJson(string code, string message, string nextAction, int retryAfterMs)
         {

@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://unity-cli.local/schemas/extension-descriptor.schema.json",
   "title": "Unity CLI Extension Descriptor",
-  "description": "Describes an optional capability pack (extension) for the Unity CLI. Extensions depend on optional Unity packages and provide additional tools, contexts, or both. P1 baseline schema matching the ALP-505 architecture base.",
+  "description": "Describes an optional capability pack (extension) for the Unity CLI. Extensions depend on optional Unity packages and provide additional tools, contexts, or both. Baseline schema for this descriptor type.",
   "type": "object",
   "required": ["id", "title", "description", "kind", "source", "status", "installMode"],
   "properties": {

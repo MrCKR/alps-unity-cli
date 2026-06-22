@@ -1,11 +1,15 @@
 import { boolFlag, compactArgs, floatFlag, numberFlag, queryArgs, stringFlag, targetArgs } from "../args.js";
 import type { BridgeCommandSpec } from "../types.js";
 
-export const urpBridgeSpecs: BridgeCommandSpec[] = [
+export const urpBridgeSpecs: BridgeCommandSpec[] = markToolsOnly([
   { group: "urp", command: "feature", bridgeCommand: "urp.feature", buildArgs: urpFeatureArgs },
   { group: "urp", command: "volume", bridgeCommand: "urp.volume", buildArgs: urpVolumeArgs },
   { group: "urp", command: "settings", bridgeCommand: "urp.settings", buildArgs: urpSettingsArgs }
-];
+]);
+
+function markToolsOnly(specs: BridgeCommandSpec[]): BridgeCommandSpec[] {
+  return specs.map((spec) => ({ ...spec, toolsOnly: true }));
+}
 
 function urpFeatureArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
@@ -40,3 +44,4 @@ function urpSettingsArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0
     value: stringFlag(flags, "value")
   });
 }
+

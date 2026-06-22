@@ -34,8 +34,13 @@ namespace UnityCli
             RegisterCommand(registry, "editor.play", "editor", false, delegate(BridgeRequest request) { return SuccessJson(EditorPlayJson(request)); });
             RegisterCommand(registry, "editor.pause", "editor", false, delegate(BridgeRequest request) { return SuccessJson(EditorPauseJson(request)); });
             RegisterCommand(registry, "editor.stop", "editor", false, delegate(BridgeRequest request) { return SuccessJson(EditorStopJson(request)); });
+            RegisterCommand(registry, "editor.undo", "editor", false, delegate(BridgeRequest request) { return SuccessJson(EditorUndoRedoJson("editor.undo")); });
+            RegisterCommand(registry, "editor.redo", "editor", false, delegate(BridgeRequest request) { return SuccessJson(EditorUndoRedoJson("editor.redo")); });
+            RegisterCommand(registry, "editor.resolution", "editor", false, delegate(BridgeRequest request) { return SuccessJson(EditorResolutionJson(request)); });
             RegisterCommand(registry, "editor.menu", "editor", false, delegate(BridgeRequest request) { return SuccessJson(EditorMenuJson(request)); });
             RegisterCommand(registry, "editor.console", "editor", false, EditorConsole);
+            RegisterCommand(registry, "project.tag", "project", false, delegate(BridgeRequest request) { return SuccessJson(ProjectTagLayerJson(request, false)); });
+            RegisterCommand(registry, "project.layer", "project", false, delegate(BridgeRequest request) { return SuccessJson(ProjectTagLayerJson(request, true)); });
         }
 
         private static string EditorStateJson()
@@ -140,6 +145,106 @@ namespace UnityCli
                     .Prop("isPaused", EditorApplication.isPaused))
                 .PropRaw("state", EditorStateJson())
                 .EndObject().ToString();
+        }
+
+        private static string EditorUndoRedoJson(string command)
+        {
+            EnsureEditorNotBusy(command);
+            if (command == "editor.undo") Undo.PerformUndo();
+            else Undo.PerformRedo();
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("performed", true)
+                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", command).Prop("performed", true).EndObject())
+                .PropRaw("state", EditorStateJson())
+                .EndObject().ToString();
+        }
+
+        private static string EditorResolutionJson(BridgeRequest request)
+        {
+            EnsureEditorNotBusy("editor.resolution");
+            var width = Math.Max(1, request.IntArg("width", PlayerSettings.defaultScreenWidth));
+            var height = Math.Max(1, request.IntArg("height", PlayerSettings.defaultScreenHeight));
+            var fullscreen = request.OptionalBoolArg("fullscreen");
+            PlayerSettings.defaultScreenWidth = width;
+            PlayerSettings.defaultScreenHeight = height;
+            if (fullscreen.HasValue) PlayerSettings.fullScreenMode = fullscreen.Value ? FullScreenMode.FullScreenWindow : FullScreenMode.Windowed;
+            return new UnityCliJsonWriter().BeginObject()
+                .PropObject("resolution", w => w.Prop("width", (long)width).Prop("height", (long)height).Prop("fullScreenMode", PlayerSettings.fullScreenMode.ToString()))
+                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "editor.resolution").Prop("width", (long)width).Prop("height", (long)height).EndObject())
+                .EndObject().ToString();
+        }
+
+        private static string ProjectTagLayerJson(BridgeRequest request, bool layer)
+        {
+            EnsureEditorNotBusy(layer ? "project.layer" : "project.tag");
+            var action = request.StringArg("action") ?? "add";
+            var name = request.StringArg("name");
+            if (string.IsNullOrWhiteSpace(name))
+            {
+                throw new BridgeCommandException("E_SCHEMA_INVALID", layer ? "Layer name is required." : "Tag name is required.", "Pass --action add|remove and a tag/layer name.");
+            }
+            var asset = AssetDatabase.LoadAllAssetsAtPath("ProjectSettings/TagManager.asset").FirstOrDefault();
+            if (asset == null)
+            {
+                throw new BridgeCommandException("E_TAG_MANAGER_NOT_FOUND", "Unity TagManager asset was not found.", "Open the project in Unity and retry.");
+            }
+            var serialized = new SerializedObject(asset);
+            var property = serialized.FindProperty(layer ? "layers" : "tags");
+            if (property == null)
+            {
+                throw new BridgeCommandException("E_TAG_MANAGER_SCHEMA", "Unity TagManager schema was not recognized.", "Use the Unity Editor Project Settings UI for this Unity version.");
+            }
+            var changed = layer ? ApplyLayerChange(property, action, name, request.OptionalIntArg("index")) : ApplyTagChange(property, action, name);
+            if (changed)
+            {
+                serialized.ApplyModifiedProperties();
+            }
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("action", action)
+                .Prop("name", name)
+                .Prop("changed", changed)
+                .PropArray("plannedEffects", arr => { if (changed) arr.BeginObject().Prop("type", layer ? "project.layer" : "project.tag").Prop("action", action).Prop("name", name).EndObject(); })
+                .EndObject().ToString();
+        }
+
+        private static bool ApplyTagChange(SerializedProperty tags, string action, string name)
+        {
+            for (var i = 0; i < tags.arraySize; i++)
+            {
+                if (tags.GetArrayElementAtIndex(i).stringValue == name)
+                {
+                    if (action == "remove") { tags.DeleteArrayElementAtIndex(i); return true; }
+                    return false;
+                }
+            }
+            if (action == "remove") return false;
+            tags.InsertArrayElementAtIndex(tags.arraySize);
+            tags.GetArrayElementAtIndex(tags.arraySize - 1).stringValue = name;
+            return true;
+        }
+
+        private static bool ApplyLayerChange(SerializedProperty layers, string action, string name, int? requestedIndex)
+        {
+            for (var i = 8; i < Math.Min(32, layers.arraySize); i++)
+            {
+                if (layers.GetArrayElementAtIndex(i).stringValue == name)
+                {
+                    if (action == "remove") { layers.GetArrayElementAtIndex(i).stringValue = string.Empty; return true; }
+                    return false;
+                }
+            }
+            if (action == "remove") return false;
+            var index = requestedIndex.HasValue ? requestedIndex.Value : -1;
+            if (index < 8 || index >= Math.Min(32, layers.arraySize))
+            {
+                for (var i = 8; i < Math.Min(32, layers.arraySize); i++)
+                {
+                    if (string.IsNullOrEmpty(layers.GetArrayElementAtIndex(i).stringValue)) { index = i; break; }
+                }
+            }
+            if (index < 8 || index >= Math.Min(32, layers.arraySize)) throw new BridgeCommandException("E_LAYER_SLOT_UNAVAILABLE", "No user layer slot is available.", "Remove an unused user layer or pass --index 8..31.");
+            layers.GetArrayElementAtIndex(index).stringValue = name;
+            return true;
         }
 
         private static string EditorMenuJson(BridgeRequest request)

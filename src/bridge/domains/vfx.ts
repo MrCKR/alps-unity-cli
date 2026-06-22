@@ -1,7 +1,7 @@
 import { boolFlag, compactArgs, floatFlag, numberFlag, stringFlag, targetArgs } from "../args.js";
 import type { BridgeCommandSpec } from "../types.js";
 
-export const vfxBridgeSpecs: BridgeCommandSpec[] = [
+export const vfxBridgeSpecs: BridgeCommandSpec[] = markToolsOnly([
   { group: "vfx", command: "graph", bridgeCommand: "vfx.graph", buildArgs: vfxGraphArgs },
   { group: "vfx", command: "effect", bridgeCommand: "vfx.effect", buildArgs: vfxEffectArgs },
   { group: "vfx", command: "parameter", bridgeCommand: "vfx.parameter", buildArgs: vfxParameterArgs },
@@ -18,7 +18,11 @@ export const vfxBridgeSpecs: BridgeCommandSpec[] = [
   { group: "vfx", command: "line-create", bridgeCommand: "vfx.line-create", buildArgs: vfxLineCreateArgs },
   { group: "vfx", command: "line-positions", bridgeCommand: "vfx.line-positions", buildArgs: vfxLinePositionsArgs },
   { group: "vfx", command: "trail", bridgeCommand: "vfx.trail", buildArgs: vfxTrailArgs }
-];
+]);
+
+function markToolsOnly(specs: BridgeCommandSpec[]): BridgeCommandSpec[] {
+  return specs.map((spec) => ({ ...spec, toolsOnly: true }));
+}
 
 function vfxGraphArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
@@ -196,3 +200,4 @@ function vfxTrailArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec[
     emitting: boolFlag(flags, "emitting")
   });
 }
+

@@ -33,7 +33,7 @@ namespace UnityCli
         private static readonly object QueueLock = new object();
         private static readonly string[] CameraCommands = { "camera.list", "camera.info", "camera.screenshot", "camera.create", "camera.target", "camera.lens", "camera.multiview" };
         private static readonly string[] SceneCommands = { "scene.active", "scene.hierarchy", "scene.build-settings", "scene.screenshot", "scene.create", "scene.load", "scene.save" };
-        private static readonly string[] GameObjectCommands = { "go.find", "go.inspect", "go.create", "go.modify", "go.delete", "component.add", "component.remove", "component.set" };
+        private static readonly string[] GameObjectCommands = { "go.find", "go.inspect", "go.create", "go.modify", "go.duplicate", "go.move-relative", "go.look-at", "go.delete", "component.add", "component.remove", "component.set" };
         private static readonly string[] AssetCommands = { "asset.search", "asset.info", "asset.create", "asset.import", "asset.modify", "asset.delete", "asset.duplicate", "asset.move", "asset.rename" };
         private static readonly string[] DiagnoseCommands = { "diagnose.preflight" };
         private static readonly string[] ScreenshotCommands = { "screenshot.capture" };
@@ -41,38 +41,21 @@ namespace UnityCli
         private static readonly string[] UiCommands = { "ui.canvas.create", "ui.text.create", "ui.button.create", "ui.image.create", "ui.document.info", "ui.document.create", "ui.hierarchy" };
         private static readonly string[] MaterialCommands = { "material.info", "material.create", "material.assign", "material.set" };
         private static readonly string[] GraphicsCommands = { "graphics.quality", "graphics.settings", "graphics.pipeline", "graphics.volume", "graphics.screenshot", "graphics.bake-start", "graphics.bake-cancel", "graphics.bake-status", "graphics.bake-clear", "graphics.bake-reflection-probe", "graphics.bake-settings", "graphics.light-probe-group", "graphics.reflection-probe", "graphics.probe-positions", "graphics.stats", "graphics.stats-counters", "graphics.stats-memory", "graphics.scene-debug", "graphics.skybox-get", "graphics.skybox-set-material", "graphics.skybox-set-properties", "graphics.skybox-set-ambient", "graphics.skybox-set-fog", "graphics.skybox-set-reflection", "graphics.skybox-set-sun", "graphics.pipeline-settings", "graphics.pipeline-quality", "graphics.pipeline-info" };
-        private static readonly string[] PhysicsCommands = { "physics.settings", "physics.raycast", "physics.simulation" };
+        private static readonly string[] PhysicsCommands = { "physics.settings", "physics.collision-matrix", "physics.material", "physics.joint", "physics.force", "physics.overlap", "physics.rigidbody", "physics.raycast", "physics.simulation" };
         private static readonly string[] ProfilerCommands = { "profiler.start", "profiler.stop", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export", "profiler.status" };
-        private static readonly string[] ProBuilderCommands = {
-            "probuilder.ping", "probuilder.create-shape", "probuilder.create-poly-shape",
-            "probuilder.extrude-faces", "probuilder.delete-faces", "probuilder.detach-faces",
-            "probuilder.merge-faces", "probuilder.subdivide", "probuilder.flip-normals",
-            "probuilder.select-faces", "probuilder.set-face-material", "probuilder.set-face-color",
-            "probuilder.set-face-uvs", "probuilder.extrude-edges", "probuilder.bevel-edges",
-            "probuilder.bridge-edges", "probuilder.connect-elements", "probuilder.combine-meshes",
-            "probuilder.merge-objects", "probuilder.duplicate-and-flip", "probuilder.create-polygon",
-            "probuilder.merge-vertices", "probuilder.weld-vertices", "probuilder.split-vertices",
-            "probuilder.move-vertices", "probuilder.insert-vertex", "probuilder.append-vertices-to-edge",
-            "probuilder.mesh-info", "probuilder.validate-mesh", "probuilder.convert-to-probuilder",
-            "probuilder.set-smoothing", "probuilder.auto-smooth", "probuilder.center-pivot",
-            "probuilder.freeze-transform", "probuilder.set-pivot", "probuilder.repair-mesh"
-        };
         private static readonly string[] AnimationCommands = { "animation.clip", "animation.state", "animation.play", "animation.stop", "animator.get-info", "animator.get-parameter", "animator.set-parameter", "animator.crossfade", "animator.set-speed", "animator.set-enabled", "controller.create", "controller.add-state", "controller.add-transition", "controller.add-parameter", "controller.get-info", "controller.assign", "controller.add-layer", "controller.remove-layer", "controller.set-layer-weight", "controller.create-blend-tree-1d", "controller.create-blend-tree-2d", "controller.add-blend-tree-child" };
-        private static readonly string[] VfxCommands = { "vfx.graph", "vfx.effect", "vfx.parameter", "vfx.control", "vfx.event", "vfx.template", "vfx.particle-create", "vfx.particle-info", "vfx.particle-main", "vfx.particle-emission", "vfx.particle-shape", "vfx.particle-play", "vfx.particle-module", "vfx.line-create", "vfx.line-positions", "vfx.trail" };
-        private static readonly string[] CinemachineCommands = { "cinemachine.create", "cinemachine.target", "cinemachine.lens", "cinemachine.priority", "cinemachine.blend", "cinemachine.body", "cinemachine.aim", "cinemachine.noise", "cinemachine.brain", "cinemachine.extension" };
-        private static readonly string[] UrpCommands = { "urp.feature", "urp.volume", "urp.settings" };
-        private static readonly string[] HdrpCommands = { "hdrp.volume", "hdrp.settings" };
         private static readonly string[] ShaderCommands = { "shader.info", "shader.read", "shader.create", "shader.update" };
         private static readonly string[] TextureCommands = { "texture.info", "texture.create", "texture.sprite", "texture.import-settings" };
-        private static readonly string[] EditorCommands = { "editor.state", "editor.play", "editor.pause", "editor.stop", "editor.menu", "editor.console" };
-        private static readonly string[] ScriptCommands = { "script.create", "script.read", "script.edit", "script.validate" };
+        private static readonly string[] EditorCommands = { "editor.state", "editor.play", "editor.pause", "editor.stop", "editor.undo", "editor.redo", "editor.resolution", "editor.menu", "editor.console", "project.tag", "project.layer" };
+        private static readonly string[] ScriptCommands = { "script.create", "script.read", "script.hash", "script.edit", "script.apply-edits", "script.validate" };
+        private static readonly string[] ScriptableObjectCommands = { "scriptable-object.create", "scriptable-object.info", "scriptable-object.modify" };
         private static readonly string[] CodeCommands = { "code.exec" };
         private static readonly string[] ProjectToolCommands = { "project-tool.list", "project-tool.run" };
         private static readonly string[] RuntimeToolCommands = { "runtime-tool.list", "runtime-tool.run" };
         private static readonly string[] ContextCommands = { "context.list", "context.describe", "context.read" };
         private static readonly string[] ExtensionCommands = { "extension.status" };
-        private const string BridgeDiagnosticsFingerprint = "alp276-health-fingerprint-20260618-play-mode-guard-v2";
-        private const string DestructiveCommandFingerprint = "alp332-destructive-safety-v1";
+        private const string BridgeDiagnosticsFingerprint = "health-fingerprint-play-mode-guard-v2";
+        private const string DestructiveCommandFingerprint = "destructive-safety-v1";
         private static readonly BridgeCommandRegistry CommandRegistry = CreateCommandRegistry();
         private static readonly string ListenerId = Guid.NewGuid().ToString("N");
         private static readonly string InstanceSuffix = Guid.NewGuid().ToString("N").Substring(0, 6);
@@ -291,11 +274,9 @@ namespace UnityCli
                 || command == "scene.save"
                 || command == "code.exec"
                 || command == "component.remove"
-                
-                || command == "cinemachine.extension"
-                || command == "urp.feature"
                 || command == "editor.menu"
-                || command == "script.edit";
+                || command == "script.edit"
+                || command == "script.apply-edits";
         }
 
         /// <summary>

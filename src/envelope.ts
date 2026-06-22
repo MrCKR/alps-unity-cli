@@ -1,6 +1,6 @@
 /**
  * CLI-side timeout and retry mechanism for bridge requests.
- * Matches ALP-164 frozen spec §安全、性能与生命周期 / timeout / retry-after.
+ * Defines timeout and retry-after envelope helpers.
  *
  * Key behaviors:
  * - Per-request timeout via --timeout-ms or command default.

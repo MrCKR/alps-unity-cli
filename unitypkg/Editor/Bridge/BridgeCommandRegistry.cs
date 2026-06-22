@@ -95,18 +95,14 @@ namespace UnityCli
             RegisterGraphicsCommands(registry);
             RegisterPhysicsCommands(registry);
             RegisterProfilerCommands(registry);
-            // ProBuilder commands removed from core — now served by extension package (P7-T2b)
-            // RegisterProBuilderCommands(registry);
-            RegisterCinemachineCommands(registry);
+            RegisterInstalledExtensionCommands(registry);
             RegisterAnimationCommands(registry);
-            RegisterVfxCommands(registry);
-            RegisterUrpCommands(registry);
-            RegisterHdrpCommands(registry);
             RegisterShaderCommands(registry);
             RegisterTextureCommands(registry);
             RegisterEditorCommands(registry);
             RegisterDiagnoseCommands(registry);
             RegisterScriptCommands(registry);
+            RegisterScriptableObjectCommands(registry);
             RegisterCodeExecCommand(registry);
             RegisterProjectToolCommands(registry);
             RegisterRuntimeToolCommands(registry);
@@ -118,6 +114,30 @@ namespace UnityCli
         private static void RegisterCommand(BridgeCommandRegistry registry, string command, string domain, bool destructive, Func<BridgeRequest, string> handler)
         {
             registry.Register(command, domain, !destructive, destructive, destructive ? 60000 : 30000, handler);
+        }
+
+        /// <summary>
+        /// 通过方法名反射注册已复制到项目中的可选 extension 命令，避免 core 静态引用可选包代码。
+        /// </summary>
+        private static void RegisterInstalledExtensionCommands(BridgeCommandRegistry registry)
+        {
+            var methodNames = new[]
+            {
+                "RegisterProBuilderCommands",
+                "RegisterCinemachineCommands",
+                "RegisterVfxCommands",
+                "RegisterUrpCommands",
+                "RegisterHdrpCommands"
+            };
+            foreach (var methodName in methodNames)
+            {
+                var method = typeof(UnityCliBridge).GetMethod(methodName, BindingFlags.Static | BindingFlags.NonPublic);
+                if (method == null)
+                {
+                    continue;
+                }
+                method.Invoke(null, new object[] { registry });
+            }
         }
     }
 }

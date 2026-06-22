@@ -4,7 +4,7 @@ CLI-first Unity 自动化工具，不是 MCP server。通过 `unity_cli` 二进�
 
 npm 包名：`@alps_ckr/unity_cli`  
 运行环境：Windows + Node.js 20+  
-当前方向：ALP-22 冻结决策 — 独立 CLI 实现、Windows-only、npm-first 安装、开放能力无默认风险门控。
+当前方向：冻结决策 — 独立 CLI 实现、Windows-only、npm-first 安装、开放能力无默认风险门控。
 
 ## 快速开始
 
@@ -266,8 +266,8 @@ unity_cli animation state <target>
 unity_cli animation play <target> --state Run
 unity_cli animation stop <target>
 
-unity_cli vfx graph <path>
-unity_cli vfx effect <target> --add --graph <vfx-path>
+unity_cli tools run vfx.graph --input '{"path":"<path>"}'
+unity_cli tools run vfx.effect --input '{"target":"<target>","add":true,"graph":"<vfx-path>"}'
 
 unity_cli shader info <path>
 unity_cli shader read <path>
@@ -390,7 +390,12 @@ unity_cli capabilities
 ```powershell
 unity_cli context list
 unity_cli context describe <name>
-unity_cli read <name> [--input '<json>']
+unity_cli context read <name> [--input '<json>']
+
+# Resource 对齐 Context 示例
+unity_cli context read scene.gameobject.components --input '{"instanceId":123}'
+unity_cli context read prefab.info --input '{"path":"Assets/Prefabs/Hero.prefab"}'
+unity_cli context read tools.groups
 ```
 
 ### 扩展包
@@ -453,7 +458,7 @@ Bridge 生命周期：
 
 ### Bridge Command Reference
 
-`camera.list`, `camera.info`, `camera.screenshot`, `scene.active`, `scene.hierarchy`, `scene.build-settings`, `scene.screenshot`, `scene.create`, `scene.load`, `scene.save`, `go.find`, `go.inspect`, `go.create`, `go.modify`, `go.delete`, `component.add`, `component.remove`, `component.set`
+`camera.list`, `camera.info`, `camera.screenshot`, `scene.active`, `scene.hierarchy`, `scene.build-settings`, `scene.screenshot`, `scene.create`, `scene.load`, `scene.save`, `go.find`, `go.inspect`, `go.create`, `go.modify`, `go.duplicate`, `go.move-relative`, `go.look-at`, `go.delete`, `component.add`, `component.remove`, `component.set`
 
 **Camera & Screenshot:**
 - `camera.list`, `camera.info`, `camera.screenshot`, `camera.create`, `camera.target`, `camera.lens`, `camera.multiview`
@@ -465,7 +470,7 @@ Bridge 生命周期：
 - `scene.active`, `scene.hierarchy`, `scene.build-settings`, `scene.screenshot`, `scene.create`, `scene.load`, `scene.save`
 
 **GameObject & Component:**
-- `go.find`, `go.inspect`, `go.create`, `go.modify`, `go.delete`, `component.add`, `component.remove`, `component.set`
+- `go.find`, `go.inspect`, `go.create`, `go.modify`, `go.duplicate`, `go.move-relative`, `go.look-at`, `go.delete`, `component.add`, `component.remove`, `component.set`
 
 **Asset:**
 - `asset.search`, `asset.info`, `asset.create`, `asset.import`, `asset.modify`, `asset.delete`, `asset.duplicate`, `asset.move`, `asset.rename`
@@ -497,7 +502,7 @@ Bridge 生命周期：
 
 **Animation & VFX:**
 - `animation clip <path>` reads or creates `Assets/*.anim` AnimationClip assets
-- `vfx graph <path>` reads or creates `Assets/*.vfx` Visual Effect Graph assets
+- `tools run vfx.graph --input '{"path":"<path>"}'` reads or creates `Assets/*.vfx` Visual Effect Graph assets
 - Windows-style `Assets\VFX\Explosion.vfx` paths are normalized to Unity asset paths
 - `E_VFX_PACKAGE_MISSING`, `E_VFX_GRAPH_NOT_FOUND`
 
@@ -516,7 +521,7 @@ Bridge 生命周期：
 - C# runtime behavior for empty camera targets, missing Cameras, screenshot IO failures, actual PNG/JPG artifacts, Prefab Stage open/save/close, Prefab dirty conflicts, nested/variant Prefab summaries, Material asset creation, Renderer/UI Graphic assignment, Material property writes, GraphicsSettings/QualitySettings persistence, render pipeline asset resolution, Physics/Physics2D project setting persistence, raycast collision hits, explicit simulation steps, AnimationClip asset creation/binding summaries, Animator state/play/stop behavior, VFX Graph asset creation, VisualEffect assignment, Shader import diagnostics, TextureImporter mutations, uGUI object creation, UIDocument/PanelSettings linking, UI hierarchy summaries and Runtime Code live execution must still be proven by real Windows + Unity Editor validation
 
 **Script & Code:**
-- `script.create`, `script.read`, `script.edit`, `script.validate`, `code.exec`.
+- `script.create`, `script.read`, `script.hash`, `script.edit`, `script.apply-edits`, `script.validate`, `code.exec`.
 
 **Context & Extension:**
 - `context.list`, `context.describe`, `context.read` — read-only context observations
@@ -536,7 +541,7 @@ Bridge 生命周期：
 Unity 项目 C# 代码通过 `[UnityCliTool]` 特性注册自定义工具：
 
 ```csharp
-[UnityCliTool("my.editor-tool", Title = "My Editor Tool", Group = "custom")]
+[UnityCliTool("my.editor-tool", Title = "My Editor-targeted Tool", Group = "custom")]
 public static class MyEditorTool
 {
     public static object Execute(Dictionary<string, object> input)
@@ -562,12 +567,11 @@ unity_cli tools describe my.editor-tool
 unity_cli tools run my.editor-tool --input '{"key":"value"}'
 ```
 
-### Editor Tool 与 Runtime Tool
+### 统一 Tool 与 target
 
-- **Editor Tool**：`target: "editor"`，在编辑器主线程执行，适合资产/场景/配置修改
-- **Runtime Tool**：`target: "runtime"`，需要 Play Mode 活跃，适合运行时域操作
+所有能力都以 Tool 呈现。`target: "editor" | "runtime" | "both"` 只是可用性与路由约束，不是两套用户入口。
 
-Runtime Tool 在非 Play Mode 时返回 `E_RUNTIME_NOT_READY`（transient error）。
+`runtime` 表示 Unity gameplay/runtime layer；具体 tool 是否需要 Play Mode，由 `availabilityScope` 和 `next_actions` 说明。
 
 ### 安全机制
 
@@ -579,13 +583,14 @@ Runtime Tool 在非 Play Mode 时返回 `E_RUNTIME_NOT_READY`（transient error�
 
 ## ProBuilder 扩展
 
-ProBuilder 命令需要 `com.unity.probuilder` 包：
+ProBuilder 工具需要项目先安装 `com.unity.probuilder`，再安装 CLI extension bundle：
 
 ```powershell
-unity_cli probuilder create-shape cube --name "MyCube"
-unity_cli probuilder extrude-faces <target> --indices 1,2,3 --distance 0.5
-unity_cli probuilder combine-meshes --targets "ObjA,ObjB" --name "Combined"
-unity_cli probuilder delete-faces <target> --indices 4,5 --yes
+unity_cli extensions install probuilder --project <project>
+unity_cli tools group list probuilder --project <project>
+unity_cli tools run probuilder.create-shape --project <project> --input '{"shapeType":"Cube","name":"MyCube"}'
+unity_cli tools run probuilder.extrude-faces --project <project> --input '{"target":"<target>","faceIndices":[1,2,3],"distance":0.5}'
+unity_cli tools run probuilder.delete-faces --project <project> --input '{"target":"<target>","faceIndices":[4,5]}' --yes
 ```
 
 ## 风险与破坏性工具
@@ -602,18 +607,16 @@ unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --yes
 
 支持 `--dry-run` 的破坏性工具：`asset.delete`、`prefab.save`、`go.delete`、`component.remove`、`probuilder.delete-faces` 等。
 
-架构敏感工具（`architectureSensitive: true`）包括所有 `profiler.*` 工具，修改前需审查 `frozenDecision` 字段。
-
 ## 扩展能力概览
 
 | 扩展类型 | 当前状态 | 发现方式 |
 |----------|---------|---------|
-| 项目自定义 Tool (Editor) | ✅ 已实现 | `tools group list custom --include-custom` |
-| 项目自定义 Tool (Runtime) | ✅ 已实现 | `tools group list custom --include-custom`（Play Mode 下） |
+| 项目自定义 Tool (`target=editor`) | ✅ 已实现 | `tools group list custom --include-custom` |
+| 项目自定义 Tool (`target=runtime`) | ✅ 已实现 | `tools group list custom --include-custom`（通常需 Play Mode） |
 | 项目自定义 Context | ✅ 已实现 | `context list/describe/read` |
 | 扩展包管理 | ✅ 已实现 | `extensions list/install/remove/doctor` |
-| ProBuilder 扩展 | ✅ 已实现 | 自动包含（需要 com.unity.probuilder） |
-| Cinemachine/VFX/URP/HDRP 扩展 | 📋 Backlog（P8） | 待实现 |
+| ProBuilder 扩展 | ✅ 已实现 | `tools group/list/describe/run`（需要 `com.unity.probuilder` + `extensions install probuilder`） |
+| Cinemachine/VFX/URP/HDRP 扩展 | ✅ 已实现 | `tools group/list/describe/run`（需要对应 Unity package + `extensions install <id>`） |
 
 ## 更多文档
 

@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { bridgeCommandRegistry } from "../bridge/index.js";
 import { builtinToolMetadata, allRegisteredToolMetadata } from "../tools/metadata/index.js";
@@ -16,7 +16,7 @@ validateToolMetadataContracts(allRegisteredToolMetadata(), bridgeCommandRegistry
 // P5-T04: Validate extension manifest tool contributions against contract
 validateExtensionManifestContracts(BUILTIN_EXTENSION_MANIFESTS, bridgeCommandRegistry);
 
-const csharpCommands = extractCSharpRegisteredCommands("unitypkg/Editor");
+const csharpCommands = extractAllCSharpRegisteredCommands();
 const requiredCsharpCommands = contracts
   .filter((entry) => (entry.handler_type === "bridge" || entry.handler_type === "hybrid") && entry.csharp_handler === "present")
   .map((entry) => entry.bridgeCommand)
@@ -31,6 +31,22 @@ console.log(JSON.stringify({
   csharpRegisteredCommands: csharpCommands.length,
   metadataTools: allRegisteredToolMetadata().length
 }, null, 2));
+
+function extractAllCSharpRegisteredCommands(): string[] {
+  const commands = new Set(extractCSharpRegisteredCommands("unitypkg/Editor"));
+  const extensionsRoot = "extensions";
+  if (existsSync(extensionsRoot)) {
+    for (const entry of readdirSync(extensionsRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const editorRoot = join(extensionsRoot, entry.name, "unitypkg", "Editor");
+      if (!existsSync(editorRoot)) continue;
+      for (const command of extractCSharpRegisteredCommands(editorRoot)) {
+        commands.add(command);
+      }
+    }
+  }
+  return [...commands].sort();
+}
 
 function extractCSharpRegisteredCommands(root: string): string[] {
   const commands = new Set<string>();

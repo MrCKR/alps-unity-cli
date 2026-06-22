@@ -30,7 +30,6 @@ namespace UnityCli
     public sealed class UnityCliProjectToolDefinition
     {
         public string Name { get; set; }
-        public string DisplayName { get; set; }
         public string Title { get; set; }
         public string Description { get; set; }
         public string Group { get; set; }
@@ -40,9 +39,6 @@ namespace UnityCli
         public string CapabilityType { get; set; }
         public bool ReadOnlyHint { get; set; }
         public bool DestructiveHint { get; set; }
-        public bool ArchitectureSensitive { get; set; }
-        public string FrozenDecision { get; set; }
-        public string[] CoverageScope { get; set; }
         /// <summary>
         /// Execution target: "editor", "runtime", or "both".
         /// Determines which invocation path is used: editor-domain

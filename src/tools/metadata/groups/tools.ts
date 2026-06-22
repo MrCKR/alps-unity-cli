@@ -5,7 +5,7 @@ export const TOOLS_DISCOVERY_TOOLS: ToolMetadata[] = [
   {
     name: "tools.group",
     title: "Tool Groups",
-    description: "List the available tool category groups. Primary discovery entry point in the group-first model.",
+    description: "List the available tool groups. Primary discovery entry point in the group-first model.",
     group: "tools",
     inputSchema: objSchema({}),
     readOnlyHint: true,
@@ -78,9 +78,6 @@ export const TOOLS_DISCOVERY_TOOLS: ToolMetadata[] = [
     docsTopic: "tool-execution",
     target: "both",
     availabilityScope: "editorSession",
-    architectureSensitive: true,
-    frozenDecision: "ALP-365-P6",
-    coverageScope: ["tools-run", "runtime-target", "play-mode-session"],
     examples: [
       { description: "Run an editor-domain tool", argv: ["tools", "run", "scene.hierarchy", "--target", "my-editor"] },
       { description: "Run a runtime tool (requires Play Mode active)", argv: ["tools", "run", "runtime.echo", "--target", "my-editor"] },

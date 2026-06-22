@@ -1,10 +1,14 @@
 import { boolFlag, compactArgs, floatFlag, queryArgs, stringFlag, targetArgs } from "../args.js";
 import type { BridgeCommandSpec } from "../types.js";
 
-export const hdrpBridgeSpecs: BridgeCommandSpec[] = [
+export const hdrpBridgeSpecs: BridgeCommandSpec[] = markToolsOnly([
   { group: "hdrp", command: "volume", bridgeCommand: "hdrp.volume", buildArgs: hdrpVolumeArgs },
   { group: "hdrp", command: "settings", bridgeCommand: "hdrp.settings", buildArgs: hdrpSettingsArgs }
-];
+]);
+
+function markToolsOnly(specs: BridgeCommandSpec[]): BridgeCommandSpec[] {
+  return specs.map((spec) => ({ ...spec, toolsOnly: true }));
+}
 
 function hdrpVolumeArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
@@ -26,3 +30,4 @@ function hdrpSettingsArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[
     value: stringFlag(flags, "value")
   });
 }
+

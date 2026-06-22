@@ -14,6 +14,7 @@ import { prefabBridgeSpecs } from "./domains/prefab.js";
 import { profilerBridgeSpecs } from "./domains/profiler.js";
 import { sceneBridgeSpecs } from "./domains/scene.js";
 import { scriptBridgeSpecs } from "./domains/script.js";
+import { scriptableObjectBridgeSpecs } from "./domains/scriptable-object.js";
 import { shaderBridgeSpecs } from "./domains/shader.js";
 import { textureBridgeSpecs } from "./domains/texture.js";
 import { uiBridgeSpecs } from "./domains/ui.js";
@@ -30,6 +31,7 @@ const CORE_DOMAIN_SPECS: BridgeCommandSpec[] = [
   ...sceneBridgeSpecs,
   ...cameraBridgeSpecs,
   ...gameObjectBridgeSpecs,
+  ...scriptableObjectBridgeSpecs,
   ...assetBridgeSpecs,
   ...prefabBridgeSpecs,
   ...materialBridgeSpecs,

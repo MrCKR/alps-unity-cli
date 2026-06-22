@@ -4,7 +4,7 @@ import { objSchema } from "../schemas.js";
 /**
  * HDRP (High Definition Render Pipeline) extension tools.
  *
- * Critical reference notes (ALP-505 P8):
+ * Critical reference notes:
  * - Critically references unity-mcp's Graphics/VolumeOps.cs and GraphicsHelpers.cs
  *   for HDRP volume and pipeline operations.
  * - Discarded: unity-mcp routes HDRP features through the graphics domain.
@@ -47,7 +47,7 @@ export const HDRP_TOOLS: ToolMetadata[] = [
     }),
     readOnlyHint: false,
     destructiveHint: false,
-    cliCommand: "hdrp volume",
+    cliCommand: "tools run hdrp.volume",
     examples: [
       { description: "List HDRP volumes in scene", argv: ["hdrp", "volume", "--action", "list"] },
       { description: "Create a global HDRP volume", argv: ["hdrp", "volume", "--action", "create", "--is-global", "true", "--name", "GlobalVolume"] }
@@ -64,7 +64,7 @@ export const HDRP_TOOLS: ToolMetadata[] = [
     }),
     readOnlyHint: false,
     destructiveHint: false,
-    cliCommand: "hdrp settings",
+    cliCommand: "tools run hdrp.settings",
     examples: [
       { description: "Read HDRP pipeline settings", argv: ["hdrp", "settings"] },
       { description: "Set shadow distance", argv: ["hdrp", "settings", "--property", "shadowDistance", "--value", "500"] }

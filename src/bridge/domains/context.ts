@@ -60,7 +60,9 @@ function contextReadArgs({ flags, positionalTarget }: Parameters<BridgeCommandSp
     }
   }
 
+  const inputObject = input && typeof input === "object" && !Array.isArray(input) ? input as Record<string, unknown> : {};
   return compactArgs({
+    ...inputObject,
     name: positionalTarget ?? stringFlag(flags, "name"),
     input,
     fingerprintMode: stringFlag(flags, "fingerprint-mode"),

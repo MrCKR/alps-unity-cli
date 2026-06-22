@@ -310,12 +310,14 @@ function buildToolUnavailableNextActions(
 ): string[] {
   const actions: string[] = [];
   actions.push(
-    `Install the missing package(s) to enable ${extensionName}: ` +
-    missingPackageIds.map((id) => `unity_cli package install ${id}`).join("; ")
+    `Install the required Unity package(s) manually via Unity Package Manager or Packages/manifest.json to enable ${extensionName}: ${missingPackageIds.join(", ")}.`
   );
   actions.push(
-    `Or add to Packages/manifest.json dependencies: ` +
+    `If editing manifest.json, add dependencies: ` +
     missingPackageIds.map((id) => `"${id}": "latest"`).join(", ")
+  );
+  actions.push(
+    `After Unity resolves packages, run 'unity_cli extensions install <id> --project <path>' for the matching extension bundle.`
   );
   actions.push(
     `Run 'unity_cli extensions doctor --project <path>' to diagnose all extension availability.`
@@ -333,11 +335,10 @@ function buildContextUnavailableNextActions(
 ): string[] {
   const actions: string[] = [];
   actions.push(
-    `Install the missing package(s) to enable ${extensionName}: ` +
-    missingPackageIds.map((id) => `unity_cli package install ${id}`).join("; ")
+    `Install the required Unity package(s) manually via Unity Package Manager or Packages/manifest.json to enable ${extensionName}: ${missingPackageIds.join(", ")}.`
   );
   actions.push(
-    `Or add to Packages/manifest.json dependencies: ` +
+    `If editing manifest.json, add dependencies: ` +
     missingPackageIds.map((id) => `"${id}": "latest"`).join(", ")
   );
   actions.push(

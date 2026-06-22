@@ -573,7 +573,6 @@ namespace UnityCli
         {
             return new UnityCliJsonWriter().BeginObject()
                 .Prop("name", definition.Name)
-                .Prop("displayName", definition.DisplayName)
                 .Prop("title", definition.Title)
                 .Prop("description", definition.Description)
                 .Prop("group", definition.Group)
@@ -590,9 +589,6 @@ namespace UnityCli
                 .Prop("maxTimeoutMs", definition.MaxTimeoutMs)
                 .Prop("supportsJob", false)
                 .PropRaw("artifactKinds", StringArrayJson(definition.ArtifactKinds))
-                .Prop("architectureSensitive", definition.ArchitectureSensitive)
-                .Prop("frozenDecision", definition.FrozenDecision)
-                .PropRaw("coverageScope", StringArrayJson(definition.CoverageScope))
                 .Prop("handler", "bridge-runtime")
                 .Prop("supportStatus", "live-bridge-runtime")
                 .Prop("cliCommand", "tools run " + definition.Name)

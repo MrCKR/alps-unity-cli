@@ -47,4 +47,8 @@ export interface BridgeCommandSpec {
   supportsDryRun?: boolean;
   /** If true, this command is internal and not accessible from CLI. Only used as bridge protocol. */
   internal?: boolean;
+  /** If true, native top-level CLI routing is disabled; tools run may still use the spec for argument mapping. */
+  toolsOnly?: boolean;
+  /** Legacy/native argv mapping used internally by tools run for argument builders. */
+  nativeCliCommand?: string;
 }

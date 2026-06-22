@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "generatedFrom": "ALP-306 unified C#/TS/metadata command contract",
+  "generatedFrom": "unified C#/TS/metadata command contract",
   "commands": [
     {
       "bridgeCommand": "animation.clip",
@@ -563,6 +563,16 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "cli.package.status",
+      "group": "cli",
+      "command": "package status",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "cli.reflect.member",
       "group": "cli",
       "command": "member",
@@ -833,6 +843,16 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "editor.redo",
+      "group": "editor",
+      "command": "redo",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "editor.refresh",
       "group": "editor",
       "command": "refresh",
@@ -841,6 +861,16 @@
       "readOnly": false,
       "destructive": false,
       "timeout": 600000
+    },
+    {
+      "bridgeCommand": "editor.resolution",
+      "group": "editor",
+      "command": "resolution",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
     },
     {
       "bridgeCommand": "editor.state",
@@ -856,6 +886,16 @@
       "bridgeCommand": "editor.stop",
       "group": "editor",
       "command": "stop",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "editor.undo",
+      "group": "editor",
+      "command": "undo",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "readOnly": false,
@@ -893,6 +933,16 @@
       "timeout": 60000
     },
     {
+      "bridgeCommand": "go.duplicate",
+      "group": "go",
+      "command": "duplicate",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "go.find",
       "group": "go",
       "command": "find",
@@ -913,9 +963,29 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "go.look-at",
+      "group": "go",
+      "command": "look-at",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "go.modify",
       "group": "go",
       "command": "modify",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "go.move-relative",
+      "group": "go",
+      "command": "move-relative",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "readOnly": false,
@@ -1269,12 +1339,72 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "physics.collision-matrix",
+      "group": "physics",
+      "command": "collision-matrix",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "physics.force",
+      "group": "physics",
+      "command": "force",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "physics.joint",
+      "group": "physics",
+      "command": "joint",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "physics.material",
+      "group": "physics",
+      "command": "material",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "physics.overlap",
+      "group": "physics",
+      "command": "overlap",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "physics.raycast",
       "group": "physics",
       "command": "raycast",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "readOnly": true,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "physics.rigidbody",
+      "group": "physics",
+      "command": "rigidbody",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
       "destructive": false,
       "timeout": 30000
     },
@@ -1844,16 +1974,7 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
-      "timeout": 30000,
-      "architectureSensitive": true,
-      "frozenDecision": "ALP-165-Q4",
-      "coverageScope": [
-        "session",
-        "counter",
-        "memory",
-        "frame-debugger",
-        "export"
-      ]
+      "timeout": 30000
     },
     {
       "bridgeCommand": "profiler.counter",
@@ -1863,16 +1984,7 @@
       "csharp_handler": "present",
       "readOnly": true,
       "destructive": false,
-      "timeout": 30000,
-      "architectureSensitive": true,
-      "frozenDecision": "ALP-165-Q4",
-      "coverageScope": [
-        "session",
-        "counter",
-        "memory",
-        "frame-debugger",
-        "export"
-      ]
+      "timeout": 30000
     },
     {
       "bridgeCommand": "profiler.export",
@@ -1882,16 +1994,7 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
-      "timeout": 30000,
-      "architectureSensitive": true,
-      "frozenDecision": "ALP-165-Q4",
-      "coverageScope": [
-        "session",
-        "counter",
-        "memory",
-        "frame-debugger",
-        "export"
-      ]
+      "timeout": 30000
     },
     {
       "bridgeCommand": "profiler.frame",
@@ -1901,16 +2004,7 @@
       "csharp_handler": "present",
       "readOnly": true,
       "destructive": false,
-      "timeout": 30000,
-      "architectureSensitive": true,
-      "frozenDecision": "ALP-165-Q4",
-      "coverageScope": [
-        "session",
-        "counter",
-        "memory",
-        "frame-debugger",
-        "export"
-      ]
+      "timeout": 30000
     },
     {
       "bridgeCommand": "profiler.memory",
@@ -1920,16 +2014,7 @@
       "csharp_handler": "present",
       "readOnly": true,
       "destructive": false,
-      "timeout": 30000,
-      "architectureSensitive": true,
-      "frozenDecision": "ALP-165-Q4",
-      "coverageScope": [
-        "session",
-        "counter",
-        "memory",
-        "frame-debugger",
-        "export"
-      ]
+      "timeout": 30000
     },
     {
       "bridgeCommand": "profiler.pause",
@@ -1939,16 +2024,7 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
-      "timeout": 30000,
-      "architectureSensitive": true,
-      "frozenDecision": "ALP-165-Q4",
-      "coverageScope": [
-        "session",
-        "counter",
-        "memory",
-        "frame-debugger",
-        "export"
-      ]
+      "timeout": 30000
     },
     {
       "bridgeCommand": "profiler.start",
@@ -1958,16 +2034,7 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
-      "timeout": 30000,
-      "architectureSensitive": true,
-      "frozenDecision": "ALP-165-Q4",
-      "coverageScope": [
-        "session",
-        "counter",
-        "memory",
-        "frame-debugger",
-        "export"
-      ]
+      "timeout": 30000
     },
     {
       "bridgeCommand": "profiler.status",
@@ -1977,16 +2044,7 @@
       "csharp_handler": "present",
       "readOnly": true,
       "destructive": false,
-      "timeout": 30000,
-      "architectureSensitive": true,
-      "frozenDecision": "ALP-165-Q4",
-      "coverageScope": [
-        "session",
-        "counter",
-        "memory",
-        "frame-debugger",
-        "export"
-      ]
+      "timeout": 30000
     },
     {
       "bridgeCommand": "profiler.stop",
@@ -1996,16 +2054,7 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
-      "timeout": 30000,
-      "architectureSensitive": true,
-      "frozenDecision": "ALP-165-Q4",
-      "coverageScope": [
-        "session",
-        "counter",
-        "memory",
-        "frame-debugger",
-        "export"
-      ]
+      "timeout": 30000
     },
     {
       "bridgeCommand": "project-tool.list",
@@ -2015,14 +2064,7 @@
       "csharp_handler": "present",
       "readOnly": true,
       "destructive": false,
-      "timeout": 30000,
-      "architectureSensitive": true,
-      "frozenDecision": "ALP-404-Q3",
-      "coverageScope": [
-        "project-tool",
-        "editor-session",
-        "availability-scope"
-      ]
+      "timeout": 30000
     },
     {
       "bridgeCommand": "project-tool.run",
@@ -2032,14 +2074,27 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": false,
-      "timeout": 60000,
-      "architectureSensitive": true,
-      "frozenDecision": "ALP-404-Q4",
-      "coverageScope": [
-        "project-tool",
-        "editor-session",
-        "custom-tool-execution"
-      ]
+      "timeout": 60000
+    },
+    {
+      "bridgeCommand": "project.layer",
+      "group": "project",
+      "command": "layer",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "project.tag",
+      "group": "project",
+      "command": "tag",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
     },
     {
       "bridgeCommand": "runtime-tool.list",
@@ -2049,14 +2104,7 @@
       "csharp_handler": "present",
       "readOnly": true,
       "destructive": false,
-      "timeout": 30000,
-      "architectureSensitive": true,
-      "frozenDecision": "ALP-404-Q3",
-      "coverageScope": [
-        "runtime-executor",
-        "play-mode-session",
-        "availability-scope"
-      ]
+      "timeout": 30000
     },
     {
       "bridgeCommand": "runtime-tool.run",
@@ -2066,15 +2114,7 @@
       "csharp_handler": "present",
       "readOnly": false,
       "destructive": true,
-      "timeout": 60000,
-      "architectureSensitive": true,
-      "frozenDecision": "ALP-404-Q4",
-      "coverageScope": [
-        "runtime-executor",
-        "play-mode-session",
-        "cross-frame-wait",
-        "timeout-semantics"
-      ]
+      "timeout": 60000
     },
     {
       "bridgeCommand": "scene.active",
@@ -2157,6 +2197,16 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "script.apply-edits",
+      "group": "script",
+      "command": "apply-edits",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "script.create",
       "group": "script",
       "command": "create",
@@ -2177,6 +2227,16 @@
       "timeout": 60000
     },
     {
+      "bridgeCommand": "script.hash",
+      "group": "script",
+      "command": "hash",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "script.read",
       "group": "script",
       "command": "read",
@@ -2193,6 +2253,36 @@
       "handler_type": "bridge",
       "csharp_handler": "present",
       "readOnly": true,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "scriptable-object.create",
+      "group": "scriptable-object",
+      "command": "create",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "scriptable-object.info",
+      "group": "scriptable-object",
+      "command": "info",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "scriptable-object.modify",
+      "group": "scriptable-object",
+      "command": "modify",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "readOnly": false,
       "destructive": false,
       "timeout": 30000
     },
@@ -2327,16 +2417,6 @@
       "timeout": 10000
     },
     {
-      "bridgeCommand": "tools.groups",
-      "group": "tools",
-      "command": "groups",
-      "handler_type": "offline",
-      "csharp_handler": "none",
-      "readOnly": true,
-      "destructive": false,
-      "timeout": 5000
-    },
-    {
       "bridgeCommand": "tools.group",
       "group": "tools",
       "command": "group",
@@ -2350,6 +2430,16 @@
       "bridgeCommand": "tools.group-list",
       "group": "tools",
       "command": "group-list",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "readOnly": true,
+      "destructive": false,
+      "timeout": 5000
+    },
+    {
+      "bridgeCommand": "tools.groups",
+      "group": "tools",
+      "command": "groups",
       "handler_type": "offline",
       "csharp_handler": "none",
       "readOnly": true,
@@ -2374,14 +2464,7 @@
       "csharp_handler": "none",
       "readOnly": false,
       "destructive": false,
-      "timeout": 30000,
-      "architectureSensitive": true,
-      "frozenDecision": "ALP-365-P6",
-      "coverageScope": [
-        "tools-run",
-        "runtime-target",
-        "play-mode-session"
-      ]
+      "timeout": 30000
     },
     {
       "bridgeCommand": "tools.search",
@@ -2555,7 +2638,7 @@
       ]
     },
     {
-"bridgeCommand": "vfx.line-create",
+      "bridgeCommand": "vfx.line-create",
       "group": "vfx",
       "command": "line-create",
       "handler_type": "bridge",

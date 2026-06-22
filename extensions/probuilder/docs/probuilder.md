@@ -5,6 +5,7 @@ ProBuilder 扩展包（`unity-cli-extension-probuilder`）提供 36 个细粒度
 ## 前置条件
 
 - Unity 项目已安装 `com.unity.probuilder` 包
+- 已运行 `unity_cli extensions install probuilder --project <project>`，或 `init` 已自动复制 ProBuilder extension bundle
 - alps-unity-cli 已连接到运行中的 Unity Editor（Bridge 连接）
 
 ## 发现与查看工具
@@ -12,34 +13,31 @@ ProBuilder 扩展包（`unity-cli-extension-probuilder`）提供 36 个细粒度
 ### 列出所有 ProBuilder 工具
 
 ```bash
-unity_cli tools group list probuilder
+unity_cli tools group list probuilder --project <project>
 ```
 
 ### 查看某个工具的详细参数
 
 ```bash
-unity_cli tools describe probuilder.mesh-info
-unity_cli tools describe probuilder.create-shape
-unity_cli tools describe probuilder.extrude-faces
+unity_cli tools describe probuilder.mesh-info --project <project>
+unity_cli tools describe probuilder.create-shape --project <project>
+unity_cli tools describe probuilder.extrude-faces --project <project>
 ```
 
 ### 运行工具
 
 ```bash
 # 检测 ProBuilder 包是否可用
-unity_cli probuilder ping
+unity_cli tools run probuilder.ping --project <project>
 
 # 创建形状
-unity_cli probuilder create-shape cube --name "MyCube"
+unity_cli tools run probuilder.create-shape --project <project> --input '{"shapeType":"Cube","name":"MyCube"}'
 
 # 查看网格信息
-unity_cli probuilder mesh-info <target>
+unity_cli tools run probuilder.mesh-info --project <project> --input '{"target":"<target>"}'
 
 # 挤出面
-unity_cli probuilder extrude-faces <target> --indices 1,2,3 --distance 0.5
-
-# 以 batch job 模式运行
-unity_cli probuilder create-shape sphere --job --wait
+unity_cli tools run probuilder.extrude-faces --project <project> --input '{"target":"<target>","faceIndices":[1,2,3],"distance":0.5}'
 ```
 
 ## 工具分类
@@ -102,18 +100,18 @@ unity_cli extensions list --project /path/to/unity/project
 
 - ProBuilder 工具在 `tools group list probuilder` 中标记为 `available=false`
 - `tools describe probuilder.*` 会显示 `requiresPackages: ["com.unity.probuilder"]`
-- `tools run probuilder.*` 返回 `E_EXTENSION_DEPENDENCY_MISSING` 错误，附带 `next_actions` 提示安装依赖
+- `tools run probuilder.*` 返回 `E_EXTENSION_UNAVAILABLE` 错误，附带 `next_actions` 提示手动安装依赖并复制 extension bundle
 
 ### 恢复路径
 
 ```bash
-# 方法 1：通过 CLI 安装 ProBuilder 包
-unity_cli package install com.unity.probuilder --project /path/to/project
+# 方法 1：通过 Unity Package Manager 安装 com.unity.probuilder
 
 # 方法 2：手动添加到 Packages/manifest.json
 # 在 dependencies 中添加 "com.unity.probuilder": "latest"
 
-# 安装后重新检测
+# Unity 解析包后复制 extension bundle，并重新检测
+unity_cli extensions install probuilder --project /path/to/project
 unity_cli doctor --project /path/to/project
 ```
 

@@ -4,7 +4,7 @@ import { objSchema } from "../schemas.js";
 /**
  * URP (Universal Render Pipeline) extension tools.
  *
- * Critical reference notes (ALP-505 P8):
+ * Critical reference notes:
  * - Critically references unity-mcp's Graphics/RendererFeatureOps.cs for renderer
  *   feature management (list, add, remove, configure, toggle, reorder) and
  *   Graphics/VolumeOps.cs for volume operations (create, add/set/remove effects, get info).
@@ -49,7 +49,7 @@ export const URP_TOOLS: ToolMetadata[] = [
     }),
     readOnlyHint: false,
     destructiveHint: true,
-    cliCommand: "urp feature",
+    cliCommand: "tools run urp.feature",
     examples: [
       { description: "List all renderer features", argv: ["urp", "feature", "--action", "list"] },
       { description: "Add a ScreenSpaceAmbientOcclusion feature", argv: ["urp", "feature", "--action", "add", "--feature-type", "ScreenSpaceAmbientOcclusion"] }
@@ -72,7 +72,7 @@ export const URP_TOOLS: ToolMetadata[] = [
     }),
     readOnlyHint: false,
     destructiveHint: false,
-    cliCommand: "urp volume",
+    cliCommand: "tools run urp.volume",
     examples: [
       { description: "List URP volumes in scene", argv: ["urp", "volume", "--action", "list"] },
       { description: "Create a global URP volume", argv: ["urp", "volume", "--action", "create", "--is-global", "--name", "GlobalVolume"] }
@@ -89,7 +89,7 @@ export const URP_TOOLS: ToolMetadata[] = [
     }),
     readOnlyHint: false,
     destructiveHint: false,
-    cliCommand: "urp settings",
+    cliCommand: "tools run urp.settings",
     examples: [
       { description: "Read URP pipeline settings", argv: ["urp", "settings"] },
       { description: "Set render scale", argv: ["urp", "settings", "--property", "renderScale", "--value", "1.5"] }

@@ -5,7 +5,7 @@
  * CLI-only and planned command contract entries. This data is shipped with the
  * CLI/UnityPkg release so that `tools describe` works without a live Unity instance.
  *
- * The schema is /schemas/tool-metadata.schema.json (ALP-164 frozen v1.0).
+ * The schema is /schemas/tool-metadata.schema.json v1.0.
  *
  * P10-R3: ProBuilder, Cinemachine, VFX, URP, and HDRP tool metadata is no longer
  * statically aggregated here. These optional extensions register their tools
@@ -29,6 +29,7 @@ import { TEXTURE_TOOLS } from "./groups/texture.js";
 import { ANIMATION_TOOLS } from "./groups/animation.js";
 import { UI_TOOLS } from "./groups/ui.js";
 import { SCRIPT_TOOLS } from "./groups/script.js";
+import { SCRIPTABLE_OBJECT_TOOLS } from "./groups/scriptable-object.js";
 import { EDITOR_TOOLS } from "./groups/editor.js";
 import { DIAGNOSE_TOOLS } from "./groups/diagnose.js";
 import { SCREENSHOT_TOOLS } from "./groups/screenshot.js";
@@ -43,13 +44,12 @@ export type { ToolExample, ToolHandler, ToolMetadata, ToolSource, ToolRiskLevel,
 /** Extension groups that register through the contribution loader, not core aggregation. */
 export const EXTENSION_GROUPS = new Set(["probuilder", "cinemachine", "vfx", "urp", "hdrp"]);
 
-/** Normalize a ToolMetadata entry to include P1 defaults for kind/source/category. */
-export function normalizeToolMetadata(tool: ToolMetadata): ToolMetadata & { kind: "tool"; source: ToolSource; category: string } {
+/** Normalize a ToolMetadata entry to include default kind/source values. */
+export function normalizeToolMetadata(tool: ToolMetadata): ToolMetadata & { kind: "tool"; source: ToolSource } {
   return {
     ...tool,
     kind: tool.kind ?? "tool",
     source: tool.source ?? "built-in",
-    category: tool.category ?? tool.group,
   };
 }
 
@@ -73,6 +73,7 @@ const CORE_TOOLS: ToolMetadata[] = [
   ...ANIMATION_TOOLS,
   ...UI_TOOLS,
   ...SCRIPT_TOOLS,
+  ...SCRIPTABLE_OBJECT_TOOLS,
   ...EDITOR_TOOLS,
   ...DIAGNOSE_TOOLS,
   ...SCREENSHOT_TOOLS,
@@ -90,7 +91,7 @@ const extensionTools: ToolMetadata[] = [];
 
 // Validate core tools at module level (no extension groups yet).
 validateBridgeRegistryContracts(bridgeCommandRegistry, EXTENSION_GROUPS);
-validateBuiltinTools(CORE_TOOLS);
+validateBuiltinTools(CORE_TOOLS, false);
 validateToolMetadataContracts(CORE_TOOLS, bridgeCommandRegistry);
 
 /** Register extension tool metadata. Called by the contribution loader. */
@@ -107,7 +108,7 @@ export function registerExtensionTools(tools: ToolMetadata[]): void {
 
 /** Validate extension tool metadata after registration. */
 export function validateExtensionToolMetadata(): void {
-  validateBuiltinTools(extensionTools);
+  validateBuiltinTools(extensionTools, true);
   validateToolMetadataContracts(extensionTools, bridgeCommandRegistry);
 }
 
@@ -176,7 +177,7 @@ function scoreSearch(text: string, query: string): number {
   return 0;
 }
 
-function validateBuiltinTools(tools: ToolMetadata[]): void {
+function validateBuiltinTools(tools: ToolMetadata[], skipCliCommandBridgeCheck: boolean): void {
   const names = new Set<string>();
   const duplicateNames = new Set<string>();
 
@@ -186,7 +187,7 @@ function validateBuiltinTools(tools: ToolMetadata[]): void {
     }
     names.add(tool.name);
 
-    if (tool.handler === "bridge" && tool.supportStatus !== "planned" && tool.cliCommand) {
+    if (!skipCliCommandBridgeCheck && tool.handler === "bridge" && tool.supportStatus !== "planned" && tool.cliCommand) {
       const [group, ...commandParts] = tool.cliCommand.split(" ");
       const command = commandParts.join(" ");
       const spec = bridgeCommandRegistry.lookup(group, command);

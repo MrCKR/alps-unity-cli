@@ -56,7 +56,7 @@ export function projectDescriptorToToolMetadata(value: unknown): ToolMetadata | 
   if (!name) {
     return undefined;
   }
-  const title = stringProp(descriptor, "title") ?? stringProp(descriptor, "displayName") ?? name;
+  const title = stringProp(descriptor, "title") ?? name;
   const group = stringProp(descriptor, "group") ?? groupFromName(name);
   const target = stringProp(descriptor, "target") ?? "editor";
   const availabilityScope = stringProp(descriptor, "availabilityScope") ?? (target === "runtime" ? "playModeSession" : "editorSession");
@@ -71,9 +71,6 @@ export function projectDescriptorToToolMetadata(value: unknown): ToolMetadata | 
     destructiveHint: booleanProp(descriptor, "destructiveHint") ?? false,
     timeoutMs: numberProp(descriptor, "defaultTimeoutMs") ?? numberProp(descriptor, "timeoutMs"),
     permissions: stringArrayProp(descriptor, "permissions"),
-    architectureSensitive: booleanProp(descriptor, "architectureSensitive"),
-    frozenDecision: stringProp(descriptor, "frozenDecision"),
-    coverageScope: stringArrayProp(descriptor, "coverageScope"),
     docsTopic: stringProp(descriptor, "docsTopic") ?? "project-tool",
     handler: "bridge",
     supportStatus: "live-bridge",

@@ -43,8 +43,8 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   "risk-and-side-effects": {
     title: "Risk and Side Effects",
-    summary: "Risk model expressed through unified tool descriptors: destructiveHint, readOnlyHint, supportsDryRun, --yes confirmation gate, plannedEffects preview, fingerprint integrity, and architecture-sensitive markers.",
-    guide: "Always `tools describe` first. For destructive tools, use `--dry-run` if supported, then `--yes`. Check `doctor` for fingerprint status. Do not modify architecture-sensitive tools without reviewing frozenDecision."
+    summary: "Risk model expressed through unified tool descriptors: destructiveHint, readOnlyHint, supportsDryRun, --yes confirmation gate, plannedEffects preview, and fingerprint integrity.",
+    guide: "Always `tools describe` first. For destructive tools, use `--dry-run` if supported, then `--yes`. Check `doctor` for fingerprint status."
   },
   scene: {
     title: "Scene Commands",
@@ -87,8 +87,8 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   profiler: {
     title: "Profiler Commands",
-    summary: "Control the Unity profiler, read counters, query memory and export frame data. Architecture-sensitive ALP-165-Q4 frozen scope: session, counter, memory, frame debugger and export must remain fully covered. Handler: bridge + hybrid (capture). Target: editor.",
-    guide: "Start with `profiler status`, then `profiler start`, run your workload, inspect `profiler counter` / `profiler memory`, and `profiler export <path>`. Do not downgrade this domain to optional without architecture review because ALP-165-Q4 freezes Profiler as complete coverage."
+    summary: "Control the Unity profiler, read counters, query memory and export frame data. Handler: bridge + hybrid (capture). Target: editor.",
+    guide: "Start with `profiler status`, then `profiler start`, run your workload, inspect `profiler counter` / `profiler memory`, and `profiler export <path>`."
   },
   probuilder: {
     title: "ProBuilder Commands",
@@ -306,7 +306,6 @@ function toolLine(tool: ToolMetadata): string {
     status,
     tool.readOnlyHint ? "read-only" : "write",
     tool.destructiveHint ? "⚠ destructive" : undefined,
-    tool.architectureSensitive ? `architecture-sensitive${tool.frozenDecision ? ` ${tool.frozenDecision}` : ""}` : undefined,
     `target:${target}`
   ].filter(Boolean).join(", ");
   return `${tool.name}${tool.cliCommand ? ` (${tool.cliCommand})` : ""} — ${tool.title}; ${notes}. ${supportStatusDescription(supportStatusForTool(tool))}`;

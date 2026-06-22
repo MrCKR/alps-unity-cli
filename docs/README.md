@@ -32,7 +32,7 @@
 
 | 文档 | 内容 |
 |------|------|
-| [自定义工具](custom-tools.md) | 项目侧 Editor Tool / Runtime Tool 注册 |
+| [自定义工具](custom-tools.md) | 项目侧统一 Tool 注册与 `target` 约束 |
 | [自定义 Context](custom-contexts.md) | 项目侧只读 Context 注册 |
 | [扩展包](extensions.md) | 扩展包使用与开发 |
 
@@ -40,6 +40,8 @@
 
 | 文档 | 内容 |
 |------|------|
+| [unity-mcp 对齐执行计划](unity-mcp-alignment-plan.md) | 当前：功能、Context、扩展、测试和结构整理的长任务计划 |
+| [功能等价追踪](unity-mcp-functional-parity.md) | 当前：unity-mcp 操作能力到 unity_cli 的功能等价矩阵 |
 | [覆盖率矩阵](coverage-matrix.md) | v1.0 归档：功能域覆盖状态 |
 | [风险登记册](risk-register-v1.0.md) | v1.0 归档：已知风险与缓解措施 |
 

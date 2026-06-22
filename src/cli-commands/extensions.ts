@@ -35,6 +35,14 @@ import {
   extensionAvailabilitySummary,
 } from "../extensions/index.js";
 import { readInstalledUnityPackages } from "../extensions/project-resolver.js";
+import {
+  checkExtensionBundles,
+  installExtensionBundle,
+  removeExtensionBundle,
+  readExtensionInstallManifest,
+  ExtensionInstallerError,
+  type ExtensionStatusCheck
+} from "../extensions/installer.js";
 import type { ExtensionId } from "../extensions/types.js";
 
 // ── Install state store ────────────────────────────────────────────────────
@@ -118,6 +126,9 @@ async function handleExtensionsList(
   const enabledExtensions = projectPath
     ? await readInstalledExtensions(projectPath)
     : new Set<ExtensionId>();
+  const physicalChecks = projectPath
+    ? await checkExtensionBundles(projectPath)
+    : [];
 
   const descriptors = registry.extensionIds().map((id) =>
     loadExtensionDescriptor(registry, id, installedPackages)
@@ -125,12 +136,17 @@ async function handleExtensionsList(
 
   const extensions = descriptors.map((desc) => {
     const availability = desc.availability;
+    const physical = physicalChecks.find((check) => check.extensionId === desc.manifest.id);
+    const providedTools = desc.tools.map((tool) => tool.name);
     return {
       id: desc.manifest.id,
       name: desc.manifest.name,
       description: desc.manifest.description,
       version: desc.manifest.version,
       enabled: enabledExtensions.has(desc.manifest.id),
+      installed: physical?.installed ?? enabledExtensions.has(desc.manifest.id),
+      status: physical?.status ?? (availability.status === "available" ? "available_not_installed" : "missing_dependency"),
+      dependencyInstalled: availability.status === "available",
       availability: availability.status,
       unityPackages: desc.manifest.unityPackages.map((pkg) => ({
         packageId: pkg.packageId,
@@ -139,7 +155,9 @@ async function handleExtensionsList(
         version: availability.packages.find((p) => p.packageId === pkg.packageId)?.version
       })),
       missingPackageIds: availability.missingPackageIds,
-      nextActions: availability.nextActions,
+      providedTools,
+      installCommand: `unity_cli extensions install ${desc.manifest.id} --project <path>`,
+      nextActions: physical?.nextActions ?? availability.nextActions,
       toolCount: desc.tools.length,
       contextCount: desc.contexts.length
     };
@@ -156,8 +174,8 @@ async function handleExtensionsList(
   const format = getString(flags, "format");
   if (format === "text") {
     const lines = extensions.map((e) => {
-      const state = e.enabled ? "enabled" : "disabled";
-      const avail = e.availability === "available" ? "✓" : e.availability === "unavailable" ? "✗" : "?";
+      const state = e.installed ? "installed" : e.status;
+      const avail = e.dependencyInstalled ? "✓" : "✗";
       return `${e.id} [${state}] ${avail} ${e.name} — ${e.unityPackages.map((p) => p.packageId).join(", ")}`;
     });
     data.text = lines.join("\n");
@@ -197,47 +215,47 @@ async function handleExtensionsInstall(
 
   const installedPackages = await readInstalledUnityPackages(projectPath);
   const availability = registry.resolveAvailability(extensionId, installedPackages);
-  const enabled = await readInstalledExtensions(projectPath);
-
-  if (enabled.has(extensionId)) {
-    const manifest = registry.getExtension(extensionId)!.manifest;
-    return success(requestId, {
-      command: "extensions.install",
+  if (availability.status !== "available") {
+    return failure(requestId, "E_EXTENSION_DEPENDENCY_MISSING", `Extension "${extensionId}" requires Unity package(s) that are not installed: ${availability.missingPackageIds.join(", ")}.`, [
+      "Install the required Unity package in Packages/manifest.json or Unity Package Manager.",
+      "Run unity_cli package resolve after changing packages.",
+      `Then run unity_cli extensions install ${extensionId} --project <path>.`,
+      "The CLI does not install optional Unity packages automatically."
+    ], {
       extensionId,
-      name: manifest.name,
-      status: "already_installed",
-      availability: availability.status,
-      projectPath,
-      nextActions: [`Extension "${extensionId}" is already enabled. Run 'unity_cli extensions remove ${extensionId}' to disable it.`]
+      missingPackageIds: availability.missingPackageIds
     });
   }
 
+  const manifest = registry.getExtension(extensionId)!.manifest;
+  const installManifest = await readExtensionInstallManifest(projectPath);
+  const alreadyInstalled = installManifest.extensions.some((entry) => entry.extensionId === extensionId);
+  const installResult = await installExtensionBundle(projectPath, manifest);
+
+  const enabled = await readInstalledExtensions(projectPath);
   enabled.add(extensionId);
   await writeInstalledExtensions(projectPath, enabled);
 
-  const manifest = registry.getExtension(extensionId)!.manifest;
-  const data: Record<string, unknown> = {
+  return success(requestId, {
     command: "extensions.install",
     extensionId,
     name: manifest.name,
-    status: "installed",
+    status: alreadyInstalled ? "already_installed" : installResult.status,
     availability: availability.status,
     projectPath,
+    targetRoot: installResult.targetRoot,
+    fileCount: installResult.fileCount,
+    sourceHash: installResult.sourceHash,
     unityPackages: manifest.unityPackages.map((pkg) => ({
       packageId: pkg.packageId,
       displayName: pkg.displayName,
       installed: availability.packages.find((p) => p.packageId === pkg.packageId)?.installed ?? false
-    }))
-  };
-
-  if (availability.status === "unavailable") {
-    data.warning = `Extension "${extensionId}" is enabled but its Unity package dependencies are not installed.`;
-    data.nextActions = availability.nextActions;
-  } else {
-    data.nextActions = [`Extension "${extensionId}" is now enabled. Its tool/context descriptors participate in discovery.`];
-  }
-
-  return success(requestId, data);
+    })),
+    nextActions: [
+      `Extension "${extensionId}" Unity-side bundle is installed under Packages/com.unity_cli/Extensions/${extensionId}.`,
+      "Wait for Unity to recompile, then run tools group list/describe/run for provided tools."
+    ]
+  });
 }
 
 // ── extensions remove ─────────────────────────────────────────────────────
@@ -260,23 +278,30 @@ async function handleExtensionsRemove(
     ]);
   }
 
-  const enabled = await readInstalledExtensions(projectPath);
-  if (!enabled.has(extensionId)) {
-    return failure(requestId, "EXTENSION_NOT_INSTALLED", `Extension is not installed: ${extensionId}`, [
-      "Run unity_cli extensions list to see installed extensions."
-    ]);
+  try {
+    const removeResult = await removeExtensionBundle(projectPath, extensionId);
+    const enabled = await readInstalledExtensions(projectPath);
+    enabled.delete(extensionId);
+    await writeInstalledExtensions(projectPath, enabled);
+
+    return success(requestId, {
+      command: "extensions.remove",
+      extensionId,
+      status: removeResult.status,
+      projectPath,
+      targetRoot: removeResult.targetRoot,
+      fileCount: removeResult.fileCount,
+      nextActions: [
+        `Extension "${extensionId}" bundle files listed in the manifest were removed.`,
+        "The required Unity package was not removed."
+      ]
+    });
+  } catch (error) {
+    if (error instanceof ExtensionInstallerError) {
+      return failure(requestId, error.code, error.message, error.nextActions);
+    }
+    throw error;
   }
-
-  enabled.delete(extensionId);
-  await writeInstalledExtensions(projectPath, enabled);
-
-  return success(requestId, {
-    command: "extensions.remove",
-    extensionId,
-    status: "removed",
-    projectPath,
-    nextActions: [`Extension "${extensionId}" is now disabled. Its descriptors no longer participate in tool/context discovery.`]
-  });
 }
 
 // ── extensions doctor ──────────────────────────────────────────────────────
@@ -299,18 +324,26 @@ async function handleExtensionsDoctor(
   const enabledExtensions = await readInstalledExtensions(projectPath);
 
   const summary = extensionAvailabilitySummary(registry, installedPackages);
+  const physicalChecks = await checkExtensionBundles(projectPath);
 
   const checks = registry.extensionIds().map((id) => {
     const desc = loadExtensionDescriptor(registry, id, installedPackages);
     const availability = desc.availability;
-    const enabled = enabledExtensions.has(id);
+    const physical = physicalChecks.find((check) => check.extensionId === id)!;
+    const enabled = enabledExtensions.has(id) || physical.installed;
 
     const issues: string[] = [];
-    if (enabled && availability.status === "unavailable") {
-      issues.push(`Extension "${id}" is enabled but required Unity packages are missing: ${availability.missingPackageIds.join(", ")}`);
+    if (availability.status === "available" && !physical.installed) {
+      issues.push(`Extension "${id}" has all dependencies installed but its Unity-side bundle is not installed.`);
     }
-    if (!enabled && availability.status === "available") {
-      issues.push(`Extension "${id}" has all dependencies installed but is not enabled.`);
+    if (physical.status === "missing_dependency" && enabled) {
+      issues.push(`Extension "${id}" is installed but required Unity packages are missing: ${availability.missingPackageIds.join(", ")}`);
+    }
+    if (physical.status === "outdated") {
+      issues.push(`Extension "${id}" managed files are missing, changed, or source hash is outdated.`);
+    }
+    if (physical.status === "unknown_files") {
+      issues.push(`Extension "${id}" install directory contains unknown files: ${physical.unknownFiles.join(", ")}`);
     }
     if (availability.status === "unknown") {
       issues.push(`Extension "${id}" availability could not be resolved (no project packages read).`);
@@ -320,8 +353,14 @@ async function handleExtensionsDoctor(
       id,
       name: desc.manifest.name,
       enabled,
+      installed: physical.installed,
+      status: physical.status,
+      dependencyInstalled: physical.dependencyInstalled,
       availability: availability.status,
       missingPackageIds: availability.missingPackageIds,
+      missingFiles: physical.missingFiles,
+      changedFiles: physical.changedFiles,
+      unknownFiles: physical.unknownFiles,
       issues
     };
   });
@@ -338,8 +377,14 @@ async function handleExtensionsDoctor(
       id,
       name: id,
       enabled: true,
+      installed: false,
+      status: "unknown_files" as const,
+      dependencyInstalled: false,
       availability: "unknown" as const,
       missingPackageIds: [],
+      missingFiles: [],
+      changedFiles: [],
+      unknownFiles: [],
       issues: [`Extension "${id}" is enabled in project state but is not registered in the CLI extension registry.`]
     })));
   }
@@ -356,7 +401,8 @@ async function handleExtensionsDoctor(
       available: summary.available,
       unavailable: summary.unavailable,
       unknown: summary.unknown,
-      enabled: enabledExtensions.size
+      enabled: checks.filter((check) => check.enabled).length,
+      installed: checks.filter((check) => check.installed).length
     },
     checks,
     issues: allIssues,
@@ -370,7 +416,7 @@ async function handleExtensionsDoctor(
     const lines: string[] = [`extensions doctor — project: ${projectPath}`, `healthy: ${healthy}`];
     for (const check of checks) {
       const icon = check.issues.length === 0 ? "✓" : "✗";
-      lines.push(`  ${icon} ${check.id} [${check.enabled ? "enabled" : "disabled"}] (${check.availability}) ${check.name}`);
+      lines.push(`  ${icon} ${check.id} [${check.installed ? "installed" : check.status}] (${check.availability}) ${check.name}`);
       for (const issue of check.issues) {
         lines.push(`      - ${issue}`);
       }

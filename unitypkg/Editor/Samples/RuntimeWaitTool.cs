@@ -31,10 +31,8 @@ namespace UnityCli
         DestructiveHint = false,
         DefaultTimeoutMs = 10000,
         MaxTimeoutMs = 120000,
-        SupportsJob = false,
-        ArchitectureSensitive = true,
-        FrozenDecision = "ALP-404-Q2",
-        CoverageScope = "attribute-first,zero-config,unity-runtime-csharp,play-mode-session,cross-frame-wait")]
+        SupportsJob = false
+)]
     public static class RuntimeWaitTool
     {
         /// <summary>

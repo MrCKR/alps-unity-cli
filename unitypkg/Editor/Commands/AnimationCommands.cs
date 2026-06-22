@@ -41,7 +41,7 @@ namespace UnityCli
             RegisterCommand(registry, "animator.crossfade", "animation", true, AnimatorCrossfade);
             RegisterCommand(registry, "animator.set-speed", "animation", true, AnimatorSetSpeed);
             RegisterCommand(registry, "animator.set-enabled", "animation", true, AnimatorSetEnabled);
-            // ── controller.* AnimatorController editing tools (ALP-603 P6-T6b) ───
+            // ── controller.* AnimatorController editing tools ───
             RegisterCommand(registry, "controller.create", "animation", true, ControllerCreate);
             RegisterCommand(registry, "controller.add-state", "animation", true, ControllerAddState);
             RegisterCommand(registry, "controller.add-transition", "animation", true, ControllerAddTransition);
@@ -243,7 +243,7 @@ namespace UnityCli
                 .EndObject().ToString();
         }
 
-        // ── animator.* runtime-state tools (ALP-601) ──────────────────────────
+        // ── animator.* runtime-state tools ──────────────────────────
         // Reference: unity-mcp AnimatorRead.cs / AnimatorControl.cs
         // Key differences from unity-mcp:
         //   - Uses alps-unity-cli envelope (SuccessJson / ErrorJson + nextActions)
@@ -558,7 +558,7 @@ namespace UnityCli
                 .EndObject().ToString());
         }
 
-        // ── controller.* AnimatorController editing tools (ALP-603 P6-T6b) ────────
+        // ── controller.* AnimatorController editing tools ────────
         // Reference: unity-mcp ControllerCreate.cs / ControllerLayers.cs / ControllerBlendTrees.cs
         // Key differences from unity-mcp:
         //   - Uses alps-unity-cli envelope (SuccessJson / ErrorJson + nextActions)
@@ -1278,7 +1278,7 @@ namespace UnityCli
                 .EndObject().ToString());
         }
 
-        // ── JSON helpers for controller condition parsing (ALP-603) ─────────────
+        // ── JSON helpers for controller condition parsing ─────────────
 
         private static IEnumerable<string> ExtractArrayItems(string jsonArray)
         {

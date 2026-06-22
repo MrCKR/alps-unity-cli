@@ -12,13 +12,12 @@ Every tool carries risk hints in its descriptor. These are the only way to asses
 | `destructiveHint: true` | Tool may irreversibly modify or delete data | Must confirm with `--yes`; consider `--dry-run` first |
 | `supportsDryRun: true` | Tool accepts `--dry-run` for safe preview | Always preview with `--dry-run` before `--yes` |
 | `longRunning: true` | Tool may take seconds or minutes | Check `cancellationSemantics`; consider `--timeout-ms` |
-| `architectureSensitive: true` | Tool tied to a frozen architecture decision | Do not modify behavior without architecture review; check `frozenDecision` |
 | `permissions` | Permission tokens required (e.g. `["executes_code"]`) | Ensure the context allows the required permissions |
 | `cancellationSemantics` | How cancellation works for this tool | Use `job cancel` or cooperative cancel as described |
 
 ## Destructive Commands
 
-The CLI enforces a confirmation gate for all tools with `destructiveHint: true`. There are 12 destructive commands in v1.0:
+The CLI enforces a confirmation gate for all tools with `destructiveHint: true`. Current built-in metadata declares 14 destructive commands:
 
 | Command | Title | Supports `--dry-run`? |
 |---------|-------|----------------------|
@@ -28,11 +27,11 @@ The CLI enforces a confirmation gate for all tools with `destructiveHint: true`.
 | `code exec` | Execute Live Code | ✅ |
 | `cli.batch.run` | Batch Run | ✅ (preflight) |
 | `component remove` | Remove Component | ❌ |
-| `probuilder.delete-faces` | ProBuilder Delete Faces | ❌ |
-| `probuilder.combine-meshes` | ProBuilder Combine Meshes | ❌ |
-| `probuilder.merge-objects` | ProBuilder Merge Objects | ❌ |
+| `graphics.bake-clear` | Clear Baked Lighting | ❌ |
+| `controller.remove-layer` | Remove Animator Controller Layer | ❌ |
 | `editor.menu` | Execute Editor Menu | ❌ |
 | `script.edit` | Edit Script | ❌ |
+| `script.apply-edits` | Apply Structured Script Edits | ❌ |
 | `cli.package.remove` | Package Remove | ❌ |
 | `test.cancel` | Cancel Test Job | ❌ |
 | `build.cancel` | Cancel Build Job | ❌ |
@@ -54,7 +53,7 @@ When a destructive command is confirmed, the response carries a `destructiveSecu
   "destructive": true,
   "confirmed": true,
   "confirmedBy": "--yes",
-  "destructiveFingerprint": "alp332-destructive-safety-v1"
+  "destructiveFingerprint": "destructive-safety-v1"
 }
 ```
 
@@ -90,17 +89,6 @@ Project tools registered by `[UnityCliTool]` C# attributes carry a `fingerprint`
 
 The `doctor` command reports fingerprint status for all project tools. Use it to verify fingerprint consistency before and after code changes.
 
-## Architecture-Sensitive Tools
-
-Tools marked `architectureSensitive: true` are tied to frozen architecture decisions. They carry:
-- `frozenDecision`: reference to the frozen decision (e.g. `ALP-165-Q4`)
-- `coverageScope`: list of coverage facets that must remain fully covered
-
-**Do not downgrade or modify these tools without architecture review.** Changing their behavior, removing coverage facets, or making them optional requires explicit approval from the architecture team.
-
-Current architecture-sensitive tools:
-- All profiler tools (`profiler.*`) — frozen by `ALP-165-Q4`
-
 ## How to Assess Risk as an AI Agent
 
 1. **Always `tools describe` first.** Read `destructiveHint`, `readOnlyHint`, `supportsDryRun`, `target`, `availabilityScope`, and `available`.
@@ -108,13 +96,12 @@ Current architecture-sensitive tools:
 3. **For runtime tools**: Verify `available: true` and Play Mode state before calling `target: "runtime"` tools.
 4. **For long-running tools**: Set appropriate `--timeout-ms`; understand `cancellationSemantics` before starting.
 5. **For project tools**: Check fingerprint status with `doctor`; use `--fingerprint-mode block` (default) to ensure integrity.
-6. **For architecture-sensitive tools**: Do not change behavior without checking `frozenDecision` and `coverageScope`.
 
 ## v1.0 Known Limitations
 
 | Limitation | Risk Level | Mitigation |
 |-----------|-----------|------------|
-| Dry-run covers 5/12 destructive commands | Medium | All destructive commands require `--yes`; dry-run is supplemental |
+| Dry-run covers 5/14 destructive commands | Medium | All destructive commands require `--yes`; dry-run is supplemental |
 | No independent command blacklist | Medium | `destructiveHint` + `--yes` + fingerprint provide equivalent protection |
 | No independent network security policy | Medium | Bridge listens only on `127.0.0.1`; no external network calls |
 | Fingerprint only covers project tools | Low | Built-in commands protected by contract validation + security policy |

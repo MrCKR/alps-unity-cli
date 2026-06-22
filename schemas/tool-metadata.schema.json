@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://unity-cli.local/schemas/tool-metadata.schema.json",
   "title": "Unity CLI Tool Metadata",
-  "description": "Describes a single tool exposed by the Unity CLI, including identity, schemas, behavioral hints, permissions, examples and documentation references. Matches the frozen spec from ALP-164 v1.0 with P3 additions (target, availabilityScope, available, bridge-runtime handler) and P1 additions (kind, source, category, sideEffects, riskLevel, equivalentUnityMcp).",
+  "description": "Describes a single tool exposed by the Unity CLI, including identity, schemas, behavioral hints, permissions, examples and documentation references.",
   "type": "object",
   "required": ["name", "title", "description", "group", "inputSchema", "readOnlyHint", "destructiveHint"],
   "properties": {
@@ -32,15 +32,10 @@
       "enum": ["built-in", "project", "extension"],
       "description": "Origin: built-in (shipped with CLI), project (custom tool in Unity project), extension (from extension package)."
     },
-    "category": {
-      "type": "string",
-      "minLength": 1,
-      "description": "Logical grouping for discovery, replacing the legacy 'group' field in new group-first discovery. Defaults to the value of 'group' when omitted."
-    },
     "group": {
       "type": "string",
       "minLength": 1,
-      "description": "Legacy logical grouping field. Maps to 'category'. Maintained for backward compat."
+      "description": "Logical grouping field used by tools group/list/describe/run discovery."
     },
     "inputSchema": {
       "type": "object",
@@ -98,20 +93,6 @@
       "type": "array",
       "items": { "type": "string" },
       "description": "Permission tokens required, e.g. ['bridge:connect', 'file:write']."
-    },
-    "architectureSensitive": {
-      "type": "boolean",
-      "default": false,
-      "description": "True when the command is tied to an explicitly frozen architecture/product decision and changes need architecture review."
-    },
-    "frozenDecision": {
-      "type": "string",
-      "description": "Frozen decision reference that governs this tool, e.g. 'ALP-165-Q4'."
-    },
-    "coverageScope": {
-      "type": "array",
-      "items": { "type": "string" },
-      "description": "Frozen coverage facets that this tool contributes to."
     },
     "cancellationSemantics": {
       "type": "string",

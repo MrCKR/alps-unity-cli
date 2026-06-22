@@ -320,6 +320,141 @@ const SCENE_RENDERING_STATS: ContextMetadata = {
   cliCommand: "context read scene.rendering-stats"
 };
 
+// ── Additional scene/prefab/tool contexts ──
+
+const SCENE_GAMEOBJECT_COMPONENTS: ContextMetadata = {
+  name: "scene.gameobject.components",
+  title: "Scene GameObject Components",
+  description: "Read all components attached to a GameObject, including type names and public readable properties.",
+  kind: "context",
+  source: "built-in",
+  category: "scene",
+  inputSchema: { type: "object", properties: { target: { type: "string" }, id: { type: "integer" }, path: { type: "string" }, includeProperties: { type: "boolean" } } },
+  readOnlyHint: true,
+  refreshBehavior: "on-demand",
+  target: "editor",
+  availabilityScope: "editorSession",
+  resourceUri: "unity-cli://scene/gameobject/{instance_id}/components",
+  outputSchema: { type: "object", properties: { gameObject: { type: "object" }, components: { type: "array", items: { type: "object" } }, count: { type: "integer" } } },
+  equivalentUnityMcp: "mcpforunity://scene/gameobject/{id}/components",
+  handler: "bridge",
+  cliCommand: "context read scene.gameobject.components"
+};
+
+const SCENE_GAMEOBJECT_COMPONENT: ContextMetadata = {
+  name: "scene.gameobject.component",
+  title: "Scene GameObject Component",
+  description: "Read one component attached to a GameObject, including public readable properties when available.",
+  kind: "context",
+  source: "built-in",
+  category: "scene",
+  inputSchema: { type: "object", properties: { target: { type: "string" }, id: { type: "integer" }, path: { type: "string" }, component: { type: "string" } }, required: ["component"] },
+  readOnlyHint: true,
+  refreshBehavior: "on-demand",
+  target: "editor",
+  availabilityScope: "editorSession",
+  resourceUri: "unity-cli://scene/gameobject/{instance_id}/component/{name}",
+  outputSchema: { type: "object", properties: { gameObject: { type: "object" }, component: { type: "object" } } },
+  equivalentUnityMcp: "mcpforunity://scene/gameobject/{id}/component/{name}",
+  handler: "bridge",
+  cliCommand: "context read scene.gameobject.component"
+};
+
+const PREFAB_INFO: ContextMetadata = {
+  name: "prefab.info",
+  title: "Prefab Info",
+  description: "Read Prefab asset metadata, dependencies, variant information, and nested prefab references.",
+  kind: "context",
+  source: "built-in",
+  category: "prefab",
+  inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"] },
+  readOnlyHint: true,
+  refreshBehavior: "on-demand",
+  target: "editor",
+  availabilityScope: "editorSession",
+  resourceUri: "unity-cli://prefab/{path}",
+  outputSchema: { type: "object", properties: { prefab: { type: "object" } } },
+  equivalentUnityMcp: "mcpforunity://prefab/{path}",
+  handler: "bridge",
+  cliCommand: "context read prefab.info"
+};
+
+const PREFAB_HIERARCHY: ContextMetadata = {
+  name: "prefab.hierarchy",
+  title: "Prefab Hierarchy",
+  description: "Read a Prefab's hierarchy without opening or modifying the Prefab Stage.",
+  kind: "context",
+  source: "built-in",
+  category: "prefab",
+  inputSchema: { type: "object", properties: { path: { type: "string" }, pageSize: { type: "integer" }, cursor: { type: "integer" } }, required: ["path"] },
+  readOnlyHint: true,
+  refreshBehavior: "on-demand",
+  target: "editor",
+  availabilityScope: "editorSession",
+  resourceUri: "unity-cli://prefab/{path}/hierarchy",
+  outputSchema: { type: "object", properties: { prefab: { type: "object" }, items: { type: "array", items: { type: "object" } }, pageInfo: { type: "object" } } },
+  equivalentUnityMcp: "mcpforunity://prefab/{path}/hierarchy",
+  handler: "bridge",
+  cliCommand: "context read prefab.hierarchy"
+};
+
+const INSTANCES_LIST: ContextMetadata = {
+  name: "instances.list",
+  title: "Unity Instances",
+  description: "Read registered Unity Editor bridge instances and their target-selection metadata.",
+  kind: "context",
+  source: "built-in",
+  category: "instances",
+  inputSchema: {},
+  readOnlyHint: true,
+  refreshBehavior: "on-demand",
+  target: "editor",
+  availabilityScope: "always",
+  resourceUri: "unity-cli://instances/list",
+  outputSchema: { type: "object", properties: { instances: { type: "array", items: { type: "object" } }, count: { type: "integer" } } },
+  equivalentUnityMcp: "mcpforunity://instances",
+  handler: "bridge",
+  cliCommand: "context read instances.list"
+};
+
+const TOOLS_GROUPS: ContextMetadata = {
+  name: "tools.groups",
+  title: "Tool Groups",
+  description: "Read built-in and available extension tool groups with counts and discovery commands.",
+  kind: "context",
+  source: "built-in",
+  category: "tools",
+  inputSchema: {},
+  readOnlyHint: true,
+  refreshBehavior: "on-demand",
+  target: "editor",
+  availabilityScope: "always",
+  resourceUri: "unity-cli://tools/groups",
+  outputSchema: { type: "object", properties: { groups: { type: "array", items: { type: "object" } }, count: { type: "integer" } } },
+  equivalentUnityMcp: "mcpforunity://tool-groups",
+  handler: "bridge",
+  cliCommand: "context read tools.groups"
+};
+
+const TOOLS_CUSTOM: ContextMetadata = {
+  name: "tools.custom",
+  title: "Custom Tools",
+  description: "Read custom Unity project tools discovered through [UnityCliTool].",
+  kind: "context",
+  source: "built-in",
+  category: "tools",
+  inputSchema: {},
+  readOnlyHint: true,
+  refreshBehavior: "on-demand",
+  target: "editor",
+  availabilityScope: "editorSession",
+  resourceUri: "unity-cli://tools/custom",
+  outputSchema: { type: "object", properties: { tools: { type: "array", items: { type: "object" } }, count: { type: "integer" } } },
+  equivalentUnityMcp: "mcpforunity://custom-tools",
+  handler: "bridge",
+  cliCommand: "context read tools.custom"
+};
+
 // ── Tests contexts ──
 
 const TESTS_LIST: ContextMetadata = {
@@ -362,11 +497,18 @@ const BUILTIN_CONTEXTS: ContextMetadata[] = [
   PREFAB_STAGE,
   EDITOR_MENU_ITEMS,
   SCENE_GAMEOBJECT,
+  SCENE_GAMEOBJECT_COMPONENTS,
+  SCENE_GAMEOBJECT_COMPONENT,
   SCENE_CAMERAS,
   SCENE_VOLUMES,
   SCENE_RENDERER_FEATURES,
   SCENE_RENDERING_STATS,
-  TESTS_LIST
+  PREFAB_INFO,
+  PREFAB_HIERARCHY,
+  TESTS_LIST,
+  INSTANCES_LIST,
+  TOOLS_GROUPS,
+  TOOLS_CUSTOM
 ];
 
 /** Return all built-in context metadata entries. */

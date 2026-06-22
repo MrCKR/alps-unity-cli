@@ -193,6 +193,25 @@ export async function handlePackage(command: string | undefined, args: string[],
     return success(requestId, await readSnapshot(projectPath));
   }
 
+  if (command === "status") {
+    const snapshot = await readSnapshot(projectPath);
+    return success(requestId, {
+      projectPath,
+      manifestPath: snapshot.manifestPath,
+      lockPath: snapshot.lockPath,
+      packageCount: snapshot.packages.length,
+      registry: snapshot.registry ?? null,
+      scopedRegistryCount: snapshot.scopedRegistries.length,
+      packages: snapshot.packages.map((entry) => ({
+        name: entry.name,
+        requestedVersion: entry.requestedVersion ?? null,
+        lockedVersion: entry.lockedVersion ?? null,
+        source: entry.source ?? null,
+        resolved: entry.lockedVersion !== undefined
+      }))
+    });
+  }
+
   if (command === "info") {
     const name = validatePackageName(args[0] ?? getString(flags, "name"));
     const info = await packageInfo(projectPath, name);
@@ -264,7 +283,7 @@ export async function handlePackage(command: string | undefined, args: string[],
     return failure(requestId, "UNKNOWN_SCOPED_REGISTRY_COMMAND", "Expected package scoped-registry list, add or remove.");
   }
 
-  return failure(requestId, "UNKNOWN_PACKAGE_COMMAND", "Expected package list, info, search, install, remove, resolve, registry or scoped-registry.");
+  return failure(requestId, "UNKNOWN_PACKAGE_COMMAND", "Expected package list, status, info, search, install, remove, resolve, registry or scoped-registry.");
 }
 
 async function refreshOpenEditor(requestId: string, flags: Record<string, string | boolean>, runtime: Runtime): Promise<Record<string, unknown>> {

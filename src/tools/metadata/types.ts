@@ -17,9 +17,7 @@ export interface ToolMetadata {
   kind?: "tool";
   /** Origin: built-in (shipped with CLI), project (custom tool in Unity project), extension (from extension package). Defaults to 'built-in' when omitted. */
   source?: ToolSource;
-  /** Logical grouping for discovery, replacing the legacy 'group' field in new group-first discovery. Defaults to the value of 'group' when omitted. */
-  category?: string;
-  /** Legacy group field; maintained for backward compat in contract validation. Maps to category. */
+  /** Logical group for discovery and `tools group list <group>`. */
   group: string;
   inputSchema: Record<string, unknown>;
   outputSchema?: Record<string, unknown>;
@@ -36,9 +34,6 @@ export interface ToolMetadata {
   supportsDryRun?: boolean;
   timeoutMs?: number;
   permissions?: string[];
-  architectureSensitive?: boolean;
-  frozenDecision?: string;
-  coverageScope?: readonly string[];
   cancellationSemantics?: string;
   examples?: ToolExample[];
   docsTopic?: string;

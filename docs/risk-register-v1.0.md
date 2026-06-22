@@ -26,7 +26,7 @@
 
 | # | 风险 | 影响 | 风险等级 | 状态 |
 |---|------|------|----------|------|
-| R9 | Bridge domain reload 后 stale endpoint | domain reload 后可能出现 E_UNITY_COMPILING 或 stale endpoint | 中 | [ALP-353](mention://issue/9232c636-3566-424f-bebb-44454389d99c) backlog 已跟踪 |
+| R9 | Bridge domain reload 后 stale endpoint | domain reload 后可能出现 E_UNITY_COMPILING 或 stale endpoint | 中 | (mention://issue/9232c636-3566-424f-bebb-44454389d99c) backlog 已跟踪 |
 | R10 | Unity Bridge 60s 超时边界 | 长时间操作可能触发 E_UNITY_BUSY | 低 | 已有 transient retry 机制；用户可通过 `--timeout` 调整 |
 | R11 | Windows-only | Unity Bridge 仅在 Windows Unity Editor 上运行 | 低 | 设计决策；macOS/Linux 用户无法使用 Bridge 功能 |
 
@@ -34,8 +34,8 @@
 
 | # | 事项 | 来源 | 优先级 | Issue |
 |---|------|------|--------|-------|
-| O1 | CLI discovery/docs 优化 | P2-4 代码审查建议 | 低 | [ALP-352](mention://issue/874e3a6a-8c6a-43e9-9f7d-9b30ca681d7e) |
-| O2 | Bridge domain reload 稳定性 | 实机 smoke 发现 | 中 | [ALP-353](mention://issue/9232c636-3566-424f-bebb-44454389d99c) |
+| O1 | CLI discovery/docs 优化 | P2-4 代码审查建议 | 低 | (mention://issue/874e3a6a-8c6a-43e9-9f7d-9b30ca681d7e) |
+| O2 | Bridge domain reload 稳定性 | 实机 smoke 发现 | 中 | (mention://issue/9232c636-3566-424f-bebb-44454389d99c) |
 | O3 | 剩余 5 个 destructive 命令 dry-run | P2-5 安全验收 | 低 | 待排期 |
 | O4 | 内置命令 fingerprint 保护 | P2-5 安全验收 | 低 | 待排期 |
 | O5 | 黑名单/网络策略独立实现 | Q6 决策 | 中 | 待排期 |
@@ -48,4 +48,4 @@
 - **关键回滚点**：
   - P2-5 安全闸门 (d2287a5) — 回滚后 destructive 命令无确认保护
   - P2-3 Fingerprint (b376722) — 回滚后 custom tool 无完整性校验
-  - ALP-340 Profiler fix (71b18128) — 回滚后 profiler start/pause 产生 Console error
+  - Profiler fix (71b18128) — 回滚后 profiler start/pause 产生 Console error

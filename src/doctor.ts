@@ -733,7 +733,7 @@ function checkExtensionRegistry(): DoctorCheck {
 
 function checkStaleToolsListWording(): DoctorCheck {
   // P1 gate: scan key source files for stale 'tools list' / 'tools groups' references
-  // that contradict the group-first discovery model mandated by ALP-505.
+  // that contradict the group-first discovery model used by the group-first discovery model.
   const stalePatterns = [
     /tools list(?:\s|--)/gi,
     /tools groups(?![\w.-])/gi,  // match 'tools groups' but not 'tools.group-list' etc.
@@ -852,11 +852,11 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
         case "extension_availability":
           suggestions.push("Run 'unity_cli extensions doctor --project <path>' for detailed extension diagnostics.");
           suggestions.push("Run 'unity_cli extensions list --project <path>' to see all extensions and their status.");
-          suggestions.push("Install missing packages with 'unity_cli package install <package-id>'.");
+          suggestions.push("Install missing Unity packages manually via Unity Package Manager or Packages/manifest.json, then run the matching 'unity_cli extensions install <id> --project <path>'.");
           break;
         case "extension.probuilder":
           suggestions.push("Run 'unity_cli extensions install probuilder --project <path>' to enable the ProBuilder extension.");
-          suggestions.push("Run 'unity_cli package install com.unity.probuilder' to install the ProBuilder Unity package.");
+          suggestions.push("Install com.unity.probuilder manually via Unity Package Manager or Packages/manifest.json before installing the ProBuilder extension bundle.");
           break;
         case "context_discovery":
           suggestions.push("Run 'unity_cli context list' to see all available contexts.");

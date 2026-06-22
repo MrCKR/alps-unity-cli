@@ -29,7 +29,6 @@ namespace UnityCli
 
         public string Name { get; private set; }
         public string Title { get; set; }
-        public string DisplayName { get; set; }
         public string Description { get; set; }
         public string Group { get; set; }
         public string Version { get; set; }
@@ -43,9 +42,6 @@ namespace UnityCli
         public bool SupportsJob { get; set; }
         public string ArtifactKinds { get; set; }
         public string RequiredInput { get; set; }
-        public bool ArchitectureSensitive { get; set; }
-        public string FrozenDecision { get; set; }
-        public string CoverageScope { get; set; }
         /// <summary>
         /// Execution target: "editor" (default, runs in Editor domain),
         /// "runtime" (runs only in Play Mode), or "both" (available in both).

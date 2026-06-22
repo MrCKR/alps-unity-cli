@@ -4,7 +4,7 @@ import { objSchema, pageSchema } from "../schemas.js";
 /**
  * VFX Graph extension tools.
  *
- * Critical reference notes (ALP-505 P8):
+ * Critical reference notes:
  * - Critically references unity-mcp's Vfx/ManageVFX.cs (action router), VfxGraphRead.cs,
  *   VfxGraphWrite.cs, VfxGraphControl.cs, VfxGraphAssets.cs for the action decomposition
  *   and Unity API paths.
@@ -29,7 +29,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "vfx graph",
+    cliCommand: "tools run vfx.graph",
     docsTopic: "vfx",
     requiresPackages: ["com.unity.visualeffectgraph"]
   },
@@ -44,7 +44,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "vfx effect",
+    cliCommand: "tools run vfx.effect",
     docsTopic: "vfx",
     requiresPackages: ["com.unity.visualeffectgraph"]
   },
@@ -72,7 +72,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "vfx parameter",
+    cliCommand: "tools run vfx.parameter",
     docsTopic: "vfx",
     requiresPackages: ["com.unity.visualeffectgraph"],
     examples: [
@@ -97,7 +97,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "vfx control",
+    cliCommand: "tools run vfx.control",
     docsTopic: "vfx",
     requiresPackages: ["com.unity.visualeffectgraph"],
     examples: [
@@ -124,7 +124,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "vfx event",
+    cliCommand: "tools run vfx.event",
     docsTopic: "vfx",
     requiresPackages: ["com.unity.visualeffectgraph"],
     examples: [
@@ -146,7 +146,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "vfx template",
+    cliCommand: "tools run vfx.template",
     docsTopic: "vfx",
     requiresPackages: ["com.unity.visualeffectgraph"],
     examples: [
@@ -171,7 +171,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "vfx particle-create",
+    cliCommand: "tools run vfx.particle-create",
     docsTopic: "vfx",
     requiresPackages: ["com.unity.visualeffectgraph"]
   },
@@ -184,7 +184,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "vfx particle-info",
+    cliCommand: "tools run vfx.particle-info",
     docsTopic: "vfx",
     requiresPackages: ["com.unity.visualeffectgraph"]
   },
@@ -211,7 +211,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "vfx particle-main",
+    cliCommand: "tools run vfx.particle-main",
     docsTopic: "vfx",
     requiresPackages: ["com.unity.visualeffectgraph"]
   },
@@ -230,7 +230,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "vfx particle-emission",
+    cliCommand: "tools run vfx.particle-emission",
     docsTopic: "vfx",
     requiresPackages: ["com.unity.visualeffectgraph"]
   },
@@ -255,7 +255,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "vfx particle-shape",
+    cliCommand: "tools run vfx.particle-shape",
     docsTopic: "vfx",
     requiresPackages: ["com.unity.visualeffectgraph"]
   },
@@ -273,7 +273,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "vfx particle-play",
+    cliCommand: "tools run vfx.particle-play",
     docsTopic: "vfx",
     requiresPackages: ["com.unity.visualeffectgraph"]
   },
@@ -290,7 +290,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "vfx particle-module",
+    cliCommand: "tools run vfx.particle-module",
     docsTopic: "vfx",
     requiresPackages: ["com.unity.visualeffectgraph"]
   },
@@ -314,7 +314,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "vfx line-create",
+    cliCommand: "tools run vfx.line-create",
     docsTopic: "vfx",
     requiresPackages: ["com.unity.visualeffectgraph"]
   },
@@ -332,7 +332,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "vfx line-positions",
+    cliCommand: "tools run vfx.line-positions",
     docsTopic: "vfx",
     requiresPackages: ["com.unity.visualeffectgraph"]
   },
@@ -356,7 +356,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "vfx trail",
+    cliCommand: "tools run vfx.trail",
     docsTopic: "vfx",
     requiresPackages: ["com.unity.visualeffectgraph"]
   }

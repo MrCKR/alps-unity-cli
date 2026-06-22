@@ -16,10 +16,8 @@ namespace UnityCli.Samples
         InputSchema = "{\"type\":\"object\",\"properties\":{\"message\":{\"type\":\"string\"}},\"required\":[\"message\"]}",
         OutputSchema = "{\"type\":\"object\",\"properties\":{\"requestId\":{\"type\":\"string\"},\"input\":{\"type\":\"object\"}}}",
         ReadOnlyHint = true,
-        DestructiveHint = false,
-        ArchitectureSensitive = true,
-        FrozenDecision = "ALP-329-Q1",
-        CoverageScope = "attribute-first,zero-config,unity-editor-csharp")]
+        DestructiveHint = false
+)]
     public static class SampleEchoTool
     {
         public static string Execute(UnityCliProjectToolContext context)

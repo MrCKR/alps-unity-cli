@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import type { JobRecord, JobStatus, JobStoreData } from "./types.js";
@@ -62,7 +63,7 @@ export class JobStore {
 
   private async write(data: JobStoreData): Promise<void> {
     await mkdir(dirname(this.filePath), { recursive: true });
-    const tempPath = `${this.filePath}.${process.pid}.${Date.now()}.tmp`;
+    const tempPath = `${this.filePath}.${process.pid}.${Date.now()}.${randomUUID()}.tmp`;
     await writeFile(tempPath, JSON.stringify(data, null, 2), "utf8");
     await rename(tempPath, this.filePath);
   }

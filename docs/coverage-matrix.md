@@ -4,8 +4,6 @@
 
 > 格式：unity-mcp 功能域/action → unity_cli 命令 → UnityPkg handler → metadata/describe → 测试证据 → 状态
 
-冻结来源：[ALP-164] 冻结版 v1.0 §功能迁移与覆盖矩阵
-
 状态说明：
 - ✅ 完整链路（命令 + handler + metadata + 测试证据）
 - 🔶 部分完成（CLI 命令 + handler 可用，metadata/测试待补）
@@ -118,24 +116,22 @@
 | animation.state | `animation state <target> [--layer]` | bridge (UnityCliBridge) | ✅ `animation.state` in ANIMATION_TOOLS | bridge-commands.test.ts: animation forwarding | ✅ |
 | animation.play | `animation play <target> --state <name>` | bridge (UnityCliBridge) | ✅ `animation.play` in ANIMATION_TOOLS | bridge-commands.test.ts: animation forwarding; tools.test.ts: describe animation.play | ✅ |
 | animation.stop | `animation stop <target>` | bridge (UnityCliBridge) | ✅ `animation.stop` in ANIMATION_TOOLS | bridge-commands.test.ts: animation forwarding | ✅ |
-| vfx.graph | `vfx graph <Assets/Effect.vfx> [--create]` | bridge (UnityCliBridge) | ✅ `vfx.graph` in VFX_TOOLS | bridge-commands.test.ts: vfx forwarding; tools.test.ts: S3.2 vfx group | ✅ |
-| vfx.effect | `vfx effect <target> [--graph] [--add]` | bridge (UnityCliBridge) | ✅ `vfx.effect` in VFX_TOOLS | bridge-commands.test.ts: vfx forwarding | ✅ |
+| vfx.graph | `tools run vfx.graph --input <json>` | bridge (UnityCliBridge) | ✅ `vfx.graph` in VFX_TOOLS | bridge-commands.test.ts: vfx forwarding; tools.test.ts: S3.2 vfx group | ✅ |
+| vfx.effect | `tools run vfx.effect --input <json>` | bridge (UnityCliBridge) | ✅ `vfx.effect` in VFX_TOOLS | bridge-commands.test.ts: vfx forwarding | ✅ |
 
 ## Profiler 域
 
-> 架构敏感：Profiler 受 ALP-165 Q4 冻结口径约束，必须完整覆盖 session / counter / memory / frame debugger / export，不可降级为可选 capability；涉及命令契约、metadata 安全标记或 handler 行为变更时需按架构敏感改动复核。
-
 | unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
 |---|---|---|---|---|---|
-| profiler.status | `profiler status` | bridge (UnityCliBridge) | ✅ `profiler.status` in PROFILER_TOOLS; `architectureSensitive=true`, `frozenDecision=ALP-165-Q4` | bridge-commands.test.ts + contracts:validate + contract architecture-sensitive test | ✅ |
-| profiler.start | `profiler start [--deep-profiling]` | hybrid (live bridge + job path) | ✅ `profiler.start` in PROFILER_TOOLS; `architectureSensitive=true`, `frozenDecision=ALP-165-Q4` | bridge-commands.test.ts + tools.test.ts | ✅ |
-| profiler.stop | `profiler stop` | bridge (UnityCliBridge) | ✅ `profiler.stop` in PROFILER_TOOLS; `architectureSensitive=true`, `frozenDecision=ALP-165-Q4` | bridge-commands.test.ts + tools.test.ts | ✅ |
-| profiler.pause | `profiler pause [--paused true\|false]` | bridge (UnityCliBridge) | ✅ `profiler.pause` in PROFILER_TOOLS; `architectureSensitive=true`, `frozenDecision=ALP-165-Q4` | bridge-commands.test.ts + tools.test.ts | ✅ |
-| profiler.counter | `profiler counter [--category] [--counter]` | bridge (UnityCliBridge) | ✅ `profiler.counter` in PROFILER_TOOLS; `coverageScope` includes counter | bridge-commands.test.ts + tools.test.ts | ✅ |
-| profiler.memory | `profiler memory` | bridge (UnityCliBridge) | ✅ `profiler.memory` in PROFILER_TOOLS; `coverageScope` includes memory | bridge-commands.test.ts + tools.test.ts | ✅ |
-| profiler.frame | `profiler frame [--module]` | bridge (UnityCliBridge) | ✅ `profiler.frame` in PROFILER_TOOLS; `coverageScope` includes frame-debugger | bridge-commands.test.ts + tools.test.ts | ✅ |
-| profiler.capture | `profiler capture <path> [--duration-ms] [--frames]` | hybrid (live bridge + job path) | ✅ `profiler.capture` in PROFILER_TOOLS; describe includes live/job cancel semantics (S3.5); `coverageScope` includes export | bridge-commands.test.ts + tools.test.ts | ✅ |
-| profiler.export | `profiler export <path>` | bridge (UnityCliBridge) | ✅ `profiler.export` in PROFILER_TOOLS; `coverageScope` includes export | bridge-commands.test.ts + tools.test.ts | ✅ |
+| profiler.status | `profiler status` | bridge (UnityCliBridge) | ✅ `profiler.status` in PROFILER_TOOLS | bridge-commands.test.ts + contracts:validate + contract architecture-sensitive test | ✅ |
+| profiler.start | `profiler start [--deep-profiling]` | hybrid (live bridge + job path) | ✅ `profiler.start` in PROFILER_TOOLS | bridge-commands.test.ts + tools.test.ts | ✅ |
+| profiler.stop | `profiler stop` | bridge (UnityCliBridge) | ✅ `profiler.stop` in PROFILER_TOOLS | bridge-commands.test.ts + tools.test.ts | ✅ |
+| profiler.pause | `profiler pause [--paused true\|false]` | bridge (UnityCliBridge) | ✅ `profiler.pause` in PROFILER_TOOLS | bridge-commands.test.ts + tools.test.ts | ✅ |
+| profiler.counter | `profiler counter [--category] [--counter]` | bridge (UnityCliBridge) | ✅ `profiler.counter` in PROFILER_TOOLS| bridge-commands.test.ts + tools.test.ts | ✅ |
+| profiler.memory | `profiler memory` | bridge (UnityCliBridge) | ✅ `profiler.memory` in PROFILER_TOOLS| bridge-commands.test.ts + tools.test.ts | ✅ |
+| profiler.frame | `profiler frame [--module]` | bridge (UnityCliBridge) | ✅ `profiler.frame` in PROFILER_TOOLS| bridge-commands.test.ts + tools.test.ts | ✅ |
+| profiler.capture | `profiler capture <path> [--duration-ms] [--frames]` | hybrid (live bridge + job path) | ✅ `profiler.capture` in PROFILER_TOOLS; describe includes live/job cancel semantics (S3.5)| bridge-commands.test.ts + tools.test.ts | ✅ |
+| profiler.export | `profiler export <path>` | bridge (UnityCliBridge) | ✅ `profiler.export` in PROFILER_TOOLS| bridge-commands.test.ts + tools.test.ts | ✅ |
 
 ---
 
@@ -201,42 +197,42 @@
 
 | unity-mcp 功能域/action | unity_cli 命令 | UnityPkg handler | metadata/describe | 测试证据 | 状态 |
 |---|---|---|---|---|---|
-| probuilder.ping | `probuilder ping` | bridge (UnityCliBridge) | ✅ `probuilder.ping` in PROBUILDER_TOOLS | probuilder-contract.test.ts; capabilities.test.ts | ✅ |
-| probuilder.create-shape | `probuilder create-shape [--type] [--position]` | hybrid (bridge + job path) | ✅ `probuilder.create-shape` in PROBUILDER_TOOLS | probuilder-contract.test.ts; camera-bridge-source.test.ts | ✅ |
-| probuilder.create-poly-shape | `probuilder create-poly-shape [--positions]` | hybrid (bridge + job path) | ✅ `probuilder.create-poly-shape` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.extrude-faces | `probuilder extrude-faces <target> [--distance]` | hybrid (bridge + job path) | ✅ `probuilder.extrude-faces` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.delete-faces | `probuilder delete-faces <target> [--faces]` | hybrid (bridge + job path), destructiveHint=true | ✅ `probuilder.delete-faces` in PROBUILDER_TOOLS | probuilder-contract.test.ts; security.test.ts | ✅ |
-| probuilder.detach-faces | `probuilder detach-faces <target>` | hybrid (bridge + job path) | ✅ `probuilder.detach-faces` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.merge-faces | `probuilder merge-faces <target>` | hybrid (bridge + job path) | ✅ `probuilder.merge-faces` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.subdivide | `probuilder subdivide <target>` | hybrid (bridge + job path) | ✅ `probuilder.subdivide` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.flip-normals | `probuilder flip-normals <target>` | hybrid (bridge + job path) | ✅ `probuilder.flip-normals` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.select-faces | `probuilder select-faces <target> [--filter]` | hybrid (bridge + job path) | ✅ `probuilder.select-faces` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.set-face-material | `probuilder set-face-material <target> [--material]` | hybrid (bridge + job path) | ✅ `probuilder.set-face-material` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.set-face-color | `probuilder set-face-color <target> [--color]` | hybrid (bridge + job path) | ✅ `probuilder.set-face-color` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.set-face-uvs | `probuilder set-face-uvs <target> [--uvs]` | hybrid (bridge + job path) | ✅ `probuilder.set-face-uvs` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.extrude-edges | `probuilder extrude-edges <target> [--distance]` | hybrid (bridge + job path) | ✅ `probuilder.extrude-edges` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.bevel-edges | `probuilder bevel-edges <target> [--distance]` | hybrid (bridge + job path) | ✅ `probuilder.bevel-edges` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.bridge-edges | `probuilder bridge-edges <target> [--target2]` | hybrid (bridge + job path) | ✅ `probuilder.bridge-edges` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.connect-elements | `probuilder connect-elements <target>` | hybrid (bridge + job path) | ✅ `probuilder.connect-elements` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.combine-meshes | `probuilder combine-meshes <target>` | hybrid (bridge + job path), destructiveHint=true | ✅ `probuilder.combine-meshes` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.merge-objects | `probuilder merge-objects <target>` | hybrid (bridge + job path), destructiveHint=true | ✅ `probuilder.merge-objects` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.duplicate-and-flip | `probuilder duplicate-and-flip <target>` | hybrid (bridge + job path) | ✅ `probuilder.duplicate-and-flip` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.create-polygon | `probuilder create-polygon [--positions]` | hybrid (bridge + job path) | ✅ `probuilder.create-polygon` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.merge-vertices | `probuilder merge-vertices <target>` | hybrid (bridge + job path) | ✅ `probuilder.merge-vertices` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.weld-vertices | `probuilder weld-vertices <target>` | hybrid (bridge + job path) | ✅ `probuilder.weld-vertices` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.split-vertices | `probuilder split-vertices <target>` | hybrid (bridge + job path) | ✅ `probuilder.split-vertices` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.move-vertices | `probuilder move-vertices <target> [--offset]` | hybrid (bridge + job path) | ✅ `probuilder.move-vertices` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.insert-vertex | `probuilder insert-vertex <target> [--position]` | hybrid (bridge + job path) | ✅ `probuilder.insert-vertex` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.append-vertices-to-edge | `probuilder append-vertices-to-edge <target> [--positions]` | hybrid (bridge + job path) | ✅ `probuilder.append-vertices-to-edge` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.mesh-info | `probuilder mesh-info <target>` | hybrid (bridge + job path) | ✅ `probuilder.mesh-info` in PROBUILDER_TOOLS | probuilder-contract.test.ts; tools.test.ts | ✅ |
-| probuilder.validate-mesh | `probuilder validate-mesh <target>` | hybrid (bridge + job path) | ✅ `probuilder.validate-mesh` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.convert-to-probuilder | `probuilder convert-to-probuilder <target>` | hybrid (bridge + job path) | ✅ `probuilder.convert-to-probuilder` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.set-smoothing | `probuilder set-smoothing <target> [--angle]` | hybrid (bridge + job path) | ✅ `probuilder.set-smoothing` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.auto-smooth | `probuilder auto-smooth <target>` | hybrid (bridge + job path) | ✅ `probuilder.auto-smooth` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.center-pivot | `probuilder center-pivot <target>` | hybrid (bridge + job path) | ✅ `probuilder.center-pivot` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.freeze-transform | `probuilder freeze-transform <target>` | hybrid (bridge + job path) | ✅ `probuilder.freeze-transform` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.set-pivot | `probuilder set-pivot <target> [--position]` | hybrid (bridge + job path) | ✅ `probuilder.set-pivot` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
-| probuilder.repair-mesh | `probuilder repair-mesh <target>` | hybrid (bridge + job path) | ✅ `probuilder.repair-mesh` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.ping | `tools run probuilder.ping` | bridge (UnityCliBridge) | ✅ `probuilder.ping` in PROBUILDER_TOOLS | probuilder-contract.test.ts; capabilities.test.ts | ✅ |
+| probuilder.create-shape | `tools run probuilder.create-shape --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.create-shape` in PROBUILDER_TOOLS | probuilder-contract.test.ts; camera-bridge-source.test.ts | ✅ |
+| probuilder.create-poly-shape | `tools run probuilder.create-poly-shape --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.create-poly-shape` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.extrude-faces | `tools run probuilder.extrude-faces --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.extrude-faces` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.delete-faces | `tools run probuilder.delete-faces --input <json>` | hybrid (bridge + job path), destructiveHint=true | ✅ `probuilder.delete-faces` in PROBUILDER_TOOLS | probuilder-contract.test.ts; security.test.ts | ✅ |
+| probuilder.detach-faces | `tools run probuilder.detach-faces --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.detach-faces` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.merge-faces | `tools run probuilder.merge-faces --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.merge-faces` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.subdivide | `tools run probuilder.subdivide --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.subdivide` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.flip-normals | `tools run probuilder.flip-normals --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.flip-normals` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.select-faces | `tools run probuilder.select-faces --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.select-faces` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.set-face-material | `tools run probuilder.set-face-material --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.set-face-material` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.set-face-color | `tools run probuilder.set-face-color --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.set-face-color` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.set-face-uvs | `tools run probuilder.set-face-uvs --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.set-face-uvs` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.extrude-edges | `tools run probuilder.extrude-edges --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.extrude-edges` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.bevel-edges | `tools run probuilder.bevel-edges --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.bevel-edges` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.bridge-edges | `tools run probuilder.bridge-edges --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.bridge-edges` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.connect-elements | `tools run probuilder.connect-elements --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.connect-elements` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.combine-meshes | `tools run probuilder.combine-meshes --input <json>` | hybrid (bridge + job path), destructiveHint=true | ✅ `probuilder.combine-meshes` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.merge-objects | `tools run probuilder.merge-objects --input <json>` | hybrid (bridge + job path), destructiveHint=true | ✅ `probuilder.merge-objects` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.duplicate-and-flip | `tools run probuilder.duplicate-and-flip --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.duplicate-and-flip` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.create-polygon | `tools run probuilder.create-polygon --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.create-polygon` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.merge-vertices | `tools run probuilder.merge-vertices --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.merge-vertices` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.weld-vertices | `tools run probuilder.weld-vertices --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.weld-vertices` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.split-vertices | `tools run probuilder.split-vertices --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.split-vertices` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.move-vertices | `tools run probuilder.move-vertices --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.move-vertices` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.insert-vertex | `tools run probuilder.insert-vertex --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.insert-vertex` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.append-vertices-to-edge | `tools run probuilder.append-vertices-to-edge --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.append-vertices-to-edge` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.mesh-info | `tools run probuilder.mesh-info --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.mesh-info` in PROBUILDER_TOOLS | probuilder-contract.test.ts; tools.test.ts | ✅ |
+| probuilder.validate-mesh | `tools run probuilder.validate-mesh --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.validate-mesh` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.convert-to-probuilder | `tools run probuilder.convert-to-probuilder --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.convert-to-probuilder` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.set-smoothing | `tools run probuilder.set-smoothing --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.set-smoothing` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.auto-smooth | `tools run probuilder.auto-smooth --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.auto-smooth` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.center-pivot | `tools run probuilder.center-pivot --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.center-pivot` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.freeze-transform | `tools run probuilder.freeze-transform --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.freeze-transform` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.set-pivot | `tools run probuilder.set-pivot --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.set-pivot` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
+| probuilder.repair-mesh | `tools run probuilder.repair-mesh --input <json>` | hybrid (bridge + job path) | ✅ `probuilder.repair-mesh` in PROBUILDER_TOOLS | probuilder-contract.test.ts | ✅ |
 
 ## Screenshot 域
 
@@ -274,7 +270,7 @@
 | 功能 | 实现 | 测试证据 | 状态 |
 |---|---|---|---|
 | project tool fingerprint 校验 | SHA-256(handler code + descriptor) 自动计算；不一致时 `E_TOOL_FINGERPRINT_MISMATCH` 拦截执行 | project-tools.test.ts: C# attribute; doctor.test.ts: fingerprint summary; security.test.ts: destructive fingerprint proof | ✅ |
-| destructive security proof | destructive 命令执行时携带 `alp332-destructive-safety-v1` fingerprint | security.test.ts: security proof 随 dry-run/yes 传播 | ✅ |
+| destructive security proof | destructive 命令执行时携带 `destructive-safety-v1` fingerprint | security.test.ts: security proof 随 dry-run/yes 传播 | ✅ |
 | doctor fingerprint 诊断 | `doctor` 命令输出 project tool fingerprint 摘要 | doctor.test.ts: project tool fingerprint summary | ✅ |
 
 ## UI 域
@@ -302,16 +298,16 @@
 | package | `package list` 返回列表 | `package install/remove` 修改 manifest | 2026-06-16 (P1-2) | 环境验证通过 |
 | test | `test.poll` 查询 job 状态 | `test run` 触发测试 | 2026-06-16 (P1-2) | job 生命周期通过 |
 | build | `build.status` 查询 job 状态 | `build run` 触发构建 | 2026-06-16 (P1-2) | job 生命周期通过 |
-| camera | `camera info <target>` | `camera screenshot <target> --output <path>` | 2026-06-16 (ALP-275) | Console clean；含 scene.screenshot 验证 |
-| scene | `scene active/hierarchy/build-settings` 返回场景信息 | `scene create/load/save` 管理场景生命周期 | 2026-06-16 (ALP-275) | 与 camera 域合并验证；scene.active/create/load/save/hierarchy/build-settings 均在 contracts:validate 和 camera-bridge-source.test.ts 覆盖 |
-| material | `material info <path>` | `material create <path> --shader <name>` | 2026-06-16 (ALP-275) | Console clean |
-| shader | `shader info <path>` | `shader create <path> --content-file <file>` | 2026-06-16 (ALP-275) | Console clean |
-| texture | `texture info <path>` | `texture create <path> [--source <file>]` | 2026-06-16 (ALP-275) | Console clean |
-| ui | `ui document/info <target|path>` / `ui hierarchy [target]` | `ui canvas/create <name>` | 2026-06-16 (ALP-275) | Console clean |
+| camera | `camera info <target>` | `camera screenshot <target> --output <path>` | 2026-06-16 | Console clean；含 scene.screenshot 验证 |
+| scene | `scene active/hierarchy/build-settings` 返回场景信息 | `scene create/load/save` 管理场景生命周期 | 2026-06-16 | 与 camera 域合并验证；scene.active/create/load/save/hierarchy/build-settings 均在 contracts:validate 和 camera-bridge-source.test.ts 覆盖 |
+| material | `material info <path>` | `material create <path> --shader <name>` | 2026-06-16 | Console clean |
+| shader | `shader info <path>` | `shader create <path> --content-file <file>` | 2026-06-16 | Console clean |
+| texture | `texture info <path>` | `texture create <path> [--source <file>]` | 2026-06-16 | Console clean |
+| ui | `ui document/info <target|path>` / `ui hierarchy [target]` | `ui canvas/create <name>` | 2026-06-16 | Console clean |
 | graphics | `graphics quality` / `graphics pipeline` / `graphics volume` 返回设置、管线和 Volume 摘要 | `graphics settings --render-pipeline` 或 `graphics quality --quality-level` 修改项目设置 | 2026-06-16 (P1-2) | Console clean |
 | physics | `physics raycast` 执行 3D/2D 射线检测 | `physics settings --gravity-y` 或 `physics simulation --simulate` 修改/步进物理 | 2026-06-16 (P1-2) | Console clean |
-| animation/vfx | `animation state` / `vfx graph` 查询动画和 VFX 资源/组件 | `animation play <target> --state <name>` / `vfx effect <target> --add` 执行动画和 VFX 修改 | 2026-06-16 (P1-2) | VFX 因 ProBuilder/VFX package 未安装，CLI 返回预期错误码 |
-| profiler | `profiler status/counter/memory/frame` 返回状态、计数器、内存和帧诊断 | `profiler start/pause/stop` 控制 session，`profiler capture/export` 写 artifact | 2026-06-16 (P1-2/ALP-340/ALP-348) | Console clean（ALP-340 修复后复测通过）；export artifact 1188 bytes |
+| animation/vfx | `animation state` / `tools run vfx.graph` 查询动画和 VFX 资源/组件 | `animation play <target> --state <name>` / `tools run vfx.effect --input <json>` 执行动画和 VFX 修改 | 2026-06-16 (P1-2) | VFX 因 ProBuilder/VFX package 未安装，CLI 返回预期错误码 |
+| profiler | `profiler status/counter/memory/frame` 返回状态、计数器、内存和帧诊断 | `profiler start/pause/stop` 控制 session，`profiler capture/export` 写 artifact | 2026-06-16 (P1-2) | Console clean（修复后复测通过）；export artifact 1188 bytes |
 | script | `script read/validate <path>` 返回内容和静态诊断 | `script create/edit --yes` 创建或编辑脚本 | 2026-06-16 (P2-6 实机) | Console clean；script.create/read/validate/edit 全链路通过 |
 | go/component | `go find/inspect` 返回对象和组件摘要 | `go create/modify/delete --yes`、`component add/set/remove --yes` 修改场景对象 | 2026-06-16 (P2-6 实机) | Console clean；destructive 命令无 --yes 返回 E_DESTRUCTIVE_CONFIRMATION_REQUIRED |
 | asset | `asset search/info` 返回资源列表与 metadata | `asset create/modify/duplicate/move/rename/delete --yes` + `delete --dry-run` 修改 AssetDatabase | 2026-06-16 (P2-6 实机) | Console clean；dry-run 预览正常 |
@@ -319,7 +315,7 @@
 | code | `code exec --code` 返回结果 | `code exec --yes` 执行代码（destructiveHint）；`--dry-run` 预览 | 2026-06-16 (P2-6 实机) | Console clean；live inline/file + dry-run 均通过 |
 | project-tool | `project-tool list` 列出注册的自定义工具 | `project-tool run sample.echo --fingerprint-mode warn` 执行自定义工具 | 2026-06-16 (P2-6 实机) | Console clean；fingerprint 链路正常 |
 | batch | `batch schema` 查看 schema | `batch run --preflight` + `batch run --yes` 执行批处理 | 2026-06-16 (P2-6 实机) | Console clean；preflight + --yes 均通过 |
-| probuilder | `probuilder mesh-info/validate-mesh` 查询网格 | `probuilder create-shape/extrude-faces/delete-faces` 修改场景（destructiveHint） | 可选 capability | 按冻结决策延后为可选 capability；需 ProBuilder 包 |
+| probuilder | `tools run probuilder.mesh-info/validate-mesh --input <json>` 查询网格 | `tools run probuilder.create-shape/extrude-faces/delete-faces --input <json>` 修改场景（destructiveHint） | 可选 capability | 按冻结决策延后为可选 capability；需 ProBuilder 包 |
 | diagnose | `diagnose run` / preflight 查看 batch schema 合规 | `diagnose preflight` 执行批处理预检 | 2026-06-16 (P2-6 实机) | Console clean |
 | screenshot | `screenshot capture <path>` 截取当前视图 | — | 2026-06-16 (P2-6 实机) | Console clean（与 camera/scene.screenshot 合并验证） |
 | 安全模型 / destructive safety | `capabilities` 列出 destructive 工具 | `--yes` 确认 + dry-run 预览 | 2026-06-16 (P2-5) | 12 个 destructive 命令确认机制已验证 |
@@ -335,9 +331,7 @@
 - **S2.2** (2026-06-15): 补齐 asset create/modify/delete/duplicate/move/rename 与 prefab modify Bridge handler、metadata 和覆盖矩阵行
 - **S3.1** (2026-06-15): 补齐 camera、material、shader、texture、ui 创作域覆盖矩阵；新增 S3.1 metadata/write smoke 单测证据
 - **S3.2** (2026-06-15): 新增 Graphics/Physics/Animation/VFX 覆盖矩阵行；补 `graphics.pipeline`、`graphics.volume` 查询命令与 metadata/handler/test 证据
-- **ALP-306** (2026-06-15): 新增 `contracts/command-contract.json` 与 `npm run contracts:validate`；补齐 scene/go/component/script 16 个 C# bridge handler，使 TS registry、tool metadata 与 C# registry 统一校验通过。
 - **S3.4** (2026-06-15): 补齐 Profiler session/counter/memory/frame/export CLI、UnityPkg handler、metadata/describe 与自动化测试矩阵；质量 smoke PASS。
-- **P1-1 Profiler 迁移重做** (2026-06-16): 在新结构 contract/metadata/handler/docs 中显式标记 `architectureSensitive=true`、`frozenDecision=ALP-165-Q4`、完整 `coverageScope`，用于防止冻结口径被误降级。
 - **S3.5** (2026-06-16): 补齐 `cli.batch.schema` metadata、`test.logs`/`test.cancel`、`build.logs`、job describe/cancellation semantics 字段，并新增 batch→build status/logs/cancel 自动化链路测试。
 - **P2-1 S3.5 Batch/Job 完整化** (2026-06-16): 新增 `cli.batch.run/schema` metadata，补齐 batch orchestration 全链路（preflight/parallel/fail-fast/env allowlist），job lifecycle（status/logs/cancel/timeout）。
 - **P2-2 S4.1 Project tool 注册 + descriptor** (2026-06-16): 新增 `project-tool.list/run` 覆盖矩阵行；实现 Attribute-first `[UnityCliTool]` 注册 + 自动 descriptor 生成 + schema 校验。

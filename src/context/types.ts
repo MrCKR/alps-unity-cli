@@ -63,6 +63,12 @@ export interface ContextDescriptor {
   dependencies?: string[];
   /** Documentation topic key. */
   docsTopic?: string;
+  /** URI-style resource identity used for MCP-resource parity tracking. */
+  resourceUri?: string;
+  /** Equivalent unity-mcp Resource URI, or "none" with an explanatory note. */
+  equivalentUnityMcp?: string;
+  /** Explains why no exact unity-mcp Resource equivalent exists. */
+  equivalentUnityMcpNote?: string;
   /** C# handler class name for custom contexts. */
   handlerClass?: string;
   /** C# handler method name for custom contexts. */

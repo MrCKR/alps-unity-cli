@@ -174,6 +174,24 @@ namespace UnityCli
                 },
                 new BuiltInContextDefinition
                 {
+                    Name = "scene.gameobject.components", Title = "Scene GameObject Components", Description = "Read all components attached to a GameObject.",
+                    Category = "scene", Source = "built-in", RefreshBehavior = "on-demand", Target = "editor", AvailabilityScope = "editorSession",
+                    ResourceUri = "unity-cli://scene/gameobject/{instance_id}/components", EquivalentUnityMcp = "mcpforunity://scene/gameobject/{id}/components", Handler = "bridge",
+                    InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"id\":{\"type\":\"integer\"},\"path\":{\"type\":\"string\"},\"includeProperties\":{\"type\":\"boolean\"}}}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"gameObject\":{\"type\":\"object\"},\"components\":{\"type\":\"array\"},\"count\":{\"type\":\"integer\"},\"readOnlyHint\":{\"type\":\"boolean\"}}}",
+                    RequiresPackages = null, ReadHandler = ReadSceneGameObjectComponents
+                },
+                new BuiltInContextDefinition
+                {
+                    Name = "scene.gameobject.component", Title = "Scene GameObject Component", Description = "Read one component attached to a GameObject.",
+                    Category = "scene", Source = "built-in", RefreshBehavior = "on-demand", Target = "editor", AvailabilityScope = "editorSession",
+                    ResourceUri = "unity-cli://scene/gameobject/{instance_id}/component/{name}", EquivalentUnityMcp = "mcpforunity://scene/gameobject/{id}/component/{name}", Handler = "bridge",
+                    InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"id\":{\"type\":\"integer\"},\"path\":{\"type\":\"string\"},\"component\":{\"type\":\"string\"}},\"required\":[\"component\"]}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"gameObject\":{\"type\":\"object\"},\"component\":{\"type\":\"object\"},\"readOnlyHint\":{\"type\":\"boolean\"}}}",
+                    RequiresPackages = null, ReadHandler = ReadSceneGameObjectComponent
+                },
+                new BuiltInContextDefinition
+                {
                     Name = "scene.cameras", Title = "Scene Cameras", Description = "List all cameras in the active scene with their key properties.",
                     Category = "scene", Source = "built-in", RefreshBehavior = "on-demand", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://scene/cameras", EquivalentUnityMcp = "mcpforunity://scene/cameras", Handler = "bridge",
@@ -207,6 +225,51 @@ namespace UnityCli
                     InputSchema = "{}",
                     OutputSchema = "{\"type\":\"object\",\"properties\":{\"available\":{\"type\":\"boolean\"},\"stats\":{\"type\":\"object\"},\"diagnostics\":{\"type\":\"string\"}}}",
                     RequiresPackages = null, ReadHandler = ReadSceneRenderingStats
+                },
+                new BuiltInContextDefinition
+                {
+                    Name = "prefab.info", Title = "Prefab Info", Description = "Read Prefab asset metadata, dependencies, variants, and nested references.",
+                    Category = "prefab", Source = "built-in", RefreshBehavior = "on-demand", Target = "editor", AvailabilityScope = "editorSession",
+                    ResourceUri = "unity-cli://prefab/{path}", EquivalentUnityMcp = "mcpforunity://prefab/{path}", Handler = "bridge",
+                    InputSchema = "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},\"required\":[\"path\"]}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"prefab\":{\"type\":\"object\"},\"readOnlyHint\":{\"type\":\"boolean\"}}}",
+                    RequiresPackages = null, ReadHandler = ReadPrefabInfoContext
+                },
+                new BuiltInContextDefinition
+                {
+                    Name = "prefab.hierarchy", Title = "Prefab Hierarchy", Description = "Read a Prefab hierarchy without modifying Prefab Stage.",
+                    Category = "prefab", Source = "built-in", RefreshBehavior = "on-demand", Target = "editor", AvailabilityScope = "editorSession",
+                    ResourceUri = "unity-cli://prefab/{path}/hierarchy", EquivalentUnityMcp = "mcpforunity://prefab/{path}/hierarchy", Handler = "bridge",
+                    InputSchema = "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"},\"pageSize\":{\"type\":\"integer\"},\"cursor\":{\"type\":\"integer\"}},\"required\":[\"path\"]}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"prefab\":{\"type\":\"object\"},\"items\":{\"type\":\"array\"},\"pageInfo\":{\"type\":\"object\"},\"readOnlyHint\":{\"type\":\"boolean\"}}}",
+                    RequiresPackages = null, ReadHandler = ReadPrefabHierarchyContext
+                },
+                new BuiltInContextDefinition
+                {
+                    Name = "instances.list", Title = "Unity Instances", Description = "Read the current Bridge instance summary from Unity.",
+                    Category = "instances", Source = "built-in", RefreshBehavior = "live", Target = "editor", AvailabilityScope = "always",
+                    ResourceUri = "unity-cli://instances/list", EquivalentUnityMcp = "mcpforunity://instances", Handler = "bridge",
+                    InputSchema = "{}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"instances\":{\"type\":\"array\"},\"count\":{\"type\":\"integer\"},\"readOnlyHint\":{\"type\":\"boolean\"}}}",
+                    RequiresPackages = null, ReadHandler = ReadInstancesListContext
+                },
+                new BuiltInContextDefinition
+                {
+                    Name = "tools.groups", Title = "Tool Groups", Description = "Read built-in bridge tool groups and command counts.",
+                    Category = "tools", Source = "built-in", RefreshBehavior = "static", Target = "editor", AvailabilityScope = "always",
+                    ResourceUri = "unity-cli://tools/groups", EquivalentUnityMcp = "mcpforunity://tool-groups", Handler = "bridge",
+                    InputSchema = "{}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"groups\":{\"type\":\"array\"},\"count\":{\"type\":\"integer\"},\"readOnlyHint\":{\"type\":\"boolean\"}}}",
+                    RequiresPackages = null, ReadHandler = ReadToolsGroupsContext
+                },
+                new BuiltInContextDefinition
+                {
+                    Name = "tools.custom", Title = "Custom Tools", Description = "Read custom Unity project tools discovered through UnityCliTool attributes.",
+                    Category = "tools", Source = "built-in", RefreshBehavior = "on-demand", Target = "editor", AvailabilityScope = "editorSession",
+                    ResourceUri = "unity-cli://tools/custom", EquivalentUnityMcp = "mcpforunity://custom-tools", Handler = "bridge",
+                    InputSchema = "{}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"tools\":{\"type\":\"array\"},\"count\":{\"type\":\"integer\"},\"readOnlyHint\":{\"type\":\"boolean\"}}}",
+                    RequiresPackages = null, ReadHandler = ReadToolsCustomContext
                 },
                 // ── Tests contexts ──
                 new BuiltInContextDefinition
@@ -541,6 +604,40 @@ namespace UnityCli
                 .ToString());
         }
 
+        private static string ReadSceneGameObjectComponents(BridgeRequest request)
+        {
+            var gameObject = ResolveContextGameObject(request);
+            var includeProperties = request.BoolArg("includeProperties", true);
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("gameObject", GameObjectTargetJson(gameObject))
+                .PropRaw("components", includeProperties ? ComponentDetailsJson(gameObject) : ComponentsJson(gameObject))
+                .Prop("count", (long)gameObject.GetComponents<Component>().Length)
+                .Prop("readOnlyHint", true)
+                .EndObject()
+                .ToString());
+        }
+
+        private static string ReadSceneGameObjectComponent(BridgeRequest request)
+        {
+            var gameObject = ResolveContextGameObject(request);
+            var componentName = request.StringArg("component") ?? request.StringArg("name");
+            if (string.IsNullOrEmpty(componentName))
+            {
+                return ErrorJson("E_COMPONENT_TYPE_REQUIRED", "scene.gameobject.component requires component.", "Pass --input '{\"target\":\"Player\",\"component\":\"Transform\"}'.");
+            }
+            var component = ResolveComponent(gameObject, componentName);
+            if (component == null)
+            {
+                return ErrorJson("E_COMPONENT_NOT_FOUND", "Component not found on target: " + componentName, "Run context read scene.gameobject.components for the target.");
+            }
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("gameObject", GameObjectTargetJson(gameObject))
+                .PropRaw("component", ComponentDetailJson(component))
+                .Prop("readOnlyHint", true)
+                .EndObject()
+                .ToString());
+        }
+
         private static string ReadSceneCameras(BridgeRequest request)
         {
             // Reuse existing CameraListJson()
@@ -659,6 +756,94 @@ namespace UnityCli
                 .ToString());
         }
 
+        private static string ReadPrefabInfoContext(BridgeRequest request)
+        {
+            var path = RequirePrefabPath(request.StringArg("path"));
+            var prefab = LoadPrefabAsset(path);
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("prefab", PrefabAssetJson(path, prefab))
+                .Prop("readOnlyHint", true)
+                .EndObject()
+                .ToString());
+        }
+
+        private static string ReadPrefabHierarchyContext(BridgeRequest request)
+        {
+            var path = RequirePrefabPath(request.StringArg("path"));
+            LoadPrefabAsset(path);
+            var pageSize = Math.Max(1, request.IntArg("pageSize", 100));
+            var cursor = Math.Max(0, request.IntArg("cursor", 0));
+            var root = PrefabUtility.LoadPrefabContents(path);
+            try
+            {
+                var items = new List<string>();
+                var total = CountHierarchy(root.transform);
+                CollectHierarchy(root.transform, items, cursor, pageSize, new Counter());
+                var nextCursor = cursor + items.Count < total ? (cursor + items.Count).ToString(CultureInfo.InvariantCulture) : null;
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .PropRaw("prefab", PrefabAssetJson(path, root, root))
+                    .PropArray("items", arr => { foreach (var item in items) { arr.RawValue(item); } })
+                    .PropObject("pageInfo", pageInfo => pageInfo
+                        .Prop("pageSize", (long)pageSize)
+                        .Prop("cursor", (long)cursor)
+                        .Prop("nextCursor", nextCursor)
+                        .Prop("total", (long)total))
+                    .Prop("readOnlyHint", true)
+                    .EndObject()
+                    .ToString());
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(root);
+            }
+        }
+
+        private static string ReadInstancesListContext(BridgeRequest request)
+        {
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropArray("instances", arr => arr.BeginObject()
+                    .Prop("instanceId", ListenerId)
+                    .Prop("projectPath", ProjectRoot())
+                    .Prop("unityVersion", Application.unityVersion)
+                    .Prop("bridgeEndpoint", "http://127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture))
+                    .Prop("status", "ready")
+                    .EndObject())
+                .Prop("count", 1L)
+                .Prop("readOnlyHint", true)
+                .EndObject()
+                .ToString());
+        }
+
+        private static string ReadToolsGroupsContext(BridgeRequest request)
+        {
+            var groups = new Dictionary<string, int>(StringComparer.Ordinal);
+            AddToolGroupCounts(groups, "camera", CameraCommands);
+            AddToolGroupCounts(groups, "scene", SceneCommands);
+            AddToolGroupCounts(groups, "go", GameObjectCommands);
+            AddToolGroupCounts(groups, "asset", AssetCommands);
+            AddToolGroupCounts(groups, "prefab", PrefabCommands);
+            AddToolGroupCounts(groups, "physics", PhysicsCommands);
+            AddToolGroupCounts(groups, "editor", EditorCommands);
+            AddToolGroupCounts(groups, "script", ScriptCommands);
+            AddToolGroupCounts(groups, "scriptable-object", ScriptableObjectCommands);
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropArray("groups", arr => { foreach (var pair in groups.OrderBy(p => p.Key, StringComparer.Ordinal)) { arr.BeginObject().Prop("name", pair.Key).Prop("toolCount", (long)pair.Value).Prop("cliCommand", "tools group list " + pair.Key).EndObject(); } })
+                .Prop("count", (long)groups.Count)
+                .Prop("readOnlyHint", true)
+                .EndObject()
+                .ToString());
+        }
+
+        private static string ReadToolsCustomContext(BridgeRequest request)
+        {
+            DiscoverProjectTools();
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("tools", ProjectToolListRawJson())
+                .Prop("readOnlyHint", true)
+                .EndObject()
+                .ToString());
+        }
+
         private static string ReadTestsList(BridgeRequest request)
         {
             // Try to find Unity Test Runner API via reflection
@@ -695,6 +880,105 @@ namespace UnityCli
         }
 
         // ── Helper methods ──
+
+        private static GameObject ResolveContextGameObject(BridgeRequest request)
+        {
+            var target = request.StringArg("target") ?? request.StringArg("name");
+            var id = request.OptionalIntArg("id");
+            var path = request.StringArg("path");
+            GameObject gameObject = null;
+            if (id.HasValue) gameObject = EditorUtility.InstanceIDToObject(id.Value) as GameObject;
+            else if (!string.IsNullOrEmpty(path)) gameObject = GameObject.Find(path);
+            else if (!string.IsNullOrEmpty(target)) gameObject = ResolveUniqueTarget(target, "Context target is required.");
+            if (gameObject == null)
+            {
+                throw new BridgeCommandException("E_TARGET_NOT_FOUND", "GameObject context target not found.", "Pass target, path, or id.");
+            }
+            return gameObject;
+        }
+
+        private static string ComponentDetailsJson(GameObject gameObject)
+        {
+            var writer = new UnityCliJsonWriter().BeginArray();
+            foreach (var component in gameObject.GetComponents<Component>())
+            {
+                writer.RawValue(ComponentDetailJson(component));
+            }
+            return writer.EndArray().ToString();
+        }
+
+        private static string ComponentDetailJson(Component component)
+        {
+            if (component == null) return ComponentSummaryJson(component);
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("type", component.GetType().Name)
+                .Prop("fullName", component.GetType().FullName)
+                .Prop("enabled", ComponentEnabled(component))
+                .PropRaw("properties", ComponentReadablePropertiesJson(component))
+                .EndObject()
+                .ToString();
+        }
+
+        private static string ComponentReadablePropertiesJson(Component component)
+        {
+            var writer = new UnityCliJsonWriter().BeginObject();
+            foreach (var property in component.GetType().GetProperties(BindingFlags.Instance | BindingFlags.Public))
+            {
+                if (!property.CanRead || property.GetIndexParameters().Length > 0) continue;
+                try
+                {
+                    var value = property.GetValue(component, null);
+                    writer.Prop(property.Name, value == null ? null : Convert.ToString(value, CultureInfo.InvariantCulture));
+                }
+                catch { }
+            }
+            return writer.EndObject().ToString();
+        }
+
+        private static void AddToolGroupCounts(Dictionary<string, int> groups, string name, string[] commands)
+        {
+            groups[name] = commands == null ? 0 : commands.Length;
+        }
+
+        private static string ProjectToolListRawJson()
+        {
+            var response = ProjectToolList(new BridgeRequest("{}", "context_tools_custom", "project-tool.list"));
+            var raw = response;
+            var data = ExtractJsonProperty(raw, "data");
+            var tools = ExtractJsonProperty(data, "tools");
+            return string.IsNullOrEmpty(tools) ? "[]" : tools;
+        }
+
+        private static string ExtractJsonProperty(string json, string name)
+        {
+            var marker = "\"" + name + "\":";
+            var index = (json ?? string.Empty).IndexOf(marker, StringComparison.Ordinal);
+            if (index < 0) return null;
+            var start = index + marker.Length;
+            while (start < json.Length && char.IsWhiteSpace(json[start])) start++;
+            var depth = 0;
+            var inString = false;
+            var escaped = false;
+            for (var i = start; i < json.Length; i++)
+            {
+                var ch = json[i];
+                if (inString)
+                {
+                    if (escaped) escaped = false;
+                    else if (ch == '\\') escaped = true;
+                    else if (ch == '"') inString = false;
+                    continue;
+                }
+                if (ch == '"') { inString = true; continue; }
+                if (ch == '{' || ch == '[') depth++;
+                if (ch == '}' || ch == ']')
+                {
+                    depth--;
+                    if (depth == 0) return json.Substring(start, i - start + 1);
+                }
+            }
+            return null;
+        }
 
         private static bool? BoolMemberValue(Type type, object instance, string memberName)
         {

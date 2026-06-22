@@ -12,7 +12,7 @@ export const animationBridgeSpecs: BridgeCommandSpec[] = [
   { group: "animator", command: "crossfade", bridgeCommand: "animator.crossfade", buildArgs: animatorArgs },
   { group: "animator", command: "set-speed", bridgeCommand: "animator.set-speed", buildArgs: animatorArgs },
   { group: "animator", command: "set-enabled", bridgeCommand: "animator.set-enabled", buildArgs: animatorArgs },
-  // ── controller.* AnimatorController editing tools (ALP-603 P6-T6b) ───
+  // ── controller.* AnimatorController editing tools ───
   { group: "controller", command: "create", bridgeCommand: "controller.create", buildArgs: controllerArgs },
   { group: "controller", command: "add-state", bridgeCommand: "controller.add-state", buildArgs: controllerArgs },
   { group: "controller", command: "add-transition", bridgeCommand: "controller.add-transition", buildArgs: controllerArgs },

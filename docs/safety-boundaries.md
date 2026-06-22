@@ -12,7 +12,6 @@ alps-unity-cli 的安全模型围绕三个核心原则：Tool 可有副作用但
 | `destructiveHint` | boolean | true = 有破坏性，执行前需要确认 |
 | `supportsDryRun` | boolean | true = 支持 `--dry-run` 预览 |
 | `longRunning` | boolean | true = 可能长时间运行 |
-| `architectureSensitive` | boolean | true = 影响项目架构，修改前需审查冻结决策 |
 | `permissions` | string[] | 执行所需权限 |
 | `cancellationSemantics` | string | 取消行为描述 |
 
@@ -103,13 +102,6 @@ unity_cli doctor
 # doctor 会报告 project_tool_fingerprint 检查结果
 ```
 
-## 架构敏感工具
-
-`architectureSensitive: true` 的工具标记了影响项目架构的能力，修改前需审查 `frozenDecision` 字段：
-
-- 所有 `profiler.*` 工具（ALP-165-Q4 冻结决策）
-- 这些工具可以读取和修改 Unity Profiler 状态
-
 ## 安全确认证明（Security Proof）
 
 破坏性 Bridge 命令的请求 payload 包含 `security` 证明对象：
@@ -117,7 +109,7 @@ unity_cli doctor
 ```json
 {
   "security": {
-    "confirmationFingerprint": "alp332-destructive-safety-v1",
+    "confirmationFingerprint": "destructive-safety-v1",
     "dryRunPreview": { ... }
   }
 }

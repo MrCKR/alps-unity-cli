@@ -4,7 +4,7 @@
 
 ## 当前状态：已实现
 
-扩展包系统已在 P5 阶段（[ALP-541](https://github.com/MrCKR/alps-unity-cli/issues)）完成，包括 Bridge 包安装、项目工具发现、fingerprint 校验，以及独立的 `extensions` 命令组。
+扩展包系统已完成，包括 Bridge 包安装、项目工具发现、fingerprint 校验、可选包可用性检测，以及独立的 `extensions` 命令组。当前运行时准源是 `src/tools/metadata/groups/*`、`src/bridge/domains/*`、核心 `unitypkg/Editor/Commands/*` 与物理 extension bundle `extensions/<id>/unitypkg/*`。
 
 ## 当前扩展能力
 
@@ -54,19 +54,22 @@ unity_cli diagnose preflight
 P5 阶段已实现独立的 `extensions` 命令组：
 
 ```powershell
-unity_cli extensions list                          # 列出已安装扩展
-unity_cli extensions install <name>                 # 安装扩展
-unity_cli extensions remove <name>                  # 卸载扩展
-unity_cli extensions doctor                         # 扩展诊断
+unity_cli extensions list --project <path>          # 列出扩展状态
+unity_cli extensions install <name> --project <path> # 复制已满足依赖的 Unity 侧 bundle
+unity_cli extensions remove <name> --project <path>  # 只移除 manifest 管理的 bundle 文件
+unity_cli extensions doctor --project <path>         # 扩展诊断
 ```
 
 ### init 自动检测
 
-`init --auto-detect` 会根据 Unity 项目已安装的 Package 自动匹配并安装对应的 CLI 扩展：
+`init` 会根据 Unity 项目已安装的 Package 自动匹配并复制对应的 Unity 侧 extension bundle；不会自动安装 Unity Package：
 
 ```
-项目检测到 com.unity.probuilder → 安装 ProBuilder 扩展
-项目检测到 com.unity.visualeffectgraph → 安装 VFX Graph 扩展（P8）
+项目检测到 com.unity.probuilder → 复制 ProBuilder bundle → `tools run probuilder.*` 可用
+项目检测到 com.unity.visualeffectgraph → 复制 VFX Graph bundle → `tools run vfx.*` 可用
+项目检测到 com.unity.cinemachine → 复制 Cinemachine bundle → `tools run cinemachine.*` 可用
+项目检测到 com.unity.render-pipelines.universal → 复制 URP bundle → `tools run urp.*` 可用
+项目检测到 com.unity.render-pipelines.high-definition → 复制 HDRP bundle → `tools run hdrp.*` 可用
 ```
 
 ## 扩展开发
@@ -87,16 +90,16 @@ unity_cli extensions doctor                         # 扩展诊断
 
 当扩展依赖的 Unity Package 未安装时：
 
-- 扩展工具在 `tools group list custom --include-custom` 中可见但标记为 `available: false`
-- 执行时返回错误，`next_actions` 指向安装所需 Package
-- 不产生静默失败
+- 扩展工具通过 `tools group/list/describe/run` 暴露，并标记为 `available: false`
+- 执行时返回错误，`next_actions` 指向手动安装 Unity Package 与随后运行 `extensions install <id>`
+- 不自动安装 Unity Package，不产生静默失败
 
 ```json
 {
   "name": "probuilder.create-shape",
   "available": false,
   "requiresPackages": ["com.unity.probuilder"],
-  "next_actions": ["Install com.unity.probuilder via Package Manager."]
+  "next_actions": ["Install com.unity.probuilder manually via Unity Package Manager or Packages/manifest.json.", "Then run unity_cli extensions install probuilder --project <path>."]
 }
 ```
 
@@ -104,10 +107,11 @@ unity_cli extensions doctor                         # 扩展诊断
 
 | 扩展 | 状态 | 说明 |
 |------|------|------|
-| ProBuilder | ✅ 已完成（P7） | 36 个扩展工具（create-shape/extrude-faces/delete-faces 等），需要 com.unity.probuilder |
-| Cinemachine | 📋 Backlog（P8） | 待实现 |
-| VFX Graph | 📋 Backlog（P8） | 仅基础 vfx 命令，扩展包待实现 |
-| URP/HDRP | 📋 Backlog（P8） | 待实现 |
+| ProBuilder | ✅ 已实现 | 36 个扩展工具（create-shape/extrude-faces/delete-faces 等），需要 `com.unity.probuilder` |
+| Cinemachine | ✅ 已实现 | Cinemachine camera/target/lens/shot 等工具，需要 `com.unity.cinemachine` |
+| VFX Graph | ✅ 已实现 | VFX Graph、ParticleSystem、LineRenderer、TrailRenderer 相关工具；VFX Graph 子集需要 `com.unity.visualeffectgraph` |
+| URP | ✅ 已实现 | URP renderer feature、volume、settings 等工具，需要 `com.unity.render-pipelines.universal` |
+| HDRP | ✅ 已实现 | HDRP volume、settings 等工具，需要 `com.unity.render-pipelines.high-definition` |
 
 ## 安全边界
 
@@ -120,8 +124,7 @@ unity_cli extensions doctor                         # 扩展诊断
 
 ## 取证与依赖
 
-- P5 扩展系统基础设施：ALP-541（done）
-- P7 ProBuilder 扩展：ALP-543（done，保留 P7-T99 观察项：主基线合入、动态加载、实机边缘验证等）
-- P8 Cinemachine/VFX/URP/HDRP：ALP-544（backlog），不得写成已可用
-
-> **注意**：P8 扩展包（Cinemachine/VFX/URP/HDRP）仍处于 backlog，文档只能写机制与计划映射，不能写已可用。
+- 扩展基础设施：`extensions list/install/remove/doctor`、`init --auto-detect`、缺依赖 `available:false` + `next_actions`。
+- ProBuilder：通过 `extensions/probuilder/unitypkg/*` 和 project-tool bridge 路由提供扩展工具。
+- Cinemachine/VFX/URP/HDRP：通过对应 metadata、bridge domain 和 `extensions/<id>/unitypkg` C# command handler 提供 live Bridge 工具。
+- 验证入口：`npm test`、`npm run contracts:validate`、extension availability tests。

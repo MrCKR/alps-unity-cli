@@ -1,12 +1,6 @@
 import type { ToolMetadata } from "../types.js";
 import { objSchema, pageSchema } from "../schemas.js";
 
-const PROFILER_ARCHITECTURE = {
-  architectureSensitive: true,
-  frozenDecision: "ALP-165-Q4",
-  coverageScope: ["session", "counter", "memory", "frame-debugger", "export"]
-} as const;
-
 export const PROFILER_TOOLS: ToolMetadata[] = [
   {
     name: "profiler.status",
@@ -19,7 +13,6 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     handler: "bridge",
     cliCommand: "profiler status",
     docsTopic: "profiler",
-    ...PROFILER_ARCHITECTURE
   },
   {
     name: "profiler.start",
@@ -32,7 +25,6 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     handler: "hybrid",
     cliCommand: "profiler start",
     docsTopic: "profiler",
-    ...PROFILER_ARCHITECTURE
   },
   {
     name: "profiler.stop",
@@ -45,7 +37,6 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     handler: "bridge",
     cliCommand: "profiler stop",
     docsTopic: "profiler",
-    ...PROFILER_ARCHITECTURE
   },
   {
     name: "profiler.pause",
@@ -58,7 +49,6 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     handler: "bridge",
     cliCommand: "profiler pause",
     docsTopic: "profiler",
-    ...PROFILER_ARCHITECTURE
   },
   {
     name: "profiler.counter",
@@ -71,7 +61,6 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     handler: "bridge",
     cliCommand: "profiler counter",
     docsTopic: "profiler",
-    ...PROFILER_ARCHITECTURE
   },
   {
     name: "profiler.memory",
@@ -84,7 +73,6 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     handler: "bridge",
     cliCommand: "profiler memory",
     docsTopic: "profiler",
-    ...PROFILER_ARCHITECTURE
   },
   {
     name: "profiler.frame",
@@ -97,7 +85,6 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     handler: "bridge",
     cliCommand: "profiler frame",
     docsTopic: "profiler",
-    ...PROFILER_ARCHITECTURE
   },
   {
     name: "profiler.capture",
@@ -117,7 +104,6 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
       { description: "Capture 1 second of profiler data", argv: ["profiler", "capture", "profile.json", "--duration-ms", "1000"] },
       { description: "Capture as job with wait", argv: ["profiler", "capture", "profile.json", "--job", "--wait"] }
     ],
-    ...PROFILER_ARCHITECTURE
   },
   {
     name: "profiler.export",
@@ -134,6 +120,5 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     examples: [
       { description: "Export profiler JSON", argv: ["profiler", "export", "profile.json", "--overwrite"] }
     ],
-    ...PROFILER_ARCHITECTURE
   }
 ];

@@ -44,21 +44,26 @@ export function registerBuiltinExtensionContributions(): void {
   if (registered) return;
   registered = true;
 
-  // Register extension bridge specs into the core bridge registry
-  bridgeCommandRegistry.registerSpecs(probuilderBridgeSpecs);
-  bridgeCommandRegistry.registerSpecs(cinemachineBridgeSpecs);
-  bridgeCommandRegistry.registerSpecs(vfxBridgeSpecs);
-  bridgeCommandRegistry.registerSpecs(urpBridgeSpecs);
-  bridgeCommandRegistry.registerSpecs(hdrpBridgeSpecs);
+  // Register extension bridge specs into the core bridge registry. They are
+  // tools-only: top-level command families are blocked, but tools run reuses
+  // their argument builders through nativeCliCommand.
+  bridgeCommandRegistry.registerSpecs([
+    ...markNativeCliCommands(probuilderBridgeSpecs),
+    ...markNativeCliCommands(cinemachineBridgeSpecs),
+    ...markNativeCliCommands(vfxBridgeSpecs),
+    ...markNativeCliCommands(urpBridgeSpecs),
+    ...markNativeCliCommands(hdrpBridgeSpecs)
+  ]);
 
-  // Register extension tool metadata
-  registerExtensionTools([
+  // Register extension tool metadata. User-facing execution always goes
+  // through tools run, even though argument builders preserve legacy argv mapping internally.
+  registerExtensionTools(markToolsRunCommands([
     ...PROBUILDER_TOOLS,
     ...CINEMACHINE_TOOLS,
     ...VFX_TOOLS,
     ...URP_TOOLS,
     ...HDRP_TOOLS
-  ]);
+  ]));
 
   // Validate extension contributions
   validateExtensionToolMetadata();
@@ -72,4 +77,12 @@ export function registerBuiltinExtensionContributions(): void {
  */
 export function isBuiltinExtensionContributionsRegistered(): boolean {
   return registered;
+}
+
+function markNativeCliCommands<T extends { group: string; command: string; nativeCliCommand?: string }>(specs: T[]): T[] {
+  return specs.map((spec) => ({ ...spec, nativeCliCommand: spec.nativeCliCommand ?? `${spec.group} ${spec.command}` }));
+}
+
+function markToolsRunCommands<T extends { name: string; cliCommand?: string }>(tools: T[]): T[] {
+  return tools.map((tool) => ({ ...tool, cliCommand: `tools run ${tool.name}` }));
 }

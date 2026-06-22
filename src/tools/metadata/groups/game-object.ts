@@ -57,6 +57,48 @@ export const GO_TOOLS: ToolMetadata[] = [
     docsTopic: "go"
   },
   {
+    name: "go.duplicate",
+    title: "Duplicate GameObject",
+    description: "Duplicate a GameObject in the active scene, optionally assigning a new name or parent.",
+    group: "go",
+    inputSchema: objSchema({ target: { type: "string" }, name: { type: "string" }, parent: { type: "string" } }, ["target"]),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "go duplicate",
+    docsTopic: "go",
+    equivalentUnityMcp: "manage_gameobject.duplicate"
+  },
+  {
+    name: "go.move-relative",
+    title: "Move GameObject Relative",
+    description: "Move a GameObject by a relative offset without replacing its absolute transform.",
+    group: "go",
+    inputSchema: objSchema({ target: { type: "string" }, offsetX: { type: "number" }, offsetY: { type: "number" }, offsetZ: { type: "number" } }, ["target"]),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "go move-relative",
+    docsTopic: "go",
+    equivalentUnityMcp: "manage_gameobject.move_relative"
+  },
+  {
+    name: "go.look-at",
+    title: "Rotate GameObject To Look At Target",
+    description: "Rotate a GameObject so its forward vector looks at another GameObject.",
+    group: "go",
+    inputSchema: objSchema({ target: { type: "string" }, lookAt: { type: "string" } }, ["target", "lookAt"]),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "go look-at",
+    docsTopic: "go",
+    equivalentUnityMcp: "manage_gameobject.look_at"
+  },
+  {
     name: "go.delete",
     title: "Delete GameObject",
     description: "Delete a GameObject from the scene. This action is irreversible.",

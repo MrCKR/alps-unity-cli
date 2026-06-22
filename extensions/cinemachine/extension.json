@@ -1,13 +1,30 @@
 {
+  "id": "cinemachine",
   "name": "cinemachine",
+  "title": "Cinemachine",
   "version": "1.0.0",
   "description": "Cinemachine smart camera extension for alps-unity-cli",
   "packageName": "unity-cli-extension-cinemachine",
+  "requiresUnityPackages": ["com.unity.cinemachine"],
   "unityPackages": [
     {
       "name": "com.unity.cinemachine"
     }
   ],
+  "providesTools": [
+    "cinemachine.create",
+    "cinemachine.target",
+    "cinemachine.lens",
+    "cinemachine.priority",
+    "cinemachine.blend",
+    "cinemachine.body",
+    "cinemachine.aim",
+    "cinemachine.noise",
+    "cinemachine.brain",
+    "cinemachine.extension"
+  ],
+  "copyRoot": "unitypkg",
+  "installMode": "copy-if-package-present",
   "toolGroups": ["cinemachine"],
   "descriptorEntry": "tools/metadata/cinemachine.js",
   "bridgeEntry": "bridge/domains/cinemachine.js",

@@ -1,13 +1,13 @@
 # 自定义工具（Custom Tools）
 
-项目侧通过 C# `[UnityCliTool]` 特性注册自定义 Editor Tool 和 Runtime Tool，它们与内置工具共享同一发现链和执行入口。
+项目侧通过 C# `[UnityCliTool]` 特性注册统一 Tool，并用 `target` / `availabilityScope` 描述运行约束；自定义 Tool 与内置工具共享同一发现链和执行入口。
 
 ## 概述
 
-| 类型 | Target | 说明 |
-|------|--------|------|
-| Editor Tool | `editor` | 编辑器主线程执行，适合资产/场景/配置修改 |
-| Runtime Tool | `runtime` | Play Mode 下执行，适合运行时域操作 |
+| `target` | 说明 |
+|----------|------|
+| `editor` | 编辑器主线程执行，适合资产/场景/配置修改 |
+| `runtime` | gameplay/runtime layer 工具；通常需要 Play Mode 才可用 |
 
 项目自定义工具：
 - 通过 `tools group list custom --include-custom` 发现
@@ -15,7 +15,7 @@
 - 通过 `tools run <name>` 执行
 - 与内置工具使用相同的 descriptor schema 和 envelope 格式
 
-## Editor Tool 注册
+## `target: editor` 注册
 
 使用 `[UnityCliTool]` 特性标记静态类或静态方法：
 
@@ -25,9 +25,9 @@
 using UnityCli;
 
 [UnityCliTool("sample.editor-tool",
-    Title = "Sample Editor Tool",
+    Title = "Sample Editor-targeted Tool",
     Group = "custom",
-    Description = "A minimal example of an Editor Tool.",
+    Description = "A minimal editor-targeted tool.",
     ReadOnlyHint = false,
     DestructiveHint = false)]
 public static class SampleEditorTool
@@ -68,9 +68,9 @@ public static class MyTools
 }
 ```
 
-## Runtime Tool 注册
+## `target: runtime` 注册
 
-Runtime Tool 与 Editor Tool 使用相同的注册方式，但需要标记 `target` 和可用性范围：
+Runtime target 与 editor target 使用相同的注册方式，只是通过 descriptor 标记 `target` 和可用性范围：
 
 ```csharp
 using UnityCli;
@@ -91,7 +91,7 @@ public static class SampleRuntimeTool
 }
 ```
 
-Runtime Tool 行为：
+Runtime target 行为：
 - 仅在 Play Mode 活跃时可用
 - 非 Play Mode 时返回 `E_RUNTIME_NOT_READY`（transient error）
 - 通过 `tools group list custom --include-custom` 发现（Play Mode 下自动标记 `available: true/false`）
@@ -147,7 +147,7 @@ unity_cli tools describe my.editor-tool
 # 执行自定义工具
 unity_cli tools run my.editor-tool --input '{"message":"hello"}'
 
-# Runtime 工具（需要 Play Mode）
+# target=runtime 的工具（通常需要 Play Mode）
 unity_cli editor play
 unity_cli tools run sample.runtime-echo --input '{"message":"ping"}'
 ```
@@ -156,8 +156,8 @@ unity_cli tools run sample.runtime-echo --input '{"message":"ping"}'
 
 | 能力 | 状态 |
 |------|------|
-| Editor Tool 注册与执行 | ✅ 已实现 |
-| Runtime Tool 注册与执行 | ✅ 已实现 |
+| `target=editor` Tool 注册与执行 | ✅ 已实现 |
+| `target=runtime` Tool 注册与执行 | ✅ 已实现 |
 | `tools group list custom --include-custom` 发现 | ✅ 已实现 |
 | Fingerprint 校验 | ✅ 已实现 |
 | `--dry-run` 支持 | ✅ 已实现（descriptor 级别控制） |

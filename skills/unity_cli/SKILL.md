@@ -50,6 +50,11 @@ unity_cli tools run scene.hierarchy --input '{}'
 unity_cli context list
 unity_cli context describe <name>
 unity_cli context read <name>
+
+# 常用只读 Context
+unity_cli context read scene.gameobject.components --input '{"instanceId":123}'
+unity_cli context read prefab.info --input '{"path":"Assets/Prefabs/Hero.prefab"}'
+unity_cli context read tools.groups
 ```
 
 > 只读工具（`readOnlyHint: true`）和 context 命令不会修改 Unity 状态，可安全重复调用。
@@ -110,16 +115,6 @@ unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --dry-run
 unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --yes
 ```
 
-### Runtime 工具
-
-需要 Play Mode：
-
-```powershell
-unity_cli tools run editor.play --input '{}'
-unity_cli tools run <runtime-tool> --input '<json>'
-# 完成后
-unity_cli tools run editor.stop --input '{}'
-```
 
 ## 步骤 5：验证结果
 
@@ -152,6 +147,16 @@ unity_cli tools run asset.create --input '{"path":"Assets/NewFolder","type":"fol
 unity_cli tools run editor.refresh --input '{"compile":true}' --job
 ```
 
+### 脚本安全编辑
+
+```powershell
+unity_cli tools run script.hash --input '{"path":"Assets/Scripts/Player.cs"}'
+unity_cli tools describe script.apply-edits
+unity_cli tools run script.apply-edits --input-file edits.json --yes
+```
+
+`script.edit` / `script.apply-edits` 支持 `preconditionSha256`，编辑前先取 hash，避免覆盖用户并发修改。
+
 ### 使用 Runtime 工具
 
 ```powershell
@@ -162,12 +167,22 @@ unity_cli tools run <runtime-tool> --input '<json>'
 unity_cli tools run editor.stop --input '{}'
 ```
 
-### 处理自定义工具
+### 处理自定义工具与 Context
 
 ```powershell
 unity_cli tools group list custom --include-custom
 unity_cli tools describe my.custom-tool
 unity_cli tools run my.custom-tool --input '<json>'
+unity_cli context read tools.custom
+```
+
+### 常见对齐工具组
+
+```powershell
+unity_cli tools group list script
+unity_cli tools group list scriptable-object
+unity_cli tools group list physics
+unity_cli tools group list project
 ```
 
 ### 诊断问题
@@ -231,6 +246,8 @@ unity_cli extensions doctor --project <path>
 - 检查 `target` 和 `availabilityScope` 确保工具在当前状态可用
 - 检查 `requiresPackages` 确保所需 Unity Package 已安装
 - Context（`readOnlyHint: true`）不能产生副作用
+- 脚本编辑优先使用 `script.hash` + `preconditionSha256`，再执行 `script.edit` 或 `script.apply-edits`
+- `editor.undo/redo`、`project.tag/layer`、`editor.resolution` 会修改 Editor/Project 状态，必须先 `tools describe`
 
 ### 不得违反
 

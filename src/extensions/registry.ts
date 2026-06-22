@@ -235,17 +235,20 @@ function buildNextActions(
   const actions: string[] = [];
 
   actions.push(
-    `Install the missing package(s) to enable ${manifest.name}: ` +
-    missingPackageIds.map((id) => `unity_cli package install ${id}`).join("; ")
+    `Install the required Unity package(s) manually via Unity Package Manager or Packages/manifest.json: ${missingPackageIds.join(", ")}.`
   );
 
   actions.push(
-    `Or add to Packages/manifest.json dependencies: ` +
+    `If editing manifest.json, add dependencies: ` +
     missingPackageIds.map((id) => `"${id}": "latest"`).join(", ")
   );
 
   actions.push(
-    `Run 'unity_cli extensions doctor' to diagnose all extension availability.`
+    `After Unity resolves packages, run 'unity_cli extensions install ${manifest.id} --project <path>'.`
+  );
+
+  actions.push(
+    `Run 'unity_cli extensions doctor --project <path>' to diagnose all extension availability.`
   );
 
   return actions;

@@ -33,12 +33,12 @@
 
 - 舍弃 `manage_probuilder(action=...)` 的单工具多 action 入口，原因是它在 CLI-first 场景下不利于独立 descriptor、独立风险标记、单 action 发现与单 action 示例。
 - 舍弃 Python facade 与 MCP tool registry；本项目不要求通过 FastMCP server 转发到 Unity，也不把 ProBuilder 可见性绑定到 MCP session 的 tool group 开关。
-- 舍弃把所有 ProBuilder 操作集中在一个超大 C# handler 内；该形态便于 MCP 单工具暴露，但会削弱本项目按 descriptor、coverageScope 和冻结决策追踪单个能力的清晰度。
+- 舍弃把所有 ProBuilder 操作集中在一个超大 C# handler 内；该形态便于 MCP 单工具暴露，但会削弱本项目按 descriptor 追踪单个能力的清晰度。
 
 ### 适配点
 
-- alps-unity-cli 在 `unitypkg/Editor/Commands/ProBuilderCommands.cs` 中保留兼容 helper，但核心 ProBuilder 能力改为 `unitypkg/Editor/ProBuilder/*.cs` 下的单 action `[UnityCliTool]` 项目工具，由 `ProjectToolRegistry.DiscoverProjectTools()` 统一发现。
-- `unitypkg/Editor/ProBuilder/ProBuilderReflection.cs` 承接 unity-mcp 的可选包 reflection 思路，但输出改为本项目的结构化错误、fingerprint/descriptor 与 CLI descriptor 能力模型。
+- alps-unity-cli 将 ProBuilder Unity 侧代码放在 `extensions/probuilder/unitypkg/*`；安装后通过 `[UnityCliTool]` 单 action 项目工具由 `ProjectToolRegistry.DiscoverProjectTools()` 统一发现。
+- `extensions/probuilder/unitypkg/Editor/ProBuilder/ProBuilderReflection.cs` 承接 unity-mcp 的可选包 reflection 思路，但输出改为本项目的结构化错误、fingerprint/descriptor 与 CLI descriptor 能力模型。
 - `src/bridge/domains/probuilder.ts` 与 `src/tools/metadata/groups/probuilder.ts` 把 ProBuilder 暴露为 CLI tool descriptor，而不是 MCP action 表；这使每个操作能独立表达 `readOnlyHint`、`destructiveHint`、`target=editor` 与文档 topic。
 
 ## VFX Graph / VFX 域
@@ -57,7 +57,7 @@
 
 ### 适配点
 
-- alps-unity-cli 在 `unitypkg/Editor/Commands/VfxCommands.cs` 中通过运行期 `FindType` / PackageManager 检查 `VisualEffectAsset` 与 `VisualEffect`，并将缺包、路径非法、创建失败等情况映射为 `E_VFX_*` 结构化错误。
+- alps-unity-cli 在 `extensions/vfx-graph/unitypkg/Editor/Commands/VfxCommands.cs` 中通过运行期 `FindType` / PackageManager 检查 `VisualEffectAsset` 与 `VisualEffect`，并将缺包、路径非法、创建失败等情况映射为 `E_VFX_*` 结构化错误。
 - `vfx.graph` 聚焦 VFX Graph asset 创建/查询，`vfx.effect` 聚焦目标 GameObject 上 `VisualEffect` component 的添加与 graph 绑定，符合 CLI-first 的小工具组合方式。
 - `src/bridge/domains/vfx.ts` 与 `src/tools/metadata/groups/vfx.ts` 将 VFX 能力纳入统一 descriptor、target 和 envelope，而不是 MCP server 的 VFX tool group。
 

@@ -4,7 +4,7 @@ import { objSchema } from "../schemas.js";
 /**
  * Cinemachine extension tools.
  *
- * Critical reference notes (ALP-505 P8):
+ * Critical reference notes:
  * - Critically references unity-mcp's Cameras/ManageCamera + CameraHelpers + CameraCreate +
  *   CameraConfigure + CameraControl for the action decomposition and Unity API paths.
  * - Discarded: unity-mcp's single-tool multi-action (manage_camera with action=...) routing is NOT
@@ -54,7 +54,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     longRunning: true,
-    cliCommand: "cinemachine create",
+    cliCommand: "tools run cinemachine.create",
     cancellationSemantics: "Live bridge execution is cooperative and usually short; --job execution can be cancelled with job cancel --id <jobId> using immediate Unity batchmode process termination semantics.",
     examples: [
       { description: "Create a follow Cinemachine camera", argv: ["cinemachine", "create", "follow", "--name", "PlayerCam", "--follow", "Player"] },
@@ -69,7 +69,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ target: { type: "string" }, follow: { type: "string" }, lookAt: { type: "string" } }, ["target"]),
     readOnlyHint: false,
     destructiveHint: false,
-    cliCommand: "cinemachine target",
+    cliCommand: "tools run cinemachine.target",
     examples: [
       { description: "Set follow target on a Cinemachine camera", argv: ["cinemachine", "target", "PlayerCam", "--follow", "Player"] }
     ]
@@ -89,7 +89,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     }, ["target"]),
     readOnlyHint: false,
     destructiveHint: false,
-    cliCommand: "cinemachine lens",
+    cliCommand: "tools run cinemachine.lens",
     examples: [
       { description: "Set a 60 degree field of view", argv: ["cinemachine", "lens", "PlayerCam", "--field-of-view", "60"] }
     ]
@@ -102,7 +102,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ target: { type: "string" }, priority: { type: "integer" }, enabled: { type: "boolean" } }, ["target"]),
     readOnlyHint: false,
     destructiveHint: false,
-    cliCommand: "cinemachine priority",
+    cliCommand: "tools run cinemachine.priority",
     examples: [
       { description: "Boost a camera priority to 20", argv: ["cinemachine", "priority", "PlayerCam", "--priority", "20"] }
     ]
@@ -115,7 +115,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ target: { type: "string" }, style: { type: "string", enum: ["cut", "ease_in_out", "ease_in", "ease_out", "hard_in", "hard_out", "linear", "soft_in", "soft_out"] }, duration: { type: "number" } }),
     readOnlyHint: false,
     destructiveHint: false,
-    cliCommand: "cinemachine blend",
+    cliCommand: "tools run cinemachine.blend",
     examples: [
       { description: "Configure a 2 second ease in/out blend", argv: ["cinemachine", "blend", "--target", "Main Camera", "--style", "ease_in_out", "--duration", "2"] }
     ]
@@ -128,7 +128,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ target: { type: "string" }, body: { type: "string" }, property: { type: "string" }, value: { type: "string" } }, ["target"]),
     readOnlyHint: false,
     destructiveHint: false,
-    cliCommand: "cinemachine body",
+    cliCommand: "tools run cinemachine.body",
     examples: [
       { description: "Swap body to CinemachineFollow", argv: ["cinemachine", "body", "PlayerCam", "--body", "CinemachineFollow"] }
     ]
@@ -141,7 +141,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ target: { type: "string" }, aim: { type: "string" }, property: { type: "string" }, value: { type: "string" } }, ["target"]),
     readOnlyHint: false,
     destructiveHint: false,
-    cliCommand: "cinemachine aim",
+    cliCommand: "tools run cinemachine.aim",
     examples: [
       { description: "Swap aim to CinemachineRotationComposer", argv: ["cinemachine", "aim", "PlayerCam", "--aim", "CinemachineRotationComposer"] }
     ]
@@ -154,7 +154,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ target: { type: "string" }, noiseProfile: { type: "string" }, amplitude: { type: "number" }, frequency: { type: "number" }, remove: { type: "boolean" } }, ["target"]),
     readOnlyHint: false,
     destructiveHint: false,
-    cliCommand: "cinemachine noise",
+    cliCommand: "tools run cinemachine.noise",
     examples: [
       { description: "Add a hand-held noise profile", argv: ["cinemachine", "noise", "PlayerCam", "--noise-profile", "Handheld_tele"] }
     ]
@@ -167,7 +167,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ target: { type: "string" }, action: { type: "string", enum: ["ensure", "status"] } }, ["target"]),
     readOnlyHint: false,
     destructiveHint: false,
-    cliCommand: "cinemachine brain",
+    cliCommand: "tools run cinemachine.brain",
     examples: [
       { description: "Report brain blending status", argv: ["cinemachine", "brain", "Main Camera", "--action", "status"] }
     ]
@@ -184,7 +184,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     }, ["target"]),
     readOnlyHint: false,
     destructiveHint: true,
-    cliCommand: "cinemachine extension",
+    cliCommand: "tools run cinemachine.extension",
     examples: [
       { description: "List extensions on a virtual camera", argv: ["cinemachine", "extension", "PlayerCam", "--action", "list"] }
     ]

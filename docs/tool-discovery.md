@@ -102,8 +102,6 @@ unity_cli tools describe camera.screenshot
 | `destructiveHint` | 是否有破坏性 |
 | `supportsDryRun` | 是否支持 `--dry-run` |
 | `longRunning` | 是否长时间运行 |
-| `architectureSensitive` | 是否架构敏感 |
-| `frozenDecision` | 冻结决策编号 |
 | `handler` | 执行通道 |
 | `supportStatus` | 支持状态 |
 | `target` | 目标类型 |
@@ -130,7 +128,6 @@ unity_cli tools describe my.custom-tool --bridge-endpoint http://127.0.0.1:47392
 
 - `destructiveHint: true` → 执行前必须确认风险、使用 `--dry-run` 或 `--yes`
 - `readOnlyHint: true` → 只读操作，不会修改 Unity 状态
-- `architectureSensitive: true` → 修改前需审查 `frozenDecision`
 
 ### 执行通道判断
 

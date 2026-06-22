@@ -34,6 +34,9 @@ namespace UnityCli
             RegisterCommand(registry, "go.inspect", "go", false, GameObjectInspect);
             RegisterCommand(registry, "go.create", "go", true, GameObjectCreate);
             RegisterCommand(registry, "go.modify", "go", true, GameObjectModify);
+            RegisterCommand(registry, "go.duplicate", "go", true, GameObjectDuplicate);
+            RegisterCommand(registry, "go.move-relative", "go", true, GameObjectMoveRelative);
+            RegisterCommand(registry, "go.look-at", "go", true, GameObjectLookAt);
             RegisterCommand(registry, "go.delete", "go", true, GameObjectDelete);
             RegisterCommand(registry, "component.add", "component", true, ComponentAdd);
             RegisterCommand(registry, "component.remove", "component", true, ComponentRemove);
@@ -144,6 +147,43 @@ namespace UnityCli
             ApplyGameObjectMutations(gameObject, request);
             EditorSceneManager.MarkSceneDirty(gameObject.scene);
             return SuccessJson(GameObjectMutationJson("go.modify", gameObject));
+        }
+
+        private static string GameObjectDuplicate(BridgeRequest request)
+        {
+            EnsureEditorNotBusy("go.duplicate");
+            var source = ResolveUniqueTarget(RequiredTarget(request, "GameObject duplicate requires a target."), "GameObject duplicate requires a target.");
+            var duplicate = UnityEngine.Object.Instantiate(source);
+            Undo.RegisterCreatedObjectUndo(duplicate, "unity_cli go.duplicate");
+            duplicate.name = request.StringArg("newName") ?? request.StringArg("name") ?? (source.name + " Copy");
+            var parent = request.StringArg("parent");
+            duplicate.transform.SetParent(string.IsNullOrEmpty(parent) ? source.transform.parent : ResolveUniqueTarget(parent, "Parent GameObject is required.").transform, true);
+            duplicate.transform.SetSiblingIndex(source.transform.GetSiblingIndex() + 1);
+            EditorSceneManager.MarkSceneDirty(duplicate.scene);
+            return SuccessJson(GameObjectMutationJson("go.duplicate", duplicate));
+        }
+
+        private static string GameObjectMoveRelative(BridgeRequest request)
+        {
+            EnsureEditorNotBusy("go.move-relative");
+            var gameObject = ResolveUniqueTarget(RequiredTarget(request, "GameObject move-relative requires a target."), "GameObject move-relative requires a target.");
+            Undo.RecordObject(gameObject.transform, "unity_cli go.move-relative");
+            var offset = new Vector3(request.FloatArg("offsetX", 0f), request.FloatArg("offsetY", 0f), request.FloatArg("offsetZ", 0f));
+            gameObject.transform.position += offset;
+            EditorSceneManager.MarkSceneDirty(gameObject.scene);
+            return SuccessJson(GameObjectMutationJson("go.move-relative", gameObject));
+        }
+
+        private static string GameObjectLookAt(BridgeRequest request)
+        {
+            EnsureEditorNotBusy("go.look-at");
+            var gameObject = ResolveUniqueTarget(RequiredTarget(request, "GameObject look-at requires a target."), "GameObject look-at requires a target.");
+            var lookAtName = request.StringArg("lookAt") ?? request.StringArg("destination");
+            var lookAt = ResolveUniqueTarget(lookAtName, "GameObject look-at requires --look-at <target>.");
+            Undo.RecordObject(gameObject.transform, "unity_cli go.look-at");
+            gameObject.transform.LookAt(lookAt.transform);
+            EditorSceneManager.MarkSceneDirty(gameObject.scene);
+            return SuccessJson(GameObjectMutationJson("go.look-at", gameObject));
         }
 
         private static string GameObjectDelete(BridgeRequest request)

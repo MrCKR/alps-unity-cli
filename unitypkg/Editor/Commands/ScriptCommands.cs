@@ -32,7 +32,9 @@ namespace UnityCli
         {
             RegisterCommand(registry, "script.create", "script", true, ScriptCreate);
             RegisterCommand(registry, "script.read", "script", false, ScriptRead);
+            RegisterCommand(registry, "script.hash", "script", false, ScriptHash);
             RegisterCommand(registry, "script.edit", "script", true, ScriptEdit);
+            RegisterCommand(registry, "script.apply-edits", "script", true, ScriptApplyEdits);
             RegisterCommand(registry, "script.validate", "script", false, ScriptValidate);
         }
 
@@ -69,6 +71,19 @@ namespace UnityCli
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropRaw("script", ScriptJson(path))
                 .Prop("content", content)
+                .Prop("sha256", Sha256Hex(content))
+                .Prop("encoding", "utf-8")
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        private static string ScriptHash(BridgeRequest request)
+        {
+            var path = RequireExistingScriptPath(request.StringArg("path") ?? request.StringArg("target"));
+            var content = File.ReadAllText(AssetFullPath(path), Encoding.UTF8);
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("script", ScriptJson(path))
+                .Prop("sha256", Sha256Hex(content))
                 .Prop("encoding", "utf-8")
                 .Prop("logPath", LogPath())
                 .EndObject().ToString());
@@ -79,29 +94,27 @@ namespace UnityCli
             EnsureEditorNotBusy("script.edit");
             var path = RequireExistingScriptPath(request.StringArg("path") ?? request.StringArg("target"));
             var fullPath = AssetFullPath(path);
+            var originalContent = File.ReadAllText(fullPath, Encoding.UTF8);
+            EnsureScriptPrecondition(request, originalContent);
             var content = request.StringArg("content");
             if (content == null)
             {
-                content = File.ReadAllText(fullPath, Encoding.UTF8);
-                var find = request.StringArg("find");
-                var replace = request.StringArg("replace") ?? string.Empty;
-                if (!string.IsNullOrEmpty(find))
-                {
-                    content = request.BoolArg("all", false) ? content.Replace(find, replace) : ReplaceFirst(content, find, replace);
-                }
-                else
-                {
-                    var patch = request.StringArg("patch");
-                    if (patch == null)
-                    {
-                        throw new BridgeCommandException("E_SCRIPT_EDIT_REQUIRED", "script.edit requires --content, --content-file, --find/--replace or --patch.", "Pass replacement content or a targeted edit.");
-                    }
-                    content = patch;
-                }
+                content = ApplyLegacyScriptEdit(request, originalContent);
             }
-            File.WriteAllText(fullPath, content, new UTF8Encoding(false));
-            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
-            return SuccessJson(ScriptMutationJson("script.edit", path));
+            WriteScriptContent(path, fullPath, content);
+            return SuccessJson(ScriptMutationJson("script.edit", path, originalContent, content));
+        }
+
+        private static string ScriptApplyEdits(BridgeRequest request)
+        {
+            EnsureEditorNotBusy("script.apply-edits");
+            var path = RequireExistingScriptPath(request.StringArg("path") ?? request.StringArg("target"));
+            var fullPath = AssetFullPath(path);
+            var originalContent = File.ReadAllText(fullPath, Encoding.UTF8);
+            EnsureScriptPrecondition(request, originalContent);
+            var editedContent = ApplyStructuredScriptEdits(request, originalContent);
+            WriteScriptContent(path, fullPath, editedContent);
+            return SuccessJson(ScriptMutationJson("script.apply-edits", path, originalContent, editedContent));
         }
 
         private static string ScriptValidate(BridgeRequest request)
@@ -194,14 +207,169 @@ namespace UnityCli
                 .EndObject().ToString();
         }
 
-        private static string ScriptMutationJson(string type, string path)
+        private static string ScriptMutationJson(string type, string path, string beforeContent = null, string afterContent = null)
         {
             AssetDatabase.Refresh();
             return new UnityCliJsonWriter().BeginObject()
                 .PropRaw("script", ScriptJson(path))
+                .Prop("sha256", afterContent == null ? null : Sha256Hex(afterContent))
+                .Prop("previousSha256", beforeContent == null ? null : Sha256Hex(beforeContent))
                 .PropArray("plannedEffects", arr => arr.RawValue(EffectJson(type, "path", Quote(path))))
                 .Prop("logPath", LogPath())
                 .EndObject().ToString();
+        }
+
+        private static void EnsureScriptPrecondition(BridgeRequest request, string currentContent)
+        {
+            var expected = request.StringArg("preconditionSha256") ?? request.StringArg("sha256");
+            if (string.IsNullOrEmpty(expected)) return;
+            var actual = Sha256Hex(currentContent);
+            if (!string.Equals(expected, actual, StringComparison.OrdinalIgnoreCase))
+            {
+                throw new BridgeCommandException("E_SCRIPT_PRECONDITION_FAILED", "Script content hash changed before edit.", "Re-read the script, verify the change, then retry with the latest preconditionSha256.");
+            }
+        }
+
+        private static string ApplyLegacyScriptEdit(BridgeRequest request, string originalContent)
+        {
+            var find = request.StringArg("find");
+            var replace = request.StringArg("replace") ?? string.Empty;
+            if (!string.IsNullOrEmpty(find))
+            {
+                return request.BoolArg("all", false) ? originalContent.Replace(find, replace) : ReplaceFirst(originalContent, find, replace);
+            }
+            var patch = request.StringArg("patch");
+            if (patch == null)
+            {
+                throw new BridgeCommandException("E_SCRIPT_EDIT_REQUIRED", "script.edit requires --content, --content-file, --find/--replace, --patch, or structured --edits.", "Pass replacement content or a targeted edit.");
+            }
+            return patch;
+        }
+
+        private static string ApplyStructuredScriptEdits(BridgeRequest request, string content)
+        {
+            var editsJson = request.RawJsonArg("edits");
+            if (string.IsNullOrWhiteSpace(editsJson))
+            {
+                var legacyContent = request.StringArg("content");
+                return legacyContent ?? ApplyLegacyScriptEdit(request, content);
+            }
+            foreach (var editBody in EnumerateStructuredScriptEditBodies(editsJson))
+            {
+                content = ApplyStructuredScriptEdit(editBody, content);
+            }
+            return content;
+        }
+
+        private static IEnumerable<string> EnumerateStructuredScriptEditBodies(string editsJson)
+        {
+            var raw = editsJson.Trim();
+            if (raw.StartsWith("\"", StringComparison.Ordinal) && raw.EndsWith("\"", StringComparison.Ordinal) && raw.Length >= 2)
+            {
+                raw = raw.Substring(1, raw.Length - 2).Replace("\\\"", "\"").Replace("\\n", "\n").Replace("\\\\", "\\");
+            }
+            if (raw.StartsWith("[", StringComparison.Ordinal))
+            {
+                foreach (Match match in Regex.Matches(raw, "\\{(?<body>.*?)\\}", RegexOptions.Singleline))
+                {
+                    yield return match.Groups["body"].Value;
+                }
+                yield break;
+            }
+            if (raw.StartsWith("{", StringComparison.Ordinal))
+            {
+                foreach (Match match in Regex.Matches(raw, "\\{(?<body>.*?)\\}", RegexOptions.Singleline))
+                {
+                    yield return match.Groups["body"].Value;
+                }
+                yield break;
+            }
+            throw new BridgeCommandException("E_SCRIPT_EDIT_INVALID", "Structured edits must be a JSON object or array.", "Pass edits via tools run script.apply-edits --input-file with an edits array.");
+        }
+
+        private static string ApplyStructuredScriptEdit(string editBody, string content)
+        {
+            var kind = JsonField(editBody, "kind") ?? "text";
+            if (kind == "text")
+            {
+                var oldText = JsonField(editBody, "oldText") ?? JsonField(editBody, "find");
+                var newText = JsonField(editBody, "newText") ?? JsonField(editBody, "replace") ?? string.Empty;
+                if (string.IsNullOrEmpty(oldText)) throw new BridgeCommandException("E_SCRIPT_EDIT_INVALID", "Text edit requires oldText.", "Pass oldText and newText for text edits.");
+                return ReplaceFirst(content, oldText, newText);
+            }
+            if (kind == "anchor")
+            {
+                var anchor = JsonField(editBody, "anchor");
+                var newText = JsonField(editBody, "newText") ?? JsonField(editBody, "content") ?? string.Empty;
+                var position = JsonField(editBody, "position") ?? "after";
+                return ApplyAnchorEdit(content, anchor, newText, position);
+            }
+            if (kind == "class" || kind == "method")
+            {
+                var name = JsonField(editBody, "name");
+                var action = JsonField(editBody, "action") ?? "insert";
+                var newText = JsonField(editBody, "newText") ?? JsonField(editBody, "content") ?? string.Empty;
+                return ApplyDeclarationEdit(content, kind, name, action, newText);
+            }
+            throw new BridgeCommandException("E_SCRIPT_EDIT_KIND_UNSUPPORTED", "Unsupported script edit kind: " + kind, "Use text, anchor, class, or method edits.");
+        }
+
+        private static string ApplyAnchorEdit(string content, string anchor, string newText, string position)
+        {
+            if (string.IsNullOrEmpty(anchor)) throw new BridgeCommandException("E_SCRIPT_EDIT_INVALID", "Anchor edit requires anchor.", "Pass anchor text and position before|after|replace.");
+            var index = content.IndexOf(anchor, StringComparison.Ordinal);
+            if (index < 0) throw new BridgeCommandException("E_SCRIPT_ANCHOR_NOT_FOUND", "Anchor text was not found in script.", "Check the anchor text against the current script content.");
+            if (position == "before") return content.Substring(0, index) + newText + content.Substring(index);
+            if (position == "replace") return content.Substring(0, index) + newText + content.Substring(index + anchor.Length);
+            return content.Substring(0, index + anchor.Length) + newText + content.Substring(index + anchor.Length);
+        }
+
+        private static string ApplyDeclarationEdit(string content, string kind, string name, string action, string newText)
+        {
+            if (string.IsNullOrEmpty(name)) throw new BridgeCommandException("E_SCRIPT_EDIT_INVALID", kind + " edit requires name.", "Pass the class or method name to edit.");
+            var pattern = kind == "class" ? "\\bclass\\s+" + Regex.Escape(name) + "\\b" : "\\b" + Regex.Escape(name) + "\\s*\\(";
+            var match = Regex.Match(content, pattern);
+            if (action == "insert")
+            {
+                var insertAt = FindLastBrace(content);
+                return content.Substring(0, insertAt) + newText + content.Substring(insertAt);
+            }
+            if (!match.Success) throw new BridgeCommandException("E_SCRIPT_DECLARATION_NOT_FOUND", kind + " not found: " + name, "Check the class or method name against the current script content.");
+            var blockStart = content.IndexOf('{', match.Index);
+            if (blockStart < 0) throw new BridgeCommandException("E_SCRIPT_DECLARATION_NOT_FOUND", kind + " body not found: " + name, "Ensure the declaration has a block body.");
+            var blockEnd = FindMatchingBrace(content, blockStart);
+            if (action == "delete") return content.Substring(0, match.Index) + content.Substring(blockEnd + 1);
+            return content.Substring(0, match.Index) + newText + content.Substring(blockEnd + 1);
+        }
+
+        private static int FindLastBrace(string content)
+        {
+            var index = content.LastIndexOf('}');
+            return index < 0 ? content.Length : index;
+        }
+
+        private static int FindMatchingBrace(string content, int openIndex)
+        {
+            var depth = 0;
+            for (var i = openIndex; i < content.Length; i++)
+            {
+                if (content[i] == '{') depth++;
+                if (content[i] == '}') depth--;
+                if (depth == 0) return i;
+            }
+            throw new BridgeCommandException("E_SCRIPT_BRACE_UNBALANCED", "Could not find matching brace for script edit.", "Run script.validate and fix syntax before applying structured edits.");
+        }
+
+        private static string JsonField(string body, string name)
+        {
+            var match = Regex.Match(body ?? string.Empty, "\\\"" + Regex.Escape(name) + "\\\"\\s*:\\s*\\\"((?:\\\\.|[^\\\"])*)\\\"");
+            return match.Success ? match.Groups[1].Value.Replace("\\n", "\n").Replace("\\\"", "\"").Replace("\\\\", "\\") : null;
+        }
+
+        private static void WriteScriptContent(string path, string fullPath, string content)
+        {
+            File.WriteAllText(fullPath, content, new UTF8Encoding(false));
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
         }
 
         private static string ReplaceFirst(string content, string find, string replace)

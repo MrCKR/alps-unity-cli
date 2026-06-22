@@ -1,12 +1,14 @@
 /**
  * Built-in context descriptors for the Unity CLI.
  *
- * Covers the 16 contexts aligned with unity-mcp reference project built-in Resources:
+ * Covers the built-in contexts aligned with unity-mcp reference project Resources:
  *   project/info, project/tags, project/layers,
  *   editor/state, editor/selection, editor/active-tool, editor/windows,
  *   editor/tool-states, editor/menu-items, prefab.stage,
- *   scene/gameobject, scene/cameras, scene/volumes,
- *   scene/renderer-features, scene/rendering-stats, tests/list
+ *   scene/gameobject, scene/gameobject/components, scene/gameobject/component,
+ *   scene/cameras, scene/volumes, scene/renderer-features,
+ *   scene/rendering-stats, prefab/info, prefab/hierarchy,
+ *   tests/list, instances/list, tools/groups, tools/custom
  *
  * All contexts are read-only (readOnlyHint=true, destructiveHint=false).
  * Context reads are routed through the "context.read" bridge command.
@@ -310,6 +312,66 @@ const SCENE_GAMEOBJECT: ContextDescriptor = {
   ...CONTEXT_COMMON,
 };
 
+const SCENE_GAMEOBJECT_COMPONENTS: ContextDescriptor = {
+  name: "scene.gameobject.components",
+  title: "Scene GameObject Components",
+  description: "Read all components attached to a GameObject, including type names and public readable properties.",
+  category: "scene",
+  cliCommand: "context read scene.gameobject.components",
+  inputSchema: {
+    type: "object",
+    properties: {
+      target: { type: "string", description: "GameObject name or hierarchy path." },
+      id: { type: "integer", description: "GameObject instance ID." },
+      path: { type: "string", description: "Hierarchy path, e.g. 'Canvas/Button'." },
+      includeProperties: { type: "boolean", description: "Include readable public component properties." }
+    }
+  },
+  outputSchema: {
+    type: "object",
+    properties: {
+      gameObject: { type: "object", description: "Resolved GameObject summary." },
+      components: { type: "array", items: { type: "object" }, description: "Attached component summaries." },
+      count: { type: "integer", description: "Number of components." }
+    },
+    required: ["gameObject", "components", "count"]
+  },
+  docsTopic: "scene",
+  resourceUri: "unity-cli://scene/gameobject/{instance_id}/components",
+  equivalentUnityMcp: "mcpforunity://scene/gameobject/{id}/components",
+  ...CONTEXT_COMMON,
+};
+
+const SCENE_GAMEOBJECT_COMPONENT: ContextDescriptor = {
+  name: "scene.gameobject.component",
+  title: "Scene GameObject Component",
+  description: "Read one component attached to a GameObject, including public readable properties when available.",
+  category: "scene",
+  cliCommand: "context read scene.gameobject.component",
+  inputSchema: {
+    type: "object",
+    properties: {
+      target: { type: "string", description: "GameObject name or hierarchy path." },
+      id: { type: "integer", description: "GameObject instance ID." },
+      path: { type: "string", description: "Hierarchy path, e.g. 'Canvas/Button'." },
+      component: { type: "string", description: "Component type name, e.g. Camera or UnityEngine.Camera." }
+    },
+    required: ["component"]
+  },
+  outputSchema: {
+    type: "object",
+    properties: {
+      gameObject: { type: "object", description: "Resolved GameObject summary." },
+      component: { type: "object", description: "Component summary and readable properties." }
+    },
+    required: ["gameObject", "component"]
+  },
+  docsTopic: "scene",
+  resourceUri: "unity-cli://scene/gameobject/{instance_id}/component/{name}",
+  equivalentUnityMcp: "mcpforunity://scene/gameobject/{id}/component/{name}",
+  ...CONTEXT_COMMON,
+};
+
 const SCENE_CAMERAS: ContextDescriptor = {
   name: "scene.cameras",
   title: "Scene Cameras",
@@ -427,6 +489,133 @@ const SCENE_RENDERING_STATS: ContextDescriptor = {
   ...CONTEXT_COMMON,
 };
 
+// ── Prefab ───────────────────────────────────────────────────────────────
+
+const PREFAB_INFO: ContextDescriptor = {
+  name: "prefab.info",
+  title: "Prefab Info",
+  description: "Read Prefab asset metadata, dependencies, variant information, and nested prefab references.",
+  category: "prefab",
+  cliCommand: "context read prefab.info",
+  inputSchema: {
+    type: "object",
+    properties: {
+      path: { type: "string", description: "Assets/*.prefab path." }
+    },
+    required: ["path"]
+  },
+  outputSchema: {
+    type: "object",
+    properties: {
+      prefab: { type: "object", description: "Prefab asset summary." }
+    },
+    required: ["prefab"]
+  },
+  docsTopic: "prefab",
+  resourceUri: "unity-cli://prefab/{path}",
+  equivalentUnityMcp: "mcpforunity://prefab/{path}",
+  ...CONTEXT_COMMON,
+};
+
+const PREFAB_HIERARCHY: ContextDescriptor = {
+  name: "prefab.hierarchy",
+  title: "Prefab Hierarchy",
+  description: "Read a Prefab's hierarchy without opening or modifying the Prefab Stage.",
+  category: "prefab",
+  cliCommand: "context read prefab.hierarchy",
+  inputSchema: {
+    type: "object",
+    properties: {
+      path: { type: "string", description: "Assets/*.prefab path." },
+      pageSize: { type: "integer", description: "Maximum items per page." },
+      cursor: { type: "integer", description: "Pagination cursor." }
+    },
+    required: ["path"]
+  },
+  outputSchema: {
+    type: "object",
+    properties: {
+      prefab: { type: "object", description: "Prefab asset summary." },
+      items: { type: "array", items: { type: "object" }, description: "Hierarchy item summaries." },
+      pageInfo: { type: "object", description: "Pagination metadata." }
+    },
+    required: ["prefab", "items", "pageInfo"]
+  },
+  docsTopic: "prefab",
+  resourceUri: "unity-cli://prefab/{path}/hierarchy",
+  equivalentUnityMcp: "mcpforunity://prefab/{path}/hierarchy",
+  ...CONTEXT_COMMON,
+};
+
+// ── Instances / Tools ────────────────────────────────────────────────────
+
+const INSTANCES_LIST: ContextDescriptor = {
+  name: "instances.list",
+  title: "Unity Instances",
+  description: "Read registered Unity Editor bridge instances and their target-selection metadata.",
+  category: "instances",
+  cliCommand: "context read instances.list",
+  inputSchema: { type: "object", properties: {} },
+  outputSchema: {
+    type: "object",
+    properties: {
+      instances: { type: "array", items: { type: "object" }, description: "Registered Unity instances." },
+      count: { type: "integer", description: "Number of registered instances." }
+    },
+    required: ["instances", "count"]
+  },
+  docsTopic: "instances",
+  resourceUri: "unity-cli://instances/list",
+  equivalentUnityMcp: "mcpforunity://instances",
+  ...CONTEXT_COMMON,
+  requiresUnity: false,
+  availabilityScope: "always",
+};
+
+const TOOLS_GROUPS: ContextDescriptor = {
+  name: "tools.groups",
+  title: "Tool Groups",
+  description: "Read built-in and available extension tool groups with counts and discovery commands.",
+  category: "tools",
+  cliCommand: "context read tools.groups",
+  inputSchema: { type: "object", properties: {} },
+  outputSchema: {
+    type: "object",
+    properties: {
+      groups: { type: "array", items: { type: "object" }, description: "Tool groups." },
+      count: { type: "integer", description: "Number of groups." }
+    },
+    required: ["groups", "count"]
+  },
+  docsTopic: "tools",
+  resourceUri: "unity-cli://tools/groups",
+  equivalentUnityMcp: "mcpforunity://tool-groups",
+  ...CONTEXT_COMMON,
+  requiresUnity: false,
+  availabilityScope: "always",
+};
+
+const TOOLS_CUSTOM: ContextDescriptor = {
+  name: "tools.custom",
+  title: "Custom Tools",
+  description: "Read custom Unity project tools discovered through [UnityCliTool].",
+  category: "tools",
+  cliCommand: "context read tools.custom",
+  inputSchema: { type: "object", properties: {} },
+  outputSchema: {
+    type: "object",
+    properties: {
+      tools: { type: "array", items: { type: "object" }, description: "Project custom tools." },
+      count: { type: "integer", description: "Number of custom tools." }
+    },
+    required: ["tools", "count"]
+  },
+  docsTopic: "custom-tools",
+  resourceUri: "unity-cli://tools/custom",
+  equivalentUnityMcp: "mcpforunity://custom-tools",
+  ...CONTEXT_COMMON,
+};
+
 // ── Tests ────────────────────────────────────────────────────────────────
 
 const TESTS_LIST: ContextDescriptor = {
@@ -483,9 +672,16 @@ export const BUILTIN_CONTEXTS: ContextDescriptor[] = [
   EDITOR_MENU_ITEMS,
   EDITOR_PREFAB_STAGE,
   SCENE_GAMEOBJECT,
+  SCENE_GAMEOBJECT_COMPONENTS,
+  SCENE_GAMEOBJECT_COMPONENT,
   SCENE_CAMERAS,
   SCENE_VOLUMES,
   SCENE_RENDERER_FEATURES,
   SCENE_RENDERING_STATS,
+  PREFAB_INFO,
+  PREFAB_HIERARCHY,
   TESTS_LIST,
+  INSTANCES_LIST,
+  TOOLS_GROUPS,
+  TOOLS_CUSTOM,
 ];

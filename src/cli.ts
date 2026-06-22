@@ -88,9 +88,17 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
 
     const bridgeSpec = bridgeCommandRegistry.lookup(group, command);
     if (bridgeSpec) {
-      // Internal commands are not accessible from CLI
+      // Internal and extension tool-only commands are not accessible as top-level CLI families.
       if (bridgeSpec.internal) {
         return failure(requestId, "UNKNOWN_COMMAND", `Unknown command: ${argv.join(" ")}`, ["Run unity_cli --help."]);
+      }
+      if (bridgeSpec.toolsOnly) {
+        const toolName = bridgeSpec.toolName ?? bridgeSpec.bridgeCommand;
+        return failure(requestId, "E_EXTENSION_COMMAND_REMOVED", `Extension command family "${group}" is not a top-level execution entrypoint. Use tools run instead.`, [
+          `Run unity_cli tools describe ${toolName}.`,
+          `Run unity_cli tools run ${toolName} --input <json>.`,
+          `Run unity_cli tools group list ${group}.`
+        ], { toolName, group });
       }
       if (shouldRunBridgeAsJob(group, command, parsed.flags)) {
         const confirmation = await confirmDestructiveExecution(parsed.flags, {
@@ -267,48 +275,14 @@ function help(): Record<string, unknown> {
       "profiler frame [--module <name>] [--bridge-endpoint <url>]",
       "profiler capture <path> [--duration-ms 1000 --frames 1 --format json|raw --overwrite] [--job --wait] [--bridge-endpoint <url>]",
       "profiler export <path> [--format json|raw --overwrite] [--bridge-endpoint <url>]",
-      "probuilder ping [--bridge-endpoint <url>] [--project <path>]",
-      "probuilder create-shape <shape> [--name <name> --parent <target>] [--job --wait] [--bridge-endpoint <url>], shapes: cube|sphere|cylinder|plane|cone|torus|pipe|arch|stair",
-      "probuilder create-poly-shape [--name <name> --height <n>] [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder extrude-faces <target> --indices <1,2,3> --distance <n> [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder delete-faces <target> --indices <1,2,3> [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder detach-faces <target> --indices <1,2,3> [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder merge-faces <target> --indices <1,2,3> [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder subdivide <target> [--indices <1,2,3>] [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder flip-normals <target> [--indices <1,2,3>] [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder select-faces <target> [--direction normal|back] [--grow|flood|loop|ring] [--bridge-endpoint <url>]",
-      "probuilder set-face-material <target> --material <path> [--indices <1,2,3>] [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder set-face-color <target> --color <#RRGGBB> [--indices <1,2,3>] [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder set-face-uvs <target> [--indices <1,2,3>] [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder extrude-edges <target> --indices <1,2> --distance <n> [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder bevel-edges <target> --indices <1,2> --amount <n> [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder bridge-edges <target> --indices <1,2> --target-indices <3,4> [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder connect-elements <target> --indices <1,2> [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder combine-meshes --targets <t1,t2> [--name <name>] [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder merge-objects --targets <t1,t2> [--name <name> --auto-convert] [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder duplicate-and-flip <target> [--indices <1,2,3>] [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder create-polygon <target> --vertex-indices <1,2,3> [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder merge-vertices <target> --indices <1,2,3> [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder weld-vertices <target> --radius <n> [--indices <1,2,3>] [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder split-vertices <target> --indices <1,2,3> [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder move-vertices <target> --indices <1,2,3> --offset <x,y,z> [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder insert-vertex <target> --edge-index <n> --position <x,y,z> [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder append-vertices-to-edge <target> --edge-index <n> --count <n> [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder mesh-info <target> [--bridge-endpoint <url>] [--project <path>]",
-      "probuilder validate-mesh <target> [--bridge-endpoint <url>]",
-      "probuilder convert-to-probuilder <target> [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder set-smoothing <target> --smoothing-group <n> [--indices <1,2,3>] [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder auto-smooth <target> --angle <n> [--indices <1,2,3>] [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder center-pivot <target> [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder freeze-transform <target> [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder set-pivot <target> --position <x,y,z> [--job --wait] [--bridge-endpoint <url>]",
-      "probuilder repair-mesh <target> [--job --wait] [--bridge-endpoint <url>]",
+      "tools group list probuilder --project <path>",
+      "tools run probuilder.create-shape --project <path> --input <json>",
+      "tools group list vfx --project <path>",
+      "tools run vfx.graph --project <path> --input <json>",
       "animation clip <Assets/Clip.anim> [--create --overwrite --frame-rate 60] [--bridge-endpoint <url>]",
       "animation state <target> [--layer 0] [--bridge-endpoint <url>]",
       "animation play <target> --state <name> [--layer 0 --normalized-time 0] [--bridge-endpoint <url>]",
       "animation stop <target> [--bridge-endpoint <url>]",
-      "vfx graph <Assets/Effect.vfx> [--create --overwrite] [--bridge-endpoint <url>]",
-      "vfx effect <target> [--graph <Assets/Effect.vfx> --add] [--bridge-endpoint <url>]",
       "ui canvas/create <name> [--bridge-endpoint <url>]",
       "ui text/create <name> --parent <target> [--text <text> --width 160 --height 40] [--bridge-endpoint <url>]",
       "ui button/create <name> --parent <target> [--label <text>] [--bridge-endpoint <url>]",

@@ -1,13 +1,22 @@
 {
+  "id": "hdrp",
   "name": "hdrp",
+  "title": "High Definition Render Pipeline",
   "version": "1.0.0",
   "description": "High Definition Render Pipeline extension for alps-unity-cli",
   "packageName": "unity-cli-extension-hdrp",
+  "requiresUnityPackages": ["com.unity.render-pipelines.high-definition"],
   "unityPackages": [
     {
       "name": "com.unity.render-pipelines.high-definition"
     }
   ],
+  "providesTools": [
+    "hdrp.volume",
+    "hdrp.settings"
+  ],
+  "copyRoot": "unitypkg",
+  "installMode": "copy-if-package-present",
   "toolGroups": ["hdrp"],
   "descriptorEntry": "tools/metadata/hdrp.js",
   "bridgeEntry": "bridge/domains/hdrp.js",

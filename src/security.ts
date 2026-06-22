@@ -4,7 +4,7 @@ import { getBoolean } from "./args.js";
 import { failure } from "./output.js";
 import type { CliResult } from "./types.js";
 
-export const DESTRUCTIVE_COMMAND_FINGERPRINT = "alp332-destructive-safety-v1";
+export const DESTRUCTIVE_COMMAND_FINGERPRINT = "destructive-safety-v1";
 export const CONFIRMED_FLAG = "__destructiveConfirmed";
 
 export interface DestructiveGuardOptions {

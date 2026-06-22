@@ -10,6 +10,11 @@
  * bypass the descriptor/schema/envelope/target/availability system.
  */
 
+import { CINEMACHINE_TOOLS } from "../../tools/metadata/groups/cinemachine.js";
+import { HDRP_TOOLS } from "../../tools/metadata/groups/hdrp.js";
+import { PROBUILDER_TOOLS } from "../../tools/metadata/groups/probuilder.js";
+import { URP_TOOLS } from "../../tools/metadata/groups/urp.js";
+import { VFX_TOOLS } from "../../tools/metadata/groups/vfx.js";
 import type { ExtensionMetadata } from "./types.js";
 
 export type { ExtensionMetadata } from "./types.js";
@@ -24,20 +29,7 @@ const PROBUILDER_EXTENSION: ExtensionMetadata = {
   source: "built-in",
   version: "1.0.0",
   status: "available",
-  providesTools: [
-    "probuilder.ping", "probuilder.create-shape", "probuilder.create-poly-shape",
-    "probuilder.extrude-faces", "probuilder.delete-faces", "probuilder.detach-faces",
-    "probuilder.merge-faces", "probuilder.subdivide", "probuilder.flip-normals",
-    "probuilder.select-faces", "probuilder.set-face-material", "probuilder.set-face-color",
-    "probuilder.set-face-uvs", "probuilder.extrude-edges", "probuilder.bevel-edges",
-    "probuilder.bridge-edges", "probuilder.connect-elements", "probuilder.combine-meshes",
-    "probuilder.merge-objects", "probuilder.duplicate-and-flip", "probuilder.create-polygon",
-    "probuilder.merge-vertices", "probuilder.weld-vertices", "probuilder.split-vertices",
-    "probuilder.move-vertices", "probuilder.insert-vertex", "probuilder.append-vertices-to-edge",
-    "probuilder.mesh-info", "probuilder.validate-mesh", "probuilder.convert-to-probuilder",
-    "probuilder.set-smoothing", "probuilder.auto-smooth", "probuilder.center-pivot",
-    "probuilder.freeze-transform", "probuilder.set-pivot", "probuilder.repair-mesh"
-  ],
+  providesTools: PROBUILDER_TOOLS.map((tool) => tool.name),
   requiresUnityPackages: ["com.unity.probuilder"],
   installMode: "auto",
   installCommand: "extensions install probuilder",
@@ -58,7 +50,7 @@ const CINEMACHINE_EXTENSION: ExtensionMetadata = {
   source: "built-in",
   version: "1.0.0",
   status: "available",
-  providesTools: [],
+  providesTools: CINEMACHINE_TOOLS.map((tool) => tool.name),
   requiresUnityPackages: ["com.unity.cinemachine"],
   installMode: "auto",
   installCommand: "extensions install cinemachine",
@@ -79,7 +71,7 @@ const VFX_GRAPH_EXTENSION: ExtensionMetadata = {
   source: "built-in",
   version: "1.0.0",
   status: "available",
-  providesTools: ["vfx.graph", "vfx.effect"],
+  providesTools: VFX_TOOLS.map((tool) => tool.name),
   requiresUnityPackages: ["com.unity.visualeffectgraph"],
   installMode: "auto",
   installCommand: "extensions install vfx-graph",
@@ -100,7 +92,7 @@ const URP_EXTENSION: ExtensionMetadata = {
   source: "built-in",
   version: "1.0.0",
   status: "available",
-  providesTools: [],
+  providesTools: URP_TOOLS.map((tool) => tool.name),
   providesContexts: ["scene.renderer-features"],
   requiresUnityPackages: ["com.unity.render-pipelines.universal"],
   installMode: "auto",
@@ -121,7 +113,7 @@ const HDRP_EXTENSION: ExtensionMetadata = {
   source: "built-in",
   version: "1.0.0",
   status: "available",
-  providesTools: [],
+  providesTools: HDRP_TOOLS.map((tool) => tool.name),
   requiresUnityPackages: ["com.unity.render-pipelines.high-definition"],
   installMode: "auto",
   installCommand: "extensions install hdrp",

@@ -1,7 +1,7 @@
 import { boolFlag, compactArgs, floatFlag, numberFlag, queryArgs, stringFlag, targetArgs } from "../args.js";
 import type { BridgeCommandSpec } from "../types.js";
 
-export const cinemachineBridgeSpecs: BridgeCommandSpec[] = [
+export const cinemachineBridgeSpecs: BridgeCommandSpec[] = markToolsOnly([
   { group: "cinemachine", command: "create", bridgeCommand: "cinemachine.create", buildArgs: cinemachineCreateArgs, supportsJob: true },
   { group: "cinemachine", command: "target", bridgeCommand: "cinemachine.target", buildArgs: cinemachineTargetArgs },
   { group: "cinemachine", command: "lens", bridgeCommand: "cinemachine.lens", buildArgs: cinemachineLensArgs },
@@ -12,7 +12,11 @@ export const cinemachineBridgeSpecs: BridgeCommandSpec[] = [
   { group: "cinemachine", command: "noise", bridgeCommand: "cinemachine.noise", buildArgs: cinemachineNoiseArgs },
   { group: "cinemachine", command: "brain", bridgeCommand: "cinemachine.brain", buildArgs: cinemachineBrainArgs },
   { group: "cinemachine", command: "extension", bridgeCommand: "cinemachine.extension", buildArgs: cinemachineExtensionArgs }
-];
+]);
+
+function markToolsOnly(specs: BridgeCommandSpec[]): BridgeCommandSpec[] {
+  return specs.map((spec) => ({ ...spec, toolsOnly: true }));
+}
 
 function cinemachineCreateArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
@@ -105,3 +109,4 @@ function cinemachineExtensionArgs({ flags, positionalTarget }: Parameters<Bridge
     extensionType: stringFlag(flags, "extension-type") ?? stringFlag(flags, "type")
   });
 }
+

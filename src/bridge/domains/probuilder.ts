@@ -12,10 +12,10 @@ import type { BridgeCommandSpec } from "../types.js";
  * so the C# ProjectToolRun handler receives both the tool name and its
  * JSON input payload.
  *
- * Source: P7-T1 alignment matrix (ALP-596)
+ * Source: P7-T1 alignment matrix
  */
 
-export const probuilderBridgeSpecs: BridgeCommandSpec[] = [
+export const probuilderBridgeSpecs: BridgeCommandSpec[] = markToolsOnly([
   // ─── Utility ───────────────────────────────────────────
   { group: "probuilder", command: "ping", bridgeCommand: "project-tool.run", toolName: "probuilder.ping", buildArgs: probuilderPingArgs, supportsJob: false },
 
@@ -73,7 +73,11 @@ export const probuilderBridgeSpecs: BridgeCommandSpec[] = [
 
   // ─── Repair ───────────────────────────────────────────
   { group: "probuilder", command: "repair-mesh", bridgeCommand: "project-tool.run", toolName: "probuilder.repair-mesh", buildArgs: probuilderTargetOnlyArgs, supportsJob: true }
-];
+]);
+
+function markToolsOnly(specs: BridgeCommandSpec[]): BridgeCommandSpec[] {
+  return specs.map((spec) => ({ ...spec, toolsOnly: true }));
+}
 
 // ─── Arg builder functions ──────────────────────────────────
 
@@ -336,3 +340,4 @@ function positionalPosition(flags: Record<string, string | boolean>): Record<str
   }
   return undefined;
 }
+

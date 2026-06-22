@@ -1,0 +1,5 @@
+build=0
+test=1
+contracts=0
+pack=0
+

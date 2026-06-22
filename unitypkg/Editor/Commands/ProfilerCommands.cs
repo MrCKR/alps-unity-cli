@@ -76,9 +76,7 @@ namespace UnityCli
             return type == null ? null : type.GetProperty("enabled", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
         }
 
-        private const string ProfilerFrozenDecision = "ALP-165-Q4";
-        private const string ProfilerCoverageScopeJson = "[\"session\",\"counter\",\"memory\",\"frame-debugger\",\"export\"]";
-        private const string ProfilerHandlerFingerprint = "alp340-profiler-driver-session-v2";
+        private const string ProfilerHandlerFingerprint = "profiler-driver-session-v2";
 
         private static string ProfilerStateJson()
         {
@@ -87,9 +85,6 @@ namespace UnityCli
                 .Prop("enableBinaryLog", UnityEngine.Profiling.Profiler.enableBinaryLog)
                 .Prop("isPaused", EditorApplication.isPaused)
                 .Prop("supported", true)
-                .Prop("architectureSensitive", true)
-                .Prop("frozenDecision", ProfilerFrozenDecision)
-                .PropRaw("coverageScope", ProfilerCoverageScopeJson)
                 .Prop("handlerFingerprint", ProfilerHandlerFingerprint)
                 .EndObject().ToString();
         }

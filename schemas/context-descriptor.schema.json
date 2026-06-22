@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://unity-cli.local/schemas/context-descriptor.schema.json",
   "title": "Unity CLI Context Descriptor",
-  "description": "Describes a read-only context exposed by the Unity CLI. Context provides observation without mutation — if a capability modifies Unity state, it must be a Tool, not a Context. P1 baseline schema matching the ALP-505 architecture base.",
+  "description": "Describes a read-only context exposed by the Unity CLI. Context provides observation without mutation — if a capability modifies Unity state, it must be a Tool, not a Context. Baseline schema for this descriptor type.",
   "type": "object",
   "required": ["name", "title", "description", "kind", "source", "category", "inputSchema", "readOnlyHint"],
   "properties": {

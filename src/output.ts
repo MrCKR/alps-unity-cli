@@ -1,12 +1,12 @@
 /**
  * Unified envelope types and helpers for all CLI output.
- * Matches ALP-164 frozen spec §安全、性能与生命周期 / request-response envelope + error code + timeout.
+ * Defines request-response envelope, error code, and timeout helpers.
  *
  * Every CLI command must return a CliResult (success or error) through these helpers.
  * The error code taxonomy is defined in ERROR_CODES below.
  */
 
-/** Structured error codes – the taxonomy covers all error categories per ALP-164 frozen spec. */
+/** Structured error codes – the taxonomy covers all error categories for the CLI envelope. */
 export const ERROR_CODES = {
   // ─── Bridge / connection ───
   BRIDGE_ENDPOINT_REQUIRED: "BRIDGE_ENDPOINT_REQUIRED",

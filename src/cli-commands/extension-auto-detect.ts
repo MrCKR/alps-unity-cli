@@ -18,7 +18,8 @@
 import { ExtensionRegistry } from "../extensions/registry.js";
 import { readInstalledUnityPackages } from "../extensions/project-resolver.js";
 import { readInstalledExtensions, writeInstalledExtensions } from "./extensions.js";
-import type { ExtensionAvailabilityResult, ExtensionId } from "../extensions/types.js";
+import { installExtensionBundleUnchecked, readExtensionInstallManifest } from "../extensions/installer.js";
+import type { ExtensionId } from "../extensions/types.js";
 
 export interface AutoDetectResult {
   /** Extensions that were auto-installed (newly enabled). */
@@ -67,9 +68,9 @@ export async function autoDetectExtensions(
   // report unavailable — this handles the "no manifest.json" case.
   const allAvailability = registry.resolveAllAvailability(installedPackages.size > 0 ? installedPackages : new Map());
 
-  const enabled = dryRun
-    ? await readInstalledExtensions(projectPath)
-    : await readInstalledExtensions(projectPath);
+  const enabled = await readInstalledExtensions(projectPath);
+  const physicalManifest = await readExtensionInstallManifest(projectPath);
+  const physicallyInstalled = new Set(physicalManifest.extensions.map((entry) => entry.extensionId));
 
   const result: AutoDetectResult = {
     installed: [],
@@ -102,26 +103,31 @@ export async function autoDetectExtensions(
       continue;
     }
 
-    // Available — check if already enabled
-    if (enabled.has(avail.extensionId)) {
+    // Available — skip only when the Unity-side bundle is already copied.
+    if (physicallyInstalled.has(avail.extensionId)) {
+      enabled.add(avail.extensionId);
       result.skipped.push({
         extensionId: avail.extensionId,
         name: manifest.name,
-        reason: "Extension is already enabled."
+        reason: "Extension bundle is already installed."
       });
       continue;
     }
 
-    // Auto-install
-    enabled.add(avail.extensionId);
+    // Auto-install the physical extension bundle. In dry-run mode this only
+    // reports the plan and leaves project files untouched.
+    if (!dryRun) {
+      await installExtensionBundleUnchecked(projectPath, manifest);
+      enabled.add(avail.extensionId);
+    }
     result.installed.push({
       extensionId: avail.extensionId,
       name: manifest.name
     });
   }
 
-  // Write state (only if not dry-run and something was installed)
-  if (!dryRun && result.installed.length > 0) {
+  // 写入兼容状态文件；真实安装清单由 installer 负责维护。
+  if (!dryRun && (result.installed.length > 0 || result.skipped.length > 0)) {
     await writeInstalledExtensions(projectPath, enabled);
   }
 

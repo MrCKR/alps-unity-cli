@@ -12,6 +12,8 @@
 
 import { getString, getBoolean } from "../args.js";
 import { executeBridgeCommand, type BridgeRuntime } from "../bridge/index.js";
+import { readInstances } from "../instances.js";
+import { builtinToolGroups, builtinToolMetadata, extensionToolMetadata } from "../tools/metadata/index.js";
 import {
   builtinContextDescriptors,
   builtinContextCategories,
@@ -27,6 +29,7 @@ import type { ContextDescriptor } from "../context/types.js";
 import { failure, success } from "../output.js";
 import { shouldDiscoverProjectTools, type ProjectToolRuntime } from "../project-tool-discovery.js";
 import type { CliResult } from "../types.js";
+import { checkContextExtensionAvailability } from "../extension-availability.js";
 
 export type ContextRuntime = BridgeRuntime & ProjectToolRuntime;
 
@@ -135,11 +138,22 @@ async function handleContextDescribe(
 
   const resolved = await resolveContextDescriptor(contextName, flags, runtime, requestId);
   if (resolved.found) {
-    return success(requestId, {
+    const availability = await checkContextExtensionAvailability(resolved.descriptor.name, flags);
+    const data: Record<string, unknown> = {
       command: "context.describe",
       ...resolved.descriptor,
       supportStatusLabel: "已路由可执行",
-    });
+    };
+    if (!availability.available) {
+      data.extensionAvailability = "unavailable";
+      data.extensionId = availability.extensionId;
+      data.missingPackageIds = availability.availabilityResult?.missingPackageIds ?? [];
+      data.nextActions = availability.nextActions;
+    } else if (availability.extensionId) {
+      data.extensionAvailability = availability.availabilityResult?.status ?? "available";
+      data.extensionId = availability.extensionId;
+    }
+    return success(requestId, data);
   }
 
   const nextActions = ["Run unity_cli context list to see all available contexts."];
@@ -179,26 +193,64 @@ async function handleContextRead(
     return failure(requestId, "E_CONTEXT_NOT_FOUND", `Context not found: ${contextName}.`, nextActions);
   }
 
-  // Route through the bridge: context.read with the context name as argument
-  // The Unity Bridge handler dispatches to the appropriate C# context reader
-  const inputString = getString(flags, "input");
-  let inputArgs: Record<string, unknown> = {};
-  if (inputString) {
-    try {
-      const parsed = JSON.parse(inputString);
-      if (typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)) {
-        inputArgs = parsed as Record<string, unknown>;
-      }
-    } catch {
-      // Invalid JSON input — proceed with empty args
+  const availability = await checkContextExtensionAvailability(resolved.descriptor.name, flags);
+  if (!availability.available) {
+    return failure(requestId, availability.errorCode, availability.message, availability.nextActions, {
+      extensionId: availability.extensionId,
+      missingPackageIds: availability.availabilityResult?.missingPackageIds ?? []
+    });
+  }
+
+  const inputArgs = parseContextInput(flags);
+
+  if (contextName === "instances.list") {
+    const instances = await readInstances(runtime.dataDir ?? process.cwd());
+    return success(requestId, {
+      command: "context.read",
+      context: contextName,
+      instances,
+      count: instances.length,
+      readOnlyHint: true,
+    });
+  }
+
+  if (contextName === "tools.groups") {
+    const tools = [...builtinToolMetadata(), ...extensionToolMetadata()];
+    const counts = new Map<string, number>();
+    for (const tool of tools) {
+      counts.set(tool.group, (counts.get(tool.group) ?? 0) + 1);
     }
+    const groups = [...new Set([...builtinToolGroups(), ...extensionToolMetadata().map((tool) => tool.group)])]
+      .sort()
+      .map((group) => ({ name: group, toolCount: counts.get(group) ?? 0, cliCommand: `tools group list ${group}` }));
+    return success(requestId, {
+      command: "context.read",
+      context: contextName,
+      groups,
+      count: groups.length,
+      readOnlyHint: true,
+    });
   }
 
   return executeBridgeCommand(
     requestId,
     "context.read",
-    { ...flags, name: contextName, ...inputArgs },
+    { ...flags, name: contextName, input: JSON.stringify(inputArgs), ...inputArgs },
     undefined,
     runtime
   );
+}
+
+/** 解析 context read 的 JSON 输入，非法输入按空对象处理，保持现有容错语义。 */
+function parseContextInput(flags: Record<string, string | boolean>): Record<string, unknown> {
+  const inputString = getString(flags, "input");
+  if (!inputString) {
+    return {};
+  }
+  try {
+    const parsed = JSON.parse(inputString);
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
 }

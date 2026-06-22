@@ -21,12 +21,14 @@ Context 是 alps-unity-cli 中获取只读项目状态的核心机制。与 Tool
 
 | 方式 | 命令 | 说明 |
 |------|------|------|
+| 内置 Context | `context list` / `context read <name>` | 23 个只读 Context，覆盖 editor、project、scene、prefab、tools 等状态 |
+| 项目 Context | `[UnityCliContext]` + `context list --include-custom` | Unity 项目侧自定义只读状态快照 |
 | 只读工具 | `tools group list` 输出中 `readOnlyHint: true` | camera.list、asset.info、scene.hierarchy 等 |
 | 离线文档 | `docs get/search` | Unity API 文档缓存 |
 | 类型反射 | `reflect type/member/search` | C# 类型信息缓存 |
 | 诊断预检 | `diagnose preflight` | 项目、编辑器、Bridge 状态快照 |
 
-## 规划的注册方式
+## 注册方式
 
 Custom Context 通过 `[UnityCliContext]` 特性注册：
 
@@ -77,7 +79,7 @@ Custom Context 实现必须严格遵守：
 - 不产生副作用
 - 不触发资源导入或编译
 
-## 规划的发现路径
+## 发现路径
 
 Context 发现路径：
 
@@ -101,16 +103,16 @@ tools run <tool>                        → 执行只读读取
 
 ## Built-in Context
 
-P2 阶段（[ALP-538](https://github.com/MrCKR/alps-unity-cli/issues)）定义了 16 个内置只读 Context，与 unity-mcp 的 Resources 模型等价映射。这些 Context 当前通过对应的只读工具暴露：
+当前内置 23 个只读 Context，与 unity-mcp 的 Resources 模型等价映射，并通过 `context describe <name>` 暴露 input/output schema 与 `equivalentUnityMcp` 信息。
 
-| Context 概念 | 当前对应工具 | unity-mcp Resource |
-|--------------|-------------|---------------------|
+| Context 概念 | Context 名称示例 | unity-mcp Resource |
+|--------------|------------------|---------------------|
 | 编辑器状态 | `editor.state` | `editor/state` |
-| 项目信息 | `diagnose preflight` 的 project 字段 | `project/info` |
-| 相机列表 | `camera.list` | `scene/cameras` |
-| 场景层级 | `scene.hierarchy` | — |
-| 编辑器控制台 | `editor.console` | — |
-| 实例列表 | `instances list` | `instances` |
+| 项目信息 | `project.info` | `project/info` |
+| 相机列表 | `scene.cameras` | `scene/cameras` |
+| 场景对象与组件 | `scene.gameobject.components` / `scene.gameobject.component` | `scene/gameobjects/*` |
+| Prefab 信息 | `prefab.info` / `prefab.hierarchy` | `prefabs/*` |
+| 实例与工具 | `instances.list` / `tools.groups` / `tools.custom` | `instances` / `tools/*` |
 
 ## 诊断与 doctor
 
@@ -123,9 +125,9 @@ doctor 将额外检查 `customContexts.fingerprint`。
 ## 取证与依赖
 
 本文档内容来源：
-- 总架构（Context 只读硬边界）：ALP-505 / ALP-545 冻结正文
-- P3 Custom Context 设计：ALP-539（in_progress）
-- P2 内置 Context 等价映射：ALP-538（done）
-- doctor/customContexts.fingerprint 诊断闭环：等待 ALP-635 / ALP-588 复审
+- 总架构：Context 只读硬边界
+- P3 Custom Context 设计：in_progress
+- P2 内置 Context 等价映射：done
+- doctor/customContexts.fingerprint 诊断闭环：等待 pending review 复审
 
-> **注意**：`diagnose.preflight` 的 `customContexts.fingerprint` 诊断闭环正在等待 [ALP-635] / [ALP-588] 复审，确认 Bridge 真实透传后再写成完成事实。
+> **注意**：`diagnose.preflight` 的 `customContexts.fingerprint` 诊断闭环正在等待 / 复审，确认 Bridge 真实透传后再写成完成事实。

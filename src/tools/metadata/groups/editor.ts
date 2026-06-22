@@ -63,6 +63,48 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     docsTopic: "editor"
   },
   {
+    name: "editor.undo",
+    title: "Undo Last Editor Operation",
+    description: "Run Unity Editor Undo.PerformUndo for the last undoable operation.",
+    group: "editor",
+    inputSchema: objSchema({}),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "editor undo",
+    docsTopic: "editor",
+    equivalentUnityMcp: "manage_editor.undo"
+  },
+  {
+    name: "editor.redo",
+    title: "Redo Last Editor Operation",
+    description: "Run Unity Editor Undo.PerformRedo for the last redoable operation.",
+    group: "editor",
+    inputSchema: objSchema({}),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "editor redo",
+    docsTopic: "editor",
+    equivalentUnityMcp: "manage_editor.redo"
+  },
+  {
+    name: "editor.resolution",
+    title: "Set Game View Resolution",
+    description: "Set a requested Game View or PlayerSettings resolution when supported by the current Unity version.",
+    group: "editor",
+    inputSchema: objSchema({ width: { type: "integer" }, height: { type: "integer" }, fullscreen: { type: "boolean" } }),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "editor resolution",
+    docsTopic: "editor",
+    equivalentUnityMcp: "manage_editor.set_resolution"
+  },
+  {
     name: "editor.menu",
     title: "Execute Editor Menu",
     description: "Invoke a Unity Editor menu item by path.",
@@ -73,6 +115,34 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     handler: "bridge",
     cliCommand: "editor menu",
     docsTopic: "editor"
+  },
+  {
+    name: "project.tag",
+    title: "Manage Project Tags",
+    description: "Add or remove tags in Unity Tag Manager.",
+    group: "project",
+    inputSchema: objSchema({ action: { type: "string", enum: ["add", "remove"] }, name: { type: "string" } }, ["action", "name"]),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "project tag",
+    docsTopic: "project",
+    equivalentUnityMcp: "manage_editor.add_tag/remove_tag"
+  },
+  {
+    name: "project.layer",
+    title: "Manage Project Layers",
+    description: "Add or remove user layers in Unity Tag Manager.",
+    group: "project",
+    inputSchema: objSchema({ action: { type: "string", enum: ["add", "remove"] }, name: { type: "string" }, index: { type: "integer" } }, ["action", "name"]),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "project layer",
+    docsTopic: "project",
+    equivalentUnityMcp: "manage_editor.add_layer/remove_layer"
   },
   {
     name: "editor.refresh",

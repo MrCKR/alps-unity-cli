@@ -83,7 +83,7 @@ export async function handleToolsCommand(
 
   return failure(requestId, "UNKNOWN_TOOLS_COMMAND", "Expected tools group, tools group list <group>, tools describe <tool>, tools run <tool>, or tools search <keyword>.", [
     "Run unity_cli tools group to see tool categories.",
-    "Run unity_cli tools group list <group> to see tools in a category.",
+    "Run unity_cli tools group list <group> to see tools in a group.",
     "Run unity_cli tools describe <tool> for full metadata.",
     "Run unity_cli tools run <tool> to execute a tool."
   ]);
@@ -152,7 +152,7 @@ async function handleToolsGroup(
 
   const seen = new Set<string>();
   for (const tool of allTools) {
-    const group = tool.category ?? tool.group;
+    const group = tool.group;
     if (!seen.has(group)) {
       seen.add(group);
     }
@@ -205,7 +205,7 @@ async function handleToolsGroupList(
   const includeCustom = shouldDiscoverProjectTools(flags, runtime);
   const customDiscovery = includeCustom ? await discoverProjectTools(flags, runtime, requestId) : { ok: true as const, tools: [] as ToolMetadata[], mode: "skipped" as const };
   if (customDiscovery.ok === false) return customDiscovery;
-  const customTools = customDiscovery.tools.filter((t: ToolMetadata) => (t.category ?? t.group) === groupName);
+  const customTools = customDiscovery.tools.filter((t: ToolMetadata) => t.group === groupName);
 
   const allTools = [...builtinTools, ...extensionTools, ...customTools];
   if (allTools.length === 0) {
@@ -292,9 +292,6 @@ async function handleToolsSearch(
       supportStatus,
       supportStatusLabel: supportStatusLabel(supportStatus),
       cliCommand: t.cliCommand,
-      architectureSensitive: t.architectureSensitive,
-      frozenDecision: t.frozenDecision,
-      coverageScope: t.coverageScope,
       target: t.target ?? "editor",
       availabilityScope: t.availabilityScope ?? (t.target === "runtime" ? "playModeSession" : "editorSession"),
       requiresPackages: t.requiresPackages
@@ -453,10 +450,7 @@ async function handleToolsRun(
   if (builtinTool && (tool.handler === "bridge" || tool.handler === "hybrid")) {
     const input = await parseToolInput(flags);
     const mergedFlags = mergeInputToFlags(input, flags);
-    const dotIndex = toolName.indexOf(".");
-    const group = dotIndex > 0 ? toolName.substring(0, dotIndex) : toolName;
-    const command = dotIndex > 0 ? toolName.substring(dotIndex + 1) : "";
-    const spec = bridgeCommandRegistry.lookup(group, command);
+    const spec = findBridgeSpecForTool(toolName);
     if (spec) {
       let args = await spec.buildArgs({ command: toolName, flags: mergedFlags, positionalTarget: undefined });
       let bridgeCommand = spec.bridgeCommand;
@@ -484,6 +478,14 @@ async function handleToolsRun(
 
   // ── Custom project tools (editor domain): route through project-tool.run ──
   return executeBridgeCommand(requestId, "project-tool.run", flags, toolName, runtime);
+}
+
+export function findBridgeSpecForTool(toolName: string) {
+  const dotIndex = toolName.indexOf(".");
+  const group = dotIndex > 0 ? toolName.substring(0, dotIndex) : toolName;
+  const command = dotIndex > 0 ? toolName.substring(dotIndex + 1) : "";
+  const byToolName = bridgeCommandRegistry.specs().find((spec) => spec.toolName === toolName || spec.bridgeCommand === toolName);
+  return byToolName ?? bridgeCommandRegistry.lookup(group, command);
 }
 
 async function parseToolInput(flags: Record<string, string | boolean>): Promise<Record<string, unknown>> {
@@ -529,6 +531,7 @@ function mergeInputToFlags(
   flags: Record<string, string | boolean>
 ): Record<string, string | boolean> {
   const merged = { ...flags };
+  const structuredInput: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(input)) {
     const flagKey = camelToKebab(key);
     if (flagKey in merged) continue; // explicit CLI flags take precedence
@@ -538,7 +541,12 @@ function mergeInputToFlags(
       merged[flagKey] = String(value);
     } else if (typeof value === "string") {
       merged[flagKey] = value;
+    } else if (value !== undefined) {
+      structuredInput[key] = value;
     }
+  }
+  if (Object.keys(structuredInput).length > 0) {
+    merged.__structuredInput = JSON.stringify(structuredInput);
   }
   return merged;
 }

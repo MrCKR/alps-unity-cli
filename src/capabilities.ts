@@ -175,11 +175,6 @@ function buildStaticCapabilities(projectTools: ToolMetadata[] = [], projectConte
   const destructiveTools = tools.filter((t) => t.destructiveHint).map((t) => t.name);
   const readOnlyTools = tools.filter((t) => t.readOnlyHint).map((t) => t.name);
   const longRunningTools = tools.filter((t) => t.longRunning).map((t) => t.name);
-  const architectureSensitiveTools = tools.filter((t) => t.architectureSensitive).map((t) => ({
-    name: t.name,
-    frozenDecision: t.frozenDecision,
-    coverageScope: t.coverageScope ?? []
-  }));
   const liveBridgeTools = tools.filter((t) => supportStatusForTool(t) === "live-bridge").map((t) => t.name);
   const hybridTools = tools.filter((t) => supportStatusForTool(t) === "bridge-job").map((t) => t.name);
   const batchJobTools = tools.filter((t) => supportStatusForTool(t) === "batch-job").map((t) => t.name);
@@ -225,7 +220,6 @@ function buildStaticCapabilities(projectTools: ToolMetadata[] = [], projectConte
     readOnlyTools,
     destructiveTools,
     longRunningTools,
-    architectureSensitiveTools,
     handlerDefinitions: {
       bridge: "Live Unity Editor Bridge /bridge/execute path.",
       hybrid: "Command supports more than one channel, typically live Bridge plus batch/job execution.",
