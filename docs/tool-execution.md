@@ -113,7 +113,7 @@ unity_cli jobs status <jobId>
 | 错误码 | 原因 | 恢复方式 |
 |--------|------|---------|
 | `E_TOOL_NOT_FOUND_FOR_TARGET` | 工具在目标不可用 | 检查 requiresPackages 和 available |
-| `E_RUNTIME_NOT_READY` | Runtime 工具但非 Play Mode | 先执行 `editor play`，transient 可重试 |
+| `E_RUNTIME_NOT_READY` | Runtime 工具但非 Play Mode | 先执行 `tools run editor.play`，transient 可重试 |
 | `E_INPUT_VALIDATION_FAILED` | 输入不符合 inputSchema | 查看 `tools describe` 的 inputSchema |
 | `E_TOOL_FINGERPRINT_MISMATCH` | handler 代码变更 | 审计后 `--fingerprint-mode warn` |
 | `E_DRY_RUN_UNSUPPORTED` | 工具不支持 dry-run | 直接使用 `--yes` 确认 |

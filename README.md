@@ -605,8 +605,8 @@ Bridge 生命周期：
 **Camera & Screenshot:**
 - `camera.list`, `camera.info`, `camera.screenshot`, `camera.create`, `camera.target`, `camera.lens`, `camera.multiview`
 - `camera.screenshot` captures render texture and returns artifact metadata
-- `E_CAMERA_NOT_FOUND` for `camera info` when a target Camera cannot be resolved
-- `E_TARGET_NOT_FOUND` for `camera screenshot` when the target is empty or cannot be resolved
+- `E_CAMERA_NOT_FOUND` for `tools run camera.info` when a target Camera cannot be resolved
+- `E_TARGET_NOT_FOUND` for `tools run camera.screenshot` when the target is empty or cannot be resolved
 
 **Scene:**
 - `scene.active`, `scene.hierarchy`, `scene.build-settings`, `scene.screenshot`, `scene.create`, `scene.load`, `scene.save`
@@ -618,41 +618,41 @@ Bridge 生命周期：
 - `asset.search`, `asset.info`, `asset.create`, `asset.import`, `asset.modify`, `asset.delete`, `asset.duplicate`, `asset.move`, `asset.rename`
 
 **Prefab:**
-- `prefab info <path>` returns Prefab metadata including GUID, root name, asset type, `variant` base/source paths and GUIDs, `dependencies.items`, and `nestedPrefabs.items` rather than counts only
-- `prefab hierarchy <path>` pages hierarchy items with `pageInfo`, component summaries, the same Prefab variant/dependency summary, `nestedPrefabs.items` and `logPath`
+- `tools run prefab.info --input '{"path":"<path>"}'` returns Prefab metadata including GUID, root name, asset type, `variant` base/source paths and GUIDs, `dependencies.items`, and `nestedPrefabs.items` rather than counts only
+- `tools run prefab.hierarchy --input '{"path":"<path>"}'` pages hierarchy items with `pageInfo`, component summaries, the same Prefab variant/dependency summary, `nestedPrefabs.items` and `logPath`
 - `E_PREFAB_PATH_REQUIRED`, `E_PREFAB_PATH_INVALID`, `E_PREFAB_NOT_FOUND`, `E_ASSET_NOT_PREFAB`, `E_PREFAB_OUTPUT_EXISTS`, `E_PREFAB_MODIFY_NOOP`, `E_PREFAB_CHILD_EXISTS`, `E_PREFAB_CHILD_NOT_FOUND`, `E_PREFAB_DIRTY_CONFLICT`, `E_PREFAB_STAGE_NOT_OPEN`, `E_PREFAB_STAGE_MISMATCH` and `E_UNITY_BUSY`
 
 **UI:**
-- `ui canvas/create`, `ui text/create`, `ui button/create` and `ui image/create` create uGUI objects
-- `ui document/info` supports live UIDocument inspection and offline `.uxml`/`.uss` file reads
+- `tools run ui.canvas.create`, `tools run ui.text.create`, `tools run ui.button.create` and `tools run ui.image.create` create uGUI objects
+- `tools run ui.document.info` supports live UIDocument inspection and offline `.uxml`/`.uss` file reads
 - `E_UI_PARENT_NOT_FOUND`, `E_UI_SPRITE_NOT_FOUND`, `E_UI_UXML_NOT_FOUND`, `E_UI_USS_NOT_FOUND`, `E_UI_PANEL_SETTINGS_NOT_FOUND`, `E_TARGET_NOT_FOUND`, `E_TARGET_AMBIGUOUS` and `E_UNITY_BUSY`
 
 **Material:**
-- `material info <path>` returns shader, keywords, ShaderUtil property metadata, current values, texture references, dependencies and `logPath`
-- `material assign --target <go> --material <path>` assigns to a Renderer shared material slot or a UI Graphic `material` property
+- `tools run material.info --input '{"path":"<path>"}'` returns shader, keywords, ShaderUtil property metadata, current values, texture references, dependencies and `logPath`
+- `tools run material.assign --input '{"target":"<go>","material":"<path>"}'` assigns to a Renderer shared material slot or a UI Graphic `material` property
 - `E_MATERIAL_PATH_REQUIRED`, `E_MATERIAL_PATH_INVALID`, `E_MATERIAL_NOT_FOUND`, `E_SHADER_NOT_FOUND`, `E_MATERIAL_PROPERTY_NOT_FOUND`, `E_MATERIAL_PROPERTY_TYPE_MISMATCH`, `E_TARGET_AMBIGUOUS`, `E_MATERIAL_SLOT_INVALID`, `E_TEXTURE_NOT_FOUND` and `E_UNITY_BUSY`
 
 **Graphics & Physics:**
-- `graphics quality` reads and updates `QualitySettings`
-- `physics raycast` supports 3D and 2D ray queries
+- `tools run graphics.quality` reads and updates `QualitySettings`
+- `tools run physics.raycast` supports 3D and 2D ray queries
 - `physics.raycast` supports 3D and 2D ray queries
 
 **Shader & Texture:**
-- `shader info/read/create/update`
-- `texture info/create/sprite/import-settings`
+- `tools run shader.info`, `tools run shader.read`, `tools run shader.create`, `tools run shader.update`
+- `tools run texture.info`, `tools run texture.create`, `tools run texture.sprite`, `tools run texture.import-settings`
 - `E_SHADER_NOT_FOUND`, `E_TEXTURE_NOT_FOUND`, `E_IMPORT_FAILED`
 
 **Animation & VFX:**
-- `animation clip <path>` reads or creates `Assets/*.anim` AnimationClip assets
+- `tools run animation.clip --input '{"path":"<path>"}'` reads or creates `Assets/*.anim` AnimationClip assets
 - `tools run vfx.graph --input '{"path":"<path>"}'` reads or creates `Assets/*.vfx` Visual Effect Graph assets
 - Windows-style `Assets\VFX\Explosion.vfx` paths are normalized to Unity asset paths
 - `E_VFX_PACKAGE_MISSING`, `E_VFX_GRAPH_NOT_FOUND`
 
 **Editor:**
-- `editor state` returns playMode, pause, busy, activeScene and Prefab Stage status
-- `editor play`, `editor pause` and `editor stop` control Editor PlayMode
-- `editor menu <path>` executes a Unity Editor menu item
-- `editor console --count <n>` returns recent Unity Console entries
+- `tools run editor.state` returns playMode, pause, busy, activeScene and Prefab Stage status
+- `tools run editor.play`, `tools run editor.pause` and `tools run editor.stop` control Editor PlayMode
+- `tools run editor.menu --input '{"path":"<path>"}'` executes a Unity Editor menu item
+- `tools run console.get --input '{"count":<n>}'` returns recent Unity Console entries
 - `E_UNITY_BUSY`, `E_PLAYMODE_TIMEOUT`, `E_MENU_NOT_FOUND`, `E_MENU_TIMEOUT`
 
 **Bridge HTTP timeout & side-effect safety:**

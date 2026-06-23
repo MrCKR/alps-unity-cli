@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { pathToFileURL } from "node:url";
 
 process.env.UNITY_CLI_GENERATING_CONTRACT = "1";
@@ -58,6 +58,7 @@ for (const spec of bridgeCommandRegistry.specs()) {
 
 const commands = [...entries.values()].sort((left, right) => left.bridgeCommand.localeCompare(right.bridgeCommand));
 
+await mkdir("contracts", { recursive: true });
 await writeFile(OUTPUT_PATH, `${JSON.stringify({
   version: 1,
   generatedFrom: "unified C#/TS/metadata command contract",

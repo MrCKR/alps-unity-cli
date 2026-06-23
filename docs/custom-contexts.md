@@ -26,7 +26,7 @@ Context 是 alps-unity-cli 中获取只读项目状态的核心机制。与 Tool
 | 只读工具 | `tools group list` 输出中 `readOnlyHint: true` | camera.list、asset.info、scene.hierarchy 等 |
 | 离线文档 | `docs get/search` | Unity API 文档缓存 |
 | 类型反射 | `reflect type/member/search` | C# 类型信息缓存 |
-| 诊断预检 | `diagnose preflight` | 项目、编辑器、Bridge 状态快照 |
+| 诊断预检 | `tools run diagnose.preflight` | 项目、编辑器、Bridge 状态快照 |
 
 ## 注册方式
 

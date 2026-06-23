@@ -21,31 +21,31 @@ The CLI enforces a confirmation gate for all tools with `destructiveHint: true`.
 
 | Command | Title | Supports `--dry-run`? |
 |---------|-------|----------------------|
-| `asset delete` | Delete Asset | ✅ |
-| `go delete` | Delete GameObject | ✅ |
-| `go set-parent` | Set GameObject Parent | ✅ |
-| `scene save` | Save Scene | ✅ |
-| `scene unload` | Unload Scene | ✅ |
-| `code exec` | Execute Live Code | ✅ |
+| `tools run asset.delete` | Delete Asset | ✅ |
+| `tools run go.delete` | Delete GameObject | ✅ |
+| `tools run go.set-parent` | Set GameObject Parent | ✅ |
+| `tools run scene.save` | Save Scene | ✅ |
+| `tools run scene.unload` | Unload Scene | ✅ |
+| `tools run code.exec` | Execute Live Code | ✅ |
 | `batch run` | Batch Run | ✅ (preflight) |
-| `component remove` | Remove Component | ❌ |
-| `component modify` | Modify Component (deep patch) | ✅ |
-| `object modify` | Modify Object (deep patch) | ✅ |
-| `reflection.method.call` | Call Method via Reflection | security fingerprint |
-| `graphics.bake-clear` | Clear Baked Lighting | ❌ |
-| `controller.remove-layer` | Remove Animator Controller Layer | ❌ |
-| `editor.menu` | Execute Editor Menu | ❌ |
-| `script.edit` | Edit Script | ❌ |
-| `script.apply-edits` | Apply Structured Script Edits | ❌ |
-| `script.update-or-create` | Update or Create Script | ✅ |
-| `texture.generate` | Generate Texture | ✅ |
-| `prefab.unpack` | Unpack Prefab Instance | ✅ |
-| `package.embed` | Embed Package | ✅ |
-| `console.clear` | Clear Console | ✅ |
-| `profiler.clear` | Clear Profiler Data | ✅ |
-| `editor.selection.set` | Set Editor Selection | ✅ |
-| `editor.active-tool.set` | Set Active Editor Tool | ❌ |
-| `cli.package.remove` | Package Remove | ❌ |
+| `tools run component.remove` | Remove Component | ❌ |
+| `tools run component.modify` | Modify Component (deep patch) | ✅ |
+| `tools run object.modify` | Modify Object (deep patch) | ✅ |
+| `tools run reflection.method.call` | Call Method via Reflection | security fingerprint |
+| `tools run graphics.bake-clear` | Clear Baked Lighting | ❌ |
+| `tools run controller.remove-layer` | Remove Animator Controller Layer | ❌ |
+| `tools run editor.menu` | Execute Editor Menu | ❌ |
+| `tools run script.edit` | Edit Script | ❌ |
+| `tools run script.apply-edits` | Apply Structured Script Edits | ❌ |
+| `tools run script.update-or-create` | Update or Create Script | ✅ |
+| `tools run texture.generate` | Generate Texture | ✅ |
+| `tools run prefab.unpack` | Unpack Prefab Instance | ✅ |
+| `tools run package.embed` | Embed Package | ✅ |
+| `tools run console.clear` | Clear Console | ✅ |
+| `tools run profiler.clear` | Clear Profiler Data | ✅ |
+| `tools run editor.selection.set` | Set Editor Selection | ✅ |
+| `tools run editor.active-tool.set` | Set Active Editor Tool | ❌ |
+| `tools run package.remove` | Package Remove | ❌ |
 | `jobs cancel` | Cancel Job | ❌ |
 
 The `reflection.method.call` tool is classified `riskLevel: critical`. It performs no scope restriction on the invoked method (public/private/static/instance, any namespace/assembly, Editor/Runtime). It requires a `security` confirmation object with `confirmed: true` and a `destructiveFingerprint`, and returns a structured audit including target method preview, parameters, result serialization, and any exception.

@@ -521,12 +521,12 @@ test("material bridge errors preserve structured diagnostics", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["tools", "run", "material.set", "Assets/Materials/Player.mat", "--property", "_Missing", "--value", "1"], {
     ...runtime,
-    bridgeExecute: async () => ({ ok: false, error: { code: "E_MATERIAL_PROPERTY_NOT_FOUND", message: "Material property not found: _Missing" }, nextActions: ["Run unity_cli material info <path> to inspect shader properties."] })
+    bridgeExecute: async () => ({ ok: false, error: { code: "E_MATERIAL_PROPERTY_NOT_FOUND", message: "Material property not found: _Missing" }, nextActions: ["Run unity_cli tools run material.info --input '{\"path\":\"<path>\"}' to inspect shader properties."] })
   });
 
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "E_MATERIAL_PROPERTY_NOT_FOUND");
-  assert.deepEqual(result.error?.next_actions, ["Run unity_cli material info <path> to inspect shader properties."]);
+  assert.deepEqual(result.error?.next_actions, ["Run unity_cli tools run material.info --input '{\"path\":\"<path>\"}' to inspect shader properties."]);
 });
 
 test("graphics commands forward settings and screenshot diagnostics", async () => {
@@ -651,8 +651,8 @@ test("animation and vfx bridge errors preserve diagnostics", async () => {
   const runtime = await makeRuntime();
   const cases: Array<{ argv: string[]; code: string; message: string; nextActions: string[] }> = [
     { argv: ["tools", "run", "animation.play", "Player", "--state", "Missing"], code: "E_TARGET_AMBIGUOUS", message: "Multiple GameObjects matched: Player", nextActions: ["Pass a hierarchy path or instance id."] },
-    { argv: ["tools", "run", "animation.clip", "Assets/Animations/Missing.anim"], code: "E_ANIMATION_CLIP_NOT_FOUND", message: "AnimationClip asset not found", nextActions: ["Check the path or create one with unity_cli animation clip <path> --create."] },
-    { argv: ["tools", "run", "vfx.graph", "--input", JSON.stringify({ path: "Assets/VFX/Explosion.vfx" })], code: "E_VFX_PACKAGE_MISSING", message: "Visual Effect Graph package is not installed", nextActions: ["Install com.unity.visualeffectgraph manually via Unity Package Manager or Packages/manifest.json, run package resolve, then retry."] },
+    { argv: ["tools", "run", "animation.clip", "Assets/Animations/Missing.anim"], code: "E_ANIMATION_CLIP_NOT_FOUND", message: "AnimationClip asset not found", nextActions: ["Check the path or create one with unity_cli tools run animation.clip --input '{\"path\":\"<path>\",\"create\":true}'."] },
+    { argv: ["tools", "run", "vfx.graph", "--input", JSON.stringify({ path: "Assets/VFX/Explosion.vfx" })], code: "E_VFX_PACKAGE_MISSING", message: "Visual Effect Graph package is not installed", nextActions: ["Install com.unity.visualeffectgraph manually via Unity Package Manager or Packages/manifest.json, run unity_cli tools run package.resolve, then retry."] },
     { argv: ["tools", "run", "vfx.graph", "--input", JSON.stringify({ path: "Assets/VFX/Explosion.vfx", create: true })], code: "E_VFX_GRAPH_CREATE_FAILED", message: "VFX Graph asset creation did not produce a readable VisualEffectAsset", nextActions: ["Check Unity Console and UnityCliBridge.log; the Visual Effect Graph package may have changed its internal authoring API."] },
     { argv: ["tools", "run", "animation.clip", "D:\\tmp\\Bad.anim"], code: "E_ANIMATION_CLIP_PATH_INVALID", message: "AnimationClip path must be under Assets/ and end with .anim: D:\\tmp\\Bad.anim", nextActions: ["Pass a Unity asset path such as Assets/Animations/Player.anim."] }
   ];

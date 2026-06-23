@@ -287,7 +287,7 @@ test("Unity Bridge animation and vfx commands expose assets, target resolver dia
   assert.match(source, /E_TARGET_AMBIGUOUS/);
   assert.match(source, /rawPath\.Replace\('\\\\', '\/'\)\.Trim\(\)/);
   assert.match(source, /Replace\("\\\\t", "\\t"\)/);
-  assert.match(readme, /`animation clip <path>` reads or creates `Assets\/\*\.anim` AnimationClip assets/);
+  assert.match(readme, /`tools run animation\.clip --input '\{"path":"<path>"\}'` reads or creates `Assets\/\*\.anim` AnimationClip assets/);
   assert.match(readme, /`tools run vfx\.graph --input/);
   assert.match(readme, /Windows-style `Assets\\VFX\\Explosion\.vfx` paths are normalized to Unity asset paths/);
   assert.match(readme, /`E_VFX_PACKAGE_MISSING`/);
@@ -525,8 +525,8 @@ test("Unity Bridge prefab operations expose structured diagnostics", async () =>
   assert.match(source, /\.PropRaw\("dependencies",/);
   assert.match(source, /\.PropRaw\("nestedPrefabs",/);
   assert.match(source, /PrefabAssetJson\(path, root, root\)/);
-  assert.match(readme, /`prefab info <path>` returns Prefab metadata including GUID, root name, asset type, `variant` base\/source paths and GUIDs, `dependencies\.items`, and `nestedPrefabs\.items` rather than counts only/);
-  assert.match(readme, /`prefab hierarchy <path>` pages hierarchy items with `pageInfo`, component summaries, the same Prefab variant\/dependency summary, `nestedPrefabs\.items` and `logPath`/);
+  assert.match(readme, /`tools run prefab\.info --input '\{"path":"<path>"\}'` returns Prefab metadata including GUID, root name, asset type, `variant` base\/source paths and GUIDs, `dependencies\.items`, and `nestedPrefabs\.items` rather than counts only/);
+  assert.match(readme, /`tools run prefab\.hierarchy --input '\{"path":"<path>"\}'` pages hierarchy items with `pageInfo`, component summaries, the same Prefab variant\/dependency summary, `nestedPrefabs\.items` and `logPath`/);
   assert.match(readme, /`E_PREFAB_PATH_REQUIRED`, `E_PREFAB_PATH_INVALID`, `E_PREFAB_NOT_FOUND`, `E_ASSET_NOT_PREFAB`, `E_PREFAB_OUTPUT_EXISTS`, `E_PREFAB_MODIFY_NOOP`, `E_PREFAB_CHILD_EXISTS`, `E_PREFAB_CHILD_NOT_FOUND`, `E_PREFAB_DIRTY_CONFLICT`, `E_PREFAB_STAGE_NOT_OPEN`, `E_PREFAB_STAGE_MISMATCH` and `E_UNITY_BUSY`/);
 });
 
@@ -549,8 +549,8 @@ test("Unity Bridge shader and texture operations expose diagnostics", async () =
   assert.match(source, /E_TEXTURE_NOT_FOUND/);
   assert.match(source, /E_IMPORT_FAILED/);
   assert.match(source, /plannedEffects/);
-  assert.match(readme, /`shader info\/read\/create\/update`/);
-  assert.match(readme, /`texture info\/create\/sprite\/import-settings`/);
+  assert.match(readme, /`tools run shader\.info`, `tools run shader\.read`, `tools run shader\.create`, `tools run shader\.update`/);
+  assert.match(readme, /`tools run texture\.info`, `tools run texture\.create`, `tools run texture\.sprite`, `tools run texture\.import-settings`/);
   assert.match(readme, /`E_SHADER_NOT_FOUND`/);
   assert.match(readme, /`E_TEXTURE_NOT_FOUND`/);
   assert.match(readme, /`E_IMPORT_FAILED`/);
@@ -574,8 +574,8 @@ test("Unity Bridge material commands expose shader properties, assignment and di
   assert.match(source, /material\.SetTexture/);
   assert.match(source, /E_MATERIAL_PROPERTY_TYPE_MISMATCH/);
   assert.match(source, /E_TARGET_AMBIGUOUS/);
-  assert.match(readme, /`material info <path>` returns shader, keywords, ShaderUtil property metadata, current values, texture references, dependencies and `logPath`/);
-  assert.match(readme, /`material assign --target <go> --material <path>` assigns to a Renderer shared material slot or a UI Graphic `material` property/);
+  assert.match(readme, /`tools run material\.info --input '\{"path":"<path>"\}'` returns shader, keywords, ShaderUtil property metadata, current values, texture references, dependencies and `logPath`/);
+  assert.match(readme, /`tools run material\.assign --input '\{"target":"<go>","material":"<path>"\}'` assigns to a Renderer shared material slot or a UI Graphic `material` property/);
   assert.match(readme, /`E_MATERIAL_PATH_REQUIRED`, `E_MATERIAL_PATH_INVALID`, `E_MATERIAL_NOT_FOUND`, `E_SHADER_NOT_FOUND`, `E_MATERIAL_PROPERTY_NOT_FOUND`, `E_MATERIAL_PROPERTY_TYPE_MISMATCH`, `E_TARGET_AMBIGUOUS`, `E_MATERIAL_SLOT_INVALID`, `E_TEXTURE_NOT_FOUND` and `E_UNITY_BUSY`/);
 });
 
@@ -615,8 +615,8 @@ test("Unity Bridge UI operations expose uGUI and UI Toolkit diagnostics", async 
   assert.match(source, /E_UI_UXML_NOT_FOUND/);
   assert.match(source, /E_UI_USS_NOT_FOUND/);
   assert.match(source, /CollectUiHierarchy/);
-  assert.match(readme, /`ui canvas\/create`, `ui text\/create`, `ui button\/create` and `ui image\/create` create uGUI objects/);
-  assert.match(readme, /`ui document\/info` supports live UIDocument inspection and offline `.uxml`\/`.uss` file reads/);
+  assert.match(readme, /`tools run ui\.canvas\.create`, `tools run ui\.text\.create`, `tools run ui\.button\.create` and `tools run ui\.image\.create` create uGUI objects/);
+  assert.match(readme, /`tools run ui\.document\.info` supports live UIDocument inspection and offline `.uxml`\/`.uss` file reads/);
   assert.match(readme, /`E_UI_PARENT_NOT_FOUND`, `E_UI_SPRITE_NOT_FOUND`, `E_UI_UXML_NOT_FOUND`, `E_UI_USS_NOT_FOUND`, `E_UI_PANEL_SETTINGS_NOT_FOUND`, `E_TARGET_NOT_FOUND`, `E_TARGET_AMBIGUOUS` and `E_UNITY_BUSY`/);
 });
 
@@ -691,8 +691,8 @@ test("Unity Bridge graphics and physics commands expose settings, raycast and di
   assert.match(source, /E_GRAPHICS_SETTING_UNSUPPORTED/);
   assert.match(source, /E_PHYSICS_SETTING_UNSUPPORTED/);
   assert.match(source, /RaycastNextActionsJson/);
-  assert.match(readme, /`graphics quality` reads and updates `QualitySettings`/);
-  assert.match(readme, /`physics raycast` supports 3D and 2D ray queries/);
+  assert.match(readme, /`tools run graphics\.quality` reads and updates `QualitySettings`/);
+  assert.match(readme, /`tools run physics\.raycast` supports 3D and 2D ray queries/);
 });
 
 test("Unity Bridge HTTP timeout prevents queued side effects from stale requests", async () => {
@@ -738,8 +738,8 @@ test("Unity Bridge screenshot validates path, format, overwrite and busy diagnos
   assert.match(source, /CreateScreenshotDirectory\(outputPath\)/);
   assert.match(source, /WriteScreenshotBytes\(outputPath, bytes\)/);
   assert.match(source, /Path\.GetFullPath/);
-  assert.match(readme, /`E_CAMERA_NOT_FOUND` for `camera info` when a target Camera cannot be resolved/);
-  assert.match(readme, /`E_TARGET_NOT_FOUND` for `camera screenshot` when the target is empty or cannot be resolved/);
+  assert.match(readme, /`E_CAMERA_NOT_FOUND` for `tools run camera\.info` when a target Camera cannot be resolved/);
+  assert.match(readme, /`E_TARGET_NOT_FOUND` for `tools run camera\.screenshot` when the target is empty or cannot be resolved/);
   assert.match(readme, /C# runtime behavior for empty camera targets, missing Cameras, screenshot IO failures, actual PNG\/JPG artifacts, Prefab Stage open\/save\/close, Prefab dirty conflicts, nested\/variant Prefab summaries, Material asset creation, Renderer\/UI Graphic assignment, Material property writes, GraphicsSettings\/QualitySettings persistence, render pipeline asset resolution, Physics\/Physics2D project setting persistence, raycast collision hits, explicit simulation steps, AnimationClip asset creation\/binding summaries, Animator state\/play\/stop behavior, VFX Graph asset creation, VisualEffect assignment, Shader import diagnostics, TextureImporter mutations, uGUI object creation, UIDocument\/PanelSettings linking, UI hierarchy summaries and Runtime Code live execution must still be proven by real Windows \+ Unity Editor validation/);
 });
 
@@ -794,10 +794,10 @@ test("Unity Bridge editor commands expose state, play/pause/stop, menu execution
   assert.match(source, /EnsureEditorNotBusy/);
   assert.match(source, /WaitForPlayModeState/);
   assert.match(source, /PrefabStageJson/);
-  assert.match(readme, /`editor state` returns playMode, pause, busy, activeScene and Prefab Stage status/);
-  assert.match(readme, /`editor play`, `editor pause` and `editor stop` control Editor PlayMode/);
-  assert.match(readme, /`editor menu <path>` executes a Unity Editor menu item/);
-  assert.match(readme, /`editor console --count <n>` returns recent Unity Console entries/);
+  assert.match(readme, /`tools run editor\.state` returns playMode, pause, busy, activeScene and Prefab Stage status/);
+  assert.match(readme, /`tools run editor\.play`, `tools run editor\.pause` and `tools run editor\.stop` control Editor PlayMode/);
+  assert.match(readme, /`tools run editor\.menu --input '\{"path":"<path>"\}'` executes a Unity Editor menu item/);
+  assert.match(readme, /`tools run console\.get --input '\{"count":<n>\}'` returns recent Unity Console entries/);
   assert.match(readme, /E_UNITY_BUSY/);
   assert.match(readme, /E_PLAYMODE_TIMEOUT/);
   assert.match(readme, /E_MENU_NOT_FOUND/);

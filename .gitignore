@@ -2,5 +2,6 @@ node_modules/
 dist/
 .alps-unity/
 .tmp/
+.multica-evidence/
 *.log
 Dev/

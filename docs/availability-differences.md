@@ -43,13 +43,13 @@ Package 依赖通过 `requiresPackages` 字段声明在工具 descriptor 中：
 | 过期（心跳超时） | 无 Bridge 命令；返回 `E_TARGET_STALE` |
 | 不可用（`/health` 失败） | 无 Bridge 命令；返回 `E_TARGET_UNREACHABLE` |
 
-离线工具（`handler: "offline"`, `supportStatus: "cli-only"`）不受 Bridge 状态影响：
-- `package list/info/search/install/remove`
-- `batch schema/run`
-- `docs get/search`, `reflect type/member/search`
-- `job status/logs/cancel`
-- `init --check`, `doctor`, `instances list/prune`
-- `target get/set/clear/alias`
+离线/CLI-only 能力不受 Bridge 状态影响：
+- `tools run package.list` / `package.info` / `package.search` / `package.install` / `package.remove`
+- `batch schema` / `batch run`
+- `tools run docs.get` / `docs.search` / `reflect.type` / `reflect.member` / `reflect.search`
+- `jobs status` / `jobs logs` / `jobs cancel`
+- `init --check`, `doctor`, `instances list` / `instances prune`
+- `target current` / `target set` / `target clear` / `target alias`
 
 ### 4. 编辑器状态（PlayMode）与 Runtime 工具可用性
 

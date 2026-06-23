@@ -37,7 +37,7 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 
 | 错误码 | 含义 | 恢复 |
 |--------|------|------|
-| `E_RUNTIME_NOT_READY` | Runtime 工具需 Play Mode | 先 `editor play`，transient 可重试 |
+| `E_RUNTIME_NOT_READY` | Runtime 工具需 Play Mode | 先 `tools run editor.play`，transient 可重试 |
 | `E_RUNTIME_SESSION_STALE` | 运行时会话过期 | 重新进入 Play Mode |
 | `E_RUNTIME_TIMEOUT` | 运行时操作超时 | 增加 `--timeout-ms` 或重试 |
 
@@ -96,9 +96,9 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 ### next_actions 规则
 
 - Target 错误的 `next_actions` 必须指向 `instances list` 或 `target set`
-- Runtime 错误的 `next_actions` 必须指向 `editor play` 或 Play Mode 相关操作
+- Runtime 错误的 `next_actions` 必须指向 `tools run editor.play` 或 Play Mode 相关操作
 - Discovery 错误的 `next_actions` 必须指向 `tools group`、`tools group list`、`tools search` 或 `tools describe`
-- 诊断错误的 `next_actions` 必须指向 `doctor` 或 `diagnose preflight`
+- 诊断错误的 `next_actions` 必须指向 `doctor` 或 `tools run diagnose.preflight`
 
 ## JSON 字段命名
 
