@@ -20,7 +20,7 @@ function makeRuntime(bridgeExecute?: BridgeRuntime["bridgeExecute"]): BridgeRunt
 
 test("builtin context descriptors cover all required contexts", () => {
   const contexts = builtinContextDescriptors();
-  assert.equal(contexts.length, 23, `Expected 23 built-in contexts, got ${contexts.length}`);
+  assert.equal(contexts.length, 25, `Expected 25 built-in contexts, got ${contexts.length}`);
 });
 
 test("all builtin contexts are read-only", () => {
@@ -104,10 +104,10 @@ test("context list returns all builtin contexts", async () => {
 
   const data = result.data as Record<string, unknown>;
   assert.equal(data.command, "context.list");
-  assert.equal(data.count, 23);
+  assert.equal(data.count, 25);
 
   const contexts = data.contexts as Array<Record<string, unknown>>;
-  assert.equal(contexts.length, 23);
+  assert.equal(contexts.length, 25);
   assert.ok(contexts[0].name);
   assert.ok(contexts[0].title);
   assert.ok(contexts[0].category);

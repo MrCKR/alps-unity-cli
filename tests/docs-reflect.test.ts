@@ -112,7 +112,7 @@ test("docs get reads offline cache and keeps JSON envelope", async () => {
   const runtime = await makeRuntime();
   const docsDir = await makeDocsCache();
 
-  const result = await execute(["docs", "get", "UnityEngine.Camera", "--docs-dir", docsDir, "--format", "text"], runtime);
+  const result = await execute(["tools", "run", "docs.get", "UnityEngine.Camera", "--docs-dir", docsDir, "--format", "text"], runtime);
 
   assert.equal(result.ok, true);
   const data = result.data as { command: string; mode: string; requiresUnity: boolean; unityVersion: { resolved: string }; format: string; doc: { name: string; content: string }; text: string };
@@ -129,7 +129,7 @@ test("docs search pages offline results", async () => {
   const runtime = await makeRuntime();
   const docsDir = await makeDocsCache();
 
-  const result = await execute(["docs", "search", "UnityEngine", "--docs-dir", docsDir, "--page-size", "1", "--cursor", "1"], runtime);
+  const result = await execute(["tools", "run", "docs.search", "UnityEngine", "--docs-dir", docsDir, "--page-size", "1", "--cursor", "1"], runtime);
 
   assert.equal(result.ok, true);
   const data = result.data as { items: Array<{ name: string }>; pageInfo: { pageSize: number; cursor: string; nextCursor?: string; total: number } };
@@ -142,7 +142,7 @@ test("docs search pages offline results", async () => {
 
 test("docs cache missing returns structured diagnostic", async () => {
   const runtime = await makeRuntime();
-  const result = await execute(["docs", "search", "Camera", "--docs-dir", join(runtime.dataDir, "missing")], runtime);
+  const result = await execute(["tools", "run", "docs.search", "Camera", "--docs-dir", join(runtime.dataDir, "missing")], runtime);
 
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "DOCS_CACHE_MISSING");
@@ -153,8 +153,8 @@ test("reflect type and member read signatures and assembly source", async () => 
   const runtime = await makeRuntime();
   const reflectDir = await makeReflectCache();
 
-  const type = await execute(["reflect", "type", "UnityEngine.Camera", "--reflect-dir", reflectDir, "--format", "text"], runtime);
-  const member = await execute(["reflect", "member", "UnityEngine.Camera.Render", "--reflect-dir", reflectDir], runtime);
+  const type = await execute(["tools", "run", "reflect.type", "UnityEngine.Camera", "--reflect-dir", reflectDir, "--format", "text"], runtime);
+  const member = await execute(["tools", "run", "reflect.member", "UnityEngine.Camera.Render", "--reflect-dir", reflectDir], runtime);
 
   assert.equal(type.ok, true);
   assert.equal(member.ok, true);
@@ -173,7 +173,7 @@ test("reflect search returns paged type and member results", async () => {
   const runtime = await makeRuntime();
   const reflectDir = await makeReflectCache();
 
-  const result = await execute(["reflect", "search", "Render", "--reflect-dir", reflectDir, "--page-size", "1"], runtime);
+  const result = await execute(["tools", "run", "reflect.search", "Render", "--reflect-dir", reflectDir, "--page-size", "1"], runtime);
 
   assert.equal(result.ok, true);
   const data = result.data as { mode: string; items: Array<{ kind: string; member?: { name: string } }>; pageInfo: { total: number } };
@@ -188,7 +188,7 @@ test("reflect ambiguous type returns structured diagnostic", async () => {
   const runtime = await makeRuntime();
   const reflectDir = await makeReflectCache({ duplicateCamera: true });
 
-  const result = await execute(["reflect", "type", "Camera", "--reflect-dir", reflectDir], runtime);
+  const result = await execute(["tools", "run", "reflect.type", "Camera", "--reflect-dir", reflectDir], runtime);
 
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "REFLECT_TYPE_AMBIGUOUS");
@@ -199,7 +199,7 @@ test("reflect assembly load failure is surfaced before query", async () => {
   const runtime = await makeRuntime();
   const reflectDir = await makeReflectCache({ assemblyFailureOnly: true });
 
-  const result = await execute(["reflect", "search", "Camera", "--reflect-dir", reflectDir], runtime);
+  const result = await execute(["tools", "run", "reflect.search", "Camera", "--reflect-dir", reflectDir], runtime);
 
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "REFLECT_ASSEMBLY_LOAD_FAILED");
@@ -208,7 +208,7 @@ test("reflect assembly load failure is surfaced before query", async () => {
 
 test("reflect cache missing returns structured diagnostic", async () => {
   const runtime = await makeRuntime();
-  const result = await execute(["reflect", "type", "UnityEngine.Camera", "--reflect-dir", join(runtime.dataDir, "missing")], runtime);
+  const result = await execute(["tools", "run", "reflect.type", "UnityEngine.Camera", "--reflect-dir", join(runtime.dataDir, "missing")], runtime);
 
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "REFLECT_CACHE_MISSING");
@@ -226,7 +226,7 @@ test("docs get can read markdown-only offline cache", async () => {
   const runtime = await makeRuntime();
   const docsDir = await makeMarkdownDocsCache();
 
-  const result = await execute(["docs", "get", "Vector3", "--docs-dir", docsDir], runtime);
+  const result = await execute(["tools", "run", "docs.get", "Vector3", "--docs-dir", docsDir], runtime);
 
   assert.equal(result.ok, true);
   const data = result.data as { doc: { name: string; content: string; path: string } };

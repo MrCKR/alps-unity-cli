@@ -13,11 +13,11 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     requiresMainThread: true,
     handler: "bridge",
-    cliCommand: "scene hierarchy",
+    cliCommand: "tools run scene.hierarchy",
     docsTopic: "scene",
     examples: [
-      { description: "List all root objects", argv: ["scene", "hierarchy"] },
-      { description: "Paginate with cursor", argv: ["scene", "hierarchy", "--page-size", "50", "--cursor", "0"] }
+      { description: "List all root objects", argv: ["tools", "run", "scene.hierarchy"] },
+      { description: "Paginate with cursor", argv: ["tools", "run", "scene.hierarchy", "--page-size", "50", "--cursor", "0"] }
     ]
   },
   {
@@ -32,7 +32,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     requiresMainThread: true,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "scene active",
+    cliCommand: "tools run scene.active",
     docsTopic: "scene"
   },
   {
@@ -45,7 +45,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "scene build-settings",
+    cliCommand: "tools run scene.build-settings",
     docsTopic: "scene"
   },
   {
@@ -57,10 +57,10 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "scene screenshot",
+    cliCommand: "tools run scene.screenshot",
     docsTopic: "scene",
     examples: [
-      { description: "Capture PNG screenshot", argv: ["scene", "screenshot", "shot.png"] }
+      { description: "Capture PNG screenshot", argv: ["tools", "run", "scene.screenshot", "shot.png"] }
     ]
   },
   {
@@ -73,7 +73,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "scene create",
+    cliCommand: "tools run scene.create",
     docsTopic: "scene"
   },
   {
@@ -86,7 +86,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "scene load",
+    cliCommand: "tools run scene.load",
     docsTopic: "scene"
   },
   {
@@ -100,7 +100,77 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     supportsDryRun: true,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "scene save",
+    cliCommand: "tools run scene.save",
+    docsTopic: "scene"
+  },
+  {
+    name: "scene.unload",
+    title: "Unload Scene",
+    description: "Unload an additively-loaded scene from the Editor. Cannot unload the only open scene.",
+    group: "scene",
+    inputSchema: objSchema({ path: { type: "string" }, name: { type: "string" }, removeAll: { type: "boolean" } }, ["path"]),
+    readOnlyHint: false,
+    destructiveHint: true,
+    supportsDryRun: true,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run scene.unload",
+    docsTopic: "scene",
+    equivalentUnityMcp: "scene-unload"
+  },
+  {
+    name: "scene.set-active",
+    title: "Set Active Scene",
+    description: "Set the active scene among currently loaded scenes.",
+    group: "scene",
+    inputSchema: objSchema({ path: { type: "string" }, name: { type: "string" } }, ["path"]),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run scene.set-active",
+    docsTopic: "scene",
+    equivalentUnityMcp: "scene-set-active"
+  },
+  {
+    name: "scene.list-opened",
+    title: "List Opened Scenes",
+    description: "List currently loaded (opened) scenes with name, path, build index, loaded/dirty state and active flag.",
+    group: "scene",
+    inputSchema: objSchema({}),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run scene.list-opened",
+    docsTopic: "scene",
+    equivalentUnityMcp: "scene-list-opened"
+  },
+  {
+    name: "scene.data",
+    title: "Scene Data",
+    description: "Parameterized deep read of the active scene hierarchy: maxDepth, nameFilter, includeComponents, maxResults. Read-only tool; for stable lightweight state use context read scene.*.",
+    group: "scene",
+    inputSchema: objSchema({ maxDepth: { type: "integer", default: 2 }, maxResults: { type: "integer", default: 200 }, nameFilter: { type: "string" }, includeComponents: { type: "boolean", default: false } }),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run scene.data",
+    docsTopic: "scene",
+    equivalentUnityMcp: "scene-get-data"
+  },
+  {
+    name: "scene.view-frame",
+    title: "Frame Scene View",
+    description: "Frame the Editor SceneView on a target GameObject or frame all. Does not modify scene data, only the viewport.",
+    group: "scene",
+    inputSchema: objSchema({ target: { type: "string" }, path: { type: "string" }, frameAll: { type: "boolean" } }),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run scene.view-frame",
     docsTopic: "scene"
   }
 ];

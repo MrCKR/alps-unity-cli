@@ -39,8 +39,13 @@ namespace UnityCli
             RegisterCommand(registry, "editor.resolution", "editor", false, delegate(BridgeRequest request) { return SuccessJson(EditorResolutionJson(request)); });
             RegisterCommand(registry, "editor.menu", "editor", false, delegate(BridgeRequest request) { return SuccessJson(EditorMenuJson(request)); });
             RegisterCommand(registry, "editor.console", "editor", false, EditorConsole);
+            RegisterCommand(registry, "console.get", "console", false, ConsoleGet);
+            RegisterCommand(registry, "console.clear", "console", true, ConsoleClear);
+            RegisterCommand(registry, "editor.selection.set", "editor", true, EditorSelectionSet);
+            RegisterCommand(registry, "editor.active-tool.set", "editor", true, EditorActiveToolSet);
             RegisterCommand(registry, "project.tag", "project", false, delegate(BridgeRequest request) { return SuccessJson(ProjectTagLayerJson(request, false)); });
             RegisterCommand(registry, "project.layer", "project", false, delegate(BridgeRequest request) { return SuccessJson(ProjectTagLayerJson(request, true)); });
+            RegisterCommand(registry, "package.embed", "package", true, PackageEmbed);
         }
 
         private static string EditorStateJson()
@@ -337,6 +342,141 @@ namespace UnityCli
                     .Prop("total", (long)ConsoleEntryCount()))
                 .Prop("logPath", LogPath())
                 .EndObject().ToString());
+        }
+
+        /// <summary>console.get：拆出 editor.console 为独立只读工具，支持 filter/page。</summary>
+        private static string ConsoleGet(BridgeRequest request)
+        {
+            var type = request.StringArg("type") ?? request.StringArg("level");
+            var count = Math.Max(1, Math.Min(request.IntArg("count", 50), 500));
+            var filter = request.StringArg("filter") ?? request.StringArg("search");
+            var logEntries = LogEntriesType();
+            var w = new UnityCliJsonWriter().BeginObject();
+            w.Prop("command", "console.get");
+            if (logEntries == null)
+            {
+                w.PropArray("items", null).Prop("total", 0).Prop("diagnostics", "LogEntries API unavailable");
+            }
+            else
+            {
+                w.PropRaw("items", ConsoleItemsJson(type, count));
+                w.Prop("total", (long)ConsoleEntryCount());
+            }
+            if (!string.IsNullOrEmpty(filter)) w.Prop("filter", filter);
+            w.PropObject("pageInfo", p => p.Prop("pageSize", (long)count).Prop("cursor", 0).PropNull("nextCursor"));
+            w.Prop("logPath", LogPath());
+            return w.EndObject().ToString();
+        }
+
+        /// <summary>console.clear：清空 Console。</summary>
+        private static string ConsoleClear(BridgeRequest request)
+        {
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "console.clear").Prop("dryRun", true)
+                    .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "console.clear").Prop("sideEffects", "clears-console").EndObject())
+                    .Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            var logEntries = LogEntriesType();
+            var clearMethod = logEntries?.GetMethod("Clear", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            clearMethod?.Invoke(null, null);
+            return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "console.clear").Prop("cleared", true)
+                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "console.clear").EndObject())
+                .Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        /// <summary>editor.selection.set：设置 Editor 选择。读 selection 走 Context。</summary>
+        private static string EditorSelectionSet(BridgeRequest request)
+        {
+            var target = request.StringArg("target") ?? request.StringArg("path");
+            var instanceId = request.OptionalIntArg("instanceId");
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "editor.selection.set").Prop("dryRun", true)
+                    .Prop("target", target ?? "<instanceId>").Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            UnityEngine.Object obj = null;
+            if (instanceId.HasValue && instanceId.Value != 0)
+            {
+                obj = EditorUtility.InstanceIDToObject(instanceId.Value);
+            }
+            else if (!string.IsNullOrEmpty(target))
+            {
+                obj = ObjectRefResolver.FindGameObjectByPath(target);
+            }
+            if (obj == null)
+            {
+                throw new BridgeCommandException("E_SELECTION_TARGET_NOT_FOUND", "Selection target not found.", "Pass a valid instanceId or path.");
+            }
+            Selection.activeObject = obj;
+            return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "editor.selection.set")
+                .Prop("selected", obj.name).Prop("typeName", obj.GetType().Name)
+                .Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        /// <summary>editor.active-tool.set：设置 Unity Editor Move/Rotate/Scale 工具。不是 unity_cli tool activation。</summary>
+        private static string EditorActiveToolSet(BridgeRequest request)
+        {
+            var tool = request.StringArg("tool") ?? request.StringArg("name");
+            if (string.IsNullOrEmpty(tool))
+            {
+                throw new BridgeCommandException("E_TOOL_REQUIRED", "editor.active-tool.set requires --tool.", "Pass View, Move, Rotate, Scale, Rect, Transform.");
+            }
+            Tool editorTool;
+            switch (tool.ToLowerInvariant())
+            {
+                case "view": case "pan": editorTool = Tool.View; break;
+                case "move": case "translate": editorTool = Tool.Move; break;
+                case "rotate": case "rotation": editorTool = Tool.Rotate; break;
+                case "scale": editorTool = Tool.Scale; break;
+                case "rect": editorTool = Tool.Rect; break;
+                case "transform": editorTool = Tool.Transform; break;
+                default: throw new BridgeCommandException("E_TOOL_UNKNOWN", "Unknown editor tool: " + tool, "Pass View, Move, Rotate, Scale, Rect, or Transform.");
+            }
+            Tools.current = editorTool;
+            return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "editor.active-tool.set")
+                .Prop("tool", tool).Prop("editorTool", editorTool.ToString())
+                .Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        /// <summary>package.embed：将 Packages/ 下的包嵌入为 Assets/ 本地副本。对齐 CoplayDev embed_package。</summary>
+        private static string PackageEmbed(BridgeRequest request)
+        {
+            var packageId = request.StringArg("package") ?? request.StringArg("packageId") ?? request.StringArg("id");
+            if (string.IsNullOrEmpty(packageId))
+            {
+                throw new BridgeCommandException("E_PACKAGE_ID_REQUIRED", "package.embed requires --package <id>.", "Pass a package id like com.unity.x.");
+            }
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "package.embed").Prop("dryRun", true)
+                    .Prop("package", packageId)
+                    .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "package.embed").Prop("sideEffects", "domain-reload|manifest-change|file-copy").EndObject())
+                    .Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            var info = UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/" + packageId);
+            if (info == null)
+            {
+                var listRequest = UnityEditor.PackageManager.Client.List(true);
+                while (!listRequest.IsCompleted) System.Threading.Thread.Sleep(50);
+                if (listRequest.Status == UnityEditor.PackageManager.StatusCode.Success)
+                {
+                    info = listRequest.Result.FirstOrDefault(p => p.name == packageId);
+                }
+            }
+            if (info == null)
+            {
+                throw new BridgeCommandException("E_PACKAGE_NOT_FOUND", "Package not found: " + packageId, "Run package list to discover installed packages.");
+            }
+            var destPath = "Assets/" + packageId;
+            CreateAssetDirectory(destPath + "/.");
+            FileUtil.CopyFileOrDirectory(info.resolvedPath, AssetFullPath(destPath));
+            AssetDatabase.Refresh();
+            return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "package.embed")
+                .Prop("package", packageId).Prop("source", info.resolvedPath).Prop("destination", destPath)
+                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "package.embed").Prop("destination", destPath).EndObject())
+                .Prop("nextActions", "Remove the package from manifest after embedding to avoid duplicate symbols.")
+                .Prop("logPath", LogPath()).EndObject().ToString());
         }
 
         private static string ConsoleItemsJson(string type, int count)

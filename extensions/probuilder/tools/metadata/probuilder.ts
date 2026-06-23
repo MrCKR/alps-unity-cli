@@ -35,7 +35,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     cliCommand: "tools run probuilder.ping",
-    examples: [{ description: "Check ProBuilder availability", argv: ["probuilder", "ping"] }]
+    examples: [{ description: "Check ProBuilder availability", argv: ["tools", "run", "probuilder.ping"] }]
   },
   // ─── Shape Creation ────────────────────────────────────
   {
@@ -60,8 +60,8 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     longRunning: true,
     cliCommand: "tools run probuilder.create-shape",
     examples: [
-      { description: "Create a ProBuilder cube", argv: ["probuilder", "create-shape", "Cube"] },
-      { description: "Create a ProBuilder arch with radius", argv: ["probuilder", "create-shape", "Arch", "--radius", "2"] }
+      { description: "Create a ProBuilder cube", argv: ["tools", "run", "probuilder.create-shape", "Cube"] },
+      { description: "Create a ProBuilder arch with radius", argv: ["tools", "run", "probuilder.create-shape", "Arch", "--radius", "2"] }
     ]
   },
   {

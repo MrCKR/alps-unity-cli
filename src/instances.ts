@@ -100,8 +100,8 @@ export async function handleInstancesCommand(
   }
 
   return failure(requestId, "UNKNOWN_INSTANCES_COMMAND", "Expected instances list or instances prune.", [
-    "Run unity_cli instances list to inspect registered targets.",
-    "Run unity_cli instances prune to remove stale or unreachable targets."
+    "Run unity_cli context read instances.list to inspect registered targets.",
+    "Run unity_cli tools run instances.prune to remove stale or unreachable targets."
   ]);
 }
 
@@ -128,7 +128,7 @@ export async function handleTargetCommand(
   if (command === "set") {
     const selector = positional[0] ?? stringFlag(flags, "target") ?? stringFlag(flags, "id") ?? stringFlag(flags, "alias");
     if (!selector) {
-      return failure(requestId, "E_TARGET_NOT_FOUND", "target set requires <id|alias>.", ["Run unity_cli instances list or unity_cli target alias list."]);
+      return failure(requestId, "E_TARGET_NOT_FOUND", "target set requires <id|alias>.", ["Run unity_cli context read instances.list or unity_cli tools run target.alias-list."]);
     }
     try {
       const instances = await readInstances(dataDir);
@@ -173,18 +173,18 @@ async function handleTargetAliasCommand(
     const instanceId = positional[0] ?? stringFlag(flags, "instance") ?? stringFlag(flags, "instance-id") ?? stringFlag(flags, "id");
     const alias = positional[1] ?? stringFlag(flags, "alias");
     if (!instanceId || !alias) {
-      return failure(requestId, "E_TARGET_NOT_FOUND", "target alias set requires <instanceId> <alias>.", ["Run unity_cli instances list to inspect instance ids."]);
+      return failure(requestId, "E_TARGET_NOT_FOUND", "target alias set requires <instanceId> <alias>.", ["Run unity_cli context read instances.list to inspect instance ids."]);
     }
     const instances = await readInstances(dataDir);
     const instance = instances.find((candidate) => candidate.instanceId === instanceId);
     if (!instance) {
-      return failure(requestId, "E_TARGET_NOT_FOUND", `Unity target not found: ${instanceId}.`, ["Run unity_cli instances list to inspect registered targets."]);
+      return failure(requestId, "E_TARGET_NOT_FOUND", `Unity target not found: ${instanceId}.`, ["Run unity_cli context read instances.list to inspect registered targets."]);
     }
     const existingInstanceId = aliases[alias];
     if (existingInstanceId && existingInstanceId !== instance.instanceId && !getBoolean(flags, "force")) {
       return failure(requestId, "E_TARGET_ALIAS_CONFLICT", `Target alias already points to another instance: ${alias}.`, [
-        "Run unity_cli target alias unset <alias> before assigning it to another instance.",
-        "Run unity_cli target alias set <instanceId> <alias> --force to overwrite the existing alias."
+        "Run unity_cli tools run target.alias-unset <alias> before assigning it to another instance.",
+        "Run unity_cli tools run target.alias-set <instanceId> <alias> --force to overwrite the existing alias."
       ], { alias, existingInstanceId, requestedInstanceId: instance.instanceId });
     }
     aliases[alias] = instance.instanceId;
@@ -195,7 +195,7 @@ async function handleTargetAliasCommand(
   if (command === "unset") {
     const alias = positional[0] ?? stringFlag(flags, "alias");
     if (!alias || aliases[alias] === undefined) {
-      return failure(requestId, "E_TARGET_NOT_FOUND", `Target alias not found: ${alias ?? ""}.`, ["Run unity_cli target alias list."]);
+      return failure(requestId, "E_TARGET_NOT_FOUND", `Target alias not found: ${alias ?? ""}.`, ["Run unity_cli tools run target.alias-list."]);
     }
     delete aliases[alias];
     await writeAliases(dataDir, aliases);
@@ -235,22 +235,22 @@ export async function selectInstanceForFlags(
     return { instance: ready[0], matchedBy: "singleReady" };
   }
   if (ready.length > 1) {
-    throw new InstanceRegistryError("E_TARGET_AMBIGUOUS", "Multiple ready Unity targets are registered; pass --target <id|alias> or run unity_cli target set <id|alias>.", [
-      "Run unity_cli instances list to inspect registered targets.",
-      "Run unity_cli target alias set <instanceId> <alias> for a stable alias.",
-      "Run unity_cli target set <id|alias> to set an active target."
+    throw new InstanceRegistryError("E_TARGET_AMBIGUOUS", "Multiple ready Unity targets are registered; pass --target <id|alias> or run unity_cli tools run target.set <id|alias>.", [
+      "Run unity_cli context read instances.list to inspect registered targets.",
+      "Run unity_cli tools run target.alias-set <instanceId> <alias> for a stable alias.",
+      "Run unity_cli tools run target.set <id|alias> to set an active target."
     ], { targets: ready.map((instance) => targetSummary(instance, aliases)) });
   }
   if (instances.some((instance) => instance.status === "stale")) {
     throw new InstanceRegistryError("E_TARGET_STALE", "Only stale Unity targets are registered.", [
       "Reopen Unity Editor for the target project.",
-      "Run unity_cli instances prune to remove stale entries."
+      "Run unity_cli tools run instances.prune to remove stale entries."
     ]);
   }
   if (instances.some((instance) => instance.status === "unreachable")) {
     throw new InstanceRegistryError("E_TARGET_UNREACHABLE", "Only unreachable Unity targets are registered.", [
       "Check whether the Unity Editor bridge process is still running.",
-      "Run unity_cli instances prune to remove unreachable entries."
+      "Run unity_cli tools run instances.prune to remove unreachable entries."
     ]);
   }
   return undefined;
@@ -408,18 +408,18 @@ async function writeAliases(dataDir: string, aliases: Record<string, string>): P
 function resolveRequiredTarget(instances: UnityInstance[], aliases: Record<string, string>, selector: string, matchedBy: "target" | "activeTarget"): InstanceSelection {
   const selection = resolveInstance(instances, aliases, selector, matchedBy);
   if (!selection) {
-    throw new InstanceRegistryError("E_TARGET_NOT_FOUND", `Unity target not found: ${selector}.`, ["Run unity_cli instances list to inspect registered targets."]);
+    throw new InstanceRegistryError("E_TARGET_NOT_FOUND", `Unity target not found: ${selector}.`, ["Run unity_cli context read instances.list to inspect registered targets."]);
   }
   if (selection.instance.status === "stale") {
     throw new InstanceRegistryError("E_TARGET_STALE", `Unity target is stale: ${selector}.`, [
       "Reopen Unity Editor for the target project.",
-      "Run unity_cli instances prune to remove stale entries."
+      "Run unity_cli tools run instances.prune to remove stale entries."
     ], { target: targetSummary(selection.instance, aliases) });
   }
   if (selection.instance.status === "unreachable") {
     throw new InstanceRegistryError("E_TARGET_UNREACHABLE", `Unity target is unreachable: ${selector}.`, [
       "Check the Unity Editor bridge endpoint and process.",
-      "Run unity_cli instances prune to remove unreachable entries."
+      "Run unity_cli tools run instances.prune to remove unreachable entries."
     ], { target: targetSummary(selection.instance, aliases) });
   }
   return selection;
@@ -439,7 +439,7 @@ function resolveInstance(instances: UnityInstance[], aliases: Record<string, str
   if (matches.length === 0) return undefined;
   if (matches.length > 1) {
     throw new InstanceRegistryError("E_TARGET_AMBIGUOUS", `Unity target selector is ambiguous: ${selector}.`, [
-      "Run unity_cli instances list to inspect target ids.",
+      "Run unity_cli context read instances.list to inspect target ids.",
       "Pass a full --target <instanceId> or set an alias."
     ], { targets: matches.map((instance) => targetSummary(instance, aliases)) });
   }
@@ -453,7 +453,7 @@ function readyInstances(instances: UnityInstance[]): UnityInstance[] {
   return instances.filter((instance) => instance.status === "ready" || instance.status === "healthy");
 }
 
-function instanceListSummary(instance: UnityInstance): Record<string, unknown> {
+export function instanceListSummary(instance: UnityInstance): Record<string, unknown> {
   return {
     id: instance.instanceId,
     alias: instance.alias ?? null,

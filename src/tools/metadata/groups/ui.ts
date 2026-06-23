@@ -11,7 +11,7 @@ export const UI_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "ui canvas/create",
+    cliCommand: "tools run ui.canvas.create",
     docsTopic: "ui"
   },
   {
@@ -23,7 +23,7 @@ export const UI_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "ui text/create",
+    cliCommand: "tools run ui.text.create",
     docsTopic: "ui"
   },
   {
@@ -35,7 +35,7 @@ export const UI_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "ui button/create",
+    cliCommand: "tools run ui.button.create",
     docsTopic: "ui"
   },
   {
@@ -47,7 +47,7 @@ export const UI_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "ui image/create",
+    cliCommand: "tools run ui.image.create",
     docsTopic: "ui"
   },
   {
@@ -59,7 +59,7 @@ export const UI_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "ui document/info",
+    cliCommand: "tools run ui.document.info",
     docsTopic: "ui"
   },
   {
@@ -71,7 +71,7 @@ export const UI_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "ui document/create",
+    cliCommand: "tools run ui.document.create",
     docsTopic: "ui"
   },
   {
@@ -83,7 +83,49 @@ export const UI_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "ui hierarchy",
+    cliCommand: "tools run ui.hierarchy",
     docsTopic: "ui"
+  },
+  {
+    name: "ui.attach-document",
+    title: "Attach UIDocument",
+    description: "Attach a UIDocument component to a GameObject, optionally with a UXML source asset and PanelSettings. Aligns with CoplayDev manage_ui.attach_ui_document.",
+    group: "ui",
+    inputSchema: objSchema({ target: { type: "string" }, sourceAsset: { type: "string" }, panelSettings: { type: "string" }, sortOrder: { type: "integer", default: 0 } }, ["target"]),
+    readOnlyHint: false,
+    destructiveHint: true,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run ui.attach-document",
+    docsTopic: "ui",
+    equivalentUnityMcp: "manage_ui.attach_ui_document"
+  },
+  {
+    name: "ui.create-panel-settings",
+    title: "Create PanelSettings",
+    description: "Create a PanelSettings asset with scale mode and reference resolution. Aligns with CoplayDev manage_ui.create_panel_settings.",
+    group: "ui",
+    inputSchema: objSchema({ path: { type: "string" }, scaleMode: { type: "string", enum: ["ConstantPixelSize", "ConstantPhysicalSize", "ScaleWithScreenSize"], default: "ScaleWithScreenSize" }, referenceWidth: { type: "integer", default: 1920 }, referenceHeight: { type: "integer", default: 1080 } }, ["path"]),
+    readOnlyHint: false,
+    destructiveHint: true,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run ui.create-panel-settings",
+    docsTopic: "ui",
+    equivalentUnityMcp: "manage_ui.create_panel_settings"
+  },
+  {
+    name: "ui.get-visual-tree",
+    title: "Get Visual Tree",
+    description: "Inspect the visual tree of a UIDocument: element name, type, classes, child count up to maxDepth. Aligns with CoplayDev manage_ui.get_visual_tree.",
+    group: "ui",
+    inputSchema: objSchema({ target: { type: "string" }, maxDepth: { type: "integer", default: 10 } }, ["target"]),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run ui.get-visual-tree",
+    docsTopic: "ui",
+    equivalentUnityMcp: "manage_ui.get_visual_tree"
   }
 ];

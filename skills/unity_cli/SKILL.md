@@ -10,22 +10,22 @@ description: 通过 alps-unity-cli 操作 Unity Editor
 ## 核心工作流
 
 ```
-instances list → target set → tools group → tools group list <group> → tools describe <tool> → tools run <tool> → verify
+context read instances.list → tools run target.set → tools group → tools group list <group> → tools describe <tool> → tools run <tool> → verify
 ```
 
 ## 步骤 1：发现目标
 
 ```powershell
-unity_cli instances list
+unity_cli context read instances.list
 ```
 
 检查返回的实例列表。选择一个 `status: ready` 的实例：
 
 ```powershell
-unity_cli target set <instanceId>
+unity_cli tools run target.set <instanceId>
 # 或使用别名
-unity_cli target alias set <instanceId> my-project
-unity_cli target set my-project
+unity_cli tools run target.alias-set <instanceId> my-project
+unity_cli tools run target.set my-project
 ```
 
 **如果没有就绪实例**：Unity Editor 未运行或未加载 Bridge 包。通知用户打开 Unity Editor 并运行 `unity_cli init`。
@@ -41,7 +41,7 @@ unity_cli target set my-project
 unity_cli tools run editor.state
 
 # 诊断预检
-unity_cli diagnose preflight
+unity_cli tools run diagnose.preflight
 
 # 场景层级
 unity_cli tools run scene.hierarchy --input '{}'
@@ -125,7 +125,7 @@ unity_cli tools run editor.state --input '{}'
 unity_cli tools run scene.hierarchy --input '{}'
 
 # 诊断验证
-unity_cli doctor
+unity_cli tools run diagnose.doctor
 ```
 
 ## 常见模式
@@ -133,8 +133,8 @@ unity_cli doctor
 ### 开始会话
 
 ```powershell
-unity_cli instances list
-unity_cli target set <instanceId>
+unity_cli context read instances.list
+unity_cli tools run target.set <instanceId>
 unity_cli tools run editor.state --input '{}'
 unity_cli tools group
 ```
@@ -188,8 +188,8 @@ unity_cli tools group list project
 ### 诊断问题
 
 ```powershell
-unity_cli doctor
-unity_cli diagnose preflight
+unity_cli tools run diagnose.doctor
+unity_cli tools run diagnose.preflight
 unity_cli tools describe <problematic-tool>
 ```
 

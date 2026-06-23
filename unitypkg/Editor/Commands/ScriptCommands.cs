@@ -36,6 +36,9 @@ namespace UnityCli
             RegisterCommand(registry, "script.edit", "script", true, ScriptEdit);
             RegisterCommand(registry, "script.apply-edits", "script", true, ScriptApplyEdits);
             RegisterCommand(registry, "script.validate", "script", false, ScriptValidate);
+            RegisterCommand(registry, "script.update-or-create", "script", true, ScriptUpdateOrCreate);
+            RegisterCommand(registry, "script.find-in-file", "script", false, ScriptFindInFile);
+            RegisterCommand(registry, "script.capabilities", "script", false, ScriptCapabilities);
         }
 
         private static string ScriptCreate(BridgeRequest request)
@@ -115,6 +118,94 @@ namespace UnityCli
             var editedContent = ApplyStructuredScriptEdits(request, originalContent);
             WriteScriptContent(path, fullPath, editedContent);
             return SuccessJson(ScriptMutationJson("script.apply-edits", path, originalContent, editedContent));
+        }
+
+        /// <summary>更新或创建脚本：存在则覆盖，不存在则创建。对齐 Ivan update-or-create。</summary>
+        private static string ScriptUpdateOrCreate(BridgeRequest request)
+        {
+            EnsureEditorNotBusy("script.update-or-create");
+            var path = RequireScriptPath(request.StringArg("path") ?? request.StringArg("target"));
+            var content = request.StringArg("content");
+            var fullPath = AssetFullPath(path);
+            var exists = File.Exists(fullPath);
+            var beforeSha = exists ? Sha256Hex(File.ReadAllText(fullPath, Encoding.UTF8)) : null;
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("command", "script.update-or-create").Prop("dryRun", true)
+                    .Prop("path", path).Prop("exists", exists)
+                    .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", exists ? "script.overwrite" : "script.create").Prop("path", path).EndObject())
+                    .Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            CreateAssetDirectory(path);
+            File.WriteAllText(fullPath, content ?? string.Empty, Encoding.UTF8);
+            AssetDatabase.ImportAsset(path);
+            var afterSha = Sha256Hex(content ?? string.Empty);
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("script", ScriptJson(path))
+                .Prop("sha256", afterSha).Prop("previousSha256", beforeSha)
+                .Prop("created", !exists)
+                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", exists ? "script.overwrite" : "script.create").Prop("path", path).EndObject())
+                .Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        /// <summary>在脚本文件中查找文本：返回匹配行。对齐 CoplayDev find_in_file。</summary>
+        private static string ScriptFindInFile(BridgeRequest request)
+        {
+            var path = RequireExistingScriptPath(request.StringArg("path") ?? request.StringArg("target"));
+            var query = request.StringArg("query") ?? request.StringArg("search") ?? request.StringArg("pattern");
+            if (string.IsNullOrEmpty(query))
+            {
+                throw new BridgeCommandException("E_QUERY_REQUIRED", "script.find-in-file requires a query.", "Pass --query <text>.");
+            }
+            var regex = request.BoolArg("regex", false);
+            var ignoreCase = request.BoolArg("ignoreCase", true);
+            var lines = File.ReadAllLines(AssetFullPath(path), Encoding.UTF8);
+            var matches = new List<string>();
+            for (var i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i];
+                var isMatch = regex
+                    ? System.Text.RegularExpressions.Regex.IsMatch(line, query, ignoreCase ? System.Text.RegularExpressions.RegexOptions.IgnoreCase : System.Text.RegularExpressions.RegexOptions.None)
+                    : line.IndexOf(query, ignoreCase ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal) >= 0;
+                if (isMatch)
+                {
+                    matches.Add(new UnityCliJsonWriter().BeginObject().Prop("line", (long)(i + 1)).Prop("text", line).EndObject().ToString());
+                }
+            }
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("command", "script.find-in-file").Prop("path", path).Prop("query", query)
+                .Prop("count", (long)matches.Count)
+                .PropArray("matches", arr => { foreach (var m in matches) arr.RawValue(m); })
+                .Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        /// <summary>脚本能力描述：列出可用 script.* 工具与约束。对齐 CoplayDev manage_script_capabilities。</summary>
+        private static string ScriptCapabilities(BridgeRequest request)
+        {
+            var caps = new[] {
+                new { tool = "script.create", risk = "write", description = "Create a new C# script." },
+                new { tool = "script.read", risk = "read-only", description = "Read script content." },
+                new { tool = "script.hash", risk = "read-only", description = "Compute SHA-256 of script content." },
+                new { tool = "script.edit", risk = "high", description = "Apply find/replace text edits with SHA precondition." },
+                new { tool = "script.apply-edits", risk = "high", description = "Apply structured/anchor edits with SHA precondition." },
+                new { tool = "script.validate", risk = "read-only", description = "Validate script syntax without compiling." },
+                new { tool = "script.update-or-create", risk = "high", description = "Update or create a script, overwriting if exists." },
+                new { tool = "script.find-in-file", risk = "read-only", description = "Find text matches in a script file." },
+                new { tool = "code.exec", risk = "high", description = "Execute dynamic C# code with ObjectRef parameters." }
+            };
+            var w = new UnityCliJsonWriter().BeginObject();
+            w.Prop("command", "script.capabilities");
+            w.PropArray("capabilities", arr =>
+            {
+                foreach (var c in caps)
+                {
+                    arr.BeginObject().Prop("tool", c.tool).Prop("risk", c.risk).Prop("description", c.description).EndObject();
+                }
+            });
+            w.Prop("count", (long)caps.Length);
+            w.Prop("logPath", LogPath());
+            return w.EndObject().ToString();
         }
 
         private static string ScriptValidate(BridgeRequest request)

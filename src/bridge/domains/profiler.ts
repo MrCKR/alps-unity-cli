@@ -10,7 +10,15 @@ export const profilerBridgeSpecs: BridgeCommandSpec[] = [
   { group: "profiler", command: "frame", bridgeCommand: "profiler.frame", buildArgs: profilerArgs },
   { group: "profiler", command: "capture", bridgeCommand: "profiler.capture", buildArgs: profilerArgs, supportsJob: true },
   { group: "profiler", command: "export", bridgeCommand: "profiler.export", buildArgs: profilerArgs },
-  { group: "profiler", command: "status", bridgeCommand: "profiler.status", buildArgs: profilerArgs }
+  { group: "profiler", command: "status", bridgeCommand: "profiler.status", buildArgs: profilerArgs },
+  { group: "profiler", command: "modules", bridgeCommand: "profiler.modules", buildArgs: profilerArgs },
+  { group: "profiler", command: "module-enable", bridgeCommand: "profiler.module-enable", buildArgs: profilerModuleEnableArgs },
+  { group: "profiler", command: "clear", bridgeCommand: "profiler.clear", buildArgs: profilerArgs, supportsDryRun: true },
+  { group: "profiler", command: "load", bridgeCommand: "profiler.load", buildArgs: profilerArgs },
+  { group: "profiler", command: "areas", bridgeCommand: "profiler.areas", buildArgs: profilerArgs },
+  { group: "profiler", command: "object-memory", bridgeCommand: "profiler.object-memory", buildArgs: profilerObjectMemoryArgs },
+  { group: "profiler", command: "rendering-stats", bridgeCommand: "profiler.rendering-stats", buildArgs: profilerArgs },
+  { group: "profiler", command: "script-stats", bridgeCommand: "profiler.script-stats", buildArgs: profilerArgs }
 ];
 
 function profilerArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
@@ -27,4 +35,12 @@ function profilerArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec[
     deepProfiling: boolFlag(flags, "deep-profiling"),
     paused: boolFlag(flags, "paused")
   });
+}
+
+function profilerModuleEnableArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({ module: stringFlag(flags, "module"), enabled: boolFlag(flags, "enabled") });
+}
+
+function profilerObjectMemoryArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({ target: positionalTarget ?? stringFlag(flags, "target"), path: stringFlag(flags, "path") });
 }

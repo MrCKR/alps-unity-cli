@@ -7,7 +7,10 @@ export const scriptBridgeSpecs: BridgeCommandSpec[] = [
   { group: "script", command: "hash", bridgeCommand: "script.hash", buildArgs: scriptArgs },
   { group: "script", command: "edit", bridgeCommand: "script.edit", buildArgs: scriptArgs },
   { group: "script", command: "apply-edits", bridgeCommand: "script.apply-edits", buildArgs: scriptArgs },
-  { group: "script", command: "validate", bridgeCommand: "script.validate", buildArgs: scriptArgs }
+  { group: "script", command: "validate", bridgeCommand: "script.validate", buildArgs: scriptArgs },
+  { group: "script", command: "update-or-create", bridgeCommand: "script.update-or-create", buildArgs: scriptArgs, supportsDryRun: true },
+  { group: "script", command: "find-in-file", bridgeCommand: "script.find-in-file", buildArgs: scriptFindArgs },
+  { group: "script", command: "capabilities", bridgeCommand: "script.capabilities", buildArgs: ({ flags }) => compactArgs({}) }
 ];
 
 async function scriptArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Promise<Record<string, unknown>> {
@@ -44,4 +47,13 @@ function parseJsonFlag(raw: string | undefined): unknown {
   } catch {
     return raw;
   }
+}
+
+function scriptFindArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({
+    path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "target"),
+    query: stringFlag(flags, "query") ?? stringFlag(flags, "search") ?? stringFlag(flags, "pattern"),
+    regex: boolFlag(flags, "regex"),
+    ignoreCase: boolFlag(flags, "ignore-case")
+  });
 }

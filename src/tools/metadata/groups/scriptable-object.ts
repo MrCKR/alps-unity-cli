@@ -12,7 +12,7 @@ export const SCRIPTABLE_OBJECT_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "scriptable-object create",
+    cliCommand: "tools run scriptable-object.create",
     docsTopic: "scriptable-object",
     equivalentUnityMcp: "manage_scriptable_object.create"
   },
@@ -26,7 +26,7 @@ export const SCRIPTABLE_OBJECT_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "scriptable-object info",
+    cliCommand: "tools run scriptable-object.info",
     docsTopic: "scriptable-object",
     equivalentUnityMcp: "manage_scriptable_object.info"
   },
@@ -40,7 +40,7 @@ export const SCRIPTABLE_OBJECT_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "scriptable-object modify",
+    cliCommand: "tools run scriptable-object.modify",
     docsTopic: "scriptable-object",
     equivalentUnityMcp: "manage_scriptable_object.modify"
   }

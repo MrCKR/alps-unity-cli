@@ -37,6 +37,9 @@ namespace UnityCli
             RegisterCommand(registry, "ui.document.info", "ui", false, UiDocumentInfo);
             RegisterCommand(registry, "ui.document.create", "ui", true, UiDocumentCreate);
             RegisterCommand(registry, "ui.hierarchy", "ui", false, UiHierarchy);
+            RegisterCommand(registry, "ui.attach-document", "ui", true, UiAttachDocument);
+            RegisterCommand(registry, "ui.create-panel-settings", "ui", true, UiCreatePanelSettings);
+            RegisterCommand(registry, "ui.get-visual-tree", "ui", false, UiGetVisualTree);
         }
 
         private static string UiCanvasCreate(BridgeRequest request)
@@ -193,6 +196,102 @@ namespace UnityCli
                 })
                 .Prop("logPath", LogPath())
                 .EndObject().ToString());
+        }
+
+        /// <summary>将 UIDocument 挂载到 GameObject。对齐 CoplayDev manage_ui.attach_ui_document。</summary>
+        private static string UiAttachDocument(BridgeRequest request)
+        {
+            EnsureEditorNotBusy("ui.attach-document");
+            var target = request.StringArg("target");
+            var go = string.IsNullOrEmpty(target) ? null : ObjectRefResolver.FindGameObjectByPath(target);
+            if (go == null) throw new BridgeCommandException("E_TARGET_NOT_FOUND", "ui.attach-document requires a target GameObject.", "Pass --target <path>.");
+            var sourceAsset = request.StringArg("sourceAsset") ?? request.StringArg("uxml");
+            var panelSettingsPath = request.StringArg("panelSettings");
+            var sortOrder = request.IntArg("sortOrder", 0);
+            var uiDoc = go.GetComponent<UIDocument>() ?? go.AddComponent<UIDocument>();
+            if (!string.IsNullOrEmpty(sourceAsset))
+            {
+                var uxml = AssetDatabase.LoadMainAssetAtPath(sourceAsset) as VisualTreeAsset;
+                if (uxml != null) uiDoc.visualTreeAsset = uxml;
+            }
+            if (!string.IsNullOrEmpty(panelSettingsPath))
+            {
+                var panel = AssetDatabase.LoadMainAssetAtPath(panelSettingsPath) as PanelSettings;
+                if (panel != null) uiDoc.panelSettings = panel;
+            }
+            else if (uiDoc.panelSettings == null)
+            {
+                // Unity 2022 没有 PanelSettings.GetDefaultOrCreate；创建临时默认设置以保证 UIDocument 可用。
+                var defaults = ScriptableObject.CreateInstance<PanelSettings>();
+                defaults.scaleMode = PanelScaleMode.ScaleWithScreenSize;
+                defaults.referenceResolution = new Vector2Int(1920, 1080);
+                uiDoc.panelSettings = defaults;
+            }
+            uiDoc.sortingOrder = sortOrder;
+            EditorSceneManager.MarkSceneDirty(go.scene);
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("command", "ui.attach-document")
+                .PropRaw("target", GameObjectTargetJson(go))
+                .Prop("sourceAsset", sourceAsset)
+                .Prop("hasPanelSettings", uiDoc.panelSettings != null)
+                .Prop("sortOrder", (long)sortOrder)
+                .Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        /// <summary>创建 PanelSettings 资产。对齐 CoplayDev manage_ui.create_panel_settings。</summary>
+        private static string UiCreatePanelSettings(BridgeRequest request)
+        {
+            EnsureEditorNotBusy("ui.create-panel-settings");
+            var path = request.StringArg("path");
+            if (string.IsNullOrEmpty(path) || !path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
+                throw new BridgeCommandException("E_PANEL_PATH_REQUIRED", "ui.create-panel-settings requires an Assets/*.asset path.", "Pass Assets/UI/Panel.asset.");
+            var scaleMode = request.StringArg("scaleMode") ?? "ScaleWithScreenSize";
+            var refW = request.IntArg("referenceWidth", 1920);
+            var refH = request.IntArg("referenceHeight", 1080);
+            var panel = ScriptableObject.CreateInstance<PanelSettings>();
+            panel.scaleMode = (PanelScaleMode)Enum.Parse(typeof(PanelScaleMode), scaleMode, true);
+            panel.referenceResolution = new Vector2Int(refW, refH);
+            CreateAssetDirectory(path);
+            AssetDatabase.CreateAsset(panel, path);
+            AssetDatabase.Refresh();
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("command", "ui.create-panel-settings")
+                .Prop("path", path).Prop("scaleMode", scaleMode)
+                .Prop("referenceResolution", refW + "x" + refH)
+                .Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        /// <summary>检查 UIDocument 的 visual tree。对齐 CoplayDev manage_ui.get_visual_tree。</summary>
+        private static string UiGetVisualTree(BridgeRequest request)
+        {
+            var target = request.StringArg("target");
+            var go = string.IsNullOrEmpty(target) ? null : ObjectRefResolver.FindGameObjectByPath(target);
+            if (go == null) throw new BridgeCommandException("E_TARGET_NOT_FOUND", "ui.get-visual-tree requires a target GameObject.", "Pass --target <path>.");
+            var uiDoc = go.GetComponent<UIDocument>();
+            if (uiDoc == null || uiDoc.rootVisualElement == null)
+                return ErrorJson("E_UI_DOCUMENT_NOT_FOUND", "No UIDocument with a root visual element on " + go.name, "Attach a UIDocument first via ui.attach-document.");
+            var maxDepth = Math.Max(1, Math.Min(request.IntArg("maxDepth", 10), 50));
+            var items = new List<string>();
+            CollectVisualElement(uiDoc.rootVisualElement, 0, maxDepth, items);
+            var w = new UnityCliJsonWriter().BeginObject();
+            w.Prop("command", "ui.get-visual-tree");
+            w.PropRaw("target", GameObjectTargetJson(go));
+            w.Prop("count", (long)items.Count);
+            w.PropArray("elements", arr => { foreach (var i in items) arr.RawValue(i); });
+            w.Prop("logPath", LogPath());
+            return w.EndObject().ToString();
+        }
+
+        private static void CollectVisualElement(VisualElement ve, int depth, int maxDepth, List<string> items)
+        {
+            if (ve == null || depth > maxDepth) return;
+            var w = new UnityCliJsonWriter().BeginObject();
+            w.Prop("name", ve.name).Prop("type", ve.GetType().Name).Prop("depth", (long)depth);
+            w.PropArray("classes", arr => { foreach (var c in ve.GetClasses()) arr.Value(c); });
+            w.Prop("childCount", (long)ve.childCount);
+            w.EndObject();
+            items.Add(w.ToString());
+            for (var i = 0; i < ve.childCount; i++) CollectVisualElement(ve[i], depth + 1, maxDepth, items);
         }
 
         private static string UiHierarchy(BridgeRequest request)

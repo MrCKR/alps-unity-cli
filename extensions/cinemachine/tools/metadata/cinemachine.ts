@@ -57,8 +57,8 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     cliCommand: "tools run cinemachine.create",
     cancellationSemantics: "Live bridge execution is cooperative and usually short; --job execution can be cancelled with job cancel --id <jobId> using immediate Unity batchmode process termination semantics.",
     examples: [
-      { description: "Create a follow Cinemachine camera", argv: ["cinemachine", "create", "follow", "--name", "PlayerCam", "--follow", "Player"] },
-      { description: "Create a static dolly camera aimed at the scene origin", argv: ["cinemachine", "create", "dolly", "--name", "DollyCam", "--look-at", "Main Camera"] }
+      { description: "Create a follow Cinemachine camera", argv: ["tools", "run", "cinemachine.create", "follow", "--name", "PlayerCam", "--follow", "Player"] },
+      { description: "Create a static dolly camera aimed at the scene origin", argv: ["tools", "run", "cinemachine.create", "dolly", "--name", "DollyCam", "--look-at", "Main Camera"] }
     ]
   },
   {
@@ -71,7 +71,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     cliCommand: "tools run cinemachine.target",
     examples: [
-      { description: "Set follow target on a Cinemachine camera", argv: ["cinemachine", "target", "PlayerCam", "--follow", "Player"] }
+      { description: "Set follow target on a Cinemachine camera", argv: ["tools", "run", "cinemachine.target", "PlayerCam", "--follow", "Player"] }
     ]
   },
   {
@@ -91,7 +91,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     cliCommand: "tools run cinemachine.lens",
     examples: [
-      { description: "Set a 60 degree field of view", argv: ["cinemachine", "lens", "PlayerCam", "--field-of-view", "60"] }
+      { description: "Set a 60 degree field of view", argv: ["tools", "run", "cinemachine.lens", "PlayerCam", "--field-of-view", "60"] }
     ]
   },
   {
@@ -104,7 +104,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     cliCommand: "tools run cinemachine.priority",
     examples: [
-      { description: "Boost a camera priority to 20", argv: ["cinemachine", "priority", "PlayerCam", "--priority", "20"] }
+      { description: "Boost a camera priority to 20", argv: ["tools", "run", "cinemachine.priority", "PlayerCam", "--priority", "20"] }
     ]
   },
   {
@@ -117,7 +117,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     cliCommand: "tools run cinemachine.blend",
     examples: [
-      { description: "Configure a 2 second ease in/out blend", argv: ["cinemachine", "blend", "--target", "Main Camera", "--style", "ease_in_out", "--duration", "2"] }
+      { description: "Configure a 2 second ease in/out blend", argv: ["tools", "run", "cinemachine.blend", "--target", "Main Camera", "--style", "ease_in_out", "--duration", "2"] }
     ]
   },
   {
@@ -130,7 +130,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     cliCommand: "tools run cinemachine.body",
     examples: [
-      { description: "Swap body to CinemachineFollow", argv: ["cinemachine", "body", "PlayerCam", "--body", "CinemachineFollow"] }
+      { description: "Swap body to CinemachineFollow", argv: ["tools", "run", "cinemachine.body", "PlayerCam", "--body", "CinemachineFollow"] }
     ]
   },
   {
@@ -143,7 +143,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     cliCommand: "tools run cinemachine.aim",
     examples: [
-      { description: "Swap aim to CinemachineRotationComposer", argv: ["cinemachine", "aim", "PlayerCam", "--aim", "CinemachineRotationComposer"] }
+      { description: "Swap aim to CinemachineRotationComposer", argv: ["tools", "run", "cinemachine.aim", "PlayerCam", "--aim", "CinemachineRotationComposer"] }
     ]
   },
   {
@@ -156,7 +156,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     cliCommand: "tools run cinemachine.noise",
     examples: [
-      { description: "Add a hand-held noise profile", argv: ["cinemachine", "noise", "PlayerCam", "--noise-profile", "Handheld_tele"] }
+      { description: "Add a hand-held noise profile", argv: ["tools", "run", "cinemachine.noise", "PlayerCam", "--noise-profile", "Handheld_tele"] }
     ]
   },
   {
@@ -169,7 +169,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     cliCommand: "tools run cinemachine.brain",
     examples: [
-      { description: "Report brain blending status", argv: ["cinemachine", "brain", "Main Camera", "--action", "status"] }
+      { description: "Report brain blending status", argv: ["tools", "run", "cinemachine.brain", "Main Camera", "--action", "status"] }
     ]
   },
   {
@@ -186,7 +186,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     destructiveHint: true,
     cliCommand: "tools run cinemachine.extension",
     examples: [
-      { description: "List extensions on a virtual camera", argv: ["cinemachine", "extension", "PlayerCam", "--action", "list"] }
+      { description: "List extensions on a virtual camera", argv: ["tools", "run", "cinemachine.extension", "PlayerCam", "--action", "list"] }
     ]
   }
 ];

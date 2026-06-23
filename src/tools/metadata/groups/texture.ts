@@ -11,7 +11,7 @@ export const TEXTURE_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "texture info",
+    cliCommand: "tools run texture.info",
     docsTopic: "texture"
   },
   {
@@ -23,7 +23,7 @@ export const TEXTURE_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "texture create",
+    cliCommand: "tools run texture.create",
     docsTopic: "texture"
   },
   {
@@ -35,7 +35,7 @@ export const TEXTURE_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "texture sprite",
+    cliCommand: "tools run texture.sprite",
     docsTopic: "texture"
   },
   {
@@ -47,7 +47,22 @@ export const TEXTURE_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "texture import-settings",
+    cliCommand: "tools run texture.import-settings",
     docsTopic: "texture"
+  },
+  {
+    name: "texture.generate",
+    title: "Generate Texture",
+    description: "Generate a procedural texture (solid, gradient, radial, noise, checkerboard, stripes, dots, grid, brick) and save as PNG under Assets/.",
+    group: "texture",
+    inputSchema: objSchema({ path: { type: "string" }, width: { type: "integer", default: 256 }, height: { type: "integer", default: 256 }, pattern: { type: "string", enum: ["solid", "gradient", "radial", "noise", "checkerboard", "stripes", "dots", "grid", "brick"], default: "solid" }, color: { type: "string" }, color2: { type: "string" }, patternSize: { type: "integer", default: 8 } }, ["path"]),
+    readOnlyHint: false,
+    destructiveHint: true,
+    supportsDryRun: true,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run texture.generate",
+    docsTopic: "texture",
+    equivalentUnityMcp: "texture.generate"
   }
 ];

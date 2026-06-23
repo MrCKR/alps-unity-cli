@@ -39,6 +39,9 @@ namespace UnityCli
             RegisterCommand(registry, "asset.duplicate", "asset", false, AssetDuplicate);
             RegisterCommand(registry, "asset.move", "asset", false, AssetMove);
             RegisterCommand(registry, "asset.rename", "asset", false, AssetRename);
+            RegisterCommand(registry, "asset.search-built-in", "asset", false, AssetSearchBuiltIn);
+            RegisterCommand(registry, "asset.get-data", "asset", false, AssetGetData);
+            RegisterCommand(registry, "asset.preview", "asset", false, AssetPreview);
         }
 
         private static bool AssetExists(string assetPath)
@@ -108,6 +111,98 @@ namespace UnityCli
                 .Prop("logPath", LogPath())
                 .EndObject()
                 .ToString());
+        }
+
+        /// <summary>查找内置资源：对齐 Ivan assets-find-built-in。</summary>
+        private static string AssetSearchBuiltIn(BridgeRequest request)
+        {
+            var keyword = request.StringArg("keyword") ?? request.StringArg("search");
+            var typeFilter = request.StringArg("type");
+            var guids = AssetDatabase.FindAssets(keyword ?? string.Empty);
+            var results = new List<string>();
+            var pageSize = Math.Max(1, Math.Min(request.IntArg("pageSize", 100), 500));
+            foreach (var guid in guids)
+            {
+                if (results.Count >= pageSize) break;
+                var assetPath = AssetDatabase.GUIDToAssetPath(guid);
+                // 仅保留 Resources/ 与内置包路径
+                if (!assetPath.StartsWith("Resources/", StringComparison.OrdinalIgnoreCase)
+                    && !assetPath.StartsWith("Packages/", StringComparison.OrdinalIgnoreCase)
+                    && !assetPath.Contains("/Resources/"))
+                {
+                    continue;
+                }
+                if (!string.IsNullOrEmpty(typeFilter))
+                {
+                    var mainAsset = AssetDatabase.LoadMainAssetAtPath(assetPath);
+                    if (mainAsset == null || !mainAsset.GetType().Name.Equals(typeFilter, StringComparison.OrdinalIgnoreCase)) continue;
+                }
+                results.Add(new UnityCliJsonWriter().BeginObject()
+                    .Prop("path", NormalizeAssetPath(assetPath))
+                    .Prop("guid", guid)
+                    .Prop("name", System.IO.Path.GetFileNameWithoutExtension(assetPath))
+                    .EndObject().ToString());
+            }
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("command", "asset.search-built-in")
+                .Prop("count", (long)results.Count)
+                .PropArray("assets", arr => { foreach (var r in results) arr.RawValue(r); })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        /// <summary>资产深读：底层复用 ObjectSerializer。对齐 Ivan assets-get-data。</summary>
+        private static string AssetGetData(BridgeRequest request)
+        {
+            var path = RequireAssetPath(request.StringArg("assetPath") ?? request.StringArg("path"));
+            if (!AssetExists(path))
+            {
+                throw new BridgeCommandException("E_ASSET_NOT_FOUND", "Asset not found: " + path, "Run asset search to discover the path.");
+            }
+            var asset = AssetDatabase.LoadMainAssetAtPath(path);
+            var options = new ObjectSerializer.Options
+            {
+                MaxDepth = request.IntArg("maxDepth", 4),
+                IncludeFields = request.BoolArg("includeFields", true),
+                IncludeProperties = request.BoolArg("includeProperties", true),
+                DeepSerialization = request.BoolArg("deepSerialization", true)
+            };
+            var memberJson = ObjectSerializer.Serialize(asset, options);
+            var w = new UnityCliJsonWriter().BeginObject();
+            w.Prop("command", "asset.get-data");
+            w.Prop("assetPath", path);
+            w.Prop("guid", AssetDatabase.AssetPathToGUID(path));
+            w.Prop("typeName", asset.GetType().FullName);
+            w.PropRaw("data", memberJson);
+            w.Prop("logPath", LogPath());
+            return w.EndObject().ToString();
+        }
+
+        /// <summary>生成资产预览：输出 artifact metadata。对齐 CoplayDev generate_preview。</summary>
+        private static string AssetPreview(BridgeRequest request)
+        {
+            var path = RequireAssetPath(request.StringArg("assetPath") ?? request.StringArg("path"));
+            if (!AssetExists(path))
+            {
+                throw new BridgeCommandException("E_ASSET_NOT_FOUND", "Asset not found: " + path, "Run asset search.");
+            }
+            var asset = AssetDatabase.LoadMainAssetAtPath(path);
+            var preview = UnityEditor.AssetPreview.GetAssetPreview(asset);
+            var hasPreview = preview != null;
+            var w = new UnityCliJsonWriter().BeginObject();
+            w.Prop("command", "asset.preview");
+            w.Prop("assetPath", path);
+            w.Prop("guid", AssetDatabase.AssetPathToGUID(path));
+            w.Prop("typeName", asset.GetType().FullName);
+            w.Prop("hasPreview", hasPreview);
+            if (hasPreview)
+            {
+                w.Prop("width", (long)preview.width);
+                w.Prop("height", (long)preview.height);
+                w.Prop("isTransient", UnityEditor.AssetPreview.IsLoadingAssetPreview(asset.GetInstanceID()));
+            }
+            w.Prop("logPath", LogPath());
+            return w.EndObject().ToString();
         }
 
         private static string AssetInfo(BridgeRequest request)

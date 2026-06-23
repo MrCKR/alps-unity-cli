@@ -80,28 +80,21 @@ export function validateToolMetadataContracts(tools: ToolMetadata[], registry: B
       throw new Error(`Tool metadata requiresPackages mismatch for ${tool.name}: metadata=${JSON.stringify(tool.requiresPackages ?? [])} contract=${JSON.stringify(contract.requires_packages ?? [])}`);
     }
     if (tool.cliCommand && (tool.handler === "bridge" || tool.handler === "hybrid")) {
-      const [group, ...commandParts] = tool.cliCommand.split(" ");
-      const spec = registry.lookup(group, commandParts.join(" ")) as BridgeCommandSpec | undefined;
-      const resolvedCommand = spec?.toolName ?? spec?.bridgeCommand;
-      if (spec && resolvedCommand !== tool.name) {
-        throw new Error(`Tool metadata contract mismatch: ${tool.name} uses cliCommand=\"${tool.cliCommand}\" but registry resolves ${resolvedCommand}`);
+      // cliCommand 现为 "tools run <name>" 形态(README Project Baseline)。
+      const trMatch = /^tools run (.+)$/.exec(tool.cliCommand);
+      if (trMatch) {
+        const toolName = trMatch[1];
+        const spec = registry.specs().find((s) => s.toolName === toolName || s.bridgeCommand === toolName) as BridgeCommandSpec | undefined;
+        const resolvedCommand = spec?.toolName ?? spec?.bridgeCommand;
+        if (spec && resolvedCommand !== tool.name) {
+          throw new Error(`Tool metadata contract mismatch: ${tool.name} uses cliCommand="${tool.cliCommand}" but registry resolves ${resolvedCommand}`);
+        }
       }
+      // 非 "tools run" 形态(如 tools group/describe、init)跳过 bridge 交叉校验。
     }
   }
 }
 
-/**
- * Validate that extension manifest tool contributions are consistent with the
- * command contract. Each tool contribution's `bridgeCommand` must either:
- * - Be present in the contract (already registered as a built-in tool), or
- * - Declare a matching `bridgeCommand`/`cliCommand`/`group` tuple.
- *
- * Extension tool contributions that duplicate built-in tool names must
- * match the built-in contract exactly.
- *
- * @param manifests - Extension manifests to validate.
- * @param registry - Bridge command registry for cross-checking cliCommand.
- */
 export function validateExtensionManifestContracts(
   manifests: ExtensionManifest[],
   registry: BridgeCommandRegistry
@@ -149,16 +142,20 @@ export function validateExtensionManifestContracts(
       }
 
       // Cross-check the cliCommand resolves to the contract bridgeCommand.
+      // cliCommand 现为 "tools run <name>" 形态(README Project Baseline)。
       if (tool.cliCommand) {
-        const [group, ...commandParts] = tool.cliCommand.split(" ");
-        const spec = registry.lookup(group, commandParts.join(" ")) as BridgeCommandSpec | undefined;
-        const specResolvedCommand = spec?.toolName ?? spec?.bridgeCommand;
-        if (spec && specResolvedCommand !== tool.bridgeCommand) {
+        const trMatch = /^tools run (.+)$/.exec(tool.cliCommand);
+        if (trMatch) {
+          const toolName = trMatch[1];
+          const spec = registry.specs().find((s) => s.toolName === toolName || s.bridgeCommand === toolName) as BridgeCommandSpec | undefined;
+          const specResolvedCommand = spec?.toolName ?? spec?.bridgeCommand;
+          if (spec && specResolvedCommand !== tool.bridgeCommand) {
           throw new Error(
             `Extension '${manifest.id}' tool '${tool.name}' cliCommand mismatch: ` +
             `cliCommand="${tool.cliCommand}" resolves to ${specResolvedCommand}, ` +
             `expected ${tool.bridgeCommand}`
           );
+        }
         }
       }
     }

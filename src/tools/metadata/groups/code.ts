@@ -22,12 +22,12 @@ export const CODE_TOOLS: ToolMetadata[] = [
     supportsDryRun: true,
     longRunning: true,
     handler: "hybrid",
-    cliCommand: "code exec",
+    cliCommand: "tools run code.exec",
     cancellationSemantics: "Live channel cannot be externally interrupted once Unity starts executing user code; batchmode/job channel can be cancelled with job cancel --id <jobId>, which attempts process-tree termination and records cancellation details.",
     docsTopic: "code",
     examples: [
-      { description: "Execute a code file", argv: ["code", "exec", "--file", "script.cs"] },
-      { description: "Execute inline code", argv: ["code", "exec", "--code", "Debug.Log(\"hello\");"] }
+      { description: "Execute a code file", argv: ["tools", "run", "code.exec", "--file", "script.cs"] },
+      { description: "Execute inline code", argv: ["tools", "run", "code.exec", "--code", "Debug.Log(\"hello\");"] }
     ]
   }
 ];

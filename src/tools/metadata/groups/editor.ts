@@ -11,7 +11,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "editor console",
+    cliCommand: "tools run editor.console",
     docsTopic: "editor"
   },
   {
@@ -23,7 +23,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "editor state",
+    cliCommand: "tools run editor.state",
     docsTopic: "editor"
   },
   {
@@ -35,7 +35,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "editor play",
+    cliCommand: "tools run editor.play",
     docsTopic: "editor"
   },
   {
@@ -47,7 +47,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "editor pause",
+    cliCommand: "tools run editor.pause",
     docsTopic: "editor"
   },
   {
@@ -59,7 +59,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "editor stop",
+    cliCommand: "tools run editor.stop",
     docsTopic: "editor"
   },
   {
@@ -72,7 +72,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "editor undo",
+    cliCommand: "tools run editor.undo",
     docsTopic: "editor",
     equivalentUnityMcp: "manage_editor.undo"
   },
@@ -86,7 +86,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "editor redo",
+    cliCommand: "tools run editor.redo",
     docsTopic: "editor",
     equivalentUnityMcp: "manage_editor.redo"
   },
@@ -100,7 +100,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "editor resolution",
+    cliCommand: "tools run editor.resolution",
     docsTopic: "editor",
     equivalentUnityMcp: "manage_editor.set_resolution"
   },
@@ -113,7 +113,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: true,
     handler: "bridge",
-    cliCommand: "editor menu",
+    cliCommand: "tools run editor.menu",
     docsTopic: "editor"
   },
   {
@@ -126,7 +126,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "project tag",
+    cliCommand: "tools run project.tag",
     docsTopic: "project",
     equivalentUnityMcp: "manage_editor.add_tag/remove_tag"
   },
@@ -140,7 +140,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "project layer",
+    cliCommand: "tools run project.layer",
     docsTopic: "project",
     equivalentUnityMcp: "manage_editor.add_layer/remove_layer"
   },
@@ -159,11 +159,40 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     longRunning: true,
     handler: "job",
-    cliCommand: "editor refresh",
+    cliCommand: "tools run editor.refresh",
     docsTopic: "editor",
     examples: [
-      { description: "Refresh assets without recompile", argv: ["editor", "refresh"] },
-      { description: "Refresh and recompile, then wait", argv: ["editor", "refresh", "--compile", "--wait"] }
+      { description: "Refresh assets without recompile", argv: ["tools", "run", "editor.refresh"] },
+      { description: "Refresh and recompile, then wait", argv: ["tools", "run", "editor.refresh", "--compile", "--wait"] }
     ]
+  },
+  {
+    name: "editor.selection.set",
+    title: "Set Editor Selection",
+    description: "Set the active Editor selection by instanceId or path. Reading selection uses context read editor.selection.",
+    group: "editor",
+    inputSchema: objSchema({ instanceId: { type: "integer" }, target: { type: "string" }, path: { type: "string" } }),
+    readOnlyHint: false,
+    destructiveHint: true,
+    supportsDryRun: true,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run editor.selection.set",
+    docsTopic: "editor",
+    equivalentUnityMcp: "editor-selection-set"
+  },
+  {
+    name: "editor.active-tool.set",
+    title: "Set Active Editor Tool",
+    description: "Set the Unity Editor active tool (Move/Rotate/Scale/Rect/View/Transform). This is the Unity Editor transform tool, not unity_cli tool activation.",
+    group: "editor",
+    inputSchema: objSchema({ tool: { type: "string", enum: ["view", "move", "rotate", "scale", "rect", "transform"] } }, ["tool"]),
+    readOnlyHint: false,
+    destructiveHint: true,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run editor.active-tool.set",
+    docsTopic: "editor",
+    equivalentUnityMcp: "manage_editor.set_active_tool"
   }
 ];

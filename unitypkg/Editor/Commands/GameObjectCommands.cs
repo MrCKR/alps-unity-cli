@@ -38,9 +38,14 @@ namespace UnityCli
             RegisterCommand(registry, "go.move-relative", "go", true, GameObjectMoveRelative);
             RegisterCommand(registry, "go.look-at", "go", true, GameObjectLookAt);
             RegisterCommand(registry, "go.delete", "go", true, GameObjectDelete);
+            RegisterCommand(registry, "go.set-parent", "go", true, GameObjectSetParent);
             RegisterCommand(registry, "component.add", "component", true, ComponentAdd);
             RegisterCommand(registry, "component.remove", "component", true, ComponentRemove);
             RegisterCommand(registry, "component.set", "component", true, ComponentSet);
+            // 深读写组件：对齐 IvanMurzak gameobject-component-get/modify/list-all
+            RegisterCommand(registry, "component.get", "component", false, ComponentGet);
+            RegisterCommand(registry, "component.modify", "component", true, ComponentModify);
+            RegisterCommand(registry, "component.list-types", "component", false, ComponentListTypes);
         }
 
         private static TargetResolution ResolveGameObjectTarget(string target)
@@ -225,6 +230,44 @@ namespace UnityCli
                 .ToString());
         }
 
+        /// <summary>设置 GameObject 父级：对齐 Ivan gameobject-set-parent。</summary>
+        private static string GameObjectSetParent(BridgeRequest request)
+        {
+            EnsureEditorNotBusy("go.set-parent");
+            var gameObject = ResolveUniqueTarget(RequiredTarget(request, "go.set-parent requires a target."), "go.set-parent requires a target.");
+            var parentName = request.StringArg("parent");
+            var worldPositionStays = request.BoolArg("worldPositionStays", true);
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("command", "go.set-parent").Prop("dryRun", true)
+                    .PropRaw("target", GameObjectTargetJson(gameObject))
+                    .Prop("parent", parentName ?? "<root>")
+                    .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "go.set-parent").Prop("parent", parentName ?? "<root>").EndObject())
+                    .Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            Transform newParent = null;
+            if (!string.IsNullOrEmpty(parentName))
+            {
+                var parentGo = ObjectRefResolver.FindGameObjectByPath(parentName);
+                if (parentGo == null)
+                {
+                    throw new BridgeCommandException("E_PARENT_NOT_FOUND", "Parent GameObject not found: " + parentName, "Pass a valid hierarchy path or name.");
+                }
+                newParent = parentGo.transform;
+            }
+            Undo.SetTransformParent(gameObject.transform, newParent, "go.set-parent");
+            gameObject.transform.SetParent(newParent, worldPositionStays);
+            EditorSceneManager.MarkSceneDirty(gameObject.scene);
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("command", "go.set-parent")
+                .PropRaw("target", GameObjectTargetJson(gameObject))
+                .Prop("parent", parentName ?? "<root>")
+                .Prop("worldPositionStays", worldPositionStays)
+                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "go.set-parent").EndObject())
+                .Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
         private static string ComponentAdd(BridgeRequest request)
         {
             EnsureEditorNotBusy("component.add");
@@ -290,6 +333,136 @@ namespace UnityCli
             EditorUtility.SetDirty(component);
             EditorSceneManager.MarkSceneDirty(gameObject.scene);
             return SuccessJson(ComponentMutationJson("component.set", gameObject, component, propertyName));
+        }
+
+        /// <summary>深读单个 Component：输出 fields/props，支持 paths/viewQuery/maxDepth。对齐 Ivan gameobject-component-get。</summary>
+        private static string ComponentGet(BridgeRequest request)
+        {
+            var component = ObjectRefResolver.ResolveComponent(request);
+            var options = new ObjectSerializer.Options
+            {
+                MaxDepth = request.IntArg("maxDepth", 4),
+                IncludeFields = request.BoolArg("includeFields", true),
+                IncludeProperties = request.BoolArg("includeProperties", true),
+                DeepSerialization = request.BoolArg("deepSerialization", true)
+            };
+            var pathsRaw = request.RawJsonArg("paths");
+            if (!string.IsNullOrEmpty(pathsRaw))
+            {
+                options.Paths = new HashSet<string>();
+                foreach (var p in pathsRaw.Trim('[', ']').Split(','))
+                {
+                    var clean = p.Trim().Trim('"');
+                    if (!string.IsNullOrEmpty(clean)) options.Paths.Add(clean);
+                }
+            }
+            var memberJson = ObjectSerializer.Serialize(component, options);
+            var w = new UnityCliJsonWriter().BeginObject();
+            w.Prop("command", "component.get");
+            w.Prop("typeName", component.GetType().FullName);
+            w.Prop("componentInstanceId", component.GetInstanceID());
+            w.PropRaw("gameObject", GameObjectTargetJson(component.gameObject));
+            w.PropRaw("data", memberJson);
+            w.Prop("logPath", LogPath());
+            return w.EndObject().ToString();
+        }
+
+        /// <summary>深改单个 Component：支持 pathPatches 与 jsonPatch (Merge Patch)。对齐 Ivan gameobject-component-modify。</summary>
+        private static string ComponentModify(BridgeRequest request)
+        {
+            EnsureEditorNotBusy("component.modify");
+            var component = ObjectRefResolver.ResolveComponent(request);
+            var pathPatchesJson = request.RawJsonArg("pathPatches");
+            var jsonPatchJson = request.RawJsonArg("jsonPatch");
+            var componentDiffJson = request.RawJsonArg("componentDiff");
+            if (string.IsNullOrEmpty(pathPatchesJson) && string.IsNullOrEmpty(jsonPatchJson) && string.IsNullOrEmpty(componentDiffJson))
+            {
+                throw new BridgeCommandException("E_COMPONENT_PATCH_REQUIRED",
+                    "component.modify requires pathPatches, jsonPatch or componentDiff.",
+                    "Pass --input '{\"component\":{\"type\":\"Transform\"},\"pathPatches\":[{\"path\":\"localPosition\",\"value\":{\"x\":1}}]}'.");
+            }
+            if (request.DryRun)
+            {
+                var dry = new UnityCliJsonWriter().BeginObject();
+                dry.Prop("command", "component.modify");
+                dry.Prop("dryRun", true);
+                dry.Prop("componentInstanceId", component.GetInstanceID());
+                dry.Prop("typeName", component.GetType().FullName);
+                dry.PropArray("plannedEffects", arr => arr.BeginObject()
+                    .Prop("type", "component.modify").Prop("target", component.gameObject.name).EndObject());
+                dry.Prop("logPath", LogPath());
+                return dry.EndObject().ToString();
+            }
+            // 执行顺序对齐 IvanMurzak: jsonPatch/componentDiff → pathPatches
+            ObjectPatch.PatchResult result = null;
+            var effectiveMerge = !string.IsNullOrEmpty(jsonPatchJson) ? jsonPatchJson : componentDiffJson;
+            if (!string.IsNullOrEmpty(effectiveMerge))
+            {
+                result = ObjectPatch.ApplyMergePatch(component, effectiveMerge);
+            }
+            if (!string.IsNullOrEmpty(pathPatchesJson))
+            {
+                var pathResult = ObjectPatch.ApplyPathPatches(component, pathPatchesJson);
+                if (result == null) result = pathResult;
+                else { result.ChangedPaths.AddRange(pathResult.ChangedPaths); result.Logs.AddRange(pathResult.Logs); }
+            }
+            EditorUtility.SetDirty(component);
+            EditorSceneManager.MarkSceneDirty(component.gameObject.scene);
+            var afterJson = ObjectSerializer.Serialize(component, new ObjectSerializer.Options { MaxDepth = request.IntArg("maxDepth", 2), IncludeFields = true, IncludeProperties = true, DeepSerialization = false });
+            var w = new UnityCliJsonWriter().BeginObject();
+            w.Prop("command", "component.modify");
+            w.Prop("componentInstanceId", component.GetInstanceID());
+            w.Prop("typeName", component.GetType().FullName);
+            w.PropArray("changedPaths", arr => { foreach (var p in result.ChangedPaths) arr.Value(p); });
+            w.PropRaw("updatedData", afterJson);
+            w.PropArray("logs", arr => { foreach (var l in result.Logs) arr.Value(l); });
+            w.PropRaw("audit", ObjectPatch.ResultToJson(result));
+            w.Prop("logPath", LogPath());
+            return w.EndObject().ToString();
+        }
+
+        /// <summary>枚举当前项目可用的 Component 类型。对齐 Ivan gameobject-component-list-all。</summary>
+        private static string ComponentListTypes(BridgeRequest request)
+        {
+            var keyword = request.StringArg("keyword") ?? request.StringArg("search");
+            var pageSize = Math.Max(1, Math.Min(request.IntArg("pageSize", 100), 500));
+            var cursor = Math.Max(0, request.IntArg("cursor", 0));
+            var types = new List<Type>();
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                Type[] candidates;
+                try { candidates = assembly.GetTypes(); }
+                catch (ReflectionTypeLoadException e) { candidates = e.Types.Where(t => t != null).ToArray(); }
+                foreach (var t in candidates)
+                {
+                    if (t == null || !typeof(Component).IsAssignableFrom(t)) continue;
+                    if (t.IsAbstract) continue;
+                    if (!string.IsNullOrEmpty(keyword) && t.FullName.IndexOf(keyword, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                    types.Add(t);
+                }
+            }
+            types.Sort((a, b) => string.Compare(a.FullName, b.FullName, StringComparison.Ordinal));
+            var total = types.Count;
+            var page = types.Skip(cursor).Take(pageSize).ToList();
+            var nextCursor = cursor + page.Count < total ? (cursor + page.Count).ToString(CultureInfo.InvariantCulture) : null;
+            var w = new UnityCliJsonWriter().BeginObject();
+            w.Prop("command", "component.list-types");
+            w.Prop("count", (long)total);
+            w.PropArray("types", arr =>
+            {
+                foreach (var t in page)
+                {
+                    arr.BeginObject()
+                        .Prop("fullName", t.FullName)
+                        .Prop("name", t.Name)
+                        .Prop("assembly", t.Assembly.GetName().Name)
+                        .Prop("namespace", t.Namespace)
+                        .EndObject();
+                }
+            });
+            w.PropObject("pageInfo", p => p.Prop("pageSize", (long)pageSize).Prop("cursor", (long)cursor).Prop("nextCursor", nextCursor).Prop("total", (long)total));
+            w.Prop("logPath", LogPath());
+            return w.EndObject().ToString();
         }
 
         private static string GameObjectFind(BridgeRequest request)

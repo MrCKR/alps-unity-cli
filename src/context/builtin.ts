@@ -315,7 +315,7 @@ const SCENE_GAMEOBJECT: ContextDescriptor = {
 const SCENE_GAMEOBJECT_COMPONENTS: ContextDescriptor = {
   name: "scene.gameobject.components",
   title: "Scene GameObject Components",
-  description: "Read all components attached to a GameObject, including type names and public readable properties.",
+  description: "Lightweight list of components attached to a GameObject: type names, enabled state and a short summary. Does NOT return full fields/props. For deep component data use `tools run component.get`.",
   category: "scene",
   cliCommand: "context read scene.gameobject.components",
   inputSchema: {
@@ -345,7 +345,7 @@ const SCENE_GAMEOBJECT_COMPONENTS: ContextDescriptor = {
 const SCENE_GAMEOBJECT_COMPONENT: ContextDescriptor = {
   name: "scene.gameobject.component",
   title: "Scene GameObject Component",
-  description: "Read one component attached to a GameObject, including public readable properties when available.",
+  description: "Lightweight preview of one component attached to a GameObject. Does NOT replace deep reads. For complete fields/props use `tools run component.get`.",
   category: "scene",
   cliCommand: "context read scene.gameobject.component",
   inputSchema: {
@@ -369,6 +369,40 @@ const SCENE_GAMEOBJECT_COMPONENT: ContextDescriptor = {
   docsTopic: "scene",
   resourceUri: "unity-cli://scene/gameobject/{instance_id}/component/{name}",
   equivalentUnityMcp: "mcpforunity://scene/gameobject/{id}/component/{name}",
+  ...CONTEXT_COMMON,
+};
+
+const SCENE_OPENED: ContextDescriptor = {
+  name: "scene.opened",
+  title: "Opened Scenes",
+  description: "List currently loaded (opened) scenes in the Editor, with name, path, build index, isLoaded and isDirty. Read-only state surface for multi-scene observation.",
+  category: "scene",
+  cliCommand: "context read scene.opened",
+  inputSchema: { type: "object", properties: {} },
+  outputSchema: {
+    type: "object",
+    properties: {
+      scenes: {
+        type: "array",
+        items: {
+          type: "object",
+          properties: {
+            name: { type: "string" },
+            path: { type: "string" },
+            buildIndex: { type: "integer" },
+            isLoaded: { type: "boolean" },
+            isDirty: { type: "boolean" }
+          }
+        }
+      },
+      count: { type: "integer" },
+      activeScene: { type: "string" }
+    },
+    required: ["scenes", "count"]
+  },
+  docsTopic: "scene",
+  resourceUri: "unity-cli://scene/opened",
+  equivalentUnityMcp: "mcpforunity://scene/opened",
   ...CONTEXT_COMMON,
 };
 
@@ -572,6 +606,29 @@ const INSTANCES_LIST: ContextDescriptor = {
   availabilityScope: "always",
 };
 
+const TARGET_CURRENT: ContextDescriptor = {
+  name: "target.current",
+  title: "Current Target",
+  description: "Read the currently active Unity target selection and its aliases. Stable read-only state surface; setting target uses tools run target.set.",
+  category: "target",
+  cliCommand: "context read target.current",
+  inputSchema: { type: "object", properties: {} },
+  outputSchema: {
+    type: "object",
+    properties: {
+      activeTarget: { type: ["string", "null"], description: "Active target selector (instanceId or alias)." },
+      target: { type: ["object", "null"], description: "Resolved target summary." },
+      aliases: { type: "object", description: "Configured aliases." }
+    }
+  },
+  docsTopic: "target",
+  resourceUri: "unity-cli://target/current",
+  equivalentUnityMcp: "mcpforunity://target/current",
+  ...CONTEXT_COMMON,
+  requiresUnity: false,
+  availabilityScope: "always",
+};
+
 const TOOLS_GROUPS: ContextDescriptor = {
   name: "tools.groups",
   title: "Tool Groups",
@@ -674,6 +731,7 @@ export const BUILTIN_CONTEXTS: ContextDescriptor[] = [
   SCENE_GAMEOBJECT,
   SCENE_GAMEOBJECT_COMPONENTS,
   SCENE_GAMEOBJECT_COMPONENT,
+  SCENE_OPENED,
   SCENE_CAMERAS,
   SCENE_VOLUMES,
   SCENE_RENDERER_FEATURES,
@@ -682,6 +740,7 @@ export const BUILTIN_CONTEXTS: ContextDescriptor[] = [
   PREFAB_HIERARCHY,
   TESTS_LIST,
   INSTANCES_LIST,
+  TARGET_CURRENT,
   TOOLS_GROUPS,
   TOOLS_CUSTOM,
 ];

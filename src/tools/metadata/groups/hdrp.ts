@@ -49,8 +49,8 @@ export const HDRP_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     cliCommand: "tools run hdrp.volume",
     examples: [
-      { description: "List HDRP volumes in scene", argv: ["hdrp", "volume", "--action", "list"] },
-      { description: "Create a global HDRP volume", argv: ["hdrp", "volume", "--action", "create", "--is-global", "true", "--name", "GlobalVolume"] }
+      { description: "List HDRP volumes in scene", argv: ["tools", "run", "hdrp.volume", "--action", "list"] },
+      { description: "Create a global HDRP volume", argv: ["tools", "run", "hdrp.volume", "--action", "create", "--is-global", "true", "--name", "GlobalVolume"] }
     ]
   },
   {
@@ -66,8 +66,8 @@ export const HDRP_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     cliCommand: "tools run hdrp.settings",
     examples: [
-      { description: "Read HDRP pipeline settings", argv: ["hdrp", "settings"] },
-      { description: "Set shadow distance", argv: ["hdrp", "settings", "--property", "shadowDistance", "--value", "500"] }
+      { description: "Read HDRP pipeline settings", argv: ["tools", "run", "hdrp.settings"] },
+      { description: "Set shadow distance", argv: ["tools", "run", "hdrp.settings", "--property", "shadowDistance", "--value", "500"] }
     ]
   }
 ];

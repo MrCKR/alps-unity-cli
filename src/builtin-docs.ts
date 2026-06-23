@@ -155,7 +155,7 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   docs: {
     title: "Built-in and Offline Documentation",
     summary: "Read built-in CLI topic docs, or query/search the offline Unity API documentation cache with `docs get` / `docs search`. Handler: offline. Target: none.",
-    guide: "Run `unity_cli docs` to list built-in topics. Use `docs get <api> --docs-dir <path>` when querying a populated Unity API cache."
+    guide: "Run `unity_cli tools run docs.list` to list built-in topics. Use `docs get <api> --docs-dir <path>` when querying a populated Unity API cache."
   },
   reflect: {
     title: "Offline Reflection",
@@ -224,7 +224,7 @@ export function getBuiltinDocTopic(
   requestId: string
 ): CliResult {
   if (!topic) {
-    return failure(requestId, "DOCS_TOPIC_REQUIRED", "Pass a topic: unity_cli docs topic <topic>.", ["Run unity_cli docs to list built-in topics."]);
+    return failure(requestId, "DOCS_TOPIC_REQUIRED", "Pass a topic: unity_cli tools run docs.topic <topic>.", ["Run unity_cli tools run docs.list to list built-in topics."]);
   }
 
   const doc = buildTopics(runtime.projectTools).find((candidate) => candidate.key === topic);

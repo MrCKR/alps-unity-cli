@@ -11,7 +11,7 @@ export const MATERIAL_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "material info",
+    cliCommand: "tools run material.info",
     docsTopic: "material"
   },
   {
@@ -23,7 +23,7 @@ export const MATERIAL_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "material create",
+    cliCommand: "tools run material.create",
     docsTopic: "material"
   },
   {
@@ -35,7 +35,7 @@ export const MATERIAL_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "material assign",
+    cliCommand: "tools run material.assign",
     docsTopic: "material"
   },
   {
@@ -47,7 +47,7 @@ export const MATERIAL_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "material set",
+    cliCommand: "tools run material.set",
     docsTopic: "material"
   }
 ];

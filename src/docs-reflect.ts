@@ -135,12 +135,12 @@ export async function handleReflectCommand(
 
 async function docsGet(api: string | undefined, flags: Record<string, string | boolean>, requestId: string, cache: CacheIndex): Promise<CliResult> {
   if (!api) {
-    return failure(requestId, "DOCS_API_REQUIRED", "Pass an API name: unity_cli docs get <api>.");
+    return failure(requestId, "DOCS_API_REQUIRED", "Pass an API name: unity_cli tools run docs.get <api>.");
   }
   const matches = cache.entries.filter((entry) => entryMatchesName(entry, api));
   if (matches.length === 0) {
     return failure(requestId, "DOCS_API_NOT_FOUND", `Unity API documentation was not found in the offline cache: ${api}.`, [
-      "Run unity_cli docs search <query> to inspect cached APIs.",
+      "Run unity_cli tools run docs.search <query> to inspect cached APIs.",
       "Pass --docs-dir <path> or set UNITY_CLI_DOCS_DIR to a populated cache."
     ]);
   }
@@ -168,7 +168,7 @@ async function docsGet(api: string | undefined, flags: Record<string, string | b
 
 function docsSearch(query: string | undefined, flags: Record<string, string | boolean>, requestId: string, cache: CacheIndex): CliResult {
   if (!query) {
-    return failure(requestId, "DOCS_QUERY_REQUIRED", "Pass a search query: unity_cli docs search <query>.");
+    return failure(requestId, "DOCS_QUERY_REQUIRED", "Pass a search query: unity_cli tools run docs.search <query>.");
   }
   const scored = scoreEntries(cache.entries, query)
     .filter((entry) => entry.score > 0)
@@ -190,12 +190,12 @@ function docsSearch(query: string | undefined, flags: Record<string, string | bo
 
 function reflectType(name: string | undefined, flags: Record<string, string | boolean>, requestId: string, cache: CacheIndex): CliResult {
   if (!name) {
-    return failure(requestId, "REFLECT_TYPE_REQUIRED", "Pass a type name: unity_cli reflect type <name>.");
+    return failure(requestId, "REFLECT_TYPE_REQUIRED", "Pass a type name: unity_cli tools run reflect.type <name>.");
   }
   const matches = typeMatches(cache.entries, name);
   if (matches.length === 0) {
     return failure(requestId, "REFLECT_TYPE_NOT_FOUND", `Type was not found in the offline reflection cache: ${name}.`, [
-      "Run unity_cli reflect search <query> to inspect cached types and members.",
+      "Run unity_cli tools run reflect.search <query> to inspect cached types and members.",
       "Regenerate the reflection cache from Unity if the type comes from project assemblies."
     ]);
   }
@@ -223,21 +223,21 @@ function reflectType(name: string | undefined, flags: Record<string, string | bo
 
 function reflectMember(target: string | undefined, flags: Record<string, string | boolean>, requestId: string, cache: CacheIndex): CliResult {
   if (!target || !target.includes(".")) {
-    return failure(requestId, "REFLECT_MEMBER_REQUIRED", "Pass a member target: unity_cli reflect member <type.member>.");
+    return failure(requestId, "REFLECT_MEMBER_REQUIRED", "Pass a member target: unity_cli tools run reflect.member <type.member>.");
   }
   const lastDot = target.lastIndexOf(".");
   const typeName = target.slice(0, lastDot);
   const memberName = target.slice(lastDot + 1);
   const types = typeMatches(cache.entries, typeName);
   if (types.length === 0) {
-    return failure(requestId, "REFLECT_TYPE_NOT_FOUND", `Type was not found in the offline reflection cache: ${typeName}.`, ["Run unity_cli reflect search <query> to inspect cached types and members."]);
+    return failure(requestId, "REFLECT_TYPE_NOT_FOUND", `Type was not found in the offline reflection cache: ${typeName}.`, ["Run unity_cli tools run reflect.search <query> to inspect cached types and members."]);
   }
 
   const memberMatches = types.flatMap((type) => (type.members ?? [])
     .filter((member) => normalize(member.name) === normalize(memberName))
     .map((member) => ({ type, member })));
   if (memberMatches.length === 0) {
-    return failure(requestId, "REFLECT_MEMBER_NOT_FOUND", `Member was not found in the offline reflection cache: ${target}.`, ["Run unity_cli reflect type <type> to inspect cached members."]);
+    return failure(requestId, "REFLECT_MEMBER_NOT_FOUND", `Member was not found in the offline reflection cache: ${target}.`, ["Run unity_cli tools run reflect.type <type> to inspect cached members."]);
   }
   if (memberMatches.length > 1) {
     return failure(requestId, "REFLECT_MEMBER_AMBIGUOUS", `Multiple members matched: ${target}.`, [
@@ -267,7 +267,7 @@ function reflectMember(target: string | undefined, flags: Record<string, string 
 
 function reflectSearch(query: string | undefined, flags: Record<string, string | boolean>, requestId: string, cache: CacheIndex): CliResult {
   if (!query) {
-    return failure(requestId, "REFLECT_QUERY_REQUIRED", "Pass a search query: unity_cli reflect search <query>.");
+    return failure(requestId, "REFLECT_QUERY_REQUIRED", "Pass a search query: unity_cli tools run reflect.search <query>.");
   }
   const typeResults = scoreEntries(cache.entries, query)
     .filter((entry) => entry.score > 0)

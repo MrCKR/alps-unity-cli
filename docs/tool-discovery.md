@@ -35,14 +35,17 @@ unity_cli tools group
   "ok": true,
   "data": {
     "command": "tools.group",
-    "count": 25,
+    "count": 34,
     "groups": [
-      { "name": "scene", "title": "...", "toolCount": 7, "source": "core", "cliCommand": "tools group list scene" },
-      { "name": "camera", "title": "...", "toolCount": 3, "source": "core", "cliCommand": "tools group list camera" }
+      { "name": "scene", "title": "...", "toolCount": 12, "source": "core", "cliCommand": "tools group list scene" },
+      { "name": "object", "title": "...", "toolCount": 2, "source": "core", "cliCommand": "tools group list object" },
+      { "name": "reflection", "title": "...", "toolCount": 2, "source": "core", "cliCommand": "tools group list reflection" }
     ]
   }
 }
 ```
+
+核心分组包含：scene、camera、go、component、object、reflection、type、asset、prefab、material、graphics、physics、profiler、shader、texture、animation、ui、script、editor、console、package、build、screenshot、code、diagnose。可选 extension 分组（probuilder/cinemachine/vfx/urp/hdrp）仅在目标项目安装对应 Unity 包时出现。
 
 ### 包含项目自定义工具分组
 

@@ -29,25 +29,28 @@ test("bridge registry marks destructive commands from security policy", () => {
   assert.equal(sceneSave?.supportsDryRun, true);
 });
 
-test("security policy covers all 20 destructive commands including CLI-only", async () => {
+test("security policy covers all destructive commands including CLI-only", async () => {
   const { destructiveCommands } = await import("../src/security-policy.js");
   const policyCommands = destructiveCommands().map((e: { command: string }) => e.command);
   const expected = [
     "asset.delete", "go.delete", "scene.save", "code.exec", "component.remove",
     "probuilder.delete-faces", "probuilder.detach-faces", "probuilder.combine-meshes",
     "probuilder.merge-objects", "probuilder.flip-normals",
-    "cinemachine.extension", "urp.feature", "editor.menu", "script.edit", "script.apply-edits", "cli.package.remove",
-    "cli.batch.run", "test.cancel", "build.cancel", "controller.remove-layer"
+    "cinemachine.extension", "urp.feature", "editor.menu", "script.edit", "script.apply-edits", "package.remove",
+    "batch.run", "test.cancel", "build.cancel", "controller.remove-layer", "profiler.clear", "console.clear",
+    "package.embed", "editor.selection.set", "editor.active-tool.set", "ui.attach-document", "ui.create-panel-settings",
+    "go.set-parent", "scene.unload", "prefab.unpack", "texture.generate", "script.update-or-create",
+    "component.modify", "object.modify", "reflection.method.call"
   ];
   assert.deepEqual(policyCommands.sort(), expected.sort());
-  assert.equal(destructiveCommands().length, 20);
+  assert.equal(destructiveCommands().length, 35);
 });
 
 test("destructive dry-run forwards envelope preview without --yes", async () => {
   const runtime = await makeRuntime();
   const requests: BridgeRequest[] = [];
 
-  const result = await execute(["asset", "delete", "Assets/DeleteMe.asset", "--dry-run"], {
+  const result = await execute(["tools", "run", "asset.delete", "Assets/DeleteMe.asset", "--dry-run"], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
@@ -66,7 +69,7 @@ test("code exec dry-run returns local preview and does not call bridge", async (
   const runtime = await makeRuntime();
   let called = false;
 
-  const result = await execute(["code", "exec", "--code", "Debug.Log(1);", "--dry-run"], {
+  const result = await execute(["tools", "run", "code.exec", "--code", "Debug.Log(1);", "--dry-run"], {
     ...runtime,
     bridgeExecute: async () => {
       called = true;

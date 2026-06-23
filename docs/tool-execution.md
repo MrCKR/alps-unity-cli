@@ -94,7 +94,7 @@ unity_cli tools run probuilder.create-shape --input '{"type":"Cube"}'
 unity_cli tools run probuilder.create-shape --input '{"type":"Cube"}' --job
 
 # 查看任务状态
-unity_cli job status --id <jobId>
+unity_cli tools run job.status --id <jobId>
 ```
 
 ## 验证策略
@@ -120,3 +120,43 @@ unity_cli job status --id <jobId>
 | `E_DESTRUCTIVE_CONFIRMATION_REQUIRED` | 破坏性工具未确认 | 添加 `--yes` 标志 |
 | `E_TARGET_AMBIGUOUS` | 多个实例可用 | 显式指定 `--target` |
 | `E_TARGET_NOT_FOUND` | 无可用实例 | 检查 `instances list` |
+
+## 深度修改与 patch 语义
+
+`object.modify` / `component.modify` / `asset.modify` 共享同一套 patch 引擎（底层 `ObjectPatch`），支持三个修改面，执行顺序对齐 IvanMurzak ReflectorNet：`jsonPatch` → `pathPatches` → `objectDiff`/`componentDiff`。
+
+- `pathPatches`：`[{"path":"...","value":...}]`，路径语法 `fieldName`、`nested/field`、`arrayField/[i]`、`dictField/[key]`，同时兼容 `.` 分隔。
+- `jsonPatch`：JSON Merge Patch (RFC 7396) 对象。
+- `objectDiff`/`componentDiff`：SerializedMember 风格的完整 diff（等价 jsonPatch merge 语义）。
+
+```powershell
+# pathPatches 示例
+unity_cli tools run component.modify --input '{"path":"Player","component":"Transform","pathPatches":[{"path":"localPosition","value":{"x":1,"y":2,"z":3}}]}'
+
+# jsonPatch 示例
+unity_cli tools run object.modify --input '{"instanceId":123,"jsonPatch":{"m_Color":{"r":1,"g":0,"b":0}}}'
+
+# 先读后改（推荐）
+unity_cli tools run component.get --input '{"path":"Player","component":"Rigidbody"}'
+unity_cli tools run component.modify --input '{"path":"Player","component":"Rigidbody","jsonPatch":{"mass":10}}'
+```
+
+## reflection.method.call 安全确认流
+
+`reflection.method.call` 不做调用范围限制（public/private/static/instance、任意 namespace/assembly、Editor/Runtime），分类为 `riskLevel: critical`、`destructiveHint: true`。必须传 `security` 对象：
+
+```powershell
+unity_cli tools run reflection.method.call --input '{
+  "typeName":"UnityEngine.Transform",
+  "methodName":"Translate",
+  "args":[1,0,0],
+  "instanceRef":{"instanceId":123},
+  "security":{"confirmed":true,"destructiveFingerprint":"<sha256>"}
+}'
+```
+
+未提供确认时返回 preview，包含 `fingerprint` 与 `plannedEffects`。确认后返回 target method preview、参数、结果序列化、异常（如有）与结构化 audit。
+
+## asset.get-data 复用 serializer
+
+`asset.get-data` 是 asset-friendly wrapper，底层复用 `object.get-data` 的 `ObjectSerializer`，不重复实现序列化。`object.get-data` 是任意 `UnityEngine.Object` 深序列化主入口，`asset.get-data` 提供按 assetPath 解析的便捷入口。

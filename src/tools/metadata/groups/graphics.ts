@@ -24,7 +24,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics quality",
+    cliCommand: "tools run graphics.quality",
     docsTopic: "graphics"
   },
   {
@@ -46,7 +46,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics settings",
+    cliCommand: "tools run graphics.settings",
     docsTopic: "graphics"
   },
   {
@@ -58,7 +58,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics pipeline",
+    cliCommand: "tools run graphics.pipeline",
     docsTopic: "graphics"
   },
   {
@@ -70,7 +70,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics volume",
+    cliCommand: "tools run graphics.volume",
     docsTopic: "graphics"
   },
   {
@@ -82,7 +82,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics screenshot",
+    cliCommand: "tools run graphics.screenshot",
     docsTopic: "graphics"
   },
   // ===== Light Baking =====
@@ -95,7 +95,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics bake-start",
+    cliCommand: "tools run graphics.bake-start",
     docsTopic: "graphics"
   },
   {
@@ -107,7 +107,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics bake-cancel",
+    cliCommand: "tools run graphics.bake-cancel",
     docsTopic: "graphics"
   },
   {
@@ -119,7 +119,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics bake-status",
+    cliCommand: "tools run graphics.bake-status",
     docsTopic: "graphics"
   },
   {
@@ -131,7 +131,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: true,
     handler: "bridge",
-    cliCommand: "graphics bake-clear",
+    cliCommand: "tools run graphics.bake-clear",
     docsTopic: "graphics"
   },
   {
@@ -143,7 +143,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics bake-reflection-probe",
+    cliCommand: "tools run graphics.bake-reflection-probe",
     docsTopic: "graphics"
   },
   {
@@ -165,7 +165,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics bake-settings",
+    cliCommand: "tools run graphics.bake-settings",
     docsTopic: "graphics"
   },
   {
@@ -177,7 +177,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics light-probe-group",
+    cliCommand: "tools run graphics.light-probe-group",
     docsTopic: "graphics"
   },
   {
@@ -198,7 +198,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics reflection-probe",
+    cliCommand: "tools run graphics.reflection-probe",
     docsTopic: "graphics"
   },
   {
@@ -210,7 +210,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics probe-positions",
+    cliCommand: "tools run graphics.probe-positions",
     docsTopic: "graphics"
   },
   // ===== Render Stats =====
@@ -223,7 +223,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics stats",
+    cliCommand: "tools run graphics.stats",
     docsTopic: "graphics"
   },
   {
@@ -235,7 +235,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics stats-counters",
+    cliCommand: "tools run graphics.stats-counters",
     docsTopic: "graphics"
   },
   {
@@ -247,7 +247,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics stats-memory",
+    cliCommand: "tools run graphics.stats-memory",
     docsTopic: "graphics"
   },
   {
@@ -259,7 +259,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics scene-debug",
+    cliCommand: "tools run graphics.scene-debug",
     docsTopic: "graphics"
   },
   // ===== Skybox / Environment =====
@@ -272,7 +272,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics skybox-get",
+    cliCommand: "tools run graphics.skybox-get",
     docsTopic: "graphics"
   },
   {
@@ -284,7 +284,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics skybox-set-material",
+    cliCommand: "tools run graphics.skybox-set-material",
     docsTopic: "graphics"
   },
   {
@@ -296,7 +296,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics skybox-set-properties",
+    cliCommand: "tools run graphics.skybox-set-properties",
     docsTopic: "graphics"
   },
   {
@@ -315,7 +315,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics skybox-set-ambient",
+    cliCommand: "tools run graphics.skybox-set-ambient",
     docsTopic: "graphics"
   },
   {
@@ -334,7 +334,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics skybox-set-fog",
+    cliCommand: "tools run graphics.skybox-set-fog",
     docsTopic: "graphics"
   },
   {
@@ -351,7 +351,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics skybox-set-reflection",
+    cliCommand: "tools run graphics.skybox-set-reflection",
     docsTopic: "graphics"
   },
   {
@@ -363,7 +363,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics skybox-set-sun",
+    cliCommand: "tools run graphics.skybox-set-sun",
     docsTopic: "graphics"
   },
   // ===== Pipeline =====
@@ -376,7 +376,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics pipeline-settings",
+    cliCommand: "tools run graphics.pipeline-settings",
     docsTopic: "graphics"
   },
   {
@@ -388,7 +388,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics pipeline-quality",
+    cliCommand: "tools run graphics.pipeline-quality",
     docsTopic: "graphics"
   },
   {
@@ -400,7 +400,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "graphics pipeline-info",
+    cliCommand: "tools run graphics.pipeline-info",
     docsTopic: "graphics"
   }
 ];

@@ -270,8 +270,8 @@ test("context list --include-custom discovers project custom contexts through th
   assert.equal(requests.length, 1);
   assert.equal(requests[0].command, "context.list");
   const data = result.data as { contexts: ContextDescriptor[]; count: number };
-  // 23 built-in contexts + 1 project custom context
-  assert.equal(data.count, 24);
+  // 25 built-in contexts + 1 project custom context
+  assert.equal(data.count, 26);
   const projectCtx = data.contexts.find((c) => c.name === "project.scene-list");
   assert.ok(projectCtx, "project.scene-list should be in results");
   assert.equal(projectCtx.source, "custom");
@@ -468,7 +468,7 @@ test("context list without --include-custom returns built-in contexts", async ()
   assert.equal(result.ok, true);
   const data = result.data as { contexts: ContextDescriptor[]; count: number };
   // Built-in contexts are always available offline
-  assert.equal(data.count, 23);
+  assert.equal(data.count, 25);
   assert.ok(data.contexts.some((c) => c.name === "project.info"));
   assert.ok(data.contexts.some((c) => c.name === "editor.state"));
 });

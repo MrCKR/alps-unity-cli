@@ -215,7 +215,7 @@ async function handleExtensionsInstall(
   if (availability.status !== "available") {
     return failure(requestId, "E_EXTENSION_DEPENDENCY_MISSING", `Extension "${extensionId}" requires Unity package(s) that are not installed: ${availability.missingPackageIds.join(", ")}.`, [
       "Install the required Unity package in Packages/manifest.json or Unity Package Manager.",
-      "Run unity_cli package resolve after changing packages.",
+      "Run unity_cli tools run package.resolve after changing packages.",
       `Then run unity_cli extensions install ${extensionId} --project <path>.`,
       "The CLI does not install optional Unity packages automatically."
     ], {

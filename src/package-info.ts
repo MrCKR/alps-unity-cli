@@ -47,9 +47,9 @@ export async function handlePackageInfoCommand(
       unity: unityPackage.unity
     },
     docs: {
-      builtin: "unity_cli docs / unity_cli docs topic <topic>",
-      offlineUnityApi: "unity_cli docs get/search --docs-dir <path>",
-      reflect: "unity_cli reflect type/member/search --reflect-dir <path>"
+      builtin: "unity_cli tools run docs.list / unity_cli tools run docs.topic <topic>",
+      offlineUnityApi: "unity_cli tools run docs.get/search --docs-dir <path>",
+      reflect: "unity_cli tools run reflect.type/member/search --reflect-dir <path>"
     },
     discovery: {
       builtinTools: "unity_cli tools group",
@@ -62,7 +62,7 @@ export async function handlePackageInfoCommand(
     data.text = [
       `${(data.npm as { name: string }).name}@${(data.npm as { version: string }).version}`,
       `Unity package: ${(data.unity as { name: string }).name}@${(data.unity as { version: string }).version}`,
-      "Docs: unity_cli docs / docs topic <topic> / docs get/search",
+      "Docs: unity_cli tools run docs.list / tools run docs.topic <topic> / tools run docs.get/search",
  "Discovery: tools group / tools group list <group> [--include-custom] / tools search / tools describe"
     ].join("\n");
   }

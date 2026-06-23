@@ -37,6 +37,11 @@ namespace UnityCli
             RegisterCommand(registry, "scene.create", "scene", true, SceneCreate);
             RegisterCommand(registry, "scene.load", "scene", true, SceneLoad);
             RegisterCommand(registry, "scene.save", "scene", true, SceneSave);
+            RegisterCommand(registry, "scene.unload", "scene", true, SceneUnload);
+            RegisterCommand(registry, "scene.set-active", "scene", true, SceneSetActive);
+            RegisterCommand(registry, "scene.list-opened", "scene", false, SceneListOpened);
+            RegisterCommand(registry, "scene.data", "scene", false, SceneData);
+            RegisterCommand(registry, "scene.view-frame", "scene", true, SceneViewFrame);
             RegisterCommand(registry, "screenshot.capture", "scene", true, SceneScreenshot);
         }
 
@@ -134,6 +139,156 @@ namespace UnityCli
                 throw new BridgeCommandException("E_SCENE_SAVE_FAILED", "Failed to save scene: " + path, "Check Unity Console diagnostics and file permissions.");
             }
             return SuccessJson(SceneMutationJson("scene.save", SceneManager.GetActiveScene(), path));
+        }
+
+        private static string SceneUnload(BridgeRequest request)
+        {
+            EnsureEditorNotBusy("scene.unload");
+            var path = ScenePathFromRequest(request, true);
+            for (var i = 0; i < SceneManager.sceneCount; i++)
+            {
+                var scene = SceneManager.GetSceneAt(i);
+                if (string.Equals(NormalizeAssetPath(scene.path), path, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (scene == SceneManager.GetActiveScene() && SceneManager.sceneCount == 1)
+                    {
+                        throw new BridgeCommandException("E_SCENE_UNLOAD_LAST", "Cannot unload the only open scene.", "Open another scene first.");
+                    }
+                    var opts = request.BoolArg("removeAll", false) ? UnloadSceneOptions.UnloadAllEmbeddedSceneObjects : UnloadSceneOptions.None;
+                    if (request.DryRun)
+                    {
+                        return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                            .Prop("command", "scene.unload").Prop("dryRun", true)
+                            .Prop("path", path).Prop("sceneName", scene.name)
+                            .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "scene.unload").Prop("path", path).EndObject())
+                            .Prop("logPath", LogPath()).EndObject().ToString());
+                    }
+                    EditorSceneManager.CloseScene(scene, opts == UnloadSceneOptions.UnloadAllEmbeddedSceneObjects);
+                    return SuccessJson(SceneMutationJson("scene.unload", SceneManager.GetActiveScene(), path));
+                }
+            }
+            throw new BridgeCommandException("E_SCENE_NOT_OPEN", "Scene is not currently open: " + path, "Run context read scene.opened to list open scenes.");
+        }
+
+        private static string SceneSetActive(BridgeRequest request)
+        {
+            EnsureEditorNotBusy("scene.set-active");
+            var path = ScenePathFromRequest(request, true);
+            for (var i = 0; i < SceneManager.sceneCount; i++)
+            {
+                var scene = SceneManager.GetSceneAt(i);
+                if (string.Equals(NormalizeAssetPath(scene.path), path, StringComparison.OrdinalIgnoreCase))
+                {
+                    EditorSceneManager.SetActiveScene(scene);
+                    return SuccessJson(SceneMutationJson("scene.set-active", scene, path));
+                }
+            }
+            throw new BridgeCommandException("E_SCENE_NOT_OPEN", "Scene is not currently open: " + path, "Run context read scene.opened, then scene.load if needed.");
+        }
+
+        private static string SceneListOpened(BridgeRequest request)
+        {
+            var w = new UnityCliJsonWriter().BeginObject();
+            w.Prop("command", "scene.list-opened");
+            w.PropArray("scenes", arr =>
+            {
+                for (var i = 0; i < SceneManager.sceneCount; i++)
+                {
+                    var scene = SceneManager.GetSceneAt(i);
+                    arr.BeginObject()
+                        .Prop("name", scene.name)
+                        .Prop("path", NormalizeAssetPath(scene.path))
+                        .Prop("buildIndex", (long)scene.buildIndex)
+                        .Prop("isLoaded", scene.isLoaded)
+                        .Prop("isDirty", scene.isDirty)
+                        .Prop("isActive", scene == SceneManager.GetActiveScene())
+                        .EndObject();
+                }
+            });
+            w.Prop("count", (long)SceneManager.sceneCount);
+            w.Prop("activeScene", SceneManager.GetActiveScene().name);
+            w.Prop("logPath", LogPath());
+            return w.EndObject().ToString();
+        }
+
+        /// <summary>参数化 Scene 深读：对齐 Ivan scene-get-data。只读 Tool，不做 Context 主入口。</summary>
+        private static string SceneData(BridgeRequest request)
+        {
+            var maxDepth = Math.Max(1, Math.Min(request.IntArg("maxDepth", 2), 6));
+            var maxResults = Math.Max(1, Math.Min(request.IntArg("maxResults", 200), 2000));
+            var nameFilter = request.StringArg("nameFilter");
+            var includeComponents = request.BoolArg("includeComponents", false);
+            var scene = SceneManager.GetActiveScene();
+            var roots = scene.GetRootGameObjects();
+            var items = new List<string>();
+            var count = 0;
+            foreach (var root in roots)
+            {
+                if (count >= maxResults) break;
+                CollectSceneData(root.transform, 0, maxDepth, nameFilter, includeComponents, items, ref count, maxResults);
+            }
+            var w = new UnityCliJsonWriter().BeginObject();
+            w.PropRaw("scene", ActiveSceneJson());
+            w.Prop("maxDepth", (long)maxDepth);
+            w.Prop("count", (long)count);
+            w.PropArray("items", arr => { foreach (var item in items) arr.RawValue(item); });
+            w.Prop("logPath", LogPath());
+            return w.EndObject().ToString();
+        }
+
+        private static void CollectSceneData(Transform t, int depth, int maxDepth, string nameFilter, bool includeComponents, List<string> items, ref int count, int maxResults)
+        {
+            if (count >= maxResults) return;
+            if (string.IsNullOrEmpty(nameFilter) || t.name.IndexOf(nameFilter, StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                var w = new UnityCliJsonWriter().BeginObject();
+                w.Prop("name", t.name).Prop("path", TransformPath(t)).Prop("depth", (long)depth).Prop("childCount", (long)t.childCount);
+                if (includeComponents)
+                {
+                    w.PropArray("components", arr => { foreach (var c in t.GetComponents<Component>()) { if (c != null) arr.Value(c.GetType().Name); } });
+                }
+                w.EndObject();
+                items.Add(w.ToString());
+                count++;
+            }
+            if (depth < maxDepth)
+            {
+                for (var i = 0; i < t.childCount; i++) CollectSceneData(t.GetChild(i), depth + 1, maxDepth, nameFilter, includeComponents, items, ref count, maxResults);
+            }
+        }
+
+        private static string TransformPath(Transform t)
+        {
+            var path = t.name;
+            var p = t.parent;
+            while (p != null) { path = p.name + "/" + path; p = p.parent; }
+            return path;
+        }
+
+        private static string SceneViewFrame(BridgeRequest request)
+        {
+            var target = request.StringArg("target") ?? request.StringArg("path");
+            var frameAll = request.BoolArg("frameAll", false);
+            var sceneView = SceneView.lastActiveSceneView;
+            if (sceneView == null)
+            {
+                throw new BridgeCommandException("E_SCENE_VIEW_NOT_AVAILABLE", "No active SceneView is open.", "Open a SceneView window in the Unity Editor.");
+            }
+            if (!string.IsNullOrEmpty(target))
+            {
+                var go = ObjectRefResolver.FindGameObjectByPath(target);
+                if (go != null)
+                {
+                    Selection.activeGameObject = go;
+                    sceneView.Frame(new Bounds(go.transform.position, Vector3.one), false);
+                    return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "scene.view-frame").Prop("target", target).Prop("framed", true).Prop("logPath", LogPath()).EndObject().ToString());
+                }
+            }
+            if (frameAll)
+            {
+                sceneView.Frame(new Bounds(Vector3.zero, new Vector3(10, 10, 10)), true);
+            }
+            return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "scene.view-frame").Prop("framed", true).Prop("logPath", LogPath()).EndObject().ToString());
         }
 
         private static string SceneScreenshot(BridgeRequest request)

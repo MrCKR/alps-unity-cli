@@ -148,7 +148,7 @@ unity_cli tools describe my.editor-tool
 unity_cli tools run my.editor-tool --input '{"message":"hello"}'
 
 # target=runtime 的工具（通常需要 Play Mode）
-unity_cli editor play
+unity_cli tools run editor.play
 unity_cli tools run sample.runtime-echo --input '{"message":"ping"}'
 ```
 

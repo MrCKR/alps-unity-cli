@@ -39,6 +39,10 @@ namespace UnityCli
             RegisterCommand(registry, "physics.rigidbody", "physics", true, PhysicsRigidbodyCommand);
             RegisterCommand(registry, "physics.raycast", "physics", false, PhysicsRaycast);
             RegisterCommand(registry, "physics.simulation", "physics", true, PhysicsSimulation);
+            RegisterCommand(registry, "physics.raycast-all", "physics", false, PhysicsRaycastAll);
+            RegisterCommand(registry, "physics.linecast", "physics", false, PhysicsLinecast);
+            RegisterCommand(registry, "physics.shapecast", "physics", false, PhysicsShapecast);
+            RegisterCommand(registry, "physics.validate", "physics", false, PhysicsValidate);
         }
 
         private static string PhysicsSettingsCommand(BridgeRequest request)
@@ -136,7 +140,27 @@ namespace UnityCli
             if (rigidbody == null) throw new BridgeCommandException("E_RIGIDBODY_NOT_FOUND", "Target has no Rigidbody: " + target.name, "Run physics.rigidbody to add/configure a Rigidbody first.");
             var force = new Vector3(request.FloatArg("x", 0f), request.FloatArg("y", 0f), request.FloatArg("z", 0f));
             var mode = ParseForceMode(request.StringArg("mode"));
-            rigidbody.AddForce(force, mode);
+            var forceType = request.StringArg("forceType") ?? request.StringArg("force_type") ?? "normal";
+            var torque = request.OptionalFloatArg("torqueX");
+            // explosion: 3D only, 在爆炸中心施加衰减力
+            if (string.Equals(forceType, "explosion", StringComparison.OrdinalIgnoreCase))
+            {
+                var expPos = new Vector3(request.FloatArg("explosionX", 0f), request.FloatArg("explosionY", 0f), request.FloatArg("explosionZ", 0f));
+                var expRadius = request.FloatArg("explosionRadius", 10f);
+                var expForce = request.FloatArg("explosionForce", 500f);
+                var upMod = request.FloatArg("upwardsModifier", 0f);
+                rigidbody.AddExplosionForce(expForce, expPos, expRadius, upMod, mode);
+            }
+            else
+            {
+                rigidbody.AddForce(force, mode);
+            }
+            // torque: 3D 用 [x,y,z], 2D 用 [z]
+            if (torque.HasValue)
+            {
+                var torqueVec = new Vector3(torque.Value, request.FloatArg("torqueY", 0f), request.FloatArg("torqueZ", 0f));
+                rigidbody.AddTorque(torqueVec, mode);
+            }
             EditorSceneManager.MarkSceneDirty(target.scene);
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropRaw("target", GameObjectTargetJson(target))
@@ -189,6 +213,127 @@ namespace UnityCli
                 .PropArray("plannedEffects", arr => arr.RawValue(EffectJson("physics.rigidbody", "target", HierarchyPath(target))))
                 .Prop("logPath", LogPath())
                 .EndObject().ToString());
+        }
+
+        /// <summary>raycast-all：返回所有命中。对齐 CoplayDev raycast_all。</summary>
+        private static string PhysicsRaycastAll(BridgeRequest request)
+        {
+            var mode = NormalizeMode(request.StringArg("mode"));
+            var distance = Math.Max(0f, request.FloatArg("distance", 100f));
+            var layerMask = request.IntArg("layerMask", Physics.DefaultRaycastLayers);
+            var origin = new Vector3(request.FloatArg("originX", 0f), request.FloatArg("originY", 0f), request.FloatArg("originZ", 0f));
+            var direction = NormalizeVector3(new Vector3(request.FloatArg("directionX", 0f), request.FloatArg("directionY", 0f), request.FloatArg("directionZ", 1f)));
+            if (mode == "2d")
+            {
+                var hits = Physics2D.RaycastAll(new Vector2(origin.x, origin.y), new Vector2(direction.x, direction.y), distance, layerMask);
+                return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "physics.raycast-all").Prop("mode", "2d")
+                    .Prop("hitCount", (long)hits.Length).PropRaw("hits", Raycast2DHitsJson(hits)).Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            var hits3d = Physics.RaycastAll(origin, direction, distance, layerMask);
+            return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "physics.raycast-all").Prop("mode", "3d")
+                .Prop("hitCount", (long)hits3d.Length).PropRaw("hits", Raycast3DHitsJson(hits3d)).Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        /// <summary>linecast：检测两点间是否有碰撞。对齐 CoplayDev linecast。</summary>
+        private static string PhysicsLinecast(BridgeRequest request)
+        {
+            var mode = NormalizeMode(request.StringArg("mode"));
+            var layerMask = request.IntArg("layerMask", Physics.DefaultRaycastLayers);
+            var start = new Vector3(request.FloatArg("startX", 0f), request.FloatArg("startY", 0f), request.FloatArg("startZ", 0f));
+            var end = new Vector3(request.FloatArg("endX", 0f), request.FloatArg("endY", 0f), request.FloatArg("endZ", 0f));
+            if (mode == "2d")
+            {
+                var hit = Physics2D.Linecast(new Vector2(start.x, start.y), new Vector2(end.x, end.y), layerMask);
+                return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "physics.linecast").Prop("mode", "2d")
+                    .Prop("hit", hit.collider != null).Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            RaycastHit hit3d;
+            var hit3dFound = Physics.Linecast(start, end, out hit3d, layerMask);
+            return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "physics.linecast").Prop("mode", "3d")
+                .Prop("hit", hit3dFound).PropRaw("hitInfo", hit3dFound ? Raycast3DHitJson(hit3d) : "null").Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        /// <summary>shapecast：球体/盒子投射。对齐 CoplayDev shapecast。</summary>
+        private static string PhysicsShapecast(BridgeRequest request)
+        {
+            var shape = request.StringArg("shape") ?? "sphere";
+            var distance = Math.Max(0f, request.FloatArg("distance", 100f));
+            var layerMask = request.IntArg("layerMask", Physics.DefaultRaycastLayers);
+            var origin = new Vector3(request.FloatArg("originX", 0f), request.FloatArg("originY", 0f), request.FloatArg("originZ", 0f));
+            var direction = NormalizeVector3(new Vector3(request.FloatArg("directionX", 0f), request.FloatArg("directionY", 0f), request.FloatArg("directionZ", 1f)));
+            var radius = request.FloatArg("radius", 0.5f);
+            var halfExtents = new Vector3(request.FloatArg("halfExtentX", 0.5f), request.FloatArg("halfExtentY", 0.5f), request.FloatArg("halfExtentZ", 0.5f));
+            RaycastHit[] hits;
+            if (shape == "box")
+            {
+                hits = Physics.BoxCastAll(origin, halfExtents, direction, Quaternion.identity, distance, layerMask);
+            }
+            else if (shape == "capsule")
+            {
+                // capsule: point1/point2 定义胶囊两端, 或用 height + capsuleDirection
+                var height = request.FloatArg("height", 1f);
+                var capDir = request.IntArg("capsuleDirection", 1); // 0=X,1=Y,2=Z
+                Vector3 point1, point2;
+                var p1Provided = request.OptionalFloatArg("point1X");
+                if (p1Provided.HasValue)
+                {
+                    point1 = new Vector3(request.FloatArg("point1X", 0f), request.FloatArg("point1Y", 0f), request.FloatArg("point1Z", 0f));
+                    point2 = new Vector3(request.FloatArg("point2X", 0f), request.FloatArg("point2Y", 0f), request.FloatArg("point2Z", 0f));
+                }
+                else
+                {
+                    var halfH = height / 2f - radius;
+                    if (halfH < 0) halfH = 0;
+                    var offset = capDir == 0 ? new Vector3(halfH, 0, 0) : capDir == 2 ? new Vector3(0, 0, halfH) : new Vector3(0, halfH, 0);
+                    point1 = origin + offset;
+                    point2 = origin - offset;
+                }
+                hits = Physics.CapsuleCastAll(point1, point2, radius, direction, distance, layerMask);
+            }
+            else
+            {
+                hits = Physics.SphereCastAll(origin, radius, direction, distance, layerMask);
+            }
+            return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "physics.shapecast").Prop("shape", shape)
+                .Prop("hitCount", (long)hits.Length).PropRaw("hits", Raycast3DHitsJson(hits)).Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        /// <summary>physics.validate：校验 Rigidbody/Collider 配置。对齐 CoplayDev physics validate。</summary>
+        private static string PhysicsValidate(BridgeRequest request)
+        {
+            var target = request.StringArg("target") ?? request.StringArg("path");
+            var go = string.IsNullOrEmpty(target) ? null : ObjectRefResolver.FindGameObjectByPath(target);
+            var issues = new List<string>();
+            if (go == null)
+            {
+                return ErrorJson("E_TARGET_NOT_FOUND", "physics.validate requires a target GameObject.", "Pass --target <path>.");
+            }
+            var rb = go.GetComponent<Rigidbody>();
+            var rb2d = go.GetComponent<Rigidbody2D>();
+            var colliders = go.GetComponents<Collider>();
+            var colliders2d = go.GetComponents<Collider2D>();
+            if (rb != null && colliders.Length == 0 && colliders2d.Length == 0)
+            {
+                issues.Add("Rigidbody without any Collider: physics body will not collide.");
+            }
+            if (rb != null && rb2d != null)
+            {
+                issues.Add("Both Rigidbody and Rigidbody2D present: ambiguous physics domain.");
+            }
+            if (rb != null && rb.isKinematic && colliders.Length > 0)
+            {
+                var anyNonTrigger = colliders.Any(c => !c.isTrigger);
+                if (!anyNonTrigger) issues.Add("Kinematic Rigidbody with only trigger colliders: no solid collision.");
+            }
+            var w = new UnityCliJsonWriter().BeginObject();
+            w.Prop("command", "physics.validate").Prop("target", go.name);
+            w.Prop("valid", issues.Count == 0);
+            w.PropArray("issues", arr => { foreach (var i in issues) arr.Value(i); });
+            w.Prop("hasRigidbody", rb != null);
+            w.Prop("hasRigidbody2D", rb2d != null);
+            w.Prop("colliderCount", (long)(colliders.Length + colliders2d.Length));
+            w.Prop("logPath", LogPath());
+            return w.EndObject().ToString();
         }
 
         private static string PhysicsRaycast(BridgeRequest request)

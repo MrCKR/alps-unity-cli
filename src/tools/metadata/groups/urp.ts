@@ -51,8 +51,8 @@ export const URP_TOOLS: ToolMetadata[] = [
     destructiveHint: true,
     cliCommand: "tools run urp.feature",
     examples: [
-      { description: "List all renderer features", argv: ["urp", "feature", "--action", "list"] },
-      { description: "Add a ScreenSpaceAmbientOcclusion feature", argv: ["urp", "feature", "--action", "add", "--feature-type", "ScreenSpaceAmbientOcclusion"] }
+      { description: "List all renderer features", argv: ["tools", "run", "urp.feature", "--action", "list"] },
+      { description: "Add a ScreenSpaceAmbientOcclusion feature", argv: ["tools", "run", "urp.feature", "--action", "add", "--feature-type", "ScreenSpaceAmbientOcclusion"] }
     ]
   },
   {
@@ -74,8 +74,8 @@ export const URP_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     cliCommand: "tools run urp.volume",
     examples: [
-      { description: "List URP volumes in scene", argv: ["urp", "volume", "--action", "list"] },
-      { description: "Create a global URP volume", argv: ["urp", "volume", "--action", "create", "--is-global", "--name", "GlobalVolume"] }
+      { description: "List URP volumes in scene", argv: ["tools", "run", "urp.volume", "--action", "list"] },
+      { description: "Create a global URP volume", argv: ["tools", "run", "urp.volume", "--action", "create", "--is-global", "--name", "GlobalVolume"] }
     ]
   },
   {
@@ -91,8 +91,8 @@ export const URP_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     cliCommand: "tools run urp.settings",
     examples: [
-      { description: "Read URP pipeline settings", argv: ["urp", "settings"] },
-      { description: "Set render scale", argv: ["urp", "settings", "--property", "renderScale", "--value", "1.5"] }
+      { description: "Read URP pipeline settings", argv: ["tools", "run", "urp.settings"] },
+      { description: "Set render scale", argv: ["tools", "run", "urp.settings", "--property", "renderScale", "--value", "1.5"] }
     ]
   }
 ];

@@ -129,14 +129,14 @@ process.stdout.write("tests ok\\n");
 process.exit(0);
 `);
 
-  const created = await execute(["test", "run", "--unity", unity, "--project", runtime.dataDir], runtime);
+  const created = await execute(["tools", "run", "test.run", "--unity", unity, "--project", runtime.dataDir], runtime);
   assert.equal(created.ok, true);
   const jobId = (created.data as { jobId: string }).jobId;
 
   const waited = await runtime.runner.wait(jobId, 3000);
   assert.equal(waited.status, "succeeded");
 
-  const status = await execute(["job", "status", "--id", jobId], runtime);
+  const status = await execute(["tools", "run", "job.status", "--id", jobId], runtime);
   assert.equal((status.data as { status: string }).status, "succeeded");
 });
 
@@ -148,14 +148,14 @@ process.stdout.write("one\\ntwo\\nthree\\n");
 process.exit(0);
 `);
 
-  const created = await execute(["build", "run", "--unity", unity, "--project", runtime.dataDir], runtime);
+  const created = await execute(["tools", "run", "build.run", "--unity", unity, "--project", runtime.dataDir], runtime);
   const jobId = (created.data as { jobId: string }).jobId;
   await runtime.runner.wait(jobId, 3000);
 
-  const logs = await execute(["job", "logs", "--id", jobId, "--tail", "2"], runtime);
+  const logs = await execute(["tools", "run", "job.logs", "--id", jobId, "--tail", "2"], runtime);
   assert.deepEqual((logs.data as { lines: string[] }).lines, ["two", "three"]);
 
-  const buildLogs = await execute(["build", "logs", "--id", jobId, "--tail", "1"], runtime);
+  const buildLogs = await execute(["tools", "run", "build.logs", "--id", jobId, "--tail", "1"], runtime);
   assert.deepEqual((buildLogs.data as { lines: string[] }).lines, ["three"]);
 });
 
@@ -163,7 +163,7 @@ test("wait timeout returns structured error while job keeps running", async () =
   const runtime = await makeRuntime();
   const unity = await makeFakeUnity(`setTimeout(() => process.exit(0), 1000);`);
 
-  const result = await execute(["editor", "refresh", "--compile", "--wait", "--wait-timeout-ms", "10", "--unity", unity, "--project", runtime.dataDir], runtime);
+  const result = await execute(["tools", "run", "editor.refresh", "--compile", "--wait", "--wait-timeout-ms", "10", "--unity", unity, "--project", runtime.dataDir], runtime);
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "E_EXECUTION_TIMEOUT");
   assert.deepEqual(result.error?.details, {
@@ -180,8 +180,8 @@ test("editor refresh compile uses batch refresh-and-compile method", async () =>
   const runtime = await makeRuntime();
   const unity = await makeFakeUnity(`process.exit(0);`);
 
-  const compile = await execute(["editor", "refresh", "--compile", "--unity", unity, "--project", runtime.dataDir], runtime);
-  const refresh = await execute(["editor", "refresh", "--unity", unity, "--project", runtime.dataDir], runtime);
+  const compile = await execute(["tools", "run", "editor.refresh", "--compile", "--unity", unity, "--project", runtime.dataDir], runtime);
+  const refresh = await execute(["tools", "run", "editor.refresh", "--unity", unity, "--project", runtime.dataDir], runtime);
 
   assert.equal((compile.data as { command: string[] }).command[(compile.data as { command: string[] }).command.indexOf("-executeMethod") + 1], "UnityCli.UnityCliBatch.RefreshAndCompile");
   assert.equal((refresh.data as { command: string[] }).command[(refresh.data as { command: string[] }).command.indexOf("-executeMethod") + 1], "UnityCli.UnityCliBatch.Refresh");
@@ -191,15 +191,15 @@ test("cancel marks running job as cancelled", async () => {
   const runtime = await makeRuntime();
   const unity = await makeFakeUnity(`setTimeout(() => process.exit(0), 5000);`);
 
-  const created = await execute(["build", "run", "--unity", unity, "--project", runtime.dataDir], runtime);
+  const created = await execute(["tools", "run", "build.run", "--unity", unity, "--project", runtime.dataDir], runtime);
   const jobId = (created.data as { jobId: string }).jobId;
   await runtime.runner.wait(jobId, 100);
 
-  const described = await execute(["job", "describe", "--id", jobId], runtime);
+  const described = await execute(["tools", "run", "job.describe", "--id", jobId], runtime);
   assert.equal(described.ok, true);
   assert.equal((described.data as { cancellation: { mode: string } }).cancellation.mode, "immediate");
 
-  const cancelled = await execute(["build", "cancel", "--id", jobId, "--yes"], runtime);
+  const cancelled = await execute(["tools", "run", "build.cancel", "--id", jobId, "--yes"], runtime);
   assert.equal(cancelled.ok, true);
   assert.equal((cancelled.data as { status: string }).status, "cancelled");
   assert.equal((cancelled.data as { cancellation: { mode: string } }).cancellation.mode, "immediate");
@@ -209,7 +209,7 @@ test("failed Unity exit is captured with summary", async () => {
   const runtime = await makeRuntime();
   const unity = await makeFakeUnity(`process.exit(7);`);
 
-  const created = await execute(["test", "run", "--unity", unity, "--project", runtime.dataDir], runtime);
+  const created = await execute(["tools", "run", "test.run", "--unity", unity, "--project", runtime.dataDir], runtime);
   const jobId = (created.data as { jobId: string }).jobId;
   const waited = await runtime.runner.wait(jobId, 3000);
 
@@ -243,7 +243,7 @@ test("successful Unity job clears stale error from summary", async () => {
   assert.equal(completed.exitCode, 0);
   assert.equal(completed.error, undefined);
 
-  const status = await execute(["job", "status", "--id", job.id], runtime);
+  const status = await execute(["tools", "run", "job.status", "--id", job.id], runtime);
   assert.equal(status.ok, true);
   assert.equal((status.data as { status: string }).status, "succeeded");
   assert.equal("error" in (status.data as Record<string, unknown>), false);
@@ -258,7 +258,7 @@ if (resultIndex >= 0) fs.writeFileSync(process.argv[resultIndex + 1], '<test-run
 process.exit(1);
 `);
 
-  const created = await execute(["test", "run", "--unity", unity, "--project", runtime.dataDir], runtime);
+  const created = await execute(["tools", "run", "test.run", "--unity", unity, "--project", runtime.dataDir], runtime);
   const jobId = (created.data as { jobId: string }).jobId;
   const waited = await runtime.runner.wait(jobId, 3000);
   const summary = (waited.result?.summary ?? {}) as { total: number; failed: number; failures: Array<{ name: string; message: string }> };
@@ -273,7 +273,7 @@ test("build run forwards output path to batch method", async () => {
   const runtime = await makeRuntime();
   const unity = await makeFakeUnity(`process.exit(0);`);
 
-  const created = await execute(["build", "run", "--unity", unity, "--project", runtime.dataDir, "--output", "Builds/App.exe"], runtime);
+  const created = await execute(["tools", "run", "build.run", "--unity", unity, "--project", runtime.dataDir, "--output", "Builds/App.exe"], runtime);
   const command = (created.data as { command: string[] }).command;
 
   assert.ok(command.includes("-unityCliBuildOutput"));
@@ -285,7 +285,7 @@ test("non-wait CLI exits quickly and worker persists terminal status", async () 
   assert.equal(defaultDataDir({ UNITY_CLI_DATA_DIR: dataDir, LOCALAPPDATA: join("C:\\", "Users", "tester", "AppData", "Local") }, "win32"), dataDir);
   const unity = await makeFakeUnity(`setTimeout(() => process.exit(0), 2000);`);
 
-  const created = await runCli(["editor", "refresh", "--compile", "--unity", unity, "--project", dataDir], { UNITY_CLI_DATA_DIR: dataDir });
+  const created = await runCli(["tools", "run", "editor.refresh", "--compile", "--unity", unity, "--project", dataDir], { UNITY_CLI_DATA_DIR: dataDir });
   assert.equal(created.code, 0, created.stderr);
   const payload = JSON.parse(created.stdout) as { ok: boolean; data: { jobId: string; status: string } };
   assert.equal(payload.ok, true);
@@ -300,7 +300,7 @@ test("process timeout marks job as timeout", async () => {
   const runtime = await makeRuntime();
   const unity = await makeFakeUnity(`setTimeout(() => process.exit(0), 5000);`);
 
-  const created = await execute(["editor", "refresh", "--compile", "--timeout-ms", "50", "--unity", unity, "--project", runtime.dataDir], runtime);
+  const created = await execute(["tools", "run", "editor.refresh", "--compile", "--timeout-ms", "50", "--unity", unity, "--project", runtime.dataDir], runtime);
   const jobId = (created.data as { jobId: string }).jobId;
   const waited = await runtime.runner.wait(jobId, 3000);
 
@@ -339,14 +339,14 @@ test("package list and info read manifest and lock data", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
 
-  const list = await execute(["package", "list", "--project", project], runtime);
+  const list = await execute(["tools", "run", "package.list", "--project", project], runtime);
   assert.equal(list.ok, true);
   const data = list.data as { registry: string; packages: Array<{ name: string; requestedVersion?: string; lockedVersion?: string; source?: string }> };
   assert.equal(data.registry, "https://packages.unity.com");
   assert.deepEqual(data.packages.map((entry) => entry.name), ["com.example.tool", "com.unity.textmeshpro"]);
   assert.equal(data.packages[0].lockedVersion, "1.2.3");
 
-  const info = await execute(["package", "info", "com.example.tool", "--project", project], runtime);
+  const info = await execute(["tools", "run", "package.info", "com.example.tool", "--project", project], runtime);
   assert.equal(info.ok, true);
   assert.equal(((info.data as { package: { dependencies: Record<string, string> } }).package.dependencies)["com.unity.textmeshpro"], "3.0.6");
 });
@@ -360,8 +360,8 @@ test("package list and info accept UTF-8 BOM manifest and lock", async () => {
   await writeFile(join(packages, "manifest.json"), `\ufeff${manifest}`, "utf8");
   await writeFile(join(packages, "packages-lock.json"), `\ufeff${lock}`, "utf8");
 
-  const list = await execute(["package", "list", "--project", project], runtime);
-  const info = await execute(["package", "info", "com.example.tool", "--project", project], runtime);
+  const list = await execute(["tools", "run", "package.list", "--project", project], runtime);
+  const info = await execute(["tools", "run", "package.info", "com.example.tool", "--project", project], runtime);
 
   assert.equal(list.ok, true);
   assert.equal(info.ok, true);
@@ -455,7 +455,7 @@ test("package install updates manifest, deploys bridge and can start package res
   const project = await makeUnityProject();
   const unity = await makeFakeUnity(`process.exit(0);`);
 
-  const installed = await execute(["package", "install", "com.acme.lib@2.0.0", "--project", project, "--unity", unity], runtime);
+  const installed = await execute(["tools", "run", "package.install", "com.acme.lib@2.0.0", "--project", project, "--unity", unity], runtime);
   assert.equal(installed.ok, true);
   const jobData = installed.data as { kind: string; result: { action: string; package: string; installedVersion: string; bridge: { dependencyName: string; bridgePath: string; installMode: string } } };
   assert.equal(jobData.kind, "package");
@@ -478,10 +478,10 @@ test("package remove returns structured diagnostic for missing package", async (
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
 
-  const removed = await execute(["package", "remove", "com.missing", "--project", project, "--yes"], runtime);
+  const removed = await execute(["tools", "run", "package.remove", "com.missing", "--project", project, "--yes"], runtime);
   assert.equal(removed.ok, false);
   assert.equal(removed.error?.code, "PACKAGE_NOT_FOUND");
-  assert.equal(removed.error?.next_actions?.[0].includes("package list"), true);
+  assert.equal(removed.error?.next_actions?.[0].includes("tools run package.list"), true);
 });
 
 test("package remove with --yes asks an open Editor to refresh via bridge instead of batchmode", async () => {
@@ -490,7 +490,7 @@ test("package remove with --yes asks an open Editor to refresh via bridge instea
   const unity = await makeFakeUnity(`process.exit(0);`);
   const requests: Array<{ command: string; args: Record<string, unknown> }> = [];
 
-  const removed = await execute(["package", "remove", "com.example.tool", "--project", project, "--unity", unity, "--yes"], {
+  const removed = await execute(["tools", "run", "package.remove", "com.example.tool", "--project", project, "--unity", unity, "--yes"], {
     ...runtime,
     bridgeExecute: async (payload) => {
       requests.push({ command: payload.command, args: payload.args });
@@ -519,7 +519,7 @@ test("package remove with --yes returns UNITY_BUSY when the project is locked by
   await mkdir(join(project, "Temp"), { recursive: true });
   await writeFile(join(project, "Temp", "UnityLockfile"), "");
 
-  const removed = await execute(["package", "remove", "com.example.tool", "--project", project, "--unity", unity, "--bridge-endpoint", "http://127.0.0.1:9", "--yes"], runtime);
+  const removed = await execute(["tools", "run", "package.remove", "com.example.tool", "--project", project, "--unity", unity, "--bridge-endpoint", "http://127.0.0.1:9", "--yes"], runtime);
 
   assert.equal(removed.ok, false);
   assert.equal(removed.error?.code, "UNITY_BUSY");
@@ -537,7 +537,7 @@ test("package remove with --yes returns UNITY_BUSY when bridge refresh fails in 
   const project = await makeUnityProject();
   const unity = await makeFakeUnity(`process.exit(0);`);
 
-  const removed = await execute(["package", "remove", "com.example.tool", "--project", project, "--unity", unity, "--yes"], {
+  const removed = await execute(["tools", "run", "package.remove", "com.example.tool", "--project", project, "--unity", unity, "--yes"], {
     ...runtime,
     bridgeExecute: async () => ({ ok: false, error: { code: "BRIDGE_COMMAND_FAILED", message: "Unity is compiling" } })
   });
@@ -552,7 +552,7 @@ test("package write commands require an existing Unity manifest", async () => {
   const runtime = await makeRuntime();
   const project = await mkdtemp(join(tmpdir(), "not-unity-project-"));
 
-  const result = await execute(["package", "install", "com.acme.lib", "--project", project], runtime);
+  const result = await execute(["tools", "run", "package.install", "com.acme.lib", "--project", project], runtime);
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "MANIFEST_NOT_FOUND");
 });
@@ -566,7 +566,7 @@ process.stdout.write("E_PACKAGE_RESOLVE_FAILED: version conflict for com.acme.li
 process.exit(1);
 `);
 
-  const created = await execute(["package", "resolve", "--project", project, "--unity", unity], runtime);
+  const created = await execute(["tools", "run", "package.resolve", "--project", project, "--unity", unity], runtime);
   assert.equal(created.ok, true);
   const waited = await runtime.runner.wait((created.data as { jobId: string }).jobId, 3000);
   assert.equal(waited.status, "failed");
@@ -583,7 +583,7 @@ process.stdout.write("Packages\\\\com.unity_cli\\\\Editor\\\\UnityCliBatch.cs(13
 process.exit(1);
 `);
 
-  const created = await execute(["package", "resolve", "--project", project, "--unity", unity], runtime);
+  const created = await execute(["tools", "run", "package.resolve", "--project", project, "--unity", unity], runtime);
   assert.equal(created.ok, true);
   const waited = await runtime.runner.wait((created.data as { jobId: string }).jobId, 3000);
   assert.equal(waited.status, "failed");
@@ -596,15 +596,15 @@ test("package registry and scoped registry commands mutate manifest", async () =
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
 
-  const registry = await execute(["package", "registry", "set", "--url", "https://npm.example.com", "--project", project], runtime);
+  const registry = await execute(["tools", "run", "package.registry", "set", "--url", "https://npm.example.com", "--project", project], runtime);
   assert.equal(registry.ok, true);
   assert.equal((registry.data as { registry: string }).registry, "https://npm.example.com");
 
-  const scoped = await execute(["package", "scoped-registry", "add", "--name", "Acme", "--url", "https://registry.acme.test", "--scope", "com.acme,com.acme.tools", "--project", project], runtime);
+  const scoped = await execute(["tools", "run", "package.scoped-registry", "add", "--name", "Acme", "--url", "https://registry.acme.test", "--scope", "com.acme,com.acme.tools", "--project", project], runtime);
   assert.equal(scoped.ok, true);
   assert.deepEqual((scoped.data as { registry: { scopes: string[] } }).registry.scopes, ["com.acme", "com.acme.tools"]);
 
-  const list = await execute(["package", "scoped-registry", "list", "--project", project], runtime);
+  const list = await execute(["tools", "run", "package.scoped-registry", "list", "--project", project], runtime);
   assert.equal(list.ok, true);
   assert.equal((list.data as { scopedRegistries: Array<{ name: string }> }).scopedRegistries.some((entry) => entry.name === "Acme"), true);
 });
@@ -613,7 +613,7 @@ test("package resolve without Unity returns structured diagnostic when job reque
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
 
-  const result = await execute(["package", "resolve", "--project", project, "--job"], runtime);
+  const result = await execute(["tools", "run", "package.resolve", "--project", project, "--job"], runtime);
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "UNITY_NOT_FOUND");
 });
@@ -645,7 +645,7 @@ test("job-routing: test run returns UNITY_BUSY when project is locked by open Ed
   await mkdir(join(runtime.dataDir, "Temp"), { recursive: true });
   await writeFile(join(runtime.dataDir, "Temp", "UnityLockfile"), "lock", "utf8");
 
-  const result = await execute(["test", "run", "--unity", unity, "--project", runtime.dataDir], runtime);
+  const result = await execute(["tools", "run", "test.run", "--unity", unity, "--project", runtime.dataDir], runtime);
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "UNITY_BUSY");
   assert.equal(result.error?.transient, true);
@@ -665,7 +665,7 @@ test("job-routing: build run returns UNITY_BUSY when project is locked by open E
   await mkdir(join(runtime.dataDir, "Temp"), { recursive: true });
   await writeFile(join(runtime.dataDir, "Temp", "UnityLockfile"), "lock", "utf8");
 
-  const result = await execute(["build", "run", "--unity", unity, "--project", runtime.dataDir], runtime);
+  const result = await execute(["tools", "run", "build.run", "--unity", unity, "--project", runtime.dataDir], runtime);
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "UNITY_BUSY");
   assert.equal(result.error?.transient, true);

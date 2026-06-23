@@ -76,8 +76,8 @@ export const VFX_TOOLS: ToolMetadata[] = [
     docsTopic: "vfx",
     requiresPackages: ["com.unity.visualeffectgraph"],
     examples: [
-      { description: "Set an exposed float parameter", argv: ["vfx", "parameter", "VFXFire", "--name", "Intensity", "--type", "float", "--value", "2.5"] },
-      { description: "Set a vector3 parameter", argv: ["vfx", "parameter", "VFXFire", "--name", "Velocity", "--type", "vector3", "--x", "0", "--y", "1", "--z", "0"] }
+      { description: "Set an exposed float parameter", argv: ["tools", "run", "vfx.parameter", "VFXFire", "--name", "Intensity", "--type", "float", "--value", "2.5"] },
+      { description: "Set a vector3 parameter", argv: ["tools", "run", "vfx.parameter", "VFXFire", "--name", "Velocity", "--type", "vector3", "--x", "0", "--y", "1", "--z", "0"] }
     ]
   },
   {
@@ -101,8 +101,8 @@ export const VFX_TOOLS: ToolMetadata[] = [
     docsTopic: "vfx",
     requiresPackages: ["com.unity.visualeffectgraph"],
     examples: [
-      { description: "Play a VFX effect", argv: ["vfx", "control", "VFXFire", "--action", "play"] },
-      { description: "Set playback rate to 0.5x", argv: ["vfx", "control", "VFXFire", "--action", "rate", "--rate", "0.5"] }
+      { description: "Play a VFX effect", argv: ["tools", "run", "vfx.control", "VFXFire", "--action", "play"] },
+      { description: "Set playback rate to 0.5x", argv: ["tools", "run", "vfx.control", "VFXFire", "--action", "rate", "--rate", "0.5"] }
     ]
   },
   {
@@ -128,7 +128,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
     docsTopic: "vfx",
     requiresPackages: ["com.unity.visualeffectgraph"],
     examples: [
-      { description: "Send an Explode event with position attribute", argv: ["vfx", "event", "VFXFire", "--event-name", "Explode", "--attribute-name", "position", "--attribute-x", "1", "--attribute-y", "2", "--attribute-z", "3"] }
+      { description: "Send an Explode event with position attribute", argv: ["tools", "run", "vfx.event", "VFXFire", "--event-name", "Explode", "--attribute-name", "position", "--attribute-x", "1", "--attribute-y", "2", "--attribute-z", "3"] }
     ]
   },
   {
@@ -150,7 +150,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
     docsTopic: "vfx",
     requiresPackages: ["com.unity.visualeffectgraph"],
     examples: [
-      { description: "Create from AR template", argv: ["vfx", "template", "Assets/VFX/Sparkle.vfx", "--template", "AR/AugmentedRealityTemplate"] }
+      { description: "Create from AR template", argv: ["tools", "run", "vfx.template", "Assets/VFX/Sparkle.vfx", "--template", "AR/AugmentedRealityTemplate"] }
     ]
   },
   // ===== ParticleSystem =====

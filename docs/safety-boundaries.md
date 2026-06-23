@@ -98,7 +98,7 @@ Context（`readOnlyHint: true` 的工具）不得：
 
 ```powershell
 # 检查 fingerprint 状态
-unity_cli doctor
+unity_cli tools run diagnose.doctor
 # doctor 会报告 project_tool_fingerprint 检查结果
 ```
 

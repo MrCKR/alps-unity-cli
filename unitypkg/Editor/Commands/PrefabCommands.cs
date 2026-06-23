@@ -37,6 +37,8 @@ namespace UnityCli
             RegisterCommand(registry, "prefab.stage-save", "prefab", true, PrefabStageSave);
             RegisterCommand(registry, "prefab.stage-close", "prefab", true, PrefabStageClose);
             RegisterCommand(registry, "prefab.hierarchy", "prefab", false, PrefabHierarchy);
+            RegisterCommand(registry, "prefab.instantiate", "prefab", false, PrefabInstantiate);
+            RegisterCommand(registry, "prefab.unpack", "prefab", true, PrefabUnpack);
         }
 
         private static string PrefabInfo(BridgeRequest request)
@@ -230,6 +232,77 @@ namespace UnityCli
             }
             WriteLog("prefab_stage_close path=" + path + " save=" + save);
             return SuccessJson(PrefabStageJson("close", path, false));
+        }
+
+        private static string PrefabInstantiate(BridgeRequest request)
+        {
+            EnsureEditorNotBusy("prefab.instantiate");
+            var path = RequirePrefabPath(request.StringArg("path"));
+            var parentName = request.StringArg("parent");
+            var name = request.StringArg("name");
+            var posX = request.FloatArg("x", 0f);
+            var posY = request.FloatArg("y", 0f);
+            var posZ = request.FloatArg("z", 0f);
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("command", "prefab.instantiate").Prop("dryRun", true)
+                    .Prop("path", path)
+                    .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "prefab.instantiate").Prop("path", path).EndObject())
+                    .Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            var prefab = AssetDatabase.LoadMainAssetAtPath(path) as GameObject;
+            if (prefab == null)
+            {
+                throw new BridgeCommandException("E_PREFAB_NOT_FOUND", "Prefab asset not found: " + path, "Run asset search --type Prefab.");
+            }
+            Transform parent = null;
+            if (!string.IsNullOrEmpty(parentName))
+            {
+                var parentGo = ObjectRefResolver.FindGameObjectByPath(parentName);
+                if (parentGo == null) throw new BridgeCommandException("E_PARENT_NOT_FOUND", "Parent not found: " + parentName, "Pass a valid path.");
+                parent = parentGo.transform;
+            }
+            var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent != null ? parent.gameObject.scene : SceneManager.GetActiveScene());
+            if (parent != null) instance.transform.SetParent(parent, false);
+            instance.transform.position = new Vector3(posX, posY, posZ);
+            if (!string.IsNullOrEmpty(name)) instance.name = name;
+            EditorSceneManager.MarkSceneDirty(instance.scene);
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("command", "prefab.instantiate")
+                .PropRaw("instance", GameObjectTargetJson(instance))
+                .Prop("sourcePath", path)
+                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "prefab.instantiate").Prop("path", path).EndObject())
+                .Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        private static string PrefabUnpack(BridgeRequest request)
+        {
+            EnsureEditorNotBusy("prefab.unpack");
+            var gameObject = ObjectRefResolver.FindGameObjectByPath(request.StringArg("target") ?? request.StringArg("path"));
+            if (gameObject == null)
+            {
+                throw new BridgeCommandException("E_TARGET_NOT_FOUND", "GameObject not found for prefab.unpack.", "Pass a prefab instance path or name.");
+            }
+            if (!PrefabUtility.IsPartOfPrefabInstance(gameObject))
+            {
+                throw new BridgeCommandException("E_NOT_PREFAB_INSTANCE", gameObject.name + " is not a prefab instance.", "Pass a GameObject that is a prefab instance.");
+            }
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("command", "prefab.unpack").Prop("dryRun", true)
+                    .PropRaw("target", GameObjectTargetJson(gameObject))
+                    .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "prefab.unpack").EndObject())
+                    .Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            PrefabUtility.UnpackPrefabInstance(gameObject, PrefabUnpackMode.OutermostRoot, InteractionMode.AutomatedAction);
+            EditorSceneManager.MarkSceneDirty(gameObject.scene);
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("command", "prefab.unpack")
+                .PropRaw("target", GameObjectTargetJson(gameObject))
+                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "prefab.unpack").EndObject())
+                .Prop("logPath", LogPath()).EndObject().ToString());
         }
 
         private static string PrefabHierarchy(BridgeRequest request)

@@ -43,10 +43,10 @@ unity_cli tools run my.custom-tool --input '{}'
 
 ```powershell
 # 检查 Bridge 连接和项目工具 fingerprint
-unity_cli doctor
+unity_cli tools run diagnose.doctor
 
 # 诊断预检
-unity_cli diagnose preflight
+unity_cli tools run diagnose.preflight
 ```
 
 ## 扩展包命令

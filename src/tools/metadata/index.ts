@@ -35,6 +35,11 @@ import { EDITOR_TOOLS } from "./groups/editor.js";
 import { DIAGNOSE_TOOLS } from "./groups/diagnose.js";
 import { SCREENSHOT_TOOLS } from "./groups/screenshot.js";
 import { CODE_TOOLS } from "./groups/code.js";
+import { BUILD_TOOLS } from "./groups/build.js";
+import { CONSOLE_TOOLS } from "./groups/console.js";
+import { PACKAGE_TOOLS } from "./groups/package.js";
+import { OBJECT_TOOLS } from "./groups/object.js";
+import { REFLECTION_TOOLS } from "./groups/reflection.js";
 import { CLI_ONLY_TOOLS } from "./groups/cli-only.js";
 import { TOOLS_DISCOVERY_TOOLS } from "./groups/tools.js";
 import type { ToolMetadata, ToolSource } from "./types.js";
@@ -79,6 +84,11 @@ const CORE_TOOLS: ToolMetadata[] = [
   ...DIAGNOSE_TOOLS,
   ...SCREENSHOT_TOOLS,
   ...CODE_TOOLS,
+  ...CONSOLE_TOOLS,
+  ...PACKAGE_TOOLS,
+  ...BUILD_TOOLS,
+  ...OBJECT_TOOLS,
+  ...REFLECTION_TOOLS,
   ...CLI_ONLY_TOOLS,
   ...TOOLS_DISCOVERY_TOOLS,
 ];
@@ -182,11 +192,19 @@ function validateBuiltinTools(tools: ToolMetadata[], skipCliCommandBridgeCheck: 
     names.add(tool.name);
 
     if (!skipCliCommandBridgeCheck && tool.handler === "bridge" && tool.supportStatus !== "planned" && tool.cliCommand) {
-      const [group, ...commandParts] = tool.cliCommand.split(" ");
-      const command = commandParts.join(" ");
-      const spec = bridgeCommandRegistry.lookup(group, command);
-      if (!spec || spec.bridgeCommand !== tool.name) {
-        throw new Error(`Bridge tool metadata mismatch: ${tool.name} uses cliCommand="${tool.cliCommand}" but bridge registry resolves ${spec?.bridgeCommand ?? "<none>"}`);
+      // cliCommand 现为 "tools run <name>" 形态(README Project Baseline)。
+      // 通过工具名查 bridge spec,验证 bridgeCommand/toolName 与 tool.name 一致。
+      const match = /^tools run (.+)$/.exec(tool.cliCommand);
+      if (match) {
+        const toolName = match[1];
+        const spec = bridgeCommandRegistry.specs().find((s) => s.toolName === toolName || s.bridgeCommand === toolName);
+        if (!spec) {
+          throw new Error(`Bridge tool metadata mismatch: ${tool.name} uses cliCommand="${tool.cliCommand}" but no bridge spec resolves toolName/bridgeCommand="${toolName}"`);
+        }
+        const resolved = spec.toolName ?? spec.bridgeCommand;
+        if (resolved !== tool.name) {
+          throw new Error(`Bridge tool metadata mismatch: ${tool.name} uses cliCommand="${tool.cliCommand}" but bridge registry resolves ${resolved}`);
+        }
       }
     }
   }

@@ -1,12 +1,25 @@
 # unity-mcp 等价追踪
 
-> 本文追踪 `CoplayDev/unity-mcp` 到 `unity_cli` 的三条等价线：
+> 本文追踪 `CoplayDev/unity-mcp` 与 `IvanMurzak/Unity-MCP` 到 `unity_cli` 的三条等价线：
 >
 > 1. **Tools 功能点等价**：智能体能执行的 Unity Editor / Project 操作能力要等价。
 > 2. **Resources → Context 语义等价**：`unity-mcp` Resource 的只读语义要由 `unity_cli context` 或 read-only tool 等价覆盖。
 > 3. **Extensions 分类与实现等价**：可选包能力的分类、依赖、可用性和实现链路要与参考项目的 tool groups / optional packages 对齐。
 >
 > 本文不要求 MCP 协议形态等价；本项目保持 CLI-first、Bridge-first 定位。
+
+## 等价状态（2026-06 全量对齐后）
+
+基于参考项目源码深度对读（CoplayDev v9.6.6、IvanMurzak main），parity 状态如下：
+
+| 等价线 | 状态 | 说明 |
+| --- | --- | --- |
+| CoplayDev Tools | ✅ Matched | 19 工具模块 action 覆盖：scene/gameobject/component/asset/prefab/material/texture/ui/editor/console/camera/graphics/package/physics/probuilder/profiler/docs/script。仅 package dev-deploy/restore 明确排除，camera preset/force/release、material mode、prefab headless modify 记录为 Partial。 |
+| IvanMurzak Object/Reflection | ✅ Matched | object.get-data/modify、component.get/modify/list-types、reflection.method.find/call、type.schema 全部实现。patch 路径语法对齐（slash+[i]/[key]），执行顺序对齐。reflection 参数用 unity_cli native 简化。 |
+| Resources → Context | ✅ Matched | 24 个只读 Context，覆盖 project/editor/scene/prefab/tools/tests/instances。scene.opened 新增。component context 明确为轻量预览。 |
+| Extensions | ✅ Extension | ProBuilder(35)/Cinemachine(10)/VFX(16)/URP(3)/HDRP(2) 通过物理 extension 边界隔离，core 不硬引用可选包。Timeline/NavMesh/InputSystem/Terrain/Tilemap/Splines 记录为后续 optional extension 目标。 |
+
+契约验证：contractCommands=311, bridgeRegistryCommands=242, csharpRegisteredCommands=278, metadataTools=301。build/test(700)/pack 全通过。
 
 ## 边界
 

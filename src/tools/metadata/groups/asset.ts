@@ -11,7 +11,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "asset search",
+    cliCommand: "tools run asset.search",
     docsTopic: "asset"
   },
   {
@@ -23,7 +23,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "asset info",
+    cliCommand: "tools run asset.info",
     docsTopic: "asset"
   },
   {
@@ -35,7 +35,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "asset create",
+    cliCommand: "tools run asset.create",
     docsTopic: "asset"
   },
   {
@@ -47,7 +47,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "asset import",
+    cliCommand: "tools run asset.import",
     docsTopic: "asset"
   },
   {
@@ -59,7 +59,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "asset modify",
+    cliCommand: "tools run asset.modify",
     docsTopic: "asset"
   },
   {
@@ -72,7 +72,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
     destructiveHint: true,
     supportsDryRun: true,
     handler: "bridge",
-    cliCommand: "asset delete",
+    cliCommand: "tools run asset.delete",
     docsTopic: "asset"
   },
   {
@@ -84,7 +84,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "asset duplicate",
+    cliCommand: "tools run asset.duplicate",
     docsTopic: "asset"
   },
   {
@@ -96,7 +96,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "asset move",
+    cliCommand: "tools run asset.move",
     docsTopic: "asset"
   },
   {
@@ -108,7 +108,49 @@ export const ASSET_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "asset rename",
+    cliCommand: "tools run asset.rename",
     docsTopic: "asset"
+  },
+  {
+    name: "asset.search-built-in",
+    title: "Search Built-in Assets",
+    description: "Search built-in resources (Resources/ and Packages/) by keyword and optional type filter.",
+    group: "asset",
+    inputSchema: objSchema({ keyword: { type: "string" }, type: { type: "string" }, pageSize: { type: "integer", default: 100 } }),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run asset.search-built-in",
+    docsTopic: "asset",
+    equivalentUnityMcp: "assets-find-built-in"
+  },
+  {
+    name: "asset.get-data",
+    title: "Get Asset Data",
+    description: "Deep-serialize an asset's main Unity Object. Asset-friendly wrapper that reuses object.get-data serializer internally.",
+    group: "asset",
+    inputSchema: objSchema({ assetPath: { type: "string" }, path: { type: "string" }, maxDepth: { type: "integer", default: 4 }, includeFields: { type: "boolean", default: true }, includeProperties: { type: "boolean", default: true }, deepSerialization: { type: "boolean", default: true } }, ["assetPath"]),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run asset.get-data",
+    docsTopic: "asset",
+    equivalentUnityMcp: "assets-get-data"
+  },
+  {
+    name: "asset.preview",
+    title: "Asset Preview",
+    description: "Generate/read the asset preview thumbnail metadata (size, dimensions, transient state).",
+    group: "asset",
+    inputSchema: objSchema({ assetPath: { type: "string" }, path: { type: "string" } }, ["assetPath"]),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run asset.preview",
+    docsTopic: "asset",
+    equivalentUnityMcp: "manage_asset.generate_preview"
   }
 ];

@@ -24,7 +24,7 @@ async function writeBatch(dataDir: string, batch: unknown): Promise<string> {
 
 test("batch schema exposes defaults, steps and env allowlist", async () => {
   const runtime = await makeRuntime();
-  const result = await execute(["batch", "schema"], runtime);
+  const result = await execute(["tools", "run", "batch.schema"], runtime);
 
   assert.equal(result.ok, true);
   const schema = result.data as { properties: Record<string, unknown> };
@@ -39,12 +39,12 @@ test("batch run orders steps by dependsOn and aggregates envelopes", async () =>
   const batch = await writeBatch(runtime.dataDir, {
     defaults: { project: ".", unity },
     steps: [
-      { id: "test", command: ["test", "run"], dependsOn: ["refresh"] },
-      { id: "refresh", command: ["editor", "refresh"], args: ["--compile"] }
+      { id: "test", command: ["tools", "run", "test.run"], dependsOn: ["refresh"] },
+      { id: "refresh", command: ["tools", "run", "editor.refresh"], args: ["--compile"] }
     ]
   });
 
-  const result = await execute(["batch", "run", batch, "--yes"], runtime);
+  const result = await execute(["tools", "run", "batch.run", batch, "--yes"], runtime);
 
   assert.equal(result.ok, true);
   const data = result.data as { summary: { succeeded: number }; steps: Array<{ id: string; jobId?: string; logPath?: string; envelope: { ok: boolean } }>; logIndex: { steps: Array<{ jobId?: string; logPath?: string }> } };
@@ -63,7 +63,7 @@ test("batch can orchestrate long job status logs and cancel chain", async () => 
 process.stdout.write("build started\\n");
 setTimeout(() => process.exit(0), 5000);
 `);
-  const created = await execute(["build", "run", "--unity", unity, "--project", runtime.dataDir], runtime);
+  const created = await execute(["tools", "run", "build.run", "--unity", unity, "--project", runtime.dataDir], runtime);
   const jobId = (created.data as { jobId: string }).jobId;
   for (let attempt = 0; attempt < 20; attempt += 1) {
     const job = await runtime.store.get(jobId);
@@ -75,13 +75,13 @@ setTimeout(() => process.exit(0), 5000);
   }
   const batch = await writeBatch(runtime.dataDir, {
     steps: [
-      { id: "status", command: ["build", "status"], args: ["--id", jobId] },
-      { id: "logs", command: ["build", "logs"], args: ["--id", jobId, "--tail", "10"], dependsOn: ["status"] },
-      { id: "cancel", command: ["build", "cancel"], args: ["--id", jobId, "--yes"], dependsOn: ["logs"] }
+      { id: "status", command: ["tools", "run", "build.status"], args: ["--id", jobId] },
+      { id: "logs", command: ["tools", "run", "build.logs"], args: ["--id", jobId, "--tail", "10"], dependsOn: ["status"] },
+      { id: "cancel", command: ["tools", "run", "build.cancel"], args: ["--id", jobId, "--yes"], dependsOn: ["logs"] }
     ]
   });
 
-  const result = await execute(["batch", "run", batch, "--fail-fast", "true", "--yes"], runtime);
+  const result = await execute(["tools", "run", "batch.run", batch, "--fail-fast", "true", "--yes"], runtime);
 
   assert.equal(result.ok, true);
   const data = result.data as { summary: { succeeded: number }; steps: Array<{ id: string; envelope: { data: { status?: string; lines?: string[]; cancellation?: { mode: string } } } }> };
@@ -99,11 +99,11 @@ test("batch runs query edit test and screenshot commands from one TS registry", 
   const batch = await writeBatch(runtime.dataDir, {
     defaults: { project: ".", unity },
     steps: [
-      { id: "query-player", command: ["go", "find"], args: ["--name", "Player"] },
-      { id: "edit-player", command: ["component", "set", "Player"], args: ["--component", "Camera", "--property", "enabled", "--value", "false"], dependsOn: ["query-player"] },
-      { id: "run-tests", command: ["test", "run"], args: ["--platform", "EditMode"], dependsOn: ["edit-player"] },
-      { id: "camera", command: ["camera", "list"] },
-      { id: "capture", command: ["camera", "screenshot", "Main Camera"], args: ["--output", "Artifacts/player.png", "--overwrite"], dependsOn: ["run-tests", "camera"] }
+      { id: "query-player", command: ["tools", "run", "go.find"], args: ["--name", "Player"] },
+      { id: "edit-player", command: ["tools", "run", "component.set", "Player"], args: ["--component", "Camera", "--property", "enabled", "--value", "false"], dependsOn: ["query-player"] },
+      { id: "run-tests", command: ["tools", "run", "test.run"], args: ["--platform", "EditMode"], dependsOn: ["edit-player"] },
+      { id: "camera", command: ["tools", "run", "camera.list"] },
+      { id: "capture", command: ["tools", "run", "camera.screenshot", "Main Camera"], args: ["--output", "Artifacts/player.png", "--overwrite"], dependsOn: ["run-tests", "camera"] }
     ]
   });
   const bridgeRuntime = {
@@ -122,7 +122,7 @@ test("batch runs query edit test and screenshot commands from one TS registry", 
     }
   };
 
-  const result = await execute(["batch", "run", batch, "--yes"], bridgeRuntime);
+  const result = await execute(["tools", "run", "batch.run", batch, "--yes"], bridgeRuntime);
 
   assert.equal(result.ok, true);
   const data = result.data as { summary: { succeeded: number }; plannedEffects: Array<{ type: string }>; steps: Array<{ id: string; jobId?: string; envelope: { data: { command?: string } } }> };
@@ -139,18 +139,18 @@ test("batch preflight accepts query edit test and screenshot example", async () 
   const batch = await writeBatch(runtime.dataDir, {
     defaults: { project: ".", unity },
     steps: [
-      { id: "query", command: ["asset", "search"], args: ["--query", "Player", "--type", "Prefab"] },
-      { id: "edit", command: ["script", "edit", "Assets/Scripts/Player.cs"], args: ["--find", "speed = 1", "--replace", "speed = 2"], dependsOn: ["query"] },
-      { id: "test", command: ["test", "run"], args: ["--platform", "EditMode"], dependsOn: ["edit"] },
-      { id: "code", command: ["code", "exec"], args: ["--code", "return 1;"], dependsOn: ["edit"] },
-      { id: "camera", command: ["camera", "info", "Main Camera"] },
-      { id: "shader", command: ["shader", "read", "Assets/Shaders/Unlit.shader"] },
-      { id: "texture", command: ["texture", "import-settings", "Assets/Textures/Icon.png"], args: ["--readable", "false"], dependsOn: ["shader"] },
-      { id: "screenshot", command: ["scene", "screenshot", "Artifacts/after.png"], dependsOn: ["test", "camera", "texture"] }
+      { id: "query", command: ["tools", "run", "asset.search"], args: ["--query", "Player", "--type", "Prefab"] },
+      { id: "edit", command: ["tools", "run", "script.edit", "Assets/Scripts/Player.cs"], args: ["--find", "speed = 1", "--replace", "speed = 2"], dependsOn: ["query"] },
+      { id: "test", command: ["tools", "run", "test.run"], args: ["--platform", "EditMode"], dependsOn: ["edit"] },
+      { id: "code", command: ["tools", "run", "code.exec"], args: ["--code", "return 1;"], dependsOn: ["edit"] },
+      { id: "camera", command: ["tools", "run", "camera.info", "Main Camera"] },
+      { id: "shader", command: ["tools", "run", "shader.read", "Assets/Shaders/Unlit.shader"] },
+      { id: "texture", command: ["tools", "run", "texture.import-settings", "Assets/Textures/Icon.png"], args: ["--readable", "false"], dependsOn: ["shader"] },
+      { id: "screenshot", command: ["tools", "run", "scene.screenshot", "Artifacts/after.png"], dependsOn: ["test", "camera", "texture"] }
     ]
   });
 
-  const result = await execute(["batch", "run", batch, "--preflight"], runtime);
+  const result = await execute(["tools", "run", "batch.run", batch, "--preflight"], runtime);
 
   assert.equal(result.ok, true);
   const data = result.data as { preflight: Array<{ code: string }>; steps: Array<{ id: string; parallelSafe: boolean }> };
@@ -165,12 +165,12 @@ test("batch preflight rejects unknown and raw commands", async () => {
   const runtime = await makeRuntime();
   const batch = await writeBatch(runtime.dataDir, {
     steps: [
-      { id: "raw", command: ["raw", "mcp"], args: ["{}"] },
+      { id: "raw", command: ["tools", "run", "raw.mcp"], args: ["{}"] },
       { id: "unknown", command: ["mcp", "call"] }
     ]
   });
 
-  const result = await execute(["batch", "run", batch, "--preflight"], runtime);
+  const result = await execute(["tools", "run", "batch.run", batch, "--preflight"], runtime);
 
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "BATCH_PREFLIGHT_FAILED");
@@ -184,15 +184,15 @@ test("batch preflight marks read commands parallel-safe and writes serial", asyn
   const batch = await writeBatch(runtime.dataDir, {
     parallel: 2,
     steps: [
-      { id: "read-material", command: ["material", "info", "Assets/Materials/Player.mat"] },
-      { id: "read-animation", command: ["animation", "state", "Player"] },
-      { id: "write-animation", command: ["animation", "clip", "Assets/Animations/Run.anim"], args: ["--create"] },
-      { id: "write-vfx", command: ["vfx", "effect", "Effects/Emitter"], args: ["--add"] },
-      { id: "write-material", command: ["material", "set", "Assets/Materials/Player.mat"], args: ["--property", "_Color", "--value", "#ffffffff"] }
+      { id: "read-material", command: ["tools", "run", "material.info", "Assets/Materials/Player.mat"] },
+      { id: "read-animation", command: ["tools", "run", "animation.state", "Player"] },
+      { id: "write-animation", command: ["tools", "run", "animation.clip", "Assets/Animations/Run.anim"], args: ["--create"] },
+      { id: "write-vfx", command: ["tools", "run", "vfx.effect", "Effects/Emitter"], args: ["--add"] },
+      { id: "write-material", command: ["tools", "run", "material.set", "Assets/Materials/Player.mat"], args: ["--property", "_Color", "--value", "#ffffffff"] }
     ]
   });
 
-  const result = await execute(["batch", "run", batch, "--preflight"], runtime);
+  const result = await execute(["tools", "run", "batch.run", batch, "--preflight"], runtime);
 
   assert.equal(result.ok, false);
   const data = result.data as { steps: Array<{ id: string; parallelSafe: boolean }>; preflight: Array<{ code: string; stepId?: string }> };
@@ -211,10 +211,10 @@ test("batch parallel rejects commands not declared parallel-safe", async () => {
   const unity = await writeFakeUnity(runtime.dataDir, "process.exit(0);");
   const batch = await writeBatch(runtime.dataDir, {
     defaults: { project: ".", unity },
-    steps: [{ id: "build", command: ["build", "run"] }]
+    steps: [{ id: "build", command: ["tools", "run", "build.run"] }]
   });
 
-  const result = await execute(["batch", "run", batch, "--parallel", "2", "--preflight"], runtime);
+  const result = await execute(["tools", "run", "batch.run", batch, "--parallel", "2", "--preflight"], runtime);
 
   assert.equal(result.ok, false);
   const data = result.data as { preflight: Array<{ code: string }> };
@@ -225,12 +225,12 @@ test("batch fail-fast skips remaining ready steps after a failure", async () => 
   const runtime = await makeRuntime();
   const batch = await writeBatch(runtime.dataDir, {
     steps: [
-      { id: "missing-job", command: ["job", "status"], args: ["--id", "missing"] },
-      { id: "logs", command: ["job", "logs"], args: ["--id", "missing"] }
+      { id: "missing-job", command: ["tools", "run", "job.status"], args: ["--id", "missing"] },
+      { id: "logs", command: ["tools", "run", "job.logs"], args: ["--id", "missing"] }
     ]
   });
 
-  const result = await execute(["batch", "run", batch, "--yes"], runtime);
+  const result = await execute(["tools", "run", "batch.run", batch, "--yes"], runtime);
 
   assert.equal(result.ok, false);
   const data = result.data as { summary: { failed: number; skipped: number }; steps: Array<{ id: string; status: string; error?: { code: string } }> };
@@ -245,10 +245,10 @@ test("batch defaults cwd is used to resolve relative project paths", async () =>
   const unity = await writeFakeUnity(runtime.dataDir, "process.exit(0);");
   const batch = await writeBatch(runtime.dataDir, {
     defaults: { cwd: ".", project: ".", unity },
-    steps: [{ id: "refresh", command: ["editor", "refresh"], args: ["--compile"] }]
+    steps: [{ id: "refresh", command: ["tools", "run", "editor.refresh"], args: ["--compile"] }]
   });
 
-  const result = await execute(["batch", "run", batch, "--yes"], runtime);
+  const result = await execute(["tools", "run", "batch.run", batch, "--yes"], runtime);
 
   assert.equal(result.ok, true);
   const data = result.data as { steps: Array<{ envelope: { data: { projectPath: string } } }> };
@@ -259,10 +259,10 @@ test("batch env entries must be explicitly allowlisted", async () => {
   const runtime = await makeRuntime();
   const batch = await writeBatch(runtime.dataDir, {
     defaults: { env: { UNITY_EXE: "C:/Unity/Unity.exe" } },
-    steps: [{ id: "status", command: ["job", "status"], args: ["--id", "missing"] }]
+    steps: [{ id: "status", command: ["tools", "run", "job.status"], args: ["--id", "missing"] }]
   });
 
-  const result = await execute(["batch", "run", batch, "--preflight"], runtime);
+  const result = await execute(["tools", "run", "batch.run", batch, "--preflight"], runtime);
 
   assert.equal(result.ok, false);
   const data = result.data as { preflight: Array<{ code: string }> };
@@ -274,14 +274,14 @@ test("batch editor play/stop/state and tools run are registered commands", async
   const batch = await writeBatch(runtime.dataDir, {
     defaults: { project: ".", unity: "/path/to/Unity" },
     steps: [
-      { id: "enter-play", command: ["editor", "play"] },
-      { id: "check-state", command: ["editor", "state"], "dependsOn": ["enter-play"] },
-      { id: "run-echo", command: ["tools", "run"], args: ["sample.echo"], "dependsOn": ["check-state"] },
-      { id: "exit-play", command: ["editor", "stop"], "dependsOn": ["run-echo"] }
+      { id: "enter-play", command: ["tools", "run", "editor.play"] },
+      { id: "check-state", command: ["tools", "run", "editor.state"], "dependsOn": ["enter-play"] },
+      { id: "run-echo", command: ["tools", "run", "sample.echo"], "dependsOn": ["check-state"] },
+      { id: "exit-play", command: ["tools", "run", "editor.stop"], "dependsOn": ["run-echo"] }
     ]
   });
 
-  const result = await execute(["batch", "run", batch, "--preflight"], runtime);
+  const result = await execute(["tools", "run", "batch.run", batch, "--preflight"], runtime);
 
   assert.equal(result.ok, true);
   const data = result.data as { preflight: Array<{ code: string }> };
@@ -303,7 +303,7 @@ test("batch playModeSessionId and fingerprintMode are converted to CLI flags", a
     ]
   });
 
-  const result = await execute(["batch", "run", batch, "--preflight"], runtime);
+  const result = await execute(["tools", "run", "batch.run", batch, "--preflight"], runtime);
 
   assert.equal(result.ok, true);
   const data = result.data as { steps: Array<{ command: string[] }> };

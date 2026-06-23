@@ -12,7 +12,7 @@
 
 import { getString, getBoolean } from "../args.js";
 import { executeBridgeCommand, type BridgeRuntime } from "../bridge/index.js";
-import { readInstances } from "../instances.js";
+import { readInstances, handleTargetCommand, instanceListSummary } from "../instances.js";
 import { builtinToolGroups, builtinToolMetadata, extensionToolMetadata } from "../tools/metadata/index.js";
 import {
   builtinContextDescriptors,
@@ -208,8 +208,20 @@ async function handleContextRead(
     return success(requestId, {
       command: "context.read",
       context: contextName,
-      instances,
+      instances: instances.map(instanceListSummary),
       count: instances.length,
+      readOnlyHint: true,
+    });
+  }
+
+  if (contextName === "target.current") {
+    const dataDir = runtime.dataDir ?? process.cwd();
+    const result = await handleTargetCommand("get", [], {}, dataDir, requestId);
+    if (!result.ok) return result;
+    return success(requestId, {
+      command: "context.read",
+      context: contextName,
+      ...result.data as Record<string, unknown>,
       readOnlyHint: true,
     });
   }

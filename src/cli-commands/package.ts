@@ -167,9 +167,10 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
   return maybeResolvePackage("init", flags, runtime, requestId, projectPath, baseResult);
 }
 
-export async function handlePackage(command: string | undefined, args: string[], flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult> {
+export async function handlePackage(command: string | undefined, args: string[], flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult | undefined> {
   const projectPath = resolve(getString(flags, "project") ?? process.cwd());
   const {
+    PackageManagerError,
     addScopedRegistry,
     clearRegistry,
     installPackage,
@@ -189,7 +190,8 @@ export async function handlePackage(command: string | undefined, args: string[],
     return handlePackageInfoCommand(flags, requestId);
   }
 
-  if (command === "list") {
+  try {
+    if (command === "list") {
     return success(requestId, await readSnapshot(projectPath));
   }
 
@@ -215,7 +217,7 @@ export async function handlePackage(command: string | undefined, args: string[],
   if (command === "info") {
     const name = validatePackageName(args[0] ?? getString(flags, "name"));
     const info = await packageInfo(projectPath, name);
-    return info ? success(requestId, { projectPath, package: info }) : failure(requestId, "PACKAGE_NOT_FOUND", `Package not found: ${name}`, ["Run unity_cli package list to inspect installed packages."]);
+    return info ? success(requestId, { projectPath, package: info }) : failure(requestId, "PACKAGE_NOT_FOUND", `Package not found: ${name}`, ["Run unity_cli tools run package.list to inspect installed packages."]);
   }
 
   if (command === "search") {
@@ -283,7 +285,15 @@ export async function handlePackage(command: string | undefined, args: string[],
     return failure(requestId, "UNKNOWN_SCOPED_REGISTRY_COMMAND", "Expected package scoped-registry list, add or remove.");
   }
 
-  return failure(requestId, "UNKNOWN_PACKAGE_COMMAND", "Expected package list, status, info, search, install, remove, resolve, registry or scoped-registry.");
+  // 未知子命令放行到 bridge spec 直通（如 package.embed），与 handleBuild 一致。
+  // 主路由会 lookup bridgeCommandRegistry("package", command)，找不到再返回 UNKNOWN_COMMAND。
+  return undefined;
+  } catch (error) {
+    if (error instanceof PackageManagerError) {
+      return failure(requestId, error.code, error.message, error.nextActions);
+    }
+    throw error;
+  }
 }
 
 async function refreshOpenEditor(requestId: string, flags: Record<string, string | boolean>, runtime: Runtime): Promise<Record<string, unknown>> {

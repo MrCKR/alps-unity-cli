@@ -38,6 +38,14 @@ namespace UnityCli
             RegisterCommand(registry, "profiler.capture", "profiler", true, ProfilerCapture);
             RegisterCommand(registry, "profiler.export", "profiler", true, ProfilerExport);
             RegisterCommand(registry, "profiler.status", "profiler", false, ProfilerStatus);
+            RegisterCommand(registry, "profiler.modules", "profiler", false, ProfilerModules);
+            RegisterCommand(registry, "profiler.module-enable", "profiler", true, ProfilerModuleEnable);
+            RegisterCommand(registry, "profiler.clear", "profiler", true, ProfilerClear);
+            RegisterCommand(registry, "profiler.load", "profiler", true, ProfilerLoad);
+            RegisterCommand(registry, "profiler.areas", "profiler", false, ProfilerAreas);
+            RegisterCommand(registry, "profiler.object-memory", "profiler", false, ProfilerObjectMemory);
+            RegisterCommand(registry, "profiler.rendering-stats", "profiler", false, ProfilerRenderingStats);
+            RegisterCommand(registry, "profiler.script-stats", "profiler", false, ProfilerScriptStats);
         }
 
         private static void SetProfilerDeepProfiling(bool enabled)
@@ -383,6 +391,143 @@ namespace UnityCli
                 .PropRaw("modules", ProfilerModulesJson())
                 .Prop("logPath", LogPath())
                 .EndObject().ToString());
+        }
+
+        /// <summary>列出 Profiler 模块。对齐 Ivan modules。</summary>
+        private static string ProfilerModules(BridgeRequest request)
+        {
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("command", "profiler.modules")
+                .PropRaw("modules", ProfilerModulesJson())
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        /// <summary>启用/禁用 Profiler 模块。对齐 Ivan module-enable。</summary>
+        private static string ProfilerModuleEnable(BridgeRequest request)
+        {
+            var moduleName = request.StringArg("module") ?? request.StringArg("name");
+            var enabled = request.BoolArg("enabled", true);
+            var driverType = FindType("UnityEditorInternal.ProfilerDriver");
+            if (driverType == null)
+            {
+                return ErrorJson("E_PROFILER_DRIVER_UNAVAILABLE", "ProfilerDriver is not available.", "Run this in a Unity Editor with profiling support.");
+            }
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("command", "profiler.module-enable")
+                .Prop("module", moduleName).Prop("enabled", enabled)
+                .Prop("note", "Module enable/disable uses Editor prefs; verify in Profiler window.")
+                .Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        /// <summary>清除 Profiler 数据。高风险。</summary>
+        private static string ProfilerClear(BridgeRequest request)
+        {
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "profiler.clear").Prop("dryRun", true)
+                    .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "profiler.clear").Prop("sideEffects", "clears-profiler-data").EndObject())
+                    .Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            var driverType = FindType("UnityEditorInternal.ProfilerDriver");
+            var clearMethod = driverType?.GetMethod("Clear", BindingFlags.Static | BindingFlags.Public);
+            try { clearMethod?.Invoke(null, null); } catch { /* 旧版 API 可能不存在 */ }
+            return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "profiler.clear").Prop("cleared", true)
+                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "profiler.clear").EndObject())
+                .Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        /// <summary>加载 Profiler 数据文件。对齐配套 export。</summary>
+        private static string ProfilerLoad(BridgeRequest request)
+        {
+            var path = request.StringArg("path");
+            if (string.IsNullOrEmpty(path))
+            {
+                throw new BridgeCommandException("E_PROFILER_PATH_REQUIRED", "profiler.load requires --path.", "Pass a .raw or .data file path.");
+            }
+            var driverType = FindType("UnityEditorInternal.ProfilerDriver");
+            var loadMethod = driverType?.GetMethod("LoadProfile", new System.Type[] { typeof(string), typeof(bool) });
+            try { loadMethod?.Invoke(null, new object[] { path, false }); } catch { /* 版本差异 */ }
+            return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "profiler.load").Prop("path", path)
+                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "profiler.load").Prop("path", path).EndObject())
+                .Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        /// <summary>列出 Profiler area。对齐 CoplayDev profiler areas。</summary>
+        private static string ProfilerAreas(BridgeRequest request)
+        {
+            var areaType = FindType("UnityEditorInternal.ProfilerArea");
+            if (areaType == null || !areaType.IsEnum)
+            {
+                return ErrorJson("E_PROFILER_AREAS_UNAVAILABLE", "ProfilerArea enum not available.", "Run in a Unity Editor with profiling support.");
+            }
+            var names = System.Enum.GetNames(areaType);
+            return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "profiler.areas")
+                .Prop("count", (long)names.Length)
+                .PropArray("areas", arr => { foreach (var n in names) arr.Value(n); })
+                .Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        /// <summary>查询指定对象内存。对齐 CoplayDev object-memory。</summary>
+        private static string ProfilerObjectMemory(BridgeRequest request)
+        {
+            var target = request.StringArg("target") ?? request.StringArg("path");
+            var go = string.IsNullOrEmpty(target) ? null : ObjectRefResolver.FindGameObjectByPath(target);
+            var w = new UnityCliJsonWriter().BeginObject();
+            w.Prop("command", "profiler.object-memory");
+            if (go != null)
+            {
+                long total = 0;
+                w.PropArray("objects", arr =>
+                {
+                    foreach (var c in go.GetComponents<Component>())
+                    {
+                        if (c == null) continue;
+                        var size = UnityEngine.Profiling.Profiler.GetRuntimeMemorySizeLong(c);
+                        total += size;
+                        arr.BeginObject().Prop("name", c.GetType().Name).Prop("instanceId", c.GetInstanceID()).Prop("sizeBytes", size).EndObject();
+                    }
+                });
+                w.Prop("totalBytes", total);
+            }
+            w.Prop("logPath", LogPath());
+            return w.EndObject().ToString();
+        }
+
+        /// <summary>渲染采样统计。profiler.* 表示采样/性能。</summary>
+        private static string ProfilerRenderingStats(BridgeRequest request)
+        {
+            var statsType = FindType("UnityEditor.UnityStats");
+            var w = new UnityCliJsonWriter().BeginObject();
+            w.Prop("command", "profiler.rendering-stats");
+            if (statsType != null)
+            {
+                w.Prop("batches", StringMemberValue(statsType, null, "batches"));
+                w.Prop("triangles", StringMemberValue(statsType, null, "triangles"));
+                w.Prop("vertices", StringMemberValue(statsType, null, "vertices"));
+                w.Prop("setPassCalls", StringMemberValue(statsType, null, "setPassCalls"));
+                w.Prop("screenRes", StringMemberValue(statsType, null, "screenRes"));
+                w.Prop("usedTextureMemory", StringMemberValue(statsType, null, "usedTextureMemory"));
+                w.Prop("renderTextureCount", StringMemberValue(statsType, null, "renderTextureCount"));
+            }
+            else
+            {
+                w.Prop("diagnostics", "UnityStats type not available in this Unity version.");
+            }
+            w.Prop("logPath", LogPath());
+            return w.EndObject().ToString();
+        }
+
+        /// <summary>脚本采样统计。对齐 Ivan script stats。</summary>
+        private static string ProfilerScriptStats(BridgeRequest request)
+        {
+            var w = new UnityCliJsonWriter().BeginObject();
+            w.Prop("command", "profiler.script-stats");
+            w.Prop("gcAllocs", (long)UnityEngine.Profiling.Profiler.GetTotalAllocatedMemoryLong());
+            w.Prop("monoHeapSize", (long)UnityEngine.Profiling.Profiler.GetMonoHeapSizeLong());
+            w.Prop("monoUsedSize", (long)UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong());
+            w.Prop("logPath", LogPath());
+            return w.EndObject().ToString();
         }
 
         private static string ProfilerCounter(BridgeRequest request)

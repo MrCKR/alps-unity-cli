@@ -62,7 +62,7 @@ test("code exec --file forwards live bridge payload with source hash and artifac
   await writeFile(sourcePath, "Console.WriteLine(\"hi\"); return 7;\n", "utf8");
   const requests: BridgeRequest[] = [];
 
-  const result = await execute(["code", "exec", "--file", sourcePath, "--args", "{\"name\":\"UnityCli\"}", "--artifact-dir", artifactDir, "--yes"], {
+  const result = await execute(["tools", "run", "code.exec", "--file", sourcePath, "--args", "{\"name\":\"UnityCli\"}", "--artifact-dir", artifactDir, "--yes"], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
@@ -93,14 +93,14 @@ test("code exec --file forwards live bridge payload with source hash and artifac
 
 test("code exec maps live timeout and busy bridge responses to structured envelopes", async () => {
   const runtime = await makeRuntime();
-  const running = await execute(["code", "exec", "--code", "return 1;", "--timeout-ms", "1000", "--yes"], {
+  const running = await execute(["tools", "run", "code.exec", "--code", "return 1;", "--timeout-ms", "1000", "--yes"], {
     ...runtime,
     bridgeExecute: async () => ({
       ok: true,
       data: { status: "running", requestId: "req_bridge", sideEffectSemantics: "started-before-http-timeout", logPath: "Logs/UnityCliBridge.log" }
     })
   });
-  const busy = await execute(["code", "exec", "--code", "return 1;", "--timeout-ms", "2000", "--yes"], {
+  const busy = await execute(["tools", "run", "code.exec", "--code", "return 1;", "--timeout-ms", "2000", "--yes"], {
     ...runtime,
     bridgeExecute: async () => ({
       ok: false,
@@ -130,7 +130,7 @@ test("code exec maps live timeout and busy bridge responses to structured envelo
 
 test("code exec preserves compile diagnostics from bridge errors", async () => {
   const runtime = await makeRuntime();
-  const result = await execute(["code", "exec", "--code", "return missing;", "--yes"], {
+  const result = await execute(["tools", "run", "code.exec", "--code", "return missing;", "--yes"], {
     ...runtime,
     bridgeExecute: async () => ({
       ok: false,
@@ -147,11 +147,11 @@ test("code exec preserves compile diagnostics from bridge errors", async () => {
 test("code exec validates source selection, args json, channel and refs", async () => {
   const runtime = await makeRuntime();
 
-  const missing = await execute(["code", "exec"], runtime);
-  const both = await execute(["code", "exec", "--code", "return 1;", "--stdin"], runtime);
-  const args = await execute(["code", "exec", "--code", "return 1;", "--args", "[]", "--yes"], runtime);
-  const channel = await execute(["code", "exec", "--code", "return 1;", "--channel", "raw", "--yes"], runtime);
-  const refs = await execute(["code", "exec", "--code", "return 1;", "--refs", join(runtime.dataDir, "missing.dll"), "--yes"], runtime);
+  const missing = await execute(["tools", "run", "code.exec"], runtime);
+  const both = await execute(["tools", "run", "code.exec", "--code", "return 1;", "--stdin"], runtime);
+  const args = await execute(["tools", "run", "code.exec", "--code", "return 1;", "--args", "[]", "--yes"], runtime);
+  const channel = await execute(["tools", "run", "code.exec", "--code", "return 1;", "--channel", "raw", "--yes"], runtime);
+  const refs = await execute(["tools", "run", "code.exec", "--code", "return 1;", "--refs", join(runtime.dataDir, "missing.dll"), "--yes"], runtime);
 
   assert.equal(missing.error?.code, "E_CODE_SOURCE_INVALID");
   assert.equal(both.error?.code, "E_CODE_SOURCE_INVALID");
@@ -167,7 +167,7 @@ test("code exec --channel batchmode creates Unity job and deploys bridge package
   const sourcePath = join(runtime.dataDir, "job.csx");
   await writeFile(sourcePath, "return 42;", "utf8");
 
-  const created = await execute(["code", "exec", "--file", sourcePath, "--channel", "batchmode", "--unity", unity, "--project", project, "--timeout-ms", "1234", "--yes"], runtime);
+  const created = await execute(["tools", "run", "code.exec", "--file", sourcePath, "--channel", "batchmode", "--unity", unity, "--project", project, "--timeout-ms", "1234", "--yes"], runtime);
 
   assert.equal(created.ok, true);
   const data = created.data as { jobId: string; kind: string; command: string[]; result: { command: string; execution: { channel: string; timeoutMs: number }; bridge: { dependencyName: string } } };
@@ -197,7 +197,7 @@ if (resultIndex >= 0) fs.writeFileSync(process.argv[resultIndex + 1], JSON.strin
 process.exit(0);
 `);
 
-  const created = await execute(["code", "exec", "--code", "return 42;", "--channel", "batchmode", "--unity", unity, "--project", project, "--yes"], runtime);
+  const created = await execute(["tools", "run", "code.exec", "--code", "return 42;", "--channel", "batchmode", "--unity", unity, "--project", project, "--yes"], runtime);
   const jobId = (created.data as { jobId: string }).jobId;
   const waited = await runtime.runner.wait(jobId, 3000);
 
@@ -221,7 +221,7 @@ test("code exec maps artifact manifest write failures", async () => {
   const artifactFile = join(runtime.dataDir, "not-a-directory");
   await writeFile(artifactFile, "occupied", "utf8");
 
-  const result = await execute(["code", "exec", "--code", "return 1;", "--artifact-dir", artifactFile, "--yes"], runtime);
+  const result = await execute(["tools", "run", "code.exec", "--code", "return 1;", "--artifact-dir", artifactFile, "--yes"], runtime);
 
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "E_ARTIFACT_WRITE_FAILED");
@@ -233,7 +233,7 @@ test("code wait timeout returns execution timeout details while job continues", 
   const project = await makeUnityProject(runtime.dataDir);
   const unity = await makeFakeUnity(runtime.dataDir, `setTimeout(() => process.exit(0), 1000);`);
 
-  const result = await execute(["code", "exec", "--code", "return 42;", "--channel", "batchmode", "--unity", unity, "--project", project, "--wait", "--wait-timeout-ms", "10", "--yes"], runtime);
+  const result = await execute(["tools", "run", "code.exec", "--code", "return 42;", "--channel", "batchmode", "--unity", unity, "--project", project, "--wait", "--wait-timeout-ms", "10", "--yes"], runtime);
 
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "E_EXECUTION_TIMEOUT");

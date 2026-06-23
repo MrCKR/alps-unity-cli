@@ -104,6 +104,10 @@ namespace UnityCli
             RegisterScriptCommands(registry);
             RegisterScriptableObjectCommands(registry);
             RegisterCodeExecCommand(registry);
+            RegisterObjectCommands(registry);
+            RegisterReflectionCommands(registry);
+            RegisterScreenshotCommands(registry);
+            RegisterBuildCommands(registry);
             RegisterProjectToolCommands(registry);
             RegisterRuntimeToolCommands(registry);
             RegisterContextCommands(registry);

@@ -1,4 +1,4 @@
-import { boolFlag, compactArgs, queryArgs, stringFlag } from "../args.js";
+import { boolFlag, compactArgs, floatFlag, queryArgs, stringFlag } from "../args.js";
 import type { BridgeCommandSpec } from "../types.js";
 
 export const prefabBridgeSpecs: BridgeCommandSpec[] = [
@@ -8,7 +8,9 @@ export const prefabBridgeSpecs: BridgeCommandSpec[] = [
   { group: "prefab", command: "modify", bridgeCommand: "prefab.modify", buildArgs: prefabArgs },
   { group: "prefab", command: "stage-open", bridgeCommand: "prefab.stage-open", buildArgs: prefabArgs },
   { group: "prefab", command: "stage-save", bridgeCommand: "prefab.stage-save", buildArgs: prefabArgs },
-  { group: "prefab", command: "stage-close", bridgeCommand: "prefab.stage-close", buildArgs: prefabArgs }
+  { group: "prefab", command: "stage-close", bridgeCommand: "prefab.stage-close", buildArgs: prefabArgs },
+  { group: "prefab", command: "instantiate", bridgeCommand: "prefab.instantiate", buildArgs: prefabInstantiateArgs, supportsDryRun: true },
+  { group: "prefab", command: "unpack", bridgeCommand: "prefab.unpack", buildArgs: prefabUnpackArgs, supportsDryRun: true }
 ];
 
 function prefabArgs({ command, flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
@@ -34,5 +36,25 @@ function prefabArgs({ command, flags, positionalTarget }: Parameters<BridgeComma
   return compactArgs({
     ...queryArgs(flags),
     path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "prefab")
+  });
+}
+
+function prefabInstantiateArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({
+    path: positionalTarget ?? stringFlag(flags, "path"),
+    parent: stringFlag(flags, "parent"),
+    name: stringFlag(flags, "name"),
+    x: floatFlag(flags, "x"),
+    y: floatFlag(flags, "y"),
+    z: floatFlag(flags, "z"),
+    dryRun: boolFlag(flags, "dry-run")
+  });
+}
+
+function prefabUnpackArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({
+    target: positionalTarget ?? stringFlag(flags, "target"),
+    path: stringFlag(flags, "path"),
+    dryRun: boolFlag(flags, "dry-run")
   });
 }

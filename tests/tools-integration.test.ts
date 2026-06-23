@@ -7,7 +7,7 @@ import test from "node:test";
 import { execute } from "../src/cli.js";
 import { JobStore } from "../src/job-store.js";
 import { JobRunner } from "../src/job-runner.js";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -84,7 +84,7 @@ test("integration: tools describe scene.hierarchy via execute()", async () => {
 
 test("integration: capabilities via execute()", async () => {
   const runtime = await makeRuntime();
-  const result = await execute(["capabilities"], runtime);
+  const result = await execute(["tools", "run", "diagnose.capabilities"], runtime);
   assert.equal(result.ok, true);
 
   const data = result.data as Record<string, unknown>;
@@ -98,8 +98,8 @@ test("integration: capabilities via execute()", async () => {
 
 test("integration: docs built-in topics via canonical docs command", async () => {
   const runtime = await makeRuntime();
-  const list = await execute(["docs"], runtime);
-  const topic = await execute(["docs", "topic", "scene"], runtime);
+  const list = await execute(["tools", "run", "docs.list"], runtime);
+  const topic = await execute(["tools", "run", "docs.topic", "scene"], runtime);
 
   assert.equal(list.ok, true);
   assert.equal(topic.ok, true);
@@ -108,15 +108,17 @@ test("integration: docs built-in topics via canonical docs command", async () =>
   assert.equal((topic.data as { topic: string }).topic, "scene");
 });
 
-test("integration: package without subcommand returns CLI and Unity package info", async () => {
+test("integration: package.list runs through tools entrypoint", async () => {
   const runtime = await makeRuntime();
-  const result = await execute(["package"], runtime);
+  const project = await mkdtemp(join(tmpdir(), "unity_cli-pkg-"));
+  await mkdir(join(project, "Packages"), { recursive: true });
+  await writeFile(join(project, "Packages", "manifest.json"), `${JSON.stringify({ dependencies: { "com.example.tool": "1.0.0" } }, null, 2)}\n`, "utf8");
+
+  const result = await execute(["tools", "run", "package.list", "--project", project], runtime);
 
   assert.equal(result.ok, true);
-  const data = result.data as { command: string; npm: { name: string }; unity: { name: string } };
-  assert.equal(data.command, "package");
-  assert.equal(data.npm.name, "@alps_ckr/unity_cli");
-  assert.equal(data.unity.name, "com.unity_cli");
+  const data = result.data as { packages: Array<{ name: string; requestedVersion?: string }> };
+  assert.deepEqual(data.packages.map((entry) => entry.name), ["com.example.tool"]);
 });
 
 

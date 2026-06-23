@@ -34,6 +34,75 @@ namespace UnityCli
             RegisterCommand(registry, "shader.read", "shader", false, ShaderRead);
             RegisterCommand(registry, "shader.create", "shader", true, ShaderCreate);
             RegisterCommand(registry, "shader.update", "shader", true, ShaderUpdate);
+            RegisterCommand(registry, "shader.list", "shader", false, ShaderList);
+            RegisterCommand(registry, "shader.get-data", "shader", false, ShaderGetData);
+        }
+
+        /// <summary>列出项目中所有 Shader 资产。对齐 Ivan shader list。</summary>
+        private static string ShaderList(BridgeRequest request)
+        {
+            var keyword = request.StringArg("keyword") ?? request.StringArg("search");
+            var guids = AssetDatabase.FindAssets("t:Shader " + (keyword ?? string.Empty));
+            var pageSize = Math.Max(1, Math.Min(request.IntArg("pageSize", 100), 500));
+            var results = new List<string>();
+            foreach (var guid in guids)
+            {
+                if (results.Count >= pageSize) break;
+                var assetPath = AssetDatabase.GUIDToAssetPath(guid);
+                var shader = AssetDatabase.LoadMainAssetAtPath(assetPath) as Shader;
+                if (shader == null) continue;
+                results.Add(new UnityCliJsonWriter().BeginObject()
+                    .Prop("path", NormalizeAssetPath(assetPath))
+                    .Prop("guid", guid)
+                    .Prop("name", shader.name)
+                    .Prop("propertyCount", (long)shader.GetPropertyCount())
+                    .Prop("renderQueue", (long)shader.renderQueue)
+                    .EndObject().ToString());
+            }
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("command", "shader.list").Prop("count", (long)results.Count)
+                .PropArray("shaders", arr => { foreach (var r in results) arr.RawValue(r); })
+                .Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        /// <summary>读取 Shader 属性/subshaders/passes/compile messages。对齐 Ivan shader get-data。</summary>
+        private static string ShaderGetData(BridgeRequest request)
+        {
+            var path = request.StringArg("path") ?? request.StringArg("assetPath");
+            Shader shader;
+            if (!string.IsNullOrEmpty(path))
+            {
+                shader = AssetDatabase.LoadMainAssetAtPath(path) as Shader;
+            }
+            else
+            {
+                var name = request.StringArg("name");
+                shader = Shader.Find(name);
+            }
+            if (shader == null)
+            {
+                throw new BridgeCommandException("E_SHADER_NOT_FOUND", "Shader not found.", "Run shader.list to discover shader paths.");
+            }
+            var w = new UnityCliJsonWriter().BeginObject();
+            w.Prop("command", "shader.get-data");
+            w.Prop("name", shader.name);
+            w.Prop("renderQueue", (long)shader.renderQueue);
+            w.Prop("isSupported", shader.isSupported);
+            w.PropArray("properties", arr =>
+            {
+                for (var i = 0; i < shader.GetPropertyCount(); i++)
+                {
+                    arr.BeginObject()
+                        .Prop("name", shader.GetPropertyName(i))
+                        .Prop("description", shader.GetPropertyDescription(i))
+                        .Prop("type", shader.GetPropertyType(i).ToString())
+                        .Prop("flags", shader.GetPropertyFlags(i).ToString())
+                        .EndObject();
+                }
+            });
+            w.Prop("propertyCount", (long)shader.GetPropertyCount());
+            w.Prop("logPath", LogPath());
+            return w.EndObject().ToString();
         }
 
         private static string ShaderInfo(BridgeRequest request)

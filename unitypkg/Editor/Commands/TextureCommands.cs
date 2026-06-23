@@ -34,6 +34,109 @@ namespace UnityCli
             RegisterCommand(registry, "texture.create", "texture", true, TextureCreate);
             RegisterCommand(registry, "texture.sprite", "texture", true, TextureSprite);
             RegisterCommand(registry, "texture.import-settings", "texture", true, TextureImportSettings);
+            RegisterCommand(registry, "texture.generate", "texture", true, TextureGenerate);
+        }
+
+        /// <summary>生成程序化纹理：pattern/gradient/noise。对齐 CoplayDev texture generate。</summary>
+        private static string TextureGenerate(BridgeRequest request)
+        {
+            EnsureEditorNotBusy("texture.generate");
+            var path = request.StringArg("path");
+            if (string.IsNullOrEmpty(path) || !path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new BridgeCommandException("E_TEXTURE_PATH_REQUIRED", "texture.generate requires an Assets/*.png path.", "Pass Assets/Textures/Generated.png.");
+            }
+            var width = Math.Max(1, Math.Min(request.IntArg("width", 256), 4096));
+            var height = Math.Max(1, Math.Min(request.IntArg("height", 256), 4096));
+            var pattern = request.StringArg("pattern") ?? "solid";
+            var color1 = ParseColorArg(request.StringArg("color"), Color.white);
+            var color2 = ParseColorArg(request.StringArg("color2"), Color.black);
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("command", "texture.generate").Prop("dryRun", true)
+                    .Prop("path", path).Prop("width", (long)width).Prop("height", (long)height).Prop("pattern", pattern)
+                    .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "texture.generate").Prop("path", path).EndObject())
+                    .Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            var texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
+            var pixels = new Color32[width * height];
+            for (var y = 0; y < height; y++)
+            {
+                for (var x = 0; x < width; x++)
+                {
+                    Color c;
+                    if (string.Equals(pattern, "gradient", StringComparison.OrdinalIgnoreCase)
+                        || string.Equals(pattern, "radial", StringComparison.OrdinalIgnoreCase))
+                    {
+                        // gradient=linear(沿 x), radial=从中心向外
+                        var t = string.Equals(pattern, "radial", StringComparison.OrdinalIgnoreCase)
+                            ? Vector2.Distance(new Vector2(x, y), new Vector2(width / 2f, height / 2f)) / Mathf.Max(width, height) * 2f
+                            : (float)x / Mathf.Max(1, width - 1);
+                        c = Color.Lerp(color1, color2, Mathf.Clamp01(t));
+                    }
+                    else if (string.Equals(pattern, "noise", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var n = Mathf.PerlinNoise((float)x / width * 8f, (float)y / height * 8f);
+                        c = Color.Lerp(color1, color2, n);
+                    }
+                    else if (string.Equals(pattern, "checkerboard", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var size = Mathf.Max(1, request.IntArg("patternSize", 8));
+                        c = ((x / size + y / size) % 2 == 0) ? color1 : color2;
+                    }
+                    else if (string.Equals(pattern, "stripes", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var size = Mathf.Max(1, request.IntArg("patternSize", 8));
+                        c = ((y / size) % 2 == 0) ? color1 : color2;
+                    }
+                    else if (string.Equals(pattern, "dots", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var size = Mathf.Max(1, request.IntArg("patternSize", 8));
+                        var cx = x % size;
+                        var cy = y % size;
+                        var r = size / 2f;
+                        c = (cx - r) * (cx - r) + (cy - r) * (cy - r) <= r * r ? color2 : color1;
+                    }
+                    else if (string.Equals(pattern, "grid", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var size = Mathf.Max(1, request.IntArg("patternSize", 8));
+                        c = (x % size == 0 || y % size == 0) ? color2 : color1;
+                    }
+                    else if (string.Equals(pattern, "brick", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var size = Mathf.Max(1, request.IntArg("patternSize", 8));
+                        var row = y / size;
+                        var offset = (row % 2 == 0) ? 0 : size / 2;
+                        c = (x + offset) % size == 0 || y % size == 0 ? color2 : color1;
+                    }
+                    else
+                    {
+                        c = color1;
+                    }
+                    pixels[y * width + x] = c;
+                }
+            }
+            texture.SetPixels32(pixels);
+            texture.Apply();
+            CreateAssetDirectory(path);
+            var bytes = texture.EncodeToPNG();
+            File.WriteAllBytes(AssetFullPath(path), bytes);
+            AssetDatabase.ImportAsset(path);
+            UnityEngine.Object.DestroyImmediate(texture);
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("command", "texture.generate")
+                .Prop("path", path).Prop("width", (long)width).Prop("height", (long)height).Prop("pattern", pattern)
+                .Prop("sizeBytes", (long)bytes.Length)
+                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "texture.generate").Prop("path", path).EndObject())
+                .Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        private static Color ParseColorArg(string value, Color fallback)
+        {
+            if (string.IsNullOrEmpty(value)) return fallback;
+            if (ColorUtility.TryParseHtmlString(value, out var c)) return c;
+            return fallback;
         }
 
         private static string TextureInfo(BridgeRequest request)

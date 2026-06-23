@@ -11,7 +11,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "profiler status",
+    cliCommand: "tools run profiler.status",
     docsTopic: "profiler",
   },
   {
@@ -23,7 +23,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "hybrid",
-    cliCommand: "profiler start",
+    cliCommand: "tools run profiler.start",
     docsTopic: "profiler",
   },
   {
@@ -35,7 +35,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "profiler stop",
+    cliCommand: "tools run profiler.stop",
     docsTopic: "profiler",
   },
   {
@@ -47,7 +47,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "profiler pause",
+    cliCommand: "tools run profiler.pause",
     docsTopic: "profiler",
   },
   {
@@ -59,7 +59,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "profiler counter",
+    cliCommand: "tools run profiler.counter",
     docsTopic: "profiler",
   },
   {
@@ -71,7 +71,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "profiler memory",
+    cliCommand: "tools run profiler.memory",
     docsTopic: "profiler",
   },
   {
@@ -83,7 +83,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "profiler frame",
+    cliCommand: "tools run profiler.frame",
     docsTopic: "profiler",
   },
   {
@@ -97,12 +97,12 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     longRunning: true,
     supportsDryRun: false,
     handler: "hybrid",
-    cliCommand: "profiler capture",
+    cliCommand: "tools run profiler.capture",
     cancellationSemantics: "Live bridge captures are cooperative and may finish before cancellation can take effect; --job captures can be cancelled with job cancel --id <jobId> using immediate Unity batchmode process termination semantics.",
     docsTopic: "profiler",
     examples: [
-      { description: "Capture 1 second of profiler data", argv: ["profiler", "capture", "profile.json", "--duration-ms", "1000"] },
-      { description: "Capture as job with wait", argv: ["profiler", "capture", "profile.json", "--job", "--wait"] }
+      { description: "Capture 1 second of profiler data", argv: ["tools", "run", "profiler.capture", "profile.json", "--duration-ms", "1000"] },
+      { description: "Capture as job with wait", argv: ["tools", "run", "profiler.capture", "profile.json", "--job", "--wait"] }
     ],
   },
   {
@@ -115,10 +115,123 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     longRunning: true,
     handler: "bridge",
-    cliCommand: "profiler export",
+    cliCommand: "tools run profiler.export",
     docsTopic: "profiler",
     examples: [
-      { description: "Export profiler JSON", argv: ["profiler", "export", "profile.json", "--overwrite"] }
+      { description: "Export profiler JSON", argv: ["tools", "run", "profiler.export", "profile.json", "--overwrite"] }
     ],
+  },
+  {
+    name: "profiler.modules",
+    title: "Profiler Modules",
+    description: "List available Profiler modules and their visibility state.",
+    group: "profiler",
+    inputSchema: objSchema({}),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run profiler.modules",
+    docsTopic: "profiler",
+    equivalentUnityMcp: "profiler.modules"
+  },
+  {
+    name: "profiler.module-enable",
+    title: "Enable Profiler Module",
+    description: "Enable or disable a Profiler module by name.",
+    group: "profiler",
+    inputSchema: objSchema({ module: { type: "string" }, enabled: { type: "boolean", default: true } }, ["module"]),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run profiler.module-enable",
+    docsTopic: "profiler",
+    equivalentUnityMcp: "profiler.module-enable"
+  },
+  {
+    name: "profiler.clear",
+    title: "Clear Profiler Data",
+    description: "Clear all collected profiler data. High-risk: discards profiling history.",
+    group: "profiler",
+    inputSchema: objSchema({}),
+    readOnlyHint: false,
+    destructiveHint: true,
+    supportsDryRun: true,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run profiler.clear",
+    docsTopic: "profiler",
+    equivalentUnityMcp: "profiler.clear"
+  },
+  {
+    name: "profiler.load",
+    title: "Load Profiler Data",
+    description: "Load a saved profiler data file (.raw/.data) into the Profiler window.",
+    group: "profiler",
+    inputSchema: objSchema({ path: { type: "string" } }, ["path"]),
+    readOnlyHint: false,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run profiler.load",
+    docsTopic: "profiler",
+    equivalentUnityMcp: "profiler.load"
+  },
+  {
+    name: "profiler.areas",
+    title: "Profiler Areas",
+    description: "List all Profiler area enum names.",
+    group: "profiler",
+    inputSchema: objSchema({}),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run profiler.areas",
+    docsTopic: "profiler",
+    equivalentUnityMcp: "profiler.areas"
+  },
+  {
+    name: "profiler.object-memory",
+    title: "Object Memory",
+    description: "Query memory size of components on a GameObject via Profiler.GetRuntimeMemorySizeLong.",
+    group: "profiler",
+    inputSchema: objSchema({ target: { type: "string" }, path: { type: "string" } }, ["target"]),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run profiler.object-memory",
+    docsTopic: "profiler",
+    equivalentUnityMcp: "profiler.object-memory"
+  },
+  {
+    name: "profiler.rendering-stats",
+    title: "Rendering Stats",
+    description: "Rendering sample statistics (batches, triangles, vertices, setPassCalls). profiler.* represents sampled performance; graphics.*/context represent static state.",
+    group: "profiler",
+    inputSchema: objSchema({}),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run profiler.rendering-stats",
+    docsTopic: "profiler",
+    equivalentUnityMcp: "profiler.rendering-stats"
+  },
+  {
+    name: "profiler.script-stats",
+    title: "Script Stats",
+    description: "Script/GC memory sample statistics (gcAllocs, monoHeap, monoUsed).",
+    group: "profiler",
+    inputSchema: objSchema({}),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run profiler.script-stats",
+    docsTopic: "profiler",
+    equivalentUnityMcp: "profiler.script-stats"
   }
 ];

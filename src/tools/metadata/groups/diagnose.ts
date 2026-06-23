@@ -11,7 +11,7 @@ export const DIAGNOSE_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "preflight",
+    cliCommand: "tools run diagnose.preflight",
     docsTopic: "diagnose"
   }
 ];

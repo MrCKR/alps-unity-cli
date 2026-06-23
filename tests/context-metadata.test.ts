@@ -11,7 +11,7 @@ import {
 
 test("builtin context metadata contains all required entries", () => {
   const contexts = builtinContextMetadata();
-  assert.equal(contexts.length, 23);
+  assert.equal(contexts.length, 25);
 });
 
 test("all builtin contexts have kind=context and readOnlyHint=true", () => {
@@ -87,6 +87,7 @@ test("context names match the expected built-in contexts", () => {
     "scene.gameobject",
     "scene.gameobject.components",
     "scene.gameobject.component",
+    "scene.opened",
     "scene.cameras",
     "scene.volumes",
     "scene.renderer-features",
@@ -95,6 +96,7 @@ test("context names match the expected built-in contexts", () => {
     "prefab.hierarchy",
     "tests.list",
     "instances.list",
+    "target.current",
     "tools.groups",
     "tools.custom"
   ];
@@ -165,7 +167,7 @@ test("filterContextsByCategory returns correct contexts", () => {
   assert.ok(project.every((c) => c.category === "project"));
 
   const scene = filterContextsByCategory("scene");
-  assert.equal(scene.length, 7);
+  assert.equal(scene.length, 8);
   assert.ok(scene.every((c) => c.category === "scene"));
 
   const prefab = filterContextsByCategory("prefab");

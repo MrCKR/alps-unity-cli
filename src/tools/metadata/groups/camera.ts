@@ -11,7 +11,7 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "camera list",
+    cliCommand: "tools run camera.list",
     docsTopic: "camera"
   },
   {
@@ -23,10 +23,10 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "camera info",
+    cliCommand: "tools run camera.info",
     docsTopic: "camera",
     examples: [
-      { description: "Inspect main camera", argv: ["camera", "info", "Main Camera"] }
+      { description: "Inspect main camera", argv: ["tools", "run", "camera.info", "Main Camera"] }
     ]
   },
   {
@@ -38,10 +38,10 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "camera screenshot",
+    cliCommand: "tools run camera.screenshot",
     docsTopic: "camera",
     examples: [
-      { description: "Capture from Main Camera", argv: ["camera", "screenshot", "Main Camera", "--output", "cam_shot.png"] }
+      { description: "Capture from Main Camera", argv: ["tools", "run", "camera.screenshot", "Main Camera", "--output", "cam_shot.png"] }
     ]
   },
   {
@@ -64,11 +64,11 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "camera create",
+    cliCommand: "tools run camera.create",
     docsTopic: "camera",
     examples: [
-      { description: "Create a perspective camera", argv: ["camera", "create", "--name", "MyCamera", "--field-of-view", "60"] },
-      { description: "Create an orthographic camera", argv: ["camera", "create", "--name", "TopView", "--orthographic", "--orthographic-size", "5"] }
+      { description: "Create a perspective camera", argv: ["tools", "run", "camera.create", "--name", "MyCamera", "--field-of-view", "60"] },
+      { description: "Create an orthographic camera", argv: ["tools", "run", "camera.create", "--name", "TopView", "--orthographic", "--orthographic-size", "5"] }
     ]
   },
   {
@@ -85,10 +85,10 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "camera target",
+    cliCommand: "tools run camera.target",
     docsTopic: "camera",
     examples: [
-      { description: "Point camera at a target", argv: ["camera", "target", "Main Camera", "--look-at", "Player"] }
+      { description: "Point camera at a target", argv: ["tools", "run", "camera.target", "Main Camera", "--look-at", "Player"] }
     ]
   },
   {
@@ -109,11 +109,11 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "camera lens",
+    cliCommand: "tools run camera.lens",
     docsTopic: "camera",
     examples: [
-      { description: "Set camera FOV", argv: ["camera", "lens", "Main Camera", "--field-of-view", "45"] },
-      { description: "Switch to orthographic", argv: ["camera", "lens", "Main Camera", "--orthographic", "--orthographic-size", "10"] }
+      { description: "Set camera FOV", argv: ["tools", "run", "camera.lens", "Main Camera", "--field-of-view", "45"] },
+      { description: "Switch to orthographic", argv: ["tools", "run", "camera.lens", "Main Camera", "--orthographic", "--orthographic-size", "10"] }
     ]
   },
   {
@@ -131,10 +131,10 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "camera multiview",
+    cliCommand: "tools run camera.multiview",
     docsTopic: "camera",
     examples: [
-      { description: "Capture from two cameras", argv: ["camera", "multiview", "--targets", "Main Camera,Top Camera", "--output", "Screenshots"] }
+      { description: "Capture from two cameras", argv: ["tools", "run", "camera.multiview", "--targets", "Main Camera,Top Camera", "--output", "Screenshots"] }
     ]
   }
 ];

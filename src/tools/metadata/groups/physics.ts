@@ -28,7 +28,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "physics settings",
+    cliCommand: "tools run physics.settings",
     docsTopic: "physics"
   },
   {
@@ -40,7 +40,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "physics collision-matrix",
+    cliCommand: "tools run physics.collision-matrix",
     docsTopic: "physics",
     equivalentUnityMcp: "manage_physics.collision_matrix"
   },
@@ -53,7 +53,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "physics material",
+    cliCommand: "tools run physics.material",
     docsTopic: "physics",
     equivalentUnityMcp: "manage_physics.physics_material"
   },
@@ -66,20 +66,20 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "physics joint",
+    cliCommand: "tools run physics.joint",
     docsTopic: "physics",
     equivalentUnityMcp: "manage_physics.joints"
   },
   {
     name: "physics.force",
     title: "Physics Force",
-    description: "Apply a force vector to a Rigidbody on a GameObject.",
+    description: "Apply a force, torque or explosion to a Rigidbody. Supports forceType normal/explosion and torque [x,y,z].",
     group: "physics",
-    inputSchema: objSchema({ target: { type: "string" }, x: { type: "number" }, y: { type: "number" }, z: { type: "number" }, mode: { type: "string" } }, ["target"]),
+    inputSchema: objSchema({ target: { type: "string" }, x: { type: "number" }, y: { type: "number" }, z: { type: "number" }, mode: { type: "string" }, forceType: { type: "string", enum: ["normal", "explosion"] }, torqueX: { type: "number" }, torqueY: { type: "number" }, torqueZ: { type: "number" }, explosionX: { type: "number" }, explosionY: { type: "number" }, explosionZ: { type: "number" }, explosionRadius: { type: "number" }, explosionForce: { type: "number" }, upwardsModifier: { type: "number" } }, ["target"]),
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "physics force",
+    cliCommand: "tools run physics.force",
     docsTopic: "physics",
     equivalentUnityMcp: "manage_physics.forces"
   },
@@ -92,7 +92,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "physics overlap",
+    cliCommand: "tools run physics.overlap",
     docsTopic: "physics",
     equivalentUnityMcp: "manage_physics.overlap_queries"
   },
@@ -105,7 +105,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "physics rigidbody",
+    cliCommand: "tools run physics.rigidbody",
     docsTopic: "physics",
     equivalentUnityMcp: "manage_physics.rigidbody"
   },
@@ -118,7 +118,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "physics raycast",
+    cliCommand: "tools run physics.raycast",
     docsTopic: "physics"
   },
   {
@@ -130,7 +130,63 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "physics simulation",
+    cliCommand: "tools run physics.simulation",
     docsTopic: "physics"
+  },
+  {
+    name: "physics.raycast-all",
+    title: "Physics Raycast All",
+    description: "Cast a ray and return all hits along its path.",
+    group: "physics",
+    inputSchema: objSchema({ originX: { type: "number" }, originY: { type: "number" }, originZ: { type: "number" }, directionX: { type: "number" }, directionY: { type: "number" }, directionZ: { type: "number" }, distance: { type: "number" }, mode: { type: "string", enum: ["3d", "2d"] }, layerMask: { type: "integer" } }),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run physics.raycast-all",
+    docsTopic: "physics",
+    equivalentUnityMcp: "physics.raycast_all"
+  },
+  {
+    name: "physics.linecast",
+    title: "Physics Linecast",
+    description: "Check if a line between two points is blocked by colliders.",
+    group: "physics",
+    inputSchema: objSchema({ startX: { type: "number" }, startY: { type: "number" }, startZ: { type: "number" }, endX: { type: "number" }, endY: { type: "number" }, endZ: { type: "number" }, mode: { type: "string", enum: ["3d", "2d"] }, layerMask: { type: "integer" } }),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run physics.linecast",
+    docsTopic: "physics",
+    equivalentUnityMcp: "physics.linecast"
+  },
+  {
+    name: "physics.shapecast",
+    title: "Physics Shapecast",
+    description: "Cast a sphere, box or capsule shape and return all hits.",
+    group: "physics",
+    inputSchema: objSchema({ shape: { type: "string", enum: ["sphere", "box", "capsule"] }, originX: { type: "number" }, originY: { type: "number" }, originZ: { type: "number" }, directionX: { type: "number" }, directionY: { type: "number" }, directionZ: { type: "number" }, distance: { type: "number" }, radius: { type: "number" }, halfExtentX: { type: "number" }, halfExtentY: { type: "number" }, halfExtentZ: { type: "number" }, height: { type: "number" }, capsuleDirection: { type: "integer" }, point1X: { type: "number" }, point1Y: { type: "number" }, point1Z: { type: "number" }, point2X: { type: "number" }, point2Y: { type: "number" }, point2Z: { type: "number" }, layerMask: { type: "integer" } }),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run physics.shapecast",
+    docsTopic: "physics",
+    equivalentUnityMcp: "physics.shapecast"
+  },
+  {
+    name: "physics.validate",
+    title: "Physics Validate",
+    description: "Validate Rigidbody/Collider configuration on a GameObject, reporting common issues.",
+    group: "physics",
+    inputSchema: objSchema({ target: { type: "string" }, path: { type: "string" } }, ["target"]),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run physics.validate",
+    docsTopic: "physics",
+    equivalentUnityMcp: "physics.validate"
   }
 ];

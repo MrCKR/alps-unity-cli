@@ -5,7 +5,8 @@ export const textureBridgeSpecs: BridgeCommandSpec[] = [
   { group: "texture", command: "info", bridgeCommand: "texture.info", buildArgs: textureArgs },
   { group: "texture", command: "create", bridgeCommand: "texture.create", buildArgs: textureArgs },
   { group: "texture", command: "sprite", bridgeCommand: "texture.sprite", buildArgs: textureArgs },
-  { group: "texture", command: "import-settings", bridgeCommand: "texture.import-settings", buildArgs: textureArgs }
+  { group: "texture", command: "import-settings", bridgeCommand: "texture.import-settings", buildArgs: textureArgs },
+  { group: "texture", command: "generate", bridgeCommand: "texture.generate", buildArgs: textureGenerateArgs, supportsDryRun: true }
 ];
 
 function textureArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
@@ -30,5 +31,18 @@ function textureArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["
     filterMode: stringFlag(flags, "filter-mode"),
     maxTextureSize: numberFlag(flags, "max-texture-size"),
     compression: stringFlag(flags, "compression")
+  });
+}
+
+function textureGenerateArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({
+    path: positionalTarget ?? stringFlag(flags, "path"),
+    width: numberFlag(flags, "width"),
+    height: numberFlag(flags, "height"),
+    pattern: stringFlag(flags, "pattern"),
+    color: stringFlag(flags, "color"),
+    color2: stringFlag(flags, "color2"),
+    patternSize: numberFlag(flags, "pattern-size"),
+    dryRun: boolFlag(flags, "dry-run")
   });
 }

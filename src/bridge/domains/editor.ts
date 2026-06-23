@@ -11,6 +11,8 @@ export const editorBridgeSpecs: BridgeCommandSpec[] = [
   { group: "editor", command: "redo", bridgeCommand: "editor.redo", buildArgs: editorArgs },
   { group: "editor", command: "resolution", bridgeCommand: "editor.resolution", buildArgs: editorArgs },
   { group: "editor", command: "menu", bridgeCommand: "editor.menu", buildArgs: editorArgs },
+  { group: "editor", command: "selection-set", bridgeCommand: "editor.selection.set", buildArgs: selectionSetArgs, supportsDryRun: true },
+  { group: "editor", command: "active-tool-set", bridgeCommand: "editor.active-tool.set", buildArgs: activeToolSetArgs },
   { group: "project", command: "tag", bridgeCommand: "project.tag", buildArgs: editorArgs },
   { group: "project", command: "layer", bridgeCommand: "project.layer", buildArgs: editorArgs }
 ];
@@ -32,4 +34,12 @@ function editorArgs({ command, flags, positionalTarget }: Parameters<BridgeComma
     return compactArgs({ action: stringFlag(flags, "action"), name: positionalTarget ?? stringFlag(flags, "name"), index: numberFlag(flags, "index") });
   }
   return compactArgs({ ...queryArgs(flags), path: positionalTarget ?? stringFlag(flags, "path"), timeoutMs: numberFlag(flags, "timeout-ms") ?? numberFlag(flags, "timeout") });
+}
+
+function selectionSetArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({ instanceId: numberFlag(flags, "instance-id"), target: positionalTarget ?? stringFlag(flags, "target"), path: stringFlag(flags, "path"), dryRun: boolFlag(flags, "dry-run") });
+}
+
+function activeToolSetArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({ tool: positionalTarget ?? stringFlag(flags, "tool") ?? stringFlag(flags, "name") });
 }

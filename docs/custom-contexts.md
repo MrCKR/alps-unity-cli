@@ -103,16 +103,21 @@ tools run <tool>                        → 执行只读读取
 
 ## Built-in Context
 
-当前内置 23 个只读 Context，与 unity-mcp 的 Resources 模型等价映射，并通过 `context describe <name>` 暴露 input/output schema 与 `equivalentUnityMcp` 信息。
+当前内置 24 个只读 Context，与 unity-mcp 的 Resources 模型等价映射，并通过 `context describe <name>` 暴露 input/output schema 与 `equivalentUnityMcp` 信息。
 
 | Context 概念 | Context 名称示例 | unity-mcp Resource |
 |--------------|------------------|---------------------|
 | 编辑器状态 | `editor.state` | `editor/state` |
 | 项目信息 | `project.info` | `project/info` |
 | 相机列表 | `scene.cameras` | `scene/cameras` |
-| 场景对象与组件 | `scene.gameobject.components` / `scene.gameobject.component` | `scene/gameobjects/*` |
+| 已打开场景 | `scene.opened` | `scene/opened` |
+| 场景对象与组件（轻量） | `scene.gameobject.components` / `scene.gameobject.component` | `scene/gameobjects/*` |
 | Prefab 信息 | `prefab.info` / `prefab.hierarchy` | `prefabs/*` |
 | 实例与工具 | `instances.list` / `tools.groups` / `tools.custom` | `instances` / `tools/*` |
+
+### 轻量 Context 与深读 Tool 的分层
+
+`scene.gameobject.components` 与 `scene.gameobject.component` 是**轻量预览** Context：仅返回组件类型名、enabled 状态与短摘要，不承诺完整 fields/props。深度读取走 `tools run component.get`（对齐 IvanMurzak `gameobject-component-get`）。这是去重规则的要求：Context 只观察，Tool 才深读。
 
 ## 诊断与 doctor
 

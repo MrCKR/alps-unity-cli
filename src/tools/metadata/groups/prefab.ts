@@ -11,7 +11,7 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "prefab info",
+    cliCommand: "tools run prefab.info",
     docsTopic: "prefab"
   },
   {
@@ -23,10 +23,10 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "prefab create",
+    cliCommand: "tools run prefab.create",
     docsTopic: "prefab",
     examples: [
-      { description: "Create prefab from Player", argv: ["prefab", "create", "Player", "--path", "Assets/Prefabs/Player.prefab"] }
+      { description: "Create prefab from Player", argv: ["tools", "run", "prefab.create", "Player", "--path", "Assets/Prefabs/Player.prefab"] }
     ]
   },
   {
@@ -38,7 +38,7 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "prefab modify",
+    cliCommand: "tools run prefab.modify",
     docsTopic: "prefab"
   },
   {
@@ -50,7 +50,7 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "prefab stage-open",
+    cliCommand: "tools run prefab.stage-open",
     docsTopic: "prefab"
   },
   {
@@ -62,7 +62,7 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "prefab stage-save",
+    cliCommand: "tools run prefab.stage-save",
     docsTopic: "prefab"
   },
   {
@@ -74,7 +74,7 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "prefab stage-close",
+    cliCommand: "tools run prefab.stage-close",
     docsTopic: "prefab"
   },
   {
@@ -86,7 +86,37 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "prefab hierarchy",
+    cliCommand: "tools run prefab.hierarchy",
     docsTopic: "prefab"
+  },
+  {
+    name: "prefab.instantiate",
+    title: "Instantiate Prefab",
+    description: "Instantiate a prefab asset into the active scene, optionally under a parent and at a position.",
+    group: "prefab",
+    inputSchema: objSchema({ path: { type: "string" }, parent: { type: "string" }, name: { type: "string" }, x: { type: "number" }, y: { type: "number" }, z: { type: "number" } }, ["path"]),
+    readOnlyHint: false,
+    destructiveHint: false,
+    supportsDryRun: true,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run prefab.instantiate",
+    docsTopic: "prefab",
+    equivalentUnityMcp: "prefab.instantiate"
+  },
+  {
+    name: "prefab.unpack",
+    title: "Unpack Prefab Instance",
+    description: "Unpack a prefab instance into a regular GameObject, breaking the prefab link. Irreversible structural change.",
+    group: "prefab",
+    inputSchema: objSchema({ target: { type: "string" }, path: { type: "string" } }, ["target"]),
+    readOnlyHint: false,
+    destructiveHint: true,
+    supportsDryRun: true,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run prefab.unpack",
+    docsTopic: "prefab",
+    equivalentUnityMcp: "prefab.unpack"
   }
 ];

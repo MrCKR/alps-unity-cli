@@ -56,8 +56,8 @@ test("live bridge tool metadata resolves through BridgeCommandRegistry", () => {
   assert.ok(tools.length > 0);
   for (const tool of tools) {
     assert.ok(tool.cliCommand, `${tool.name} is missing cliCommand`);
-    const [group, ...commandParts] = tool.cliCommand.split(" ");
-    const spec = bridgeCommandRegistry.lookup(group, commandParts.join(" "));
+    assert.equal(tool.cliCommand, `tools run ${tool.name}`);
+    const spec = bridgeCommandRegistry.specs().find((candidate) => candidate.bridgeCommand === tool.name || candidate.toolName === tool.name);
     assert.ok(spec, `${tool.name} cliCommand is missing from BridgeCommandRegistry: ${tool.cliCommand}`);
     assert.equal(spec.bridgeCommand, tool.name);
   }
@@ -283,17 +283,17 @@ test("editor.refresh metadata exists with job handler and longRunning", () => {
   assert.ok(tool.examples && tool.examples.length > 0);
 });
 
-test("cli.batch schema and run metadata cover S3.5 orchestration", () => {
-  const schema = findToolByName("cli.batch.schema");
-  assert.ok(schema, "cli.batch.schema should exist");
-  assert.equal(schema.group, "cli");
+test("batch schema and run metadata cover S3.5 orchestration", () => {
+  const schema = findToolByName("batch.schema");
+  assert.ok(schema, "batch.schema should exist");
+  assert.equal(schema.group, "batch");
   assert.equal(schema.handler, "offline");
   assert.equal(schema.readOnlyHint, true);
   assert.equal(schema.destructiveHint, false);
   assert.ok(schema.outputSchema);
 
-  const run = findToolByName("cli.batch.run");
-  assert.ok(run, "cli.batch.run should exist");
+  const run = findToolByName("batch.run");
+  assert.ok(run, "batch.run should exist");
   assert.equal(run.handler, "offline");
   assert.equal(run.supportsDryRun, true);
   assert.ok(run.outputSchema);
@@ -309,28 +309,28 @@ test("representative destructive tools declare dry-run support", () => {
   }
 });
 
-test("cli.package.resolve metadata exists with hybrid handler", () => {
-  const tool = findToolByName("cli.package.resolve");
-  assert.ok(tool, "cli.package.resolve should exist");
-  assert.equal(tool.group, "cli");
+test("package.resolve metadata exists with hybrid handler", () => {
+  const tool = findToolByName("package.resolve");
+  assert.ok(tool, "package.resolve should exist");
+  assert.equal(tool.group, "package");
   assert.equal(tool.handler, "hybrid");
   assert.equal(supportStatusForTool(tool), "bridge-job");
   assert.equal(tool.longRunning, true);
   assert.equal(tool.readOnlyHint, false);
 });
 
-test("cli.package.registry metadata exists with offline handler", () => {
-  const tool = findToolByName("cli.package.registry");
-  assert.ok(tool, "cli.package.registry should exist");
-  assert.equal(tool.group, "cli");
+test("package.registry metadata exists with offline handler", () => {
+  const tool = findToolByName("package.registry");
+  assert.ok(tool, "package.registry should exist");
+  assert.equal(tool.group, "package");
   assert.equal(tool.handler, "offline");
   assert.equal(tool.readOnlyHint, false);
 });
 
-test("cli.package.scoped-registry metadata exists with offline handler", () => {
-  const tool = findToolByName("cli.package.scoped-registry");
-  assert.ok(tool, "cli.package.scoped-registry should exist");
-  assert.equal(tool.group, "cli");
+test("package.scoped-registry metadata exists with offline handler", () => {
+  const tool = findToolByName("package.scoped-registry");
+  assert.ok(tool, "package.scoped-registry should exist");
+  assert.equal(tool.group, "package");
   assert.equal(tool.handler, "offline");
   assert.equal(tool.readOnlyHint, false);
 });
@@ -428,9 +428,9 @@ test("S3.1 creation domains have frozen metadata coverage", () => {
   const expectedByGroup = new Map([
     ["camera", ["camera.list", "camera.info", "camera.screenshot", "camera.create", "camera.target", "camera.lens", "camera.multiview"]],
     ["material", ["material.info", "material.create", "material.assign", "material.set"]],
-    ["shader", ["shader.info", "shader.read", "shader.create", "shader.update"]],
-    ["texture", ["texture.info", "texture.create", "texture.sprite", "texture.import-settings"]],
-    ["ui", ["ui.canvas.create", "ui.text.create", "ui.button.create", "ui.image.create", "ui.document.info", "ui.document.create", "ui.hierarchy"]]
+    ["shader", ["shader.info", "shader.read", "shader.create", "shader.update", "shader.list", "shader.get-data"]],
+    ["texture", ["texture.info", "texture.create", "texture.sprite", "texture.import-settings", "texture.generate"]],
+    ["ui", ["ui.canvas.create", "ui.text.create", "ui.button.create", "ui.image.create", "ui.document.info", "ui.document.create", "ui.hierarchy", "ui.attach-document", "ui.create-panel-settings", "ui.get-visual-tree"]]
   ]);
 
   for (const [group, expectedNames] of expectedByGroup) {
@@ -495,7 +495,7 @@ test("S3.2 graphics group has quality, pipeline, volume and screenshot tools", (
 
 test("S3.4 profiler domain exposes expected tools and safety hints", () => {
   const profilerTools = filterToolsByGroup("profiler");
-  const expectedNames = ["profiler.status", "profiler.start", "profiler.stop", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export"];
+  const expectedNames = ["profiler.status", "profiler.start", "profiler.stop", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export", "profiler.modules", "profiler.module-enable", "profiler.clear", "profiler.load", "profiler.areas", "profiler.object-memory", "profiler.rendering-stats", "profiler.script-stats"];
   assert.deepEqual(profilerTools.map((tool) => tool.name), expectedNames);
 
   for (const name of expectedNames) {
@@ -541,7 +541,7 @@ test("core bridge contract tools expose live-bridge support status", () => {
 });
 
 test("hybrid tools expose bridge plus job support status", () => {
-  const hybridNames = ["cli.package.install", "cli.package.remove", "cli.package.resolve", "code.exec", "profiler.start", "profiler.capture", "probuilder.create-shape", "probuilder.create-poly-shape", "probuilder.extrude-faces", "probuilder.delete-faces", "probuilder.mesh-info"];
+  const hybridNames = ["package.install", "package.remove", "package.resolve", "code.exec", "profiler.start", "profiler.capture", "probuilder.create-shape", "probuilder.create-poly-shape", "probuilder.extrude-faces", "probuilder.delete-faces", "probuilder.mesh-info"];
   for (const name of hybridNames) {
     const tool = findToolByName(name);
     assert.ok(tool, `${name} should exist`);
@@ -552,7 +552,7 @@ test("hybrid tools expose bridge plus job support status", () => {
 
 test("S3.2 physics group has settings, queries and mutation tools", () => {
   const names = filterToolsByGroup("physics").map((t) => t.name);
-  assert.deepEqual(names, ["physics.settings", "physics.collision-matrix", "physics.material", "physics.joint", "physics.force", "physics.overlap", "physics.rigidbody", "physics.raycast", "physics.simulation"]);
+  assert.deepEqual(names, ["physics.settings", "physics.collision-matrix", "physics.material", "physics.joint", "physics.force", "physics.overlap", "physics.rigidbody", "physics.raycast", "physics.simulation", "physics.raycast-all", "physics.linecast", "physics.shapecast", "physics.validate"]);
   assert.equal(findToolByName("physics.raycast")?.readOnlyHint, true);
   assert.equal(findToolByName("physics.overlap")?.readOnlyHint, true);
   assert.equal(findToolByName("physics.simulation")?.handler, "bridge");
@@ -571,7 +571,7 @@ test("tools describe graphics.volume returns bridge metadata", async () => {
   assert.equal(data.group, "graphics");
   assert.equal(data.handler, "bridge");
   assert.equal(data.readOnlyHint, true);
-  assert.equal(data.cliCommand, "graphics volume");
+  assert.equal(data.cliCommand, "tools run graphics.volume");
 });
 
 test("tools describe animation.play returns full bridge metadata", async () => {
@@ -581,7 +581,7 @@ test("tools describe animation.play returns full bridge metadata", async () => {
   assert.equal(data.name, "animation.play");
   assert.equal(data.group, "animation");
   assert.equal(data.handler, "bridge");
-  assert.equal(data.cliCommand, "animation play");
+  assert.equal(data.cliCommand, "tools run animation.play");
 });
 
 // ── tools unknown subcommand ───────────────────────────────
@@ -998,14 +998,12 @@ test("tools run built-in hybrid tool routes to native bridge command", async () 
     }
   };
 
-  // code.exec is a hybrid handler tool with bridgeCommand "code.exec"
-  // After the bridge-spec routing fix, --input is merged into flags and
-  // buildArgs translates "code" → "sourceText" + "sourceKind: inline".
-  const result = await handleToolsCommand("run", ["code.exec"], { input: '{"code":"return 42;"}' }, runtime, requestId);
+  // profiler.start is a hybrid handler tool with bridgeCommand "profiler.start".
+  // --input is merged into flags and buildArgs translates deepProfiling → deepProfiling.
+  const result = await handleToolsCommand("run", ["profiler.start"], { input: '{"deepProfiling":true}' }, runtime, requestId);
   assert.equal(result.ok, true);
-  assert.equal(requests[0].command, "code.exec");
-  assert.deepEqual((requests[0].args as Record<string, unknown>).sourceText, "return 42;");
-  assert.deepEqual((requests[0].args as Record<string, unknown>).sourceKind, "inline");
+  assert.equal(requests[0].command, "profiler.start");
+  assert.deepEqual((requests[0].args as Record<string, unknown>).deepProfiling, true);
 });
 
 // ── Play Mode regression: Play Mode tool discovery and --target/--runtime flags ──

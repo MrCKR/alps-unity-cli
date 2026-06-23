@@ -11,7 +11,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "animation clip",
+    cliCommand: "tools run animation.clip",
     docsTopic: "animation"
   },
   {
@@ -23,7 +23,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "animation state",
+    cliCommand: "tools run animation.state",
     docsTopic: "animation"
   },
   {
@@ -35,7 +35,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "animation play",
+    cliCommand: "tools run animation.play",
     docsTopic: "animation"
   },
   {
@@ -47,7 +47,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "animation stop",
+    cliCommand: "tools run animation.stop",
     docsTopic: "animation"
   },
   {
@@ -59,7 +59,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "animator get-info",
+    cliCommand: "tools run animator.get-info",
     docsTopic: "animation"
   },
   {
@@ -71,7 +71,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "animator get-parameter",
+    cliCommand: "tools run animator.get-parameter",
     docsTopic: "animation"
   },
   {
@@ -83,7 +83,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "animator set-parameter",
+    cliCommand: "tools run animator.set-parameter",
     docsTopic: "animation"
   },
   {
@@ -95,7 +95,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "animator crossfade",
+    cliCommand: "tools run animator.crossfade",
     docsTopic: "animation"
   },
   {
@@ -107,7 +107,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "animator set-speed",
+    cliCommand: "tools run animator.set-speed",
     docsTopic: "animation"
   },
   {
@@ -119,7 +119,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "animator set-enabled",
+    cliCommand: "tools run animator.set-enabled",
     docsTopic: "animation"
   },
   // ── controller.* AnimatorController editing tools ───
@@ -132,7 +132,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "controller create",
+    cliCommand: "tools run controller.create",
     docsTopic: "animation"
   },
   {
@@ -144,7 +144,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "controller add-state",
+    cliCommand: "tools run controller.add-state",
     docsTopic: "animation"
   },
   {
@@ -156,7 +156,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "controller add-transition",
+    cliCommand: "tools run controller.add-transition",
     docsTopic: "animation"
   },
   {
@@ -168,7 +168,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "controller add-parameter",
+    cliCommand: "tools run controller.add-parameter",
     docsTopic: "animation"
   },
   {
@@ -180,7 +180,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "controller get-info",
+    cliCommand: "tools run controller.get-info",
     docsTopic: "animation"
   },
   {
@@ -192,7 +192,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "controller assign",
+    cliCommand: "tools run controller.assign",
     docsTopic: "animation"
   },
   {
@@ -204,7 +204,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "controller add-layer",
+    cliCommand: "tools run controller.add-layer",
     docsTopic: "animation"
   },
   {
@@ -216,7 +216,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: true,
     handler: "bridge",
-    cliCommand: "controller remove-layer",
+    cliCommand: "tools run controller.remove-layer",
     docsTopic: "animation"
   },
   {
@@ -228,7 +228,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "controller set-layer-weight",
+    cliCommand: "tools run controller.set-layer-weight",
     docsTopic: "animation"
   },
   {
@@ -240,7 +240,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "controller create-blend-tree-1d",
+    cliCommand: "tools run controller.create-blend-tree-1d",
     docsTopic: "animation"
   },
   {
@@ -252,7 +252,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "controller create-blend-tree-2d",
+    cliCommand: "tools run controller.create-blend-tree-2d",
     docsTopic: "animation"
   },
   {
@@ -264,7 +264,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "controller add-blend-tree-child",
+    cliCommand: "tools run controller.add-blend-tree-child",
     docsTopic: "animation"
   }
 ];

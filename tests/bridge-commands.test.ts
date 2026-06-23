@@ -86,11 +86,11 @@ test("instances list and prune normalize stale registry entries", async () => {
     instance({ instanceId: "editor-stale", projectHash: "hash-stale", status: "ready", bridgeEndpoint: healthEndpoint2, lastHeartbeatAt: new Date(Date.now() - 60_000).toISOString() })
   ]);
 
-  const list = await execute(["instances", "list"], runtime);
+  const list = await execute(["context", "read", "instances.list"], runtime);
   assert.equal(list.ok, true);
   assert.deepEqual((list.data as { instances: Array<{ state: string }> }).instances.map((item) => item.state), ["ready", "stale"]);
 
-  const cleanup = await execute(["instances", "prune"], runtime);
+  const cleanup = await execute(["tools", "run", "instances.prune"], runtime);
   assert.equal(cleanup.ok, true);
   assert.equal((cleanup.data as { removed: number }).removed, 1);
 });
@@ -99,12 +99,15 @@ test("instances list keeps latest endpoint for the same instance", async () => {
   const runtime = await makeRuntime();
   const oldHeartbeat = new Date(Date.now() - 10_000).toISOString();
   const newHeartbeat = new Date().toISOString();
-  await writeRegistry(runtime.dataDir, [
-    instance({ status: "stale", bridgeEndpoint: healthEndpoint1, lastHeartbeatAt: oldHeartbeat }),
-    instance({ status: "ready", bridgeEndpoint: healthEndpoint2, lastHeartbeatAt: newHeartbeat })
-  ]);
+  await writeFile(join(runtime.dataDir, "instances.json"), JSON.stringify({
+    version: 1,
+    instances: [
+      instance({ status: "stale", bridgeEndpoint: healthEndpoint1, lastHeartbeatAt: oldHeartbeat }),
+      instance({ status: "ready", bridgeEndpoint: healthEndpoint2, lastHeartbeatAt: newHeartbeat })
+    ]
+  }, null, 2), "utf8");
 
-  const list = await execute(["instances", "list"], runtime);
+  const list = await execute(["context", "read", "instances.list"], runtime);
 
   assert.equal(list.ok, true);
   const instances = (list.data as { instances: Array<{ state: string; endpoint: string }> }).instances;
@@ -122,7 +125,7 @@ test("bridge command does not select superseded healthy endpoint during reload",
     instance({ status: "stale", bridgeEndpoint: healthEndpoint1, lastHeartbeatAt: newHeartbeat })
   ]);
 
-  const result = await execute(["editor", "state", "--instance", "editor-1"], runtime);
+  const result = await execute(["tools", "run", "editor.state", "--instance", "editor-1"], runtime);
 
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "E_TARGET_STALE");
@@ -136,7 +139,7 @@ test("bridge command routes --instance to the matching ready endpoint", async ()
   ]);
   const requests: BridgeRequest[] = [];
 
-  const result = await execute(["scene", "hierarchy", "--instance", "editor-2"], {
+  const result = await execute(["tools", "run", "scene.hierarchy", "--instance", "editor-2"], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
@@ -161,13 +164,13 @@ test("instances list and target selection mark failed health checks unreachable"
   const runtime = await makeRuntime();
   await writeRegistry(runtime.dataDir, [instance({ bridgeEndpoint: "http://127.0.0.1:1" })]);
 
-  const list = await execute(["instances", "list"], runtime);
+  const list = await execute(["context", "read", "instances.list"], runtime);
   assert.equal(list.ok, true);
   const instances = (list.data as { instances: Array<{ state: string; status: string }> }).instances;
   assert.equal(instances[0].state, "unreachable");
   assert.equal(instances[0].status, "unreachable");
 
-  const result = await execute(["editor", "state", "--instance", "editor-1"], runtime);
+  const result = await execute(["tools", "run", "editor.state", "--instance", "editor-1"], runtime);
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "E_TARGET_UNREACHABLE");
 });
@@ -176,9 +179,9 @@ test("target commands manage active target and aliases", async () => {
   const runtime = await makeRuntime();
   await writeRegistry(runtime.dataDir, [instance(), instance({ instanceId: "editor-2", projectPath: "/tmp/project-two", projectHash: "hash-two", bridgeEndpoint: healthEndpoint2 })]);
 
-  const alias = await execute(["target", "alias", "set", "editor-2", "main"], runtime);
-  const set = await execute(["target", "set", "main"], runtime);
-  const get = await execute(["target", "get"], runtime);
+  const alias = await execute(["tools", "run", "target.alias-set", "editor-2", "main"], runtime);
+  const set = await execute(["tools", "run", "target.set", "main"], runtime);
+  const get = await execute(["context", "read", "target.current"], runtime);
 
   assert.equal(alias.ok, true);
   assert.equal(set.ok, true);
@@ -192,10 +195,10 @@ test("target alias set requires --force to overwrite another target", async () =
   const runtime = await makeRuntime();
   await writeRegistry(runtime.dataDir, [instance(), instance({ instanceId: "editor-2", projectPath: "/tmp/project-two", projectHash: "hash-two", bridgeEndpoint: healthEndpoint2 })]);
 
-  const first = await execute(["target", "alias", "set", "editor-1", "main"], runtime);
-  const conflict = await execute(["target", "alias", "set", "editor-2", "main"], runtime);
-  const forced = await execute(["target", "alias", "set", "editor-2", "main", "--force"], runtime);
-  const set = await execute(["target", "set", "main"], runtime);
+  const first = await execute(["tools", "run", "target.alias-set", "editor-1", "main"], runtime);
+  const conflict = await execute(["tools", "run", "target.alias-set", "editor-2", "main"], runtime);
+  const forced = await execute(["tools", "run", "target.alias-set", "editor-2", "main", "--force"], runtime);
+  const set = await execute(["tools", "run", "target.set", "main"], runtime);
 
   assert.equal(first.ok, true);
   assert.equal(conflict.ok, false);
@@ -211,7 +214,7 @@ test("bridge command auto-selects by current project path", async () => {
   const runtime = await makeRuntime();
   await writeRegistry(runtime.dataDir, [instance({ projectPath: process.cwd() })]);
 
-  const result = await execute(["editor", "state"], {
+  const result = await execute(["tools", "run", "editor.state"], {
     ...runtime,
     bridgeExecute: async () => ({ ok: true, data: { state: "ok" } })
   });
@@ -223,19 +226,19 @@ test("bridge command auto-selects by current project path", async () => {
 test("bridge command reports missing, stale and ambiguous instances", async () => {
   const missingRuntime = await makeRuntime();
   await writeRegistry(missingRuntime.dataDir, [instance()]);
-  const missing = await execute(["editor", "state", "--instance", "missing"], missingRuntime);
+  const missing = await execute(["tools", "run", "editor.state", "--instance", "missing"], missingRuntime);
   assert.equal(missing.ok, false);
   assert.equal(missing.error?.code, "E_TARGET_NOT_FOUND");
 
   const staleRuntime = await makeRuntime();
   await writeRegistry(staleRuntime.dataDir, [instance({ status: "stale" })]);
-  const stale = await execute(["editor", "state", "--instance", "editor-1"], staleRuntime);
+  const stale = await execute(["tools", "run", "editor.state", "--instance", "editor-1"], staleRuntime);
   assert.equal(stale.ok, false);
   assert.equal(stale.error?.code, "E_TARGET_STALE");
 
   const ambiguousRuntime = await makeRuntime();
   await writeRegistry(ambiguousRuntime.dataDir, [instance(), instance({ instanceId: "editor-2", projectPath: "/tmp/project-two", projectHash: "hash-two", bridgeEndpoint: healthEndpoint2 })]);
-  const ambiguous = await execute(["editor", "state"], ambiguousRuntime);
+  const ambiguous = await execute(["tools", "run", "editor.state"], ambiguousRuntime);
   assert.equal(ambiguous.ok, false);
   assert.equal(ambiguous.error?.code, "E_TARGET_AMBIGUOUS");
 });
@@ -244,7 +247,7 @@ test("bridge command marks expired healthy heartbeat as stale", async () => {
   const runtime = await makeRuntime();
   await writeRegistry(runtime.dataDir, [instance({ lastHeartbeatAt: new Date(Date.now() - 60_000).toISOString() })]);
 
-  const result = await execute(["editor", "state", "--instance", "editor-1"], runtime);
+  const result = await execute(["tools", "run", "editor.state", "--instance", "editor-1"], runtime);
 
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "E_TARGET_STALE");
@@ -253,7 +256,7 @@ test("bridge command marks expired healthy heartbeat as stale", async () => {
 test("query command forwards stable bridge envelope", async () => {
   const runtime = await makeRuntime();
   const requests: BridgeRequest[] = [];
-  const result = await execute(["scene", "hierarchy", "--page-size", "50"], {
+  const result = await execute(["tools", "run", "scene.hierarchy", "--page-size", "50"], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
@@ -270,7 +273,7 @@ test("query command forwards stable bridge envelope", async () => {
 test("edit command forwards target and plannedEffects", async () => {
   const runtime = await makeRuntime();
   const requests: BridgeRequest[] = [];
-  const result = await execute(["component", "set", "Player", "--component", "Camera", "--property", "enabled", "--value", "false"], {
+  const result = await execute(["tools", "run", "component.set", "Player", "--component", "Camera", "--property", "enabled", "--value", "false"], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
@@ -290,7 +293,7 @@ test("script create reads content file", async () => {
   await writeFile(contentFile, "public class Player {}\n", "utf8");
   const requests: BridgeRequest[] = [];
 
-  const result = await execute(["script", "create", "Assets/Scripts/Player.cs", "--content-file", contentFile], {
+  const result = await execute(["tools", "run", "script.create", "Assets/Scripts/Player.cs", "--content-file", contentFile], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
@@ -307,7 +310,7 @@ test("screenshot command forwards output path", async () => {
   const runtime = await makeRuntime();
   const requests: BridgeRequest[] = [];
 
-  const result = await execute(["screenshot", "capture", "Artifacts/after.png", "--width", "1280", "--height", "720"], {
+  const result = await execute(["tools", "run", "screenshot.capture", "Artifacts/after.png", "--width", "1280", "--height", "720"], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
@@ -325,7 +328,7 @@ test("camera commands forward target and screenshot options", async () => {
   const runtime = await makeRuntime();
   const requests: BridgeRequest[] = [];
 
-  const list = await execute(["camera", "list"], {
+  const list = await execute(["tools", "run", "camera.list"], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
@@ -333,7 +336,7 @@ test("camera commands forward target and screenshot options", async () => {
     }
   });
 
-  const info = await execute(["camera", "info", "Main Camera"], {
+  const info = await execute(["tools", "run", "camera.info", "Main Camera"], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
@@ -341,7 +344,7 @@ test("camera commands forward target and screenshot options", async () => {
     }
   });
 
-  const screenshot = await execute(["camera", "screenshot", "Main Camera", "--output", "Artifacts/camera.png", "--format", "png", "--width", "1920", "--height", "1080", "--transparent", "--overwrite", "--quality", "90"], {
+  const screenshot = await execute(["tools", "run", "camera.screenshot", "Main Camera", "--output", "Artifacts/camera.png", "--format", "png", "--width", "1920", "--height", "1080", "--transparent", "--overwrite", "--quality", "90"], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
@@ -361,7 +364,7 @@ test("scene screenshot forwards output path and overwrite", async () => {
   const runtime = await makeRuntime();
   const requests: BridgeRequest[] = [];
 
-  const result = await execute(["scene", "screenshot", "Artifacts/scene.jpg", "--width", "800", "--height", "600", "--format", "jpg", "--overwrite"], {
+  const result = await execute(["tools", "run", "scene.screenshot", "Artifacts/scene.jpg", "--width", "800", "--height", "600", "--format", "jpg", "--overwrite"], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
@@ -382,13 +385,13 @@ test("prefab commands forward paths, pagination, modify args and planned effects
     return { ok: true, data: { prefab: { path: payload.args.path }, plannedEffects: payload.command === "prefab.create" ? [{ type: payload.command, path: payload.args.path }] : [] } };
   };
 
-  const info = await execute(["prefab", "info", "Assets/Prefabs/Player.prefab"], { ...runtime, bridgeExecute });
-  const create = await execute(["prefab", "create", "Player", "--path", "Assets/Prefabs/Player.prefab", "--overwrite"], { ...runtime, bridgeExecute });
-  const modify = await execute(["prefab", "modify", "Assets/Prefabs/Player.prefab", "--name", "Hero", "--add-child", "Socket", "--remove-child", "OldSocket", "--overwrite"], { ...runtime, bridgeExecute });
-  const open = await execute(["prefab", "stage-open", "Assets/Prefabs/Player.prefab"], { ...runtime, bridgeExecute });
-  const hierarchy = await execute(["prefab", "hierarchy", "Assets/Prefabs/Player.prefab", "--page-size", "25", "--cursor", "50"], { ...runtime, bridgeExecute });
-  const save = await execute(["prefab", "stage-save"], { ...runtime, bridgeExecute });
-  const close = await execute(["prefab", "stage-close", "--save"], { ...runtime, bridgeExecute });
+  const info = await execute(["tools", "run", "prefab.info", "Assets/Prefabs/Player.prefab"], { ...runtime, bridgeExecute });
+  const create = await execute(["tools", "run", "prefab.create", "Player", "--path", "Assets/Prefabs/Player.prefab", "--overwrite"], { ...runtime, bridgeExecute });
+  const modify = await execute(["tools", "run", "prefab.modify", "Assets/Prefabs/Player.prefab", "--name", "Hero", "--add-child", "Socket", "--remove-child", "OldSocket", "--overwrite"], { ...runtime, bridgeExecute });
+  const open = await execute(["tools", "run", "prefab.stage-open", "Assets/Prefabs/Player.prefab"], { ...runtime, bridgeExecute });
+  const hierarchy = await execute(["tools", "run", "prefab.hierarchy", "Assets/Prefabs/Player.prefab", "--page-size", "25", "--cursor", "50"], { ...runtime, bridgeExecute });
+  const save = await execute(["tools", "run", "prefab.stage-save"], { ...runtime, bridgeExecute });
+  const close = await execute(["tools", "run", "prefab.stage-close", "--save"], { ...runtime, bridgeExecute });
 
   assert.equal(info.ok, true);
   assert.equal(create.ok, true);
@@ -411,7 +414,7 @@ test("destructive bridge commands require --yes before execution", async () => {
   const runtime = await makeRuntime();
   let called = false;
 
-  const result = await execute(["go", "delete", "Player"], {
+  const result = await execute(["tools", "run", "go.delete", "Player"], {
     ...runtime,
     bridgeExecute: async () => {
       called = true;
@@ -428,14 +431,14 @@ test("destructive bridge commands pass dryRun and security proof when explicitly
   const runtime = await makeRuntime();
   const requests: BridgeRequest[] = [];
 
-  const confirmed = await execute(["go", "delete", "Player", "--yes"], {
+  const confirmed = await execute(["tools", "run", "go.delete", "Player", "--yes"], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
       return { ok: true, data: { plannedEffects: [] } };
     }
   });
-  const dryRun = await execute(["go", "delete", "Player", "--dry-run"], {
+  const dryRun = await execute(["tools", "run", "go.delete", "Player", "--dry-run"], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
@@ -461,16 +464,16 @@ test("destructive bridge commands pass dryRun and security proof when explicitly
     return { ok: true, data: { asset: { path: payload.args.path ?? payload.args.destination }, plannedEffects: [{ type: payload.command }] } };
   };
 
-  const search = await execute(["asset", "search", "Player", "--type", "Prefab", "--page-size", "10"], { ...runtime, bridgeExecute });
-  const info = await execute(["asset", "info", "Assets/Prefabs/Player.prefab"], { ...runtime, bridgeExecute });
-  const create = await execute(["asset", "create", "Assets/Generated/config.json", "--content", "{}", "--overwrite"], { ...runtime, bridgeExecute });
-  const mkdir = await execute(["asset", "mkdir", "Assets/Generated"], { ...runtime, bridgeExecute });
-  const imported = await execute(["asset", "import", "Assets/Generated/asset.txt", "--source", contentFile, "--overwrite"], { ...runtime, bridgeExecute });
-  const modify = await execute(["asset", "modify", "Assets/Generated/config.json", "--content-file", contentFile], { ...runtime, bridgeExecute });
-  const duplicate = await execute(["asset", "duplicate", "Assets/Generated/config.json", "--to", "Assets/Generated/config-copy.json"], { ...runtime, bridgeExecute });
-  const move = await execute(["asset", "move", "Assets/Generated/config-copy.json", "--to", "Assets/Generated/config-moved.json"], { ...runtime, bridgeExecute });
-  const rename = await execute(["asset", "rename", "Assets/Generated/config-moved.json", "--name", "config-renamed.json"], { ...runtime, bridgeExecute });
-  const deleted = await execute(["asset", "delete", "Assets/Generated/config-renamed.json", "--yes"], { ...runtime, bridgeExecute });
+  const search = await execute(["tools", "run", "asset.search", "Player", "--type", "Prefab", "--page-size", "10"], { ...runtime, bridgeExecute });
+  const info = await execute(["tools", "run", "asset.info", "Assets/Prefabs/Player.prefab"], { ...runtime, bridgeExecute });
+  const create = await execute(["tools", "run", "asset.create", "Assets/Generated/config.json", "--content", "{}", "--overwrite"], { ...runtime, bridgeExecute });
+  const mkdir = await execute(["tools", "run", "asset.create", "Assets/Generated"], { ...runtime, bridgeExecute });
+  const imported = await execute(["tools", "run", "asset.import", "Assets/Generated/asset.txt", "--source", contentFile, "--overwrite"], { ...runtime, bridgeExecute });
+  const modify = await execute(["tools", "run", "asset.modify", "Assets/Generated/config.json", "--content-file", contentFile], { ...runtime, bridgeExecute });
+  const duplicate = await execute(["tools", "run", "asset.duplicate", "Assets/Generated/config.json", "--to", "Assets/Generated/config-copy.json"], { ...runtime, bridgeExecute });
+  const move = await execute(["tools", "run", "asset.move", "Assets/Generated/config-copy.json", "--to", "Assets/Generated/config-moved.json"], { ...runtime, bridgeExecute });
+  const rename = await execute(["tools", "run", "asset.rename", "Assets/Generated/config-moved.json", "--name", "config-renamed.json"], { ...runtime, bridgeExecute });
+  const deleted = await execute(["tools", "run", "asset.delete", "Assets/Generated/config-renamed.json", "--yes"], { ...runtime, bridgeExecute });
 
   for (const result of [search, info, create, mkdir, imported, modify, duplicate, move, rename, deleted]) {
     assert.equal(result.ok, true);
@@ -496,10 +499,10 @@ test("material commands forward asset paths, target, values and planned effects"
     return { ok: true, data: { material: { path: payload.args.path ?? payload.args.material }, plannedEffects: payload.command === "material.info" ? [] : [{ type: payload.command, path: payload.args.path ?? payload.args.material }] } };
   };
 
-  const info = await execute(["material", "info", "Assets/Materials/Player.mat"], { ...runtime, bridgeExecute });
-  const create = await execute(["material", "create", "Assets/Materials/Player.mat", "--shader", "Standard", "--overwrite"], { ...runtime, bridgeExecute });
-  const assign = await execute(["material", "assign", "--target", "Canvas/Button", "--material", "Assets/Materials/Player.mat", "--slot", "1"], { ...runtime, bridgeExecute });
-  const set = await execute(["material", "set", "Assets/Materials/Player.mat", "--property", "_Color", "--value", "#ff00ffff", "--type", "color"], { ...runtime, bridgeExecute });
+  const info = await execute(["tools", "run", "material.info", "Assets/Materials/Player.mat"], { ...runtime, bridgeExecute });
+  const create = await execute(["tools", "run", "material.create", "Assets/Materials/Player.mat", "--shader", "Standard", "--overwrite"], { ...runtime, bridgeExecute });
+  const assign = await execute(["tools", "run", "material.assign", "--target", "Canvas/Button", "--material", "Assets/Materials/Player.mat", "--slot", "1"], { ...runtime, bridgeExecute });
+  const set = await execute(["tools", "run", "material.set", "Assets/Materials/Player.mat", "--property", "_Color", "--value", "#ff00ffff", "--type", "color"], { ...runtime, bridgeExecute });
 
   assert.equal(info.ok, true);
   assert.equal(create.ok, true);
@@ -516,7 +519,7 @@ test("material commands forward asset paths, target, values and planned effects"
 
 test("material bridge errors preserve structured diagnostics", async () => {
   const runtime = await makeRuntime();
-  const result = await execute(["material", "set", "Assets/Materials/Player.mat", "--property", "_Missing", "--value", "1"], {
+  const result = await execute(["tools", "run", "material.set", "Assets/Materials/Player.mat", "--property", "_Missing", "--value", "1"], {
     ...runtime,
     bridgeExecute: async () => ({ ok: false, error: { code: "E_MATERIAL_PROPERTY_NOT_FOUND", message: "Material property not found: _Missing" }, nextActions: ["Run unity_cli material info <path> to inspect shader properties."] })
   });
@@ -534,11 +537,11 @@ test("graphics commands forward settings and screenshot diagnostics", async () =
     return { ok: true, data: { graphics: { renderPipeline: { active: "Built-in" } }, plannedEffects: payload.args } };
   };
 
-  const quality = await execute(["graphics", "quality", "--quality-level", "2", "--v-sync-count", "1", "--shadow-distance", "75.5", "--soft-particles", "false"], { ...runtime, bridgeExecute });
-  const settings = await execute(["graphics", "settings", "--render-pipeline", "Assets/Settings/URP.asset", "--anti-aliasing", "4"], { ...runtime, bridgeExecute });
-  const pipeline = await execute(["graphics", "pipeline"], { ...runtime, bridgeExecute });
-  const volume = await execute(["graphics", "volume", "Global Volume"], { ...runtime, bridgeExecute });
-  const screenshot = await execute(["graphics", "screenshot", "Artifacts/graphics.png", "--width", "1024", "--height", "768", "--include-diagnostics", "--overwrite"], { ...runtime, bridgeExecute });
+  const quality = await execute(["tools", "run", "graphics.quality", "--quality-level", "2", "--v-sync-count", "1", "--shadow-distance", "75.5", "--soft-particles", "false"], { ...runtime, bridgeExecute });
+  const settings = await execute(["tools", "run", "graphics.settings", "--render-pipeline", "Assets/Settings/URP.asset", "--anti-aliasing", "4"], { ...runtime, bridgeExecute });
+  const pipeline = await execute(["tools", "run", "graphics.pipeline"], { ...runtime, bridgeExecute });
+  const volume = await execute(["tools", "run", "graphics.volume", "Global Volume"], { ...runtime, bridgeExecute });
+  const screenshot = await execute(["tools", "run", "graphics.screenshot", "Artifacts/graphics.png", "--width", "1024", "--height", "768", "--include-diagnostics", "--overwrite"], { ...runtime, bridgeExecute });
 
   assert.equal(quality.ok, true);
   assert.equal(settings.ok, true);
@@ -561,9 +564,9 @@ test("physics commands forward settings, raycast and simulation inputs", async (
     return { ok: true, data: { physics: {}, plannedEffects: payload.command === "physics.raycast" ? [] : [{ type: payload.command }] } };
   };
 
-  const settings = await execute(["physics", "settings", "--gravity-y", "-9.81", "--gravity2d-y", "-12.5", "--queries-hit-triggers", "false", "--default-solver-iterations", "8"], { ...runtime, bridgeExecute });
-  const raycast = await execute(["physics", "raycast", "--mode", "2d", "--origin-x", "1", "--origin-y", "2", "--direction-x", "0", "--direction-y", "-1", "--distance", "50", "--layer-mask", "5", "--all"], { ...runtime, bridgeExecute });
-  const simulation = await execute(["physics", "simulation", "--steps", "3", "--delta-time", "0.016", "--simulate"], { ...runtime, bridgeExecute });
+  const settings = await execute(["tools", "run", "physics.settings", "--gravity-y", "-9.81", "--gravity2d-y", "-12.5", "--queries-hit-triggers", "false", "--default-solver-iterations", "8"], { ...runtime, bridgeExecute });
+  const raycast = await execute(["tools", "run", "physics.raycast", "--mode", "2d", "--origin-x", "1", "--origin-y", "2", "--direction-x", "0", "--direction-y", "-1", "--distance", "50", "--layer-mask", "5", "--all"], { ...runtime, bridgeExecute });
+  const simulation = await execute(["tools", "run", "physics.simulation", "--steps", "3", "--delta-time", "0.016", "--simulate"], { ...runtime, bridgeExecute });
 
   assert.equal(settings.ok, true);
   assert.equal(raycast.ok, true);
@@ -582,15 +585,15 @@ test("profiler commands forward session, counter, memory, frame and export args"
     return { ok: true, data: { profiler: { enabled: payload.command === "profiler.start" }, counters: [], memory: {}, frame: {}, artifactPath: payload.args.path, plannedEffects: [{ type: payload.command }] } };
   };
 
-  const status = await execute(["profiler", "status"], { ...runtime, bridgeExecute });
-  const start = await execute(["profiler", "start", "--deep-profiling"], { ...runtime, bridgeExecute });
-  const pause = await execute(["profiler", "pause", "--paused", "true"], { ...runtime, bridgeExecute });
-  const counter = await execute(["profiler", "counter", "--category", "memory", "--counter", "MonoUsedSizeLong"], { ...runtime, bridgeExecute });
-  const memory = await execute(["profiler", "memory"], { ...runtime, bridgeExecute });
-  const frame = await execute(["profiler", "frame", "--module", "CPU Usage"], { ...runtime, bridgeExecute });
-  const capture = await execute(["profiler", "capture", "Artifacts/profile.json", "--duration-ms", "100", "--frames", "2", "--format", "json", "--overwrite"], { ...runtime, bridgeExecute });
-  const exportResult = await execute(["profiler", "export", "Artifacts/profile-export.json", "--format", "json", "--overwrite"], { ...runtime, bridgeExecute });
-  const stop = await execute(["profiler", "stop"], { ...runtime, bridgeExecute });
+  const status = await execute(["tools", "run", "profiler.status"], { ...runtime, bridgeExecute });
+  const start = await execute(["tools", "run", "profiler.start", "--deep-profiling"], { ...runtime, bridgeExecute });
+  const pause = await execute(["tools", "run", "profiler.pause", "--paused", "true"], { ...runtime, bridgeExecute });
+  const counter = await execute(["tools", "run", "profiler.counter", "--category", "memory", "--counter", "MonoUsedSizeLong"], { ...runtime, bridgeExecute });
+  const memory = await execute(["tools", "run", "profiler.memory"], { ...runtime, bridgeExecute });
+  const frame = await execute(["tools", "run", "profiler.frame", "--module", "CPU Usage"], { ...runtime, bridgeExecute });
+  const capture = await execute(["tools", "run", "profiler.capture", "Artifacts/profile.json", "--duration-ms", "100", "--frames", "2", "--format", "json", "--overwrite"], { ...runtime, bridgeExecute });
+  const exportResult = await execute(["tools", "run", "profiler.export", "Artifacts/profile-export.json", "--format", "json", "--overwrite"], { ...runtime, bridgeExecute });
+  const stop = await execute(["tools", "run", "profiler.stop"], { ...runtime, bridgeExecute });
 
   assert.equal(status.ok, true);
   assert.equal(start.ok, true);
@@ -619,11 +622,11 @@ test("animation and vfx commands forward Windows paths, targets and effects", as
     return { ok: true, data: { plannedEffects: [{ type: payload.command }], clip: { path: payload.args.path }, graph: { path: payload.args.path }, target: { path: payload.args.target } } };
   };
 
-  const clipInfo = await execute(["animation", "clip", "Assets\\Animations\\Idle.anim"], { ...runtime, bridgeExecute });
-  const clipCreate = await execute(["animation", "clip", "Assets\\Animations\\Run.anim", "--create", "--overwrite", "--frame-rate", "30", "--legacy", "false"], { ...runtime, bridgeExecute });
-  const state = await execute(["animation", "state", "Rig/Player", "--layer", "1"], { ...runtime, bridgeExecute });
-  const play = await execute(["animation", "play", "Rig/Player", "--state", "Base Layer.Run", "--layer", "0", "--normalized-time", "0.25"], { ...runtime, bridgeExecute });
-  const stop = await execute(["animation", "stop", "Rig/Player"], { ...runtime, bridgeExecute });
+  const clipInfo = await execute(["tools", "run", "animation.clip", "Assets\\Animations\\Idle.anim"], { ...runtime, bridgeExecute });
+  const clipCreate = await execute(["tools", "run", "animation.clip", "Assets\\Animations\\Run.anim", "--create", "--overwrite", "--frame-rate", "30", "--legacy", "false"], { ...runtime, bridgeExecute });
+  const state = await execute(["tools", "run", "animation.state", "Rig/Player", "--layer", "1"], { ...runtime, bridgeExecute });
+  const play = await execute(["tools", "run", "animation.play", "Rig/Player", "--state", "Base Layer.Run", "--layer", "0", "--normalized-time", "0.25"], { ...runtime, bridgeExecute });
+  const stop = await execute(["tools", "run", "animation.stop", "Rig/Player"], { ...runtime, bridgeExecute });
   const graphCreate = await execute(["tools", "run", "vfx.graph", "--input", JSON.stringify({ path: "Assets\\VFX\\Explosion.vfx", create: true, overwrite: true })], { ...runtime, bridgeExecute });
   const effect = await execute(["tools", "run", "vfx.effect", "--input", JSON.stringify({ target: "Effects/Emitter", graph: "Assets\\VFX\\Explosion.vfx", add: true })], { ...runtime, bridgeExecute });
 
@@ -647,11 +650,11 @@ test("animation and vfx commands forward Windows paths, targets and effects", as
 test("animation and vfx bridge errors preserve diagnostics", async () => {
   const runtime = await makeRuntime();
   const cases: Array<{ argv: string[]; code: string; message: string; nextActions: string[] }> = [
-    { argv: ["animation", "play", "Player", "--state", "Missing"], code: "E_TARGET_AMBIGUOUS", message: "Multiple GameObjects matched: Player", nextActions: ["Pass a hierarchy path or instance id."] },
-    { argv: ["animation", "clip", "Assets/Animations/Missing.anim"], code: "E_ANIMATION_CLIP_NOT_FOUND", message: "AnimationClip asset not found", nextActions: ["Check the path or create one with unity_cli animation clip <path> --create."] },
+    { argv: ["tools", "run", "animation.play", "Player", "--state", "Missing"], code: "E_TARGET_AMBIGUOUS", message: "Multiple GameObjects matched: Player", nextActions: ["Pass a hierarchy path or instance id."] },
+    { argv: ["tools", "run", "animation.clip", "Assets/Animations/Missing.anim"], code: "E_ANIMATION_CLIP_NOT_FOUND", message: "AnimationClip asset not found", nextActions: ["Check the path or create one with unity_cli animation clip <path> --create."] },
     { argv: ["tools", "run", "vfx.graph", "--input", JSON.stringify({ path: "Assets/VFX/Explosion.vfx" })], code: "E_VFX_PACKAGE_MISSING", message: "Visual Effect Graph package is not installed", nextActions: ["Install com.unity.visualeffectgraph manually via Unity Package Manager or Packages/manifest.json, run package resolve, then retry."] },
     { argv: ["tools", "run", "vfx.graph", "--input", JSON.stringify({ path: "Assets/VFX/Explosion.vfx", create: true })], code: "E_VFX_GRAPH_CREATE_FAILED", message: "VFX Graph asset creation did not produce a readable VisualEffectAsset", nextActions: ["Check Unity Console and UnityCliBridge.log; the Visual Effect Graph package may have changed its internal authoring API."] },
-    { argv: ["animation", "clip", "D:\\tmp\\Bad.anim"], code: "E_ANIMATION_CLIP_PATH_INVALID", message: "AnimationClip path must be under Assets/ and end with .anim: D:\\tmp\\Bad.anim", nextActions: ["Pass a Unity asset path such as Assets/Animations/Player.anim."] }
+    { argv: ["tools", "run", "animation.clip", "D:\\tmp\\Bad.anim"], code: "E_ANIMATION_CLIP_PATH_INVALID", message: "AnimationClip path must be under Assets/ and end with .anim: D:\\tmp\\Bad.anim", nextActions: ["Pass a Unity asset path such as Assets/Animations/Player.anim."] }
   ];
 
   for (const item of cases) {
@@ -677,10 +680,10 @@ test("shader commands forward paths, content and overwrite", async () => {
     return { ok: true, data: { shader: { path: payload.args.path }, plannedEffects: payload.command.startsWith("shader.") ? [{ type: payload.command, path: payload.args.path }] : [] } };
   };
 
-  const info = await execute(["shader", "info", "Assets/Shaders/Unlit.shader"], { ...runtime, bridgeExecute });
-  const read = await execute(["shader", "read", "Assets/Shaders/Unlit.shader"], { ...runtime, bridgeExecute });
-  const create = await execute(["shader", "create", "Assets/Shaders/Created.shader", "--content-file", contentFile, "--overwrite"], { ...runtime, bridgeExecute });
-  const update = await execute(["shader", "update", "Assets/Shaders/Unlit.shader", "--content", "Shader X {}"], { ...runtime, bridgeExecute });
+  const info = await execute(["tools", "run", "shader.info", "Assets/Shaders/Unlit.shader"], { ...runtime, bridgeExecute });
+  const read = await execute(["tools", "run", "shader.read", "Assets/Shaders/Unlit.shader"], { ...runtime, bridgeExecute });
+  const create = await execute(["tools", "run", "shader.create", "Assets/Shaders/Created.shader", "--content-file", contentFile, "--overwrite"], { ...runtime, bridgeExecute });
+  const update = await execute(["tools", "run", "shader.update", "Assets/Shaders/Unlit.shader", "--content", "Shader X {}"], { ...runtime, bridgeExecute });
 
   assert.equal(info.ok, true);
   assert.equal(read.ok, true);
@@ -701,10 +704,10 @@ test("texture commands forward importer, sprite and creation options", async () 
     return { ok: true, data: { texture: { path: payload.args.path }, importSettings: { textureType: payload.args.textureType }, plannedEffects: [{ type: payload.command, path: payload.args.path }] } };
   };
 
-  const info = await execute(["texture", "info", "Assets/Textures/Icon.png"], { ...runtime, bridgeExecute });
-  const create = await execute(["texture", "create", "Assets/Textures/Icon.png", "--source", "C:/tmp/icon.png", "--overwrite", "--texture-type", "Sprite"], { ...runtime, bridgeExecute });
-  const sprite = await execute(["texture", "sprite", "Assets/Textures/Icon.png", "--pixels-per-unit", "128", "--pivot-x", "0.25", "--pivot-y", "0.75", "--sprite-mode", "single"], { ...runtime, bridgeExecute });
-  const importSettings = await execute(["texture", "import-settings", "Assets/Textures/Icon.png", "--readable", "false", "--mipmap", "false", "--srgb", "true", "--alpha-is-transparency", "--wrap-mode", "Clamp", "--filter-mode", "Point", "--max-texture-size", "512", "--compression", "Uncompressed"], { ...runtime, bridgeExecute });
+  const info = await execute(["tools", "run", "texture.info", "Assets/Textures/Icon.png"], { ...runtime, bridgeExecute });
+  const create = await execute(["tools", "run", "texture.create", "Assets/Textures/Icon.png", "--source", "C:/tmp/icon.png", "--overwrite", "--texture-type", "Sprite"], { ...runtime, bridgeExecute });
+  const sprite = await execute(["tools", "run", "texture.sprite", "Assets/Textures/Icon.png", "--pixels-per-unit", "128", "--pivot-x", "0.25", "--pivot-y", "0.75", "--sprite-mode", "single"], { ...runtime, bridgeExecute });
+  const importSettings = await execute(["tools", "run", "texture.import-settings", "Assets/Textures/Icon.png", "--readable", "false", "--mipmap", "false", "--srgb", "true", "--alpha-is-transparency", "--wrap-mode", "Clamp", "--filter-mode", "Point", "--max-texture-size", "512", "--compression", "Uncompressed"], { ...runtime, bridgeExecute });
 
   assert.equal(info.ok, true);
   assert.equal(create.ok, true);
@@ -722,11 +725,11 @@ test("texture commands forward importer, sprite and creation options", async () 
 
 test("shader and texture bridge errors preserve structured diagnostics", async () => {
   const runtime = await makeRuntime();
-  const shader = await execute(["shader", "info", "Assets/Shaders/Missing.shader"], {
+  const shader = await execute(["tools", "run", "shader.info", "Assets/Shaders/Missing.shader"], {
     ...runtime,
     bridgeExecute: async () => ({ ok: false, error: { code: "E_SHADER_NOT_FOUND", message: "Shader asset not found." }, nextActions: ["Check the path."] })
   });
-  const texture = await execute(["texture", "import-settings", "Assets/Textures/Missing.png"], {
+  const texture = await execute(["tools", "run", "texture.import-settings", "Assets/Textures/Missing.png"], {
     ...runtime,
     bridgeExecute: async () => ({ ok: false, error: { code: "E_IMPORT_FAILED", message: "Failed to apply texture import settings." }, nextActions: ["Check Unity Console."] })
   });
@@ -747,13 +750,13 @@ test("ui commands forward creation, document and hierarchy arguments", async () 
     return { ok: true, data: { plannedEffects: payload.command.includes("create") ? [{ type: payload.command, args: payload.args }] : [], document: payload.command.includes("document") ? { path: payload.args.uxml ?? payload.args.path } : undefined } };
   };
 
-  const canvas = await execute(["ui", "canvas/create", "HUD"], { ...runtime, bridgeExecute });
-  const text = await execute(["ui", "text/create", "Title", "--parent", "HUD", "--text", "Start", "--width", "320", "--height", "80", "--x", "10", "--y", "20", "--font-size", "32"], { ...runtime, bridgeExecute });
-  const button = await execute(["ui", "button/create", "PlayButton", "--canvas", "HUD", "--label", "Play"], { ...runtime, bridgeExecute });
-  const image = await execute(["ui", "image/create", "Logo", "--parent", "HUD", "--sprite", "Assets/UI/logo.png", "--color", "#ffffff"], { ...runtime, bridgeExecute });
-  const documentCreate = await execute(["ui", "document/create", "--name", "MainUIDocument", "--uxml", "Assets/UI/Main.uxml", "--uss", "Assets/UI/Main.uss", "--panel-settings", "Assets/UI/Panel.asset", "--overwrite"], { ...runtime, bridgeExecute });
-  const documentInfo = await execute(["ui", "document/info", "MainUIDocument", "--uss", "Assets/UI/Main.uss"], { ...runtime, bridgeExecute });
-  const hierarchy = await execute(["ui", "hierarchy", "HUD", "--page-size", "25", "--cursor", "50"], { ...runtime, bridgeExecute });
+  const canvas = await execute(["tools", "run", "ui.canvas.create", "HUD"], { ...runtime, bridgeExecute });
+  const text = await execute(["tools", "run", "ui.text.create", "Title", "--parent", "HUD", "--text", "Start", "--width", "320", "--height", "80", "--x", "10", "--y", "20", "--font-size", "32"], { ...runtime, bridgeExecute });
+  const button = await execute(["tools", "run", "ui.button.create", "PlayButton", "--canvas", "HUD", "--label", "Play"], { ...runtime, bridgeExecute });
+  const image = await execute(["tools", "run", "ui.image.create", "Logo", "--parent", "HUD", "--sprite", "Assets/UI/logo.png", "--color", "#ffffff"], { ...runtime, bridgeExecute });
+  const documentCreate = await execute(["tools", "run", "ui.document.create", "--name", "MainUIDocument", "--uxml", "Assets/UI/Main.uxml", "--uss", "Assets/UI/Main.uss", "--panel-settings", "Assets/UI/Panel.asset", "--overwrite"], { ...runtime, bridgeExecute });
+  const documentInfo = await execute(["tools", "run", "ui.document.info", "MainUIDocument", "--uss", "Assets/UI/Main.uss"], { ...runtime, bridgeExecute });
+  const hierarchy = await execute(["tools", "run", "ui.hierarchy", "HUD", "--page-size", "25", "--cursor", "50"], { ...runtime, bridgeExecute });
 
   assert.equal(canvas.ok, true);
   assert.equal(text.ok, true);
@@ -777,7 +780,7 @@ test("ui document info reads UXML offline when bridge endpoint is absent", async
   const uxmlPath = join(runtime.dataDir, "Main.uxml");
   await writeFile(uxmlPath, "<ui:UXML xmlns:ui=\"UnityEngine.UIElements\"><ui:VisualElement name=\"Root\" /></ui:UXML>\n", "utf8");
 
-  const result = await execute(["ui", "document/info", uxmlPath], runtime);
+  const result = await execute(["tools", "run", "ui.document.info", uxmlPath], runtime);
 
   assert.equal(result.ok, true);
   assert.equal((result.data as { mode: string }).mode, "offline-reader");
@@ -787,7 +790,7 @@ test("ui document info reads UXML offline when bridge endpoint is absent", async
 
 test("ui bridge errors preserve structured diagnostics", async () => {
   const runtime = await makeRuntime();
-  const result = await execute(["ui", "document/create", "--uxml", "Assets/UI/Main.uxml", "--panel-settings", "Assets/UI/Missing.asset"], {
+  const result = await execute(["tools", "run", "ui.document.create", "--uxml", "Assets/UI/Main.uxml", "--panel-settings", "Assets/UI/Missing.asset"], {
     ...runtime,
     bridgeExecute: async () => ({ ok: false, error: { code: "E_UI_PANEL_SETTINGS_NOT_FOUND", message: "PanelSettings asset not found: Assets/UI/Missing.asset" }, nextActions: ["Create a PanelSettings asset in Unity."] })
   });
@@ -800,9 +803,9 @@ test("ui bridge errors preserve structured diagnostics", async () => {
 test("ui target ambiguity diagnostics are preserved for parent, document and hierarchy", async () => {
   const runtime = await makeRuntime();
   const cases: Array<{ name: string; args: string[]; message: string; nextAction: string }> = [
-    { name: "parent", args: ["ui", "text/create", "Title", "--parent", "HUD"], message: "UI parent target is ambiguous: HUD", nextAction: "Pass a hierarchy path or instance id for the intended Canvas/RectTransform parent." },
-    { name: "document", args: ["ui", "document/info", "HUD"], message: "UIDocument target is ambiguous: HUD", nextAction: "Pass a hierarchy path or instance id for the intended UIDocument GameObject." },
-    { name: "hierarchy", args: ["ui", "hierarchy", "HUD"], message: "UI hierarchy target is ambiguous: HUD", nextAction: "Pass a hierarchy path or instance id for the intended UI hierarchy root." }
+    { name: "parent", args: ["tools", "run", "ui.text.create", "Title", "--parent", "HUD"], message: "UI parent target is ambiguous: HUD", nextAction: "Pass a hierarchy path or instance id for the intended Canvas/RectTransform parent." },
+    { name: "document", args: ["tools", "run", "ui.document.info", "HUD"], message: "UIDocument target is ambiguous: HUD", nextAction: "Pass a hierarchy path or instance id for the intended UIDocument GameObject." },
+    { name: "hierarchy", args: ["tools", "run", "ui.hierarchy", "HUD"], message: "UI hierarchy target is ambiguous: HUD", nextAction: "Pass a hierarchy path or instance id for the intended UI hierarchy root." }
   ];
 
   for (const item of cases) {
@@ -839,19 +842,19 @@ test("ui target ambiguity diagnostics are preserved for parent, document and hie
 
 test("prefab bridge errors preserve structured diagnostics", async () => {
   const runtime = await makeRuntime();
-  const result = await execute(["prefab", "stage-close"], {
+  const result = await execute(["tools", "run", "prefab.stage-close"], {
     ...runtime,
-    bridgeExecute: async () => ({ ok: false, error: { code: "E_PREFAB_DIRTY_CONFLICT", message: "Prefab Stage has unsaved changes." }, nextActions: ["Run unity_cli prefab stage-close --save."] })
+    bridgeExecute: async () => ({ ok: false, error: { code: "E_PREFAB_DIRTY_CONFLICT", message: "Prefab Stage has unsaved changes." }, nextActions: ["Run unity_cli tools run prefab.stage-close --save."] })
   });
 
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "E_PREFAB_DIRTY_CONFLICT");
-  assert.deepEqual(result.error?.next_actions, ["Run unity_cli prefab stage-close --save."]);
+  assert.deepEqual(result.error?.next_actions, ["Run unity_cli tools run prefab.stage-close --save."]);
 });
 
 test("bridge errors return CLI failure envelope", async () => {
   const runtime = await makeRuntime();
-  const result = await execute(["go", "inspect", "Player"], {
+  const result = await execute(["tools", "run", "go.inspect", "Player"], {
     ...runtime,
     bridgeExecute: async () => ({ ok: false, error: { code: "E_TARGET_AMBIGUOUS", message: "Multiple targets matched." }, nextActions: ["Pass --path or --id."] })
   });
@@ -865,12 +868,12 @@ test("camera screenshot bridge target and IO errors preserve protocol envelopes"
   const runtime = await makeRuntime();
   const cases: Array<{ name: string; response: { code: string; message: string }; nextActions: string[] }> = [
     { name: "empty target", response: { code: "E_TARGET_NOT_FOUND", message: "Camera screenshot requires a target Camera." }, nextActions: ["Pass a Camera name, hierarchy path or instance id."] },
-    { name: "missing camera", response: { code: "E_TARGET_NOT_FOUND", message: "Camera not found: Missing Camera" }, nextActions: ["Run unity_cli camera list to inspect available cameras."] },
+    { name: "missing camera", response: { code: "E_TARGET_NOT_FOUND", message: "Camera not found: Missing Camera" }, nextActions: ["Run unity_cli tools run camera.list to inspect available cameras."] },
     { name: "io failure", response: { code: "E_IO_ERROR", message: "Failed to write screenshot output." }, nextActions: ["Check output path, permissions, format parameters and UnityCliBridge.log."] }
   ];
 
   for (const item of cases) {
-    const result = await execute(["camera", "screenshot", item.name === "empty target" ? "" : "Missing Camera", "--output", "Artifacts/out.png"], {
+    const result = await execute(["tools", "run", "camera.screenshot", item.name === "empty target" ? "" : "Missing Camera", "--output", "Artifacts/out.png"], {
       ...runtime,
       bridgeExecute: async () => ({ ok: false, error: item.response, nextActions: item.nextActions })
     });
@@ -896,11 +899,11 @@ test("editor state/play/pause/stop/menu commands forward args and return envelop
     return { ok: true, data: { command: payload.command, plannedEffects: [{ type: payload.command }], result: { requested: payload.command.split(".")[1] } } };
   };
 
-  const state = await execute(["editor", "state"], { ...runtime, bridgeExecute });
-  const play = await execute(["editor", "play", "--timeout-ms", "2500"], { ...runtime, bridgeExecute });
-  const pause = await execute(["editor", "pause"], { ...runtime, bridgeExecute });
-  const stop = await execute(["editor", "stop", "--timeout", "3000"], { ...runtime, bridgeExecute });
-  const menu = await execute(["editor", "menu", "File/Save", "--timeout-ms", "7000", "--yes"], { ...runtime, bridgeExecute });
+  const state = await execute(["tools", "run", "editor.state"], { ...runtime, bridgeExecute });
+  const play = await execute(["tools", "run", "editor.play", "--timeout-ms", "2500"], { ...runtime, bridgeExecute });
+  const pause = await execute(["tools", "run", "editor.pause"], { ...runtime, bridgeExecute });
+  const stop = await execute(["tools", "run", "editor.stop", "--timeout", "3000"], { ...runtime, bridgeExecute });
+  const menu = await execute(["tools", "run", "editor.menu", "File/Save", "--timeout-ms", "7000", "--yes"], { ...runtime, bridgeExecute });
 
   assert.equal(state.ok, true);
   assert.equal(play.ok, true);
@@ -917,10 +920,10 @@ test("editor state/play/pause/stop/menu commands forward args and return envelop
 test("editor bridge errors preserve structured diagnostics", async () => {
   const runtime = await makeRuntime();
   const cases: Array<{ name: string; args: string[]; response: { code: string; message: string }; nextActions: string[] }> = [
-    { name: "busy", args: ["editor", "menu", "File/Save", "--yes"], response: { code: "E_UNITY_BUSY", message: "Unity Editor is busy and cannot run this editor command right now." }, nextActions: ["Wait for compiling, asset importing, build, PlayMode switching, or domain reload to complete, then retry."] },
-    { name: "playmode timeout", args: ["editor", "stop"], response: { code: "E_PLAYMODE_TIMEOUT", message: "Unity PlayMode did not reach the requested state before the timeout." }, nextActions: ["Wait for PlayMode switching or domain reload to finish, then retry."] },
-    { name: "menu not found", args: ["editor", "menu", "Tools/Missing", "--yes"], response: { code: "E_MENU_NOT_FOUND", message: "Unity menu item was not found or could not be executed." }, nextActions: ["Use the exact Unity Editor menu path, such as File/Save or Assets/Refresh."] },
-    { name: "menu timeout", args: ["editor", "menu", "Tools/Slow", "--yes"], response: { code: "E_MENU_TIMEOUT", message: "Unity menu item execution exceeded the requested timeout." }, nextActions: ["Check Unity Editor and Unity CLI Bridge logs for long-running menu work."] }
+    { name: "busy", args: ["tools", "run", "editor.menu", "File/Save", "--yes"], response: { code: "E_UNITY_BUSY", message: "Unity Editor is busy and cannot run this editor command right now." }, nextActions: ["Wait for compiling, asset importing, build, PlayMode switching, or domain reload to complete, then retry."] },
+    { name: "playmode timeout", args: ["tools", "run", "editor.stop"], response: { code: "E_PLAYMODE_TIMEOUT", message: "Unity PlayMode did not reach the requested state before the timeout." }, nextActions: ["Wait for PlayMode switching or domain reload to finish, then retry."] },
+    { name: "menu not found", args: ["tools", "run", "editor.menu", "Tools/Missing", "--yes"], response: { code: "E_MENU_NOT_FOUND", message: "Unity menu item was not found or could not be executed." }, nextActions: ["Use the exact Unity Editor menu path, such as File/Save or Assets/Refresh."] },
+    { name: "menu timeout", args: ["tools", "run", "editor.menu", "Tools/Slow", "--yes"], response: { code: "E_MENU_TIMEOUT", message: "Unity menu item execution exceeded the requested timeout." }, nextActions: ["Check Unity Editor and Unity CLI Bridge logs for long-running menu work."] }
   ];
 
   for (const item of cases) {
@@ -937,16 +940,16 @@ test("editor bridge errors preserve structured diagnostics", async () => {
 
 test("runtime-tool list is blocked from CLI as internal command", async () => {
   const runtime = await makeRuntime();
-  const result = await execute(["runtime-tool", "list"], runtime);
+  const result = await execute(["tools", "run", "runtime-tool.list"], runtime);
   assert.equal(result.ok, false);
-  assert.equal(result.error?.code, "UNKNOWN_COMMAND");
+  assert.equal(result.error?.code, "E_TOOL_NOT_FOUND_FOR_TARGET");
 });
 
 test("runtime-tool run is blocked from CLI as internal command", async () => {
   const runtime = await makeRuntime();
-  const result = await execute(["runtime-tool", "run", "sample.runtime-echo", "--yes"], runtime);
+  const result = await execute(["tools", "run", "runtime-tool.run", "sample.runtime-echo", "--yes"], runtime);
   assert.equal(result.ok, false);
-  assert.equal(result.error?.code, "UNKNOWN_COMMAND");
+  assert.equal(result.error?.code, "E_TOOL_NOT_FOUND_FOR_TARGET");
 });
 
 test("runtime-tool list is registered in bridge command registry as internal", () => {

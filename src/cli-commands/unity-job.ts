@@ -31,7 +31,7 @@ export async function startUnityJob(kind: JobKind, flags: Record<string, string 
     return failure(requestId, "UNITY_BUSY", `Cannot start Unity batchmode: the project is currently open in the Unity Editor (${projectPath}).`, [
       "Close the Unity Editor and retry.",
       "If Unity is not running, delete the stale lock file: <project>/Temp/UnityLockfile",
-      `Run 'unity_cli job status' to check existing jobs.`
+      `Run 'unity_cli tools run job.status' to check existing jobs.`
     ], {
       projectPath,
       kind,
@@ -53,9 +53,9 @@ export async function startUnityJob(kind: JobKind, flags: Record<string, string 
   const waited = await runtime.runner.wait(job.id, waitTimeoutMs);
   if (!terminalStatuses.has(waited.status)) {
     return failure(requestId, "E_EXECUTION_TIMEOUT", `Job did not reach a terminal state within ${waitTimeoutMs}ms.`, [
-      `Run unity_cli job status --id ${job.id}.`,
-      `Run unity_cli job logs --id ${job.id}.`,
-      `Run unity_cli job cancel --id ${job.id} if the Unity process should be stopped.`
+      `Run unity_cli tools run job.status --id ${job.id}.`,
+      `Run unity_cli tools run job.logs --id ${job.id}.`,
+      `Run unity_cli tools run job.cancel --id ${job.id} if the Unity process should be stopped.`
     ], {
       jobId: job.id,
       timeoutMs: waitTimeoutMs,
@@ -107,8 +107,8 @@ export async function summarizeJob(job: JobRecord): Promise<Record<string, unkno
 export function jobCancellationSemantics(kind: JobKind): Record<string, unknown> {
   return {
     mode: "immediate",
-    description: `${kind} jobs run as external Unity batchmode processes. unity_cli job cancel attempts an immediate process-tree termination when a pid is known; if the process is still queued or the pid is unavailable, the job is marked cancelled and the underlying Unity operation is expected to finish or already be gone.`,
-    cancelCommand: "unity_cli job cancel --id <jobId>",
+    description: `${kind} jobs run as external Unity batchmode processes. unity_cli tools run job.cancel attempts an immediate process-tree termination when a pid is known; if the process is still queued or the pid is unavailable, the job is marked cancelled and the underlying Unity operation is expected to finish or already be gone.`,
+    cancelCommand: "unity_cli tools run job.cancel --id <jobId>",
     domainReloadObserved: false
   };
 }

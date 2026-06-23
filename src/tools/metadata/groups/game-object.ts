@@ -11,10 +11,10 @@ export const GO_TOOLS: ToolMetadata[] = [
     readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
-    cliCommand: "go find",
+    cliCommand: "tools run go.find",
     docsTopic: "go",
     examples: [
-      { description: "Find by name", argv: ["go", "find", "--name", "Player"] }
+      { description: "Find by name", argv: ["tools", "run", "go.find", "--name", "Player"] }
     ]
   },
   {
@@ -27,7 +27,7 @@ export const GO_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "go inspect",
+    cliCommand: "tools run go.inspect",
     docsTopic: "go"
   },
   {
@@ -40,7 +40,7 @@ export const GO_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "go create",
+    cliCommand: "tools run go.create",
     docsTopic: "go"
   },
   {
@@ -53,7 +53,7 @@ export const GO_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "go modify",
+    cliCommand: "tools run go.modify",
     docsTopic: "go"
   },
   {
@@ -66,7 +66,7 @@ export const GO_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "go duplicate",
+    cliCommand: "tools run go.duplicate",
     docsTopic: "go",
     equivalentUnityMcp: "manage_gameobject.duplicate"
   },
@@ -80,7 +80,7 @@ export const GO_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "go move-relative",
+    cliCommand: "tools run go.move-relative",
     docsTopic: "go",
     equivalentUnityMcp: "manage_gameobject.move_relative"
   },
@@ -94,7 +94,7 @@ export const GO_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "go look-at",
+    cliCommand: "tools run go.look-at",
     docsTopic: "go",
     equivalentUnityMcp: "manage_gameobject.look_at"
   },
@@ -109,8 +109,23 @@ export const GO_TOOLS: ToolMetadata[] = [
     supportsDryRun: true,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "go delete",
+    cliCommand: "tools run go.delete",
     docsTopic: "go"
+  },
+  {
+    name: "go.set-parent",
+    title: "Set GameObject Parent",
+    description: "Reparent a GameObject under another GameObject or to the scene root.",
+    group: "go",
+    inputSchema: objSchema({ target: { type: "string" }, parent: { type: "string", description: "Parent path/name; omit to detach to root." }, worldPositionStays: { type: "boolean", default: true } }, ["target"]),
+    readOnlyHint: false,
+    destructiveHint: true,
+    supportsDryRun: true,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run go.set-parent",
+    docsTopic: "go",
+    equivalentUnityMcp: "gameobject-set-parent"
   }
 ];
 
@@ -125,7 +140,7 @@ export const COMPONENT_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "component add",
+    cliCommand: "tools run component.add",
     docsTopic: "component"
   },
   {
@@ -138,7 +153,7 @@ export const COMPONENT_TOOLS: ToolMetadata[] = [
     destructiveHint: true,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "component remove",
+    cliCommand: "tools run component.remove",
     docsTopic: "component"
   },
   {
@@ -151,7 +166,82 @@ export const COMPONENT_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "component set",
+    cliCommand: "tools run component.set",
     docsTopic: "component"
+  },
+  {
+    name: "component.get",
+    title: "Get Component Data",
+    description: "Deep-read a single Component into a SerializedMember tree with fields/props/value/paths. Supports instanceId/componentIndex/componentType resolution, maxDepth, paths, includeFields/includeProperties. Aligns with IvanMurzak gameobject-component-get.",
+    group: "component",
+    inputSchema: objSchema({
+      instanceId: { type: "integer", description: "GameObject instance ID." },
+      path: { type: "string", description: "GameObject hierarchy path or name." },
+      componentInstanceId: { type: "integer", description: "Component instance ID (highest priority)." },
+      componentIndex: { type: "integer", description: "Component index on the GameObject." },
+      component: { type: "string", description: "Component type name." },
+      maxDepth: { type: "integer", default: 4 },
+      includeFields: { type: "boolean", default: true },
+      includeProperties: { type: "boolean", default: true },
+      deepSerialization: { type: "boolean", default: true },
+      paths: { type: "array", items: { type: "string" } }
+    }),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run component.get",
+    docsTopic: "component",
+    equivalentUnityMcp: "gameobject-component-get",
+    examples: [
+      { description: "Read Transform deeply", argv: ["tools", "run", "component.get", "--input", "{\"path\":\"Main Camera\",\"component\":\"Transform\"}"] }
+    ]
+  },
+  {
+    name: "component.modify",
+    title: "Modify Component",
+    description: "Apply pathPatches, jsonPatch (Merge Patch) or componentDiff to a Component. Returns updated data, changed paths, logs and audit. Use component.get first. Aligns with IvanMurzak gameobject-component-modify.",
+    group: "component",
+    inputSchema: objSchema({
+      instanceId: { type: "integer" },
+      path: { type: "string" },
+      componentInstanceId: { type: "integer" },
+      componentIndex: { type: "integer" },
+      component: { type: "string" },
+      pathPatches: { type: "array", items: { type: "object" } },
+      jsonPatch: { type: "object" },
+      componentDiff: { type: "object", description: "Alias of jsonPatch (Merge Patch semantics)." },
+      maxDepth: { type: "integer", default: 2 }
+    }),
+    readOnlyHint: false,
+    destructiveHint: true,
+    supportsDryRun: true,
+    riskLevel: "high",
+    sideEffects: ["component-modify"],
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run component.modify",
+    docsTopic: "component",
+    equivalentUnityMcp: "gameobject-component-modify",
+    examples: [
+      { description: "Patch localPosition", argv: ["tools", "run", "component.modify", "--input", "{\"path\":\"Player\",\"component\":\"Transform\",\"pathPatches\":[{\"path\":\"localPosition\",\"value\":{\"x\":1,\"y\":2,\"z\":3}}]}"] }
+    ]
+  },
+  {
+    name: "component.list-types",
+    title: "List Component Types",
+    description: "Enumerate Component types available in the current project (all loaded assemblies). Use before component.add/get/modify to discover type names. Aligns with IvanMurzak gameobject-component-list-all.",
+    group: "component",
+    inputSchema: objSchema({ keyword: { type: "string", description: "Optional name/namespace filter." }, pageSize: { type: "integer", default: 100 }, cursor: { type: "integer", default: 0 } }),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run component.list-types",
+    docsTopic: "component",
+    equivalentUnityMcp: "gameobject-component-list-all",
+    examples: [
+      { description: "List Rigidbody types", argv: ["tools", "run", "component.list-types", "--input", "{\"keyword\":\"Rigidbody\"}"] }
+    ]
   }
 ];

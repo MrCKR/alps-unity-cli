@@ -37,7 +37,7 @@ export const SCRIPT_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "script create",
+    cliCommand: "tools run script.create",
     docsTopic: "script"
   },
   {
@@ -50,7 +50,7 @@ export const SCRIPT_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "script read",
+    cliCommand: "tools run script.read",
     docsTopic: "script"
   },
   {
@@ -63,7 +63,7 @@ export const SCRIPT_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "script hash",
+    cliCommand: "tools run script.hash",
     docsTopic: "script",
     equivalentUnityMcp: "get_sha"
   },
@@ -77,7 +77,7 @@ export const SCRIPT_TOOLS: ToolMetadata[] = [
     destructiveHint: true,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "script edit",
+    cliCommand: "tools run script.edit",
     docsTopic: "script",
     equivalentUnityMcp: "apply_text_edits"
   },
@@ -91,7 +91,7 @@ export const SCRIPT_TOOLS: ToolMetadata[] = [
     destructiveHint: true,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "script apply-edits",
+    cliCommand: "tools run script.apply-edits",
     docsTopic: "script",
     equivalentUnityMcp: "script_apply_edits"
   },
@@ -105,7 +105,50 @@ export const SCRIPT_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "script validate",
+    cliCommand: "tools run script.validate",
     docsTopic: "script"
+  },
+  {
+    name: "script.update-or-create",
+    title: "Update or Create Script",
+    description: "Create a script or overwrite it if it exists. Returns created flag and before/after SHA-256.",
+    group: "script",
+    inputSchema: objSchema({ path: { type: "string" }, content: { type: "string" } }, ["path", "content"]),
+    readOnlyHint: false,
+    destructiveHint: true,
+    supportsDryRun: true,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run script.update-or-create",
+    docsTopic: "script",
+    equivalentUnityMcp: "script-update-or-create"
+  },
+  {
+    name: "script.find-in-file",
+    title: "Find in Script File",
+    description: "Find text matches in a script file, returning line numbers and text. Supports regex and case sensitivity.",
+    group: "script",
+    inputSchema: objSchema({ path: { type: "string" }, query: { type: "string" }, regex: { type: "boolean", default: false }, ignoreCase: { type: "boolean", default: true } }, ["path", "query"]),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run script.find-in-file",
+    docsTopic: "script",
+    equivalentUnityMcp: "find_in_file"
+  },
+  {
+    name: "script.capabilities",
+    title: "Script Capabilities",
+    description: "List available script.* and code.exec capabilities with risk levels and descriptions.",
+    group: "script",
+    inputSchema: objSchema({}),
+    readOnlyHint: true,
+    destructiveHint: false,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run script.capabilities",
+    docsTopic: "script",
+    equivalentUnityMcp: "manage_script_capabilities"
   }
 ];

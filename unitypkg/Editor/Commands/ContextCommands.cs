@@ -192,6 +192,15 @@ namespace UnityCli
                 },
                 new BuiltInContextDefinition
                 {
+                    Name = "scene.opened", Title = "Opened Scenes", Description = "List currently loaded (opened) scenes in the Editor.",
+                    Category = "scene", Source = "built-in", RefreshBehavior = "live", Target = "editor", AvailabilityScope = "editorSession",
+                    ResourceUri = "unity-cli://scene/opened", EquivalentUnityMcp = "mcpforunity://scene/opened", Handler = "bridge",
+                    InputSchema = "{}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"scenes\":{\"type\":\"array\"},\"count\":{\"type\":\"integer\"},\"activeScene\":{\"type\":\"string\"},\"readOnlyHint\":{\"type\":\"boolean\"}}}",
+                    RequiresPackages = null, ReadHandler = ReadSceneOpened
+                },
+                new BuiltInContextDefinition
+                {
                     Name = "scene.cameras", Title = "Scene Cameras", Description = "List all cameras in the active scene with their key properties.",
                     Category = "scene", Source = "built-in", RefreshBehavior = "on-demand", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://scene/cameras", EquivalentUnityMcp = "mcpforunity://scene/cameras", Handler = "bridge",
@@ -602,6 +611,30 @@ namespace UnityCli
                 .Prop("readOnlyHint", true)
                 .EndObject()
                 .ToString());
+        }
+
+        private static string ReadSceneOpened(BridgeRequest request)
+        {
+            var w = new UnityCliJsonWriter().BeginObject();
+            w.PropArray("scenes", arr =>
+            {
+                for (var i = 0; i < SceneManager.sceneCount; i++)
+                {
+                    var scene = SceneManager.GetSceneAt(i);
+                    arr.BeginObject()
+                        .Prop("name", scene.name)
+                        .Prop("path", NormalizeAssetPath(scene.path))
+                        .Prop("buildIndex", (long)scene.buildIndex)
+                        .Prop("isLoaded", scene.isLoaded)
+                        .Prop("isDirty", scene.isDirty)
+                        .EndObject();
+                }
+            });
+            w.Prop("count", (long)SceneManager.sceneCount);
+            w.Prop("activeScene", SceneManager.GetActiveScene().name);
+            w.Prop("readOnlyHint", true);
+            w.Prop("logPath", LogPath());
+            return w.EndObject().ToString();
         }
 
         private static string ReadSceneGameObjectComponents(BridgeRequest request)

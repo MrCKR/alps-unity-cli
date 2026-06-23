@@ -324,7 +324,7 @@ const SCENE_RENDERING_STATS: ContextMetadata = {
 const SCENE_GAMEOBJECT_COMPONENTS: ContextMetadata = {
   name: "scene.gameobject.components",
   title: "Scene GameObject Components",
-  description: "Read all components attached to a GameObject, including type names and public readable properties.",
+  description: "Lightweight list of components attached to a GameObject: type names, enabled state and a short summary. Does NOT return full fields/props. For deep component data use `tools run component.get`.",
   kind: "context",
   source: "built-in",
   category: "scene",
@@ -343,7 +343,7 @@ const SCENE_GAMEOBJECT_COMPONENTS: ContextMetadata = {
 const SCENE_GAMEOBJECT_COMPONENT: ContextMetadata = {
   name: "scene.gameobject.component",
   title: "Scene GameObject Component",
-  description: "Read one component attached to a GameObject, including public readable properties when available.",
+  description: "Lightweight preview of one component attached to a GameObject. Does NOT replace deep reads. For complete fields/props use `tools run component.get`.",
   kind: "context",
   source: "built-in",
   category: "scene",
@@ -357,6 +357,25 @@ const SCENE_GAMEOBJECT_COMPONENT: ContextMetadata = {
   equivalentUnityMcp: "mcpforunity://scene/gameobject/{id}/component/{name}",
   handler: "bridge",
   cliCommand: "context read scene.gameobject.component"
+};
+
+const SCENE_OPENED: ContextMetadata = {
+  name: "scene.opened",
+  title: "Opened Scenes",
+  description: "List currently loaded (opened) scenes in the Editor, with name, path, build index, isLoaded and isDirty. Read-only state surface for multi-scene observation.",
+  kind: "context",
+  source: "built-in",
+  category: "scene",
+  inputSchema: { type: "object", properties: {} },
+  readOnlyHint: true,
+  refreshBehavior: "live",
+  target: "editor",
+  availabilityScope: "editorSession",
+  resourceUri: "unity-cli://scene/opened",
+  outputSchema: { type: "object", properties: { scenes: { type: "array", items: { type: "object", properties: { name: { type: "string" }, path: { type: "string" }, buildIndex: { type: "integer" }, isLoaded: { type: "boolean" }, isDirty: { type: "boolean" } } } }, count: { type: "integer" }, activeScene: { type: "string" } } },
+  equivalentUnityMcp: "mcpforunity://scene/opened",
+  handler: "bridge",
+  cliCommand: "context read scene.opened"
 };
 
 const PREFAB_INFO: ContextMetadata = {
@@ -414,6 +433,25 @@ const INSTANCES_LIST: ContextMetadata = {
   equivalentUnityMcp: "mcpforunity://instances",
   handler: "bridge",
   cliCommand: "context read instances.list"
+};
+
+const TARGET_CURRENT: ContextMetadata = {
+  name: "target.current",
+  title: "Current Target",
+  description: "Read the currently active Unity target selection and its aliases. Stable read-only state surface; setting target uses tools run target.set.",
+  kind: "context",
+  source: "built-in",
+  category: "target",
+  inputSchema: {},
+  readOnlyHint: true,
+  refreshBehavior: "on-demand",
+  target: "editor",
+  availabilityScope: "always",
+  resourceUri: "unity-cli://target/current",
+  outputSchema: { type: "object", properties: { activeTarget: { type: ["string", "null"] }, target: { type: ["object", "null"] }, aliases: { type: "object" } } },
+  equivalentUnityMcp: "mcpforunity://target/current",
+  handler: "bridge",
+  cliCommand: "context read target.current"
 };
 
 const TOOLS_GROUPS: ContextMetadata = {
@@ -498,6 +536,7 @@ const BUILTIN_CONTEXTS: ContextMetadata[] = [
   SCENE_GAMEOBJECT,
   SCENE_GAMEOBJECT_COMPONENTS,
   SCENE_GAMEOBJECT_COMPONENT,
+  SCENE_OPENED,
   SCENE_CAMERAS,
   SCENE_VOLUMES,
   SCENE_RENDERER_FEATURES,
@@ -506,6 +545,7 @@ const BUILTIN_CONTEXTS: ContextMetadata[] = [
   PREFAB_HIERARCHY,
   TESTS_LIST,
   INSTANCES_LIST,
+  TARGET_CURRENT,
   TOOLS_GROUPS,
   TOOLS_CUSTOM
 ];

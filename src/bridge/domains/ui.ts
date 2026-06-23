@@ -8,7 +8,10 @@ export const uiBridgeSpecs: BridgeCommandSpec[] = [
   { group: "ui", command: "image/create", bridgeCommand: "ui.image.create", buildArgs: uiArgs },
   { group: "ui", command: "document/info", bridgeCommand: "ui.document.info", buildArgs: uiArgs },
   { group: "ui", command: "document/create", bridgeCommand: "ui.document.create", buildArgs: uiArgs },
-  { group: "ui", command: "hierarchy", bridgeCommand: "ui.hierarchy", buildArgs: uiArgs }
+  { group: "ui", command: "hierarchy", bridgeCommand: "ui.hierarchy", buildArgs: uiArgs },
+  { group: "ui", command: "attach-document", bridgeCommand: "ui.attach-document", buildArgs: uiAttachArgs },
+  { group: "ui", command: "create-panel-settings", bridgeCommand: "ui.create-panel-settings", buildArgs: uiPanelArgs },
+  { group: "ui", command: "get-visual-tree", bridgeCommand: "ui.get-visual-tree", buildArgs: uiVisualTreeArgs }
 ];
 
 function uiArgs({ command, flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
@@ -49,4 +52,29 @@ function uiArgs({ command, flags, positionalTarget }: Parameters<BridgeCommandSp
 
 function looksLikeUiAssetPath(value: string | undefined): boolean {
   return typeof value === "string" && /\.(uxml|uss)$/i.test(value);
+}
+
+function uiAttachArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({
+    target: positionalTarget ?? stringFlag(flags, "target"),
+    sourceAsset: stringFlag(flags, "source-asset") ?? stringFlag(flags, "uxml"),
+    panelSettings: stringFlag(flags, "panel-settings"),
+    sortOrder: numberFlag(flags, "sort-order")
+  });
+}
+
+function uiPanelArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({
+    path: positionalTarget ?? stringFlag(flags, "path"),
+    scaleMode: stringFlag(flags, "scale-mode"),
+    referenceWidth: numberFlag(flags, "reference-width"),
+    referenceHeight: numberFlag(flags, "reference-height")
+  });
+}
+
+function uiVisualTreeArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({
+    target: positionalTarget ?? stringFlag(flags, "target"),
+    maxDepth: numberFlag(flags, "max-depth")
+  });
 }

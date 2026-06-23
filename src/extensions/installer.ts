@@ -363,7 +363,7 @@ function nextActionsForStatus(manifest: ExtensionManifest, availability: Extensi
   if (status === "missing_dependency") {
     return [
       `Install ${availability.missingPackageIds.join(", ")} manually via the Unity Package Manager or Packages/manifest.json.`,
-      "Run unity_cli package resolve after changing Packages/manifest.json.",
+      "Run unity_cli tools run package.resolve after changing Packages/manifest.json.",
       `Then run unity_cli extensions install ${manifest.id} --project <path>.`,
       "The CLI does not install optional Unity packages automatically."
     ];
