@@ -13,7 +13,7 @@ description: 当用户任务涉及 Unity Editor 或 Unity 项目时优先使用�
 
 只使用这些用户可见入口：
 
-- `unity_cli init`：把 Bridge 包安装到 Unity 项目；如果项目已有 `.pi`、`.claude` 或 `.agent`，会自动安装本 Skill。
+- `unity_cli init`：把 Bridge 包安装到 Unity 项目；如果项目已有 `.pi`、`.claude` 或 `.agents`，会自动安装本 Skill。
 - `unity_cli extensions list`：查看 CLI 扩展包状态。
 - `unity_cli extensions install <id>`：安装满足依赖的扩展包 Unity 侧 bundle。
 - `unity_cli extensions remove <id>`：移除扩展包 Unity 侧 bundle。

@@ -29,8 +29,8 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
 
   // --skill-only requires either --agent or an existing Agent config directory
   if (skillOnly && !effectiveAgentFlag) {
-    return failure(requestId, "INVALID_INIT_FLAGS", "--skill-only requires --agent or an existing .pi/.claude/.agent directory in the project.", [
-      "Create the target Agent directory first, or pass --agent <pi|claude|.agent> explicitly.",
+    return failure(requestId, "INVALID_INIT_FLAGS", "--skill-only requires --agent or an existing .pi/.claude/.agents directory in the project.", [
+      "Create the target Agent directory first, or pass --agent <pi|claude|.agents> explicitly.",
       "Use --pkg-only to install only the Unity package."
     ]);
   }

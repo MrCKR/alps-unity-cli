@@ -6,10 +6,10 @@ import { fileURLToPath } from "node:url";
 // ─── Types ───────────────────────────────────────────────────────────────────
 
 /** Supported agent identifiers for skill installation. */
-export type AgentKind = "pi" | "claude" | ".agent";
+export type AgentKind = "pi" | "claude" | ".agents";
 
 /** All valid agent kinds. */
-export const AGENT_KINDS: readonly AgentKind[] = ["pi", "claude", ".agent"];
+export const AGENT_KINDS: readonly AgentKind[] = ["pi", "claude", ".agents"];
 
 /** Result of installing a skill for a single agent. */
 export interface SkillInstallResult {
@@ -38,14 +38,14 @@ export interface SkillCheckResult {
 const AGENT_ROOT_DIR: Record<AgentKind, string> = {
   pi: ".pi",
   claude: ".claude",
-  ".agent": ".agent",
+  ".agents": ".agents",
 };
 
 /** Maps an agent kind to its skill directory relative to the Unity project root. */
 const AGENT_SKILL_DIR: Record<AgentKind, string> = {
   pi: ".pi/skills/unity_cli",
   claude: ".claude/skills/unity_cli",
-  ".agent": ".agent/skills/unity_cli",
+  ".agents": ".agents/skills/unity_cli",
 };
 
 /** 探测项目中已存在的 Agent 目录,用于 init 默认安装 Skill。 */
@@ -335,7 +335,7 @@ export function parseAgentList(agents: string | AgentKind[]): AgentKind[] {
       throw new SkillInstallerError(
         "UNKNOWN_AGENT_KIND",
         `Unknown agent kind: "${agent}". Supported: ${AGENT_KINDS.join(", ")}`,
-        [`Use one or more of: ${AGENT_KINDS.join(", ")}, comma-separated (e.g. "pi,claude")`]
+        [`Use one or more of: ${AGENT_KINDS.join(", ")}, comma-separated (e.g. "pi,claude,.agents")`]
       );
     }
     // Deduplicate

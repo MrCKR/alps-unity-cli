@@ -72,7 +72,7 @@ unity_cli init
 # 安装
 npm install -g @alps_ckr/unity_cli
 
-# 初始化项目（安装 Bridge 包；若项目已有 .pi/.claude/.agent，则自动安装 Skill）
+# 初始化项目（安装 Bridge 包；若项目已有 .pi/.claude/.agents，则自动安装 Skill）
 unity_cli init --project C:\path\MyProject
 
 # 查看帮助
@@ -564,7 +564,7 @@ unity_cli tools run reflect.search <query>
 
 ## 初始化（init）
 
-`init` 安装捆绑的 `com.unity_cli` Bridge 包到目标 Unity 项目；如果项目根目录已经存在 `.pi`、`.claude` 或 `.agent`，会自动安装对应 AI Agent Skill。也可以用 `--agent` 显式指定目标。
+`init` 安装捆绑的 `com.unity_cli` Bridge 包到目标 Unity 项目；如果项目根目录已经存在 `.pi`、`.claude` 或 `.agents`，会自动安装对应 AI Agent Skill。也可以用 `--agent` 显式指定目标。
 
 | 标志 | 含义 |
 |------|------|
@@ -572,10 +572,10 @@ unity_cli tools run reflect.search <query>
 | `--pkg-only` | 仅安装 Bridge 包，不安装 Skill |
 | `--skill-only [--agent <agent>]` | 仅安装 Skill；未传 `--agent` 时使用已存在的 Agent 目录 |
 | `--check` | 检查安装状态，不修改项目 |
-| `--agent <pi\|claude\|.agent,...>` | 显式指定 Skill 安装目标 |
+| `--agent <pi\|claude\|.agents,...>` | 显式指定 Skill 安装目标 |
 
 ```powershell
-# 默认安装 Bridge；若项目已有 .pi/.claude/.agent，则自动安装 Skill
+# 默认安装 Bridge；若项目已有 .pi/.claude/.agents，则自动安装 Skill
 unity_cli init --project C:\path\MyProject
 
 # 仅 Bridge 包

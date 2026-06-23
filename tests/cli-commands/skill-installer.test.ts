@@ -47,7 +47,7 @@ test("parseAgentList accepts comma-separated agents", () => {
 });
 
 test("parseAgentList accepts all three agents", () => {
-  assert.deepEqual(parseAgentList("pi,claude,.agent"), ["pi", "claude", ".agent"]);
+  assert.deepEqual(parseAgentList("pi,claude,.agents"), ["pi", "claude", ".agents"]);
 });
 
 test("parseAgentList accepts AgentKind[] array", () => {
@@ -70,6 +70,15 @@ test("parseAgentList throws for unknown agent kind", () => {
   });
 });
 
+test("parseAgentList rejects legacy .agent directory name", () => {
+  assert.throws(() => parseAgentList(".agent"), (error: unknown) => {
+    assert.ok(error instanceof SkillInstallerError);
+    assert.equal(error.code, "UNKNOWN_AGENT_KIND");
+    assert.match(error.message, /\.agents/);
+    return true;
+  });
+});
+
 test("parseAgentList throws for empty list", () => {
   assert.throws(() => parseAgentList(""), (error: unknown) => {
     assert.ok(error instanceof SkillInstallerError);
@@ -80,8 +89,8 @@ test("parseAgentList throws for empty list", () => {
 
 // ─── AGENT_KINDS ─────────────────────────────────────────────────────────────
 
-test("AGENT_KINDS contains pi, claude, .agent", () => {
-  assert.deepEqual([...AGENT_KINDS], ["pi", "claude", ".agent"]);
+test("AGENT_KINDS contains pi, claude, .agents", () => {
+  assert.deepEqual([...AGENT_KINDS], ["pi", "claude", ".agents"]);
 });
 
 // ─── resolveTargetPath ───────────────────────────────────────────────────────
@@ -98,10 +107,10 @@ test("resolveTargetPath maps claude to .claude/skills/unity_cli/SKILL.md", () =>
   assert.equal(installer.resolveTargetPath("/project"), join("/project", ".claude", "skills", "unity_cli", "SKILL.md"));
 });
 
-test("resolveTargetPath maps .agent to .agent/skills/unity_cli/SKILL.md", () => {
+test("resolveTargetPath maps .agents to .agents/skills/unity_cli/SKILL.md", () => {
   const reg = registry();
-  const installer = reg.get(".agent")!;
-  assert.equal(installer.resolveTargetPath("/project"), join("/project", ".agent", "skills", "unity_cli", "SKILL.md"));
+  const installer = reg.get(".agents")!;
+  assert.equal(installer.resolveTargetPath("/project"), join("/project", ".agents", "skills", "unity_cli", "SKILL.md"));
 });
 
 // ─── Install: single agent ───────────────────────────────────────────────────
@@ -142,17 +151,17 @@ test("install for claude creates .claude/skills/unity_cli/SKILL.md", async () =>
   await rm(project, { recursive: true });
 });
 
-test("install for .agent creates .agent/skills/unity_cli/SKILL.md", async () => {
+test("install for .agents creates .agents/skills/unity_cli/SKILL.md", async () => {
   const reg = registry();
   const sourcePath = await makeSkillSource("# Unity CLI Skill\nAgent test");
   const project = await makeProject();
 
-  const results = await reg.installForAgents(".agent", sourcePath, project);
+  const results = await reg.installForAgents(".agents", sourcePath, project);
   assert.equal(results.length, 1);
-  assert.equal(results[0].agent, ".agent");
+  assert.equal(results[0].agent, ".agents");
   assert.equal(results[0].status, "installed");
 
-  const targetPath = join(project, ".agent", "skills", "unity_cli", "SKILL.md");
+  const targetPath = join(project, ".agents", "skills", "unity_cli", "SKILL.md");
   const content = await readFile(targetPath, "utf8");
   assert.equal(content, "# Unity CLI Skill\nAgent test");
 

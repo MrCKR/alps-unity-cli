@@ -78,8 +78,9 @@ test("node dist cli version prints package version", async () => {
   const result = await runCli(["--version"]);
   assert.equal(result.code, 0, result.stderr);
   const payload = JSON.parse(result.stdout) as { ok: boolean; data: { version: string } };
+  const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
   assert.equal(payload.ok, true);
-  assert.equal(payload.data.version, "0.1.0");
+  assert.equal(payload.data.version, packageJson.version);
 });
 
 test("frozen top-level directories exist", async () => {
@@ -904,6 +905,26 @@ test("init --skill-only without --agent installs skill for existing agent direct
   assert.equal(skills.length, 1);
   assert.equal(skills[0].agent, "claude");
   assert.equal(skills[0].status, "installed");
+});
+
+test("init --skill-only without --agent installs skill for existing .agents directory", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+  await mkdir(join(project, ".agents"), { recursive: true });
+
+  const result = await execute(["init", "--skill-only", "--project", project], runtime);
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.package, undefined, "package segment should not be present with --skill-only");
+  assert.ok(data.skills, "skills segment should be present for detected agent directory");
+
+  const skills = data.skills as Array<{ agent: string; status: string }>;
+  assert.equal(skills.length, 1);
+  assert.equal(skills[0].agent, ".agents");
+  assert.equal(skills[0].status, "installed");
+
+  const skillContent = await readFile(join(project, ".agents", "skills", "unity_cli", "SKILL.md"), "utf8");
+  assert.ok(skillContent.length > 0);
 });
 
 test("init --check --agent on missing skill reports missing", async () => {
