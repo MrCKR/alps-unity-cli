@@ -103,7 +103,7 @@ tools run <tool>                        → 执行只读读取
 
 ## Built-in Context
 
-当前内置 24 个只读 Context，与 unity-mcp 的 Resources 模型等价映射，并通过 `context describe <name>` 暴露 input/output schema 与 `equivalentUnityMcp` 信息。
+当前内置 23 个只读 Context，与 unity-mcp 的 Resources 模型等价映射，并通过 `context describe <name>` 暴露 input/output schema 与 `equivalentUnityMcp` 信息。
 
 | Context 概念 | Context 名称示例 | unity-mcp Resource |
 |--------------|------------------|---------------------|
@@ -113,7 +113,7 @@ tools run <tool>                        → 执行只读读取
 | 已打开场景 | `scene.opened` | `scene/opened` |
 | 场景对象与组件（轻量） | `scene.gameobject.components` / `scene.gameobject.component` | `scene/gameobjects/*` |
 | Prefab 信息 | `prefab.info` / `prefab.hierarchy` | `prefabs/*` |
-| 实例与工具 | `instances.list` / `tools.groups` / `tools.custom` | `instances` / `tools/*` |
+| 工具发现 | `tools.groups` / `tools.custom` | `tools/*` |
 
 ### 轻量 Context 与深读 Tool 的分层
 

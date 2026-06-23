@@ -150,7 +150,7 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   batch: {
     title: "Batch Execution",
-    summary: "Execute a JSON file containing multiple CLI commands in sequence or parallel. Handler: offline. Target: routed per-step. `batch.run` is destructive (supports --preflight dry-run, requires --yes)."
+    summary: "Execute a JSON file containing multiple CLI commands in sequence or parallel. Handler: offline. Target: routed per-step. `batch run` is destructive (supports --preflight dry-run, requires --yes)."
   },
   docs: {
     title: "Built-in and Offline Documentation",
@@ -164,11 +164,11 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   test: {
     title: "Test Commands",
-    summary: "Run Unity tests as jobs and inspect status/logs. Handler: job (run), offline (poll/logs/cancel). Target: editor (batch job). `test.cancel` is destructive (requires --yes)."
+    summary: "Run Unity tests as jobs. Inspect or cancel them with top-level `jobs status/logs/cancel`. Handler: job (run). Target: editor (batch job)."
   },
   build: {
     title: "Build Commands",
-    summary: "Run Unity builds as jobs and inspect status/logs. Handler: job (run), offline (status/logs/cancel). Target: editor (batch job). `build.cancel` is destructive (requires --yes)."
+    summary: "Run Unity builds as jobs. Inspect or cancel them with top-level `jobs status/logs/cancel`. Handler: job (run). Target: editor (batch job)."
   },
   "project-tool": {
     title: "Project Tools (Custom)",

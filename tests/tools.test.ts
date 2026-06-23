@@ -283,21 +283,9 @@ test("editor.refresh metadata exists with job handler and longRunning", () => {
   assert.ok(tool.examples && tool.examples.length > 0);
 });
 
-test("batch schema and run metadata cover S3.5 orchestration", () => {
-  const schema = findToolByName("batch.schema");
-  assert.ok(schema, "batch.schema should exist");
-  assert.equal(schema.group, "batch");
-  assert.equal(schema.handler, "offline");
-  assert.equal(schema.readOnlyHint, true);
-  assert.equal(schema.destructiveHint, false);
-  assert.ok(schema.outputSchema);
-
-  const run = findToolByName("batch.run");
-  assert.ok(run, "batch.run should exist");
-  assert.equal(run.handler, "offline");
-  assert.equal(run.supportsDryRun, true);
-  assert.ok(run.outputSchema);
-  assert.match(run.cancellationSemantics ?? "", /child jobs/i);
+test("batch control-plane tools are not exposed through tools metadata", () => {
+  assert.equal(findToolByName("batch.schema"), undefined, "batch.schema should be top-level batch control-plane only");
+  assert.equal(findToolByName("batch.run"), undefined, "batch.run should be top-level batch control-plane only");
 });
 
 test("representative destructive tools declare dry-run support", () => {
@@ -346,15 +334,6 @@ test("test.run metadata exists with job handler and longRunning", () => {
   assert.ok(tool.examples && tool.examples.length > 0);
 });
 
-test("test.poll metadata exists with offline handler", () => {
-  const tool = findToolByName("test.poll");
-  assert.ok(tool, "test.poll should exist");
-  assert.equal(tool.group, "test");
-  assert.equal(tool.handler, "offline");
-  assert.equal(tool.readOnlyHint, true);
-  assert.ok(tool.outputSchema);
-});
-
 test("build.run metadata exists with job handler and longRunning", () => {
   const tool = findToolByName("build.run");
   assert.ok(tool, "build.run should exist");
@@ -366,31 +345,9 @@ test("build.run metadata exists with job handler and longRunning", () => {
   assert.ok(tool.examples && tool.examples.length > 0);
 });
 
-test("build.status metadata exists with offline handler", () => {
-  const tool = findToolByName("build.status");
-  assert.ok(tool, "build.status should exist");
-  assert.equal(tool.group, "build");
-  assert.equal(tool.handler, "offline");
-  assert.equal(tool.readOnlyHint, true);
-  assert.ok(tool.outputSchema);
-});
-
-test("test and build job domains expose status logs and cancel metadata", () => {
-  for (const name of ["test.poll", "test.logs", "build.status", "build.logs"]) {
-    const tool = findToolByName(name);
-    assert.ok(tool, `${name} should exist`);
-    assert.equal(tool?.handler, "offline");
-    assert.equal(tool?.readOnlyHint, true);
-    assert.ok(tool?.outputSchema);
-  }
-
-  for (const name of ["test.cancel", "build.cancel"]) {
-    const tool = findToolByName(name);
-    assert.ok(tool, `${name} should exist`);
-    assert.equal(tool?.handler, "offline");
-    assert.equal(tool?.readOnlyHint, false);
-    assert.equal(tool?.destructiveHint, true);
-    assert.match(tool?.cancellationSemantics ?? "", /job cancel/i);
+test("job control-plane tools are not exposed through tools metadata", () => {
+  for (const name of ["job.status", "job.logs", "job.describe", "job.cancel", "test.poll", "test.logs", "test.cancel", "build.status", "build.logs", "build.cancel"]) {
+    assert.equal(findToolByName(name), undefined, `${name} should be top-level jobs control-plane only`);
   }
 });
 
@@ -406,22 +363,14 @@ test("S2.3 editor group has all required tools", () => {
   assert.ok(names.includes("editor.refresh"));
 });
 
-test("S2.3 test group has all required tools", () => {
+test("S2.3 test group exposes only test execution tool", () => {
   const testTools = filterToolsByGroup("test");
-  const names = testTools.map((t) => t.name);
-  assert.ok(names.includes("test.run"));
-  assert.ok(names.includes("test.poll"));
-  assert.ok(names.includes("test.logs"));
-  assert.ok(names.includes("test.cancel"));
+  assert.deepEqual(testTools.map((t) => t.name), ["test.run"]);
 });
 
-test("S2.3 build group has all required tools", () => {
-  const buildTools = filterToolsByGroup("build");
-  const names = buildTools.map((t) => t.name);
-  assert.ok(names.includes("build.run"));
-  assert.ok(names.includes("build.status"));
-  assert.ok(names.includes("build.logs"));
-  assert.ok(names.includes("build.cancel"));
+test("S2.3 build group exposes run plus Editor build settings tools", () => {
+  const names = filterToolsByGroup("build").map((t) => t.name);
+  assert.deepEqual(names, ["build.scenes", "build.platform", "build.settings", "build.run"]);
 });
 
 test("S3.1 creation domains have frozen metadata coverage", () => {

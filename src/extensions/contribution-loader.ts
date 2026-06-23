@@ -65,8 +65,10 @@ export function registerBuiltinExtensionContributions(): void {
   // Validate extension contributions
   validateExtensionToolMetadata();
 
-  // Full bridge registry validation (core + extension)
-  validateBridgeRegistryContracts(bridgeCommandRegistry);
+  // 生成 command-contract.json 时契约尚未完成,跳过完整反向校验。
+  if (process.env.UNITY_CLI_GENERATING_CONTRACT !== "1") {
+    validateBridgeRegistryContracts(bridgeCommandRegistry);
+  }
 }
 
 /**

@@ -17,14 +17,21 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
   const pkgOnly = getBoolean(flags, "pkg-only");
   const skillOnly = getBoolean(flags, "skill-only");
   const isCheck = getBoolean(flags, "check");
+  let effectiveAgentFlag = agentFlag;
+
+  if (!agentFlag && !pkgOnly) {
+    const { detectAgentKinds } = await import("./skill-installer.js");
+    const detectedAgents = await detectAgentKinds(projectPath);
+    effectiveAgentFlag = detectedAgents.length > 0 ? detectedAgents.join(",") : undefined;
+  }
 
   // ─── Parameter validation ─────────────────────────────────────────────
 
-  // --skill-only requires --agent
-  if (skillOnly && !agentFlag) {
-    return failure(requestId, "INVALID_INIT_FLAGS", "--skill-only requires --agent to specify which agent skill(s) to install.", [
-      "Use --skill-only --agent <pi|claude|.agent> to install only agent skills.",
-      "Omit --skill-only to install both unitypkg and agent skills."
+  // --skill-only requires either --agent or an existing Agent config directory
+  if (skillOnly && !effectiveAgentFlag) {
+    return failure(requestId, "INVALID_INIT_FLAGS", "--skill-only requires --agent or an existing .pi/.claude/.agent directory in the project.", [
+      "Create the target Agent directory first, or pass --agent <pi|claude|.agent> explicitly.",
+      "Use --pkg-only to install only the Unity package."
     ]);
   }
 
@@ -46,10 +53,10 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
   }
 
   // Validate --agent values early (applies to both install and check)
-  if (agentFlag) {
+  if (effectiveAgentFlag) {
     const { parseAgentList, SkillInstallerError } = await import("./skill-installer.js");
     try {
-      parseAgentList(agentFlag);
+      parseAgentList(effectiveAgentFlag);
     } catch (error) {
       if (error instanceof SkillInstallerError) {
         return failure(requestId, error.code, error.message, error.nextActions);
@@ -89,11 +96,11 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
       }
     }
 
-    // Check skill status (when --agent is specified)
-    if (agentFlag) {
+    // Check skill status for explicit or auto-detected Agent directories.
+    if (effectiveAgentFlag) {
       const { agentSkillInstaller, findSkillSourcePath } = await import("./skill-installer.js");
       const sourcePath = await findSkillSourcePath();
-      const skillResults = await agentSkillInstaller.checkForAgents(agentFlag, sourcePath, projectPath);
+      const skillResults = await agentSkillInstaller.checkForAgents(effectiveAgentFlag, sourcePath, projectPath);
       result.skills = skillResults;
     }
 
@@ -131,11 +138,11 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
       : ["Open the Unity project to start using the package. The package is copied to Packages/com.unity_cli/."];
   }
 
-  // Install agent skills (when --agent is specified)
-  if (agentFlag) {
+  // Install agent skills for explicit or auto-detected Agent directories.
+  if (effectiveAgentFlag) {
     const { agentSkillInstaller, findSkillSourcePath } = await import("./skill-installer.js");
     const sourcePath = await findSkillSourcePath();
-    const skillResults = await agentSkillInstaller.installForAgents(agentFlag, sourcePath, projectPath);
+    const skillResults = await agentSkillInstaller.installForAgents(effectiveAgentFlag, sourcePath, projectPath);
     baseResult.skills = skillResults;
 
     // Build change description for updated skills
@@ -297,11 +304,17 @@ export async function handlePackage(command: string | undefined, args: string[],
 }
 
 async function refreshOpenEditor(requestId: string, flags: Record<string, string | boolean>, runtime: Runtime): Promise<Record<string, unknown>> {
-  const endpoint = getString(flags, "bridge-endpoint") ?? runtime.bridgeEndpoint ?? process.env.UNITY_CLI_BRIDGE_ENDPOINT ?? "http://127.0.0.1:47392";
-  if (!runtime.bridgeExecute && !(await isBridgeReachable(endpoint))) {
-    return { status: "skipped", reason: "bridge_endpoint_absent", endpoint };
+  const endpoint = getString(flags, "bridge-endpoint") ?? runtime.bridgeEndpoint ?? process.env.UNITY_CLI_BRIDGE_ENDPOINT;
+  // 只对显式配置的 bridge endpoint 或测试注入的 bridgeExecute 做 live refresh。
+  // 避免盲探默认端口导致无关已打开 Editor 改变 package job 路由。
+  if (!endpoint && !runtime.bridgeExecute) {
+    return { status: "skipped", reason: "bridge_endpoint_absent" };
   }
-  const result = await executeBridgePayload(`${requestId}_refresh`, "editor.menu", { path: "Assets/Refresh", timeoutMs: 7000 }, { ...flags, "bridge-endpoint": endpoint, __destructiveConfirmed: true }, runtime);
+  if (endpoint && !runtime.bridgeExecute && !(await isBridgeReachable(endpoint))) {
+    return { status: "skipped", reason: "bridge_endpoint_unreachable", endpoint };
+  }
+  const effectiveEndpoint = endpoint ?? "http://127.0.0.1:47392";
+  const result = await executeBridgePayload(`${requestId}_refresh`, "editor.menu", { path: "Assets/Refresh", timeoutMs: 7000 }, { ...flags, "bridge-endpoint": effectiveEndpoint, __destructiveConfirmed: true }, runtime);
   if (result.ok) {
     return { status: "triggered", command: "editor.menu", path: "Assets/Refresh", endpoint };
   }

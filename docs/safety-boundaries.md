@@ -47,8 +47,7 @@ alps-unity-cli 的安全模型围绕三个核心原则：Tool 可有副作用但
 | `script.edit` | 编辑脚本文件 |
 | `cli.package.remove` | 移除包 |
 | `code.exec` | 执行代码 |
-| `test.cancel` | 取消测试 |
-| `build.cancel` | 取消构建 |
+| `jobs.cancel` | 取消测试/构建/刷新等后台任务 |
 
 ### 确认流程
 
@@ -98,7 +97,7 @@ Context（`readOnlyHint: true` 的工具）不得：
 
 ```powershell
 # 检查 fingerprint 状态
-unity_cli tools run diagnose.doctor
+unity_cli doctor
 # doctor 会报告 project_tool_fingerprint 检查结果
 ```
 

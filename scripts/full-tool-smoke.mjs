@@ -9,7 +9,7 @@ const { allRegisteredToolMetadata } = await import(`${distPrefix}/tools/metadata
 
 const project = resolve(process.argv[2] || 'Dev/UnityProject');
 const unity = process.argv[3] || 'C:/Program Files/Unity/Unity-2022.3.61f1/Editor/Unity.exe';
-const outDir = resolve('.multica-evidence/full-tool-smoke');
+const outDir = resolve('.tmp/evidence/full-tool-smoke');
 mkdirSync(outDir, { recursive: true });
 
 const baseFlags = {

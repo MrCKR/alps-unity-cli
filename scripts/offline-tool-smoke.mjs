@@ -5,7 +5,7 @@ import { join, resolve } from 'node:path';
 
 const project = resolve(process.argv[2] || 'Dev/UnityProject');
 const unity = process.argv[3] || 'C:/Program Files/Unity/Unity-2022.3.61f1/Editor/Unity.exe';
-const outDir = resolve('.multica-evidence/offline-tool-smoke');
+const outDir = resolve('.tmp/evidence/offline-tool-smoke');
 const dataDir = join(outDir, 'data');
 const docsDir = join(outDir, 'docs-cache');
 const reflectDir = join(outDir, 'reflect-cache');
@@ -154,46 +154,46 @@ try {
   await run('package.registry', ['tools', 'run', 'package.registry', '--project', project]);
   await run('package.scoped-registry', ['tools', 'run', 'package.scoped-registry', '--project', project]);
 
-  await run('batch.schema', ['tools', 'run', 'batch.schema']);
-  await run('batch.run', ['tools', 'run', 'batch.run', batchPath, '--dry-run', '--yes']);
+  await run('batch schema', ['batch', 'schema']);
+  await run('batch run', ['batch', 'run', batchPath, '--dry-run', '--yes']);
 
   seedInstances();
-  await run('target.alias-set', ['tools', 'run', 'target.alias-set', 'smoke-ready', 'smoke', '--yes']);
-  await run('target.alias-list', ['tools', 'run', 'target.alias-list']);
-  await run('target.set', ['tools', 'run', 'target.set', 'smoke', '--yes']);
-  await run('target.clear', ['tools', 'run', 'target.clear', '--yes']);
-  await run('target.alias-unset', ['tools', 'run', 'target.alias-unset', 'smoke', '--yes']);
+  await run('target alias set', ['target', 'alias', 'set', 'smoke-ready', 'smoke']);
+  await run('target alias list', ['target', 'alias', 'list']);
+  await run('target set', ['target', 'set', 'smoke']);
+  await run('target clear', ['target', 'clear']);
+  await run('target alias unset', ['target', 'alias', 'unset', 'smoke']);
   seedInstances();
-  await run('instances.prune', ['tools', 'run', 'instances.prune', '--yes']);
-  await run('diagnose.doctor', ['tools', 'run', 'diagnose.doctor', '--project', project]);
+  await run('instances prune', ['instances', 'prune', '--yes']);
+  await run('doctor', ['doctor', '--project', project]);
   await run('diagnose.capabilities', ['tools', 'run', 'diagnose.capabilities', '--project', project]);
 
   const refresh = await runExpect('editor.refresh', ['tools', 'run', 'editor.refresh', '--project', project, '--unity', unity, '--timeout-ms', '600000']);
   const refreshJobId = refresh?.data?.jobId;
   if (refreshJobId) {
-    await run('job.status', ['tools', 'run', 'job.status', '--id', refreshJobId]);
-    await run('job.logs', ['tools', 'run', 'job.logs', '--id', refreshJobId, '--tail', '5']);
-    await run('job.describe', ['tools', 'run', 'job.describe', '--id', refreshJobId]);
+    await run('jobs status', ['jobs', 'status', refreshJobId]);
+    await run('jobs logs', ['jobs', 'logs', refreshJobId, '--tail', '5']);
+    await run('jobs describe', ['jobs', 'describe', refreshJobId]);
     seedQueuedJob('smoke-job-cancel', 'refresh');
-    await run('job.cancel', ['tools', 'run', 'job.cancel', '--id', 'smoke-job-cancel', '--yes']);
+    await run('jobs cancel refresh', ['jobs', 'cancel', 'smoke-job-cancel', '--yes']);
   }
 
   const testRun = await runExpect('test.run', ['tools', 'run', 'test.run', '--project', project, '--unity', unity, '--timeout-ms', '600000']);
   const testJobId = testRun?.data?.jobId;
   if (testJobId) {
-    await run('test.poll', ['tools', 'run', 'test.poll', '--id', testJobId]);
-    await run('test.logs', ['tools', 'run', 'test.logs', '--id', testJobId, '--tail', '5']);
+    await run('jobs status test', ['jobs', 'status', testJobId]);
+    await run('jobs logs test', ['jobs', 'logs', testJobId, '--tail', '5']);
     seedQueuedJob('smoke-test-cancel', 'test');
-    await run('test.cancel', ['tools', 'run', 'test.cancel', '--id', 'smoke-test-cancel', '--yes']);
+    await run('jobs cancel test', ['jobs', 'cancel', 'smoke-test-cancel', '--yes']);
   }
 
   const buildRun = await runExpect('build.run', ['tools', 'run', 'build.run', '--project', project, '--unity', unity, '--target', 'StandaloneWindows64', '--output', join(outDir, 'Build.exe'), '--timeout-ms', '600000']);
   const buildJobId = buildRun?.data?.jobId;
   if (buildJobId) {
-    await run('build.status', ['tools', 'run', 'build.status', '--id', buildJobId]);
-    await run('build.logs', ['tools', 'run', 'build.logs', '--id', buildJobId, '--tail', '5']);
+    await run('jobs status build', ['jobs', 'status', buildJobId]);
+    await run('jobs logs build', ['jobs', 'logs', buildJobId, '--tail', '5']);
     seedQueuedJob('smoke-build-cancel', 'build');
-    await run('build.cancel', ['tools', 'run', 'build.cancel', '--id', 'smoke-build-cancel', '--yes']);
+    await run('jobs cancel build', ['jobs', 'cancel', 'smoke-build-cancel', '--yes']);
   }
 
   const install = await runExpect('package.install', ['tools', 'run', 'package.install', 'com.unity.cli.smoke', '--version', '0.0.1', '--project', project, '--unity', unity, '--timeout-ms', '600000']);
@@ -204,14 +204,14 @@ try {
   if (resolve?.data?.jobId) cleanupJobIds.add(resolve.data.jobId);
 
   for (const jobId of [...cleanupJobIds]) {
-    await run(`cleanup.job.cancel.${jobId}`, ['tools', 'run', 'job.cancel', '--id', jobId, '--yes']);
+    await run(`cleanup jobs cancel ${jobId}`, ['jobs', 'cancel', jobId, '--yes']);
   }
 } finally {
   await new Promise((resolveClose) => server.close(resolveClose));
 }
 
 const expectedTools = [
-  'editor.refresh','package.list','package.status','package.info','package.search','package.install','package.remove','package.resolve','package.registry','package.scoped-registry','batch.schema','batch.run','docs.list','docs.topic','docs.get','docs.search','reflect.type','reflect.member','reflect.search','job.status','job.logs','job.describe','job.cancel','instances.prune','target.set','target.clear','target.alias-set','target.alias-unset','target.alias-list','diagnose.doctor','diagnose.capabilities','test.run','test.poll','test.logs','test.cancel','build.run','build.status','build.logs','build.cancel','tools.group','tools.group-list','tools.search','tools.describe','tools.run'
+  'editor.refresh','package.list','package.status','package.info','package.search','package.install','package.remove','package.resolve','package.registry','package.scoped-registry','batch schema','batch run','docs.list','docs.topic','docs.get','docs.search','reflect.type','reflect.member','reflect.search','jobs status','jobs logs','jobs describe','jobs cancel refresh','instances prune','target set','target clear','target alias set','target alias unset','target alias list','doctor','diagnose.capabilities','test.run','jobs status test','jobs logs test','jobs cancel test','build.run','jobs status build','jobs logs build','jobs cancel build','tools.group','tools.group-list','tools.search','tools.describe','tools.run'
 ];
 const covered = new Set(rows.filter((row) => expectedTools.includes(row.tool)).map((row) => row.tool));
 const missing = expectedTools.filter((tool) => !covered.has(tool));

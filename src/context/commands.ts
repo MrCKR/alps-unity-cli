@@ -12,7 +12,6 @@
 
 import { getString, getBoolean } from "../args.js";
 import { executeBridgeCommand, type BridgeRuntime } from "../bridge/index.js";
-import { readInstances, handleTargetCommand, instanceListSummary } from "../instances.js";
 import { builtinToolGroups, builtinToolMetadata, extensionToolMetadata } from "../tools/metadata/index.js";
 import {
   builtinContextDescriptors,
@@ -202,29 +201,6 @@ async function handleContextRead(
   }
 
   const inputArgs = parseContextInput(flags);
-
-  if (contextName === "instances.list") {
-    const instances = await readInstances(runtime.dataDir ?? process.cwd());
-    return success(requestId, {
-      command: "context.read",
-      context: contextName,
-      instances: instances.map(instanceListSummary),
-      count: instances.length,
-      readOnlyHint: true,
-    });
-  }
-
-  if (contextName === "target.current") {
-    const dataDir = runtime.dataDir ?? process.cwd();
-    const result = await handleTargetCommand("get", [], {}, dataDir, requestId);
-    if (!result.ok) return result;
-    return success(requestId, {
-      command: "context.read",
-      context: contextName,
-      ...result.data as Record<string, unknown>,
-      readOnlyHint: true,
-    });
-  }
 
   if (contextName === "tools.groups") {
     const tools = [...builtinToolMetadata(), ...extensionToolMetadata()];

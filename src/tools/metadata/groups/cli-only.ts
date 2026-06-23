@@ -3,9 +3,8 @@ import { objSchema, pageSchema } from "../schemas.js";
 
 /**
  * CLI-only 工具:不通过 Unity Bridge,在本地 CLI 完成,或经 job runner/batchmode 执行。
- * 这些工具的 cliCommand 统一为 `tools run <name>`,符合 README Project Baseline。
- * docs/reflect/package/batch 是离线或 hybrid 工具;test/build 是 job 工具;
- * job/instances.prune/target.set/target.clear/diagnose.* 是迁移自旧顶层命令的工具。
+ * Unity 能力与离线查询仍以 `tools run <name>` 暴露。
+ * target/instances/jobs/batch/doctor 属于 CLI 控制面,不得在这里重复注册为工具入口。
  */
 export const CLI_ONLY_TOOLS: ToolMetadata[] = [
   {
@@ -126,37 +125,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     docsTopic: "package",
     equivalentUnityMcp: "manage_packages.add_registry"
   },
-  {
-    name: "batch.schema",
-    title: "Batch Schema",
-    description: "Print the JSON Schema for first-class CLI batch orchestration files.",
-    group: "batch",
-    inputSchema: objSchema({}),
-    outputSchema: objSchema({ properties: { type: "object" }, required: { type: "array", items: { type: "string" } } }),
-    readOnlyHint: true,
-    destructiveHint: false,
-    handler: "offline",
-    cliCommand: "tools run batch.schema",
-    docsTopic: "batch",
-    equivalentUnityMcp: "batch_execute"
-  },
-  {
-    name: "batch.run",
-    title: "Batch Run",
-    description: "Execute a JSON batch file containing multiple tools run commands.",
-    group: "batch",
-    inputSchema: objSchema({ file: { type: "string" }, preflight: { type: "boolean" }, failFast: { type: "boolean" }, parallel: { type: "integer" } }, ["file"]),
-    outputSchema: objSchema({ batchRequestId: { type: "string" }, summary: { type: "object" }, logIndex: { type: "object" }, steps: { type: "array" } }),
-    readOnlyHint: false,
-    destructiveHint: true,
-    supportsDryRun: true,
-    handler: "offline",
-    cliCommand: "tools run batch.run",
-    docsTopic: "batch",
-    cancellationSemantics: "Batch orchestration itself is synchronous CLI work. Long-running steps return jobId/logPath entries; cancel those child jobs with tools run job.cancel --input <json>. Already completed or skipped steps are not rolled back.",
-    equivalentUnityMcp: "batch_execute"
-  },
-  {
+      {
     name: "docs.list",
     title: "Docs List",
     description: "List built-in CLI documentation topics.",
@@ -247,142 +216,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     docsTopic: "reflect",
     equivalentUnityMcp: "unity_reflect.search"
   },
-  {
-    name: "job.status",
-    title: "Job Status",
-    description: "Check the status of a running job (build/test/profiler/package).",
-    group: "job",
-    inputSchema: objSchema({ id: { type: "string" } }, ["id"]),
-    readOnlyHint: true,
-    destructiveHint: false,
-    handler: "offline",
-    cliCommand: "tools run job.status",
-    docsTopic: "job"
-  },
-  {
-    name: "job.logs",
-    title: "Job Logs",
-    description: "Read tail lines from a job log.",
-    group: "job",
-    inputSchema: objSchema({ id: { type: "string" }, tail: { type: "integer" } }, ["id"]),
-    readOnlyHint: true,
-    destructiveHint: false,
-    handler: "offline",
-    cliCommand: "tools run job.logs",
-    docsTopic: "job"
-  },
-  {
-    name: "job.describe",
-    title: "Job Describe",
-    description: "Describe a job's metadata and progress.",
-    group: "job",
-    inputSchema: objSchema({ id: { type: "string" } }, ["id"]),
-    readOnlyHint: true,
-    destructiveHint: false,
-    handler: "offline",
-    cliCommand: "tools run job.describe",
-    docsTopic: "job"
-  },
-  {
-    name: "job.cancel",
-    title: "Job Cancel",
-    description: "Cancel a running job.",
-    group: "job",
-    inputSchema: objSchema({ id: { type: "string" } }, ["id"]),
-    readOnlyHint: false,
-    destructiveHint: true,
-    handler: "offline",
-    cliCommand: "tools run job.cancel",
-    docsTopic: "job",
-    cancellationSemantics: "Attempts immediate process-tree termination when possible, otherwise records cancellation intent in the job store."
-  },
-  {
-    name: "instances.prune",
-    title: "Instances Prune",
-    description: "Remove stale or unreachable Unity instances from the registry.",
-    group: "instances",
-    inputSchema: objSchema({}),
-    readOnlyHint: false,
-    destructiveHint: false,
-    handler: "offline",
-    cliCommand: "tools run instances.prune",
-    docsTopic: "instances",
-    equivalentUnityMcp: "set_active_instance"
-  },
-  {
-    name: "target.set",
-    title: "Target Set",
-    description: "Set the active Unity target by instanceId or alias.",
-    group: "target",
-    inputSchema: objSchema({ target: { type: "string" } }, ["target"]),
-    readOnlyHint: false,
-    destructiveHint: false,
-    handler: "offline",
-    cliCommand: "tools run target.set",
-    docsTopic: "target",
-    equivalentUnityMcp: "set_active_instance"
-  },
-  {
-    name: "target.clear",
-    title: "Target Clear",
-    description: "Clear the active Unity target selection.",
-    group: "target",
-    inputSchema: objSchema({}),
-    readOnlyHint: false,
-    destructiveHint: false,
-    handler: "offline",
-    cliCommand: "tools run target.clear",
-    docsTopic: "target"
-  },
-  {
-    name: "target.alias-set",
-    title: "Target Alias Set",
-    description: "Assign an alias to a Unity instance.",
-    group: "target",
-    inputSchema: objSchema({ instanceId: { type: "string" }, alias: { type: "string" }, force: { type: "boolean" } }, ["instanceId", "alias"]),
-    readOnlyHint: false,
-    destructiveHint: false,
-    handler: "offline",
-    cliCommand: "tools run target.alias-set",
-    docsTopic: "target"
-  },
-  {
-    name: "target.alias-unset",
-    title: "Target Alias Unset",
-    description: "Remove an alias from a Unity instance.",
-    group: "target",
-    inputSchema: objSchema({ alias: { type: "string" } }, ["alias"]),
-    readOnlyHint: false,
-    destructiveHint: false,
-    handler: "offline",
-    cliCommand: "tools run target.alias-unset",
-    docsTopic: "target"
-  },
-  {
-    name: "target.alias-list",
-    title: "Target Alias List",
-    description: "List all configured Unity instance aliases.",
-    group: "target",
-    inputSchema: objSchema({}),
-    readOnlyHint: true,
-    destructiveHint: false,
-    handler: "offline",
-    cliCommand: "tools run target.alias-list",
-    docsTopic: "target"
-  },
-  {
-    name: "diagnose.doctor",
-    title: "Doctor Diagnostics",
-    description: "Diagnose CLI ↔ UnityPkg connectivity, instance health, bridge status, and configuration integrity.",
-    group: "diagnose",
-    inputSchema: objSchema({ bridgeEndpoint: { type: "string" }, json: { type: "boolean" } }),
-    readOnlyHint: true,
-    destructiveHint: false,
-    handler: "offline",
-    cliCommand: "tools run diagnose.doctor",
-    docsTopic: "diagnose"
-  },
-  {
+                        {
     name: "diagnose.capabilities",
     title: "Capabilities",
     description: "Summarize available CLI capabilities, tool catalog fingerprint, and extension availability.",
@@ -416,48 +250,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     cancellationSemantics: "Immediate process cancellation when a Unity batchmode pid is known; queued or pid-less jobs are marked cancelled and may already have finished or be waiting for Unity cleanup.",
     equivalentUnityMcp: "run_tests"
   },
-  {
-    name: "test.poll",
-    title: "Test Poll",
-    description: "Poll the status of a running test job. Equivalent to tools run job.status --input <json>.",
-    group: "test",
-    inputSchema: objSchema({ id: { type: "string" } }, ["id"]),
-    outputSchema: objSchema({ jobId: { type: "string" }, kind: { type: "string" }, status: { type: "string" }, exitCode: { type: "integer" }, logPath: { type: "string" } }),
-    readOnlyHint: true,
-    destructiveHint: false,
-    handler: "offline",
-    cliCommand: "tools run test.poll",
-    docsTopic: "test",
-    equivalentUnityMcp: "get_test_job"
-  },
-  {
-    name: "test.logs",
-    title: "Test Logs",
-    description: "Read tail lines from a Unity test job log. Equivalent to tools run job.logs --input <json>.",
-    group: "test",
-    inputSchema: objSchema({ id: { type: "string" }, tail: { type: "integer" } }, ["id"]),
-    outputSchema: objSchema({ jobId: { type: "string" }, logPath: { type: "string" }, lines: { type: "array", items: { type: "string" } } }),
-    readOnlyHint: true,
-    destructiveHint: false,
-    handler: "offline",
-    cliCommand: "tools run test.logs",
-    docsTopic: "test"
-  },
-  {
-    name: "test.cancel",
-    title: "Test Cancel",
-    description: "Cancel a running Unity test job. Equivalent to tools run job.cancel --input <json>.",
-    group: "test",
-    inputSchema: objSchema({ id: { type: "string" } }, ["id"]),
-    readOnlyHint: false,
-    destructiveHint: true,
-    handler: "offline",
-    cliCommand: "tools run test.cancel",
-    docsTopic: "test",
-    cancellationSemantics: "Delegates to job cancel; attempts immediate process-tree termination when possible, otherwise records cancellation intent in the job store.",
-    equivalentUnityMcp: "get_test_job"
-  },
-  {
+        {
     name: "build.run",
     title: "Build Run",
     description: "Trigger a Unity project build as a batch job. Returns a job ID that can be polled for status.",
@@ -480,44 +273,4 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     cancellationSemantics: "Immediate process cancellation when a Unity batchmode pid is known; if Unity is already inside build cleanup, the job is marked cancelled and callers should inspect job logs for final filesystem state.",
     equivalentUnityMcp: "manage_build"
   },
-  {
-    name: "build.status",
-    title: "Build Status",
-    description: "Check the status of a running build job. Equivalent to tools run job.status --input <json>.",
-    group: "build",
-    inputSchema: objSchema({ id: { type: "string" } }, ["id"]),
-    outputSchema: objSchema({ jobId: { type: "string" }, kind: { type: "string" }, status: { type: "string" }, exitCode: { type: "integer" }, logPath: { type: "string" } }),
-    readOnlyHint: true,
-    destructiveHint: false,
-    handler: "offline",
-    cliCommand: "tools run build.status",
-    docsTopic: "build"
-  },
-  {
-    name: "build.logs",
-    title: "Build Logs",
-    description: "Read tail lines from a Unity build job log. Equivalent to tools run job.logs --input <json>.",
-    group: "build",
-    inputSchema: objSchema({ id: { type: "string" }, tail: { type: "integer" } }, ["id"]),
-    outputSchema: objSchema({ jobId: { type: "string" }, logPath: { type: "string" }, lines: { type: "array", items: { type: "string" } } }),
-    readOnlyHint: true,
-    destructiveHint: false,
-    handler: "offline",
-    cliCommand: "tools run build.logs",
-    docsTopic: "build"
-  },
-  {
-    name: "build.cancel",
-    title: "Build Cancel",
-    description: "Cancel a running build job. Equivalent to tools run job.cancel --input <json>.",
-    group: "build",
-    inputSchema: objSchema({ id: { type: "string" } }, ["id"]),
-    readOnlyHint: false,
-    destructiveHint: true,
-    handler: "offline",
-    cliCommand: "tools run build.cancel",
-    docsTopic: "build",
-    cancellationSemantics: "Delegates to job cancel; attempts immediate process-tree termination when possible, otherwise records cancellation intent in the job store.",
-    equivalentUnityMcp: "manage_build"
-  }
-];
+      ];

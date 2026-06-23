@@ -27,7 +27,7 @@ The CLI enforces a confirmation gate for all tools with `destructiveHint: true`.
 | `scene save` | Save Scene | ✅ |
 | `scene unload` | Unload Scene | ✅ |
 | `code exec` | Execute Live Code | ✅ |
-| `cli.batch.run` | Batch Run | ✅ (preflight) |
+| `batch run` | Batch Run | ✅ (preflight) |
 | `component remove` | Remove Component | ❌ |
 | `component modify` | Modify Component (deep patch) | ✅ |
 | `object modify` | Modify Object (deep patch) | ✅ |
@@ -46,8 +46,7 @@ The CLI enforces a confirmation gate for all tools with `destructiveHint: true`.
 | `editor.selection.set` | Set Editor Selection | ✅ |
 | `editor.active-tool.set` | Set Active Editor Tool | ❌ |
 | `cli.package.remove` | Package Remove | ❌ |
-| `test.cancel` | Cancel Test Job | ❌ |
-| `build.cancel` | Cancel Build Job | ❌ |
+| `jobs cancel` | Cancel Job | ❌ |
 
 The `reflection.method.call` tool is classified `riskLevel: critical`. It performs no scope restriction on the invoked method (public/private/static/instance, any namespace/assembly, Editor/Runtime). It requires a `security` confirmation object with `confirmed: true` and a `destructiveFingerprint`, and returns a structured audit including target method preview, parameters, result serialization, and any exception.
 

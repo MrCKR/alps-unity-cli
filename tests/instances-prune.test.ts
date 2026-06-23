@@ -58,6 +58,15 @@ function makeInstance(overrides: Partial<UnityInstance> = {}): UnityInstance {
   };
 }
 
+test("instances prune requires explicit confirmation", async () => {
+  const runtime = await makeRuntime();
+  await writeInstances(runtime.dataDir, [makeInstance({ instanceId: "inst_stale", lastHeartbeatAt: new Date(Date.now() - 60000).toISOString() })]);
+
+  const result = await execute(["instances", "prune"], runtime);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_DESTRUCTIVE_CONFIRMATION_REQUIRED");
+});
+
 test("instances prune removes stale instances and reports count", async () => {
   const runtime = await makeRuntime();
   const staleTime = new Date(Date.now() - 60000).toISOString();
@@ -67,7 +76,7 @@ test("instances prune removes stale instances and reports count", async () => {
     makeInstance({ instanceId: "inst_stale2", lastHeartbeatAt: staleTime })
   ]);
 
-  const result = await execute(["tools", "run", "instances.prune"], runtime);
+  const result = await execute(["instances", "prune", "--yes"], runtime);
   assert.equal(result.ok, true);
   const data = result.data as { removed: number; remaining: number; staleCleaned: Array<{ instanceId: string; pid: number | null; killed: boolean }> };
   assert.equal(data.removed, 2);
@@ -86,7 +95,7 @@ test("instances prune reports 0 removed when all instances are healthy", async (
     makeInstance({ instanceId: "inst_healthy2" })
   ]);
 
-  const result = await execute(["tools", "run", "instances.prune"], runtime);
+  const result = await execute(["instances", "prune", "--yes"], runtime);
   assert.equal(result.ok, true);
   const data = result.data as { removed: number; remaining: number };
   assert.equal(data.removed, 0);
@@ -100,7 +109,7 @@ test("instances prune reports 0 remaining when all instances are stale", async (
     makeInstance({ instanceId: "inst_stale", lastHeartbeatAt: staleTime })
   ]);
 
-  const result = await execute(["tools", "run", "instances.prune"], runtime);
+  const result = await execute(["instances", "prune", "--yes"], runtime);
   assert.equal(result.ok, true);
   const data = result.data as { removed: number; remaining: number };
   assert.equal(data.removed, 1);
@@ -111,7 +120,7 @@ test("instances prune on empty registry returns 0 removed", async () => {
   const runtime = await makeRuntime();
   await writeInstances(runtime.dataDir, []);
 
-  const result = await execute(["tools", "run", "instances.prune"], runtime);
+  const result = await execute(["instances", "prune", "--yes"], runtime);
   assert.equal(result.ok, true);
   const data = result.data as { removed: number; remaining: number };
   assert.equal(data.removed, 0);
@@ -126,7 +135,7 @@ test("instances list returns all instances with status", async () => {
     makeInstance({ instanceId: "inst_stale", lastHeartbeatAt: staleTime })
   ]);
 
-  const result = await execute(["context", "read", "instances.list"], runtime);
+  const result = await execute(["instances", "list"], runtime);
   assert.equal(result.ok, true);
   const data = result.data as { instances: UnityInstance[] };
   assert.equal(data.instances.length, 2);
@@ -141,7 +150,7 @@ test("doctor command is routed correctly via CLI execute", async () => {
   const runtime = await makeRuntime();
   await writeInstances(runtime.dataDir, []);
 
-  const result = await execute(["tools", "run", "diagnose.doctor"], runtime);
+  const result = await execute(["doctor"], runtime);
   assert.equal(result.ok, true);
   const data = result.data as { command: string; summary: string; checks: Array<{ name: string; status: string }> };
   assert.equal(data.command, "doctor");
@@ -151,7 +160,7 @@ test("doctor command is routed correctly via CLI execute", async () => {
 test("job status returns error when job ID is missing", async () => {
   const runtime = await makeRuntime();
 
-  const result = await execute(["tools", "run", "job.status"], runtime);
+  const result = await execute(["jobs", "status"], runtime);
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "JOB_ID_REQUIRED");
 });
@@ -159,7 +168,7 @@ test("job status returns error when job ID is missing", async () => {
 test("job logs returns error when job ID is missing", async () => {
   const runtime = await makeRuntime();
 
-  const result = await execute(["tools", "run", "job.logs"], runtime);
+  const result = await execute(["jobs", "logs"], runtime);
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "JOB_ID_REQUIRED");
 });
@@ -167,7 +176,7 @@ test("job logs returns error when job ID is missing", async () => {
 test("job cancel returns error when job ID is missing", async () => {
   const runtime = await makeRuntime();
 
-  const result = await execute(["tools", "run", "job.cancel", "--yes"], runtime);
+  const result = await execute(["jobs", "cancel", "--yes"], runtime);
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "JOB_ID_REQUIRED");
 });
@@ -175,7 +184,7 @@ test("job cancel returns error when job ID is missing", async () => {
 test("job status returns not found for unknown job ID", async () => {
   const runtime = await makeRuntime();
 
-  const result = await execute(["tools", "run", "job.status", "--id", "job_nonexistent"], runtime);
+  const result = await execute(["jobs", "status", "job_nonexistent"], runtime);
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "JOB_NOT_FOUND");
 });
@@ -183,10 +192,27 @@ test("job status returns not found for unknown job ID", async () => {
 test("job logs returns not found for unknown job ID", async () => {
   const runtime = await makeRuntime();
 
-  const result = await execute(["tools", "run", "job.logs", "--id", "job_nonexistent"], runtime);
+  const result = await execute(["jobs", "logs", "job_nonexistent"], runtime);
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "JOB_NOT_FOUND");
 });
+test("control-plane duplicate tools and contexts are not exposed", async () => {
+  const runtime = await makeRuntime();
+
+  for (const argv of [
+    ["tools", "run", "target.set", "anything"],
+    ["tools", "run", "instances.prune"],
+    ["tools", "run", "job.status", "--id", "anything"],
+    ["tools", "run", "batch.schema"],
+    ["tools", "run", "diagnose.doctor"],
+    ["context", "read", "instances.list"],
+    ["context", "read", "target.current"]
+  ]) {
+    const result = await execute(argv, runtime);
+    assert.equal(result.ok, false, argv.join(" "));
+  }
+});
+
 test("instances list reads UTF-8 BOM prefixed registry files", async () => {
   const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-bom-"));
   const registryDir = join(dataDir, "instances");

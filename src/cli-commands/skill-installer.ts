@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile } from "node:fs/promises";
+import { copyFile, mkdir, readFile, stat } from "node:fs/promises";
 import { createHash } from "node:crypto";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -34,12 +34,35 @@ export interface SkillCheckResult {
 
 // ─── Agent skill target paths ────────────────────────────────────────────────
 
+/** Maps an agent kind to its root directory relative to the Unity project root. */
+const AGENT_ROOT_DIR: Record<AgentKind, string> = {
+  pi: ".pi",
+  claude: ".claude",
+  ".agent": ".agent",
+};
+
 /** Maps an agent kind to its skill directory relative to the Unity project root. */
 const AGENT_SKILL_DIR: Record<AgentKind, string> = {
   pi: ".pi/skills/unity_cli",
   claude: ".claude/skills/unity_cli",
   ".agent": ".agent/skills/unity_cli",
 };
+
+/** 探测项目中已存在的 Agent 目录,用于 init 默认安装 Skill。 */
+export async function detectAgentKinds(projectRoot: string): Promise<AgentKind[]> {
+  const detected: AgentKind[] = [];
+  for (const agent of AGENT_KINDS) {
+    try {
+      const rootStat = await stat(join(projectRoot, AGENT_ROOT_DIR[agent]));
+      if (rootStat.isDirectory()) {
+        detected.push(agent);
+      }
+    } catch {
+      // 未配置该 Agent 时跳过,避免凭空创建新的 Agent 根目录。
+    }
+  }
+  return detected;
+}
 
 // ─── Skill source resolution ─────────────────────────────────────────────────
 

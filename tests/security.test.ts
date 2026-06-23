@@ -37,7 +37,7 @@ test("security policy covers all destructive commands including CLI-only", async
     "probuilder.delete-faces", "probuilder.detach-faces", "probuilder.combine-meshes",
     "probuilder.merge-objects", "probuilder.flip-normals",
     "cinemachine.extension", "urp.feature", "editor.menu", "script.edit", "script.apply-edits", "package.remove",
-    "batch.run", "test.cancel", "build.cancel", "controller.remove-layer", "profiler.clear", "console.clear",
+    "batch.run", "instances.prune", "jobs.cancel", "controller.remove-layer", "profiler.clear", "console.clear",
     "package.embed", "editor.selection.set", "editor.active-tool.set", "ui.attach-document", "ui.create-panel-settings",
     "go.set-parent", "scene.unload", "prefab.unpack", "texture.generate", "script.update-or-create",
     "component.modify", "object.modify", "reflection.method.call"

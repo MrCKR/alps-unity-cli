@@ -11,7 +11,7 @@ import {
 
 test("builtin context metadata contains all required entries", () => {
   const contexts = builtinContextMetadata();
-  assert.equal(contexts.length, 25);
+  assert.equal(contexts.length, 23);
 });
 
 test("all builtin contexts have kind=context and readOnlyHint=true", () => {
@@ -95,8 +95,6 @@ test("context names match the expected built-in contexts", () => {
     "prefab.info",
     "prefab.hierarchy",
     "tests.list",
-    "instances.list",
-    "target.current",
     "tools.groups",
     "tools.custom"
   ];

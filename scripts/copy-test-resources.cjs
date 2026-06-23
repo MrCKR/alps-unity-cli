@@ -22,7 +22,7 @@ function copyFile(name) {
   }
 }
 
-for (const dir of ['cli', 'unitypkg', 'extensions', 'schemas', 'skills', 'docs', 'contracts']) {
+for (const dir of ['unitypkg', 'extensions', 'schemas', 'skills', 'docs', 'contracts']) {
   copyDir(dir);
 }
 

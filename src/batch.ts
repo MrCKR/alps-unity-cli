@@ -302,8 +302,6 @@ const commandRegistry = new Map<string, { parallelSafe: boolean }>([
   ["package.resolve", { parallelSafe: false }],
   ["package.registry", { parallelSafe: false }],
   ["package.scoped-registry", { parallelSafe: false }],
-  ["batch.schema", { parallelSafe: true }],
-  ["batch.run", { parallelSafe: false }],
   ["docs.list", { parallelSafe: true }],
   ["docs.topic", { parallelSafe: true }],
   ["docs.get", { parallelSafe: true }],
@@ -311,28 +309,35 @@ const commandRegistry = new Map<string, { parallelSafe: boolean }>([
   ["reflect.type", { parallelSafe: true }],
   ["reflect.member", { parallelSafe: true }],
   ["reflect.search", { parallelSafe: true }],
-  ["job.status", { parallelSafe: true }],
-  ["job.logs", { parallelSafe: true }],
-  ["job.describe", { parallelSafe: true }],
-  ["job.cancel", { parallelSafe: false }],
-  ["instances.prune", { parallelSafe: false }],
-  ["target.set", { parallelSafe: false }],
-  ["target.clear", { parallelSafe: false }],
-  ["target.alias-set", { parallelSafe: false }],
-  ["target.alias-unset", { parallelSafe: false }],
-  ["target.alias-list", { parallelSafe: true }],
-  ["diagnose.doctor", { parallelSafe: true }],
+  ["jobs status", { parallelSafe: true }],
+  ["jobs logs", { parallelSafe: true }],
+  ["jobs describe", { parallelSafe: true }],
+  ["jobs cancel", { parallelSafe: false }],
+  ["instances list", { parallelSafe: true }],
+  ["instances prune", { parallelSafe: false }],
+  ["target current", { parallelSafe: true }],
+  ["target set", { parallelSafe: false }],
+  ["target clear", { parallelSafe: false }],
+  ["target alias", { parallelSafe: false }],
+  ["doctor", { parallelSafe: true }],
   ["diagnose.capabilities", { parallelSafe: true }],
   ["test.run", { parallelSafe: false }],
-  ["test.poll", { parallelSafe: true }],
-  ["test.logs", { parallelSafe: true }],
-  ["test.cancel", { parallelSafe: false }],
   ["build.run", { parallelSafe: false }],
-  ["build.status", { parallelSafe: true }],
-  ["build.logs", { parallelSafe: true }],
-  ["build.cancel", { parallelSafe: false }],
 
 ]);
+
+function batchCommandKey(rawCommand: string[]): string {
+  if (rawCommand[0] === "tools" && rawCommand[1] === "run" && rawCommand[2]) {
+    return rawCommand[2];
+  }
+  if (rawCommand[0] === "target" && rawCommand[1] === "alias") {
+    return "target alias";
+  }
+  if (rawCommand[0] === "doctor") {
+    return "doctor";
+  }
+  return rawCommand.slice(0, 2).join(" ");
+}
 
 export function batchJsonSchema(): Record<string, unknown> {
   return {
@@ -482,10 +487,8 @@ function normalizeBatch(batch: BatchDefinition, batchPath: string): { steps: Nor
   const steps = batch.steps.map((step) => {
     const rawCommand = Array.isArray(step.command) ? step.command : [];
     const rawArgs = Array.isArray(step.args) ? step.args : [];
-    // commandKey 为工具点号名:argv 形如 ["tools","run","scene.screenshot",...]。
-    const commandKey = rawCommand[0] === "tools" && rawCommand[1] === "run" && rawCommand[2]
-      ? rawCommand[2]
-      : rawCommand.slice(0, 2).join(" ");
+    // commandKey: tools run 使用点号工具名;控制面使用顶层命令形态。
+    const commandKey = batchCommandKey(rawCommand);
     const registryItem = commandRegistry.get(commandKey);
     const argv = applyDefaults([...rawCommand, ...rawArgs], defaults, step, defaultCwd);
     return {

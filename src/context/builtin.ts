@@ -581,53 +581,7 @@ const PREFAB_HIERARCHY: ContextDescriptor = {
   ...CONTEXT_COMMON,
 };
 
-// ── Instances / Tools ────────────────────────────────────────────────────
-
-const INSTANCES_LIST: ContextDescriptor = {
-  name: "instances.list",
-  title: "Unity Instances",
-  description: "Read registered Unity Editor bridge instances and their target-selection metadata.",
-  category: "instances",
-  cliCommand: "context read instances.list",
-  inputSchema: { type: "object", properties: {} },
-  outputSchema: {
-    type: "object",
-    properties: {
-      instances: { type: "array", items: { type: "object" }, description: "Registered Unity instances." },
-      count: { type: "integer", description: "Number of registered instances." }
-    },
-    required: ["instances", "count"]
-  },
-  docsTopic: "instances",
-  resourceUri: "unity-cli://instances/list",
-  equivalentUnityMcp: "mcpforunity://instances",
-  ...CONTEXT_COMMON,
-  requiresUnity: false,
-  availabilityScope: "always",
-};
-
-const TARGET_CURRENT: ContextDescriptor = {
-  name: "target.current",
-  title: "Current Target",
-  description: "Read the currently active Unity target selection and its aliases. Stable read-only state surface; setting target uses tools run target.set.",
-  category: "target",
-  cliCommand: "context read target.current",
-  inputSchema: { type: "object", properties: {} },
-  outputSchema: {
-    type: "object",
-    properties: {
-      activeTarget: { type: ["string", "null"], description: "Active target selector (instanceId or alias)." },
-      target: { type: ["object", "null"], description: "Resolved target summary." },
-      aliases: { type: "object", description: "Configured aliases." }
-    }
-  },
-  docsTopic: "target",
-  resourceUri: "unity-cli://target/current",
-  equivalentUnityMcp: "mcpforunity://target/current",
-  ...CONTEXT_COMMON,
-  requiresUnity: false,
-  availabilityScope: "always",
-};
+// ── Tools ────────────────────────────────────────────────────────────────
 
 const TOOLS_GROUPS: ContextDescriptor = {
   name: "tools.groups",
@@ -739,8 +693,6 @@ export const BUILTIN_CONTEXTS: ContextDescriptor[] = [
   PREFAB_INFO,
   PREFAB_HIERARCHY,
   TESTS_LIST,
-  INSTANCES_LIST,
-  TARGET_CURRENT,
   TOOLS_GROUPS,
   TOOLS_CUSTOM,
 ];

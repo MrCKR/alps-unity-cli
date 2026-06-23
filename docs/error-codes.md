@@ -13,8 +13,8 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
     "message": "Multiple ready instances found.",
     "details": "...",
     "next_actions": [
-      "Run unity_cli context read instances.list to discover targets.",
-      "Run unity_cli tools run target.set <id|alias> to select a target."
+      "Run unity_cli instances list to discover targets.",
+      "Run unity_cli target set <id|alias> to select a target."
     ],
     "transient": false,
     "retry_after_ms": 0

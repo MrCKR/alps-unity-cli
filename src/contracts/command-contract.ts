@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import type { BridgeCommandRegistry, BridgeCommandSpec } from "../bridge/index.js";
 import type { ToolMetadata } from "../tools/metadata/types.js";
@@ -25,8 +25,16 @@ interface CommandContractFile {
 }
 
 const contractPath = fileURLToPath(new URL("../../contracts/command-contract.json", import.meta.url));
-const contractFile = JSON.parse(readFileSync(contractPath, "utf8")) as CommandContractFile;
+const contractFile = loadCommandContractFile(contractPath);
 const contractByBridgeCommand = new Map<string, CommandContractEntry>();
+
+// 加载命令契约；生成契约时允许空启动,避免生成器与产物互相依赖。
+function loadCommandContractFile(path: string): CommandContractFile {
+  if (process.env.UNITY_CLI_GENERATING_CONTRACT === "1" && !existsSync(path)) {
+    return { version: 1, generatedFrom: "command contract generation bootstrap", commands: [] };
+  }
+  return JSON.parse(readFileSync(path, "utf8")) as CommandContractFile;
+}
 
 for (const entry of contractFile.commands) {
   if (contractByBridgeCommand.has(entry.bridgeCommand)) {

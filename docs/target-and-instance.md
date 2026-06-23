@@ -6,7 +6,7 @@
 
 **Unity instance** 是加载了 `com.unity_cli` Bridge 包的运行中 Unity Editor 进程。Editor 编译该包时，`UnityCliBridge` 启动 Windows loopback HTTP 监听器并向 CLI 注册。
 
-> ⚠️ **不要手动读取注册文件或 ping 端点。** 始终使用 `unity_cli context read instances.list` 和 `unity_cli context read target.current` 命令。内部文件路径和端点 URL 仅供理解系统架构，不是 CLI 调用接口。
+> ⚠️ **不要手动读取注册文件或 ping 端点。** 始终使用 `unity_cli instances list` 和 `unity_cli target current` 命令。内部文件路径和端点 URL 仅供理解系统架构，不是 CLI 调用接口。
 
 每个实例注册包含：
 
@@ -34,10 +34,10 @@
 
 ```powershell
 # 列出所有注册实例
-unity_cli context read instances.list
+unity_cli instances list
 
 # 清理过期/不可达注册
-unity_cli tools run instances.prune
+unity_cli instances prune --yes
 ```
 
 ## 选择目标
@@ -56,9 +56,9 @@ unity_cli tools run camera.list --target my-project
 ### 2. 活动目标（`target set`）
 
 ```powershell
-unity_cli tools run target.set <instanceId|alias>
-unity_cli context read target.current       # 查看当前活动目标
-unity_cli tools run target.clear     # 清除活动目标
+unity_cli target set <instanceId|alias>
+unity_cli target current       # 查看当前活动目标
+unity_cli target clear         # 清除活动目标
 ```
 
 存储在 `config.json` 中。后续命令无需 `--target` 即使用此目标。
@@ -78,9 +78,9 @@ unity_cli tools run target.clear     # 清除活动目标
 ### 别名管理
 
 ```powershell
-unity_cli tools run target.alias-set <instanceId> <alias>     # 创建别名
-unity_cli tools run target.alias-list                           # 列出别名
-unity_cli tools run target.alias-unset <alias>                  # 删除别名
+unity_cli target alias set <instanceId> <alias>     # 创建别名
+unity_cli target alias list                           # 列出别名
+unity_cli target alias unset <alias>                  # 删除别名
 ```
 
 别名在 Editor 重启后保留。

@@ -94,7 +94,7 @@ unity_cli tools run probuilder.create-shape --input '{"type":"Cube"}'
 unity_cli tools run probuilder.create-shape --input '{"type":"Cube"}' --job
 
 # 查看任务状态
-unity_cli tools run job.status --id <jobId>
+unity_cli jobs status <jobId>
 ```
 
 ## 验证策略

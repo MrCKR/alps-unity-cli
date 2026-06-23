@@ -25,7 +25,7 @@ test("Context built-in table contains all expected context names", async () => {
     "editor.menu-items",
     "scene.gameobject", "scene.gameobject.components", "scene.gameobject.component",
     "scene.cameras", "scene.volumes", "scene.renderer-features", "scene.rendering-stats",
-    "prefab.info", "prefab.hierarchy", "tests.list", "instances.list", "tools.groups", "tools.custom"
+    "prefab.info", "prefab.hierarchy", "tests.list", "tools.groups", "tools.custom"
   ];
   for (const name of expectedNames) {
     assert.match(source, new RegExp(`Name = "${escapeRegex(name)}"`), `Built-in context table must include ${name}`);

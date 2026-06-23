@@ -13,7 +13,7 @@
 通过 `init` 命令安装 Unity Editor Bridge 包：
 
 ```powershell
-# 完整安装（Bridge 包 + Skill）
+# 默认安装 Bridge；若项目已有 .pi/.claude/.agent，则自动安装 Skill
 unity_cli init --project C:\path\MyProject
 
 # 仅安装 Bridge 包
@@ -26,6 +26,7 @@ unity_cli init --check --project C:\path\MyProject
 安装内容：
 - `Packages/com.unity_cli/` — Bridge 包（copy 模式）
 - `Packages/unity_cli.install.json` — 安装元数据（项目 hash、版本、支持范围）
+- `.pi/skills/unity_cli/SKILL.md`、`.claude/skills/unity_cli/SKILL.md` 或 `.agent/skills/unity_cli/SKILL.md` — 仅当对应 Agent 目录已存在，或显式传入 `--agent` 时安装
 
 ### 项目自定义工具发现
 
@@ -42,10 +43,10 @@ unity_cli tools run my.custom-tool --input '{}'
 ### 诊断
 
 ```powershell
-# 检查 Bridge 连接和项目工具 fingerprint
-unity_cli tools run diagnose.doctor
+# 检查 CLI 控制面、Bridge 连接和项目工具 fingerprint
+unity_cli doctor
 
-# 诊断预检
+# 诊断预检（Unity Bridge 工具）
 unity_cli tools run diagnose.preflight
 ```
 

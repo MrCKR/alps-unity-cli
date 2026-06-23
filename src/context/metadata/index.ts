@@ -416,44 +416,6 @@ const PREFAB_HIERARCHY: ContextMetadata = {
   cliCommand: "context read prefab.hierarchy"
 };
 
-const INSTANCES_LIST: ContextMetadata = {
-  name: "instances.list",
-  title: "Unity Instances",
-  description: "Read registered Unity Editor bridge instances and their target-selection metadata.",
-  kind: "context",
-  source: "built-in",
-  category: "instances",
-  inputSchema: {},
-  readOnlyHint: true,
-  refreshBehavior: "on-demand",
-  target: "editor",
-  availabilityScope: "always",
-  resourceUri: "unity-cli://instances/list",
-  outputSchema: { type: "object", properties: { instances: { type: "array", items: { type: "object" } }, count: { type: "integer" } } },
-  equivalentUnityMcp: "mcpforunity://instances",
-  handler: "bridge",
-  cliCommand: "context read instances.list"
-};
-
-const TARGET_CURRENT: ContextMetadata = {
-  name: "target.current",
-  title: "Current Target",
-  description: "Read the currently active Unity target selection and its aliases. Stable read-only state surface; setting target uses tools run target.set.",
-  kind: "context",
-  source: "built-in",
-  category: "target",
-  inputSchema: {},
-  readOnlyHint: true,
-  refreshBehavior: "on-demand",
-  target: "editor",
-  availabilityScope: "always",
-  resourceUri: "unity-cli://target/current",
-  outputSchema: { type: "object", properties: { activeTarget: { type: ["string", "null"] }, target: { type: ["object", "null"] }, aliases: { type: "object" } } },
-  equivalentUnityMcp: "mcpforunity://target/current",
-  handler: "bridge",
-  cliCommand: "context read target.current"
-};
-
 const TOOLS_GROUPS: ContextMetadata = {
   name: "tools.groups",
   title: "Tool Groups",
@@ -544,8 +506,6 @@ const BUILTIN_CONTEXTS: ContextMetadata[] = [
   PREFAB_INFO,
   PREFAB_HIERARCHY,
   TESTS_LIST,
-  INSTANCES_LIST,
-  TARGET_CURRENT,
   TOOLS_GROUPS,
   TOOLS_CUSTOM
 ];

@@ -734,7 +734,7 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
         case "healthy_instances":
           if (check.status === "fail") {
             suggestions.push("Reopen the Unity Editor for the target project.");
-            suggestions.push("Run unity_cli tools run instances.prune to remove stale entries.");
+            suggestions.push("Run unity_cli instances prune --yes to remove stale entries.");
           }
           break;
         case "bridge_connectivity":
@@ -742,7 +742,7 @@ function buildSuggestions(checks: DoctorCheck[]): string[] {
           suggestions.push("Check --bridge-endpoint or UNITY_CLI_BRIDGE_ENDPOINT.");
           break;
         case "project_tool_fingerprint":
-          suggestions.push("Inspect unity_cli tools run diagnose.doctor fingerprint details, then review project tool descriptor/handler code changes.");
+          suggestions.push("Inspect unity_cli doctor fingerprint details, then review project tool descriptor/handler code changes.");
           suggestions.push("Use tools run --fingerprint-mode warn only for an intentional, audited mismatch.");
           break;
         case "project_context_fingerprint":

@@ -36,12 +36,8 @@ import type { CliResult } from "./types.js";
 import { handleBuild } from "./cli-commands/build.js";
 import { handleEditor } from "./cli-commands/editor.js";
 import { handleTest } from "./cli-commands/test.js";
-import { handleJob } from "./cli-commands/job.js";
 import { handlePackage } from "./cli-commands/package.js";
-import { handleBatch } from "./cli-commands/batch.js";
-import { handleDoctorCommand } from "./doctor.js";
 import { handleCapabilitiesCommand } from "./capabilities.js";
-import { handleInstancesCommand, handleTargetCommand } from "./instances.js";
 import { handleDocsCommand, handleReflectCommand } from "./docs-reflect.js";
 import { handleCode } from "./runtime-code.js";
 import type { Runtime } from "./cli-commands/types.js";
@@ -437,7 +433,7 @@ async function handleToolsRun(
 
   // ── Built-in bridge/hybrid tools WITH bridge spec: route through Unity Bridge ──
   // 仅当存在 bridge spec 时走 bridge 路由(scene/camera/go/.../code.exec 等)。
-  // 无 bridge spec 的 hybrid/offline 工具(package.*/docs.*/reflect.*/batch.*/...)
+  // 无 bridge spec 的 hybrid/offline 工具(package.*/docs.*/reflect.*/...)
   // 走下面的原生 handler dispatch。
   if (builtinTool && (tool.handler === "bridge" || tool.handler === "hybrid") && findBridgeSpecForTool(toolName)) {
     const input = await parseToolInput(flags);
@@ -468,7 +464,7 @@ async function handleToolsRun(
   }
 
   // ── Built-in offline/hybrid(no bridge spec) tools: route to native CLI handlers ──
-  // 迁移自旧顶层命令的 docs/reflect/package/batch/job/instances/target/diagnose/tools 发现。
+  // 迁移自旧顶层命令的 docs/reflect/package/diagnose/tools 发现。
   if (builtinTool && (tool.handler === "offline" || tool.handler === "hybrid")) {
     return dispatchOfflineHandler(tool, flags, runtime, requestId, positional);
   }
@@ -485,11 +481,9 @@ async function handleToolsRun(
 }
 
 export function findBridgeSpecForTool(toolName: string) {
-  const dotIndex = toolName.indexOf(".");
-  const group = dotIndex > 0 ? toolName.substring(0, dotIndex) : toolName;
-  const command = dotIndex > 0 ? toolName.substring(dotIndex + 1) : "";
-  const byToolName = bridgeCommandRegistry.specs().find((spec) => spec.toolName === toolName || spec.bridgeCommand === toolName);
-  return byToolName ?? bridgeCommandRegistry.lookup(group, command);
+  // tools run 只能按完整 dotted tool name 精确解析 bridge spec。
+  // 不能回退到 group/command lookup,否则 package.install 会误匹配 package.embed 这类同组 bridge command。
+  return bridgeCommandRegistry.specs().find((spec) => spec.toolName === toolName || spec.bridgeCommand === toolName);
 }
 
 async function parseToolInput(flags: Record<string, string | boolean>): Promise<Record<string, unknown>> {
@@ -610,7 +604,7 @@ async function dispatchJobHandler(
 
 /**
  * 分发 offline/hybrid(no bridge spec) 工具到原生 CLI handler。
- * 迁移自旧顶层命令:docs/reflect/package/batch/job/instances/target/diagnose/capabilities/tools 发现。
+ * 仅处理仍属于工具目录的离线/混合能力;target/instances/jobs/batch/doctor 属于顶层控制面。
  */
 async function dispatchOfflineHandler(
   tool: ToolMetadata,
@@ -628,7 +622,7 @@ async function dispatchOfflineHandler(
   const input = await parseToolInput(flags);
   const mergedFlags = mergeInputToFlags(input, flags);
 
-  // 破坏性 offline 工具确认(batch.run/job.cancel/package.remove/instances.prune/target.set/clear 等)。
+  // 破坏性 offline 工具确认(package.remove 等)。
   if (tool.destructiveHint) {
     const confirmation = await confirmDestructiveExecution(mergedFlags, {
       command: name,
@@ -652,22 +646,13 @@ async function dispatchOfflineHandler(
       return handleReflectCommand(sub, positional.slice(1), mergedFlags, fullRuntime.dataDir, requestId);
     case "package":
       return (await handlePackage(sub, positional.slice(1), mergedFlags, fullRuntime, requestId)) ?? failure(requestId, "E_TOOL_HANDLER_UNSUPPORTED", `package.${sub} not supported.`, ["Run unity_cli tools describe <tool>."]);
-    case "batch":
-      return handleBatch(sub, positional[1], mergedFlags, fullRuntime, requestId);
-    case "job":
-      return handleJob(sub, mergedFlags, fullRuntime, requestId);
     case "build":
       return (await handleBuild(sub, mergedFlags, fullRuntime, requestId)) ?? failure(requestId, "E_TOOL_HANDLER_UNSUPPORTED", `build.${sub} not supported.`, ["Run unity_cli tools describe <tool>."]);
     case "test":
       return (await handleTest(sub, mergedFlags, fullRuntime, requestId)) ?? failure(requestId, "E_TOOL_HANDLER_UNSUPPORTED", `test.${sub} not supported.`, ["Run unity_cli tools describe <tool>."]);
     case "editor":
       return (await handleEditor(sub, mergedFlags, fullRuntime, requestId)) ?? failure(requestId, "E_TOOL_HANDLER_UNSUPPORTED", `editor.${sub} not supported.`, ["Run unity_cli tools describe <tool>."]);
-    case "instances":
-      return handleInstancesCommand(sub === "prune" ? "prune" : "list", mergedFlags, fullRuntime.dataDir, requestId);
-    case "target":
-      return dispatchTargetTool(name, sub, mergedFlags, fullRuntime.dataDir, requestId, positional);
     case "diagnose":
-      if (sub === "doctor") return handleDoctorCommand(mergedFlags, fullRuntime, requestId);
       if (sub === "capabilities") return handleCapabilitiesCommand(mergedFlags, fullRuntime, requestId);
       return failure(requestId, "E_TOOL_HANDLER_UNSUPPORTED", `diagnose.${sub} not supported.`, ["Run unity_cli tools describe <tool>."]);
     default:
@@ -675,27 +660,6 @@ async function dispatchOfflineHandler(
         "Run unity_cli tools describe <tool> for details."
       ]);
   }
-}
-
-/** target.* 工具按子命令分发到 handleTargetCommand。 */
-async function dispatchTargetTool(name: string, sub: string, flags: Record<string, string | boolean>, dataDir: string, requestId: string, positional: string[] = []): Promise<CliResult> {
-  // 位置参数:target.alias-set <instanceId> <alias>; target.set <selector>
-  const posArgs = positional.slice(1); // positional[0] 是 tool name
-  // target.alias-set/unset/list → handleTargetCommand("alias", [sub, instanceId, alias])
-  if (sub === "alias-set" || sub === "alias-unset" || sub === "alias-list") {
-    const aliasSub = sub === "alias-set" ? "set" : sub === "alias-unset" ? "unset" : "list";
-    const instanceId = getString(flags, "instance-id") ?? getString(flags, "instanceId") ?? posArgs[0] ?? "";
-    const alias = getString(flags, "alias") ?? posArgs[1] ?? posArgs[0] ?? "";
-    return handleTargetCommand("alias", aliasSub === "set" ? [aliasSub, instanceId, alias] : [aliasSub, alias], flags, dataDir, requestId);
-  }
-  if (sub === "set") {
-    const selector = getString(flags, "target") ?? posArgs[0] ?? "";
-    return handleTargetCommand("set", [selector], flags, dataDir, requestId);
-  }
-  if (sub === "clear") {
-    return handleTargetCommand("clear", [], flags, dataDir, requestId);
-  }
-  return failure(requestId, "E_TOOL_HANDLER_UNSUPPORTED", `target.${sub} not supported.`, ["Run unity_cli tools describe <tool>."]);
 }
 
 /**

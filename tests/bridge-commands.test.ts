@@ -86,11 +86,11 @@ test("instances list and prune normalize stale registry entries", async () => {
     instance({ instanceId: "editor-stale", projectHash: "hash-stale", status: "ready", bridgeEndpoint: healthEndpoint2, lastHeartbeatAt: new Date(Date.now() - 60_000).toISOString() })
   ]);
 
-  const list = await execute(["context", "read", "instances.list"], runtime);
+  const list = await execute(["instances", "list"], runtime);
   assert.equal(list.ok, true);
   assert.deepEqual((list.data as { instances: Array<{ state: string }> }).instances.map((item) => item.state), ["ready", "stale"]);
 
-  const cleanup = await execute(["tools", "run", "instances.prune"], runtime);
+  const cleanup = await execute(["instances", "prune", "--yes"], runtime);
   assert.equal(cleanup.ok, true);
   assert.equal((cleanup.data as { removed: number }).removed, 1);
 });
@@ -107,7 +107,7 @@ test("instances list keeps latest endpoint for the same instance", async () => {
     ]
   }, null, 2), "utf8");
 
-  const list = await execute(["context", "read", "instances.list"], runtime);
+  const list = await execute(["instances", "list"], runtime);
 
   assert.equal(list.ok, true);
   const instances = (list.data as { instances: Array<{ state: string; endpoint: string }> }).instances;
@@ -164,7 +164,7 @@ test("instances list and target selection mark failed health checks unreachable"
   const runtime = await makeRuntime();
   await writeRegistry(runtime.dataDir, [instance({ bridgeEndpoint: "http://127.0.0.1:1" })]);
 
-  const list = await execute(["context", "read", "instances.list"], runtime);
+  const list = await execute(["instances", "list"], runtime);
   assert.equal(list.ok, true);
   const instances = (list.data as { instances: Array<{ state: string; status: string }> }).instances;
   assert.equal(instances[0].state, "unreachable");
@@ -179,9 +179,9 @@ test("target commands manage active target and aliases", async () => {
   const runtime = await makeRuntime();
   await writeRegistry(runtime.dataDir, [instance(), instance({ instanceId: "editor-2", projectPath: "/tmp/project-two", projectHash: "hash-two", bridgeEndpoint: healthEndpoint2 })]);
 
-  const alias = await execute(["tools", "run", "target.alias-set", "editor-2", "main"], runtime);
-  const set = await execute(["tools", "run", "target.set", "main"], runtime);
-  const get = await execute(["context", "read", "target.current"], runtime);
+  const alias = await execute(["target", "alias", "set", "editor-2", "main"], runtime);
+  const set = await execute(["target", "set", "main"], runtime);
+  const get = await execute(["target", "current"], runtime);
 
   assert.equal(alias.ok, true);
   assert.equal(set.ok, true);
@@ -195,10 +195,10 @@ test("target alias set requires --force to overwrite another target", async () =
   const runtime = await makeRuntime();
   await writeRegistry(runtime.dataDir, [instance(), instance({ instanceId: "editor-2", projectPath: "/tmp/project-two", projectHash: "hash-two", bridgeEndpoint: healthEndpoint2 })]);
 
-  const first = await execute(["tools", "run", "target.alias-set", "editor-1", "main"], runtime);
-  const conflict = await execute(["tools", "run", "target.alias-set", "editor-2", "main"], runtime);
-  const forced = await execute(["tools", "run", "target.alias-set", "editor-2", "main", "--force"], runtime);
-  const set = await execute(["tools", "run", "target.set", "main"], runtime);
+  const first = await execute(["target", "alias", "set", "editor-1", "main"], runtime);
+  const conflict = await execute(["target", "alias", "set", "editor-2", "main"], runtime);
+  const forced = await execute(["target", "alias", "set", "editor-2", "main", "--force"], runtime);
+  const set = await execute(["target", "set", "main"], runtime);
 
   assert.equal(first.ok, true);
   assert.equal(conflict.ok, false);

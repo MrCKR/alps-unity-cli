@@ -72,7 +72,7 @@ unity_cli init
 # 安装
 npm install -g @alps_ckr/unity_cli
 
-# 初始化项目（安装 Bridge 包 + Skill 文件）
+# 初始化项目（安装 Bridge 包；若项目已有 .pi/.claude/.agent，则自动安装 Skill）
 unity_cli init --project C:\path\MyProject
 
 # 查看帮助
@@ -480,14 +480,14 @@ unity_cli tools run package.scoped-registry add --name <name> --url <url> --scop
 
 ```powershell
 unity_cli tools run test.run --platform EditMode --wait --project <path> --unity <unity-exe>
-unity_cli tools run test.poll --id <jobId>
-unity_cli tools run test.logs --id <jobId> --tail 100
-unity_cli tools run test.cancel --id <jobId>
+unity_cli jobs status <jobId>
+unity_cli jobs logs <jobId> --tail 100
+unity_cli jobs cancel <jobId> --yes
 
 unity_cli tools run build.run --target StandaloneWindows64 --output <output-path> --wait
-unity_cli tools run build.status --id <jobId>
-unity_cli tools run build.logs --id <jobId> --tail 100
-unity_cli tools run build.cancel --id <jobId>
+unity_cli jobs status <jobId>
+unity_cli jobs logs <jobId> --tail 100
+unity_cli jobs cancel <jobId> --yes
 ```
 
 ### Batch 自动化
@@ -512,7 +512,7 @@ unity_cli target alias unset <alias>
 unity_cli target alias list
 ```
 
-`context read instances.list` 和 `context read target.current` 仍可作为只读 Context 保留，供 AI 获取状态；修改性操作使用顶层 `target` / `instances` 控制面。
+实例与目标属于 CLI 控制面，只使用顶层 `instances` / `target`；不要通过 `context read` 或 `tools run` 访问这些状态。
 
 ### Jobs、诊断与能力
 
@@ -564,28 +564,28 @@ unity_cli tools run reflect.search <query>
 
 ## 初始化（init）
 
-`init` 安装捆绑的 `com.unity_cli` Bridge 包到目标 Unity 项目，并可选安装 AI Agent Skill 文件。
+`init` 安装捆绑的 `com.unity_cli` Bridge 包到目标 Unity 项目；如果项目根目录已经存在 `.pi`、`.claude` 或 `.agent`，会自动安装对应 AI Agent Skill。也可以用 `--agent` 显式指定目标。
 
 | 标志 | 含义 |
 |------|------|
-| *(none)* | 安装/更新 Bridge 包（copy 模式） |
+| *(none)* | 安装/更新 Bridge 包（copy 模式），并为已存在的 Agent 目录安装 Skill |
 | `--pkg-only` | 仅安装 Bridge 包，不安装 Skill |
-| `--skill-only --agent <agent>` | 仅安装 Skill 文件 |
+| `--skill-only [--agent <agent>]` | 仅安装 Skill；未传 `--agent` 时使用已存在的 Agent 目录 |
 | `--check` | 检查安装状态，不修改项目 |
-| `--agent <pi\|claude\|.agent,...>` | 指定 Skill 安装目标 |
+| `--agent <pi\|claude\|.agent,...>` | 显式指定 Skill 安装目标 |
 
 ```powershell
-# 完整安装
+# 默认安装 Bridge；若项目已有 .pi/.claude/.agent，则自动安装 Skill
 unity_cli init --project C:\path\MyProject
 
 # 仅 Bridge 包
 unity_cli init --project C:\path\MyProject --pkg-only
 
-# 仅安装 Skill 到 pi
+# 显式安装 Skill 到 pi
 unity_cli init --project C:\path\MyProject --skill-only --agent pi
 
-# 检查安装状态
-unity_cli init --check --project C:\path\MyProject --agent pi
+# 检查安装状态；未传 --agent 时同样会检查已存在的 Agent 目录
+unity_cli init --check --project C:\path\MyProject
 ```
 
 ## Unity Editor Bridge
@@ -762,16 +762,18 @@ unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --yes
 
 ## 更多文档
 
-- [文档索引](docs/README.md) — 按主题组织的详细文档
+- [文档索引](docs/README.md) — 当前使用、扩展与诊断文档入口
+- [Target 与 Instance](docs/target-and-instance.md) — 目标选择与实例管理
 - [工具发现](docs/tool-discovery.md) — group-first 分层发现详解
 - [工具执行](docs/tool-execution.md) — tools run 执行通道详解
 - [安全边界](docs/safety-boundaries.md) — 风险模型与破坏性确认
+- [风险与副作用](docs/risk-and-side-effects.md) — readOnly/destructive/dry-run 规则
 - [错误码](docs/error-codes.md) — 结构化错误与 next_actions
 - [可用性差异](docs/availability-differences.md) — 不同实例的工具有效性
-- [Target 与 Instance](docs/target-and-instance.md) — 目标选择与实例管理
-- [自定义工具指南](docs/custom-tools.md) — 项目侧 Tool 注册开发
-- [AI Agent Skill](skills/unity_cli/SKILL.md) — Agent 操作手册
-- [示例](examples/README.md) — 编辑器/运行时/自定义工具示例
+- [扩展包](docs/extensions.md) — 可选扩展安装、卸载与诊断
+- [自定义 Tool](docs/custom-tools.md) — 项目侧 Tool 注册开发
+- [自定义 Context](docs/custom-contexts.md) — 项目侧只读 Context 注册开发
+- [AI Agent Skill](skills/unity_cli/SKILL.md) — Agent 最小入口卡片
 
 ## 本地开发
 

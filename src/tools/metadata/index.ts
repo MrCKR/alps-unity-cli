@@ -101,9 +101,12 @@ const CORE_TOOLS: ToolMetadata[] = [
 const extensionTools: ToolMetadata[] = [];
 
 // Validate core tools at module level (no extension groups yet).
-validateBridgeRegistryContracts(bridgeCommandRegistry, EXTENSION_GROUPS);
+// 生成 command-contract.json 时需要先加载 metadata,因此跳过契约反向校验以避免循环依赖。
+if (process.env.UNITY_CLI_GENERATING_CONTRACT !== "1") {
+  validateBridgeRegistryContracts(bridgeCommandRegistry, EXTENSION_GROUPS);
+  validateToolMetadataContracts(CORE_TOOLS, bridgeCommandRegistry);
+}
 validateBuiltinTools(CORE_TOOLS, false);
-validateToolMetadataContracts(CORE_TOOLS, bridgeCommandRegistry);
 
 /** Register extension tool metadata. Called by the contribution loader. */
 export function registerExtensionTools(tools: ToolMetadata[]): void {
@@ -120,7 +123,9 @@ export function registerExtensionTools(tools: ToolMetadata[]): void {
 /** Validate extension tool metadata after registration. */
 export function validateExtensionToolMetadata(): void {
   validateBuiltinTools(extensionTools, true);
-  validateToolMetadataContracts(extensionTools, bridgeCommandRegistry);
+  if (process.env.UNITY_CLI_GENERATING_CONTRACT !== "1") {
+    validateToolMetadataContracts(extensionTools, bridgeCommandRegistry);
+  }
 }
 
 /** Return core built-in tool metadata entries (no extension tools). */

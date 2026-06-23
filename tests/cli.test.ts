@@ -83,7 +83,7 @@ test("node dist cli version prints package version", async () => {
 });
 
 test("frozen top-level directories exist", async () => {
-  for (const directory of ["cli", "unitypkg", "schemas", "skills", "docs", "tests"]) {
+  for (const directory of ["unitypkg", "schemas", "skills", "docs", "tests"]) {
     await access(new URL(`../${directory}/`, import.meta.url));
   }
 });
@@ -136,7 +136,7 @@ process.exit(0);
   const waited = await runtime.runner.wait(jobId, 3000);
   assert.equal(waited.status, "succeeded");
 
-  const status = await execute(["tools", "run", "job.status", "--id", jobId], runtime);
+  const status = await execute(["jobs", "status", jobId], runtime);
   assert.equal((status.data as { status: string }).status, "succeeded");
 });
 
@@ -152,10 +152,10 @@ process.exit(0);
   const jobId = (created.data as { jobId: string }).jobId;
   await runtime.runner.wait(jobId, 3000);
 
-  const logs = await execute(["tools", "run", "job.logs", "--id", jobId, "--tail", "2"], runtime);
+  const logs = await execute(["jobs", "logs", jobId, "--tail", "2"], runtime);
   assert.deepEqual((logs.data as { lines: string[] }).lines, ["two", "three"]);
 
-  const buildLogs = await execute(["tools", "run", "build.logs", "--id", jobId, "--tail", "1"], runtime);
+  const buildLogs = await execute(["jobs", "logs", jobId, "--tail", "1"], runtime);
   assert.deepEqual((buildLogs.data as { lines: string[] }).lines, ["three"]);
 });
 
@@ -195,11 +195,11 @@ test("cancel marks running job as cancelled", async () => {
   const jobId = (created.data as { jobId: string }).jobId;
   await runtime.runner.wait(jobId, 100);
 
-  const described = await execute(["tools", "run", "job.describe", "--id", jobId], runtime);
+  const described = await execute(["jobs", "describe", jobId], runtime);
   assert.equal(described.ok, true);
   assert.equal((described.data as { cancellation: { mode: string } }).cancellation.mode, "immediate");
 
-  const cancelled = await execute(["tools", "run", "build.cancel", "--id", jobId, "--yes"], runtime);
+  const cancelled = await execute(["jobs", "cancel", jobId, "--yes"], runtime);
   assert.equal(cancelled.ok, true);
   assert.equal((cancelled.data as { status: string }).status, "cancelled");
   assert.equal((cancelled.data as { cancellation: { mode: string } }).cancellation.mode, "immediate");
@@ -243,7 +243,7 @@ test("successful Unity job clears stale error from summary", async () => {
   assert.equal(completed.exitCode, 0);
   assert.equal(completed.error, undefined);
 
-  const status = await execute(["tools", "run", "job.status", "--id", job.id], runtime);
+  const status = await execute(["jobs", "status", job.id], runtime);
   assert.equal(status.ok, true);
   assert.equal((status.data as { status: string }).status, "succeeded");
   assert.equal("error" in (status.data as Record<string, unknown>), false);
@@ -741,14 +741,14 @@ test("init --skill-only --agent pi installs only skill, no unitypkg", async () =
   assert.equal(skills[0].status, "installed");
 });
 
-test("init --skill-only without --agent returns error", async () => {
+test("init --skill-only without --agent or agent dir returns error", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
 
   const result = await execute(["init", "--skill-only", "--project", project], runtime);
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "INVALID_INIT_FLAGS");
-  assert.match(result.error?.message ?? "", /--skill-only requires --agent/);
+  assert.match(result.error?.message ?? "", /--skill-only requires --agent or an existing/);
 });
 
 test("init --pkg-only --skill-only returns mutual exclusion error", async () => {
@@ -781,7 +781,7 @@ test("init --agent unknown returns validation error", async () => {
   assert.match(result.error?.message ?? "", /Unknown agent kind/);
 });
 
-test("init --check without --agent checks only unitypkg", async () => {
+test("init --check without --agent checks only unitypkg when no agent dir exists", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
 
@@ -792,7 +792,27 @@ test("init --check without --agent checks only unitypkg", async () => {
   assert.equal(checkResult.ok, true);
   const data = checkResult.data as Record<string, unknown>;
   assert.ok(data.package, "package segment should be present");
-  assert.equal(data.skills, undefined, "skills should not be present without --agent");
+  assert.equal(data.skills, undefined, "skills should not be present without an agent directory");
+});
+
+test("init --check without --agent checks auto-detected agent skills", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+  await mkdir(join(project, ".pi"), { recursive: true });
+
+  // Install first
+  await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
+
+  const checkResult = await execute(["init", "--check", "--project", project], runtime);
+  assert.equal(checkResult.ok, true);
+  const data = checkResult.data as Record<string, unknown>;
+  assert.ok(data.package, "package segment should be present");
+  assert.ok(data.skills, "skills segment should be present for detected agent directory");
+
+  const skills = data.skills as Array<{ agent: string; status: string }>;
+  assert.equal(skills.length, 1);
+  assert.equal(skills[0].agent, "pi");
+  assert.equal(skills[0].status, "installed");
 });
 
 test("init --check --agent pi checks unitypkg + skill", async () => {
@@ -827,7 +847,7 @@ test("init --check --skill-only --agent pi checks only skill", async () => {
   assert.ok(data.skills, "skills segment should be present");
 });
 
-test("init without --agent defaults to unitypkg-only (matches frozen command semantics)", async () => {
+test("init without --agent defaults to unitypkg-only when no agent dir exists", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
 
@@ -835,7 +855,27 @@ test("init without --agent defaults to unitypkg-only (matches frozen command sem
   assert.equal(result.ok, true);
   const data = result.data as Record<string, unknown>;
   assert.ok(data.package, "package segment should be present");
-  assert.equal(data.skills, undefined, "skills should not be present without --agent");
+  assert.equal(data.skills, undefined, "skills should not be present without an agent directory");
+});
+
+test("init without --agent installs skill for existing agent directory", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+  await mkdir(join(project, ".pi"), { recursive: true });
+
+  const result = await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.ok(data.package, "package segment should be present");
+  assert.ok(data.skills, "skills segment should be present for detected agent directory");
+
+  const skills = data.skills as Array<{ agent: string; status: string }>;
+  assert.equal(skills.length, 1);
+  assert.equal(skills[0].agent, "pi");
+  assert.equal(skills[0].status, "installed");
+
+  const skillContent = await readFile(join(project, ".pi", "skills", "unity_cli", "SKILL.md"), "utf8");
+  assert.ok(skillContent.length > 0);
 });
 
 test("init --check on missing project returns package not_installed", async () => {
@@ -847,6 +887,23 @@ test("init --check on missing project returns package not_installed", async () =
   const data = checkResult.data as Record<string, unknown>;
   const pkg = data.package as { status: string; code?: string; message?: string };
   assert.equal(pkg.status, "not_installed");
+});
+
+test("init --skill-only without --agent installs skill for existing agent directory", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+  await mkdir(join(project, ".claude"), { recursive: true });
+
+  const result = await execute(["init", "--skill-only", "--project", project], runtime);
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.package, undefined, "package segment should not be present with --skill-only");
+  assert.ok(data.skills, "skills segment should be present for detected agent directory");
+
+  const skills = data.skills as Array<{ agent: string; status: string }>;
+  assert.equal(skills.length, 1);
+  assert.equal(skills[0].agent, "claude");
+  assert.equal(skills[0].status, "installed");
 });
 
 test("init --check --agent on missing skill reports missing", async () => {

@@ -8,7 +8,6 @@
   },
   "files": [
     "dist",
-    "cli",
     "unitypkg",
     "extensions",
     "contracts",
@@ -19,8 +18,8 @@
   ],
   "scripts": {
     "clean": "node -e \"require('node:fs').rmSync('dist',{recursive:true,force:true})\"",
-    "build": "npm run clean && tsc -p tsconfig.json",
-    "build:test": "npm run clean && tsc -p tsconfig.test.json && node scripts/copy-test-resources.cjs",
+    "build": "npm run clean && tsc -p tsconfig.json && node scripts/gen-command-contract.mjs && tsc -p tsconfig.json",
+    "build:test": "npm run clean && tsc -p tsconfig.test.json && node scripts/gen-command-contract.mjs && tsc -p tsconfig.test.json && node scripts/copy-test-resources.cjs",
     "test": "node --test \"dist/tests/**/*.test.js\"",
     "pretest": "npm run build:test",
     "prepack": "npm run build",
