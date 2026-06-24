@@ -14,10 +14,9 @@ test("builtin context metadata contains all required entries", () => {
   assert.equal(contexts.length, 23);
 });
 
-test("all builtin contexts have kind=context and readOnlyHint=true", () => {
+test("all builtin contexts have kind=context", () => {
   for (const ctx of builtinContextMetadata()) {
     assert.equal(ctx.kind, "context", `${ctx.name} kind must be "context"`);
-    assert.equal(ctx.readOnlyHint, true, `${ctx.name} readOnlyHint must be true`);
   }
 });
 
@@ -186,7 +185,7 @@ test("searchContexts finds contexts by keyword", () => {
 test("all contexts have destructiveHint absent or undefined", () => {
   for (const ctx of builtinContextMetadata()) {
     const hasDestructive = "destructiveHint" in ctx && (ctx as Record<string, unknown>).destructiveHint !== undefined;
-    assert.ok(!hasDestructive, `${ctx.name} must not have destructiveHint — contexts are always read-only`);
+    assert.ok(!hasDestructive, `${ctx.name} must not have destructiveHint — contexts do not expose destructive metadata`);
   }
 });
 

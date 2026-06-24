@@ -135,7 +135,6 @@ namespace UnityCli
                 InputSchema = attribute.InputSchema,
                 OutputSchema = attribute.OutputSchema,
                 CapabilityType = attribute.CapabilityType,
-                ReadOnlyHint = attribute.ReadOnlyHint,
                 DestructiveHint = attribute.DestructiveHint,
                 Target = attribute.Target ?? "editor",
                 DefaultTimeoutMs = attribute.DefaultTimeoutMs,
@@ -344,7 +343,6 @@ namespace UnityCli
                 .PropRaw("inputSchema", definition.InputSchema)
                 .PropRaw("outputSchema", definition.OutputSchema)
                 .Prop("capabilityType", definition.CapabilityType)
-                .Prop("readOnlyHint", definition.ReadOnlyHint)
                 .Prop("destructiveHint", definition.DestructiveHint)
                 .Prop("target", definition.Target)
                 .Prop("availabilityScope", definition.AvailabilityScope)
@@ -553,7 +551,6 @@ namespace UnityCli
                 + "\ninputSchema=" + NormalizeFingerprintJson(definition.InputSchema)
                 + "\noutputSchema=" + NormalizeFingerprintJson(definition.OutputSchema)
                 + "\ncapabilityType=" + (definition.CapabilityType ?? string.Empty)
-                + "\nreadOnlyHint=" + Bool(definition.ReadOnlyHint)
                 + "\ndestructiveHint=" + Bool(definition.DestructiveHint)
                 + "\ndefaultTimeoutMs=" + definition.DefaultTimeoutMs.ToString(CultureInfo.InvariantCulture)
                 + "\nmaxTimeoutMs=" + definition.MaxTimeoutMs.ToString(CultureInfo.InvariantCulture)

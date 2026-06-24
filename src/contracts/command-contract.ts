@@ -12,7 +12,6 @@ export interface CommandContractEntry {
   command: string;
   handler_type: CommandHandlerType;
   csharp_handler: "present" | "none" | "planned";
-  readOnly: boolean;
   destructive: boolean;
   timeout: number;
   requires_packages?: string[];
@@ -81,8 +80,8 @@ export function validateToolMetadataContracts(tools: ToolMetadata[], registry: B
     if (contract.handler_type !== tool.handler) {
       throw new Error(`Tool metadata handler mismatch for ${tool.name}: metadata=${tool.handler ?? "<none>"} contract=${contract.handler_type}`);
     }
-    if (contract.readOnly !== tool.readOnlyHint || contract.destructive !== tool.destructiveHint) {
-      throw new Error(`Tool metadata safety hint mismatch for ${tool.name}`);
+    if (contract.destructive !== tool.destructiveHint) {
+      throw new Error(`Tool metadata destructive hint mismatch for ${tool.name}`);
     }
     if (JSON.stringify(contract.requires_packages ?? []) !== JSON.stringify(tool.requiresPackages ?? [])) {
       throw new Error(`Tool metadata requiresPackages mismatch for ${tool.name}: metadata=${JSON.stringify(tool.requiresPackages ?? [])} contract=${JSON.stringify(contract.requires_packages ?? [])}`);

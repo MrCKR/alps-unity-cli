@@ -2,7 +2,7 @@
  * Contract/snapshot tests for ProBuilder extension — 36 single-action tools.
  *
  * Validates:
- * - 36 ProBuilder tool names, schemas, requiresPackages, readOnly/destructive,
+ * - 36 ProBuilder tool names, schemas, requiresPackages, destructive,
  *   target, cliCommand and bridge command consistency
  * - tools group list probuilder discovers 36 tools
  * - tools describe probuilder.* works for each tool
@@ -57,13 +57,6 @@ const EXPECTED_PROBUILDER_TOOLS = [
   "probuilder.repair-mesh"
 ] as const;
 
-// Read-only ProBuilder tools.
-const READ_ONLY_TOOLS = new Set([
-  "probuilder.ping",
-  "probuilder.select-faces",
-  "probuilder.mesh-info",
-  "probuilder.validate-mesh"
-]);
 
 // Destructive ProBuilder tools.
 const DESTRUCTIVE_TOOLS = new Set([
@@ -100,21 +93,11 @@ test("every ProBuilder tool has consistent metadata", () => {
     assert.equal(typeof tool.inputSchema, "object", `${tool.name}: inputSchema must be an object`);
     assert.notEqual(tool.inputSchema, null, `${tool.name}: inputSchema must not be null`);
 
-    // readOnly/destructive consistency
-    if (READ_ONLY_TOOLS.has(tool.name)) {
-      assert.equal(tool.readOnlyHint, true, `${tool.name}: should be readOnly`);
-    } else {
-      assert.equal(tool.readOnlyHint, false, `${tool.name}: should NOT be readOnly`);
-    }
-
     if (DESTRUCTIVE_TOOLS.has(tool.name)) {
       assert.equal(tool.destructiveHint, true, `${tool.name}: should be destructive`);
     } else {
       assert.equal(tool.destructiveHint, false, `${tool.name}: should NOT be destructive`);
     }
-
-    // Must not be both readOnly and destructive
-    assert.equal(tool.readOnlyHint && tool.destructiveHint, false, `${tool.name}: cannot be both readOnly and destructive`);
 
     // Public execution must use the unified tools run entrypoint.
     assert.ok(tool.cliCommand, `${tool.name}: must have cliCommand`);
@@ -147,7 +130,6 @@ test("every ProBuilder tool has a matching command contract", () => {
     assert.equal(contract.handler_type, "hybrid", `${tool.name}: contract handler_type must be hybrid`);
     assert.equal(contract.csharp_handler, "present", `${tool.name}: contract csharp_handler must be present`);
     assert.deepEqual(contract.requires_packages, ["com.unity.probuilder"], `${tool.name}: contract requires_packages mismatch`);
-    assert.equal(contract.readOnly, tool.readOnlyHint, `${tool.name}: contract readOnly mismatch`);
     assert.equal(contract.destructive, tool.destructiveHint, `${tool.name}: contract destructive mismatch`);
   }
 });

@@ -18,7 +18,6 @@ namespace UnityCli.Samples
         Target = "runtime",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"message\":{\"type\":\"string\"}},\"required\":[\"message\"]}",
         OutputSchema = "{\"type\":\"object\",\"properties\":{\"requestId\":{\"type\":\"string\"},\"input\":{\"type\":\"object\"},\"isPlaying\":{\"type\":\"boolean\"},\"frameCount\":{\"type\":\"number\"}}}",
-        ReadOnlyHint = true,
         DestructiveHint = false
 )]
     public static class SampleRuntimeEchoTool

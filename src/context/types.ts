@@ -5,7 +5,6 @@
  * without side effects. This is the CLI-first equivalent of MCP Resources.
  *
  * Key rules:
- * - All contexts are read-only (readOnlyHint=true, destructiveHint=false).
  * - Output uses the unified envelope.
  * - Built-in contexts are declared statically in the CLI package.
  * - Custom contexts are discovered at runtime via the Unity Bridge.
@@ -45,8 +44,6 @@ export interface ContextDescriptor {
   inputSchema: Record<string, unknown>;
   /** JSON Schema for context read output. */
   outputSchema: Record<string, unknown>;
-  /** Always true for contexts. */
-  readOnlyHint: true;
   /** Always false for contexts. */
   destructiveHint: false;
   /** Bridge command name for reading this context, e.g. "context.read". */

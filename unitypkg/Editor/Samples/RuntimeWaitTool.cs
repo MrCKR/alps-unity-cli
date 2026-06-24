@@ -27,7 +27,6 @@ namespace UnityCli
         Target = "runtime",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"frames\":{\"type\":\"number\",\"description\":\"Number of frames to wait (default 1)\"},\"seconds\":{\"type\":\"number\",\"description\":\"Seconds to wait (alternative to frames)\"},\"condition\":{\"type\":\"string\",\"description\":\"Wait condition: frame-count, duration, or next-frame (default next-frame)\"}},\"required\":[]}",
         OutputSchema = "{\"type\":\"object\",\"properties\":{\"framesWaited\":{\"type\":\"number\"},\"elapsedMs\":{\"type\":\"number\"},\"condition\":{\"type\":\"string\"},\"isPlaying\":{\"type\":\"boolean\"},\"frameCount\":{\"type\":\"number\"}}}",
-        ReadOnlyHint = true,
         DestructiveHint = false,
         DefaultTimeoutMs = 10000,
         MaxTimeoutMs = 120000,

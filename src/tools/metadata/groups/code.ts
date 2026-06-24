@@ -17,7 +17,6 @@ export const CODE_TOOLS: ToolMetadata[] = [
       args: { type: "object" },
       timeoutMs: { type: "integer" }
     }),
-    readOnlyHint: false,
     destructiveHint: true,
     supportsDryRun: true,
     longRunning: true,

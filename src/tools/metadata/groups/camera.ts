@@ -8,7 +8,6 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
     description: "List all cameras in the active scene.",
     group: "camera",
     inputSchema: objSchema({}),
-    readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
     cliCommand: "tools run camera.list",
@@ -20,7 +19,6 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
     description: "Get position, rotation, FOV and other properties of a camera.",
     group: "camera",
     inputSchema: objSchema({ target: { type: "string" } }, ["target"]),
-    readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
     cliCommand: "tools run camera.info",
@@ -35,7 +33,6 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
     description: "Render a screenshot from a specific camera and save to file.",
     group: "camera",
     inputSchema: objSchema({ target: { type: "string" }, output: { type: "string" }, width: { type: "integer" }, height: { type: "integer" }, format: { type: "string" }, transparent: { type: "boolean" }, overwrite: { type: "boolean" } }, ["target", "output"]),
-    readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
     cliCommand: "tools run camera.screenshot",
@@ -61,7 +58,6 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
       depth: { type: "number" },
       tag: { type: "string" }
     }),
-    readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
     cliCommand: "tools run camera.create",
@@ -82,7 +78,6 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
       position: { type: "string" },
       rotation: { type: "string" }
     }, ["target"]),
-    readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
     cliCommand: "tools run camera.target",
@@ -106,7 +101,6 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
       clearFlags: { type: "string" },
       depth: { type: "number" }
     }, ["target"]),
-    readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
     cliCommand: "tools run camera.lens",
@@ -128,7 +122,6 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
       height: { type: "integer" },
       format: { type: "string" }
     }, ["targets"]),
-    readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
     cliCommand: "tools run camera.multiview",

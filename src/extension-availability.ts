@@ -267,7 +267,6 @@ export async function collectExtensionToolDescriptors(
     description: extTool.description,
     group: extTool.group,
     inputSchema: {},
-    readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge" as const,
     supportStatus: "live-bridge" as const,

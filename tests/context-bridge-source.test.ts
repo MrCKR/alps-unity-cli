@@ -32,15 +32,6 @@ test("Context built-in table contains all expected context names", async () => {
   }
 });
 
-test("All context descriptors have readOnlyHint=true", async () => {
-  const source = await readContextCommandsSource();
-  // Every context descriptor should output readOnlyHint: true
-  const readOnlyMatches = source.match(/\.Prop\("readOnlyHint", true\)/g);
-  assert.ok(readOnlyMatches !== null, "Must have .Prop(\"readOnlyHint\", true) calls");
-  // At least 16 (one per read handler) + 16 (one per descriptor) = 32 minimum
-  assert.ok(readOnlyMatches.length >= 16, `Expected at least 16 readOnlyHint=true, got ${readOnlyMatches.length}`);
-});
-
 test("Context read handlers never modify Unity state", async () => {
   const source = await readContextCommandsSource();
   // These are forbidden in context read handlers

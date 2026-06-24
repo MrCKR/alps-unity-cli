@@ -15,7 +15,6 @@ namespace UnityCli.Samples
         Group = "sample",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"message\":{\"type\":\"string\"}},\"required\":[\"message\"]}",
         OutputSchema = "{\"type\":\"object\",\"properties\":{\"requestId\":{\"type\":\"string\"},\"input\":{\"type\":\"object\"}}}",
-        ReadOnlyHint = true,
         DestructiveHint = false
 )]
     public static class SampleEchoTool

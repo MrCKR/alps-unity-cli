@@ -580,7 +580,6 @@ namespace UnityCli
                 .PropRaw("inputSchema", definition.InputSchema)
                 .PropRaw("outputSchema", definition.OutputSchema)
                 .Prop("capabilityType", definition.CapabilityType)
-                .Prop("readOnlyHint", definition.ReadOnlyHint)
                 .Prop("destructiveHint", definition.DestructiveHint)
                 .Prop("target", definition.Target)
                 .Prop("availabilityScope", definition.AvailabilityScope)

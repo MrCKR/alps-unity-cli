@@ -24,7 +24,6 @@ test("screenshot domain exposes game-view/scene-view/isolated-object/orbit", () 
 test("screenshot tools have correct safety hints", () => {
   for (const name of ["screenshot.game-view", "screenshot.scene-view", "screenshot.isolated-object", "screenshot.orbit"]) {
     const tool = findToolByName(name)!;
-    assert.equal(tool.readOnlyHint, false, `${name} writes an artifact`);
     assert.equal(tool.destructiveHint, false, `${name} should not be destructive`);
     assert.equal(tool.handler, "bridge");
   }

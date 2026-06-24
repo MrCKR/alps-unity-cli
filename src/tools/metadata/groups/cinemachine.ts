@@ -51,7 +51,6 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
       z: { type: "number" },
       priority: { type: "integer" }
     }),
-    readOnlyHint: false,
     destructiveHint: false,
     longRunning: true,
     cliCommand: "tools run cinemachine.create",
@@ -67,7 +66,6 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     title: "Cinemachine Target",
     description: "Set the Follow and/or LookAt targets on a Cinemachine virtual camera. Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({ target: { type: "string" }, follow: { type: "string" }, lookAt: { type: "string" } }, ["target"]),
-    readOnlyHint: false,
     destructiveHint: false,
     cliCommand: "tools run cinemachine.target",
     examples: [
@@ -87,7 +85,6 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
       orthographicSize: { type: "number" },
       dutch: { type: "number" }
     }, ["target"]),
-    readOnlyHint: false,
     destructiveHint: false,
     cliCommand: "tools run cinemachine.lens",
     examples: [
@@ -100,7 +97,6 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     title: "Cinemachine Priority",
     description: "Get or set the priority (and enabled flag) on a Cinemachine virtual camera via SerializedObject PrioritySettings struct. Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({ target: { type: "string" }, priority: { type: "integer" }, enabled: { type: "boolean" } }, ["target"]),
-    readOnlyHint: false,
     destructiveHint: false,
     cliCommand: "tools run cinemachine.priority",
     examples: [
@@ -113,7 +109,6 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     title: "Cinemachine Blend",
     description: "Get or set the DefaultBlend (style + duration) on the CinemachineBrain of a target camera owner. Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({ target: { type: "string" }, style: { type: "string", enum: ["cut", "ease_in_out", "ease_in", "ease_out", "hard_in", "hard_out", "linear", "soft_in", "soft_out"] }, duration: { type: "number" } }),
-    readOnlyHint: false,
     destructiveHint: false,
     cliCommand: "tools run cinemachine.blend",
     examples: [
@@ -126,7 +121,6 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     title: "Cinemachine Body",
     description: "Swap or configure the Cinemachine Body pipeline component on a virtual camera (e.g. CinemachineFollow, CinemachinePositionComposer, CinemachineOrbitalFollow, CinemachineSplineDolly, CinemachineThirdPersonFollow). Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({ target: { type: "string" }, body: { type: "string" }, property: { type: "string" }, value: { type: "string" } }, ["target"]),
-    readOnlyHint: false,
     destructiveHint: false,
     cliCommand: "tools run cinemachine.body",
     examples: [
@@ -139,7 +133,6 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     title: "Cinemachine Aim",
     description: "Swap or configure the Cinemachine Aim pipeline component on a virtual camera (e.g. CinemachineRotationComposer, CinemachineHardLookAt). Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({ target: { type: "string" }, aim: { type: "string" }, property: { type: "string" }, value: { type: "string" } }, ["target"]),
-    readOnlyHint: false,
     destructiveHint: false,
     cliCommand: "tools run cinemachine.aim",
     examples: [
@@ -152,7 +145,6 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     title: "Cinemachine Noise",
     description: "Add, configure or remove a CinemachineBasicMultiChannelPerlin noise component on a virtual camera. Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({ target: { type: "string" }, noiseProfile: { type: "string" }, amplitude: { type: "number" }, frequency: { type: "number" }, remove: { type: "boolean" } }, ["target"]),
-    readOnlyHint: false,
     destructiveHint: false,
     cliCommand: "tools run cinemachine.noise",
     examples: [
@@ -165,7 +157,6 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     title: "Cinemachine Brain",
     description: "Ensure a CinemachineBrain is attached to the target camera owner, or report the brain's active virtual camera, blending state and active blend. Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({ target: { type: "string" }, action: { type: "string", enum: ["ensure", "status"] } }, ["target"]),
-    readOnlyHint: false,
     destructiveHint: false,
     cliCommand: "tools run cinemachine.brain",
     examples: [
@@ -182,7 +173,6 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
       action: { type: "string", enum: ["list", "add", "remove"] },
       extensionType: { type: "string" }
     }, ["target"]),
-    readOnlyHint: false,
     destructiveHint: true,
     cliCommand: "tools run cinemachine.extension",
     examples: [

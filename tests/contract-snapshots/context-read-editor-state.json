@@ -31,6 +31,5 @@
       "runtime": "<object|null>",
       "plannedEffects": "<array>"
     },
-    "readOnlyHint": true
   }
 }

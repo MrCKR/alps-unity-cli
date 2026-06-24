@@ -33,7 +33,6 @@ test("component deep tools exist alongside simple set", () => {
   assert.ok(names.includes("component.set"));
 
   const get = findToolByName("component.get")!;
-  assert.equal(get.readOnlyHint, true);
   assert.equal(get.equivalentUnityMcp, "gameobject-component-get");
 
   const modify = findToolByName("component.modify")!;
@@ -42,7 +41,6 @@ test("component deep tools exist alongside simple set", () => {
   assert.equal(modify.equivalentUnityMcp, "gameobject-component-modify");
 
   const listTypes = findToolByName("component.list-types")!;
-  assert.equal(listTypes.readOnlyHint, true);
   assert.equal(listTypes.equivalentUnityMcp, "gameobject-component-list-all");
 });
 

@@ -8,7 +8,6 @@ Every tool carries risk hints in its descriptor. These are the only way to asses
 
 | Descriptor Field | Meaning | How AI Should Handle |
 |-----------------|---------|---------------------|
-| `readOnlyHint: true` | Tool never mutates Unity state | Safe to call freely; no confirmation needed |
 | `destructiveHint: true` | Tool may irreversibly modify or delete data | Must confirm with `--yes`; consider `--dry-run` first |
 | `supportsDryRun: true` | Tool accepts `--dry-run` for safe preview | Always preview with `--dry-run` before `--yes` |
 | `longRunning: true` | Tool may take seconds or minutes | Check `cancellationSemantics`; consider `--timeout-ms` |
@@ -105,7 +104,7 @@ The `doctor` command reports fingerprint status for all project tools. Use it to
 
 ## How to Assess Risk as an AI Agent
 
-1. **Always `tools describe` first.** Read `destructiveHint`, `readOnlyHint`, `supportsDryRun`, `target`, `availabilityScope`, and `available`.
+1. **Always `tools describe` first.** Read `destructiveHint`, `supportsDryRun`, `target`, `availabilityScope`, and `available`.
 2. **For destructive tools**: Use `--dry-run` if supported; otherwise, explain the planned effects to the user before calling with `--yes`.
 3. **For runtime tools**: Verify `available: true` and Play Mode state before calling `target: "runtime"` tools.
 4. **For long-running tools**: Set appropriate `--timeout-ms`; understand `cancellationSemantics` before starting.

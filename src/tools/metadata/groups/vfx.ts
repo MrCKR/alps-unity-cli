@@ -26,7 +26,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
     kind: "tool",
     source: "extension",
     inputSchema: objSchema({ path: { type: "string" }, action: { type: "string", enum: ["info", "create"] }, create: { type: "boolean" }, overwrite: { type: "boolean" } }, ["path"]),
-    readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
     cliCommand: "tools run vfx.graph",
@@ -41,7 +40,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
     kind: "tool",
     source: "extension",
     inputSchema: objSchema({ target: { type: "string" }, graph: { type: "string" }, add: { type: "boolean" } }, ["target"]),
-    readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
     cliCommand: "tools run vfx.effect",
@@ -69,7 +67,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
       b: { type: "number" },
       a: { type: "number" }
     }, ["target", "name"]),
-    readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
     cliCommand: "tools run vfx.parameter",
@@ -94,7 +91,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
       seed: { type: "integer" },
       resetSeedOnPlay: { type: "boolean" }
     }, ["target"]),
-    readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
     cliCommand: "tools run vfx.control",
@@ -121,7 +117,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
       attributeZ: { type: "number" },
       attributeSize: { type: "number" }
     }, ["target", "eventName"]),
-    readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
     cliCommand: "tools run vfx.event",
@@ -143,7 +138,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
       template: { type: "string" },
       overwrite: { type: "boolean" }
     }, ["path"]),
-    readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
     cliCommand: "tools run vfx.template",
@@ -168,7 +162,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
       maxParticles: { type: "integer" },
       loop: { type: "boolean" }
     }),
-    readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
     cliCommand: "tools run vfx.particle-create",
@@ -181,7 +174,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
     description: "Get ParticleSystem state, particle count, and main module settings.",
     group: "vfx",
     inputSchema: objSchema({ target: { type: "string" } }, ["target"]),
-    readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
     cliCommand: "tools run vfx.particle-info",
@@ -208,7 +200,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
       simulationSpace: { type: "string" },
       scalingMode: { type: "string" }
     }, ["target"]),
-    readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
     cliCommand: "tools run vfx.particle-main",
@@ -227,7 +218,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
       rateOverDistance: { type: "number" },
       burstCount: { type: "integer" }
     }, ["target"]),
-    readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
     cliCommand: "tools run vfx.particle-emission",
@@ -252,7 +242,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
       boxZ: { type: "number" },
       randomDirection: { type: "boolean" }
     }, ["target"]),
-    readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
     cliCommand: "tools run vfx.particle-shape",
@@ -270,7 +259,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
       withChildren: { type: "boolean" },
       stopBehavior: { type: "string" }
     }, ["target"]),
-    readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
     cliCommand: "tools run vfx.particle-play",
@@ -287,7 +275,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
       module: { type: "string" },
       enabled: { type: "boolean" }
     }, ["target"]),
-    readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
     cliCommand: "tools run vfx.particle-module",
@@ -311,7 +298,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
       loop: { type: "boolean" },
       useWorldSpace: { type: "boolean" }
     }),
-    readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
     cliCommand: "tools run vfx.line-create",
@@ -329,7 +315,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
       index: { type: "integer" },
       position: { type: "string" }
     }, ["target"]),
-    readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
     cliCommand: "tools run vfx.line-positions",
@@ -353,7 +338,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
       autodestruct: { type: "boolean" },
       emitting: { type: "boolean" }
     }),
-    readOnlyHint: false,
     destructiveHint: false,
     handler: "bridge",
     cliCommand: "tools run vfx.trail",

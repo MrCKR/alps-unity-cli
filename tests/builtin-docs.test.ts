@@ -12,7 +12,6 @@ function customTool(overrides: Partial<ToolMetadata> = {}): ToolMetadata {
     description: "Bake terrain data.",
     group: "terrain-tools",
     inputSchema: { type: "object" },
-    readOnlyHint: false,
     destructiveHint: true,
     handler: "bridge",
     supportStatus: "live-bridge",
@@ -49,7 +48,7 @@ test("buildTopics formats custom tool lines", () => {
   assert.ok(line);
   assert.ok(line.includes("terrain.bake (tools run terrain.bake) — Terrain Bake"));
   assert.ok(line.includes("已路由可执行"));
-  assert.ok(line.includes("write"));
+  assert.ok(line.includes("target:editor"));
   assert.ok(line.includes("⚠ destructive"));
   assert.ok(line.includes("Bundled Unity Editor Bridge serves this command"));
 });

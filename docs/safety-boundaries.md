@@ -8,7 +8,6 @@ alps-unity-cli 的安全模型围绕三个核心原则：Tool 可有副作用但
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `readOnlyHint` | boolean | true = 只读，不会修改 Unity 状态 |
 | `destructiveHint` | boolean | true = 有破坏性，执行前需要确认 |
 | `supportsDryRun` | boolean | true = 支持 `--dry-run` 预览 |
 | `longRunning` | boolean | true = 可能长时间运行 |
@@ -16,14 +15,6 @@ alps-unity-cli 的安全模型围绕三个核心原则：Tool 可有副作用但
 | `cancellationSemantics` | string | 取消行为描述 |
 
 ## Tool 安全规则
-
-### 只读工具
-
-`readOnlyHint: true` 的工具保证：
-- 不修改 Unity 状态、文件、场景、资产
-- 不触发 Play Mode 变化
-- 不修改 Package 依赖
-- 可安全重复调用
 
 ### 破坏性工具
 
@@ -63,14 +54,13 @@ tools describe <tool>        → 确认 destructiveHint 和 supportsDryRun
 
 ## Context 只读硬边界
 
-Context（`readOnlyHint: true` 的工具）不得：
+Context 不得：
 - 修改 Unity 状态（场景、资产、GameObject、Component）
 - 修改文件系统
 - 修改 Package 依赖
 - 触发 Play Mode 变化
 - 产生任何副作用
 
-当前只读工具示例：`camera.list`、`camera.info`、`asset.search`、`asset.info`、`scene.hierarchy`、`scene.active`、`editor.state`、`editor.console`、`tools.list`、`tools.describe` 等。
 
 ## Extension 安全边界
 

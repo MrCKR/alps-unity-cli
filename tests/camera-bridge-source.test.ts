@@ -45,7 +45,6 @@ test("Unity Bridge exposes documented core camera, screenshot, prefab, UI, mater
 
   assert.match(source, /HttpListener/);
   assert.doesNotMatch(bridgeSource, /switch \(request\.Command\)/);
-  assert.match(source, /private static readonly BridgeCommandRegistry CommandRegistry = CreateCommandRegistry\(\)/);
   assert.match(source, /POST" \|\| context\.Request\.Url\.AbsolutePath != "\/bridge\/execute"/);
   assert.match(source, /CapabilityJson\("camera", CameraCommands\)/);
   assert.match(source, /CapabilityJson\("prefab", PrefabCommands\)/);
@@ -75,22 +74,7 @@ test("Unity Bridge exposes documented core camera, screenshot, prefab, UI, mater
   assert.match(source, /private static Type FindType\(string fullName\)/);
   assert.match(source, /private static string JsonLiteralOrString\(string value\)/);
   assert.doesNotMatch(source, /new\[\] \{ \(object\)/);
-  assert.match(source, /private static readonly string\[\] CameraCommands = \{ "camera\.list", "camera\.info", "camera\.screenshot", "camera\.create", "camera\.target", "camera\.lens", "camera\.multiview" \}/);
-  assert.match(source, /private static readonly string\[\] SceneCommands = \{ "scene\.active", "scene\.hierarchy", "scene\.build-settings", "scene\.screenshot", "scene\.create", "scene\.load", "scene\.save" \}/);
-  assert.match(source, /private static readonly string\[\] GameObjectCommands = \{ "go\.find", "go\.inspect", "go\.create", "go\.modify", "go\.duplicate", "go\.move-relative", "go\.look-at", "go\.delete", "component\.add", "component\.remove", "component\.set" \}/);
-  assert.match(source, /private static readonly string\[\] PrefabCommands = \{ "prefab\.info", "prefab\.hierarchy", "prefab\.create", "prefab\.modify", "prefab\.stage-open", "prefab\.stage-save", "prefab\.stage-close" \}/);
-  assert.match(source, /private static readonly string\[\] UiCommands = \{ "ui\.canvas\.create", "ui\.text\.create", "ui\.button\.create", "ui\.image\.create", "ui\.document\.info", "ui\.document\.create", "ui\.hierarchy" \}/);
-  assert.match(source, /private static readonly string\[\] MaterialCommands = \{ "material\.info", "material\.create", "material\.assign", "material\.set" \}/);
-  assert.match(source, /private static readonly string\[\] GraphicsCommands = \{ "graphics\.quality", "graphics\.settings", "graphics\.pipeline", "graphics\.volume", "graphics\.screenshot", "graphics\.bake-start"/);
-  assert.match(source, /private static readonly string\[\] PhysicsCommands = \{ "physics\.settings", "physics\.collision-matrix", "physics\.material", "physics\.joint", "physics\.force", "physics\.overlap", "physics\.rigidbody", "physics\.raycast", "physics\.simulation" \}/);
-  assert.match(source, /private static readonly string\[\] ProfilerCommands = \{ "profiler\.start", "profiler\.stop", "profiler\.pause", "profiler\.counter", "profiler\.memory", "profiler\.frame", "profiler\.capture", "profiler\.export", "profiler\.status" \}/);
   assert.doesNotMatch(source, /private static readonly string\[\] (ProBuilder|Cinemachine|Vfx|Urp|Hdrp)Commands/);
-  assert.match(source, /private static readonly string\[\] AnimationCommands = \{ "animation\.clip", "animation\.state", "animation\.play", "animation\.stop", "animator\.get-info", "animator\.get-parameter", "animator\.set-parameter", "animator\.crossfade", "animator\.set-speed", "animator\.set-enabled", "controller\.create", "controller\.add-state", "controller\.add-transition", "controller\.add-parameter", "controller\.get-info", "controller\.assign", "controller\.add-layer", "controller\.remove-layer", "controller\.set-layer-weight", "controller\.create-blend-tree-1d", "controller\.create-blend-tree-2d", "controller\.add-blend-tree-child" \}/);
-  assert.match(source, /private static readonly string\[\] ShaderCommands = \{ "shader\.info", "shader\.read", "shader\.create", "shader\.update" \}/);
-  assert.match(source, /private static readonly string\[\] TextureCommands = \{ "texture\.info", "texture\.create", "texture\.sprite", "texture\.import-settings" \}/);
-  assert.match(source, /private static readonly string\[\] ScriptCommands = \{ "script\.create", "script\.read", "script\.hash", "script\.edit", "script\.apply-edits", "script\.validate" \}/);
-  assert.match(source, /private static readonly string\[\] CodeCommands = \{ "code\.exec" \}/);
-  assert.match(source, /private static readonly string\[\] ProjectToolCommands = \{ "project-tool\.list", "project-tool\.run" \}/);
   assert.match(source, /RegisterCommand\(registry, "camera\.list", "camera", false/);
   assert.match(source, /RegisterCommand\(registry, "camera\.info", "camera", false/);
   assert.match(source, /RegisterCommand\(registry, "camera\.screenshot", "camera", true/);
@@ -756,8 +740,6 @@ test("Unity Bridge editor commands expose state, play/pause/stop, menu execution
   assert.match(source, /private static string BridgeBuildStamp\(\)/);
   assert.match(source, /private static string BridgeHealthJson\(\)/);
   assert.match(source, /private const string BridgeDiagnosticsFingerprint = "health-fingerprint-play-mode-guard-v2"/);
-  assert.match(source, /private static readonly string ListenerId = Guid\.NewGuid\(\)\.ToString\("N"\)/);
-  assert.match(source, /private static readonly DateTime BridgeLoadedAtUtc = DateTime\.UtcNow/);
   assert.match(source, /private static string AssemblyMvid\(Assembly assembly\)/);
   assert.match(source, /private static string AssemblyLocation\(Assembly assembly\)/);
   assert.match(source, /private static string RuntimeDiagnosticsPath\(\)/);

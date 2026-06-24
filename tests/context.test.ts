@@ -25,7 +25,6 @@ test("builtin context descriptors cover all required contexts", () => {
 
 test("all builtin contexts are read-only", () => {
   for (const ctx of builtinContextDescriptors()) {
-    assert.equal(ctx.readOnlyHint, true, `${ctx.name} should be readOnly`);
     assert.equal(ctx.destructiveHint, false, `${ctx.name} should not be destructive`);
   }
 });
@@ -153,7 +152,6 @@ test("context describe returns full descriptor for builtin context", async () =>
   const data = result.data as Record<string, unknown>;
   assert.equal(data.command, "context.describe");
   assert.equal(data.name, "project.info");
-  assert.equal(data.readOnlyHint, true);
   assert.equal(data.destructiveHint, false);
   assert.ok(data.inputSchema);
   assert.ok(data.outputSchema);

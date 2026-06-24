@@ -135,7 +135,6 @@ test("unavailable degradation: all ProBuilder tools have requiresPackages with c
 test("unavailable degradation: ProBuilder ping tool is read-only and safe to call without package", () => {
   const ping = findToolByName("probuilder.ping");
   assert.ok(ping, "probuilder.ping must exist");
-  assert.equal(ping.readOnlyHint, true, "ping must be read-only");
   assert.equal(ping.destructiveHint, false, "ping must not be destructive");
   // Ping is the canonical unavailable-check tool; it returns installed=false
   // without throwing when the package is missing.

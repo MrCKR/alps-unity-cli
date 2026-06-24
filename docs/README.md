@@ -16,7 +16,7 @@
 | 文档 | 内容 |
 |------|------|
 | [安全边界](safety-boundaries.md) | 风险模型、破坏性确认、dry-run、fingerprint |
-| [风险与副作用](risk-and-side-effects.md) | `readOnlyHint`、`destructiveHint`、`plannedEffects` 与确认规则 |
+| [风险与副作用](risk-and-side-effects.md) | `destructiveHint`、`supportsDryRun`、`plannedEffects` 与确认规则 |
 | [错误码](error-codes.md) | 结构化错误、`next_actions` 与恢复建议 |
 
 ## 扩展

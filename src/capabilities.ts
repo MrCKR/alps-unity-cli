@@ -168,7 +168,6 @@ function buildStaticCapabilities(projectTools: ToolMetadata[] = [], projectConte
   const coreGroups = [...new Set([...coreTools, ...projectTools].map((tool) => tool.group))].sort();
 
   const destructiveTools = tools.filter((t) => t.destructiveHint).map((t) => t.name);
-  const readOnlyTools = tools.filter((t) => t.readOnlyHint).map((t) => t.name);
   const longRunningTools = tools.filter((t) => t.longRunning).map((t) => t.name);
   const liveBridgeTools = tools.filter((t) => supportStatusForTool(t) === "live-bridge").map((t) => t.name);
   const hybridTools = tools.filter((t) => supportStatusForTool(t) === "bridge-job").map((t) => t.name);
@@ -212,7 +211,6 @@ function buildStaticCapabilities(projectTools: ToolMetadata[] = [], projectConte
     bridgeTools,
     offlineTools,
     jobTools,
-    readOnlyTools,
     destructiveTools,
     longRunningTools,
     handlerDefinitions: {

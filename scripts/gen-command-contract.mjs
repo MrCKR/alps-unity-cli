@@ -13,14 +13,14 @@ const OUTPUT_PATH = "contracts/command-contract.json";
 const DEFAULT_TIMEOUT_MS = 30000;
 
 const bridgeOnlyEntries = new Map([
-  ["context.describe", { handler_type: "bridge", readOnly: true, destructive: false }],
-  ["context.list", { handler_type: "bridge", readOnly: true, destructive: false }],
-  ["context.read", { handler_type: "bridge", readOnly: true, destructive: false }],
-  ["extension.status", { handler_type: "hybrid", readOnly: true, destructive: false }],
-  ["project-tool.list", { handler_type: "bridge", readOnly: true, destructive: false }],
-  ["project-tool.run", { handler_type: "bridge", readOnly: false, destructive: false }],
-  ["runtime-tool.list", { handler_type: "bridge", readOnly: true, destructive: false }],
-  ["runtime-tool.run", { handler_type: "bridge", readOnly: false, destructive: true }]
+  ["context.describe", { handler_type: "bridge", destructive: false }],
+  ["context.list", { handler_type: "bridge", destructive: false }],
+  ["context.read", { handler_type: "bridge", destructive: false }],
+  ["extension.status", { handler_type: "hybrid", destructive: false }],
+  ["project-tool.list", { handler_type: "bridge", destructive: false }],
+  ["project-tool.run", { handler_type: "bridge", destructive: false }],
+  ["runtime-tool.list", { handler_type: "bridge", destructive: false }],
+  ["runtime-tool.run", { handler_type: "bridge", destructive: true }]
 ]);
 
 const entries = new Map();
@@ -32,7 +32,6 @@ for (const tool of allRegisteredToolMetadata()) {
     command: commandName(tool.name, tool.group),
     handler_type: normalizeHandler(tool.handler),
     csharp_handler: csharpHandlerForTool(tool),
-    readOnly: tool.readOnlyHint,
     destructive: tool.destructiveHint,
     timeout: tool.timeoutMs ?? DEFAULT_TIMEOUT_MS,
     ...(tool.requiresPackages?.length ? { requires_packages: [...tool.requiresPackages] } : {})
@@ -50,7 +49,6 @@ for (const spec of bridgeCommandRegistry.specs()) {
     command: spec.command || commandName(key, spec.group),
     handler_type: override.handler_type,
     csharp_handler: "present",
-    readOnly: override.readOnly,
     destructive: override.destructive,
     timeout: DEFAULT_TIMEOUT_MS
   });

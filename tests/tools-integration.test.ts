@@ -75,7 +75,6 @@ test("integration: tools describe scene.hierarchy via execute()", async () => {
   const data = result.data as Record<string, unknown>;
   assert.equal(data.name, "scene.hierarchy");
   assert.equal(data.group, "scene");
-  assert.equal(data.readOnlyHint, true);
   assert.equal(data.destructiveHint, false);
   assert.ok(data.inputSchema);
   assert.ok(Array.isArray(data.examples));

@@ -30,7 +30,6 @@ export const OBJECT_TOOLS: ToolMetadata[] = [
       instanceId: { type: "integer" },
       data: { type: "object" }
     }),
-    readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
@@ -56,7 +55,6 @@ export const OBJECT_TOOLS: ToolMetadata[] = [
       jsonPatch: { type: "object", description: "JSON Merge Patch object (RFC 7386)." },
       maxDepth: { type: "integer", default: 2 }
     }),
-    readOnlyHint: false,
     destructiveHint: true,
     supportsDryRun: true,
     riskLevel: "high",

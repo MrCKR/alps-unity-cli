@@ -34,7 +34,6 @@ test("capabilities without bridge returns static-only result", async () => {
   assert.ok(Array.isArray(staticData.plannedTools));
   assert.ok(Array.isArray(staticData.bridgeTools));
   assert.ok(Array.isArray(staticData.offlineTools));
-  assert.ok(Array.isArray(staticData.readOnlyTools));
   assert.ok(Array.isArray(staticData.destructiveTools));
 
   // No runtime section since bridge not reachable
@@ -136,14 +135,13 @@ test("capabilities static data includes schemaFeatures", async () => {
 });
 
 test("capabilities includes custom tools in unified static manifest when available", async () => {
-  const runtime: BridgeRuntime & { projectTools: Array<{ name: string; title: string; description: string; group: string; inputSchema: Record<string, unknown>; readOnlyHint: boolean; destructiveHint: boolean }> } = {
+  const runtime: BridgeRuntime & { projectTools: Array<{ name: string; title: string; description: string; group: string; inputSchema: Record<string, unknown>; destructiveHint: boolean }> } = {
     projectTools: [{
       name: "project.audit",
       title: "Project Audit",
       description: "Audits project state.",
       group: "project",
       inputSchema: { type: "object" },
-      readOnlyHint: true,
       destructiveHint: false
     }]
   };
@@ -180,7 +178,6 @@ test("capabilities includes customContexts when project contexts are available",
         category: "sample",
         kind: "context",
         source: "project",
-        readOnlyHint: true,
         requiresUnity: true,
         inputSchema: { type: "object" }
       }

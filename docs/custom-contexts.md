@@ -9,7 +9,7 @@ Context 是 alps-unity-cli 中获取只读项目状态的核心机制。与 Tool
 | 特性 | Context | Tool |
 |------|---------|------|
 | 副作用 | ❌ 绝对禁止 | ✅ 可有 |
-| 只读保证 | ✅ 硬边界 | 按 `readOnlyHint` |
+| 只读保证 | ✅ 硬边界 | Context API 只允许观察语义 |
 | 修改 Unity 状态 | ❌ 禁止 | ✅ 可有 |
 | 执行前确认 | 不需要 | 破坏性需 `--yes` |
 
@@ -23,7 +23,7 @@ Context 是 alps-unity-cli 中获取只读项目状态的核心机制。与 Tool
 |------|------|------|
 | 内置 Context | `context list` / `context read <name>` | 23 个只读 Context，覆盖 editor、project、scene、prefab、tools 等状态 |
 | 项目 Context | `[UnityCliContext]` + `context list --include-custom` | Unity 项目侧自定义只读状态快照 |
-| 只读工具 | `tools group list` 输出中 `readOnlyHint: true` | camera.list、asset.info、scene.hierarchy 等 |
+| 观察型能力 | `context list` / `context describe` / `context read` | project.info、editor.state、scene.cameras 等 |
 | 离线文档 | `docs get/search` | Unity API 文档缓存 |
 | 类型反射 | `reflect type/member/search` | C# 类型信息缓存 |
 | 诊断预检 | `tools run diagnose.preflight` | 项目、编辑器、Bridge 状态快照 |
@@ -41,7 +41,6 @@ using UnityCli;
     Description = "Read-only project overview.",
     Source = "project",
     Category = "project",
-    ReadOnlyHint = true)]
 public static class SampleProjectSummaryContext
 {
     // 只读读取，不得修改任何状态
@@ -96,7 +95,7 @@ context read <name>             → 读取 Context 数据
 ```
 tools group list <read-only-group>   → 查看只读工具
        ↓
-tools describe <tool>                   → 确认 readOnlyHint
+context describe <context>                → 确认 Context 描述
        ↓
 tools run <tool>                        → 执行只读读取
 ```

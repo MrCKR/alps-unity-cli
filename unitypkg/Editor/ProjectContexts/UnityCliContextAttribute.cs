@@ -10,8 +10,7 @@ namespace UnityCli
     /// the method metadata. No hand-written config or manifest is required.
     ///
     /// Custom contexts are strictly read-only: they expose information about the Unity
-    /// project state without modifying it. The registry enforces readOnlyHint=true,
-    /// rejects destructive/write semantics, and applies a source guard at registration.
+    /// project state without modifying it. The registry rejects destructive/write semantics, and applies a source guard at registration.
     /// </summary>
     [AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
     public sealed class UnityCliContextAttribute : Attribute

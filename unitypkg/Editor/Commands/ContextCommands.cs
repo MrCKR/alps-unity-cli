@@ -103,7 +103,7 @@ namespace UnityCli
                     Category = "editor", Source = "built-in", RefreshBehavior = "live", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://editor/state", EquivalentUnityMcp = "mcpforunity://editor/state", Handler = "bridge",
                     InputSchema = "{}",
-                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"schemaVersion\":{\"type\":\"string\"},\"observedAt\":{\"type\":\"string\"},\"state\":{\"type\":\"object\"},\"readOnlyHint\":{\"type\":\"boolean\"}}}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"schemaVersion\":{\"type\":\"string\"},\"observedAt\":{\"type\":\"string\"},\"state\":{\"type\":\"object\"}}}",
                     RequiresPackages = null, ReadHandler = ReadEditorStateContext
                 },
                 new BuiltInContextDefinition
@@ -169,7 +169,7 @@ namespace UnityCli
                     Category = "scene", Source = "built-in", RefreshBehavior = "on-demand", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://scene/gameobject/{instance_id}", EquivalentUnityMcp = "mcpforunity://scene/gameobject/{instance_id}", Handler = "bridge",
                     InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\",\"description\":\"GameObject name or path.\"},\"id\":{\"type\":\"integer\",\"description\":\"Instance ID.\"},\"path\":{\"type\":\"string\",\"description\":\"Hierarchy path.\"},\"includeComponents\":{\"type\":\"boolean\",\"description\":\"Include component summaries.\"}}}",
-                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"gameObject\":{\"type\":\"object\"},\"readOnlyHint\":{\"type\":\"boolean\"}}}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"gameObject\":{\"type\":\"object\"}}}",
                     RequiresPackages = null, ReadHandler = ReadSceneGameObject
                 },
                 new BuiltInContextDefinition
@@ -178,7 +178,7 @@ namespace UnityCli
                     Category = "scene", Source = "built-in", RefreshBehavior = "on-demand", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://scene/gameobject/{instance_id}/components", EquivalentUnityMcp = "mcpforunity://scene/gameobject/{id}/components", Handler = "bridge",
                     InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"id\":{\"type\":\"integer\"},\"path\":{\"type\":\"string\"},\"includeProperties\":{\"type\":\"boolean\"}}}",
-                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"gameObject\":{\"type\":\"object\"},\"components\":{\"type\":\"array\"},\"count\":{\"type\":\"integer\"},\"readOnlyHint\":{\"type\":\"boolean\"}}}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"gameObject\":{\"type\":\"object\"},\"components\":{\"type\":\"array\"},\"count\":{\"type\":\"integer\"}}}",
                     RequiresPackages = null, ReadHandler = ReadSceneGameObjectComponents
                 },
                 new BuiltInContextDefinition
@@ -187,7 +187,7 @@ namespace UnityCli
                     Category = "scene", Source = "built-in", RefreshBehavior = "on-demand", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://scene/gameobject/{instance_id}/component/{name}", EquivalentUnityMcp = "mcpforunity://scene/gameobject/{id}/component/{name}", Handler = "bridge",
                     InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"id\":{\"type\":\"integer\"},\"path\":{\"type\":\"string\"},\"component\":{\"type\":\"string\"}},\"required\":[\"component\"]}",
-                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"gameObject\":{\"type\":\"object\"},\"component\":{\"type\":\"object\"},\"readOnlyHint\":{\"type\":\"boolean\"}}}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"gameObject\":{\"type\":\"object\"},\"component\":{\"type\":\"object\"}}}",
                     RequiresPackages = null, ReadHandler = ReadSceneGameObjectComponent
                 },
                 new BuiltInContextDefinition
@@ -196,7 +196,7 @@ namespace UnityCli
                     Category = "scene", Source = "built-in", RefreshBehavior = "live", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://scene/opened", EquivalentUnityMcp = "mcpforunity://scene/opened", Handler = "bridge",
                     InputSchema = "{}",
-                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"scenes\":{\"type\":\"array\"},\"count\":{\"type\":\"integer\"},\"activeScene\":{\"type\":\"string\"},\"readOnlyHint\":{\"type\":\"boolean\"}}}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"scenes\":{\"type\":\"array\"},\"count\":{\"type\":\"integer\"},\"activeScene\":{\"type\":\"string\"}}}",
                     RequiresPackages = null, ReadHandler = ReadSceneOpened
                 },
                 new BuiltInContextDefinition
@@ -205,7 +205,7 @@ namespace UnityCli
                     Category = "scene", Source = "built-in", RefreshBehavior = "on-demand", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://scene/cameras", EquivalentUnityMcp = "mcpforunity://scene/cameras", Handler = "bridge",
                     InputSchema = "{}",
-                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"camerasData\":{\"type\":\"object\"},\"readOnlyHint\":{\"type\":\"boolean\"}}}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"camerasData\":{\"type\":\"object\"}}}",
                     RequiresPackages = null, ReadHandler = ReadSceneCameras
                 },
                 new BuiltInContextDefinition
@@ -214,7 +214,7 @@ namespace UnityCli
                     Category = "scene", Source = "built-in", RefreshBehavior = "on-demand", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://scene/volumes", EquivalentUnityMcp = "mcpforunity://scene/volumes", Handler = "bridge",
                     InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"pageSize\":{\"type\":\"integer\"},\"cursor\":{\"type\":\"string\"}}}",
-                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"volumes\":{\"type\":\"array\"},\"pageInfo\":{\"type\":\"object\"},\"readOnlyHint\":{\"type\":\"boolean\"}}}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"volumes\":{\"type\":\"array\"},\"pageInfo\":{\"type\":\"object\"}}}",
                     RequiresPackages = null, ReadHandler = ReadSceneVolumes
                 },
                 new BuiltInContextDefinition
@@ -241,7 +241,7 @@ namespace UnityCli
                     Category = "prefab", Source = "built-in", RefreshBehavior = "on-demand", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://prefab/{path}", EquivalentUnityMcp = "mcpforunity://prefab/{path}", Handler = "bridge",
                     InputSchema = "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},\"required\":[\"path\"]}",
-                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"prefab\":{\"type\":\"object\"},\"readOnlyHint\":{\"type\":\"boolean\"}}}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"prefab\":{\"type\":\"object\"}}}",
                     RequiresPackages = null, ReadHandler = ReadPrefabInfoContext
                 },
                 new BuiltInContextDefinition
@@ -250,7 +250,7 @@ namespace UnityCli
                     Category = "prefab", Source = "built-in", RefreshBehavior = "on-demand", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://prefab/{path}/hierarchy", EquivalentUnityMcp = "mcpforunity://prefab/{path}/hierarchy", Handler = "bridge",
                     InputSchema = "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"},\"pageSize\":{\"type\":\"integer\"},\"cursor\":{\"type\":\"integer\"}},\"required\":[\"path\"]}",
-                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"prefab\":{\"type\":\"object\"},\"items\":{\"type\":\"array\"},\"pageInfo\":{\"type\":\"object\"},\"readOnlyHint\":{\"type\":\"boolean\"}}}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"prefab\":{\"type\":\"object\"},\"items\":{\"type\":\"array\"},\"pageInfo\":{\"type\":\"object\"}}}",
                     RequiresPackages = null, ReadHandler = ReadPrefabHierarchyContext
                 },
                 new BuiltInContextDefinition
@@ -259,7 +259,7 @@ namespace UnityCli
                     Category = "instances", Source = "built-in", RefreshBehavior = "live", Target = "editor", AvailabilityScope = "always",
                     ResourceUri = "unity-cli://instances/list", EquivalentUnityMcp = "mcpforunity://instances", Handler = "bridge",
                     InputSchema = "{}",
-                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"instances\":{\"type\":\"array\"},\"count\":{\"type\":\"integer\"},\"readOnlyHint\":{\"type\":\"boolean\"}}}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"instances\":{\"type\":\"array\"},\"count\":{\"type\":\"integer\"}}}",
                     RequiresPackages = null, ReadHandler = ReadInstancesListContext
                 },
                 new BuiltInContextDefinition
@@ -268,7 +268,7 @@ namespace UnityCli
                     Category = "tools", Source = "built-in", RefreshBehavior = "static", Target = "editor", AvailabilityScope = "always",
                     ResourceUri = "unity-cli://tools/groups", EquivalentUnityMcp = "mcpforunity://tool-groups", Handler = "bridge",
                     InputSchema = "{}",
-                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"groups\":{\"type\":\"array\"},\"count\":{\"type\":\"integer\"},\"readOnlyHint\":{\"type\":\"boolean\"}}}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"groups\":{\"type\":\"array\"},\"count\":{\"type\":\"integer\"}}}",
                     RequiresPackages = null, ReadHandler = ReadToolsGroupsContext
                 },
                 new BuiltInContextDefinition
@@ -277,7 +277,7 @@ namespace UnityCli
                     Category = "tools", Source = "built-in", RefreshBehavior = "on-demand", Target = "editor", AvailabilityScope = "editorSession",
                     ResourceUri = "unity-cli://tools/custom", EquivalentUnityMcp = "mcpforunity://custom-tools", Handler = "bridge",
                     InputSchema = "{}",
-                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"tools\":{\"type\":\"array\"},\"count\":{\"type\":\"integer\"},\"readOnlyHint\":{\"type\":\"boolean\"}}}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"tools\":{\"type\":\"array\"},\"count\":{\"type\":\"integer\"}}}",
                     RequiresPackages = null, ReadHandler = ReadToolsCustomContext
                 },
                 // ── Tests contexts ──
@@ -316,7 +316,6 @@ namespace UnityCli
                 .Prop("kind", "context")
                 .Prop("source", ctx.Source)
                 .Prop("category", ctx.Category)
-                .Prop("readOnlyHint", true)
                 .Prop("refreshBehavior", ctx.RefreshBehavior)
                 .Prop("target", ctx.Target)
                 .Prop("availabilityScope", ctx.AvailabilityScope)
@@ -350,7 +349,6 @@ namespace UnityCli
                 .Prop("unityVersion", Application.unityVersion)
                 .Prop("platform", Application.platform.ToString())
                 .Prop("assetsPath", Application.dataPath)
-                .Prop("readOnlyHint", true)
                 .EndObject()
                 .ToString());
         }
@@ -361,7 +359,6 @@ namespace UnityCli
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropArray("tags", arr => { foreach (var tag in tags) { arr.Value(tag); } })
                 .Prop("count", (long)tags.Length)
-                .Prop("readOnlyHint", true)
                 .EndObject()
                 .ToString());
         }
@@ -383,7 +380,6 @@ namespace UnityCli
                     }
                 })
                 .Prop("count", (long)count)
-                .Prop("readOnlyHint", true)
                 .EndObject()
                 .ToString());
         }
@@ -398,7 +394,6 @@ namespace UnityCli
                 .Prop("schemaVersion", "1.0")
                 .Prop("observedAt", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture))
                 .PropRaw("state", stateJson)
-                .Prop("readOnlyHint", true)
                 .EndObject()
                 .ToString());
         }
@@ -431,7 +426,6 @@ namespace UnityCli
                         }
                     }
                 })
-                .Prop("readOnlyHint", true)
                 .EndObject()
                 .ToString());
         }
@@ -445,7 +439,6 @@ namespace UnityCli
                 .Prop("pivotRotation", Tools.pivotRotation.ToString())
                 .PropRaw("handlePosition", Vector3Json(Tools.handlePosition))
                 .PropRaw("handleRotation", QuaternionJson(Tools.handleRotation))
-                .Prop("readOnlyHint", true)
                 .EndObject()
                 .ToString());
         }
@@ -481,7 +474,6 @@ namespace UnityCli
                     }
                 })
                 .Prop("count", (long)windows.Length)
-                .Prop("readOnlyHint", true)
                 .EndObject()
                 .ToString());
         }
@@ -510,7 +502,6 @@ namespace UnityCli
                     .Prop("rotationSnap", rotationSnapEnabled.HasValue && rotationSnapEnabled.Value && rotationSnap.HasValue ? rotationSnap.Value : 0f)
                     .Prop("scaleSnap", scaleSnapEnabled.HasValue && scaleSnapEnabled.Value && scaleSnap.HasValue ? scaleSnap.Value : 0f))
                 .Prop("gridAvailable", snapSettingsType != null)
-                .Prop("readOnlyHint", true)
                 .EndObject();
             return SuccessJson(w.ToString());
         }
@@ -526,7 +517,6 @@ namespace UnityCli
                     .Prop("prefabRootName", null)
                     .Prop("mode", null)
                     .Prop("isDirty", false)
-                    .Prop("readOnlyHint", true)
                     .EndObject()
                     .ToString());
             }
@@ -545,7 +535,6 @@ namespace UnityCli
                 .Prop("prefabRootName", rootName)
                 .Prop("mode", modeStr)
                 .Prop("isDirty", isDirty)
-                .Prop("readOnlyHint", true)
                 .EndObject()
                 .ToString());
         }
@@ -561,7 +550,6 @@ namespace UnityCli
                 .PropArray("items", arr => { /* Unity internal menu cache not reliably accessible */ })
                 .Prop("count", (long)0)
                 .Prop("diagnostics", "Unity Editor menu items cannot be enumerated through a public API. Reflection on internal MenuItem cache is version-dependent and not guaranteed. This context returns an empty list; menu execution is a Tool (editor.menu), not a Context.")
-                .Prop("readOnlyHint", true)
                 .EndObject()
                 .ToString());
         }
@@ -608,7 +596,6 @@ namespace UnityCli
 
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropRaw("gameObject", includeComponents ? GameObjectDetailJson(gameObject) : GameObjectTargetJson(gameObject))
-                .Prop("readOnlyHint", true)
                 .EndObject()
                 .ToString());
         }
@@ -632,7 +619,6 @@ namespace UnityCli
             });
             w.Prop("count", (long)SceneManager.sceneCount);
             w.Prop("activeScene", SceneManager.GetActiveScene().name);
-            w.Prop("readOnlyHint", true);
             w.Prop("logPath", LogPath());
             return w.EndObject().ToString();
         }
@@ -645,7 +631,6 @@ namespace UnityCli
                 .PropRaw("gameObject", GameObjectTargetJson(gameObject))
                 .PropRaw("components", includeProperties ? ComponentDetailsJson(gameObject) : ComponentsJson(gameObject))
                 .Prop("count", (long)gameObject.GetComponents<Component>().Length)
-                .Prop("readOnlyHint", true)
                 .EndObject()
                 .ToString());
         }
@@ -666,7 +651,6 @@ namespace UnityCli
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropRaw("gameObject", GameObjectTargetJson(gameObject))
                 .PropRaw("component", ComponentDetailJson(component))
-                .Prop("readOnlyHint", true)
                 .EndObject()
                 .ToString());
         }
@@ -676,7 +660,6 @@ namespace UnityCli
             // Reuse existing CameraListJson()
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropRaw("camerasData", CameraListJson())
-                .Prop("readOnlyHint", true)
                 .EndObject()
                 .ToString());
         }
@@ -693,7 +676,6 @@ namespace UnityCli
                 .PropObject("pageInfo", obj => obj
                     .Prop("hasMore", false)
                     .Prop("pageSize", (long)pageSize))
-                .Prop("readOnlyHint", true)
                 .EndObject()
                 .ToString());
         }
@@ -712,7 +694,6 @@ namespace UnityCli
                     .PropArray("features", arr => { })
                     .Prop("diagnostics", "URP package (com.unity.render-pipelines.universal) is not installed. Renderer features context requires URP.")
                     .PropArray("next_actions", arr => arr.Value("Install the URP package via Package Manager."))
-                    .Prop("readOnlyHint", true)
                     .EndObject()
                     .ToString());
             }
@@ -726,7 +707,6 @@ namespace UnityCli
                     .PropArray("features", arr => { })
                     .Prop("diagnostics", "No URP render pipeline asset is assigned in Graphics Settings.")
                     .PropArray("next_actions", arr => arr.Value("Assign a UniversalRenderPipelineAsset in Graphics Settings."))
-                    .Prop("readOnlyHint", true)
                     .EndObject()
                     .ToString());
             }
@@ -751,7 +731,6 @@ namespace UnityCli
                 .Prop("renderer", pipelineAsset.name)
                 .PropArray("features", arr => { foreach (var f in features) { arr.Value(f); } })
                 .Prop("count", (long)features.Count)
-                .Prop("readOnlyHint", true)
                 .EndObject()
                 .ToString());
         }
@@ -766,7 +745,6 @@ namespace UnityCli
                     .Prop("available", false)
                     .Prop("diagnostics", "UnityStats internal API not available in this Unity version. Rendering stats cannot be read.")
                     .PropArray("next_actions", arr => arr.Value("Rendering stats may be available through the Stats overlay window in the Game view."))
-                    .Prop("readOnlyHint", true)
                     .EndObject()
                     .ToString());
             }
@@ -784,7 +762,6 @@ namespace UnityCli
                     .Prop("triangles", triangles)
                     .Prop("vertices", vertices)
                     .Prop("screenResolution", screenRes))
-                .Prop("readOnlyHint", true)
                 .EndObject()
                 .ToString());
         }
@@ -795,7 +772,6 @@ namespace UnityCli
             var prefab = LoadPrefabAsset(path);
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropRaw("prefab", PrefabAssetJson(path, prefab))
-                .Prop("readOnlyHint", true)
                 .EndObject()
                 .ToString());
         }
@@ -821,7 +797,6 @@ namespace UnityCli
                         .Prop("cursor", (long)cursor)
                         .Prop("nextCursor", nextCursor)
                         .Prop("total", (long)total))
-                    .Prop("readOnlyHint", true)
                     .EndObject()
                     .ToString());
             }
@@ -842,7 +817,6 @@ namespace UnityCli
                     .Prop("status", "ready")
                     .EndObject())
                 .Prop("count", 1L)
-                .Prop("readOnlyHint", true)
                 .EndObject()
                 .ToString());
         }
@@ -862,7 +836,6 @@ namespace UnityCli
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropArray("groups", arr => { foreach (var pair in groups.OrderBy(p => p.Key, StringComparer.Ordinal)) { arr.BeginObject().Prop("name", pair.Key).Prop("toolCount", (long)pair.Value).Prop("cliCommand", "tools group list " + pair.Key).EndObject(); } })
                 .Prop("count", (long)groups.Count)
-                .Prop("readOnlyHint", true)
                 .EndObject()
                 .ToString());
         }
@@ -872,7 +845,6 @@ namespace UnityCli
             DiscoverProjectTools();
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropRaw("tools", ProjectToolListRawJson())
-                .Prop("readOnlyHint", true)
                 .EndObject()
                 .ToString());
         }
@@ -895,7 +867,6 @@ namespace UnityCli
                         arr.Value("Install the Unity Test Framework package via Package Manager.");
                         arr.Value("Enable the Test Runner window: Window > General > Test Runner.");
                     })
-                    .Prop("readOnlyHint", true)
                     .EndObject()
                     .ToString());
             }
@@ -907,7 +878,6 @@ namespace UnityCli
                 .PropArray("tests", arr => { })
                 .Prop("count", (long)0)
                 .Prop("diagnostics", "Test enumeration via reflection is not reliably available. Use the Unity Test Runner window for full test discovery, or run tests via the CLI test runner tool.")
-                .Prop("readOnlyHint", true)
                 .EndObject()
                 .ToString());
         }

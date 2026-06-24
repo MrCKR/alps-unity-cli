@@ -31,7 +31,6 @@ using UnityCli;
     Group = "sample",
     InputSchema = "{\"type\":\"object\",\"properties\":{\"message\":{\"type\":\"string\"}},\"required\":[\"message\"]}",
     OutputSchema = "{\"type\":\"object\",\"properties\":{\"requestId\":{\"type\":\"string\"},\"input\":{\"type\":\"object\"}}}",
-    ReadOnlyHint = true,
     DestructiveHint = false)]
 public static class SampleEchoTool
 {
@@ -62,8 +61,7 @@ public static class MyProjectTools
         Description = "Returns a project-specific asset summary.",
         Group = "custom",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},\"required\":[\"path\"]}",
-        OutputSchema = "{\"type\":\"object\"}",
-        ReadOnlyHint = true)]
+        OutputSchema = "{\"type\":\"object\"}")]
     public static object AssetSummary(Dictionary<string, object> input)
     {
         return new { ok = true, path = input["path"] };
@@ -78,7 +76,6 @@ public static class MyProjectTools
 - `Title` / `Description`：让 AI 能理解用途。
 - `Group`：分组名；项目专用工具常用 `custom` 或项目域名或功能域名。
 - `InputSchema` / `OutputSchema`：JSON Schema；AI 执行前会通过 `tools describe` 读取。
-- `ReadOnlyHint`：只读工具设为 `true`。
 - `DestructiveHint`：删除、覆盖、不可逆修改必须设为 `true`。
 - `Target`：`editor`、`runtime` 或 `both`；runtime 通常需要 Play Mode。
 - `DefaultTimeoutMs` / `MaxTimeoutMs`：长任务按需设置。

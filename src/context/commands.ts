@@ -216,7 +216,6 @@ async function handleContextRead(
       context: contextName,
       groups,
       count: groups.length,
-      readOnlyHint: true,
     });
   }
 

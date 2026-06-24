@@ -100,7 +100,6 @@ const REQUIRED_COMMANDS = [
 const STALE_CAMEL_CASE = [
   "nextActions",            // must be next_actions
   "retryAfterMs",           // must be retry_after_ms
-  "readOnlyhint",           // must be readOnlyHint (PascalCase for descriptor field)
 ];
 
 // Must use correct error code names

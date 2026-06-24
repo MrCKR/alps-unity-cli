@@ -16,7 +16,7 @@ namespace UnityCli.Samples
     /// - Handler method name must NOT be Execute/Run.
     /// - Handler must NOT contain write-semantic tokens (see ProjectContextRegistry
     ///   ContextSourceGuardForbiddenTokens for the full list).
-    /// - ReadOnlyHint is always true; no DestructiveHint/SupportsJob/ArtifactKinds.
+    /// - No DestructiveHint/SupportsJob/ArtifactKinds.
     /// </summary>
     public static class SampleContext
     {

@@ -30,13 +30,11 @@ test("object group tools exist with correct safety hints", () => {
   assert.deepEqual(names, ["object.get-data", "object.modify"]);
 
   const getData = findToolByName("object.get-data")!;
-  assert.equal(getData.readOnlyHint, true);
   assert.equal(getData.destructiveHint, false);
   assert.equal(getData.handler, "bridge");
   assert.equal(getData.equivalentUnityMcp, "object-get-data");
 
   const modify = findToolByName("object.modify")!;
-  assert.equal(modify.readOnlyHint, false);
   assert.equal(modify.destructiveHint, true);
   assert.equal(modify.supportsDryRun, true);
   assert.equal(modify.riskLevel, "high");

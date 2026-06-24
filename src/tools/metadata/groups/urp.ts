@@ -47,7 +47,6 @@ export const URP_TOOLS: ToolMetadata[] = [
       value: { type: "string" },
       rendererIndex: { type: "integer" }
     }),
-    readOnlyHint: false,
     destructiveHint: true,
     cliCommand: "tools run urp.feature",
     examples: [
@@ -70,7 +69,6 @@ export const URP_TOOLS: ToolMetadata[] = [
       property: { type: "string" },
       value: { type: "string" }
     }),
-    readOnlyHint: false,
     destructiveHint: false,
     cliCommand: "tools run urp.volume",
     examples: [
@@ -87,7 +85,6 @@ export const URP_TOOLS: ToolMetadata[] = [
       property: { type: "string" },
       value: { type: "string" }
     }),
-    readOnlyHint: false,
     destructiveHint: false,
     cliCommand: "tools run urp.settings",
     examples: [

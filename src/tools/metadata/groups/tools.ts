@@ -8,7 +8,6 @@ export const TOOLS_DISCOVERY_TOOLS: ToolMetadata[] = [
     description: "List the available tool groups. Primary discovery entry point in the group-first model.",
     group: "tools",
     inputSchema: objSchema({}),
-    readOnlyHint: true,
     destructiveHint: false,
     handler: "offline",
     cliCommand: "tools group",
@@ -23,7 +22,6 @@ export const TOOLS_DISCOVERY_TOOLS: ToolMetadata[] = [
       group: { type: "string" },
       includeCustom: { type: "boolean", default: false }
     }, ["group"]),
-    readOnlyHint: true,
     destructiveHint: false,
     handler: "offline",
     cliCommand: "tools group list",
@@ -37,7 +35,6 @@ export const TOOLS_DISCOVERY_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({
       keyword: { type: "string" }
     }, ["keyword"]),
-    readOnlyHint: true,
     destructiveHint: false,
     handler: "offline",
     cliCommand: "tools search",
@@ -51,7 +48,6 @@ export const TOOLS_DISCOVERY_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({
       name: { type: "string" }
     }, ["name"]),
-    readOnlyHint: true,
     destructiveHint: false,
     handler: "offline",
     cliCommand: "tools describe",
@@ -70,7 +66,6 @@ export const TOOLS_DISCOVERY_TOOLS: ToolMetadata[] = [
       fingerprintMode: { type: "string", enum: ["block", "warn"], description: "Fingerprint mismatch handling: block (default) or warn" },
       runtime: { type: "boolean", description: "Force runtime execution path for target=both tools" }
     }, ["name"]),
-    readOnlyHint: false,
     destructiveHint: false,
     handler: "hybrid",
     supportStatus: "live-bridge",

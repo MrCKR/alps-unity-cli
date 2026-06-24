@@ -212,7 +212,6 @@ test("checkToolExtensionAvailability returns unavailable for tool with missing p
       description: "Create shape",
       group: "probuilder",
       inputSchema: {},
-      readOnlyHint: false,
       destructiveHint: false,
       requiresPackages: ["com.unity.probuilder"]
     },
@@ -237,7 +236,6 @@ test("checkToolExtensionAvailability returns available when packages present", a
       description: "Create shape",
       group: "probuilder",
       inputSchema: {},
-      readOnlyHint: false,
       destructiveHint: false,
       requiresPackages: ["com.unity.probuilder"]
     },
@@ -258,7 +256,6 @@ test("checkToolExtensionAvailability returns available for tools without require
       description: "Get scene hierarchy",
       group: "scene",
       inputSchema: {},
-      readOnlyHint: true,
       destructiveHint: false
     },
     { project: projectPath }

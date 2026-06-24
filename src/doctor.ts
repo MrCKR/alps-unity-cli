@@ -565,13 +565,11 @@ function checkContextDiscovery(flags: Record<string, string | boolean>, runtime:
   const missingResourceUri = contexts.filter((c) => !c.resourceUri);
   const missingEquivalent = contexts.filter((c) => !c.equivalentUnityMcp);
   const missingOutputSchema = contexts.filter((c) => !c.outputSchema);
-  const notReadOnly = contexts.filter((c) => c.readOnlyHint !== true);
 
   const warnings: string[] = [];
   if (missingResourceUri.length > 0) warnings.push(`${missingResourceUri.length} context(s) missing resourceUri`);
   if (missingEquivalent.length > 0) warnings.push(`${missingEquivalent.length} context(s) missing equivalentUnityMcp`);
   if (missingOutputSchema.length > 0) warnings.push(`${missingOutputSchema.length} context(s) missing outputSchema`);
-  if (notReadOnly.length > 0) warnings.push(`${notReadOnly.length} context(s) not read-only`);
 
   if (warnings.length > 0) {
     return {

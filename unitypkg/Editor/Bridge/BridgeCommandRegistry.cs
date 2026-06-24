@@ -32,7 +32,7 @@ namespace UnityCli
         {
             private readonly Dictionary<string, BridgeCommandDefinition> commands = new Dictionary<string, BridgeCommandDefinition>(StringComparer.Ordinal);
 
-            public void Register(string command, string domain, bool readOnly, bool destructive, int timeoutMs, Func<BridgeRequest, string> handler)
+            public void Register(string command, string domain, bool destructive, int timeoutMs, Func<BridgeRequest, string> handler)
             {
                 if (string.IsNullOrEmpty(command))
                 {
@@ -42,7 +42,7 @@ namespace UnityCli
                 {
                     throw new ArgumentNullException("handler");
                 }
-                commands[command] = new BridgeCommandDefinition(command, domain, readOnly, destructive, timeoutMs, handler);
+                commands[command] = new BridgeCommandDefinition(command, domain, destructive, timeoutMs, handler);
             }
 
             public string Execute(BridgeRequest request)
@@ -64,11 +64,10 @@ namespace UnityCli
 
         private sealed class BridgeCommandDefinition
         {
-            public BridgeCommandDefinition(string command, string domain, bool readOnly, bool destructive, int timeoutMs, Func<BridgeRequest, string> handler)
+            public BridgeCommandDefinition(string command, string domain, bool destructive, int timeoutMs, Func<BridgeRequest, string> handler)
             {
                 Command = command;
                 Domain = domain;
-                ReadOnly = readOnly;
                 Destructive = destructive;
                 TimeoutMs = timeoutMs;
                 Handler = handler;
@@ -76,7 +75,6 @@ namespace UnityCli
 
             public string Command { get; private set; }
             public string Domain { get; private set; }
-            public bool ReadOnly { get; private set; }
             public bool Destructive { get; private set; }
             public int TimeoutMs { get; private set; }
             public Func<BridgeRequest, string> Handler { get; private set; }
@@ -117,7 +115,7 @@ namespace UnityCli
 
         private static void RegisterCommand(BridgeCommandRegistry registry, string command, string domain, bool destructive, Func<BridgeRequest, string> handler)
         {
-            registry.Register(command, domain, !destructive, destructive, destructive ? 60000 : 30000, handler);
+            registry.Register(command, domain, destructive, destructive ? 60000 : 30000, handler);
         }
 
         /// <summary>

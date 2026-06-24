@@ -135,7 +135,7 @@ unity_cli tools run reflect.type UnityEngine.Camera
 unity_cli tools run reflect.member UnityEngine.Camera.fieldOfView
 ```
 
-> **注意**：可通过 `context list` / `context describe <name>` / `context read <name>` 命令获取只读项目状态。也可通过 `tools group list` 输出中 `readOnlyHint: true` 的工具以及 `docs`/`reflect` 命令获取。
+> **注意**：可通过 `context list` / `context describe <name>` / `context read <name>` 命令获取只读项目状态，也可通过 `docs`/`reflect` 命令获取离线文档与类型信息。
 
 ### 4. 项目自定义工具
 
@@ -169,7 +169,7 @@ unity_cli tools run diagnose.preflight
 | 规则 | 说明 |
 |------|------|
 | Tool 可有副作用 | `destructiveHint: true` 的工具需要 `--yes` 确认或 `--dry-run` 预览 |
-| Context 必须只读 | `readOnlyHint: true` 的工具不会修改 Unity 状态 |
+| Context 只负责观察 | Context 不承载写入、artifact、job 或 destructive 语义 |
 | Extension 不能绕过 descriptor/envelope | 项目工具必须可描述、可审计、可阻断 |
 | fingerprint mismatch 默认 block | 自定义工具的 handler 代码与 descriptor 指纹不匹配时，默认阻止执行 |
 
@@ -699,7 +699,6 @@ public static class MyEditorTool
 - `Title`：人类可读标题
 - `Group`：工具分组（如 `custom`）
 - `Description`：工具描述
-- `ReadOnlyHint`：是否只读（默认 false）
 - `DestructiveHint`：是否有破坏性（默认 false）
 
 发现与执行：
@@ -767,7 +766,7 @@ unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --yes
 - [工具发现](docs/tool-discovery.md) — group-first 分层发现详解
 - [工具执行](docs/tool-execution.md) — tools run 执行通道详解
 - [安全边界](docs/safety-boundaries.md) — 风险模型与破坏性确认
-- [风险与副作用](docs/risk-and-side-effects.md) — readOnly/destructive/dry-run 规则
+- [风险与副作用](docs/risk-and-side-effects.md) — destructive/dry-run 规则
 - [错误码](docs/error-codes.md) — 结构化错误与 next_actions
 - [可用性差异](docs/availability-differences.md) — 不同实例的工具有效性
 - [扩展包](docs/extensions.md) — 可选扩展安装、卸载与诊断

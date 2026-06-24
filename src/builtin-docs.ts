@@ -43,7 +43,7 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   "risk-and-side-effects": {
     title: "Risk and Side Effects",
-    summary: "Risk model expressed through unified tool descriptors: destructiveHint, readOnlyHint, supportsDryRun, --yes confirmation gate, plannedEffects preview, and fingerprint integrity.",
+    summary: "Risk model expressed through unified tool descriptors: destructiveHint, supportsDryRun, --yes confirmation gate, plannedEffects preview, and fingerprint integrity.",
     guide: "Always `tools describe` first. For destructive tools, use `--dry-run` if supported, then `--yes`. Check `doctor` for fingerprint status."
   },
   scene: {
@@ -296,7 +296,6 @@ function toolLine(tool: ToolMetadata): string {
   const target = tool.target ?? "editor";
   const notes = [
     status,
-    tool.readOnlyHint ? "read-only" : "write",
     tool.destructiveHint ? "⚠ destructive" : undefined,
     `target:${target}`
   ].filter(Boolean).join(", ");

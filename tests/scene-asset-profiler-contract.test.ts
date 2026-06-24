@@ -20,14 +20,12 @@ test("scene domain exposes unload/set-active/list-opened/data/view-frame", () =>
   assert.equal(unload.destructiveHint, true);
   assert.equal(unload.supportsDryRun, true);
   const data = findToolByName("scene.data")!;
-  assert.equal(data.readOnlyHint, true);
 });
 
 test("asset domain exposes search-built-in/get-data/preview", () => {
   for (const name of ["asset.search-built-in", "asset.get-data", "asset.preview"]) {
     const tool = findToolByName(name);
     assert.ok(tool, `${name} should exist`);
-    assert.equal(tool.readOnlyHint, true);
   }
 });
 
@@ -43,14 +41,11 @@ test("prefab domain exposes instantiate/unpack", () => {
 
 test("script domain exposes update-or-create/find-in-file/capabilities", () => {
   assert.ok(findToolByName("script.update-or-create")?.destructiveHint);
-  assert.equal(findToolByName("script.find-in-file")?.readOnlyHint, true);
-  assert.equal(findToolByName("script.capabilities")?.readOnlyHint, true);
 });
 
 // screenshot 与 profiler 域详细契约测试已拆分至 screenshot-contract.test.ts 与 profiler-contract.test.ts
 
 test("console domain exposes get/clear; editor exposes selection.set/active-tool.set", () => {
-  assert.ok(findToolByName("console.get")?.readOnlyHint);
   assert.ok(findToolByName("console.clear")?.destructiveHint);
   assert.ok(findToolByName("editor.selection.set")?.destructiveHint);
   assert.ok(findToolByName("editor.active-tool.set")?.destructiveHint);
@@ -76,7 +71,6 @@ test("physics domain exposes raycast-all/linecast/shapecast/validate", () => {
   for (const name of ["physics.raycast-all", "physics.linecast", "physics.shapecast", "physics.validate"]) {
     const tool = findToolByName(name);
     assert.ok(tool, `${name} should exist`);
-    assert.equal(tool.readOnlyHint, true);
   }
 });
 

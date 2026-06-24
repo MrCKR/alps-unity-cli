@@ -28,7 +28,6 @@ using UnityCli;
     Title = "Sample Editor-targeted Tool",
     Group = "custom",
     Description = "A minimal editor-targeted tool.",
-    ReadOnlyHint = false,
     DestructiveHint = false)]
 public static class SampleEditorTool
 {
@@ -50,8 +49,7 @@ public static class MyTools
 {
     [UnityCliTool("my.tool-a",
         Title = "Tool A",
-        Group = "custom",
-        ReadOnlyHint = true)]
+        Group = "custom")]
     public static object ToolA(Dictionary<string, object> input)
     {
         return new { result = "tool-a output" };
@@ -79,7 +77,6 @@ using UnityCli;
     Title = "Runtime Echo",
     Group = "custom",
     Description = "Echoes input during Play Mode.",
-    ReadOnlyHint = true,
     Target = "runtime")]
 public static class SampleRuntimeTool
 {
@@ -104,7 +101,6 @@ Runtime target 行为：
 | `Title` | string | ✅ | 人类可读标题 |
 | `Group` | string | ✅ | 工具分组名 |
 | `Description` | string | ❌ | 工具描述 |
-| `ReadOnlyHint` | bool | ❌ | 是否只读（默认 false） |
 | `DestructiveHint` | bool | ❌ | 是否有破坏性（默认 false） |
 | `Target` | string | ❌ | 目标类型：`editor`（默认）/ `runtime` / `both` |
 
@@ -133,7 +129,7 @@ Bridge 扫描已加载的 Unity Editor 程序集，自动从 `[UnityCliTool]` �
 | 任意方法调用 | 只能通过 `tools run <registered-name>` 执行已注册工具 |
 | 反射 escape hatch | 不可通过自定义工具绕过安全检查 |
 | 绕过 registry 直接执行 | 不允许跳过 descriptor 校验和 fingerprint 检查 |
-| 修改 Context 约定 | `ReadOnlyHint: true` 的工具必须保证只读 |
+| 修改 Context 约定 | 有副作用的能力必须注册为 Tool，不得注册为 Context |
 
 ## 发现与执行
 

@@ -31,7 +31,6 @@ test("tools group list <sample> --include-custom discovers Unity project custom 
     group: "sample",
     inputSchema: { type: "object", properties: { message: { type: "string" } }, required: ["message"] },
     outputSchema: { type: "object" },
-    readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
@@ -67,7 +66,6 @@ test("tools describe resolves custom descriptor without hand-written CLI metadat
           description: "Echoes input from an Attribute-first Unity Editor tool.",
           group: "sample",
           inputSchema: { type: "object" },
-          readOnlyHint: true,
           destructiveHint: false
         }]
       }

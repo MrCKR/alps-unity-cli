@@ -10,7 +10,6 @@
  *   scene/rendering-stats, prefab/info, prefab/hierarchy,
  *   tests/list, instances/list, tools/groups, tools/custom
  *
- * All contexts are read-only (readOnlyHint=true, destructiveHint=false).
  * Context reads are routed through the "context.read" bridge command.
  */
 
@@ -21,7 +20,6 @@ const CONTEXT_COMMON = {
   target: "editor" as const,
   availabilityScope: "editorSession" as const,
   requiresUnity: true,
-  readOnlyHint: true as const,
   destructiveHint: false as const,
   bridgeCommand: "context.read",
   available: true,

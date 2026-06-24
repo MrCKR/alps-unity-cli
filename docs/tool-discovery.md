@@ -101,7 +101,6 @@ unity_cli tools describe camera.screenshot
 | `group` | 所属分组 |
 | `inputSchema` | 输入参数 JSON Schema |
 | `outputSchema` | 输出格式 JSON Schema |
-| `readOnlyHint` | 是否只读 |
 | `destructiveHint` | 是否有破坏性 |
 | `supportsDryRun` | 是否支持 `--dry-run` |
 | `longRunning` | 是否长时间运行 |
@@ -130,7 +129,6 @@ unity_cli tools describe my.custom-tool --bridge-endpoint http://127.0.0.1:47392
 ### 安全判断
 
 - `destructiveHint: true` → 执行前必须确认风险、使用 `--dry-run` 或 `--yes`
-- `readOnlyHint: true` → 只读操作，不会修改 Unity 状态
 
 ### 执行通道判断
 

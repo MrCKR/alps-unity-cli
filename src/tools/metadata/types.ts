@@ -21,7 +21,6 @@ export interface ToolMetadata {
   group: string;
   inputSchema: Record<string, unknown>;
   outputSchema?: Record<string, unknown>;
-  readOnlyHint: boolean;
   destructiveHint: boolean;
   /** Side effect categories this tool may produce, e.g. ['file-write', 'scene-modify']. */
   sideEffects?: string[];

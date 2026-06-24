@@ -45,7 +45,6 @@ export const HDRP_TOOLS: ToolMetadata[] = [
       property: { type: "string" },
       value: { type: "string" }
     }),
-    readOnlyHint: false,
     destructiveHint: false,
     cliCommand: "tools run hdrp.volume",
     examples: [
@@ -62,7 +61,6 @@ export const HDRP_TOOLS: ToolMetadata[] = [
       property: { type: "string" },
       value: { type: "string" }
     }),
-    readOnlyHint: false,
     destructiveHint: false,
     cliCommand: "tools run hdrp.settings",
     examples: [

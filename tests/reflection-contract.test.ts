@@ -31,12 +31,10 @@ test("reflection group tools exist with correct safety hints", () => {
   assert.deepEqual(names, ["reflection.method.call", "reflection.method.find"]);
 
   const find = findToolByName("reflection.method.find")!;
-  assert.equal(find.readOnlyHint, true);
   assert.equal(find.destructiveHint, false);
   assert.equal(find.equivalentUnityMcp, "reflection-method-find");
 
   const call = findToolByName("reflection.method.call")!;
-  assert.equal(call.readOnlyHint, false);
   assert.equal(call.destructiveHint, true);
   assert.equal(call.riskLevel, "critical");
   assert.equal(call.equivalentUnityMcp, "reflection-method-call");
@@ -45,7 +43,6 @@ test("reflection group tools exist with correct safety hints", () => {
 test("type.schema tool exists as read-only bridge", () => {
   const schema = findToolByName("type.schema")!;
   assert.equal(schema.group, "type");
-  assert.equal(schema.readOnlyHint, true);
   assert.equal(schema.destructiveHint, false);
   assert.equal(schema.handler, "bridge");
   assert.equal(schema.equivalentUnityMcp, "type-get-json-schema");

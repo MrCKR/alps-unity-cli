@@ -47,7 +47,6 @@ ALLOWLIST=(
     "ShaderCommands.cs:EscapeShaderName"
 
     # Debug/fingerprint strings use \n separator, not JSON
-    "ProjectToolRegistry.cs:readOnlyHint="
     "ProjectToolRegistry.cs:destructiveHint="
     "ProjectToolRegistry.cs:architectureSensitive="
     "ProjectToolRegistry.cs:supportsJob="

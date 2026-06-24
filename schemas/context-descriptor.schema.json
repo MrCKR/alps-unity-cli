@@ -4,7 +4,7 @@
   "title": "Unity CLI Context Descriptor",
   "description": "Describes a read-only context exposed by the Unity CLI. Context provides observation without mutation — if a capability modifies Unity state, it must be a Tool, not a Context. Baseline schema for this descriptor type.",
   "type": "object",
-  "required": ["name", "title", "description", "kind", "source", "category", "inputSchema", "readOnlyHint"],
+  "required": ["name", "title", "description", "kind", "source", "category", "inputSchema"],
   "properties": {
     "name": {
       "type": "string",
@@ -44,11 +44,6 @@
     "outputSchema": {
       "type": "object",
       "description": "JSON Schema for the context's output."
-    },
-    "readOnlyHint": {
-      "type": "boolean",
-      "const": true,
-      "description": "Always true for Context. If false, the capability must be a Tool."
     },
     "resourceUri": {
       "type": "string",

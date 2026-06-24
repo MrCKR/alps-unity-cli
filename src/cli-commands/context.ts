@@ -5,7 +5,7 @@
  * so that AI agents and users can discover, describe and read contexts.
  *
  * Key invariants:
- * - Custom contexts are always source="project", kind="context", readOnlyHint=true.
+ * - Custom contexts are always source="project", kind="context".
  * - Built-in contexts are always source="built-in".
  * - Project contexts cannot silently override built-in contexts with the same name.
  * - Contexts never enter the `tools` execution path.
@@ -82,7 +82,6 @@ async function handleContextList(
     category: c.category,
     kind: c.kind,
     source: c.source,
-    readOnlyHint: c.readOnlyHint,
     requiresUnity: c.requiresUnity,
     target: c.target,
     availabilityScope: c.availabilityScope,
@@ -163,21 +162,6 @@ async function handleContextRead(
     return failure(requestId, "E_CONTEXT_NAME_REQUIRED", "Pass a context name: unity_cli context read <name>.", [
       "Run unity_cli context list to see available contexts."
     ]);
-  }
-
-  // Verify the context exists and is read-only before executing
-  const includeCustom = shouldDiscoverContexts(flags, runtime) || getBoolean(flags, "include-custom");
-  if (includeCustom) {
-    const discovery = await discoverProjectContexts(flags, runtime, requestId);
-    if (discovery.ok === false) return discovery;
-    const context = discovery.contexts.find((c) => c.name === contextName);
-    if (context && !context.readOnlyHint) {
-      // Safety guard: context must always be read-only
-      return failure(requestId, "E_CONTEXT_READONLY_VIOLATION", `Context "${contextName}" does not have readOnlyHint=true. Contexts must be read-only.`, [
-        "Only read-only contexts can be accessed via context read.",
-        "Report this issue — context descriptors should always be read-only."
-      ]);
-    }
   }
 
   // Delegate to bridge context.read

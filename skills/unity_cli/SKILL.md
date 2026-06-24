@@ -1,6 +1,6 @@
 ---
 name: unity_cli
-description: 当用户任务涉及 Unity Editor 或 Unity 项目时优先使用本 Skill。该 Skill 支持通过 `unity_cli` 连接并操作 Unity，包括查看/修改场景、GameObject、Prefab、资源、Package 和项目设置，读取项目上下文，运行测试、构建、截图，诊断 Bridge/target/instance/job，以及处理项目自定义 Tool/Context。触发词包括 Unity、Editor、Scene、GameObject、Prefab、Asset、Build、Test、GameView、SceneView、Bridge、target、instance、job、截图、打包、场景修改、资源检查。
+description: 当任务涉及 Unity Editor 或 Unity 时都优先使用本 Skill。该 Skill 支持通过 `unity_cli` 连接并读取和操作 Unity，包括但不限于查看/修改场景、GameObject、Prefab、日志、资源、Package 和项目设置，读取项目上下文，运行测试、构建、截图，诊断 Bridge/target/instance/job，以及处理项目自定义 Tool/Context。触发词包括 Unity、Editor、Scene、GameObject、Prefab、Asset、Build、Test、GameView、SceneView、Bridge、target、instance、job、截图、打包、场景修改、资源检查。
 ---
 
 # unity_cli — AI 入口卡片
@@ -66,7 +66,7 @@ unity_cli tools search <keyword>
 
 执行规则：
 
-- 执行前先 `tools describe <tool>`，读取 `inputSchema`、`readOnlyHint`、`destructiveHint`、`requiresPackages`、`target`、`availabilityScope`。
+- 执行前先 `tools describe <tool>`，读取 `inputSchema`、`destructiveHint`、`supportsDryRun`、`requiresPackages`、`target`、`availabilityScope`。
 - 用 `--input`、`--input-file` 或 `--stdin` 传参。
 - `destructiveHint: true` 的工具先用 `--dry-run`（如支持），确认后加 `--yes`。
 - Runtime 工具通常需要 Play Mode；遇到 `E_RUNTIME_NOT_READY`，按 `next_actions` 处理。

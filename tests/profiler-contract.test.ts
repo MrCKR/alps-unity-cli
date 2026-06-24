@@ -17,7 +17,6 @@ test("profiler domain exposes modules/clear/load/areas/object-memory/rendering-s
     assert.ok(findToolByName(name), `${name} should exist`);
   }
   assert.equal(findToolByName("profiler.clear")?.destructiveHint, true);
-  assert.equal(findToolByName("profiler.rendering-stats")?.readOnlyHint, true);
   // profiler.export remains main; profiler.save not added
   assert.ok(findToolByName("profiler.export"));
   assert.ok(!findToolByName("profiler.save"));
@@ -28,7 +27,6 @@ test("profiler tools have correct safety hints", () => {
   assert.equal(clear.destructiveHint, true);
   assert.equal(clear.supportsDryRun, true);
   for (const name of ["profiler.modules", "profiler.areas", "profiler.object-memory", "profiler.rendering-stats", "profiler.script-stats"]) {
-    assert.equal(findToolByName(name)?.readOnlyHint, true, `${name} should be read-only`);
   }
 });
 

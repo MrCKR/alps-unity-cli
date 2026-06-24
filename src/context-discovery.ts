@@ -79,7 +79,6 @@ function projectDescriptorToContextMetadata(value: unknown): ContextMetadata | u
     category,
     inputSchema: objectProp(descriptor, "inputSchema") ?? {},
     outputSchema: objectProp(descriptor, "outputSchema"),
-    readOnlyHint: true,
     resourceUri: stringProp(descriptor, "resourceUri"),
     refreshBehavior: stringProp(descriptor, "refreshBehavior") as ContextMetadata["refreshBehavior"],
     target: target as ContextMetadata["target"],

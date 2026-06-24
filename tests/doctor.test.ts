@@ -245,7 +245,6 @@ test("doctor reports runtime custom tools in unified discovery", async () => {
       description: "Echo project data.",
       group: "project",
       inputSchema: { type: "object" },
-      readOnlyHint: true,
       destructiveHint: false
     }]
   };
@@ -323,7 +322,6 @@ test("doctor context_discovery reports project custom contexts from runtime", as
         category: "sample",
         kind: "context",
         source: "project",
-        readOnlyHint: true,
         requiresUnity: true,
         inputSchema: { type: "object" }
       }
@@ -442,7 +440,6 @@ test("doctor context_discovery suggestions never suggest tools run", async () =>
         category: "test",
         kind: "context",
         source: "project",
-        readOnlyHint: true,
         requiresUnity: true,
         inputSchema: { type: "object" },
         supportStatus: "unavailable"

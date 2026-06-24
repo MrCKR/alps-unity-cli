@@ -6,7 +6,6 @@
  * raw C# bridge descriptors into unified ContextDescriptor objects.
  *
  * Key invariants enforced here:
- * - Custom contexts always have source="project", kind="context", readOnlyHint=true.
  * - Built-in contexts always have source="built-in".
  * - Project contexts that share a name with a built-in context are rejected
  *   (duplicate guard) rather than silently overriding.
@@ -42,8 +41,6 @@ export interface ContextDescriptor {
   kind: "context";
   /** "built-in" for built-in contexts, "project" for custom project contexts. */
   source: "built-in" | "project";
-  /** Always true — contexts are read-only by definition. */
-  readOnlyHint: true;
   /** True for project contexts (they require a live Unity bridge). */
   requiresUnity: boolean;
   target?: string;
@@ -163,7 +160,6 @@ export function rawDescriptorToContextDescriptor(value: unknown): ContextDescrip
     outputSchema: objectProp(d, "outputSchema"),
     kind: "context" as const,
     source,
-    readOnlyHint: true as const,          // Always true for contexts
     requiresUnity: isProject,              // Project contexts require Unity bridge
     target: stringProp(d, "target") ?? "editor",
     availabilityScope: stringProp(d, "availabilityScope"),
@@ -201,7 +197,6 @@ function ensureContextDefaults(context: ContextDescriptor): ContextDescriptor {
   return {
     ...context,
     kind: "context" as const,
-    readOnlyHint: true as const,
     target: context.target ?? "editor",
     availabilityScope: context.availabilityScope ?? "editorSession",
     ...(context.source === "project" ? {

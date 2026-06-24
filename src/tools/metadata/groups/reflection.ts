@@ -25,7 +25,6 @@ export const REFLECTION_TOOLS: ToolMetadata[] = [
       count: { type: "integer" },
       methods: { type: "array", items: { type: "object" } }
     }),
-    readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
@@ -49,7 +48,6 @@ export const REFLECTION_TOOLS: ToolMetadata[] = [
       instanceRef: { type: "object", description: "Instance reference for instance methods: {instanceId} | {assetPath} | {path}." },
       security: { type: "object", description: "Confirmation: {confirmed: true, destructiveFingerprint: \"...\"}." }
     }, ["typeName", "methodName"]),
-    readOnlyHint: false,
     destructiveHint: true,
     supportsDryRun: false,
     riskLevel: "critical",
@@ -78,7 +76,6 @@ export const REFLECTION_TOOLS: ToolMetadata[] = [
       typeName: { type: "string" },
       schema: { type: "object" }
     }),
-    readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",

@@ -82,7 +82,7 @@ namespace UnityCli
         /// <summary>
         /// Register a project custom context definition. Enforces:
         /// - name + Read delegate required
-        /// - Kind=context, Source=project, ReadOnlyHint=true (fixed)
+        /// - Kind=context, Source=project (fixed)
         /// - No destructive/write descriptor fields
         /// - Source guard on handler source
         /// - Name conflict detection against built-in contexts
@@ -102,7 +102,6 @@ namespace UnityCli
             // ── Fixed descriptor constraints ──
             definition.Kind = "context";
             definition.Source = "project";
-            definition.ReadOnlyHint = true;
 
             // ── Reject forbidden descriptor fields (write/destructive semantics) ──
             foreach (var field in ContextForbiddenDescriptorFields)
@@ -172,7 +171,6 @@ namespace UnityCli
             WriteLog("custom_context_registered name=" + definition.Name +
                 " kind=" + definition.Kind +
                 " source=" + definition.Source +
-                " readOnlyHint=" + Bool(definition.ReadOnlyHint) +
                 " fingerprint=" + definition.Fingerprint);
         }
 
@@ -402,7 +400,6 @@ namespace UnityCli
                 + "\noutputSchema=" + NormalizeFingerprintJson(definition.OutputSchema)
                 + "\nkind=" + (definition.Kind ?? string.Empty)
                 + "\nsource=" + (definition.Source ?? string.Empty)
-                + "\nreadOnlyHint=" + Bool(definition.ReadOnlyHint)
                 + "\ntarget=" + (definition.Target ?? string.Empty)
                 + "\navailabilityScope=" + (definition.AvailabilityScope ?? string.Empty)
                 + "\nrefreshBehavior=" + (definition.RefreshBehavior ?? string.Empty)
@@ -491,7 +488,6 @@ namespace UnityCli
                     { "source", ctx.Source ?? "built-in" },
                     { "category", ctx.Category ?? "" },
                     { "kind", "context" },
-                    { "readOnlyHint", true }
                 };
                 BuiltInContextDescriptors[ctx.Name] = descriptor;
             }
@@ -693,8 +689,7 @@ namespace UnityCli
                     ctx.Prop("name", definition.Name)
                         .Prop("version", definition.Version)
                         .Prop("kind", definition.Kind)
-                        .Prop("source", definition.Source)
-                        .Prop("readOnlyHint", definition.ReadOnlyHint);
+                        .Prop("source", definition.Source);
                 })
                 .PropObject("execution", execution =>
                 {
@@ -723,7 +718,6 @@ namespace UnityCli
                 .PropRaw("outputSchema", definition.OutputSchema)
                 .Prop("kind", definition.Kind)
                 .Prop("source", definition.Source)
-                .Prop("readOnlyHint", definition.ReadOnlyHint)
                 .Prop("target", definition.Target)
                 .Prop("availabilityScope", definition.AvailabilityScope)
                 .Prop("refreshBehavior", definition.RefreshBehavior)

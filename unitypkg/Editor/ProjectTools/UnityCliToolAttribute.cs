@@ -35,7 +35,6 @@ namespace UnityCli
         public string InputSchema { get; set; }
         public string OutputSchema { get; set; }
         public string CapabilityType { get; set; }
-        public bool ReadOnlyHint { get; set; }
         public bool DestructiveHint { get; set; }
         public int DefaultTimeoutMs { get; set; }
         public int MaxTimeoutMs { get; set; }

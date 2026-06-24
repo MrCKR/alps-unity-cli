@@ -8,7 +8,7 @@ namespace UnityCli
     /// ProjectContextRegistry during discovery from [UnityCliContext] attributed
     /// methods, and stored in the registry for lookup by context.list/describe/read.
     ///
-    /// Custom contexts are always Kind=context, Source=project, ReadOnlyHint=true,
+    /// Custom contexts are always Kind=context, Source=project,
     /// and must not declare DestructiveHint, SupportsJob, or artifact kinds.
     /// </summary>
     public sealed class UnityCliContextDefinition
@@ -34,11 +34,6 @@ namespace UnityCli
         /// Always "project" for custom contexts.
         /// </summary>
         public string Source { get; set; }
-
-        /// <summary>
-        /// Always true for custom contexts. The registry enforces this at registration.
-        /// </summary>
-        public bool ReadOnlyHint { get; set; }
 
         // --- Execution ---
         public string Target { get; set; }

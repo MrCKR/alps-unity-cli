@@ -8,7 +8,6 @@ export const DIAGNOSE_TOOLS: ToolMetadata[] = [
     description: "Run a quick health check on the Unity project and bridge setup.",
     group: "diagnose",
     inputSchema: objSchema({}),
-    readOnlyHint: true,
     destructiveHint: false,
     handler: "bridge",
     cliCommand: "tools run diagnose.preflight",

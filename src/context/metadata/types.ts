@@ -27,8 +27,6 @@ export interface ContextMetadata {
   inputSchema: Record<string, unknown>;
   /** JSON Schema for the context's output. */
   outputSchema?: Record<string, unknown>;
-  /** Always true for Context. If false, the capability is not a Context and must be a Tool. */
-  readOnlyHint: true;
   /** URI template for resource identification, e.g. 'unity-cli://project/info'. Optional. */
   resourceUri?: string;
   /** Refresh behavior: 'static' (never changes), 'on-demand' (can be re-read), 'live' (subscribable). */

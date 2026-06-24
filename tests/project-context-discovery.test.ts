@@ -5,8 +5,7 @@
  * - Descriptor mapping: raw bridge descriptor → unified ContextDescriptor
  * - Source isolation: built-in vs project contexts correctly classified
  * - Duplicate guard: project context with same name as built-in is rejected
- * - readOnlyHint: always true for any context
- * - Context never enters tools path: ContextDescriptor is distinct from ToolMetadata
+ * * - Context never enters tools path: ContextDescriptor is distinct from ToolMetadata
  * - CLI context list/describe/read with --include-custom
  */
 
@@ -47,7 +46,6 @@ test("rawDescriptorToContextDescriptor maps project context descriptor correctly
     outputSchema: { type: "object", properties: { scenes: { type: "array" } } },
     kind: "context",
     source: "project",
-    readOnlyHint: true,
     target: "editor",
     availabilityScope: "editorSession",
     equivalentUnityMcp: "resources://scenes",
@@ -70,7 +68,6 @@ test("rawDescriptorToContextDescriptor maps project context descriptor correctly
   assert.equal(descriptor!.title, "Scene List");
   assert.equal(descriptor!.kind, "context");
   assert.equal(descriptor!.source, "project");
-  assert.equal(descriptor!.readOnlyHint, true);
   assert.equal(descriptor!.requiresUnity, true);
   assert.equal(descriptor!.category, "project");
   assert.equal(descriptor!.equivalentUnityMcpNote, "Maps to unity-mcp resources/scenes");
@@ -88,7 +85,6 @@ test("rawDescriptorToContextDescriptor maps built-in context descriptor", () => 
     name: "unity.version",
     kind: "context",
     source: "built-in",
-    readOnlyHint: true,
     title: "Unity Version"
   };
 
@@ -96,7 +92,6 @@ test("rawDescriptorToContextDescriptor maps built-in context descriptor", () => 
   assert.ok(descriptor);
   assert.equal(descriptor!.source, "built-in");
   assert.equal(descriptor!.requiresUnity, false);
-  assert.equal(descriptor!.readOnlyHint, true);
   assert.equal(descriptor!.kind, "context");
   assert.equal(descriptor!.handler, undefined);
   assert.equal(descriptor!.supportStatus, undefined);
@@ -151,23 +146,6 @@ test("context with unknown source defaults to built-in", () => {
   assert.ok(descriptor);
   assert.equal(descriptor!.source, "built-in");
   assert.equal(descriptor!.requiresUnity, false);
-});
-
-// ─── readOnlyHint fixed tests ──────────────────────────────────────────
-
-test("readOnlyHint is always true regardless of input", () => {
-  // Even if the raw descriptor claims readOnlyHint=false, the mapping forces true
-  const raw = { name: "evil.context", source: "project", readOnlyHint: false };
-  const descriptor = rawDescriptorToContextDescriptor(raw);
-  assert.ok(descriptor);
-  assert.equal(descriptor!.readOnlyHint, true);
-});
-
-test("readOnlyHint is true when not specified in raw descriptor", () => {
-  const raw = { name: "no-hint.context", source: "project" };
-  const descriptor = rawDescriptorToContextDescriptor(raw);
-  assert.ok(descriptor);
-  assert.equal(descriptor!.readOnlyHint, true);
 });
 
 // ─── Context not in tools path ─────────────────────────────────────────
@@ -240,7 +218,6 @@ test("context list --include-custom discovers project custom contexts through th
     category: "project",
     kind: "context",
     source: "project",
-    readOnlyHint: true,
     inputSchema: { type: "object" },
     outputSchema: { type: "object" },
     target: "editor",
@@ -286,7 +263,6 @@ test("context list --include-custom merges built-in and project custom contexts 
     category: "built-in",
     kind: "context",
     source: "built-in",
-    readOnlyHint: true,
     inputSchema: {},
     target: "editor"
   };
@@ -297,7 +273,6 @@ test("context list --include-custom merges built-in and project custom contexts 
     category: "project",
     kind: "context",
     source: "project",
-    readOnlyHint: true,
     inputSchema: { type: "object" },
     target: "editor",
     handler: "bridge",
@@ -336,7 +311,6 @@ test("context list --include-custom rejects project context with same name as bu
     category: "project",
     kind: "context",
     source: "project",
-    readOnlyHint: true,
     inputSchema: {},
     handler: "bridge",
     supportStatus: "live-bridge",
@@ -372,7 +346,6 @@ test("context describe <name> resolves custom context descriptor through the bri
     category: "project",
     kind: "context",
     source: "project",
-    readOnlyHint: true,
     inputSchema: { type: "object" },
     outputSchema: { type: "object" },
     target: "editor",
@@ -399,7 +372,6 @@ test("context describe <name> resolves custom context descriptor through the bri
   const data = result.data as Record<string, unknown>;
   assert.equal(data.name, "project.build-info");
   assert.equal(data.source, "custom");
-  assert.equal(data.readOnlyHint, true);
 });
 
 test("context read <name> delegates to bridge context.read and returns envelope", async () => {
@@ -418,7 +390,6 @@ test("context read <name> delegates to bridge context.read and returns envelope"
               category: "project",
               kind: "context",
               source: "project",
-              readOnlyHint: true,
               inputSchema: {},
               target: "editor"
             }],
@@ -432,7 +403,7 @@ test("context read <name> delegates to bridge context.read and returns envelope"
           ok: true as const,
           data: {
             command: "context.read",
-            context: { name: "project.scene-list", kind: "context", source: "project", readOnlyHint: true },
+            context: { name: "project.scene-list", kind: "context", source: "project" },
             execution: { channel: "live", exitState: "completed" },
             result: { scenes: ["Assets/Scenes/Main.unity"], count: 1 },
             logs: { bridge: "/tmp/bridge.log" }
@@ -494,8 +465,6 @@ test("Unity C# custom context registry supports UnityCliContextAttribute and bri
   assert.match(registry, /Kind.*=.*"context"/);
   // Registry enforces Source=project
   assert.match(registry, /Source.*=.*"project"/);
-  // Registry enforces ReadOnlyHint=true
-  assert.match(registry, /ReadOnlyHint.*=.*true/);
   // Registry has fingerprint support
   assert.match(registry, /E_CONTEXT_FINGERPRINT_MISMATCH/);
   // Registry has source guard
@@ -505,11 +474,8 @@ test("Unity C# custom context registry supports UnityCliContextAttribute and bri
 test("Unity C# context definition enforces read-only constraint", async () => {
   const { readFile } = await import("node:fs/promises");
   const definition = await readFile(new URL("../../unitypkg/Editor/ProjectContexts/UnityCliContextDefinition.cs", import.meta.url), "utf8");
-
-  // Definition has Kind, Source, ReadOnlyHint properties
   assert.match(definition, /public string Kind/);
   assert.match(definition, /public string Source/);
-  assert.match(definition, /public bool ReadOnlyHint/);
   // Definition has Read handler (not Execute/Run)
   assert.match(definition, /Func<UnityCliContextRequest, string> Read/);
   // No destructive/write fields as public properties (the doc comment mentions them as "must not declare")
@@ -549,7 +515,7 @@ test("SampleContext uses UnityCliContextAttribute with correct contract fields",
   assert.match(sample, /RefreshBehavior.*=.*"onDemand"/);
 });
 
-test("SampleContext descriptor has schema, fingerprint and readOnlyHint", async () => {
+test("SampleContext descriptor has schema and fingerprint", async () => {
   const { readFile } = await import("node:fs/promises");
   const sample = await readFile(new URL("../../unitypkg/Editor/Samples/SampleContext.cs", import.meta.url), "utf8");
 
@@ -558,7 +524,6 @@ test("SampleContext descriptor has schema, fingerprint and readOnlyHint", async 
   // OutputSchema is declared
   assert.match(sample, /OutputSchema\s*=\s*"/);
   // Fingerprint is available (context infrastructure auto-computes)
-  // ReadOnlyHint is enforced by the registry, not declared in attribute
   // But the attribute implies it through the context kind
   assert.match(sample, /UnityCliContext\(/);
 });

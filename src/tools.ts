@@ -167,7 +167,7 @@ async function handleToolsGroup(
 
 /**
  * `tools group list <group>` — list tools in a specific group with short summaries.
- * Only shows name, title, readOnly/destructive hints, source, availability.
+ * Only shows name, title, destructive hint, source, availability.
  * Does NOT expand full schema.
  */
 async function handleToolsGroupList(
@@ -206,7 +206,6 @@ async function handleToolsGroupList(
       title: t.title,
       group: t.group,
       source: t.source ?? (customTools.includes(t) ? "project" : "built-in"),
-      readOnlyHint: t.readOnlyHint,
       destructiveHint: t.destructiveHint,
       supportStatus,
       supportStatusLabel: supportStatusLabel(supportStatus),
@@ -272,7 +271,6 @@ async function handleToolsSearch(
       name: t.name,
       title: t.title,
       group: t.group,
-      readOnlyHint: t.readOnlyHint,
       destructiveHint: t.destructiveHint,
       supportStatus,
       supportStatusLabel: supportStatusLabel(supportStatus),

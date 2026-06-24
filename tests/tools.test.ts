@@ -30,7 +30,6 @@ test("every tool has the required frozen fields", () => {
     assert.ok(tool.description, `missing description in ${tool.name}`);
     assert.ok(tool.group, `missing group in ${tool.name}`);
     assert.ok(tool.inputSchema, `missing inputSchema in ${tool.name}`);
-    assert.ok(typeof tool.readOnlyHint === "boolean", `missing readOnlyHint in ${tool.name}`);
     assert.ok(typeof tool.destructiveHint === "boolean", `missing destructiveHint in ${tool.name}`);
   }
 });
@@ -74,7 +73,6 @@ test("scene.hierarchy is in the built-in tools", () => {
   const tool = findToolByName("scene.hierarchy");
   assert.ok(tool, "scene.hierarchy should exist");
   assert.equal(tool.group, "scene");
-  assert.equal(tool.readOnlyHint, true);
   assert.equal(tool.destructiveHint, false);
 });
 
@@ -161,7 +159,6 @@ test("tools group list includes custom project tools when available", async () =
     description: "A custom tool for testing",
     group: "custom",
     inputSchema: { type: "object" as const, properties: {} },
-    readOnlyHint: true,
     destructiveHint: false
   };
   const runtime: ToolsRuntime = { projectTools: [customTool] };
@@ -200,7 +197,6 @@ test("tools group includes runtime custom tool groups", async () => {
     description: "Bakes project data.",
     group: "project",
     inputSchema: { type: "object" },
-    readOnlyHint: false,
     destructiveHint: false
   }] };
   const result = await handleToolsCommand("group", [], {}, runtime, requestId);
@@ -242,7 +238,6 @@ test("tools describe scene.hierarchy returns full metadata", async () => {
   const data = result.data as Record<string, unknown>;
   assert.equal(data.name, "scene.hierarchy");
   assert.equal(data.group, "scene");
-  assert.equal(data.readOnlyHint, true);
   assert.equal(data.destructiveHint, false);
   assert.ok(data.inputSchema);
   assert.ok(data.description);
@@ -278,7 +273,6 @@ test("editor.refresh metadata exists with job handler and longRunning", () => {
   assert.equal(tool.group, "editor");
   assert.equal(tool.handler, "job");
   assert.equal(tool.longRunning, true);
-  assert.equal(tool.readOnlyHint, false);
   assert.equal(tool.destructiveHint, false);
   assert.ok(tool.examples && tool.examples.length > 0);
 });
@@ -304,7 +298,6 @@ test("package.resolve metadata exists with hybrid handler", () => {
   assert.equal(tool.handler, "hybrid");
   assert.equal(supportStatusForTool(tool), "bridge-job");
   assert.equal(tool.longRunning, true);
-  assert.equal(tool.readOnlyHint, false);
 });
 
 test("package.registry metadata exists with offline handler", () => {
@@ -312,7 +305,6 @@ test("package.registry metadata exists with offline handler", () => {
   assert.ok(tool, "package.registry should exist");
   assert.equal(tool.group, "package");
   assert.equal(tool.handler, "offline");
-  assert.equal(tool.readOnlyHint, false);
 });
 
 test("package.scoped-registry metadata exists with offline handler", () => {
@@ -320,7 +312,6 @@ test("package.scoped-registry metadata exists with offline handler", () => {
   assert.ok(tool, "package.scoped-registry should exist");
   assert.equal(tool.group, "package");
   assert.equal(tool.handler, "offline");
-  assert.equal(tool.readOnlyHint, false);
 });
 
 test("test.run metadata exists with job handler and longRunning", () => {
@@ -329,7 +320,6 @@ test("test.run metadata exists with job handler and longRunning", () => {
   assert.equal(tool.group, "test");
   assert.equal(tool.handler, "job");
   assert.equal(tool.longRunning, true);
-  assert.equal(tool.readOnlyHint, false);
   assert.equal(tool.destructiveHint, false);
   assert.ok(tool.examples && tool.examples.length > 0);
 });
@@ -340,7 +330,6 @@ test("build.run metadata exists with job handler and longRunning", () => {
   assert.equal(tool.group, "build");
   assert.equal(tool.handler, "job");
   assert.equal(tool.longRunning, true);
-  assert.equal(tool.readOnlyHint, false);
   assert.equal(tool.destructiveHint, false);
   assert.ok(tool.examples && tool.examples.length > 0);
 });
@@ -399,7 +388,6 @@ test("S3.1 creation-domain write tools are marked mutating but non-destructive",
   for (const name of writeTools) {
     const tool = findToolByName(name);
     assert.ok(tool, `${name} should exist`);
-    assert.equal(tool.readOnlyHint, false, `${name} should be marked as mutating`);
     assert.equal(tool.destructiveHint, false, `${name} should not be marked destructive`);
   }
 });
@@ -438,8 +426,6 @@ test("tools describe editor.refresh returns job metadata", async () => {
 test("S3.2 graphics group has quality, pipeline, volume and screenshot tools", () => {
   const names = filterToolsByGroup("graphics").map((t) => t.name);
   assert.deepEqual(names, ["graphics.quality", "graphics.settings", "graphics.pipeline", "graphics.volume", "graphics.screenshot", "graphics.bake-start", "graphics.bake-cancel", "graphics.bake-status", "graphics.bake-clear", "graphics.bake-reflection-probe", "graphics.bake-settings", "graphics.light-probe-group", "graphics.reflection-probe", "graphics.probe-positions", "graphics.stats", "graphics.stats-counters", "graphics.stats-memory", "graphics.scene-debug", "graphics.skybox-get", "graphics.skybox-set-material", "graphics.skybox-set-properties", "graphics.skybox-set-ambient", "graphics.skybox-set-fog", "graphics.skybox-set-reflection", "graphics.skybox-set-sun", "graphics.pipeline-settings", "graphics.pipeline-quality", "graphics.pipeline-info"]);
-  assert.equal(findToolByName("graphics.pipeline")?.readOnlyHint, true);
-  assert.equal(findToolByName("graphics.volume")?.readOnlyHint, true);
 });
 
 test("S3.4 profiler domain exposes expected tools and safety hints", () => {
@@ -456,13 +442,11 @@ test("S3.4 profiler domain exposes expected tools and safety hints", () => {
 
   for (const name of ["profiler.status", "profiler.counter", "profiler.memory", "profiler.frame"]) {
     const tool = findToolByName(name);
-    assert.equal(tool?.readOnlyHint, true, `${name} should be read-only from Unity state perspective`);
     assert.equal(tool?.destructiveHint, false, `${name} should not be destructive`);
   }
 
   for (const name of ["profiler.start", "profiler.stop", "profiler.pause", "profiler.capture", "profiler.export"]) {
     const tool = findToolByName(name);
-    assert.equal(tool?.readOnlyHint, false, `${name} should change profiler session or write an artifact`);
     assert.equal(tool?.destructiveHint, false, `${name} should not be destructive`);
   }
 
@@ -475,7 +459,6 @@ test("tools describe profiler.memory returns full metadata", async () => {
   const data = result.data as Record<string, unknown>;
   assert.equal(data.name, "profiler.memory");
   assert.equal(data.group, "profiler");
-  assert.equal(data.readOnlyHint, true);
   assert.equal(data.destructiveHint, false);
 });
 
@@ -502,8 +485,6 @@ test("hybrid tools expose bridge plus job support status", () => {
 test("S3.2 physics group has settings, queries and mutation tools", () => {
   const names = filterToolsByGroup("physics").map((t) => t.name);
   assert.deepEqual(names, ["physics.settings", "physics.collision-matrix", "physics.material", "physics.joint", "physics.force", "physics.overlap", "physics.rigidbody", "physics.raycast", "physics.simulation", "physics.raycast-all", "physics.linecast", "physics.shapecast", "physics.validate"]);
-  assert.equal(findToolByName("physics.raycast")?.readOnlyHint, true);
-  assert.equal(findToolByName("physics.overlap")?.readOnlyHint, true);
   assert.equal(findToolByName("physics.simulation")?.handler, "bridge");
 });
 
@@ -519,7 +500,6 @@ test("tools describe graphics.volume returns bridge metadata", async () => {
   assert.equal(data.name, "graphics.volume");
   assert.equal(data.group, "graphics");
   assert.equal(data.handler, "bridge");
-  assert.equal(data.readOnlyHint, true);
   assert.equal(data.cliCommand, "tools run graphics.volume");
 });
 
@@ -578,7 +558,6 @@ test("tools run with target=runtime project tool routes to runtime-tool.run", as
       description: "Echoes input from runtime",
       group: "sample",
       inputSchema: { type: "object", properties: { message: { type: "string" } }, required: ["message"] },
-      readOnlyHint: true,
       destructiveHint: false,
       handler: "bridge-runtime",
       target: "runtime",
@@ -604,7 +583,6 @@ test("tools run target=both with --runtime flag routes to runtime-tool.run", asy
       description: "Works in both domains",
       group: "sample",
       inputSchema: { type: "object" },
-      readOnlyHint: true,
       destructiveHint: false,
       handler: "bridge",
       target: "both",
@@ -630,7 +608,6 @@ test("tools run custom editor-domain tool routes to project-tool.run", async () 
       description: "Works in both domains",
       group: "sample",
       inputSchema: { type: "object" },
-      readOnlyHint: true,
       destructiveHint: false,
       handler: "bridge",
       target: "both",
@@ -668,7 +645,6 @@ test("tools run custom editor tool routes to project-tool.run", async () => {
       description: "Editor-only tool",
       group: "custom",
       inputSchema: { type: "object" },
-      readOnlyHint: true,
       destructiveHint: false,
       handler: "bridge",
       target: "editor",
@@ -919,7 +895,6 @@ test("tools run custom project tool passes name and input to project-tool.run", 
       description: "Echoes input",
       group: "sample",
       inputSchema: { type: "object", properties: { message: { type: "string" } } },
-      readOnlyHint: true,
       destructiveHint: false,
       handler: "bridge",
       target: "editor",
@@ -1028,7 +1003,6 @@ test("normalizeToolMetadata fills default kind and source", () => {
     description: "Test tool",
     group: "test",
     inputSchema: {},
-    readOnlyHint: true,
     destructiveHint: false
   });
   assert.equal(normalized.kind, "tool");

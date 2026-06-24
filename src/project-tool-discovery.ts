@@ -67,7 +67,6 @@ export function projectDescriptorToToolMetadata(value: unknown): ToolMetadata | 
     group,
     inputSchema: objectProp(descriptor, "inputSchema") ?? {},
     outputSchema: objectProp(descriptor, "outputSchema"),
-    readOnlyHint: booleanProp(descriptor, "readOnlyHint") ?? false,
     destructiveHint: booleanProp(descriptor, "destructiveHint") ?? false,
     timeoutMs: numberProp(descriptor, "defaultTimeoutMs") ?? numberProp(descriptor, "timeoutMs"),
     permissions: stringArrayProp(descriptor, "permissions"),
