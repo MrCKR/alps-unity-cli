@@ -22,6 +22,10 @@ export const PROBUILDER_MANIFEST: ExtensionManifest = {
       displayName: "ProBuilder"
     }
   ],
+  unityInstall: {
+    layout: "directory",
+    include: ["extension.json", "unitypkg/", "docs/"]
+  },
   contributions: {
     tools: [
       { name: "probuilder.ping", title: "ProBuilder Ping", description: "Check ProBuilder package availability and bridge status. Returns package info if installed.", group: "probuilder", bridgeCommand: "probuilder.ping", cliCommand: "tools run probuilder.ping" },
@@ -93,6 +97,10 @@ export const VFX_GRAPH_MANIFEST: ExtensionManifest = {
       displayName: "Visual Effect Graph"
     }
   ],
+  unityInstall: {
+    layout: "directory",
+    include: ["extension.json", "unitypkg/", "docs/"]
+  },
   contributions: {
     tools: [
       { name: "vfx.graph", title: "VFX Graph", description: "Get info on a Visual Effect graph asset, optionally create one.", group: "vfx", bridgeCommand: "vfx.graph", cliCommand: "tools run vfx.graph" },
@@ -125,6 +133,10 @@ export const CINEMACHINE_MANIFEST: ExtensionManifest = {
       displayName: "Cinemachine"
     }
   ],
+  unityInstall: {
+    layout: "directory",
+    include: ["extension.json", "unitypkg/", "docs/"]
+  },
   contributions: {
     tools: [
       { name: "cinemachine.create", title: "Cinemachine Create", description: "Create a Cinemachine virtual camera with an optional preset (follow, third_person, freelook, dolly, static, top_down, side_scroller).", group: "cinemachine", bridgeCommand: "cinemachine.create", cliCommand: "tools run cinemachine.create" },
@@ -165,6 +177,10 @@ export const URP_MANIFEST: ExtensionManifest = {
       displayName: "Universal Render Pipeline"
     }
   ],
+  unityInstall: {
+    layout: "directory",
+    include: ["extension.json", "unitypkg/", "docs/"]
+  },
   contributions: {
     tools: [
       { name: "urp.feature", title: "URP Renderer Feature", description: "List, add, remove, toggle or configure URP Renderer Features on the active Universal Render Pipeline asset.", group: "urp", bridgeCommand: "urp.feature", cliCommand: "tools run urp.feature" },
@@ -200,6 +216,10 @@ export const HDRP_MANIFEST: ExtensionManifest = {
       displayName: "High Definition Render Pipeline"
     }
   ],
+  unityInstall: {
+    layout: "directory",
+    include: ["extension.json", "unitypkg/", "docs/"]
+  },
   contributions: {
     tools: [
       { name: "hdrp.volume", title: "HDRP Volume", description: "List, create or configure HDRP Volume components and their profile effects.", group: "hdrp", bridgeCommand: "hdrp.volume", cliCommand: "tools run hdrp.volume" },

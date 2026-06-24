@@ -15,8 +15,8 @@ description: 当任务涉及 Unity Editor 或 Unity 时都优先使用本 Skill�
 
 - `unity_cli init`：把 Bridge 包安装到 Unity 项目；如果项目已有 `.pi`、`.claude` 或 `.agents`，会自动安装本 Skill。
 - `unity_cli extensions list`：查看 CLI 扩展包状态。
-- `unity_cli extensions install <id>`：安装满足依赖的扩展包 Unity 侧 bundle。
-- `unity_cli extensions remove <id>`：移除扩展包 Unity 侧 bundle。
+- `unity_cli extensions install <id>`：安装满足依赖的 Unity 侧扩展目录到 `Packages/com.unity_cli/Extensions/<id>/`。
+- `unity_cli extensions remove <id>`：移除扩展包 Unity 侧目录中 manifest 管理的文件。
 - `unity_cli extensions doctor`：诊断扩展包依赖和安装状态。
 - `unity_cli target current|set|clear|alias`：查看或设置当前 Unity Editor 目标。
 - `unity_cli instances list|prune`：查看或清理 Bridge 注册的 Unity Editor 实例。

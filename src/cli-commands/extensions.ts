@@ -1,21 +1,13 @@
 /**
- * CLI sub-commands: extensions list, extensions install, extensions remove,
- * extensions doctor.
+ * 扩展包命令：extensions list/install/remove/doctor。
  *
- * `extensions list`     — list available extensions, install state, Unity
- *                         package mappings, availability and next_actions.
- * `extensions install`  — install (enable) an extension in the current project.
- * `extensions remove`   — uninstall (disable) an extension, removing its
- *                         descriptor contributions from discovery.
- * `extensions doctor`   — diagnose extension install state, Unity package
- *                         dependency consistency, missing deps, and descriptor
- *                         load errors.
+ * list 查询扩展可用性、安装状态和 Unity Package 映射；install 将扩展目录安装到
+ * Packages/com.unity_cli/Extensions/<id>；remove 只移除扩展目录中由 manifest 管理的文件；
+ * doctor 诊断依赖、物理文件和状态文件是否一致。
  *
- * Install state is persisted per-project under
- *   <project>/Packages/com.unity_cli/extensions.json
- * as a list of enabled extension IDs. The core package never depends on
- * optional Unity packages at compile time; enabling an extension only flips
- * whether its descriptors participate in tool/context discovery.
+ * 每个项目的启用状态保存在 <project>/Packages/com.unity_cli/extensions.json；
+ * 物理文件清单保存在 <project>/Packages/com.unity_cli/unity_cli.extensions.manifest.json。
+ * 核心 CLI 不在编译期依赖任何可选 Unity Package。
  */
 
 import { readFile, writeFile, mkdir } from "node:fs/promises";
@@ -249,7 +241,7 @@ async function handleExtensionsInstall(
       installed: availability.packages.find((p) => p.packageId === pkg.packageId)?.installed ?? false
     })),
     nextActions: [
-      `Extension "${extensionId}" Unity-side bundle is installed under Packages/com.unity_cli/Extensions/${extensionId}.`,
+      `Extension "${extensionId}" Unity-side directory is installed under Packages/com.unity_cli/Extensions/${extensionId}.`,
       "Wait for Unity to recompile, then run tools group list/describe/run for provided tools."
     ]
   });
@@ -331,7 +323,7 @@ async function handleExtensionsDoctor(
 
     const issues: string[] = [];
     if (availability.status === "available" && !physical.installed) {
-      issues.push(`Extension "${id}" has all dependencies installed but its Unity-side bundle is not installed.`);
+      issues.push(`Extension "${id}" has all dependencies installed but its Unity-side directory is not installed.`);
     }
     if (physical.status === "missing_dependency" && enabled) {
       issues.push(`Extension "${id}" is installed but required Unity packages are missing: ${availability.missingPackageIds.join(", ")}`);

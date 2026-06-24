@@ -4,7 +4,7 @@
 
 ## 当前状态：已实现
 
-扩展包系统已完成，包括 Bridge 包安装、项目工具发现、fingerprint 校验、可选包可用性检测，以及独立的 `extensions` 命令组。当前运行时准源是 `src/tools/metadata/groups/*`、`src/bridge/domains/*`、核心 `unitypkg/Editor/Commands/*` 与物理 extension bundle `extensions/<id>/unitypkg/*`。
+扩展包系统已完成，包括 Bridge 包安装、项目工具发现、fingerprint 校验、可选包可用性检测，以及独立的 `extensions` 命令组。当前运行时准源是 `src/tools/metadata/groups/*`、`src/bridge/domains/*`、核心 `unitypkg/Editor/Commands/*` 与目录扩展包 `extensions/<id>/`。
 
 ## 当前扩展能力
 
@@ -56,14 +56,14 @@ unity_cli tools run diagnose.preflight
 
 ```powershell
 unity_cli extensions list --project <path>          # 列出扩展状态
-unity_cli extensions install <name> --project <path> # 复制已满足依赖的 Unity 侧 bundle
+unity_cli extensions install <name> --project <path> # 安装已满足依赖的 Unity 侧扩展目录
 unity_cli extensions remove <name> --project <path>  # 只移除 manifest 管理的 bundle 文件
 unity_cli extensions doctor --project <path>         # 扩展诊断
 ```
 
 ### init 自动检测
 
-`init` 会根据 Unity 项目已安装的 Package 自动匹配并复制对应的 Unity 侧 extension bundle；不会自动安装 Unity Package：
+`init` 会根据 Unity 项目已安装的 Package 自动匹配并安装对应的 Unity 侧扩展目录；不会自动安装 Unity Package：
 
 ```
 项目检测到 com.unity.probuilder → 复制 ProBuilder bundle → `tools run probuilder.*` 可用
@@ -83,7 +83,7 @@ unity_cli extensions doctor --project <path>         # 扩展诊断
 |------|------|
 | Manifest | 扩展元数据（名称、版本、依赖） |
 | Descriptor | 工具/Context 的 JSON Schema |
-| C# Bridge 实现 | `[UnityCliTool]` / `[UnityCliContext]` 标记的 handler |
+| C# Bridge 实现 | `unitypkg/Editor` 下的 `[UnityCliTool]` / `[UnityCliContext]` handler，安装后位于 `Packages/com.unity_cli/Extensions/<id>/Editor` |
 | 测试 | 单元测试和集成测试 |
 | 文档片段 | 扩展使用说明 |
 
@@ -126,6 +126,6 @@ unity_cli extensions doctor --project <path>         # 扩展诊断
 ## 取证与依赖
 
 - 扩展基础设施：`extensions list/install/remove/doctor`、`init --auto-detect`、缺依赖 `available:false` + `next_actions`。
-- ProBuilder：通过 `extensions/probuilder/unitypkg/*` 和 project-tool bridge 路由提供扩展工具。
-- Cinemachine/VFX/URP/HDRP：通过对应 metadata、bridge domain 和 `extensions/<id>/unitypkg` C# command handler 提供 live Bridge 工具。
+- ProBuilder：源码位于 `extensions/probuilder/`，安装后位于 `Packages/com.unity_cli/Extensions/probuilder/`，通过 project-tool bridge 路由提供扩展工具。
+- Cinemachine/VFX/URP/HDRP：源码位于对应 `extensions/<id>/` 目录，安装后位于 `Packages/com.unity_cli/Extensions/<id>/`，通过 metadata、bridge domain 和 C# command handler 提供 live Bridge 工具。
 - 验证入口：`npm test`、`npm run contracts:validate`、extension availability tests。

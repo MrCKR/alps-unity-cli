@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
-import { dirname, join, relative, resolve, sep } from "node:path";
+import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readInstalledUnityPackages } from "./project-resolver.js";
 import { ExtensionRegistry } from "./registry.js";
@@ -23,6 +23,7 @@ export interface InstalledExtensionManifestEntry {
   files: ManagedExtensionFile[];
   requiresUnityPackages: string[];
   copyRoot: string;
+  layout?: "directory";
   installMode: "copy-if-package-present";
 }
 
@@ -59,12 +60,22 @@ export interface ExtensionStatusCheck {
 const packageName = "com.unity_cli";
 const manifestFileName = "unity_cli.extensions.manifest.json";
 
-/** 返回 extension bundle 的源码根目录。 */
-export function extensionBundleSourceRoot(extensionId: ExtensionId): string {
-  return resolve(fileURLToPath(new URL(`../../extensions/${extensionId}/unitypkg`, import.meta.url)));
+/** 返回 extension 源码目录。 */
+export function extensionSourceRoot(extensionId: ExtensionId): string {
+  return resolve(fileURLToPath(new URL(`../../extensions/${extensionId}`, import.meta.url)));
 }
 
-/** 返回 Unity 项目内 extension bundle 的安装根目录。 */
+/** 返回 extension Unity 安装投影使用的默认相对路径。 */
+export function extensionUnityInstallIncludes(manifest: ExtensionManifest): string[] {
+  return manifest.unityInstall?.include ?? ["extension.json", "unitypkg/", "docs/"];
+}
+
+/** 返回 legacy unitypkg 源码根目录；保留给旧测试和调用方。 */
+export function extensionBundleSourceRoot(extensionId: ExtensionId): string {
+  return join(extensionSourceRoot(extensionId), "unitypkg");
+}
+
+/** 返回 Unity 项目内 extension 目录安装根目录。 */
 export function extensionInstallRoot(projectPath: string, extensionId: ExtensionId): string {
   return join(resolve(projectPath), "Packages", packageName, "Extensions", extensionId);
 }
@@ -97,7 +108,7 @@ export async function writeExtensionInstallManifest(projectPath: string, manifes
   await writeFile(manifestPath, `${JSON.stringify({ version: 1, extensions: manifest.extensions.sort((a, b) => a.extensionId.localeCompare(b.extensionId)) }, null, 2)}\n`, "utf8");
 }
 
-/** 安装一个 extension bundle；只复制 CLI 已实现的 C# bundle，不安装 Unity package。 */
+/** 安装一个 extension 目录；只投影 Unity 侧文件，不安装可选 Unity package。 */
 export async function installExtensionBundle(projectPath: string, manifest: ExtensionManifest): Promise<ExtensionInstallResult> {
   const installedPackages = await readInstalledUnityPackages(projectPath);
   const availability = new ExtensionRegistry().resolveAvailability(manifest.id, installedPackages);
@@ -119,15 +130,15 @@ export async function installExtensionBundle(projectPath: string, manifest: Exte
   return installExtensionBundleUnchecked(projectPath, manifest, "installed");
 }
 
-/** 根据已解析依赖自动安装 extension bundle；调用方保证依赖可用。 */
+/** 根据已解析依赖自动安装 extension 目录；调用方保证依赖可用。 */
 export async function installExtensionBundleUnchecked(
   projectPath: string,
   manifest: ExtensionManifest,
   installedStatus: "installed" | "already_installed" = "installed"
 ): Promise<ExtensionInstallResult> {
-  const sourceRoot = extensionBundleSourceRoot(manifest.id);
+  const sourceRoot = extensionSourceRoot(manifest.id);
   if (!existsSync(sourceRoot)) {
-    throw new ExtensionInstallerError("E_EXTENSION_BUNDLE_MISSING", `Extension bundle source not found: ${sourceRoot}`, ["Reinstall or rebuild the unity_cli package."]);
+    throw new ExtensionInstallerError("E_EXTENSION_BUNDLE_MISSING", `Extension source directory not found: ${sourceRoot}`, ["Reinstall or rebuild the unity_cli package."]);
   }
 
   const targetRoot = extensionInstallRoot(projectPath, manifest.id);
@@ -137,8 +148,9 @@ export async function installExtensionBundleUnchecked(
     await removeManagedFiles(targetRoot, previous.files);
   }
 
-  const copiedFiles = await copyBundle(sourceRoot, targetRoot);
-  const sourceHash = await hashDirectory(sourceRoot);
+  const installIncludes = extensionUnityInstallIncludes(manifest);
+  const copiedFiles = await copyBundleProjection(sourceRoot, targetRoot, installIncludes);
+  const sourceHash = await hashBundleProjection(sourceRoot, installIncludes);
   const entry: InstalledExtensionManifestEntry = {
     extensionId: manifest.id,
     version: manifest.version,
@@ -146,7 +158,8 @@ export async function installExtensionBundleUnchecked(
     sourceHash,
     files: copiedFiles,
     requiresUnityPackages: manifest.unityPackages.map((pkg) => pkg.packageId),
-    copyRoot: "unitypkg",
+    copyRoot: "extension-directory",
+    layout: "directory",
     installMode: "copy-if-package-present"
   };
 
@@ -165,7 +178,7 @@ export async function installExtensionBundleUnchecked(
   };
 }
 
-/** 按 manifest 删除一个 extension bundle 复制过的文件。 */
+/** 按 manifest 删除一个 extension 目录复制过的文件。 */
 export async function removeExtensionBundle(projectPath: string, extensionId: ExtensionId): Promise<ExtensionInstallResult> {
   const installManifest = await readExtensionInstallManifest(projectPath);
   const entry = installManifest.extensions.find((item) => item.extensionId === extensionId);
@@ -201,8 +214,8 @@ export async function checkExtensionBundles(projectPath: string): Promise<Extens
     const availability = registry.resolveAvailability(extensionId, installedPackages);
     const entry = installManifest.extensions.find((item) => item.extensionId === extensionId);
     const targetRoot = extensionInstallRoot(projectPath, extensionId);
-    const sourceRoot = extensionBundleSourceRoot(extensionId);
-    const sourceHash = existsSync(sourceRoot) ? await hashDirectory(sourceRoot) : undefined;
+    const sourceRoot = extensionSourceRoot(extensionId);
+    const sourceHash = existsSync(sourceRoot) ? await hashBundleProjection(sourceRoot, extensionUnityInstallIncludes(extension.manifest)) : undefined;
     const fileCheck = entry ? await checkManagedFiles(targetRoot, entry.files) : { missingFiles: [], changedFiles: [], unknownFiles: await listUnknownFiles(targetRoot, []) };
     const outdated = Boolean(entry && sourceHash && entry.sourceHash !== sourceHash);
     const hasUnknownFiles = fileCheck.unknownFiles.length > 0;
@@ -228,21 +241,35 @@ export async function checkExtensionBundles(projectPath: string): Promise<Extens
   return checks;
 }
 
-async function copyBundle(sourceRoot: string, targetRoot: string): Promise<ManagedExtensionFile[]> {
+async function copyBundleProjection(sourceRoot: string, targetRoot: string, includes: string[]): Promise<ManagedExtensionFile[]> {
   const files: ManagedExtensionFile[] = [];
-  await copyRecursive(sourceRoot, targetRoot, sourceRoot, files);
+  for (const includePath of includes) {
+    const sourcePath = safeSourcePath(sourceRoot, includePath);
+    if (!existsSync(sourcePath)) continue;
+    const sourceInfo = await stat(sourcePath);
+    const targetRelativeRoot = projectionTargetRoot(includePath);
+    if (sourceInfo.isDirectory()) {
+      await copyRecursive(sourcePath, join(targetRoot, targetRelativeRoot), sourcePath, files, targetRelativeRoot);
+    } else if (sourceInfo.isFile()) {
+      const dest = join(targetRoot, targetRelativeRoot);
+      await mkdir(dirname(dest), { recursive: true });
+      await copyFile(sourcePath, dest);
+      files.push({ path: normalizePath(targetRelativeRoot), sha256: await hashFile(sourcePath) });
+    }
+  }
   return files.sort((a, b) => a.path.localeCompare(b.path));
 }
 
-async function copyRecursive(sourcePath: string, targetRoot: string, sourceRoot: string, files: ManagedExtensionFile[]): Promise<void> {
+async function copyRecursive(sourcePath: string, targetRoot: string, sourceRoot: string, files: ManagedExtensionFile[], targetPrefix = ""): Promise<void> {
   const entries = (await readdir(sourcePath, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name));
   for (const entry of entries) {
     const src = join(sourcePath, entry.name);
-    const rel = normalizePath(relative(sourceRoot, src));
-    const dest = join(targetRoot, rel);
+    const sourceRelative = normalizePath(relative(sourceRoot, src));
+    const rel = normalizePath(targetPrefix ? `${targetPrefix}/${sourceRelative}` : sourceRelative);
+    const dest = join(targetRoot, sourceRelative);
     if (entry.isDirectory()) {
       await mkdir(dest, { recursive: true });
-      await copyRecursive(src, targetRoot, sourceRoot, files);
+      await copyRecursive(src, targetRoot, sourceRoot, files, targetPrefix);
     } else if (entry.isFile()) {
       await mkdir(dirname(dest), { recursive: true });
       await copyFile(src, dest);
@@ -318,20 +345,34 @@ async function removeEmptyDirectories(root: string): Promise<void> {
   }
 }
 
-async function hashDirectory(root: string): Promise<string> {
+async function hashBundleProjection(sourceRoot: string, includes: string[]): Promise<string> {
   const hash = createHash("sha256");
-  await hashDirectoryInto(hash, root, root);
+  for (const includePath of includes.map(normalizePath).sort()) {
+    const sourcePath = safeSourcePath(sourceRoot, includePath);
+    if (!existsSync(sourcePath)) continue;
+    const sourceInfo = await stat(sourcePath);
+    const targetRelativeRoot = projectionTargetRoot(includePath);
+    if (sourceInfo.isDirectory()) {
+      hash.update(`projection-dir:${targetRelativeRoot}/\n`);
+      await hashDirectoryInto(hash, sourcePath, sourcePath, targetRelativeRoot);
+    } else if (sourceInfo.isFile()) {
+      hash.update(`projection-file:${targetRelativeRoot}\n`);
+      hash.update(await readFile(sourcePath));
+      hash.update("\n");
+    }
+  }
   return hash.digest("hex");
 }
 
-async function hashDirectoryInto(hash: ReturnType<typeof createHash>, dir: string, root: string): Promise<void> {
+async function hashDirectoryInto(hash: ReturnType<typeof createHash>, dir: string, root: string, targetPrefix = ""): Promise<void> {
   const entries = (await readdir(dir, { withFileTypes: true })).sort((a, b) => a.name.localeCompare(b.name));
   for (const entry of entries) {
     const fullPath = join(dir, entry.name);
-    const rel = normalizePath(relative(root, fullPath));
+    const sourceRelative = normalizePath(relative(root, fullPath));
+    const rel = normalizePath(targetPrefix ? `${targetPrefix}/${sourceRelative}` : sourceRelative);
     if (entry.isDirectory()) {
       hash.update(`dir:${rel}/\n`);
-      await hashDirectoryInto(hash, fullPath, root);
+      await hashDirectoryInto(hash, fullPath, root, targetPrefix);
     } else if (entry.isFile()) {
       hash.update(`file:${rel}\n`);
       hash.update(await readFile(fullPath));
@@ -369,7 +410,7 @@ function nextActionsForStatus(manifest: ExtensionManifest, availability: Extensi
     ];
   }
   if (status === "available_not_installed") {
-    return [`Run unity_cli extensions install ${manifest.id} --project <path> to copy the optional Unity-side bundle.`];
+    return [`Run unity_cli extensions install ${manifest.id} --project <path> to install the optional Unity-side extension directory.`];
   }
   if (status === "outdated") {
     return [`Run unity_cli extensions install ${manifest.id} --project <path> to refresh managed extension files.`];
@@ -378,6 +419,28 @@ function nextActionsForStatus(manifest: ExtensionManifest, availability: Extensi
     return [`Inspect Packages/${packageName}/Extensions/${manifest.id}; extension remove only deletes files listed in ${manifestFileName}.`];
   }
   return ["Extension bundle files are installed and match the manifest."];
+}
+
+function projectionTargetRoot(includePath: string): string {
+  const normalized = normalizePath(includePath).replace(/\/+$/, "");
+  if (!normalized || normalized === ".") {
+    throw new ExtensionInstallerError("E_EXTENSION_MANIFEST_INVALID", `Invalid extension install include path: ${includePath}`);
+  }
+  if (normalized === "unitypkg") return "";
+  return basename(normalized);
+}
+
+function safeSourcePath(sourceRoot: string, relPath: string): string {
+  const normalized = normalizePath(relPath).replace(/\/+$/, "");
+  if (normalized.startsWith("../") || normalized === ".." || normalized.includes("/../") || normalized.startsWith("/")) {
+    throw new ExtensionInstallerError("E_EXTENSION_MANIFEST_INVALID", `Unsafe extension source path: ${relPath}`);
+  }
+  const fullPath = resolve(sourceRoot, ...normalized.split("/"));
+  const root = resolve(sourceRoot);
+  if (fullPath !== root && !fullPath.startsWith(root + sep)) {
+    throw new ExtensionInstallerError("E_EXTENSION_MANIFEST_INVALID", `Extension source path escapes root: ${relPath}`);
+  }
+  return fullPath;
 }
 
 function safeManagedPath(targetRoot: string, relPath: string): string {

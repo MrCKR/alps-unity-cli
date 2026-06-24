@@ -599,6 +599,13 @@ test("all five manifests have at least one unityPackage", () => {
   }
 });
 
+
+test("built-in manifests declare Unity directory install layout", () => {
+  for (const manifest of BUILTIN_EXTENSION_MANIFESTS) {
+    assert.equal(manifest.unityInstall?.layout, "directory", `${manifest.id} should install as a Unity extension directory`);
+    assert.deepEqual(manifest.unityInstall?.include, ["extension.json", "unitypkg/", "docs/"]);
+  }
+});
 test("all five manifests have valid contributions", () => {
   for (const m of BUILTIN_EXTENSION_MANIFESTS) {
     assert.ok(m.contributions, `${m.id} should have contributions`);

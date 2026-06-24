@@ -88,6 +88,14 @@ export interface ExtensionContributions {
   docs?: ExtensionDocsContribution[];
 }
 
+/** 投影到 Packages/com.unity_cli/Extensions/<id> 的 Unity 侧文件布局。 */
+export interface ExtensionUnityInstallLayout {
+  /** 布局标识；"directory" 表示以独立子目录安装。 */
+  layout?: "directory";
+  /** 相对 extensions/<id>/ 的源码路径，会复制到 Unity 扩展目录。 */
+  include?: string[];
+}
+
 /** The top-level extension manifest. */
 export interface ExtensionManifest {
   /** Unique extension identifier (kebab-case), e.g. "probuilder". */
@@ -102,6 +110,8 @@ export interface ExtensionManifest {
   unityPackages: UnityPackageRequirement[];
   /** Capabilities contributed by this extension. */
   contributions: ExtensionContributions;
+  /** Unity 侧扩展目录安装布局。 */
+  unityInstall?: ExtensionUnityInstallLayout;
   /** Tags for categorization, e.g. ["modeling", "3d"]. */
   tags?: string[];
   /** Homepage or documentation URL. */

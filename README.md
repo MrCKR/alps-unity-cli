@@ -549,6 +549,8 @@ unity_cli extensions remove <id>
 unity_cli extensions doctor
 ```
 
+扩展源码以 `extensions/<id>/` 目录组织；安装到 Unity 项目后只作为主包子目录存在：`Packages/com.unity_cli/Extensions/<id>/`。不会创建 `Packages/com.unity_cli.<id>` 这类独立 Unity package。
+
 ### 离线文档与反射
 
 ```powershell
@@ -724,7 +726,7 @@ unity_cli tools run my.editor-tool --input '{"key":"value"}'
 
 ## ProBuilder 扩展
 
-ProBuilder 工具需要项目先安装 `com.unity.probuilder`，再安装 CLI extension bundle：
+ProBuilder 工具需要项目先安装 `com.unity.probuilder`，再安装 CLI 扩展目录：
 
 ```powershell
 unity_cli extensions install probuilder --project <project>

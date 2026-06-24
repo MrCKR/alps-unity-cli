@@ -5,7 +5,9 @@
   "version": "1.0.0",
   "description": "Universal Render Pipeline extension for alps-unity-cli",
   "packageName": "unity-cli-extension-urp",
-  "requiresUnityPackages": ["com.unity.render-pipelines.universal"],
+  "requiresUnityPackages": [
+    "com.unity.render-pipelines.universal"
+  ],
   "unityPackages": [
     {
       "name": "com.unity.render-pipelines.universal"
@@ -16,12 +18,26 @@
     "urp.volume",
     "urp.settings"
   ],
-  "copyRoot": "unitypkg",
+  "copyRoot": "extension-directory",
   "installMode": "copy-if-package-present",
-  "toolGroups": ["urp"],
+  "toolGroups": [
+    "urp"
+  ],
   "descriptorEntry": "tools/metadata/urp.js",
   "bridgeEntry": "bridge/domains/urp.js",
-  "unityPackageFiles": ["unitypkg/"],
+  "unityPackageFiles": [
+    "extension.json",
+    "unitypkg/",
+    "docs/"
+  ],
   "docsTopic": "urp",
-  "docsEntry": "docs/urp.md"
+  "docsEntry": "docs/urp.md",
+  "unityInstall": {
+    "layout": "directory",
+    "include": [
+      "extension.json",
+      "unitypkg/",
+      "docs/"
+    ]
+  }
 }

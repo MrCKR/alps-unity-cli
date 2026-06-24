@@ -6,7 +6,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, mkdir, writeFile, readFile, rm } from "node:fs/promises";
+import { mkdtemp, mkdir, writeFile, readFile, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -151,6 +151,42 @@ test("extensions install on already-installed returns already_installed", async 
   }
 });
 
+
+test("extensions install creates a Unity extension directory package", async () => {
+  const project = await makeProjectDir({ "com.unity.probuilder": "5.2.0" });
+  try {
+    const result = await handleExtensionsCommand("install", ["probuilder"], { project }, emptyRuntime, requestId);
+    assert.equal(result.ok, true);
+    const data = result.data as { targetRoot: string; fileCount: number };
+    assert.ok(data.targetRoot.endsWith(join("Packages", "com.unity_cli", "Extensions", "probuilder")));
+    assert.ok(data.fileCount > 0);
+
+    const extensionRoot = join(project, "Packages", "com.unity_cli", "Extensions", "probuilder");
+    const installedManifest = JSON.parse(await readFile(join(extensionRoot, "extension.json"), "utf8")) as { id: string; copyRoot: string; unityInstall: { layout: string } };
+    assert.equal(installedManifest.id, "probuilder");
+    assert.equal(installedManifest.copyRoot, "extension-directory");
+    assert.equal(installedManifest.unityInstall.layout, "directory");
+
+    const commandSource = await readFile(join(extensionRoot, "Editor", "Commands", "ProBuilderCommands.cs"), "utf8");
+    assert.match(commandSource, /RegisterProBuilderCommands/);
+    await stat(join(extensionRoot, "docs", "probuilder.md"));
+    await assert.rejects(() => stat(join(extensionRoot, "bridge")), { code: "ENOENT" });
+    await assert.rejects(() => stat(join(extensionRoot, "tools")), { code: "ENOENT" });
+
+    const installManifest = JSON.parse(await readFile(join(project, "Packages", "com.unity_cli", "unity_cli.extensions.manifest.json"), "utf8")) as {
+      extensions: Array<{ extensionId: string; copyRoot: string; layout?: string; files: Array<{ path: string }> }>;
+    };
+    const entry = installManifest.extensions.find((item) => item.extensionId === "probuilder")!;
+    assert.equal(entry.copyRoot, "extension-directory");
+    assert.equal(entry.layout, "directory");
+    assert.ok(entry.files.some((file) => file.path === "extension.json"));
+    assert.ok(entry.files.some((file) => file.path === "Editor/Commands/ProBuilderCommands.cs"));
+    assert.ok(entry.files.some((file) => file.path === "docs/probuilder.md"));
+    assert.ok(!entry.files.some((file) => file.path.startsWith("unitypkg/")));
+  } finally {
+    await rm(project, { recursive: true, force: true });
+  }
+});
 test("extensions install unknown extension fails with UNKNOWN_EXTENSION", async () => {
   const project = await makeProjectDir({});
   try {
@@ -281,7 +317,7 @@ test("extensions doctor flags available extension not enabled", async () => {
     const data = result.data as { healthy: boolean; checks: Array<{ id: string; issues: string[] }> };
     assert.equal(data.healthy, false);
     const probuilderCheck = data.checks.find((c) => c.id === "probuilder")!;
-    assert.ok(probuilderCheck.issues.some((i) => i.includes("bundle is not installed")));
+    assert.ok(probuilderCheck.issues.some((i) => i.includes("directory is not installed")));
   } finally {
     await rm(project, { recursive: true, force: true });
   }

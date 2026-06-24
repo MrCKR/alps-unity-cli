@@ -58,8 +58,22 @@
     },
     "installMode": {
       "type": "string",
-      "enum": ["auto", "manual"],
+      "enum": ["auto", "manual", "copy-if-package-present"],
       "description": "How the extension is installed: 'auto' (detected during init) or 'manual' (explicit install command)."
+    },
+    "copyRoot": {
+      "type": "string",
+      "enum": ["extension-directory", "unitypkg"],
+      "description": "Unity-side copy root. New extensions use extension-directory under Packages/com.unity_cli/Extensions/<id>; unitypkg is legacy."
+    },
+    "unityInstall": {
+      "type": "object",
+      "properties": {
+        "layout": { "type": "string", "const": "directory" },
+        "include": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false,
+      "description": "Unity-side directory install projection."
     },
     "installCommand": {
       "type": "string",

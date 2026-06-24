@@ -60,6 +60,7 @@ export type {
   ExtensionDocsContribution,
   ExtensionCSharpEntry,
   ExtensionContributions,
+  ExtensionUnityInstallLayout,
   ExtensionManifest,
   PackageResolution,
   ExtensionAvailabilityResult,

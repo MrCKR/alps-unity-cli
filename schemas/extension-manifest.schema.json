@@ -52,6 +52,23 @@
       },
       "description": "Required Unity packages for this extension to be available."
     },
+    "unityInstall": {
+      "type": "object",
+      "properties": {
+        "layout": {
+          "type": "string",
+          "const": "directory",
+          "description": "Install this extension as a subdirectory under Packages/com.unity_cli/Extensions/<id>."
+        },
+        "include": {
+          "type": "array",
+          "items": { "type": "string" },
+          "description": "Source paths relative to extensions/<id>/ projected into the Unity extension directory."
+        }
+      },
+      "additionalProperties": false,
+      "description": "Unity-side directory install projection."
+    },
     "contributions": {
       "type": "object",
       "properties": {

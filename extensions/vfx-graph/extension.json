@@ -5,7 +5,9 @@
   "version": "1.0.0",
   "description": "VFX Graph extension for alps-unity-cli",
   "packageName": "unity-cli-extension-vfx-graph",
-  "requiresUnityPackages": ["com.unity.visualeffectgraph"],
+  "requiresUnityPackages": [
+    "com.unity.visualeffectgraph"
+  ],
   "unityPackages": [
     {
       "name": "com.unity.visualeffectgraph"
@@ -29,12 +31,26 @@
     "vfx.line-positions",
     "vfx.trail"
   ],
-  "copyRoot": "unitypkg",
+  "copyRoot": "extension-directory",
   "installMode": "copy-if-package-present",
-  "toolGroups": ["vfx"],
+  "toolGroups": [
+    "vfx"
+  ],
   "descriptorEntry": "tools/metadata/vfx.js",
   "bridgeEntry": "bridge/domains/vfx.js",
-  "unityPackageFiles": ["unitypkg/"],
+  "unityPackageFiles": [
+    "extension.json",
+    "unitypkg/",
+    "docs/"
+  ],
   "docsTopic": "vfx",
-  "docsEntry": "docs/vfx.md"
+  "docsEntry": "docs/vfx.md",
+  "unityInstall": {
+    "layout": "directory",
+    "include": [
+      "extension.json",
+      "unitypkg/",
+      "docs/"
+    ]
+  }
 }

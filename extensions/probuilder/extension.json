@@ -5,7 +5,9 @@
   "version": "1.0.0",
   "description": "ProBuilder mesh editing extension for alps-unity-cli",
   "packageName": "unity-cli-extension-probuilder",
-  "requiresUnityPackages": ["com.unity.probuilder"],
+  "requiresUnityPackages": [
+    "com.unity.probuilder"
+  ],
   "unityPackages": [
     {
       "name": "com.unity.probuilder"
@@ -49,12 +51,26 @@
     "probuilder.set-pivot",
     "probuilder.repair-mesh"
   ],
-  "copyRoot": "unitypkg",
+  "copyRoot": "extension-directory",
   "installMode": "copy-if-package-present",
-  "toolGroups": ["probuilder"],
+  "toolGroups": [
+    "probuilder"
+  ],
   "descriptorEntry": "tools/metadata/probuilder.js",
   "bridgeEntry": "bridge/domains/probuilder.js",
-  "unityPackageFiles": ["unitypkg/"],
+  "unityPackageFiles": [
+    "extension.json",
+    "unitypkg/",
+    "docs/"
+  ],
   "docsTopic": "probuilder",
-  "docsEntry": "docs/probuilder.md"
+  "docsEntry": "docs/probuilder.md",
+  "unityInstall": {
+    "layout": "directory",
+    "include": [
+      "extension.json",
+      "unitypkg/",
+      "docs/"
+    ]
+  }
 }
