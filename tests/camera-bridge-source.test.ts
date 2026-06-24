@@ -68,6 +68,13 @@ test("Unity Bridge exposes documented core camera, screenshot, prefab, UI, mater
   assert.match(source, /EditorApplication\.quitting \+= UnregisterAndStop/);
   assert.match(source, /RegisterInstance\("healthy"\)/);
   assert.match(source, /RegisterInstance\("stale"\)/);
+  assert.match(source, /return "unity-" \+ ProjectHash\(\) \+ "-" \+ System\.Diagnostics\.Process\.GetCurrentProcess\(\)\.Id\.ToString/);
+  assert.doesNotMatch(source, /InstanceSuffix/);
+  assert.match(source, /DeleteSupersededInstanceFiles\(\)/);
+  assert.match(source, /ShouldRemoveRegistration\(item\)/);
+  assert.match(source, /RegistrationPid\(string json\)/);
+  assert.match(source, /RegistrationTimestamp\(string json\)/);
+  assert.match(source, /StaleRegistrationSeconds/);
   assert.match(source, /"instances"/);
   assert.match(source, /\.Prop\("domainReloading", domainReloading\)/);
   assert.doesNotMatch(source, /\.Prop\("domainReloading", EditorApplication\.isCompiling\)/);

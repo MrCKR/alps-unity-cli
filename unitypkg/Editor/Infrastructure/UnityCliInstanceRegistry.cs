@@ -33,9 +33,10 @@ namespace UnityCli
             return Directory.GetParent(Application.dataPath).FullName;
         }
 
+        // 实例 ID 对同一 Unity 进程保持稳定，domain reload 只通过 bridgeListenerId 区分。
         private static string InstanceId()
         {
-            return "unity-" + ProjectHash() + "-" + System.Diagnostics.Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture) + "-" + InstanceSuffix;
+            return "unity-" + ProjectHash() + "-" + System.Diagnostics.Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture);
         }
 
         private static string ProjectHash()
@@ -78,6 +79,7 @@ namespace UnityCli
             try
             {
                 Directory.CreateDirectory(InstancesDir());
+                DeleteSupersededInstanceFiles();
                 var instanceJson = InstanceJson(status);
                 File.WriteAllText(InstancePath(), instanceJson, Encoding.UTF8);
                 WriteRegistryFile(instanceJson);
@@ -110,12 +112,11 @@ namespace UnityCli
         {
             Directory.CreateDirectory(DataDir());
             var existing = File.Exists(RegistryPath()) ? File.ReadAllText(RegistryPath()) : string.Empty;
-            var marker = "\"instanceId\":" + Quote(InstanceId());
             var items = new List<string>();
             foreach (Match match in Regex.Matches(existing, "\\{\\s*\\\"instanceId\\\"[\\s\\S]*?\\\"last(?:Heartbeat|Seen)At\\\"\\s*:\\s*\\\"(?:\\\\.|[^\\\"])*\\\"\\s*\\}"))
             {
                 var item = match.Value;
-                if (item.IndexOf(marker, StringComparison.Ordinal) < 0)
+                if (!ShouldRemoveRegistration(item))
                 {
                     items.Add(item);
                 }
@@ -135,6 +136,72 @@ namespace UnityCli
                 })
                 .EndObject();
             File.WriteAllText(RegistryPath(), w.ToString(), Encoding.UTF8);
+        }
+
+        private const double StaleRegistrationSeconds = 30.0;
+
+        // 清理同项目的旧注册：当前进程旧随机文件直接移除，心跳过期的历史文件也移除。
+        private static void DeleteSupersededInstanceFiles()
+        {
+            if (!Directory.Exists(InstancesDir()))
+            {
+                return;
+            }
+
+            foreach (var path in Directory.GetFiles(InstancesDir(), "*.json"))
+            {
+                if (string.Equals(path, InstancePath(), StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+
+                try
+                {
+                    var json = File.ReadAllText(path);
+                    if (ShouldRemoveRegistration(json))
+                    {
+                        File.Delete(path);
+                    }
+                }
+                catch (Exception exception)
+                {
+                    WriteLog("instance_cleanup_failed " + Path.GetFileName(path) + " " + exception.GetType().Name + ": " + exception.Message);
+                }
+            }
+        }
+
+        // 判断注册 JSON 是否属于当前项目且已被当前注册取代。
+        private static bool ShouldRemoveRegistration(string json)
+        {
+            if (!Regex.IsMatch(json, "\\\"projectHash\\\"\\s*:\\s*" + Regex.Escape(Quote(ProjectHash()))))
+            {
+                return false;
+            }
+
+            var pid = RegistrationPid(json);
+            if (pid.HasValue && pid.Value == System.Diagnostics.Process.GetCurrentProcess().Id)
+            {
+                return true;
+            }
+
+            var timestamp = RegistrationTimestamp(json);
+            return timestamp.HasValue && DateTime.UtcNow - timestamp.Value.ToUniversalTime() > TimeSpan.FromSeconds(StaleRegistrationSeconds);
+        }
+
+        // 从注册 JSON 中解析 Unity 进程 ID，兼容 processId 与旧 pid 字段。
+        private static int? RegistrationPid(string json)
+        {
+            var match = Regex.Match(json, "\\\"(?:processId|pid)\\\"\\s*:\\s*(\\d+)(?=\\s*[,}])");
+            int value;
+            return match.Success && int.TryParse(match.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out value) ? (int?)value : null;
+        }
+
+        // 从注册 JSON 中解析最近心跳时间，优先 lastSeenAt，兼容 lastHeartbeatAt。
+        private static DateTime? RegistrationTimestamp(string json)
+        {
+            var match = Regex.Match(json, "\\\"last(?:Seen|Heartbeat)At\\\"\\s*:\\s*\\\"((?:\\\\.|[^\\\"])*)\\\"");
+            DateTime value;
+            return match.Success && DateTime.TryParse(match.Groups[1].Value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out value) ? (DateTime?)value : null;
         }
 
         private static string InstanceJson(string status)

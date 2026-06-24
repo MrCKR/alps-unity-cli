@@ -58,7 +58,6 @@ namespace UnityCli
         private const string DestructiveCommandFingerprint = "destructive-safety-v1";
         private static readonly BridgeCommandRegistry CommandRegistry = CreateCommandRegistry();
         private static readonly string ListenerId = Guid.NewGuid().ToString("N");
-        private static readonly string InstanceSuffix = Guid.NewGuid().ToString("N").Substring(0, 6);
         private static readonly DateTime BridgeLoadedAtUtc = DateTime.UtcNow;
         private static HttpListener listener;
         private static bool started;
