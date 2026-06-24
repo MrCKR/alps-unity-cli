@@ -71,7 +71,7 @@ namespace UnityCli
             ApplyQualityInt(request, "vSyncCount", "vSyncCount", delegate(int value) { QualitySettings.vSyncCount = value; }, effects);
             ApplyQualityInt(request, "antiAliasing", "antiAliasing", delegate(int value) { QualitySettings.antiAliasing = value; }, effects);
             ApplyQualityFloat(request, "shadowDistance", "shadowDistance", delegate(float value) { QualitySettings.shadowDistance = value; }, effects);
-            ApplyQualityInt(request, "masterTextureLimit", "masterTextureLimit", delegate(int value) { QualitySettings.masterTextureLimit = value; }, effects);
+            ApplyQualityInt(request, "masterTextureLimit", "masterTextureLimit", delegate(int value) { QualitySettings.globalTextureMipmapLimit = value; }, effects);
             ApplyQualityFloat(request, "lodBias", "lodBias", delegate(float value) { QualitySettings.lodBias = value; }, effects);
             ApplyQualityInt(request, "maximumLODLevel", "maximumLODLevel", delegate(int value) { QualitySettings.maximumLODLevel = value; }, effects);
             ApplyQualityEnum<AnisotropicFiltering>(request, "anisotropicFiltering", "anisotropicFiltering", delegate(AnisotropicFiltering value) { QualitySettings.anisotropicFiltering = value; }, effects);
@@ -98,7 +98,7 @@ namespace UnityCli
             ApplyQualityInt(request, "antiAliasing", "antiAliasing", delegate(int value) { QualitySettings.antiAliasing = value; }, effects);
             ApplyQualityFloat(request, "shadowDistance", "shadowDistance", delegate(float value) { QualitySettings.shadowDistance = value; }, effects);
             ApplyQualityInt(request, "vSyncCount", "vSyncCount", delegate(int value) { QualitySettings.vSyncCount = value; }, effects);
-            ApplyQualityInt(request, "masterTextureLimit", "masterTextureLimit", delegate(int value) { QualitySettings.masterTextureLimit = value; }, effects);
+            ApplyQualityInt(request, "masterTextureLimit", "masterTextureLimit", delegate(int value) { QualitySettings.globalTextureMipmapLimit = value; }, effects);
             ApplyQualityFloat(request, "lodBias", "lodBias", delegate(float value) { QualitySettings.lodBias = value; }, effects);
             ApplyQualityInt(request, "maximumLODLevel", "maximumLODLevel", delegate(int value) { QualitySettings.maximumLODLevel = value; }, effects);
             if (request.HasArg("renderPipeline"))
@@ -255,7 +255,7 @@ namespace UnityCli
                 .Prop("vSyncCount", (long)QualitySettings.vSyncCount)
                 .Prop("antiAliasing", (long)QualitySettings.antiAliasing)
                 .Prop("shadowDistance", QualitySettings.shadowDistance)
-                .Prop("masterTextureLimit", (long)QualitySettings.masterTextureLimit)
+                .Prop("masterTextureLimit", (long)QualitySettings.globalTextureMipmapLimit)
                 .Prop("lodBias", QualitySettings.lodBias)
                 .Prop("maximumLODLevel", (long)QualitySettings.maximumLODLevel)
                 .Prop("anisotropicFiltering", QualitySettings.anisotropicFiltering.ToString())
