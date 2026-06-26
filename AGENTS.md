@@ -121,11 +121,37 @@ Packages/com.unity_cli/Extensions/<id>/
 
 ## 安全与破坏性操作
 
-- `destructiveHint: true` 的 Tool 必须要求 `--yes` 或支持 `--dry-run` 预览。
-- 支持 dry-run 的 Tool 必须返回可机器读取的 planned effects。
-- 删除、覆盖、保存、执行菜单、修改脚本、取消 job 等操作必须显式声明破坏性。
+### 安全策略判定标准
+
+只有满足以下条件的工具才标记 `destructiveHint: true`：
+
+- 对资产文件做**真实持久化操作**（修改、创建、删除 `.asset`/`.unity`/`.controller`/`.mat`/`.png` 等文件）。
+- 改变项目 `Packages/manifest.json` 或 `ProjectSettings/`。
+- 写入持久化光照数据（lightmap、reflection probe bake）。
+- **可执行任意代码**（`code.exec`、`editor.menu`、`reflection.method.call`）——潜在任何副作用。
+
+**不标记 `destructiveHint: true`** 的工具：
+
+- 只改场景内存 / 会话状态（GameObject 增删改、组件增删改、Console 清空、Profiler 清空、选择切换、编辑器工具切换、Prefab unpack、场景卸载等）——这些操作不保存则不持久。
+- 新建场景内存对象（GameObject、Canvas、UI 元素等）——不破坏已有资源。
+
+### `--yes` 与 `--dry-run` 规则
+
+- `destructiveHint: true` 的 Tool 必须要求 `--yes` 才能执行。
+- `destructiveHint: true` 的 Tool 鼓励支持 `--dry-run` 预览，返回可机器读取的 planned effects。
+- `destructiveHint: false` 的 Tool 也可以支持 `--dry-run`（如 `component.modify`、`object.modify`），用于预览修改影响——这不依赖 `destructiveHint`。
 - 不得通过模糊描述隐藏副作用。
-- 破坏性 Tool 的 CLI 路径与 Bridge 路径都必须保持安全语义一致。
+- 破坏性 Tool 的 CLI 路径（`security-policy.ts`）与 Bridge 路径（C# `RegisterCommand` 第 3 参数）都必须保持安全语义一致。
+
+### 三层一致性
+
+破坏性声明必须在三层保持一致：
+
+1. **metadata `destructiveHint`**（`src/tools/metadata/groups/*.ts`）：AI 看到的权威来源，CLI `--yes` 门禁实际拦截依据。
+2. **`security-policy.ts`**（`src/security-policy.ts`）：CLI 侧显式安全策略列表。
+3. **C# `RegisterCommand`** 第 3 参数（`unitypkg/Editor/Commands/*.cs`）：Bridge 侧门禁。
+
+三层中任一层声明 `destructive=true`，该工具就需要 `--yes`。修改时三层必须同步。
 
 ## 输出与错误规范
 
