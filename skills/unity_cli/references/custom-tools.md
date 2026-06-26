@@ -18,6 +18,8 @@
 
 在 Unity Editor 侧 C# 中使用 `[UnityCliTool]`。可以标在静态类或静态方法上。
 
+`[UnityCliTool]` 定义在 `UnityCli.Editor` 程序集中（`autoReferenced: true`），项目内任何 asmdef 都可以直接引用，无需手动添加程序集引用。C# 文件放在名为 `UnityCLI` 的目录下（如 `Assets/UnityCLI/`）。
+
 类级别示例：
 
 ```csharp

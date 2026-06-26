@@ -16,7 +16,7 @@
 
 ## 注册方式
 
-在 Unity Editor 侧 C# 静态方法上使用 `[UnityCliContext]`。Context handler 方法名不要叫 `Execute` 或 `Run`，避免被误认为 Tool。
+在 Unity Editor 侧 C# 静态方法上使用 `[UnityCliContext]`。Context handler 方法名不要叫 `Execute` 或 `Run`，避免被误认为 Tool。`[UnityCliContext]` 定义在 `UnityCli.Editor` 程序集中（`autoReferenced: true`），项目内任何 asmdef 都可以直接引用。C# 文件放在名为 `UnityCLI` 的目录下（如 `Assets/UnityCLI/`）。
 
 示例（放在 `Assets/UnityCLI/` 目录下）：
 
