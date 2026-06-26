@@ -18,7 +18,7 @@
 
 在 Unity Editor 侧 C# 静态方法上使用 `[UnityCliContext]`。Context handler 方法名不要叫 `Execute` 或 `Run`，避免被误认为 Tool。
 
-示例：
+示例（放在 `Assets/UnityCLI/` 目录下）：
 
 ```csharp
 #if UNITY_EDITOR

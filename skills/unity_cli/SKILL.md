@@ -91,10 +91,15 @@ unity_cli context read <context> --input '<json>'
 
 ## 自定义 Tool / Context 扩展
 
-只在要要创建、修改、审计或排查项目自定义能力时读取引文：
+当 CLI 没有某种能力时，按以下优先级决策：
 
-- 需要让 AI 执行动作、修改项目、生成资源、运行项目逻辑：读取 `references/custom-tools.md`，使用 `[UnityCliTool]`。
-- 需要给 AI 增加只读项目知识、状态摘要、团队约定或资源索引：读取 `references/custom-contexts.md`，使用 `[UnityCliContext]`。
+1. **一次性需求**：用 `tools run code.exec --yes` 动态执行 C# 代码解决。
+2. **反复需要的只读信息**：创建自定义 Context（`[UnityCliContext]`），读取 `references/custom-contexts.md`。
+3. **反复需要的操作能力**：创建自定义 Tool（`[UnityCliTool]`），读取 `references/custom-tools.md`。
+
+不要绕过 CLI 用其他方式操作 Unity——优先在 CLI 框架内解决。
+
+**目录约定**：所有自定义 Tool 和 Context 的 C# 文件必须放在名为 `UnityCLI` 的目录下（如 `Assets/UnityCLI/`、`Assets/Editor/UnityCLI/`、`Assets/SomeModule/UnityCLI/`）。位置和数量不限，但目录名必须是 `UnityCLI`，便于统一发现和管理。
 
 日常使用自定义能力时不需要读取引文，直接走发现链：
 

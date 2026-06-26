@@ -168,6 +168,19 @@ Packages/com.unity_cli/Extensions/<id>/
 - 扩展工具不可用时，必须返回明确缺失包和下一步操作。
 - 新增扩展能力必须同步更新 manifest、TS metadata、Bridge spec、Unity C#、docs、contract、tests。
 
+### 自定义 Tool / Context 目录约定
+
+项目自定义工具（`[UnityCliTool]`）和自定义 Context（`[UnityCliContext]`）的 C# 文件必须放在名为 `UnityCLI` 的目录下：
+
+- 合法路径示例：`Assets/UnityCLI/`、`Assets/Editor/UnityCLI/`、`Assets/SomeModule/UnityCLI/`
+- 目录位置不限，项目内可存在多个 `UnityCLI` 目录
+- 目录名必须是 `UnityCLI`（大小写敏感），便于统一发现和管理
+- 这不适用于 CLI 内置 Bridge 包（`Packages/com.unity_cli/`）和扩展（`Packages/com.unity_cli/Extensions/`）
+- Core 不得对可选 Unity package 建立编译期依赖。
+- 扩展可用性必须根据目标项目安装的 Unity package 判断。
+- 扩展工具不可用时，必须返回明确缺失包和下一步操作。
+- 新增扩展能力必须同步更新 manifest、TS metadata、Bridge spec、Unity C#、docs、contract、tests。
+
 ## 安全与破坏性操作
 
 ### 安全策略判定标准

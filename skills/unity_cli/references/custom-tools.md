@@ -47,7 +47,7 @@ public static class SampleEchoTool
 #endif
 ```
 
-方法级别示例：
+方法级别示例（放在 `Assets/UnityCLI/` 目录下）：
 
 ```csharp
 #if UNITY_EDITOR
