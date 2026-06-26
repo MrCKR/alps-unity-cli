@@ -8,6 +8,55 @@
 
 核心目标不是维护给人记忆的传统命令手册，而是提供可发现、可描述、可审计、可验证的工具目录，让陌生 AI 能通过一次自发现安全调用 Unity 能力。
 
+### 设计哲学
+
+本 CLI 的核心用户是 AI，不是人。所有设计决策的第一标准是：陌生 AI 看一眼 `describe` 就能一次调用成功，不需要读源码、不需要人教、不需要试错。
+
+这个 CLI 是 AI 的「Unity 手」，不是人的工具。AI 通过 `describe` 学习工具用法（像读 API 文档），通过 `tools run` 执行操作（像调 API），通过 `context read` 观察状态（像读数据库）。安全策略只保护真正不可逆的持久化操作，不阻挡日常的 Unity 编辑操作。每个工具的 describe 必须让 AI 一次看懂、一次调对——做不到就是接口设计失败。
+
+### 核心原则
+
+1. **职责单一，不聚合**：不把多种能力塞进一个 action 路由器（如 `manage_material` 一个工具做 create/set/assign/color）。拆成 `material.info/create/assign/set` 独立工具——AI 从工具名就能判断该不该用，不用先理解 action 枚举。
+
+2. **只吸收 AI 做不到的**：AI 能直接读写工程文件（如 `.cs` 脚本），不需要 CLI 包装。AI 不能直接操作 Unity Editor 内存/资产/场景/物理/渲染，这些保留。分界线是「Unity 侧独特价值」。
+
+3. **不做 AI 已经能做的事**：install-unity/create-project/open/close Editor——AI 用命令行自己能做，不需要 CLI 包装。
+
+4. **减少上下文消耗是硬指标**：返回量可控（分页/筛选/深度/namePattern）；`describe` 自足（不用先读 README）；大对象默认摘要，按需展开；减少轮询往返（如 `--wait-ready`）。
+
+5. **安全策略最小化**：只拦「真实持久化文件操作」和「任意代码执行」。场景内存操作不拦——AI 不应该被 `--yes` 阻挡去做 Unity Editor 里的日常操作。
+
+### 架构分层
+
+```
+AI
+ ↓
+tools describe <tool>        ← 唯一的学习入口
+tools run <tool> --input     ← 唯一的执行入口
+ ↓
+CLI (TypeScript)
+ ├── bridge spec → 结构化 --input 字段透传
+ ├── security-policy → --yes 门禁（只拦持久化）
+ ├── metadata → describe 输出来源
+ └── handler routing → bridge / offline / hybrid / job
+ ↓
+Unity Bridge (C#)
+ ├── RegisterCommand → 工具注册 + destructive 标记
+ ├── SuccessJson → 统一 envelope（业务字段不丢）
+ └── 各域 Commands → 实际 Unity API 调用
+ ↓
+Unity Editor
+```
+
+### 明确不做的东西
+
+- MCP 协议 / server / transport / resource / prompt
+- 桌面 GUI / setup wizard
+- 工具开关 / 配置持久化
+- 聚合 action 路由器（manage_*）
+- 人类导向的命令手册（README → CLI 交互式）
+- 兼容层 / 遗留语义
+
 ## 顶层 CLI 形态冻结
 
 用户可见顶层命令只允许以下两类。
