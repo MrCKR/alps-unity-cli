@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;
+using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEngine;
 
@@ -33,15 +34,190 @@ namespace UnityCli
                 public HashSet<string> Paths;
                 public HashSet<string> NameFilters;
                 public HashSet<string> TypeFilters;
+                public string ViewPath;
+                public string NamePattern;
+                public string TypeFilter;
             }
 
-            /// <summary>序列化根对象为 SerializedMember JSON。</summary>
+            /// <summary>序列化根对象为 SerializedMember JSON，paths/viewQuery 存在时优先做范围化读取，避免大对象展开。</summary>
             public static string Serialize(object obj, Options options)
             {
                 if (options == null) options = new Options();
+                if (options.Paths != null && options.Paths.Count > 0)
+                {
+                    return MemberToJson(BuildPathReadAggregate(obj, options));
+                }
+                if (!string.IsNullOrEmpty(options.ViewPath))
+                {
+                    var viewRoot = TryReadPath(obj, NormalizeReadPath(options.ViewPath), out var error);
+                    if (error != null)
+                    {
+                        return MemberToJson(ErrorMember("$" + "." + NormalizeReadPath(options.ViewPath), error));
+                    }
+                    obj = viewRoot;
+                }
                 var visited = new HashSet<int>();
-                var member = ToMember(obj, "$", obj == null ? "null" : obj.GetType().FullName, options, visited, 0);
+                var member = ToMember(obj, string.IsNullOrEmpty(options.ViewPath) ? "$" : "$" + "." + NormalizeReadPath(options.ViewPath), obj == null ? "null" : obj.GetType().FullName, options, visited, 0);
                 return MemberToJson(member);
+            }
+
+            /// <summary>按请求路径逐项读取，并用稳定 fields envelope 返回每个路径的结果或可恢复错误。</summary>
+            private static SerializedMember BuildPathReadAggregate(object obj, Options options)
+            {
+                var aggregate = new SerializedMember
+                {
+                    Path = "$",
+                    TypeName = "UnityCli.PathReadAggregate"
+                };
+                foreach (var rawPath in options.Paths)
+                {
+                    var normalizedPath = NormalizeReadPath(rawPath);
+                    var value = TryReadPath(obj, normalizedPath, out var error);
+                    aggregate.Fields.Add(new SerializedMember.KV
+                    {
+                        Key = rawPath,
+                        Value = error == null
+                            ? ToMember(value, string.IsNullOrEmpty(normalizedPath) ? "$" : "$" + "." + normalizedPath, value == null ? "null" : value.GetType().FullName, WithoutPaths(options), new HashSet<int>(), 0)
+                            : ErrorMember(string.IsNullOrEmpty(normalizedPath) ? "$" : "$" + "." + normalizedPath, error)
+                    });
+                }
+                return aggregate;
+            }
+
+            /// <summary>移除 paths 选项，避免读取到的子树再次被路径过滤。</summary>
+            private static Options WithoutPaths(Options options)
+            {
+                return new Options
+                {
+                    MaxDepth = options.MaxDepth,
+                    IncludeFields = options.IncludeFields,
+                    IncludeProperties = options.IncludeProperties,
+                    DeepSerialization = options.DeepSerialization,
+                    NameFilters = options.NameFilters,
+                    TypeFilters = options.TypeFilters,
+                    NamePattern = options.NamePattern,
+                    TypeFilter = options.TypeFilter
+                };
+            }
+
+            /// <summary>规范化 AI 常用路径语法，兼容 leading #/、$/、点路径和 / 路径。</summary>
+            private static string NormalizeReadPath(string path)
+            {
+                if (string.IsNullOrEmpty(path)) return string.Empty;
+                var normalized = path.Trim();
+                if (normalized.StartsWith("#/", StringComparison.Ordinal)) normalized = normalized.Substring(2);
+                if (normalized.StartsWith("$.", StringComparison.Ordinal)) normalized = normalized.Substring(2);
+                if (normalized.StartsWith("$/", StringComparison.Ordinal)) normalized = normalized.Substring(2);
+                normalized = normalized.Replace('/', '.');
+                return normalized.Trim('.');
+            }
+
+            /// <summary>沿字段、属性、数组索引或字典 key 读取单一路径。</summary>
+            private static object TryReadPath(object root, string path, out string error)
+            {
+                error = null;
+                if (root == null)
+                {
+                    error = "root object is null";
+                    return null;
+                }
+                if (string.IsNullOrEmpty(path)) return root;
+                var current = root;
+                foreach (var rawSegment in path.Split(new[] { '.' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    current = ReadPathSegment(current, rawSegment, out error);
+                    if (error != null) return null;
+                }
+                return current;
+            }
+
+            /// <summary>读取路径中的一个 segment，支持 field/property 与 name[index]。</summary>
+            private static object ReadPathSegment(object current, string segment, out string error)
+            {
+                error = null;
+                if (current == null)
+                {
+                    error = "encountered null before segment '" + segment + "'";
+                    return null;
+                }
+
+                var name = segment;
+                string indexer = null;
+                var bracketIndex = segment.IndexOf('[');
+                if (bracketIndex >= 0)
+                {
+                    name = segment.Substring(0, bracketIndex);
+                    indexer = segment.Substring(bracketIndex).Trim();
+                }
+
+                object value = current;
+                if (!string.IsNullOrEmpty(name))
+                {
+                    var type = current.GetType();
+                    var field = type.GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                    if (field != null)
+                    {
+                        value = field.GetValue(current);
+                    }
+                    else
+                    {
+                        var prop = type.GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+                        if (prop == null || !prop.CanRead || prop.GetIndexParameters().Length > 0)
+                        {
+                            error = "member not found or unreadable: " + name;
+                            return null;
+                        }
+                        value = prop.GetValue(current, null);
+                    }
+                }
+
+                if (!string.IsNullOrEmpty(indexer))
+                {
+                    value = ReadIndexer(value, indexer, out error);
+                }
+                return value;
+            }
+
+            /// <summary>读取数组/list/dictionary 索引，格式为 [i] 或 [key]。</summary>
+            private static object ReadIndexer(object value, string indexer, out string error)
+            {
+                error = null;
+                if (value == null)
+                {
+                    error = "cannot index null value";
+                    return null;
+                }
+                var token = indexer.Trim();
+                if (!token.StartsWith("[", StringComparison.Ordinal) || !token.EndsWith("]", StringComparison.Ordinal))
+                {
+                    error = "invalid index syntax: " + indexer;
+                    return null;
+                }
+                token = token.Substring(1, token.Length - 2).Trim().Trim('"');
+                if (value is IList list)
+                {
+                    int index;
+                    if (!int.TryParse(token, NumberStyles.Integer, CultureInfo.InvariantCulture, out index) || index < 0 || index >= list.Count)
+                    {
+                        error = "list index out of range: " + token;
+                        return null;
+                    }
+                    return list[index];
+                }
+                if (value is IDictionary dict)
+                {
+                    foreach (DictionaryEntry entry in dict)
+                    {
+                        if (string.Equals(Convert.ToString(entry.Key, CultureInfo.InvariantCulture), token, StringComparison.Ordinal))
+                        {
+                            return entry.Value;
+                        }
+                    }
+                    error = "dictionary key not found: " + token;
+                    return null;
+                }
+                error = "value is not indexable";
+                return null;
             }
 
             private static SerializedMember ToMember(object obj, string path, string declaredType, Options options, HashSet<int> visited, int depth)
@@ -180,10 +356,12 @@ namespace UnityCli
                         try
                         {
                             var value = field.GetValue(obj);
+                            var child = ToMember(value, member.Path + "." + field.Name, field.FieldType.FullName, options, visited, depth + 1);
+                            if (!TypeAllowed(child.TypeName, options)) continue;
                             member.Fields.Add(new SerializedMember.KV
                             {
                                 Key = field.Name,
-                                Value = ToMember(value, member.Path + "." + field.Name, field.FieldType.FullName, options, visited, depth + 1)
+                                Value = child
                             });
                             memberCount++;
                         }
@@ -205,6 +383,7 @@ namespace UnityCli
                         {
                             var value = prop.GetValue(obj, null);
                             var child = ToMember(value, member.Path + "." + prop.Name, prop.PropertyType.FullName, options, visited, depth + 1);
+                            if (!TypeAllowed(child.TypeName, options)) continue;
                             child.ReadOnly = !prop.CanWrite;
                             child.Writable = prop.CanWrite;
                             member.Props.Add(new SerializedMember.KV { Key = prop.Name, Value = child });
@@ -237,7 +416,17 @@ namespace UnityCli
                 {
                     return options.NameFilters.Contains(name);
                 }
+                if (!string.IsNullOrEmpty(options.NamePattern) && !Regex.IsMatch(name, options.NamePattern, RegexOptions.IgnoreCase))
+                {
+                    return false;
+                }
                 return true;
+            }
+
+            private static bool TypeAllowed(string typeName, Options options)
+            {
+                return string.IsNullOrEmpty(options.TypeFilter)
+                    || (!string.IsNullOrEmpty(typeName) && typeName.IndexOf(options.TypeFilter, StringComparison.OrdinalIgnoreCase) >= 0);
             }
 
             private static bool IsSimpleType(Type type)

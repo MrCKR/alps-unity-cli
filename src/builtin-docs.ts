@@ -54,7 +54,7 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   camera: {
     title: "Camera Commands",
     summary: "Inspect cameras and capture camera-specific screenshots. Handler: bridge. Target: editor.",
-    guide: "Use `camera list` to find camera names, then `camera info <target>` for details."
+    guide: "Use `tools run camera.list` to find camera names, then `tools run camera.info --input '{\"target\":\"<camera>\"}'` for details."
   },
   go: {
     title: "GameObject Commands",
@@ -154,8 +154,8 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   docs: {
     title: "Built-in and Offline Documentation",
-    summary: "Read built-in CLI topic docs, or query/search the offline Unity API documentation cache with `docs get` / `docs search`. Handler: offline. Target: none.",
-    guide: "Run `unity_cli tools run docs.list` to list built-in topics. Use `docs get <api> --docs-dir <path>` when querying a populated Unity API cache."
+    summary: "Read built-in CLI topic docs, or query/search the offline Unity API documentation cache with `tools run docs.get` / `tools run docs.search`. Handler: offline. Target: none.",
+    guide: "Run `unity_cli tools run docs.list` to list built-in topics. Use `unity_cli tools run docs.get --input '{\"api\":\"UnityEngine.Camera\",\"docsDir\":\"<path>\"}'` when querying a populated Unity API cache."
   },
   reflect: {
     title: "Offline Reflection",
@@ -205,7 +205,7 @@ export function listBuiltinDocs(
     .sort((a, b) => a.key.localeCompare(b.key));
   const format = getString(flags, "format");
   const data: Record<string, unknown> = {
-    command: "docs.topics",
+    command: "docs.list",
     mode: "builtin",
     requiresUnity: false,
     count: topics.length,

@@ -39,7 +39,7 @@ namespace UnityCli
             if (includeInstance) bindings |= BindingFlags.Instance;
             if (!includePrivate) bindings = BindingFlags.Public | (includeStatic ? BindingFlags.Static : BindingFlags.Default) | (includeInstance ? BindingFlags.Instance : BindingFlags.Default);
 
-            return ReflectionInvoker.FindMethods(typeName, methodName, bindings);
+            return SuccessJson(ReflectionInvoker.FindMethods(typeName, methodName, bindings));
         }
 
         /// <summary>调用方法：不做范围限制，高风险，要求 --yes。返回 audit、异常与结果。</summary>
@@ -55,9 +55,8 @@ namespace UnityCli
                     "Run reflection.method.find to discover methods, then call with --yes.");
             }
 
-            // 高风险确认：必须 security.confirmed + destructiveFingerprint
-            var fingerprint = SecurityFingerprint("reflection.method.call", typeName, methodName);
-            if (!request.SecurityConfirmed(fingerprint))
+            // 高风险确认：dry-run 返回预览；真实执行使用 CLI 统一 destructive proof。
+            if (request.DryRun || !request.SecurityConfirmed(DestructiveCommandFingerprint))
             {
                 var preview = new UnityCliJsonWriter().BeginObject();
                 preview.Prop("command", "reflection.method.call");
@@ -67,7 +66,7 @@ namespace UnityCli
                 preview.Prop("destructiveHint", true);
                 preview.Prop("typeName", typeName);
                 preview.Prop("methodName", methodName);
-                preview.Prop("fingerprint", fingerprint);
+                preview.Prop("confirmationFlag", "--yes");
                 preview.PropArray("plannedEffects", arr => arr.BeginObject()
                     .Prop("type", "reflection.method.call")
                     .Prop("target", typeName + "." + methodName)
@@ -83,7 +82,7 @@ namespace UnityCli
             var bindings = BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance | BindingFlags.Static;
 
             var result = ReflectionInvoker.CallMethod(typeName, methodName, false, argsJson, instanceRefJson, bindings);
-            return result;
+            return SuccessJson(result);
         }
 
         /// <summary>生成类型 JSON Schema。</summary>
@@ -97,7 +96,7 @@ namespace UnityCli
                     "Pass --input '{\"typeName\":\"UnityEngine.Rigidbody\"}'.");
             }
             var maxDepth = request.IntArg("maxDepth", 3);
-            return TypeSchemaGenerator.Generate(typeName, maxDepth);
+            return SuccessJson(TypeSchemaGenerator.Generate(typeName, maxDepth));
         }
 
         /// <summary>计算高风险操作的确认指纹。</summary>

@@ -113,7 +113,7 @@ namespace UnityCli
             }
             if (string.IsNullOrEmpty(path))
             {
-                throw new BridgeCommandException("E_SCENE_PATH_REQUIRED", "Scene save requires --path when the active scene has not been saved yet.", "Pass unity_cli scene save Assets/Scenes/Main.unity.");
+                throw new BridgeCommandException("E_SCENE_PATH_REQUIRED", "Scene save requires --path when the active scene has not been saved yet.", "Pass tools run scene.save --input '{\"path\":\"Assets/Scenes/Main.unity\"}'.");
             }
             if (request.DryRun)
             {
@@ -208,7 +208,7 @@ namespace UnityCli
             w.Prop("count", (long)SceneManager.sceneCount);
             w.Prop("activeScene", SceneManager.GetActiveScene().name);
             w.Prop("logPath", LogPath());
-            return w.EndObject().ToString();
+            return SuccessJson(w.EndObject().ToString());
         }
 
         /// <summary>参数化 Scene 深读：对齐 Ivan scene-get-data。只读 Tool，不做 Context 主入口。</summary>
@@ -233,7 +233,7 @@ namespace UnityCli
             w.Prop("count", (long)count);
             w.PropArray("items", arr => { foreach (var item in items) arr.RawValue(item); });
             w.Prop("logPath", LogPath());
-            return w.EndObject().ToString();
+            return SuccessJson(w.EndObject().ToString());
         }
 
         private static void CollectSceneData(Transform t, int depth, int maxDepth, string nameFilter, bool includeComponents, List<string> items, ref int count, int maxResults)
@@ -323,7 +323,7 @@ namespace UnityCli
             {
                 if (requireExisting)
                 {
-                    throw new BridgeCommandException("E_SCENE_PATH_REQUIRED", "Pass an Assets/*.unity scene path.", "Use unity_cli scene load Assets/Scenes/Main.unity.");
+                    throw new BridgeCommandException("E_SCENE_PATH_REQUIRED", "Pass an Assets/*.unity scene path.", "Use tools run scene.load --input '{\"path\":\"Assets/Scenes/Main.unity\"}'.");
                 }
                 return null;
             }
@@ -333,7 +333,7 @@ namespace UnityCli
             }
             if (requireExisting && !AssetExists(path))
             {
-                throw new BridgeCommandException("E_SCENE_NOT_FOUND", "Scene asset not found: " + path, "Run unity_cli asset search --type Scene or pass an existing Assets/*.unity path.");
+                throw new BridgeCommandException("E_SCENE_NOT_FOUND", "Scene asset not found: " + path, "Run tools run asset.search --input '{\"filter\":\"t:Scene\"}' or pass an existing Assets/*.unity path.");
             }
             return path;
         }
@@ -355,34 +355,57 @@ namespace UnityCli
                 .EndObject().ToString();
         }
 
+        /// <summary>读取场景层级摘要：支持 parent、深度、名称过滤、组件预览和分页，避免一次返回整棵大树。</summary>
         private static string SceneHierarchy(BridgeRequest request)
         {
-            var roots = SceneManager.GetActiveScene().GetRootGameObjects();
-            var total = 0;
-            foreach (var root in roots)
-            {
-                total += CountHierarchy(root.transform);
-            }
+            var scene = SceneManager.GetActiveScene();
+            var parent = request.StringArg("parent");
+            var includeInactive = request.BoolArg("includeInactive", false);
+            var includeComponents = request.BoolArg("includeComponents", false);
+            var nameFilter = request.StringArg("nameFilter") ?? request.StringArg("filter");
+            var maxDepth = Math.Max(0, Math.Min(request.IntArg("maxDepth", 1), 16));
             var cursor = Math.Max(0, request.IntArg("cursor", 0));
             var pageSize = Math.Max(1, Math.Min(request.IntArg("pageSize", 100), 500));
-            var items = new List<string>();
-            var counter = new Counter();
-            foreach (var root in roots)
+
+            var roots = new List<GameObject>();
+            if (!string.IsNullOrEmpty(parent))
             {
-                if (items.Count >= pageSize)
+                var parentObject = ObjectRefResolver.FindGameObjectByPath(parent);
+                if (parentObject == null)
                 {
-                    break;
+                    throw new BridgeCommandException("E_SCENE_HIERARCHY_PARENT_NOT_FOUND", "Parent GameObject not found: " + parent, "Run go.find or scene.hierarchy without parent, then pass a stable hierarchy path or instance id.");
                 }
-                CollectHierarchy(root.transform, items, cursor, pageSize, counter);
+                for (var i = 0; i < parentObject.transform.childCount; i++)
+                {
+                    roots.Add(parentObject.transform.GetChild(i).gameObject);
+                }
             }
-            var nextCursor = cursor + items.Count < total ? (cursor + items.Count).ToString(CultureInfo.InvariantCulture) : null;
+            else
+            {
+                roots.AddRange(scene.GetRootGameObjects());
+            }
+
+            var allItems = new List<string>();
+            foreach (var root in roots.OrderBy(g => HierarchyPath(g), StringComparer.Ordinal))
+            {
+                CollectHierarchy(root.transform, allItems, 0, maxDepth, nameFilter, includeInactive, includeComponents);
+            }
+
+            var total = allItems.Count;
+            var page = allItems.Skip(cursor).Take(pageSize).ToList();
+            var nextCursor = cursor + page.Count < total ? (cursor + page.Count).ToString(CultureInfo.InvariantCulture) : null;
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropObject("scene", w => w
-                    .Prop("name", SceneManager.GetActiveScene().name)
-                    .Prop("path", SceneManager.GetActiveScene().path))
+                    .Prop("name", scene.name)
+                    .Prop("path", scene.path))
+                .Prop("parent", parent)
+                .Prop("maxDepth", (long)maxDepth)
+                .Prop("nameFilter", nameFilter)
+                .Prop("includeInactive", includeInactive)
+                .Prop("includeComponents", includeComponents)
                 .PropArray("items", arr =>
                 {
-                    foreach (var item in items)
+                    foreach (var item in page)
                     {
                         arr.RawValue(item);
                     }

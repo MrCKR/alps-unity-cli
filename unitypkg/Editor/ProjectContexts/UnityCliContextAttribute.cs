@@ -24,6 +24,7 @@ namespace UnityCli
             Category = "custom";
             Target = "editor";
             AvailabilityScope = "editorSession";
+            PlayModeSupport = "supported";
             RefreshBehavior = "onDemand";
         }
 
@@ -71,6 +72,13 @@ namespace UnityCli
         /// Availability scope: "editorSession" (default), "playModeSession", etc.
         /// </summary>
         public string AvailabilityScope { get; set; }
+
+        /// <summary>
+        /// Play Mode read semantics: "supported", "runtime-only",
+        /// "session-affecting", "editor-only", or "unknown".
+        /// Contexts are read-only, so editor contexts default to supported.
+        /// </summary>
+        public string PlayModeSupport { get; set; }
 
         /// <summary>
         /// How the context refreshes: "onDemand" (default), "periodic", "onEvent".

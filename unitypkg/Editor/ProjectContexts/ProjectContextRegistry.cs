@@ -144,6 +144,7 @@ namespace UnityCli
             definition.AvailabilityScope = string.IsNullOrEmpty(definition.AvailabilityScope)
                 ? (definition.Target == "runtime" ? "playModeSession" : "editorSession")
                 : definition.AvailabilityScope;
+            definition.PlayModeSupport = NormalizeProjectContextPlayModeSupport(definition.PlayModeSupport, definition.Target);
             definition.RefreshBehavior = string.IsNullOrEmpty(definition.RefreshBehavior) ? "onDemand" : definition.RefreshBehavior;
             definition.RequiresPackages = definition.RequiresPackages ?? new string[0];
             definition.RegisteredBy = string.IsNullOrEmpty(definition.RegisteredBy) ? "unity-editor-package" : definition.RegisteredBy;
@@ -246,6 +247,7 @@ namespace UnityCli
                     OutputSchema = attribute.OutputSchema,
                     Target = attribute.Target,
                     AvailabilityScope = attribute.AvailabilityScope,
+                    PlayModeSupport = attribute.PlayModeSupport,
                     RefreshBehavior = attribute.RefreshBehavior,
                     ResourceUri = attribute.ResourceUri,
                     RequiresPackages = SplitCsv(attribute.RequiresPackages).ToArray(),
@@ -402,6 +404,7 @@ namespace UnityCli
                 + "\nsource=" + (definition.Source ?? string.Empty)
                 + "\ntarget=" + (definition.Target ?? string.Empty)
                 + "\navailabilityScope=" + (definition.AvailabilityScope ?? string.Empty)
+                + "\nplayModeSupport=" + (definition.PlayModeSupport ?? string.Empty)
                 + "\nrefreshBehavior=" + (definition.RefreshBehavior ?? string.Empty)
                 + "\nresourceUri=" + (definition.ResourceUri ?? string.Empty)
                 + "\nrequiresPackages=" + string.Join(",", (definition.RequiresPackages ?? new string[0])
@@ -409,6 +412,16 @@ namespace UnityCli
                 + "\nequivalentUnityMcp=" + (definition.EquivalentUnityMcp ?? string.Empty)
                 + "\nequivalentUnityMcpNote=" + (definition.EquivalentUnityMcpNote ?? string.Empty)
                 + "\ndescriptorSource=" + (definition.DescriptorSource ?? string.Empty);
+        }
+
+        private static string NormalizeProjectContextPlayModeSupport(string value, string target)
+        {
+            if (string.Equals(value, "supported", StringComparison.OrdinalIgnoreCase)) return "supported";
+            if (string.Equals(value, "runtime-only", StringComparison.OrdinalIgnoreCase)) return "runtime-only";
+            if (string.Equals(value, "session-affecting", StringComparison.OrdinalIgnoreCase)) return "session-affecting";
+            if (string.Equals(value, "editor-only", StringComparison.OrdinalIgnoreCase)) return "editor-only";
+            if (string.Equals(value, "unknown", StringComparison.OrdinalIgnoreCase)) return "unknown";
+            return string.Equals(target, "runtime", StringComparison.OrdinalIgnoreCase) ? "runtime-only" : "supported";
         }
 
         private static string ProjectContextHandlerFingerprintMaterial(UnityCliContextDefinition definition)
@@ -720,6 +733,7 @@ namespace UnityCli
                 .Prop("source", definition.Source)
                 .Prop("target", definition.Target)
                 .Prop("availabilityScope", definition.AvailabilityScope)
+                .Prop("playModeSupport", definition.PlayModeSupport)
                 .Prop("refreshBehavior", definition.RefreshBehavior)
                 .Prop("resourceUri", definition.ResourceUri ?? string.Empty)
                 .PropRaw("requiresPackages", StringArrayJson(definition.RequiresPackages))

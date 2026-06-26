@@ -20,6 +20,9 @@ export type ContextTarget = "editor" | "runtime";
 /** Availability scope for a context. */
 export type ContextAvailabilityScope = "editorSession" | "playModeSession" | "always";
 
+/** Play Mode read semantics for a context. */
+export type ContextPlayModeSupport = "supported" | "runtime-only" | "session-affecting" | "editor-only" | "unknown";
+
 /** Descriptor for a single context entry. */
 export interface ContextDescriptor {
   /** Dotted context name, e.g. "project.info", "editor.state", "scene.cameras". */
@@ -36,6 +39,8 @@ export interface ContextDescriptor {
   target: ContextTarget;
   /** Availability scope. */
   availabilityScope: ContextAvailabilityScope;
+  /** Play Mode read semantics. */
+  playModeSupport: ContextPlayModeSupport;
   /** Whether the context requires a live Unity Bridge connection. */
   requiresUnity: boolean;
   /** Whether the context is currently available (depends on Unity state). */
@@ -80,6 +85,7 @@ export interface ContextListEntry {
   category: string;
   source: ContextSource;
   target: ContextTarget;
+  playModeSupport: ContextPlayModeSupport;
   available?: boolean;
 }
 

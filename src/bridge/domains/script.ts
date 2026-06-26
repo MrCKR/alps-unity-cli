@@ -1,4 +1,4 @@
-import { boolFlag, compactArgs, contentFlag, stringFlag } from "../args.js";
+import { boolFlag, compactArgs, contentFlag, numberFlag, stringFlag } from "../args.js";
 import type { BridgeCommandSpec } from "../types.js";
 
 export const scriptBridgeSpecs: BridgeCommandSpec[] = [
@@ -16,14 +16,16 @@ export const scriptBridgeSpecs: BridgeCommandSpec[] = [
 async function scriptArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Promise<Record<string, unknown>> {
   const structured = structuredInput(flags);
   return compactArgs({
-    path: positionalTarget ?? stringFlag(flags, "path"),
-    name: stringFlag(flags, "name"),
-    content: await contentFlag(flags),
-    patch: stringFlag(flags, "patch"),
-    find: stringFlag(flags, "find"),
-    replace: stringFlag(flags, "replace"),
-    all: boolFlag(flags, "all"),
-    preconditionSha256: stringFlag(flags, "precondition-sha256") ?? stringFlag(flags, "sha256"),
+    path: positionalTarget ?? stringFlag(flags, "path") ?? stringValue(structured.path),
+    name: stringFlag(flags, "name") ?? stringValue(structured.name),
+    content: await contentFlag(flags) ?? stringValue(structured.content),
+    patch: stringFlag(flags, "patch") ?? stringValue(structured.patch),
+    find: stringFlag(flags, "find") ?? stringValue(structured.find),
+    replace: stringFlag(flags, "replace") ?? stringValue(structured.replace),
+    all: boolFlag(flags, "all") ?? boolValue(structured.all),
+    preconditionSha256: stringFlag(flags, "precondition-sha256") ?? stringFlag(flags, "sha256") ?? stringValue(structured.preconditionSha256),
+    lineFrom: numberFlag(flags, "line-from") ?? numberValue(structured.lineFrom),
+    lineTo: numberFlag(flags, "line-to") ?? numberValue(structured.lineTo),
     edits: structured.edits ?? parseJsonFlag(stringFlag(flags, "edits"))
   });
 }
@@ -50,10 +52,23 @@ function parseJsonFlag(raw: string | undefined): unknown {
 }
 
 function scriptFindArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  const structured = structuredInput(flags);
   return compactArgs({
-    path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "target"),
-    query: stringFlag(flags, "query") ?? stringFlag(flags, "search") ?? stringFlag(flags, "pattern"),
-    regex: boolFlag(flags, "regex"),
-    ignoreCase: boolFlag(flags, "ignore-case")
+    path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "target") ?? stringValue(structured.path) ?? stringValue(structured.target),
+    query: stringFlag(flags, "query") ?? stringFlag(flags, "search") ?? stringFlag(flags, "pattern") ?? stringValue(structured.query) ?? stringValue(structured.search) ?? stringValue(structured.pattern),
+    regex: boolFlag(flags, "regex") ?? boolValue(structured.regex),
+    ignoreCase: boolFlag(flags, "ignore-case") ?? boolValue(structured.ignoreCase)
   });
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function numberValue(value: unknown): number | undefined {
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function boolValue(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined;
 }

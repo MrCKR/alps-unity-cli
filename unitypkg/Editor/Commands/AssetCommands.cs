@@ -73,13 +73,20 @@ namespace UnityCli
             }
         }
 
+        /// <summary>搜索 AssetDatabase：支持 Unity 原生 filter、类型追加、多目录范围与分页。</summary>
         private static string AssetSearch(BridgeRequest request)
         {
+            var filter = request.StringArg("filter");
             var query = request.StringArg("query");
             var type = request.StringArg("type");
-            var path = NormalizeAssetSearchPath(request.StringArg("path"));
+            var rawPath = request.StringArg("path");
+            var searchInFolders = NormalizeAssetSearchFolders(rawPath, request.RawJsonArg("searchInFolders"));
             var filterParts = new List<string>();
-            if (!string.IsNullOrEmpty(query))
+            if (!string.IsNullOrEmpty(filter))
+            {
+                filterParts.Add(filter);
+            }
+            else if (!string.IsNullOrEmpty(query))
             {
                 filterParts.Add(query);
             }
@@ -87,9 +94,10 @@ namespace UnityCli
             {
                 filterParts.Add("t:" + type);
             }
-            var guids = AssetDatabase.FindAssets(string.Join(" ", filterParts.ToArray()), string.IsNullOrEmpty(path) ? null : new[] { path });
+            var resolvedFilter = string.Join(" ", filterParts.ToArray()).Trim();
+            var guids = AssetDatabase.FindAssets(resolvedFilter, searchInFolders.Length == 0 ? null : searchInFolders);
             var cursor = Math.Max(0, request.IntArg("cursor", 0));
-            var pageSize = Math.Max(1, Math.Min(request.IntArg("pageSize", 100), 500));
+            var pageSize = Math.Max(1, Math.Min(request.IntArg("pageSize", request.IntArg("maxResults", 100)), 500));
             var items = new List<string>();
             for (var index = cursor; index < guids.Length && items.Count < pageSize; index++)
             {
@@ -99,15 +107,18 @@ namespace UnityCli
             }
             var nextCursor = cursor + items.Count < guids.Length ? (cursor + items.Count).ToString(CultureInfo.InvariantCulture) : null;
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("filter", resolvedFilter)
                 .Prop("query", query)
                 .Prop("type", type)
-                .Prop("path", path)
+                .Prop("path", searchInFolders.Length == 1 ? searchInFolders[0] : null)
+                .PropArray("searchInFolders", arr => { foreach (var folder in searchInFolders) arr.Value(folder); })
                 .PropArray("items", arr => { foreach (var item in items) { arr.RawValue(item); } })
                 .PropObject("pageInfo", pageInfo => pageInfo
                     .Prop("pageSize", (long)pageSize)
                     .Prop("cursor", (long)cursor)
                     .Prop("nextCursor", nextCursor)
-                    .Prop("total", (long)guids.Length))
+                    .Prop("total", (long)guids.Length)
+                    .Prop("truncated", nextCursor != null))
                 .Prop("logPath", LogPath())
                 .EndObject()
                 .ToString());
@@ -157,16 +168,14 @@ namespace UnityCli
             var path = RequireAssetPath(request.StringArg("assetPath") ?? request.StringArg("path"));
             if (!AssetExists(path))
             {
-                throw new BridgeCommandException("E_ASSET_NOT_FOUND", "Asset not found: " + path, "Run asset search to discover the path.");
+                throw new BridgeCommandException("E_ASSET_NOT_FOUND", "Asset not found: " + path, "Run tools run asset.search --input '{\"query\":\"<keyword>\"}' to discover the path.");
             }
             var asset = AssetDatabase.LoadMainAssetAtPath(path);
-            var options = new ObjectSerializer.Options
+            if (asset == null)
             {
-                MaxDepth = request.IntArg("maxDepth", 4),
-                IncludeFields = request.BoolArg("includeFields", true),
-                IncludeProperties = request.BoolArg("includeProperties", true),
-                DeepSerialization = request.BoolArg("deepSerialization", true)
-            };
+                throw new BridgeCommandException("E_ASSET_LOAD_FAILED", "Asset main object could not be loaded: " + path, "Run asset.info to confirm the asset type, or use a more specific tool for folders/importers.");
+            }
+            var options = BuildSerializerOptions(request);
             var memberJson = ObjectSerializer.Serialize(asset, options);
             var w = new UnityCliJsonWriter().BeginObject();
             w.Prop("command", "asset.get-data");
@@ -175,7 +184,7 @@ namespace UnityCli
             w.Prop("typeName", asset.GetType().FullName);
             w.PropRaw("data", memberJson);
             w.Prop("logPath", LogPath());
-            return w.EndObject().ToString();
+            return SuccessJson(w.EndObject().ToString());
         }
 
         /// <summary>生成资产预览：输出 artifact metadata。对齐 CoplayDev generate_preview。</summary>
@@ -184,7 +193,7 @@ namespace UnityCli
             var path = RequireAssetPath(request.StringArg("assetPath") ?? request.StringArg("path"));
             if (!AssetExists(path))
             {
-                throw new BridgeCommandException("E_ASSET_NOT_FOUND", "Asset not found: " + path, "Run asset search.");
+                throw new BridgeCommandException("E_ASSET_NOT_FOUND", "Asset not found: " + path, "Run tools run asset.search --input '{\"query\":\"<keyword>\"}' to discover the path.");
             }
             var asset = AssetDatabase.LoadMainAssetAtPath(path);
             var preview = UnityEditor.AssetPreview.GetAssetPreview(asset);
@@ -202,7 +211,7 @@ namespace UnityCli
                 w.Prop("isTransient", UnityEditor.AssetPreview.IsLoadingAssetPreview(asset.GetInstanceID()));
             }
             w.Prop("logPath", LogPath());
-            return w.EndObject().ToString();
+            return SuccessJson(w.EndObject().ToString());
         }
 
         private static string AssetInfo(BridgeRequest request)
@@ -210,7 +219,7 @@ namespace UnityCli
             var path = RequireAssetPath(request.StringArg("path") ?? request.StringArg("target"));
             if (!AssetExists(path))
             {
-                throw new BridgeCommandException("E_ASSET_NOT_FOUND", "Asset not found: " + path, "Run unity_cli asset search <keyword> or pass an existing Assets/* path.");
+                throw new BridgeCommandException("E_ASSET_NOT_FOUND", "Asset not found: " + path, "Run tools run asset.search --input '{\"query\":\"<keyword>\"}' or pass an existing Assets/* path.");
             }
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropRaw("asset", AssetDetailJson(path))
@@ -371,14 +380,34 @@ namespace UnityCli
             return SuccessJson(AssetMutationJson("asset.rename", renamedPath, path));
         }
 
-        private static string NormalizeAssetSearchPath(string path)
+        /// <summary>规范化搜索目录，显式拒绝会导致全项目误搜的非法范围。</summary>
+        private static string[] NormalizeAssetSearchFolders(string path, string searchInFoldersJson)
         {
-            if (string.IsNullOrEmpty(path))
+            var folders = new List<string>();
+            if (!string.IsNullOrEmpty(searchInFoldersJson))
             {
-                return null;
+                foreach (var folder in JsonStringArray(searchInFoldersJson))
+                {
+                    AddAssetSearchFolder(folders, folder);
+                }
             }
-            var normalized = NormalizeAssetPath(path);
-            return normalized.StartsWith("Assets", StringComparison.OrdinalIgnoreCase) || normalized.StartsWith("Packages", StringComparison.OrdinalIgnoreCase) ? normalized : null;
+            if (!string.IsNullOrEmpty(path))
+            {
+                AddAssetSearchFolder(folders, path);
+            }
+            return folders.Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        }
+
+        /// <summary>校验单个 AssetDatabase 搜索范围，仅允许 Assets/ 或 Packages/。</summary>
+        private static void AddAssetSearchFolder(List<string> folders, string rawPath)
+        {
+            if (string.IsNullOrEmpty(rawPath)) return;
+            var normalized = NormalizeAssetPath(rawPath);
+            if (!normalized.StartsWith("Assets", StringComparison.OrdinalIgnoreCase) && !normalized.StartsWith("Packages", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new BridgeCommandException("E_ASSET_SEARCH_SCOPE_INVALID", "Asset search scope must be under Assets/ or Packages/: " + rawPath, "Pass filter/query for search text, and use path/searchInFolders only for folder scopes.");
+            }
+            folders.Add(normalized);
         }
 
         private static string RequireAssetPath(string rawPath)
@@ -386,7 +415,7 @@ namespace UnityCli
             var path = NormalizeAssetPath(rawPath);
             if (string.IsNullOrEmpty(path))
             {
-                throw new BridgeCommandException("E_ASSET_PATH_REQUIRED", "Pass an Assets/* asset path.", "Use unity_cli asset info <path> or pass --path Assets/Example.asset.");
+                throw new BridgeCommandException("E_ASSET_PATH_REQUIRED", "Pass an Assets/* asset path.", "Use tools run asset.info --input '{\"path\":\"Assets/Example.asset\"}' or pass path in the tool input.");
             }
             if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) && !string.Equals(path, "Assets", StringComparison.OrdinalIgnoreCase))
             {
@@ -400,7 +429,7 @@ namespace UnityCli
             var path = RequireAssetPath(rawPath);
             if (!AssetExists(path))
             {
-                throw new BridgeCommandException("E_ASSET_NOT_FOUND", "Asset not found: " + path, "Run unity_cli asset search <keyword> or pass an existing Assets/* path.");
+                throw new BridgeCommandException("E_ASSET_NOT_FOUND", "Asset not found: " + path, "Run tools run asset.search --input '{\"query\":\"<keyword>\"}' or pass an existing Assets/* path.");
             }
             return path;
         }

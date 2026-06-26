@@ -224,7 +224,7 @@ export async function handlePackage(command: string | undefined, args: string[],
   if (command === "info") {
     const name = validatePackageName(args[0] ?? getString(flags, "name"));
     const info = await packageInfo(projectPath, name);
-    return info ? success(requestId, { projectPath, package: info }) : failure(requestId, "PACKAGE_NOT_FOUND", `Package not found: ${name}`, ["Run unity_cli tools run package.list to inspect installed packages."]);
+    return info ? success(requestId, { projectPath, package: info }) : failure(requestId, "PACKAGE_NOT_FOUND", `Package not found: ${name}`, ["Run tools run package.list to inspect installed packages."]);
   }
 
   if (command === "search") {

@@ -108,6 +108,7 @@ unity_cli tools describe camera.screenshot
 | `supportStatus` | 支持状态 |
 | `target` | 目标类型 |
 | `availabilityScope` | 可用性范围 |
+| `playModeSupport` | Play Mode 行为：`supported` / `runtime-only` / `session-affecting` / `editor-only` / `unknown` |
 | `available` | 当前是否可用 |
 | `requiresPackages` | 依赖的 Unity 包 |
 | `examples` | 使用示例 |
@@ -144,6 +145,10 @@ unity_cli tools describe my.custom-tool --bridge-endpoint http://127.0.0.1:47392
 - `target: "runtime"` → Play Mode 下可用
 - `target: "both"` → 编辑器和运行时都可用
 - `availabilityScope` → 详细可用性范围
+- `playModeSupport: "supported"` → Play Mode 下语义基本不变
+- `playModeSupport: "runtime-only"` → Play Mode 可执行，但结果只影响当前运行会话
+- `playModeSupport: "session-affecting"` → 可能触发 import、compile、domain reload 或 Play Mode 状态变化
+- `playModeSupport: "editor-only"` → Play Mode 下不可执行，返回 `E_TOOL_PLAYMODE_UNAVAILABLE`
 - `available` → 当前目标实例上是否可用
 - `requiresPackages` → 需要安装的 Unity 包
 

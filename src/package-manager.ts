@@ -112,7 +112,7 @@ export async function removePackage(projectPath: string, name: string): Promise<
   const manifest = await readManifest(paths.manifestPath, false);
   const removedVersion = manifest.dependencies?.[name];
   if (!removedVersion) {
-    throw new PackageManagerError("PACKAGE_NOT_FOUND", `Package is not declared in manifest: ${name}`, ["Run unity_cli tools run package.list to inspect installed packages."]);
+    throw new PackageManagerError("PACKAGE_NOT_FOUND", `Package is not declared in manifest: ${name}`, ["Run tools run package.list to inspect installed packages."]);
   }
   delete manifest.dependencies?.[name];
   await writeManifest(paths.manifestPath, manifest);
@@ -159,7 +159,7 @@ export async function removeScopedRegistry(projectPath: string, name: string): P
   const registries = normalizeScopedRegistries(manifest.scopedRegistries);
   const index = registries.findIndex((registry) => registry.name === name);
   if (index < 0) {
-    throw new PackageManagerError("SCOPED_REGISTRY_NOT_FOUND", `Scoped registry not found: ${name}`, ["Run unity_cli tools run package.scoped-registry list."]);
+    throw new PackageManagerError("SCOPED_REGISTRY_NOT_FOUND", `Scoped registry not found: ${name}`, ["Run tools run package.scoped-registry --input '{\"action\":\"list\"}' to inspect scoped registries."]);
   }
   const [removed] = registries.splice(index, 1);
   manifest.scopedRegistries = registries;

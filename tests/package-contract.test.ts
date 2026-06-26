@@ -1,0 +1,82 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { findToolByName, filterToolsByGroup } from "../src/tools/metadata/index.js";
+import { bridgeCommandRegistry } from "../src/bridge/index.js";
+import { findCommandContract } from "../src/contracts/command-contract.js";
+import { readFile } from "node:fs/promises";
+
+const PACKAGE_COMMANDS = ["package.list", "package.status", "package.info", "package.search", "package.install", "package.remove", "package.resolve", "package.registry", "package.scoped-registry", "package.embed"];
+
+/**
+ * Package 域契约测试：list/status/info/search/install/remove/resolve/registry/scoped-registry (offline/hybrid) + embed (bridge)。
+ * 对齐 CoplayDev manage_packages，验证 metadata/bridge/contract 一致，错误恢复提示迁移到 `tools run` 形态。
+ * C# RegisterCommand 守卫不适用：除 embed 外的 package.* 经 offline/hybrid handlePackage 路由（非 bridge RegisterCommand）。
+ */
+
+test("package group exposes the 10 package tools", () => {
+  const tools = filterToolsByGroup("package").map((t) => t.name).sort();
+  assert.deepEqual(tools, ["package.embed", "package.info", "package.install", "package.list", "package.registry", "package.remove", "package.resolve", "package.scoped-registry", "package.search", "package.status"]);
+});
+
+test("package read tools are offline/non-destructive/supported", () => {
+  for (const name of ["package.list", "package.status", "package.info", "package.search"]) {
+    const tool = findToolByName(name)!;
+    assert.equal(tool.destructiveHint, false, `${name} non-destructive`);
+    assert.equal(tool.handler, "offline", `${name} offline`);
+    assert.equal(tool.playModeSupport, "supported", `${name} play mode supported`);
+    assert.ok(tool.examples?.length, `${name} examples`);
+  }
+});
+
+test("package install/remove/resolve expose play mode + risk metadata", () => {
+  const install = findToolByName("package.install")!;
+  assert.equal(install.playModeSupport, "session-affecting");
+  assert.ok(install.sideEffects?.includes("manifest-change"));
+
+  const remove = findToolByName("package.remove")!;
+  assert.equal(remove.destructiveHint, true);
+  assert.equal(remove.supportsDryRun, true);
+  assert.equal(remove.riskLevel, "high");
+  assert.equal(remove.playModeSupport, "session-affecting");
+
+  const resolve = findToolByName("package.resolve")!;
+  assert.equal(resolve.longRunning, true);
+  assert.equal(resolve.playModeSupport, "session-affecting");
+});
+
+test("package.embed is destructive bridge with session-affecting play mode", () => {
+  const embed = findToolByName("package.embed")!;
+  assert.equal(embed.destructiveHint, true);
+  assert.equal(embed.supportsDryRun, true);
+  assert.equal(embed.handler, "bridge");
+  assert.equal(embed.playModeSupport, "session-affecting");
+  assert.ok(embed.sideEffects?.includes("domain-reload"));
+});
+
+test("bridge spec resolves for package.embed", () => {
+  const spec = bridgeCommandRegistry.lookup("package", "embed");
+  assert.equal(spec?.bridgeCommand, "package.embed");
+});
+
+test("contract entries exist for all package tools", () => {
+  for (const name of PACKAGE_COMMANDS) {
+    const contract = findCommandContract(name);
+    assert.ok(contract, `${name} should be in contract`);
+  }
+});
+
+test("package C# error recovery hints use current tools run form, not legacy unity_cli", async () => {
+  // package-manager.ts + cli-commands/package.ts 错误提示
+  const pm = await readFile(new URL("../src/package-manager.js", import.meta.url), "utf8");
+  const cliPkg = await readFile(new URL("../src/cli-commands/package.js", import.meta.url), "utf8");
+  assert.equal(pm.includes("unity_cli tools run package"), false, "package-manager must not reference legacy form");
+  assert.equal(cliPkg.includes("unity_cli tools run package"), false, "cli-commands/package must not reference legacy form");
+  assert.match(pm, /tools run package\.list/, "package-manager hints should route to tools run package.list");
+  assert.match(cliPkg, /tools run package\.list/, "cli package hints should route to tools run package.list");
+});
+
+test("package.embed bridge spec forwards structured --input fields", async () => {
+  const spec = await readFile(new URL("../src/bridge/domains/package.js", import.meta.url), "utf8");
+  assert.match(spec, /stringField\(flags, "package"\)/, "bridge should forward structured package");
+  assert.match(spec, /boolField\(flags, "dryRun"\)/, "bridge should forward structured dryRun");
+});

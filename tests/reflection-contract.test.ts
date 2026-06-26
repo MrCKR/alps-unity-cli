@@ -48,11 +48,14 @@ test("type.schema tool exists as read-only bridge", () => {
   assert.equal(schema.equivalentUnityMcp, "type-get-json-schema");
 });
 
-test("reflection.method.call supports instanceRef and security confirmation", () => {
+test("reflection.method.call supports instanceRef and dry-run confirmation flow", () => {
   const call = findToolByName("reflection.method.call")!;
   const props = call.inputSchema.properties as Record<string, unknown>;
   assert.ok(props.instanceRef, "instanceRef should be supported for instance methods");
-  assert.ok(props.security, "security confirmation should be required");
+  assert.equal(props.security, undefined, "CLI should provide destructive security proof instead of user-authored security JSON");
+  assert.equal(call.supportsDryRun, true);
+  assert.ok(call.description.includes("--dry-run"));
+  assert.ok(call.description.includes("--yes"));
 });
 
 test("bridge specs resolve for reflection and type tools", () => {
@@ -90,4 +93,9 @@ test("C# RegisterCommand calls exist for reflection and type commands", async ()
       `${command} should be registered via RegisterCommand in C#`
     );
   }
+  assert.match(allSource, /return SuccessJson\(ReflectionInvoker\.FindMethods\(/, "reflection.method.find should return a bridge success envelope");
+  assert.match(allSource, /return SuccessJson\(result\);/, "reflection.method.call should wrap execution results in a bridge success envelope");
+  assert.match(allSource, /return SuccessJson\(TypeSchemaGenerator\.Generate\(/, "type.schema should return a bridge success envelope");
+  assert.match(allSource, /command == "reflection\.method\.call"/, "reflection.method.call should be covered by the bridge destructive proof guard");
+  assert.match(allSource, /request\.DryRun \|\| !request\.SecurityConfirmed\(DestructiveCommandFingerprint\)/, "reflection.method.call should preview on dry-run and execute with CLI destructive proof");
 });

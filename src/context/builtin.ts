@@ -19,6 +19,7 @@ const CONTEXT_COMMON = {
   source: "built-in" as const,
   target: "editor" as const,
   availabilityScope: "editorSession" as const,
+  playModeSupport: "supported" as const,
   requiresUnity: true,
   destructiveHint: false as const,
   bridgeCommand: "context.read",
@@ -101,22 +102,28 @@ const PROJECT_LAYERS: ContextDescriptor = {
 const EDITOR_STATE: ContextDescriptor = {
   name: "editor.state",
   title: "Editor State",
-  description: "Comprehensive editor state snapshot: play mode, compilation, asset import, domain reload status, and activity.",
+  description: "Read-only snapshot of current Unity Editor state: Play Mode, compile/import/build busy flags, active scene, Prefab Stage, Bridge build stamp, and runtime session status. Use this before live tools to avoid acting while Unity is busy.",
   category: "editor",
   cliCommand: "context read editor.state",
   inputSchema: { type: "object", properties: {} },
   outputSchema: {
     type: "object",
     properties: {
-      isPlaying: { type: "boolean", description: "Whether the editor is in Play Mode." },
-      isCompiling: { type: "boolean", description: "Whether scripts are currently compiling." },
-      isImporting: { type: "boolean", description: "Whether assets are being imported." },
-      isDomainReloading: { type: "boolean", description: "Whether a domain reload is in progress." },
-      isPaused: { type: "boolean", description: "Whether Play Mode is paused." },
-      currentScene: { type: "string", description: "Path of the currently active scene." },
-      unityVersion: { type: "string", description: "Unity Editor version." }
+      schemaVersion: { type: "string", description: "Context schema version." },
+      observedAt: { type: "string", description: "UTC observation timestamp." },
+      state: {
+        type: "object",
+        properties: {
+          playMode: { type: "object", description: "Play Mode state." },
+          busy: { type: "object", description: "Compilation/import/build/domain reload busy flags." },
+          activeScene: { type: "object", description: "Active scene summary." },
+          prefabStage: { type: "object", description: "Current Prefab Stage summary." },
+          bridge: { type: "object", description: "Bridge build/runtime metadata." },
+          runtime: { type: "object", description: "Runtime Play Mode session state." }
+        }
+      }
     },
-    required: ["isPlaying", "isCompiling"]
+    required: ["state"]
   },
   docsTopic: "editor",
   ...CONTEXT_COMMON,
@@ -125,7 +132,7 @@ const EDITOR_STATE: ContextDescriptor = {
 const EDITOR_SELECTION: ContextDescriptor = {
   name: "editor.selection",
   title: "Editor Selection",
-  description: "Currently selected objects in the editor: active GameObject, selection count, and selected object paths.",
+  description: "Read the current Unity Editor selection in Hierarchy or Project Browser. Returns object/GameObject names and asset GUIDs only; it does not select, focus, ping, or modify anything.",
   category: "editor",
   cliCommand: "context read editor.selection",
   inputSchema: { type: "object", properties: {} },
@@ -134,10 +141,12 @@ const EDITOR_SELECTION: ContextDescriptor = {
     properties: {
       activeObject: { type: "string", description: "Name of the actively selected object." },
       activeGameObject: { type: "string", description: "Name of the active GameObject." },
-      count: { type: "integer", description: "Number of selected objects." },
-      objects: { type: "array", items: { type: "string" }, description: "Names of all selected objects." }
+      activeTransform: { type: "string", description: "Name of the active Transform, if any." },
+      objects: { type: "array", items: { type: "string" }, description: "Names of all selected objects." },
+      gameObjects: { type: "array", items: { type: "string" }, description: "Names of selected GameObjects." },
+      assetGUIDs: { type: "array", items: { type: "string" }, description: "Asset GUIDs for selected project assets." }
     },
-    required: ["count"]
+    required: ["objects", "gameObjects", "assetGUIDs"]
   },
   docsTopic: "editor",
   ...CONTEXT_COMMON,
@@ -146,17 +155,21 @@ const EDITOR_SELECTION: ContextDescriptor = {
 const EDITOR_ACTIVE_TOOL: ContextDescriptor = {
   name: "editor.active-tool",
   title: "Editor Active Tool",
-  description: "The currently active editor tool (e.g. Move, Rotate, Scale, Rect, Custom).",
+  description: "Read the currently active Unity Editor transform/tool handle plus pivot mode, pivot rotation, handle position, and handle rotation. Does not change the active tool.",
   category: "editor",
   cliCommand: "context read editor.active-tool",
   inputSchema: { type: "object", properties: {} },
   outputSchema: {
     type: "object",
     properties: {
-      toolName: { type: "string", description: "Name of the active tool." },
-      toolType: { type: "string", description: "Tool type identifier." }
+      activeTool: { type: "string", description: "Name of the active Unity Editor tool." },
+      isCustom: { type: "boolean", description: "Whether the active tool is a custom tool." },
+      pivotMode: { type: "string", description: "Current pivot mode." },
+      pivotRotation: { type: "string", description: "Current pivot rotation mode." },
+      handlePosition: { type: "object", description: "Current handle position." },
+      handleRotation: { type: "object", description: "Current handle rotation." }
     },
-    required: ["toolName"]
+    required: ["activeTool", "pivotMode", "pivotRotation"]
   },
   docsTopic: "editor",
   ...CONTEXT_COMMON,
@@ -165,7 +178,7 @@ const EDITOR_ACTIVE_TOOL: ContextDescriptor = {
 const EDITOR_WINDOWS: ContextDescriptor = {
   name: "editor.windows",
   title: "Editor Windows",
-  description: "List of currently open editor windows with their types and titles.",
+  description: "Read currently open Unity EditorWindow instances with title, type names, focused state, and instance IDs. This observes editor UI state without opening, closing, focusing, or moving windows.",
   category: "editor",
   cliCommand: "context read editor.windows",
   inputSchema: { type: "object", properties: {} },
@@ -178,9 +191,12 @@ const EDITOR_WINDOWS: ContextDescriptor = {
           type: "object",
           properties: {
             title: { type: "string", description: "Window title." },
-            type: { type: "string", description: "Window class type name." }
+            typeName: { type: "string", description: "Window class type name." },
+            fullName: { type: "string", description: "Full window class name." },
+            isFocused: { type: "boolean", description: "Whether this window is currently focused." },
+            instanceID: { type: "integer", description: "Unity instance ID for the EditorWindow." }
           },
-          required: ["title", "type"]
+          required: ["title", "typeName"]
         },
         description: "List of open editor windows."
       }
@@ -194,29 +210,18 @@ const EDITOR_WINDOWS: ContextDescriptor = {
 const EDITOR_TOOL_STATES: ContextDescriptor = {
   name: "editor.tool-states",
   title: "Editor Tool States",
-  description: "State of all editor tools: active tool, tool mode, and available tool options.",
+  description: "Read Unity Editor transform tool settings, pivot mode/rotation, snap settings, and grid availability. This is not MCP tool discovery; it observes editor tool configuration only.",
   category: "editor",
   cliCommand: "context read editor.tool-states",
   inputSchema: { type: "object", properties: {} },
   outputSchema: {
     type: "object",
     properties: {
-      activeTool: { type: "string", description: "Name of the active tool." },
-      tools: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            name: { type: "string" },
-            active: { type: "boolean" },
-            available: { type: "boolean" }
-          },
-          required: ["name", "active"]
-        },
-        description: "State of each editor tool."
-      }
+      transform: { type: "object", description: "Active tool, pivot mode, and pivot rotation." },
+      snap: { type: "object", description: "Move/rotation/scale snap settings." },
+      gridAvailable: { type: "boolean", description: "Whether Unity snap/grid settings are available through this Unity version." }
     },
-    required: ["activeTool"]
+    required: ["transform", "snap", "gridAvailable"]
   },
   docsTopic: "editor",
   ...CONTEXT_COMMON,
@@ -225,13 +230,13 @@ const EDITOR_TOOL_STATES: ContextDescriptor = {
 const EDITOR_MENU_ITEMS: ContextDescriptor = {
   name: "editor.menu-items",
   title: "Editor Menu Items",
-  description: "Available Unity editor menu items and their paths, for discovery of editor functionality.",
-  category: "menu",
+  description: "Attempt to enumerate Unity Editor menu items as read-only discovery. Unity has no stable public API for full menu enumeration, so this context may return an empty items array with diagnostics; executing a menu path remains the destructive Tool editor.menu.",
+  category: "editor",
   cliCommand: "context read editor.menu-items",
   inputSchema: {
     type: "object",
     properties: {
-      filter: { type: "string", description: "Filter menu items by path substring." }
+      search: { type: "string", description: "Optional menu path/title substring filter if a Unity version exposes enumerable menu data." }
     }
   },
   outputSchema: {
@@ -248,10 +253,12 @@ const EDITOR_MENU_ITEMS: ContextDescriptor = {
           },
           required: ["path", "label"]
         },
-        description: "List of menu items."
-      }
+        description: "List of menu items, often empty because Unity has no stable public menu enumeration API."
+      },
+      count: { type: "integer", description: "Number of returned menu items." },
+      diagnostics: { type: "string", description: "Explanation when menu enumeration is unavailable." }
     },
-    required: ["items"]
+    required: ["items", "count"]
   },
   docsTopic: "editor",
   ...CONTEXT_COMMON,
@@ -282,14 +289,16 @@ const EDITOR_PREFAB_STAGE: ContextDescriptor = {
 const SCENE_GAMEOBJECT: ContextDescriptor = {
   name: "scene.gameobject",
   title: "Scene GameObject",
-  description: "GameObject(s) in the active scene. Supports querying by instance ID or getting the hierarchy root objects.",
+  description: "Read one GameObject's lightweight scene summary by id, hierarchy path, or name. Use this before go.inspect, component.get, object.get-data, or mutation tools to confirm the stable path/id. Does not modify the scene; for full component fields use component.get.",
   category: "scene",
   cliCommand: "context read scene.gameobject",
   inputSchema: {
     type: "object",
     properties: {
       instanceId: { type: "integer", description: "Instance ID of a specific GameObject." },
-      includeComponents: { type: "boolean", description: "Include component type list in output." }
+      target: { type: "string", description: "GameObject name or hierarchy path. If ambiguous, pass path or id." },
+      path: { type: "string", description: "Hierarchy path, e.g. Main Camera." },
+      includeComponents: { type: "boolean", default: true, description: "Include lightweight component summaries." }
     }
   },
   outputSchema: {
@@ -313,7 +322,7 @@ const SCENE_GAMEOBJECT: ContextDescriptor = {
 const SCENE_GAMEOBJECT_COMPONENTS: ContextDescriptor = {
   name: "scene.gameobject.components",
   title: "Scene GameObject Components",
-  description: "Lightweight list of components attached to a GameObject: type names, enabled state and a short summary. Does NOT return full fields/props. For deep component data use `tools run component.get`.",
+  description: "Lightweight list of components attached to a GameObject: type names, enabled state and optional readable property preview. Use this before component.get/component.modify to choose component name or index. Does NOT return full fields/props; for deep component data use `tools run component.get`.",
   category: "scene",
   cliCommand: "context read scene.gameobject.components",
   inputSchema: {
@@ -322,7 +331,7 @@ const SCENE_GAMEOBJECT_COMPONENTS: ContextDescriptor = {
       target: { type: "string", description: "GameObject name or hierarchy path." },
       id: { type: "integer", description: "GameObject instance ID." },
       path: { type: "string", description: "Hierarchy path, e.g. 'Canvas/Button'." },
-      includeProperties: { type: "boolean", description: "Include readable public component properties." }
+      includeProperties: { type: "boolean", default: true, description: "Include shallow readable properties for each component; set false for a compact type list." }
     }
   },
   outputSchema: {
@@ -343,7 +352,7 @@ const SCENE_GAMEOBJECT_COMPONENTS: ContextDescriptor = {
 const SCENE_GAMEOBJECT_COMPONENT: ContextDescriptor = {
   name: "scene.gameobject.component",
   title: "Scene GameObject Component",
-  description: "Lightweight preview of one component attached to a GameObject. Does NOT replace deep reads. For complete fields/props use `tools run component.get`.",
+  description: "Lightweight preview of one component attached to a GameObject. Use scene.gameobject.components first when unsure which component name exists. Does NOT replace deep reads; for complete fields/props use `tools run component.get`.",
   category: "scene",
   cliCommand: "context read scene.gameobject.component",
   inputSchema: {
@@ -373,7 +382,7 @@ const SCENE_GAMEOBJECT_COMPONENT: ContextDescriptor = {
 const SCENE_OPENED: ContextDescriptor = {
   name: "scene.opened",
   title: "Opened Scenes",
-  description: "List currently loaded (opened) scenes in the Editor, with name, path, build index, isLoaded and isDirty. Read-only state surface for multi-scene observation.",
+  description: "List currently loaded scenes in the Editor with name, path, build index, loaded state, dirty state, and active scene. Read-only; does not load, unload, save, or switch scenes.",
   category: "scene",
   cliCommand: "context read scene.opened",
   inputSchema: { type: "object", properties: {} },
@@ -394,7 +403,8 @@ const SCENE_OPENED: ContextDescriptor = {
         }
       },
       count: { type: "integer" },
-      activeScene: { type: "string" }
+      activeScene: { type: "string" },
+      logPath: { type: "string" }
     },
     required: ["scenes", "count"]
   },
@@ -407,7 +417,7 @@ const SCENE_OPENED: ContextDescriptor = {
 const SCENE_CAMERAS: ContextDescriptor = {
   name: "scene.cameras",
   title: "Scene Cameras",
-  description: "All cameras in the active scene with their properties and positions.",
+  description: "List all active scene cameras with stable GameObject path, tag, enabled state, projection, FOV/orthographic size, depth, target texture, and pixel size. Read-only camera inventory.",
   category: "scene",
   cliCommand: "context read scene.cameras",
   inputSchema: { type: "object", properties: {} },
@@ -419,17 +429,26 @@ const SCENE_CAMERAS: ContextDescriptor = {
         items: {
           type: "object",
           properties: {
+            id: { type: "integer", description: "Camera component instance ID." },
             name: { type: "string", description: "Camera GameObject name." },
-            instanceId: { type: "integer", description: "Instance ID." },
-            isMain: { type: "boolean", description: "Whether this is the main camera." },
-            enabled: { type: "boolean", description: "Whether the camera component is enabled." }
+            path: { type: "string", description: "Hierarchy path." },
+            tag: { type: "string", description: "GameObject tag." },
+            enabled: { type: "boolean", description: "Whether the camera component is enabled." },
+            projection: { type: "string", description: "perspective or orthographic." },
+            fieldOfView: { type: "number", description: "Perspective field of view." },
+            orthographicSize: { type: "number", description: "Orthographic size." },
+            depth: { type: "number", description: "Camera depth." },
+            targetTexture: { type: "string", description: "Target texture name, if any." },
+            pixelWidth: { type: "integer", description: "Camera pixel width." },
+            pixelHeight: { type: "integer", description: "Camera pixel height." }
           },
-          required: ["name", "instanceId"]
+          required: ["id", "name", "path"]
         },
         description: "List of cameras in the scene."
-      }
+      },
+      count: { type: "integer", description: "Number of cameras." }
     },
-    required: ["cameras"]
+    required: ["cameras", "count"]
   },
   docsTopic: "scene",
   ...CONTEXT_COMMON,
@@ -438,10 +457,10 @@ const SCENE_CAMERAS: ContextDescriptor = {
 const SCENE_VOLUMES: ContextDescriptor = {
   name: "scene.volumes",
   title: "Scene Volumes",
-  description: "Volume components in the active scene (URP/HDRP), their profiles and priorities.",
+  description: "List Volume components in the active scene with target GameObject, enabled state, global flag, priority, weight, profile reference, and pagination metadata. Returns an empty list when Volume type is unavailable.",
   category: "scene",
   cliCommand: "context read scene.volumes",
-  inputSchema: { type: "object", properties: {} },
+  inputSchema: { type: "object", properties: { target: { type: "string", description: "Optional hierarchy path or name filter." }, pageSize: { type: "integer", description: "Reported page size." }, cursor: { type: "string", description: "Reserved cursor for future pagination." } } },
   outputSchema: {
     type: "object",
     properties: {
@@ -450,18 +469,21 @@ const SCENE_VOLUMES: ContextDescriptor = {
         items: {
           type: "object",
           properties: {
-            name: { type: "string", description: "Volume GameObject name." },
+            target: { type: "object", description: "Volume GameObject target summary." },
+            enabled: { type: "boolean", description: "Whether the Volume component is enabled." },
             priority: { type: "number", description: "Volume priority." },
             weight: { type: "number", description: "Volume blend weight." },
             isGlobal: { type: "boolean", description: "Whether the volume is global." },
-            profilePath: { type: "string", description: "Asset path of the volume profile." }
+            profile: { type: "object", description: "Profile asset reference." }
           },
-          required: ["name"]
+          required: ["target"]
         },
         description: "List of volumes."
-      }
+      },
+      count: { type: "integer", description: "Number of volumes." },
+      pageInfo: { type: "object", description: "Pagination metadata." }
     },
-    required: ["volumes"]
+    required: ["volumes", "count", "pageInfo"]
   },
   docsTopic: "graphics",
   ...CONTEXT_COMMON,
@@ -470,29 +492,21 @@ const SCENE_VOLUMES: ContextDescriptor = {
 const SCENE_RENDERER_FEATURES: ContextDescriptor = {
   name: "scene.renderer-features",
   title: "Renderer Features",
-  description: "URP renderer features and their enabled states for the active render pipeline asset.",
+  description: "Read URP renderer feature availability and configured feature names for the active/default render pipeline. If URP or a pipeline asset is unavailable, returns available=false with diagnostics and next_actions.",
   category: "scene",
   cliCommand: "context read scene.renderer-features",
   inputSchema: { type: "object", properties: {} },
   outputSchema: {
     type: "object",
     properties: {
-      rendererName: { type: "string", description: "Name of the URP renderer." },
-      features: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            name: { type: "string", description: "Feature name." },
-            type: { type: "string", description: "Feature class type name." },
-            active: { type: "boolean", description: "Whether the feature is enabled." }
-          },
-          required: ["name", "type", "active"]
-        },
-        description: "List of renderer features."
-      }
+      available: { type: "boolean", description: "Whether renderer feature data is available." },
+      renderer: { type: "string", description: "Name of the active/default render pipeline asset." },
+      features: { type: "array", items: { type: "string" }, description: "List of renderer feature or renderer data names." },
+      count: { type: "integer", description: "Number of returned feature entries." },
+      diagnostics: { type: "string", description: "Unavailable reason when available=false." },
+      next_actions: { type: "array", items: { type: "string" }, description: "Suggested recovery actions when unavailable." }
     },
-    required: ["features"]
+    required: ["available", "features"]
   },
   docsTopic: "graphics",
   ...CONTEXT_COMMON,
@@ -501,21 +515,19 @@ const SCENE_RENDERER_FEATURES: ContextDescriptor = {
 const SCENE_RENDERING_STATS: ContextDescriptor = {
   name: "scene.rendering-stats",
   title: "Rendering Stats",
-  description: "Current rendering statistics: draw calls, triangles, vertices, and frame timing.",
+  description: "Read current rendering statistics from UnityStats when available. If Unity's internal stats API is unavailable, returns available=false with diagnostics and next_actions.",
   category: "scene",
   cliCommand: "context read scene.rendering-stats",
   inputSchema: { type: "object", properties: {} },
   outputSchema: {
     type: "object",
     properties: {
-      drawCalls: { type: "integer", description: "Number of draw calls." },
-      triangles: { type: "integer", description: "Number of triangles rendered." },
-      vertices: { type: "integer", description: "Number of vertices rendered." },
-      fps: { type: "number", description: "Current frames per second." },
-      usedTextureMemory: { type: "number", description: "Texture memory usage in bytes." },
-      usedHeapSize: { type: "number", description: "Heap size in bytes." }
+      available: { type: "boolean", description: "Whether UnityStats was available." },
+      stats: { type: "object", properties: { batches: { type: "string" }, triangles: { type: "string" }, vertices: { type: "string" }, screenResolution: { type: "string" } }, description: "Rendering stats strings from UnityStats." },
+      diagnostics: { type: "string", description: "Unavailable reason when available=false." },
+      next_actions: { type: "array", items: { type: "string" }, description: "Suggested recovery actions when unavailable." }
     },
-    required: ["drawCalls", "triangles", "vertices"]
+    required: ["available"]
   },
   docsTopic: "graphics",
   ...CONTEXT_COMMON,
@@ -584,7 +596,7 @@ const PREFAB_HIERARCHY: ContextDescriptor = {
 const TOOLS_GROUPS: ContextDescriptor = {
   name: "tools.groups",
   title: "Tool Groups",
-  description: "Read built-in and available extension tool groups with counts and discovery commands.",
+  description: "Read built-in and available extension tool groups with counts and discovery commands from the local CLI registry; no Unity connection is required.",
   category: "tools",
   cliCommand: "context read tools.groups",
   inputSchema: { type: "object", properties: {} },
@@ -644,24 +656,14 @@ const TESTS_LIST: ContextDescriptor = {
   outputSchema: {
     type: "object",
     properties: {
-      items: {
-        type: "array",
-        items: {
-          type: "object",
-          properties: {
-            assembly: { type: "string", description: "Test assembly name." },
-            className: { type: "string", description: "Test class name." },
-            methodName: { type: "string", description: "Test method name." },
-            mode: { type: "string", enum: ["EditMode", "PlayMode"], description: "Test mode." }
-          },
-          required: ["assembly", "className", "methodName", "mode"]
-        }
-      },
-      totalCount: { type: "integer", description: "Total number of tests." },
-      cursor: { type: "integer", description: "Current page cursor." },
-      hasMore: { type: "boolean", description: "Whether more results are available." }
+      available: { type: "boolean", description: "Whether Unity Test Framework enumeration is available." },
+      tests: { type: "array", items: { type: "object" }, description: "Discovered test entries." },
+      count: { type: "integer", description: "Number of returned tests." },
+      pageInfo: { type: "object", description: "Pagination metadata when available." },
+      diagnostics: { type: "string", description: "Availability or enumeration diagnostics." },
+      next_actions: { type: "array", items: { type: "string" }, description: "Suggested actions when unavailable." }
     },
-    required: ["items", "totalCount"]
+    required: ["available", "tests", "count"]
   },
   docsTopic: "test",
   ...CONTEXT_COMMON,

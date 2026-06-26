@@ -23,14 +23,49 @@ export function parseArgs(argv: string[]): ParsedArgs {
 
     const next = argv[index + 1];
     if (next && !next.startsWith("--")) {
-      flags[withoutPrefix] = next;
-      index += 1;
+      const collected = collectMultitokenJsonFlag(argv, index + 1, withoutPrefix);
+      flags[withoutPrefix] = collected.value;
+      index = collected.nextIndex;
     } else {
       flags[withoutPrefix] = true;
     }
   }
 
   return { positional, flags };
+}
+
+/** 容错 PowerShell 将 --input JSON 按空格拆成多个 argv token 的常见情况。 */
+function collectMultitokenJsonFlag(argv: string[], valueIndex: number, flagName: string): { value: string; nextIndex: number } {
+  const first = argv[valueIndex];
+  if (flagName !== "input" || !looksLikeJsonStart(first) || looksLikeJsonEnd(first)) {
+    return { value: first, nextIndex: valueIndex };
+  }
+
+  const parts = [first];
+  let index = valueIndex;
+  for (let nextIndex = valueIndex + 1; nextIndex < argv.length; nextIndex += 1) {
+    const token = argv[nextIndex];
+    if (token.startsWith("--")) {
+      break;
+    }
+    parts.push(token);
+    index = nextIndex;
+    if (looksLikeJsonEnd(token)) {
+      break;
+    }
+  }
+
+  return { value: parts.join(" "), nextIndex: index };
+}
+
+function looksLikeJsonStart(value: string): boolean {
+  const trimmed = value.trimStart();
+  return trimmed.startsWith("{") || trimmed.startsWith("[");
+}
+
+function looksLikeJsonEnd(value: string): boolean {
+  const trimmed = value.trimEnd();
+  return trimmed.endsWith("}") || trimmed.endsWith("\\}") || trimmed.endsWith("]") || trimmed.endsWith("\\]");
 }
 
 export function getString(flags: Record<string, string | boolean>, name: string): string | undefined {

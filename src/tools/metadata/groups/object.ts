@@ -9,7 +9,7 @@ export const OBJECT_TOOLS: ToolMetadata[] = [
   {
     name: "object.get-data",
     title: "Get Object Data",
-    description: "Deep-serialize any UnityEngine.Object (GameObject, Component, Asset, ScriptableObject) into a SerializedMember tree with fields/props/value/paths. Supports maxDepth, paths, includeFields/includeProperties, namePattern for partial reads.",
+    description: "Deep-serialize any UnityEngine.Object (GameObject, Component, Asset, ScriptableObject) into a SerializedMember tree. Use asset.get-data for known asset paths and component.get for a single component. For token safety, pass exact paths or one viewQuery; they are mutually exclusive. Keep maxDepth low for full reads.",
     group: "object",
     inputSchema: objSchema({
       instanceId: { type: "integer", description: "Unity Object instance ID (highest priority)." },
@@ -17,20 +17,25 @@ export const OBJECT_TOOLS: ToolMetadata[] = [
       guid: { type: "string", description: "Asset GUID." },
       path: { type: "string", description: "GameObject hierarchy path or name." },
       name: { type: "string", description: "GameObject name (alias of path)." },
-      maxDepth: { type: "integer", default: 4, description: "Max serialization depth." },
+      maxDepth: { type: "integer", default: 4, description: "Max serialization depth for full reads or viewQuery subtree." },
       includeFields: { type: "boolean", default: true },
       includeProperties: { type: "boolean", default: true },
       deepSerialization: { type: "boolean", default: true },
-      paths: { type: "array", items: { type: "string" }, description: "Only read these dotted paths (e.g. [\"localPosition\",\"m_Color\"])." },
-      namePattern: { type: "string", description: "Comma-separated member name filter." }
+      paths: { type: "array", items: { type: "string" }, description: "Exact member paths to read as a small aggregate, e.g. [\"name\"] for assets or [\"transform.position\"] for scene objects. Mutually exclusive with viewQuery." },
+      viewQuery: { type: "object", description: "Optional subtree/filter read: {path?, namePattern?, typeFilter?, maxDepth?}. Mutually exclusive with paths." },
+      namePattern: { type: "string", description: "Comma-separated exact member-name filter for full reads; prefer paths/viewQuery for token safety." }
     }),
     outputSchema: objSchema({
       command: { type: "string" },
-      typeName: { type: "string" },
+      typeName: { type: "string", description: "Serialized type or UnityCli.PathReadAggregate for paths reads." },
       instanceId: { type: "integer" },
-      data: { type: "object" }
+      path: { type: "string", description: "SerializedMember root path." },
+      fields: { type: "array", items: { type: "object" }, description: "Present for path aggregate or expanded field data." },
+      props: { type: "array", items: { type: "object" }, description: "Present for property data when included." },
+      unityObjectRef: { type: "object" }
     }),
     destructiveHint: false,
+    playModeSupport: "supported",
     handler: "bridge",
     supportStatus: "live-bridge",
     cliCommand: "tools run object.get-data",
@@ -38,13 +43,14 @@ export const OBJECT_TOOLS: ToolMetadata[] = [
     equivalentUnityMcp: "object-get-data",
     examples: [
       { description: "Read by instanceId", argv: ["tools", "run", "object.get-data", "--input", "{\"instanceId\":12345}"] },
-      { description: "Read Transform localPosition only", argv: ["tools", "run", "object.get-data", "--input", "{\"path\":\"Main Camera\",\"paths\":[\"localPosition\"]}"] }
+      { description: "Read an asset name only", argv: ["tools", "run", "object.get-data", "--input", "{\"assetPath\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeMaterial.mat\",\"paths\":[\"name\"],\"maxDepth\":2}"] },
+      { description: "Read a filtered asset subtree", argv: ["tools", "run", "object.get-data", "--input", "{\"assetPath\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeMaterial.mat\",\"viewQuery\":{\"namePattern\":\"name\",\"maxDepth\":1}}"] }
     ]
   },
   {
     name: "object.modify",
     title: "Modify Object",
-    description: "Apply pathPatches or jsonPatch (JSON Merge Patch, RFC 7386) to any Unity Object. Returns updated data, changed paths, logs and structured audit. Use object.get-data first to read current values.",
+    description: "Apply pathPatches or jsonPatch (JSON Merge Patch, RFC 7386) to any Unity Object. Returns updated data, changed paths, logs and structured audit. Use object.get-data first to read current values. In Play Mode, scene/runtime object changes are runtime-only and asset changes can affect the editor session.",
     group: "object",
     inputSchema: objSchema({
       instanceId: { type: "integer" },
@@ -56,6 +62,7 @@ export const OBJECT_TOOLS: ToolMetadata[] = [
       maxDepth: { type: "integer", default: 2 }
     }),
     destructiveHint: true,
+    playModeSupport: "runtime-only",
     supportsDryRun: true,
     riskLevel: "high",
     sideEffects: ["object-modify"],

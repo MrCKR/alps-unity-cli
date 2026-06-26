@@ -31,7 +31,8 @@ using UnityCli;
     Group = "sample",
     InputSchema = "{\"type\":\"object\",\"properties\":{\"message\":{\"type\":\"string\"}},\"required\":[\"message\"]}",
     OutputSchema = "{\"type\":\"object\",\"properties\":{\"requestId\":{\"type\":\"string\"},\"input\":{\"type\":\"object\"}}}",
-    DestructiveHint = false)]
+    DestructiveHint = false,
+    PlayModeSupport = "editor-only")]
 public static class SampleEchoTool
 {
     public static string Execute(UnityCliProjectToolContext context)
@@ -78,6 +79,7 @@ public static class MyProjectTools
 - `InputSchema` / `OutputSchema`：JSON Schema；AI 执行前会通过 `tools describe` 读取。
 - `DestructiveHint`：删除、覆盖、不可逆修改必须设为 `true`。
 - `Target`：`editor`、`runtime` 或 `both`；runtime 通常需要 Play Mode。
+- `PlayModeSupport`：`supported`、`runtime-only`、`session-affecting`、`editor-only` 或 `unknown`；editor-only 在 Play Mode 下返回 `E_TOOL_PLAYMODE_UNAVAILABLE`。
 - `DefaultTimeoutMs` / `MaxTimeoutMs`：长任务按需设置。
 - `Fingerprint`：可选固定指纹；缺省时 Bridge 会计算 handler + descriptor 指纹。
 
@@ -92,7 +94,7 @@ unity_cli tools describe <custom-tool>
 unity_cli tools run <custom-tool> --input '<json>'
 ```
 
-runtime Tool 通常先进入 Play Mode：
+runtime Tool 通常先进入 Play Mode，并声明 `PlayModeSupport = "runtime-only"`：
 
 ```powershell
 unity_cli tools run editor.play

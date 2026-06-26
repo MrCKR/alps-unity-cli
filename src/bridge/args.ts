@@ -39,30 +39,51 @@ export function targetArgs(flags: BridgeFlags, positionalTarget: string | undefi
 }
 
 export async function assetArgs(command: string, flags: BridgeFlags, positionalTarget: string | undefined): Promise<Record<string, unknown>> {
+  const structured = structuredInput(flags);
   if (command === "asset.rename") {
     return compactArgs({
-      path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "source"),
-      name: stringFlag(flags, "name") ?? stringFlag(flags, "new-name")
+      path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "source") ?? stringValue(structured.path) ?? stringValue(structured.source),
+      name: stringFlag(flags, "name") ?? stringFlag(flags, "new-name") ?? stringValue(structured.name)
     });
   }
 
   if (command === "asset.duplicate" || command === "asset.move") {
     return compactArgs({
-      path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "source"),
-      source: stringFlag(flags, "source"),
-      destination: stringFlag(flags, "destination") ?? stringFlag(flags, "to")
+      path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "source") ?? stringValue(structured.path) ?? stringValue(structured.source),
+      source: stringFlag(flags, "source") ?? stringValue(structured.source),
+      destination: stringFlag(flags, "destination") ?? stringFlag(flags, "to") ?? stringValue(structured.destination)
     });
   }
 
   return compactArgs({
-    path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "source"),
-    source: stringFlag(flags, "source"),
-    destination: stringFlag(flags, "destination") ?? stringFlag(flags, "to"),
-    type: stringFlag(flags, "type"),
-    content: await contentFlag(flags),
-    overwrite: boolFlag(flags, "overwrite"),
-    dryRun: boolFlag(flags, "dry-run") ?? boolFlag(flags, "preflight")
+    path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "source") ?? stringValue(structured.path) ?? stringValue(structured.source),
+    source: stringFlag(flags, "source") ?? stringValue(structured.source),
+    destination: stringFlag(flags, "destination") ?? stringFlag(flags, "to") ?? stringValue(structured.destination),
+    type: stringFlag(flags, "type") ?? stringValue(structured.type),
+    content: await contentFlag(flags) ?? stringValue(structured.content),
+    overwrite: boolFlag(flags, "overwrite") ?? boolValue(structured.overwrite),
+    dryRun: boolFlag(flags, "dry-run") ?? boolFlag(flags, "preflight") ?? boolValue(structured.dryRun)
   });
+}
+
+/** 读取 tools run --input 中无法映射为简单 flag 的结构化字段。 */
+function structuredInput(flags: BridgeFlags): Record<string, unknown> {
+  const raw = typeof flags.__structuredInput === "string" ? flags.__structuredInput : undefined;
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function stringValue(value: unknown): string | undefined {
+  return typeof value === "string" ? value : undefined;
+}
+
+function boolValue(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined;
 }
 
 
@@ -75,7 +96,7 @@ export function boolFlag(flags: BridgeFlags, key: string): boolean | string | un
   if (flags[key] === true || flags[key] === "true") {
     return true;
   }
-  if (flags[key] === "false") {
+  if (flags[key] === false || flags[key] === "false") {
     return false;
   }
   return undefined;

@@ -54,7 +54,7 @@ namespace UnityCli
         private static readonly string[] RuntimeToolCommands = { "runtime-tool.list", "runtime-tool.run" };
         private static readonly string[] ContextCommands = { "context.list", "context.describe", "context.read" };
         private static readonly string[] ExtensionCommands = { "extension.status" };
-        private const string BridgeDiagnosticsFingerprint = "health-fingerprint-play-mode-guard-v2";
+        private const string BridgeDiagnosticsFingerprint = "health-fingerprint-play-mode-guard-v3";
         private const string DestructiveCommandFingerprint = "destructive-safety-v1";
         private static readonly BridgeCommandRegistry CommandRegistry = CreateCommandRegistry();
         private static readonly string ListenerId = Guid.NewGuid().ToString("N");
@@ -217,9 +217,8 @@ namespace UnityCli
 
             if (EditorApplication.isPlayingOrWillChangePlaymode)
             {
-                // Read-only queries, runtime tool commands, and tool discovery
-                // are always allowed in any Play Mode state.
-                var alwaysAllowedInPlayMode = request.Command == "editor.state"
+                // 只在 Play Mode 切换期限制高风险命令；稳定运行态允许 CLI 工具继续操作 Unity。
+                var allowedDuringPlayModeTransition = request.Command == "editor.state"
                     || request.Command == "editor.console"
                     || request.Command == "editor.pause"
                     || request.Command == "editor.stop"
@@ -232,24 +231,12 @@ namespace UnityCli
                     || request.Command == "context.read"
                     || request.Command == "extension.status";
 
-                if (!alwaysAllowedInPlayMode)
+                if (!EditorApplication.isPlaying && !allowedDuringPlayModeTransition)
                 {
-                    WriteLog("execute_play_mode_guard_blocked requestId=" + request.RequestId + " command=" + request.Command + " isPlaying=" + Bool(EditorApplication.isPlaying));
-                    if (!EditorApplication.isPlaying)
-                    {
-                        // During Play Mode state changes, isPlayingOrWillChangePlaymode is true
-                        // while isPlaying may still be false on enter or exit.
-                        // Transient — callers should wait and retry.
-                        return TransientErrorJson("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode. (execute-guard-v2)", "Wait for Play mode transition to complete and retry.", 3000);
-                    }
-                    else
-                    {
-                        // Stable Play Mode: editor-domain write commands are not available.
-                        // Non-transient — retrying won't help; the caller must exit Play Mode first.
-                        return ErrorJson("E_UNITY_PLAY_MODE", "Unity Editor is in Play Mode; editor-domain write commands are not available. (execute-guard-v2)", "Exit Play Mode first (use editor stop), or use read-only and runtime tool commands.");
-                    }
+                    WriteLog("execute_play_mode_guard_blocked_transition requestId=" + request.RequestId + " command=" + request.Command + " isPlaying=" + Bool(EditorApplication.isPlaying));
+                    return TransientErrorJson("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode. (execute-guard-v3)", "Wait for Play mode transition to complete and retry.", 3000);
                 }
-                WriteLog("execute_play_mode_guard_allowed requestId=" + request.RequestId + " command=" + request.Command);
+                WriteLog("execute_play_mode_guard_allowed requestId=" + request.RequestId + " command=" + request.Command + " isPlaying=" + Bool(EditorApplication.isPlaying));
             }
 
             if (RequiresDestructiveSecurityProof(request.Command) && !request.DryRun && !request.SecurityConfirmed(DestructiveCommandFingerprint))
@@ -275,7 +262,8 @@ namespace UnityCli
                 || command == "component.remove"
                 || command == "editor.menu"
                 || command == "script.edit"
-                || command == "script.apply-edits";
+                || command == "script.apply-edits"
+                || command == "reflection.method.call";
         }
 
         /// <summary>

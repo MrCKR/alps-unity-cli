@@ -258,7 +258,7 @@ namespace UnityCli
             var path = request.StringArg("path");
             if (string.IsNullOrWhiteSpace(path))
             {
-                throw new BridgeCommandException("E_SCHEMA_INVALID", "Editor menu path is required.", "Use unity_cli editor menu <path>, for example File/Save.");
+                throw new BridgeCommandException("E_SCHEMA_INVALID", "Editor menu path is required.", "Use unity_cli tools run editor.menu --input '{\"path\":\"File/Save\"}' --yes, or pass another exact Unity menu path.");
             }
 
             var startedAt = DateTime.UtcNow;
@@ -315,40 +315,28 @@ namespace UnityCli
             }
             if (request.BoolArg("clear", false))
             {
-                var clearMethod = logEntries.GetMethod("Clear", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-                if (clearMethod != null)
-                {
-                    clearMethod.Invoke(null, null);
-                }
-                return SuccessJson(new UnityCliJsonWriter().BeginObject()
-                    .Prop("cleared", true)
-                    .PropArray("items", null)
-                    .PropObject("pageInfo", w => w
-                        .Prop("pageSize", (long)count)
-                        .Prop("cursor", (long)0)
-                        .PropNull("nextCursor")
-                        .Prop("total", (long)0))
-                    .Prop("logPath", LogPath())
-                    .EndObject().ToString());
+                throw new BridgeCommandException("E_EDITOR_CONSOLE_CLEAR_UNSUPPORTED", "editor.console is read-only and no longer clears the Console.", "Use unity_cli tools run console.clear --dry-run to preview, then unity_cli tools run console.clear --yes to clear.");
             }
+            var total = 0;
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .Prop("cleared", false)
                 .Prop("type", type)
-                .PropRaw("items", ConsoleItemsJson(type, count))
+                .PropRaw("items", ConsoleItemsJson(type, count, null, 0, out total))
                 .PropObject("pageInfo", w => w
                     .Prop("pageSize", (long)count)
                     .Prop("cursor", (long)0)
                     .PropNull("nextCursor")
-                    .Prop("total", (long)ConsoleEntryCount()))
+                    .Prop("total", (long)total))
                 .Prop("logPath", LogPath())
                 .EndObject().ToString());
         }
 
-        /// <summary>console.get：拆出 editor.console 为独立只读工具，支持 filter/page。</summary>
+        /// <summary>读取 Console 日志：按类型、文本过滤和 newest-first cursor 分页返回，避免一次拉取大量日志。</summary>
         private static string ConsoleGet(BridgeRequest request)
         {
             var type = request.StringArg("type") ?? request.StringArg("level");
             var count = Math.Max(1, Math.Min(request.IntArg("count", 50), 500));
+            var cursor = Math.Max(0, request.IntArg("cursor", 0));
             var filter = request.StringArg("filter") ?? request.StringArg("search");
             var logEntries = LogEntriesType();
             var w = new UnityCliJsonWriter().BeginObject();
@@ -356,16 +344,19 @@ namespace UnityCli
             if (logEntries == null)
             {
                 w.PropArray("items", null).Prop("total", 0).Prop("diagnostics", "LogEntries API unavailable");
+                w.PropObject("pageInfo", p => p.Prop("pageSize", (long)count).Prop("cursor", (long)cursor).PropNull("nextCursor").Prop("total", 0L));
             }
             else
             {
-                w.PropRaw("items", ConsoleItemsJson(type, count));
-                w.Prop("total", (long)ConsoleEntryCount());
+                var total = 0;
+                w.PropRaw("items", ConsoleItemsJson(type, count, filter, cursor, out total));
+                w.Prop("total", (long)total);
+                var nextCursor = cursor + count < total ? (cursor + count).ToString(CultureInfo.InvariantCulture) : null;
+                w.PropObject("pageInfo", p => p.Prop("pageSize", (long)count).Prop("cursor", (long)cursor).Prop("nextCursor", nextCursor).Prop("total", (long)total));
             }
             if (!string.IsNullOrEmpty(filter)) w.Prop("filter", filter);
-            w.PropObject("pageInfo", p => p.Prop("pageSize", (long)count).Prop("cursor", 0).PropNull("nextCursor"));
             w.Prop("logPath", LogPath());
-            return w.EndObject().ToString();
+            return SuccessJson(w.EndObject().ToString());
         }
 
         /// <summary>console.clear：清空 Console。</summary>
@@ -479,8 +470,10 @@ namespace UnityCli
                 .Prop("logPath", LogPath()).EndObject().ToString());
         }
 
-        private static string ConsoleItemsJson(string type, int count)
+        /// <summary>按 newest-first 顺序读取 Console 条目，并在过滤后的集合上应用 cursor 分页。</summary>
+        private static string ConsoleItemsJson(string type, int count, string filter, int cursor, out int filteredTotal)
         {
+            filteredTotal = 0;
             var entryType = FindType("UnityEditor.LogEntry");
             var logEntries = LogEntriesType();
             var getEntry = logEntries == null ? null : logEntries.GetMethod("GetEntryInternal", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
@@ -492,17 +485,35 @@ namespace UnityCli
             var writer = new UnityCliJsonWriter().BeginArray();
             var total = ConsoleEntryCount();
             var added = 0;
-            for (var index = total - 1; index >= 0 && added < count; index--)
+            var skipped = 0;
+            var includeAllTypes = string.IsNullOrEmpty(type) || string.Equals(type, "all", StringComparison.OrdinalIgnoreCase);
+            for (var index = total - 1; index >= 0; index--)
             {
                 getEntry.Invoke(null, new object[] { index, entry });
                 var mode = Convert.ToInt32(entryType.GetField("mode", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(entry), CultureInfo.InvariantCulture);
                 var level = ConsoleLevel(mode);
-                if (!string.IsNullOrEmpty(type) && !string.Equals(type, level, StringComparison.OrdinalIgnoreCase))
+                if (!includeAllTypes && !string.Equals(type, level, StringComparison.OrdinalIgnoreCase))
                 {
                     continue;
                 }
-                var message = Convert.ToString(entryType.GetField("message", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(entry), CultureInfo.InvariantCulture);
-                var file = Convert.ToString(entryType.GetField("file", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(entry), CultureInfo.InvariantCulture);
+                var message = Convert.ToString(entryType.GetField("message", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(entry), CultureInfo.InvariantCulture) ?? "";
+                var file = Convert.ToString(entryType.GetField("file", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(entry), CultureInfo.InvariantCulture) ?? "";
+                if (!string.IsNullOrEmpty(filter)
+                    && message.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0
+                    && file.IndexOf(filter, StringComparison.OrdinalIgnoreCase) < 0)
+                {
+                    continue;
+                }
+                filteredTotal++;
+                if (skipped < cursor)
+                {
+                    skipped++;
+                    continue;
+                }
+                if (added >= count)
+                {
+                    continue;
+                }
                 var line = Convert.ToInt32(entryType.GetField("line", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(entry), CultureInfo.InvariantCulture);
                 writer.BeginObject()
                     .Prop("index", (long)index)
@@ -557,19 +568,14 @@ namespace UnityCli
                 throw new BridgeCommandException("E_UNITY_IMPORTING", "Unity Editor is importing assets.", "Wait for Unity to finish importing and retry.", transient: true, retryAfterMs: 5000);
             }
             if (EditorApplication.isPlayingOrWillChangePlaymode
+                && !EditorApplication.isPlaying
                 && command != "editor.pause"
                 && command != "editor.stop"
                 && command != "editor.state"
                 && command != "editor.console")
             {
-                var isTransition = !EditorApplication.isPlaying;
-                var message = isTransition
-                    ? "Unity Editor is entering or exiting Play mode."
-                    : "Unity Editor is in Play Mode; this editor-domain command is not available.";
-                var nextAction = isTransition
-                    ? "Wait for Play mode transition to complete and retry."
-                    : "Exit Play Mode first (use editor stop).";
-                throw new BridgeCommandException("E_UNITY_PLAY_MODE", message, nextAction, transient: isTransition, retryAfterMs: isTransition ? 3000 : 0);
+                // 只拦截进入/退出 Play Mode 的过渡期；稳定运行态允许 AI 继续用 CLI 工具调试和改场景。
+                throw new BridgeCommandException("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode.", "Wait for Play mode transition to complete and retry.", transient: true, retryAfterMs: 3000);
             }
             if (BuildPipeline.isBuildingPlayer)
             {

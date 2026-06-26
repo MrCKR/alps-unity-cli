@@ -26,6 +26,7 @@ export const REFLECTION_TOOLS: ToolMetadata[] = [
       methods: { type: "array", items: { type: "object" } }
     }),
     destructiveHint: false,
+    playModeSupport: "supported",
     handler: "bridge",
     supportStatus: "live-bridge",
     cliCommand: "tools run reflection.method.find",
@@ -39,27 +40,37 @@ export const REFLECTION_TOOLS: ToolMetadata[] = [
   {
     name: "reflection.method.call",
     title: "Call Method",
-    description: "Invoke any C# method via reflection. No scope restriction: public/private/static/instance, any namespace/assembly, Editor/Runtime. High-risk: requires security confirmation (--yes with destructiveFingerprint). Returns target method preview, structured audit, exceptions and result serialization.",
+    description: "Invoke any C# method via reflection. No scope restriction: public/private/static/instance, any namespace/assembly, Editor/Runtime. Critical risk: run --dry-run first to preview the target and planned effects, then rerun with --yes only for a known safe method. Use reflection.method.find first to discover signatures.",
     group: "reflection",
     inputSchema: objSchema({
       typeName: { type: "string", description: "Full type name containing the method." },
       methodName: { type: "string", description: "Method name to call." },
       args: { type: "array", description: "Positional arguments array, or object {argName: value}." },
-      instanceRef: { type: "object", description: "Instance reference for instance methods: {instanceId} | {assetPath} | {path}." },
-      security: { type: "object", description: "Confirmation: {confirmed: true, destructiveFingerprint: \"...\"}." }
+      instanceRef: { type: "object", description: "Instance reference for instance methods: {instanceId} | {assetPath} | {path}." }
     }, ["typeName", "methodName"]),
+    outputSchema: objSchema({
+      command: { type: "string" },
+      typeName: { type: "string" },
+      methodName: { type: "string" },
+      requiresConfirmation: { type: "boolean" },
+      plannedEffects: { type: "array", items: { type: "object" } },
+      result: { description: "Serialized result when confirmed execution succeeds." },
+      ok: { type: "boolean", description: "Method invocation result flag inside the bridge data." },
+      error: { type: "string", description: "Invocation error when the reflected method throws or cannot be called." }
+    }),
     destructiveHint: true,
-    supportsDryRun: false,
+    supportsDryRun: true,
     riskLevel: "critical",
     sideEffects: ["arbitrary-method-invocation"],
+    playModeSupport: "session-affecting",
     handler: "bridge",
     supportStatus: "live-bridge",
     cliCommand: "tools run reflection.method.call",
     docsTopic: "reflection",
     equivalentUnityMcp: "reflection-method-call",
     examples: [
-      { description: "Static method (requires confirmation)", argv: ["tools", "run", "reflection.method.call", "--input", "{\"typeName\":\"UnityEngine.Physics\",\"methodName\":\"Gravity\",\"security\":{\"confirmed\":true,\"destructiveFingerprint\":\"...\"}}"] },
-      { description: "Instance method", argv: ["tools", "run", "reflection.method.call", "--input", "{\"typeName\":\"UnityEngine.Transform\",\"methodName\":\"Translate\",\"args\":[1,0,0],\"instanceRef\":{\"instanceId\":123},\"security\":{\"confirmed\":true,\"destructiveFingerprint\":\"...\"}}"] }
+      { description: "Preview a static method call", argv: ["tools", "run", "reflection.method.call", "--dry-run", "--input", "{\"typeName\":\"UnityEngine.Application\",\"methodName\":\"get_unityVersion\"}"] },
+      { description: "Execute only after reviewing dry-run", argv: ["tools", "run", "reflection.method.call", "--yes", "--input", "{\"typeName\":\"UnityEngine.Application\",\"methodName\":\"get_unityVersion\"}"] }
     ]
   },
   {
@@ -77,6 +88,7 @@ export const REFLECTION_TOOLS: ToolMetadata[] = [
       schema: { type: "object" }
     }),
     destructiveHint: false,
+    playModeSupport: "supported",
     handler: "bridge",
     supportStatus: "live-bridge",
     cliCommand: "tools run type.schema",

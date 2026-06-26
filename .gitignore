@@ -5,3 +5,4 @@ dist/
 .multica-evidence/
 *.log
 Dev/
+.codegraph/

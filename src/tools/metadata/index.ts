@@ -42,21 +42,31 @@ import { OBJECT_TOOLS } from "./groups/object.js";
 import { REFLECTION_TOOLS } from "./groups/reflection.js";
 import { CLI_ONLY_TOOLS } from "./groups/cli-only.js";
 import { TOOLS_DISCOVERY_TOOLS } from "./groups/tools.js";
-import type { ToolMetadata, ToolSource } from "./types.js";
+import type { PlayModeSupport, ToolMetadata, ToolSource } from "./types.js";
 
 export { supportStatusDescription, supportStatusForTool, supportStatusLabel } from "./status.js";
-export type { ToolExample, ToolHandler, ToolMetadata, ToolSource, ToolRiskLevel, ToolSupportStatus } from "./types.js";
+export type { PlayModeSupport, ToolExample, ToolHandler, ToolMetadata, ToolSource, ToolRiskLevel, ToolSupportStatus } from "./types.js";
 
 /** Extension groups that register through the contribution loader, not core aggregation. */
 export const EXTENSION_GROUPS = new Set(["probuilder", "cinemachine", "vfx", "urp", "hdrp"]);
 
 /** Normalize a ToolMetadata entry to include default kind/source values. */
-export function normalizeToolMetadata(tool: ToolMetadata): ToolMetadata & { kind: "tool"; source: ToolSource } {
+export function normalizeToolMetadata(tool: ToolMetadata): ToolMetadata & { kind: "tool"; source: ToolSource; playModeSupport: PlayModeSupport } {
   return {
     ...tool,
     kind: tool.kind ?? "tool",
     source: tool.source ?? "built-in",
+    playModeSupport: tool.playModeSupport ?? inferPlayModeSupport(tool),
   };
+}
+
+/** 推导迁移期默认 Play Mode 语义，显式 metadata 可覆盖。 */
+export function inferPlayModeSupport(tool: ToolMetadata): PlayModeSupport {
+  if (tool.target === "runtime" || tool.handler === "bridge-runtime") return "runtime-only";
+  if (tool.handler === "job" || tool.handler === "offline") return "editor-only";
+  if (tool.longRunning || tool.sideEffects?.some((effect) => ["asset-import", "file-write", "package-modify"].includes(effect))) return "session-affecting";
+  if (tool.destructiveHint || tool.supportsDryRun) return "runtime-only";
+  return "supported";
 }
 
 /**
@@ -130,17 +140,17 @@ export function validateExtensionToolMetadata(): void {
 
 /** Return core built-in tool metadata entries (no extension tools). */
 export function builtinToolMetadata(): ToolMetadata[] {
-  return [...CORE_TOOLS];
+  return CORE_TOOLS.map(normalizeToolMetadata);
 }
 
 /** Return extension tool metadata entries (registered by extension contributions). */
 export function extensionToolMetadata(): ToolMetadata[] {
-  return [...extensionTools];
+  return extensionTools.map(normalizeToolMetadata);
 }
 
 /** Return all registered tool metadata entries (core + extension). */
 export function allRegisteredToolMetadata(): ToolMetadata[] {
-  return [...CORE_TOOLS, ...extensionTools];
+  return [...CORE_TOOLS, ...extensionTools].map(normalizeToolMetadata);
 }
 
 /** Return distinct core group names from built-in metadata. */

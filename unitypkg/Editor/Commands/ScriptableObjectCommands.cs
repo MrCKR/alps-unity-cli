@@ -58,7 +58,7 @@ namespace UnityCli
             {
                 throw new BridgeCommandException("E_SCRIPTABLE_OBJECT_PROPERTY_REQUIRED", "scriptable-object.modify requires --property <name>.", "Pass a public writable field or property name.");
             }
-            Undo.RecordObject(asset, "unity_cli scriptable-object.modify");
+            Undo.RecordObject(asset, "unity_cli tools run scriptable-object.modify");
             SetObjectMemberValue(asset, property, request.StringArg("value"));
             EditorUtility.SetDirty(asset);
             AssetDatabase.SaveAssets();
@@ -113,7 +113,7 @@ namespace UnityCli
             var asset = AssetDatabase.LoadAssetAtPath<ScriptableObject>(path);
             if (asset == null)
             {
-                throw new BridgeCommandException("E_SCRIPTABLE_OBJECT_NOT_FOUND", "ScriptableObject asset not found: " + path, "Check the path or run unity_cli asset search --type ScriptableObject.");
+                throw new BridgeCommandException("E_SCRIPTABLE_OBJECT_NOT_FOUND", "ScriptableObject asset not found: " + path, "Check the path or run tools run asset.search --input '{\"filter\":\"t:ScriptableObject\"}' to discover the path.");
             }
             return asset;
         }
@@ -160,16 +160,34 @@ namespace UnityCli
             var property = target.GetType().GetProperty(propertyName, flags);
             if (property != null && property.CanWrite)
             {
-                property.SetValue(target, ConvertComponentValue(value, property.PropertyType), null);
+                property.SetValue(target, ConvertScriptableObjectValue(value, property.PropertyType), null);
                 return;
             }
             var field = target.GetType().GetField(propertyName, flags);
             if (field != null)
             {
-                field.SetValue(target, ConvertComponentValue(value, field.FieldType));
+                field.SetValue(target, ConvertScriptableObjectValue(value, field.FieldType));
                 return;
             }
             throw new BridgeCommandException("E_SCRIPTABLE_OBJECT_PROPERTY_NOT_FOUND", "Writable ScriptableObject member not found: " + propertyName, "Use a public writable field or property name.");
+        }
+
+        // 将 CLI 字符串输入转换为 ScriptableObject 公共字段/属性的基础类型。
+        private static object ConvertScriptableObjectValue(string value, Type type)
+        {
+            if (Nullable.GetUnderlyingType(type) != null)
+            {
+                if (string.IsNullOrEmpty(value)) return null;
+                type = Nullable.GetUnderlyingType(type);
+            }
+            if (type == typeof(string)) return value;
+            if (type == typeof(bool)) return bool.Parse(value);
+            if (type == typeof(int)) return int.Parse(value, CultureInfo.InvariantCulture);
+            if (type == typeof(long)) return long.Parse(value, CultureInfo.InvariantCulture);
+            if (type == typeof(float)) return float.Parse(value, CultureInfo.InvariantCulture);
+            if (type == typeof(double)) return double.Parse(value, CultureInfo.InvariantCulture);
+            if (type.IsEnum) return Enum.Parse(type, value, true);
+            throw new BridgeCommandException("E_SCRIPTABLE_OBJECT_VALUE_TYPE_UNSUPPORTED", "Unsupported ScriptableObject member type: " + type.Name, "Use string, bool, numeric, enum, or a dedicated asset/object tool for complex values.");
         }
     }
 }

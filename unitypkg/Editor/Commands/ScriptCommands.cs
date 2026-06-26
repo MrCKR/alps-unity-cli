@@ -59,23 +59,47 @@ namespace UnityCli
             return SuccessJson(ScriptMutationJson("script.create", path));
         }
 
+        /// <summary>读取脚本内容；支持 1-based lineFrom/lineTo 范围以控制大文件返回量。</summary>
         private static string ScriptRead(BridgeRequest request)
         {
             var path = RequireExistingScriptPath(request.StringArg("path") ?? request.StringArg("target"));
             string content;
+            string[] lines;
             try
             {
                 content = File.ReadAllText(AssetFullPath(path), Encoding.UTF8);
+                lines = content.Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
             }
             catch (Exception exception)
             {
                 throw new BridgeCommandException("E_IO_ERROR", "Failed to read script file: " + exception.Message, "Check file encoding and permissions: " + path);
             }
+            var lineCount = lines.Length;
+            var lineFrom = Math.Max(1, request.IntArg("lineFrom", 1));
+            var requestedLineTo = request.IntArg("lineTo", -1);
+            var lineTo = requestedLineTo < 0 ? lineCount : Math.Min(requestedLineTo, lineCount);
+            var sliced = lineFrom > lineCount || lineFrom > lineTo;
+            var returnedContent = content;
+            if (request.HasArg("lineFrom") || request.HasArg("lineTo"))
+            {
+                if (sliced)
+                {
+                    returnedContent = string.Empty;
+                }
+                else
+                {
+                    returnedContent = string.Join("\n", lines.Skip(lineFrom - 1).Take(lineTo - lineFrom + 1));
+                }
+            }
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropRaw("script", ScriptJson(path))
-                .Prop("content", content)
+                .Prop("content", returnedContent)
                 .Prop("sha256", Sha256Hex(content))
                 .Prop("encoding", "utf-8")
+                .Prop("lineFrom", (long)(request.HasArg("lineFrom") || request.HasArg("lineTo") ? lineFrom : 1))
+                .Prop("lineTo", (long)(request.HasArg("lineFrom") || request.HasArg("lineTo") ? Math.Max(0, lineTo) : lineCount))
+                .Prop("lineCount", (long)lineCount)
+                .Prop("truncated", request.HasArg("lineFrom") || request.HasArg("lineTo"))
                 .Prop("logPath", LogPath())
                 .EndObject().ToString());
         }
@@ -205,7 +229,7 @@ namespace UnityCli
             });
             w.Prop("count", (long)caps.Length);
             w.Prop("logPath", LogPath());
-            return w.EndObject().ToString();
+            return SuccessJson(w.EndObject().ToString());
         }
 
         private static string ScriptValidate(BridgeRequest request)
@@ -255,7 +279,7 @@ namespace UnityCli
             var path = NormalizeAssetPath(rawPath);
             if (string.IsNullOrEmpty(path))
             {
-                throw new BridgeCommandException("E_SCRIPT_PATH_REQUIRED", "Pass an Assets/*.cs script path.", "Use unity_cli script read Assets/Scripts/Example.cs.");
+                throw new BridgeCommandException("E_SCRIPT_PATH_REQUIRED", "Pass an Assets/*.cs script path.", "Use tools run script.read --input '{\"path\":\"<path>\"}' or pass an Assets/*.cs path.");
             }
             if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || !path.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
             {
@@ -269,7 +293,7 @@ namespace UnityCli
             var path = RequireScriptPath(rawPath);
             if (!AssetExists(path))
             {
-                throw new BridgeCommandException("E_SCRIPT_NOT_FOUND", "Script not found: " + path, "Check the path or run unity_cli asset search --type MonoScript.");
+                throw new BridgeCommandException("E_SCRIPT_NOT_FOUND", "Script not found: " + path, "Check the path or run tools run asset.search --input '{\"filter\":\"t:MonoScript\"}' to discover the path.");
             }
             return path;
         }

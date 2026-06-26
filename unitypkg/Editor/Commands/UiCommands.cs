@@ -146,7 +146,7 @@ namespace UnityCli
 
             if (string.IsNullOrEmpty(path))
             {
-                return ErrorJson("E_UI_DOCUMENT_PATH_REQUIRED", "UIDocument info requires a target or Assets/*.uxml path.", "Pass unity_cli ui document/info <UIDocument target> or --path Assets/UI/Layout.uxml.");
+                return ErrorJson("E_UI_DOCUMENT_PATH_REQUIRED", "UIDocument info requires a target or Assets/*.uxml path.", "Pass a UIDocument GameObject name/path/instance id or an Assets/*.uxml path.");
             }
 
             var visualTree = LoadVisualTreeAsset(path);
@@ -279,7 +279,7 @@ namespace UnityCli
             w.Prop("count", (long)items.Count);
             w.PropArray("elements", arr => { foreach (var i in items) arr.RawValue(i); });
             w.Prop("logPath", LogPath());
-            return w.EndObject().ToString();
+            return SuccessJson(w.EndObject().ToString());
         }
 
         private static void CollectVisualElement(VisualElement ve, int depth, int maxDepth, List<string> items)

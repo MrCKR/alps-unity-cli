@@ -8,6 +8,7 @@ export type ToolHandler = "bridge" | "bridge-runtime" | "job" | "offline" | "hyb
 export type ToolSupportStatus = "live-bridge" | "live-bridge-runtime" | "bridge-job" | "batch-job" | "cli-only" | "planned";
 export type ToolSource = "built-in" | "project" | "extension";
 export type ToolRiskLevel = "safe" | "low" | "medium" | "high" | "critical";
+export type PlayModeSupport = "supported" | "runtime-only" | "session-affecting" | "editor-only" | "unknown";
 
 export interface ToolMetadata {
   name: string;
@@ -26,6 +27,8 @@ export interface ToolMetadata {
   sideEffects?: string[];
   /** Risk level classification for safety disclosure. */
   riskLevel?: ToolRiskLevel;
+  /** Play Mode execution semantics for AI routing and runtime safety. */
+  playModeSupport?: PlayModeSupport;
   /** Mapping to equivalent unity-mcp tool name, for parity tracking. */
   equivalentUnityMcp?: string;
   longRunning?: boolean;

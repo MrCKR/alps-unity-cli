@@ -1,5 +1,5 @@
-import { assetArgs, compactArgs, numberFlag, queryArgs, stringFlag } from "../args.js";
-import type { BridgeCommandSpec } from "../types.js";
+import { assetArgs, boolFlag, compactArgs, numberFlag, queryArgs, stringFlag } from "../args.js";
+import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const assetBridgeSpecs: BridgeCommandSpec[] = [
   { group: "asset", command: "search", bridgeCommand: "asset.search", buildArgs: assetQueryArgs },
@@ -17,14 +17,32 @@ export const assetBridgeSpecs: BridgeCommandSpec[] = [
   { group: "asset", command: "preview", bridgeCommand: "asset.preview", buildArgs: assetPreviewArgs }
 ];
 
+/** 读取 tools run --input 中无法映射为简单 flag 的结构化字段。 */
+function structuredInput(flags: BridgeFlags): Record<string, unknown> {
+  const raw = typeof flags.__structuredInput === "string" ? flags.__structuredInput : undefined;
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
 function assetQueryArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  const structured = structuredInput(flags);
   return compactArgs({
     ...queryArgs(flags),
-    target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "path") ?? stringFlag(flags, "query"),
-    query: stringFlag(flags, "query") ?? stringFlag(flags, "filter") ?? positionalTarget,
-    type: stringFlag(flags, "type"),
-    path: stringFlag(flags, "path"),
-    guid: stringFlag(flags, "guid")
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "path") ?? stringFlag(flags, "query") ?? structured.query ?? structured.filter,
+    query: stringFlag(flags, "query") ?? positionalTarget ?? structured.query,
+    filter: stringFlag(flags, "filter") ?? structured.filter,
+    type: stringFlag(flags, "type") ?? structured.type,
+    path: stringFlag(flags, "path") ?? structured.path,
+    searchInFolders: structured.searchInFolders,
+    guid: stringFlag(flags, "guid") ?? structured.guid,
+    pageSize: numberFlag(flags, "page-size") ?? structured.pageSize ?? structured.maxResults,
+    maxResults: structured.maxResults,
+    cursor: numberFlag(flags, "cursor") ?? structured.cursor
   });
 }
 
@@ -37,7 +55,18 @@ function assetSearchBuiltInArgs({ flags, positionalTarget }: Parameters<BridgeCo
 }
 
 function assetGetDataArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
-  return compactArgs({ assetPath: positionalTarget ?? stringFlag(flags, "asset-path") ?? stringFlag(flags, "path"), maxDepth: numberFlag(flags, "max-depth"), includeFields: stringFlag(flags, "include-fields"), includeProperties: stringFlag(flags, "include-properties") });
+  const structured = structuredInput(flags);
+  return compactArgs({
+    assetPath: positionalTarget ?? stringFlag(flags, "asset-path") ?? stringFlag(flags, "path") ?? structured.assetPath,
+    path: structured.path,
+    maxDepth: numberFlag(flags, "max-depth") ?? structured.maxDepth,
+    includeFields: boolFlag(flags, "include-fields") ?? structured.includeFields,
+    includeProperties: boolFlag(flags, "include-properties") ?? structured.includeProperties,
+    deepSerialization: boolFlag(flags, "deep-serialization") ?? structured.deepSerialization,
+    paths: structured.paths,
+    viewQuery: structured.viewQuery,
+    namePattern: stringFlag(flags, "name-pattern") ?? structured.namePattern
+  });
 }
 
 function assetPreviewArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {

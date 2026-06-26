@@ -13,6 +13,7 @@ alps-unity-cli 的安全模型围绕三个核心原则：Tool 可有副作用但
 | `longRunning` | boolean | true = 可能长时间运行 |
 | `permissions` | string[] | 执行所需权限 |
 | `cancellationSemantics` | string | 取消行为描述 |
+| `playModeSupport` | string | Play Mode 行为：`supported` / `runtime-only` / `session-affecting` / `editor-only` / `unknown` |
 
 ## Tool 安全规则
 
@@ -51,6 +52,14 @@ tools describe <tool>        → 确认 destructiveHint 和 supportsDryRun
 ```
 
 未确认时返回 `E_DESTRUCTIVE_CONFIRMATION_REQUIRED`。
+
+### Play Mode 支持
+
+- `supported`：Play Mode 下可正常执行，语义基本不变。
+- `runtime-only`：Play Mode 下可执行，但只影响当前运行会话，退出 Play Mode 后不持久。
+- `session-affecting`：允许执行，但可能触发 asset import、compile、domain reload 或 Play Mode 状态变化。
+- `editor-only`：没有合理运行态语义，Play Mode 下返回 `E_TOOL_PLAYMODE_UNAVAILABLE`。
+- `unknown`：迁移期状态，应逐步消除。
 
 ## Context 只读硬边界
 

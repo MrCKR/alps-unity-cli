@@ -45,6 +45,7 @@ export interface ContextDescriptor {
   requiresUnity: boolean;
   target?: string;
   availabilityScope?: string;
+  playModeSupport?: "supported" | "runtime-only" | "session-affecting" | "editor-only" | "unknown";
   refreshBehavior?: string;
   resourceUri?: string;
   requiresPackages?: string[];
@@ -163,6 +164,7 @@ export function rawDescriptorToContextDescriptor(value: unknown): ContextDescrip
     requiresUnity: isProject,              // Project contexts require Unity bridge
     target: stringProp(d, "target") ?? "editor",
     availabilityScope: stringProp(d, "availabilityScope"),
+    playModeSupport: playModeSupportProp(d, "playModeSupport"),
     refreshBehavior: stringProp(d, "refreshBehavior"),
     resourceUri: stringProp(d, "resourceUri"),
     requiresPackages: stringArrayProp(d, "requiresPackages"),
@@ -199,6 +201,7 @@ function ensureContextDefaults(context: ContextDescriptor): ContextDescriptor {
     kind: "context" as const,
     target: context.target ?? "editor",
     availabilityScope: context.availabilityScope ?? "editorSession",
+    playModeSupport: context.playModeSupport ?? (context.target === "runtime" ? "runtime-only" : "supported"),
     ...(context.source === "project" ? {
       handler: context.handler ?? "bridge",
       supportStatus: context.supportStatus ?? "live-bridge",
@@ -217,6 +220,11 @@ function isContextDescriptor(value: ContextDescriptor | undefined): value is Con
 function stringProp(record: Record<string, unknown>, key: string): string | undefined {
   const value = record[key];
   return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function playModeSupportProp(record: Record<string, unknown>, key: string): ContextDescriptor["playModeSupport"] | undefined {
+  const value = record[key];
+  return value === "supported" || value === "runtime-only" || value === "session-affecting" || value === "editor-only" || value === "unknown" ? value : undefined;
 }
 
 function objectProp(record: Record<string, unknown>, key: string): Record<string, unknown> | undefined {

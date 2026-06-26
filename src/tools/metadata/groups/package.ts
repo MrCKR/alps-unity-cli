@@ -16,6 +16,7 @@ export const PACKAGE_TOOLS: ToolMetadata[] = [
     supportsDryRun: true,
     riskLevel: "high",
     sideEffects: ["domain-reload", "manifest-change", "file-copy"],
+    playModeSupport: "session-affecting",
     handler: "bridge",
     supportStatus: "live-bridge",
     cliCommand: "tools run package.embed",

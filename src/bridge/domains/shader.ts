@@ -1,5 +1,5 @@
 import { boolFlag, compactArgs, contentFlag, numberFlag, stringFlag } from "../args.js";
-import type { BridgeCommandSpec } from "../types.js";
+import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const shaderBridgeSpecs: BridgeCommandSpec[] = [
   { group: "shader", command: "info", bridgeCommand: "shader.info", buildArgs: shaderArgs },
@@ -10,16 +10,40 @@ export const shaderBridgeSpecs: BridgeCommandSpec[] = [
   { group: "shader", command: "get-data", bridgeCommand: "shader.get-data", buildArgs: shaderArgs }
 ];
 
+// 读取 tools run --input 中无法映射为简单 flag 的结构化字段（content/source/name 等）
+function structuredInput(flags: BridgeFlags): Record<string, unknown> {
+  const raw = typeof flags.__structuredInput === "string" ? flags.__structuredInput : undefined;
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function stringField(flags: BridgeFlags, key: string): string | undefined {
+  const value = structuredInput(flags)[key];
+  return typeof value === "string" ? value : undefined;
+}
+
+// 解析 shader 源码内容：优先 --content / --content-file，再回退结构化 content / source 别名
+async function resolveShaderContent(flags: BridgeFlags): Promise<string | undefined> {
+  const flagged = await contentFlag(flags);
+  if (flagged !== undefined) return flagged;
+  return stringField(flags, "content") ?? stringField(flags, "source");
+}
+
 async function shaderArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Promise<Record<string, unknown>> {
   return compactArgs({
-    path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "shader"),
-    target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "path") ?? stringFlag(flags, "shader"),
-    name: stringFlag(flags, "name"),
-    content: await contentFlag(flags),
-    overwrite: boolFlag(flags, "overwrite")
+    path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "shader") ?? stringField(flags, "path"),
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "path") ?? stringFlag(flags, "shader") ?? stringField(flags, "path"),
+    name: stringFlag(flags, "name") ?? stringField(flags, "name"),
+    content: await resolveShaderContent(flags),
+    overwrite: boolFlag(flags, "overwrite") ?? structuredInput(flags).overwrite
   });
 }
 
 function shaderListArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
-  return compactArgs({ keyword: positionalTarget ?? stringFlag(flags, "keyword") ?? stringFlag(flags, "search"), pageSize: numberFlag(flags, "page-size") });
+  return compactArgs({ keyword: positionalTarget ?? stringFlag(flags, "keyword") ?? stringFlag(flags, "search"), pageSize: numberFlag(flags, "page-size") ?? structuredInput(flags).pageSize });
 }

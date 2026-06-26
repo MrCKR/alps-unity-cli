@@ -85,6 +85,7 @@ function contextMetadataToDescriptor(metadata: ContextMetadata): ContextDescript
     source: metadata.source === "built-in" ? "built-in" : "custom",
     target: metadata.target === "runtime" ? "runtime" : "editor",
     availabilityScope: metadata.availabilityScope === "playModeSession" || metadata.availabilityScope === "always" ? metadata.availabilityScope : "editorSession",
+    playModeSupport: metadata.playModeSupport ?? "supported",
     requiresUnity: metadata.handler === "bridge" || metadata.handler === "bridge-runtime",
     available: metadata.available,
     inputSchema: metadata.inputSchema,
@@ -110,6 +111,7 @@ function extensionContributionToDescriptor(ec: ExtensionContextContribution): Co
     source: "custom",
     target: "editor",
     availabilityScope: "editorSession",
+    playModeSupport: "supported",
     requiresUnity: true,
     destructiveHint: false,
     bridgeCommand: "context.read",
@@ -183,6 +185,7 @@ export function customContextToDescriptor(custom: CustomContextDescriptor): Cont
     source: "custom",
     target: "editor",
     availabilityScope: "editorSession",
+    playModeSupport: "supported",
     requiresUnity: true,
     destructiveHint: false,
     bridgeCommand: "context.read",
@@ -237,6 +240,7 @@ export function toListEntry(ctx: ContextDescriptor): ContextListEntry {
     category: ctx.category,
     source: ctx.source,
     target: ctx.target,
+    playModeSupport: ctx.playModeSupport,
     available: ctx.available,
   };
 }

@@ -51,6 +51,11 @@ namespace UnityCli
         /// stale when the session changes.
         /// </summary>
         public string AvailabilityScope { get; set; }
+        /// <summary>
+        /// Play Mode execution semantics exposed to AI callers.
+        /// Valid values: supported, runtime-only, session-affecting, editor-only, unknown.
+        /// </summary>
+        public string PlayModeSupport { get; set; }
         public int DefaultTimeoutMs { get; set; }
         public int MaxTimeoutMs { get; set; }
         public bool SupportsJob { get; set; }

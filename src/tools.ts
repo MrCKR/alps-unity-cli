@@ -207,6 +207,7 @@ async function handleToolsGroupList(
       group: t.group,
       source: t.source ?? (customTools.includes(t) ? "project" : "built-in"),
       destructiveHint: t.destructiveHint,
+      playModeSupport: t.playModeSupport,
       supportStatus,
       supportStatusLabel: supportStatusLabel(supportStatus),
       target: t.target ?? "editor",
@@ -272,6 +273,7 @@ async function handleToolsSearch(
       title: t.title,
       group: t.group,
       destructiveHint: t.destructiveHint,
+      playModeSupport: t.playModeSupport,
       supportStatus,
       supportStatusLabel: supportStatusLabel(supportStatus),
       cliCommand: t.cliCommand,
@@ -365,7 +367,7 @@ async function handleToolsRun(
   if (!toolName) {
     return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", "Tool name is required for tools run.", [
       "Run unity_cli tools group to see tool groups.",
-      "Run unity_cli tools run <name> [--input <json>] [--target <instance>]."
+      "Run unity_cli tools run <name> [--input <json>] [--instance <id|alias>]."
     ]);
   }
 
@@ -425,8 +427,9 @@ async function handleToolsRun(
 
   // code.exec 是 hybrid，但需要先经过原生 handler 完成本地校验、dry-run、artifact 与 batchmode job 逻辑。
   if (builtinTool && toolName === "code.exec") {
-    const input = await parseToolInput(flags);
-    return handleCode("exec", mergeInputToFlags(input, flags), runtime as Runtime, requestId);
+    const parsedInput = await parseToolInput(flags, requestId);
+    if (!parsedInput.ok) return parsedInput.error!;
+    return handleCode("exec", mergeInputToFlags(parsedInput.input, flags), runtime as Runtime, requestId);
   }
 
   // ── Built-in bridge/hybrid tools WITH bridge spec: route through Unity Bridge ──
@@ -434,8 +437,9 @@ async function handleToolsRun(
   // 无 bridge spec 的 hybrid/offline 工具(package.*/docs.*/reflect.*/...)
   // 走下面的原生 handler dispatch。
   if (builtinTool && (tool.handler === "bridge" || tool.handler === "hybrid") && findBridgeSpecForTool(toolName)) {
-    const input = await parseToolInput(flags);
-    const mergedFlags = mergeInputToFlags(input, flags);
+    const parsedInput = await parseToolInput(flags, requestId);
+    if (!parsedInput.ok) return parsedInput.error!;
+    const mergedFlags = mergeInputToFlags(parsedInput.input, flags);
     const spec = findBridgeSpecForTool(toolName)!;
     // 破坏性工具确认(对齐旧 cli.ts bridge 路径)。
     if (spec.destructiveHint || tool.destructiveHint) {
@@ -484,40 +488,147 @@ export function findBridgeSpecForTool(toolName: string) {
   return bridgeCommandRegistry.specs().find((spec) => spec.toolName === toolName || spec.bridgeCommand === toolName);
 }
 
-async function parseToolInput(flags: Record<string, string | boolean>): Promise<Record<string, unknown>> {
+interface ParsedToolInput {
+  ok: boolean;
+  input: Record<string, unknown>;
+  error?: CliResult;
+}
+
+async function parseToolInput(flags: Record<string, string | boolean>, requestId: string): Promise<ParsedToolInput> {
   const inputFilePath = getString(flags, "input-file");
   if (inputFilePath) {
     const content = await readFile(resolve(inputFilePath), "utf8");
-    try {
-      const parsed = JSON.parse(content);
-      return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed : { input: parsed };
-    } catch {
-      return {};
-    }
+    return parseToolInputString(content, requestId, "--input-file");
   }
   const inputString = getString(flags, "input");
   if (inputString !== undefined) {
-    try {
-      const parsed = JSON.parse(inputString);
-      return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed : { input: parsed };
-    } catch {
-      return {};
-    }
+    return parseToolInputString(inputString, requestId, "--input");
   }
-  return {};
+  return { ok: true, input: {} };
 }
 
-/**
- * Convert a camelCase key to kebab-case CLI flag name.
- * e.g. "timeoutMs" → "timeout-ms", "outputPath" → "output-path"
- */
+/** 解析 tools run 输入；兼容 PowerShell 将 escaped JSON 拆坏后的常见形态。 */
+function parseToolInputString(inputString: string, requestId: string, source: "--input" | "--input-file"): ParsedToolInput {
+  const parsed = parseJsonWithPowerShellFallback(inputString);
+  if (parsed.ok) {
+    const value = parsed.value;
+    return { ok: true, input: typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : { input: value } };
+  }
+  return {
+    ok: false,
+    input: {},
+    error: failure(requestId, "E_TOOL_INPUT_JSON_INVALID", `${source} must be valid JSON. ${parsed.message}`, [
+      "In PowerShell, use single quotes with unescaped JSON quotes, or prefer --input-file <path> for complex JSON.",
+      "Do not type backslashes before JSON quotes inside PowerShell single quotes.",
+      "Run unity_cli tools describe <tool> and copy the inputSchema field names exactly."
+    ])
+  };
+}
+
+function parseJsonWithPowerShellFallback(inputString: string): { ok: true; value: unknown } | { ok: false; message: string } {
+  try {
+    return { ok: true, value: JSON.parse(inputString) };
+  } catch (error) {
+    const backslashQuoted = recoverBackslashQuotedJson(inputString);
+    if (backslashQuoted !== undefined) {
+      return { ok: true, value: backslashQuoted };
+    }
+    const recovered = recoverPowerShellEscapedJsonObject(inputString);
+    if (recovered) {
+      return { ok: true, value: recovered };
+    }
+    return { ok: false, message: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+function recoverBackslashQuotedJson(inputString: string): unknown | undefined {
+  const trimmed = inputString.trim();
+  if (!/^[{\[]\\"/.test(trimmed)) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(trimmed.replace(/\\"/g, '"'));
+  } catch {
+    return undefined;
+  }
+}
+
+function recoverPowerShellEscapedJsonObject(inputString: string): Record<string, unknown> | undefined {
+  const trimmed = inputString.trim();
+  if (!trimmed.startsWith("{\\") || (!trimmed.endsWith("}") && !trimmed.endsWith("\\}"))) {
+    return undefined;
+  }
+  const body = trimmed
+    .replace(/^\{\\\s*/, "")
+    .replace(/\\?\}\s*$/, "");
+  return parseRecoveredObjectBody(body);
+}
+
+/** 解析 PowerShell 常见的 `{"key":"value"}` 被拆坏后的对象体，保留数组/对象层级。 */
+function parseRecoveredObjectBody(body: string): Record<string, unknown> | undefined {
+  const result: Record<string, unknown> = {};
+  for (const pair of splitRecoveredTopLevel(body)) {
+    const separator = findRecoveredKeySeparator(pair);
+    if (separator < 0) {
+      return undefined;
+    }
+    const key = cleanRecoveredToken(pair.slice(0, separator));
+    if (!key) {
+      return undefined;
+    }
+    result[key] = parseRecoveredValue(pair.slice(separator + 1).replace(/\\$/g, "").trim());
+  }
+  return result;
+}
+
+function parseRecoveredValue(value: string): unknown {
+  const trimmed = value.trim();
+  if (trimmed === "true") return true;
+  if (trimmed === "false") return false;
+  if (trimmed === "null") return null;
+  if (/^-?\d+(?:\.\d+)?$/.test(trimmed)) return Number(trimmed);
+  if (trimmed.startsWith("[") && trimmed.endsWith("]")) {
+    const inner = trimmed.slice(1, -1).trim();
+    if (!inner) return [];
+    return splitRecoveredTopLevel(inner).map(parseRecoveredValue);
+  }
+  if (trimmed.startsWith("{") && trimmed.endsWith("}")) {
+    return parseRecoveredObjectBody(trimmed.slice(1, -1));
+  }
+  return cleanRecoveredToken(trimmed);
+}
+
+function splitRecoveredTopLevel(value: string): string[] {
+  const parts: string[] = [];
+  let start = 0;
+  let depth = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    const char = value[index];
+    if (char === "{" || char === "[") depth += 1;
+    else if (char === "}" || char === "]") depth = Math.max(0, depth - 1);
+    else if (char === "," && depth === 0) {
+      parts.push(value.slice(start, value[index - 1] === "\\" ? index - 1 : index).trim());
+      start = index + 1;
+    }
+  }
+  parts.push(value.slice(start).trim());
+  return parts.filter(Boolean);
+}
+
+function findRecoveredKeySeparator(pair: string): number {
+  return pair.indexOf(":");
+}
+
+function cleanRecoveredToken(value: string): string {
+  return value.trim().replace(/^\\/, "").replace(/\\$/, "").replace(/\\:/g, ":").replace(/\\,/g, ",").replace(/\\\\/g, "\\");
+}
 function camelToKebab(key: string): string {
   return key.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`);
 }
 
 /**
  * Merge --input JSON fields into CLI flags (kebab-case).
- * Boolean values become true; string/number values are passed as-is.
+ * Boolean values are preserved as explicit true/false flags; string/number values are passed as-is.
  * Existing flags are not overwritten.
  */
 function mergeInputToFlags(
@@ -528,15 +639,15 @@ function mergeInputToFlags(
   const structuredInput: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(input)) {
     const flagKey = camelToKebab(key);
+    // 保留原始 input 字段，避免 tools run --target 实例选择与工具 target 字段冲突。
+    structuredInput[key] = value;
     if (flagKey in merged) continue; // explicit CLI flags take precedence
     if (typeof value === "boolean") {
-      if (value) merged[flagKey] = true;
+      merged[flagKey] = value;
     } else if (typeof value === "number") {
       merged[flagKey] = String(value);
     } else if (typeof value === "string") {
       merged[flagKey] = value;
-    } else if (value !== undefined) {
-      structuredInput[key] = value;
     }
   }
   if (Object.keys(structuredInput).length > 0) {
@@ -574,8 +685,9 @@ async function dispatchJobHandler(
     ]);
   }
 
-  const input = await parseToolInput(flags);
-  const mergedFlags = mergeInputToFlags(input, flags);
+  const parsedInput = await parseToolInput(flags, requestId);
+  if (!parsedInput.ok) return parsedInput.error!;
+  const mergedFlags = mergeInputToFlags(parsedInput.input, flags);
 
   let result: CliResult | undefined;
 
@@ -617,8 +729,9 @@ async function dispatchOfflineHandler(
   const sub = dotIndex > 0 ? name.substring(dotIndex + 1) : "";
   const fullRuntime = runtime as Runtime;
 
-  const input = await parseToolInput(flags);
-  const mergedFlags = mergeInputToFlags(input, flags);
+  const parsedInput = await parseToolInput(flags, requestId);
+  if (!parsedInput.ok) return parsedInput.error!;
+  const mergedFlags = mergeInputToFlags(parsedInput.input, flags);
 
   // 破坏性 offline 工具确认(package.remove 等)。
   if (tool.destructiveHint) {
@@ -729,3 +842,4 @@ async function resolveAvailableExtensionTools(
     return [];
   }
 }
+

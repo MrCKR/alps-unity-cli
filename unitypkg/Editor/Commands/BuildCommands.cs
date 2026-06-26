@@ -37,7 +37,7 @@ namespace UnityCli
                     }
                 });
                 w.Prop("logPath", LogPath());
-                return w.EndObject().ToString();
+                return SuccessJson(w.EndObject().ToString());
             }
             if (action == "add" || action == "remove" || action == "enable" || action == "disable")
             {
@@ -117,7 +117,7 @@ namespace UnityCli
             w.Prop("scriptingBackend", PlayerSettings.GetScriptingBackend(BuildTargetGroup.Unknown).ToString());
             w.Prop("apiCompatibilityLevel", PlayerSettings.GetApiCompatibilityLevel(BuildTargetGroup.Unknown).ToString());
             w.Prop("logPath", LogPath());
-            return w.EndObject().ToString();
+            return SuccessJson(w.EndObject().ToString());
         }
     }
 }

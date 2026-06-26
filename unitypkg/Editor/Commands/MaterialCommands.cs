@@ -40,8 +40,11 @@ namespace UnityCli
         {
             var path = RequireMaterialPath(request.StringArg("path"));
             var material = LoadMaterialAsset(path);
+            // namePattern: 可选逗号分隔属性名，用于 token 安全的轻量读取，避免大 shader 全量序列化
+            var nameFilter = ParseNameFilter(request.StringArg("namePattern"));
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
-                .PropRaw("material", MaterialJson(path, material))
+                .PropRaw("material", MaterialJson(path, material, nameFilter))
+                .Prop("nameFilterApplied", nameFilter != null)
                 .Prop("logPath", LogPath())
                 .EndObject()
                 .ToString());
@@ -135,11 +138,11 @@ namespace UnityCli
             var material = LoadMaterialAsset(path);
             if (string.IsNullOrEmpty(propertyName))
             {
-                return ErrorJson("E_MATERIAL_PROPERTY_REQUIRED", "Material set requires --property <name>.", "Run unity_cli material info <path> to inspect shader properties.");
+                return ErrorJson("E_MATERIAL_PROPERTY_REQUIRED", "Material set requires --property <name>.", "Inspect shader properties with tools run material.info --input '{\"path\":\"<path>\"}'.");
             }
             if (!material.HasProperty(propertyName))
             {
-                return ErrorJson("E_MATERIAL_PROPERTY_NOT_FOUND", "Material property not found: " + propertyName, "Run unity_cli material info <path> to inspect shader properties.");
+                return ErrorJson("E_MATERIAL_PROPERTY_NOT_FOUND", "Material property not found: " + propertyName, "Inspect shader properties with tools run material.info --input '{\"path\":\"<path>\"}'.");
             }
 
             var propertyType = MaterialPropertyType(material, propertyName);
@@ -150,7 +153,7 @@ namespace UnityCli
             }
             if (!TypesCompatible(propertyType, normalizedType))
             {
-                return ErrorJson("E_MATERIAL_PROPERTY_TYPE_MISMATCH", "Material property " + propertyName + " is " + propertyType + ", not " + requestedType + ".", "Use the property type reported by unity_cli material info <path>.");
+                return ErrorJson("E_MATERIAL_PROPERTY_TYPE_MISMATCH", "Material property " + propertyName + " is " + propertyType + ", not " + requestedType + ".", "Use the property type reported by tools run material.info --input '{\"path\":\"<path>\"}'.");
             }
 
             var appliedValue = ApplyMaterialValue(material, propertyName, normalizedType, value);
@@ -178,7 +181,7 @@ namespace UnityCli
             var path = NormalizeAssetPath(rawPath);
             if (string.IsNullOrEmpty(path))
             {
-                throw new BridgeCommandException("E_MATERIAL_PATH_REQUIRED", "Pass an Assets/*.mat path.", "Use unity_cli material info <path> or pass --path Assets/Materials/Example.mat.");
+                throw new BridgeCommandException("E_MATERIAL_PATH_REQUIRED", "Pass an Assets/*.mat path.", "Use tools run material.info --input '{\"path\":\"<path>\"}' or pass an Assets/*.mat path.");
             }
             if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || !path.EndsWith(".mat", StringComparison.OrdinalIgnoreCase))
             {
@@ -192,7 +195,7 @@ namespace UnityCli
             var material = AssetDatabase.LoadAssetAtPath<Material>(path);
             if (material == null)
             {
-                throw new BridgeCommandException("E_MATERIAL_NOT_FOUND", "Material asset not found: " + path, "Check the path or run unity_cli asset search --type Material.");
+                throw new BridgeCommandException("E_MATERIAL_NOT_FOUND", "Material asset not found: " + path, "Check the path or run tools run asset.search --input '{\"filter\":\"t:Material\"}' to discover the path.");
             }
             return material;
         }
@@ -218,7 +221,7 @@ namespace UnityCli
             return matches.Count == 1 ? matches[0] : null;
         }
 
-        private static string MaterialJson(string path, Material material)
+        private static string MaterialJson(string path, Material material, HashSet<string> nameFilter = null)
         {
             var shader = material.shader;
             var dependencies = AssetDatabase.GetDependencies(path, false);
@@ -229,15 +232,34 @@ namespace UnityCli
                 .Prop("shader", shader == null ? null : shader.name)
                 .Prop("renderQueue", (long)material.renderQueue)
                 .PropArray("keywords", arr => { foreach (var keyword in material.shaderKeywords) { arr.Value(keyword); } })
-                .PropRaw("properties", MaterialPropertiesJson(material))
-                .PropRaw("textureReferences", MaterialTextureReferencesJson(material))
+                .PropRaw("properties", MaterialPropertiesJson(material, nameFilter))
+                .PropRaw("textureReferences", MaterialTextureReferencesJson(material, nameFilter))
                 .PropRaw("dependencies", DependencySummaryJson(dependencies))
                 .EndObject()
                 .ToString();
         }
 
+        // 解析逗号分隔的属性名筛选集合；null 表示不过滤（全量返回）
+        private static HashSet<string> ParseNameFilter(string namePattern)
+        {
+            if (string.IsNullOrEmpty(namePattern))
+            {
+                return null;
+            }
+            var set = new HashSet<string>();
+            foreach (var part in namePattern.Split(','))
+            {
+                var trimmed = part.Trim();
+                if (trimmed.Length > 0)
+                {
+                    set.Add(trimmed);
+                }
+            }
+            return set.Count == 0 ? null : set;
+        }
 
-        private static string MaterialPropertiesJson(Material material)
+
+        private static string MaterialPropertiesJson(Material material, HashSet<string> nameFilter = null)
         {
             var shader = material.shader;
             if (shader == null)
@@ -253,6 +275,10 @@ namespace UnityCli
             for (var index = 0; index < count; index++)
             {
                 var name = ShaderUtil.GetPropertyName(shader, index);
+                if (nameFilter != null && !nameFilter.Contains(name))
+                {
+                    continue;
+                }
                 var type = ShaderUtil.GetPropertyType(shader, index).ToString();
                 var description = ShaderUtil.GetPropertyDescription(shader, index);
                 var valueJson = material.HasProperty(name) ? MaterialPropertyValueJson(material, name, NormalizeMaterialValueType(type)) : "null";
@@ -265,13 +291,13 @@ namespace UnityCli
                     .ToString());
             }
             return new UnityCliJsonWriter().BeginObject()
-                .Prop("count", (long)count)
+                .Prop("count", (long)items.Count)
                 .PropArray("items", arr => { foreach (var item in items) { arr.RawValue(item); } })
                 .EndObject()
                 .ToString();
         }
 
-        private static string MaterialTextureReferencesJson(Material material)
+        private static string MaterialTextureReferencesJson(Material material, HashSet<string> nameFilter = null)
         {
             var shader = material.shader;
             if (shader == null)
@@ -287,6 +313,10 @@ namespace UnityCli
             for (var index = 0; index < count; index++)
             {
                 var name = ShaderUtil.GetPropertyName(shader, index);
+                if (nameFilter != null && !nameFilter.Contains(name))
+                {
+                    continue;
+                }
                 if (NormalizeMaterialValueType(ShaderUtil.GetPropertyType(shader, index).ToString()) != "texture" || !material.HasProperty(name))
                 {
                     continue;

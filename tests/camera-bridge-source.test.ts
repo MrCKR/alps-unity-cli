@@ -723,6 +723,7 @@ test("Unity Bridge screenshot validates path, format, overwrite and busy diagnos
   assert.match(source, /E_OUTPUT_PATH_REQUIRED/);
   assert.match(source, /E_OUTPUT_EXISTS/);
   assert.match(source, /E_SCREENSHOT_FORMAT_UNSUPPORTED/);
+  assert.match(source, /E_SCREENSHOT_SIZE_INVALID/);
   assert.match(source, /E_IO_ERROR/);
   assert.match(source, /string\.IsNullOrEmpty\(target\)/);
   assert.match(source, /File\.Exists\(outputPath\) && !overwrite/);
@@ -732,6 +733,27 @@ test("Unity Bridge screenshot validates path, format, overwrite and busy diagnos
   assert.match(readme, /`E_CAMERA_NOT_FOUND` for `tools run camera\.info` when a target Camera cannot be resolved/);
   assert.match(readme, /`E_TARGET_NOT_FOUND` for `tools run camera\.screenshot` when the target is empty or cannot be resolved/);
   assert.match(readme, /C# runtime behavior for empty camera targets, missing Cameras, screenshot IO failures, actual PNG\/JPG artifacts, Prefab Stage open\/save\/close, Prefab dirty conflicts, nested\/variant Prefab summaries, Material asset creation, Renderer\/UI Graphic assignment, Material property writes, GraphicsSettings\/QualitySettings persistence, render pipeline asset resolution, Physics\/Physics2D project setting persistence, raycast collision hits, explicit simulation steps, AnimationClip asset creation\/binding summaries, Animator state\/play\/stop behavior, VFX Graph asset creation, VisualEffect assignment, Shader import diagnostics, TextureImporter mutations, uGUI object creation, UIDocument\/PanelSettings linking, UI hierarchy summaries and Runtime Code live execution must still be proven by real Windows \+ Unity Editor validation/);
+});
+
+test("Unity Bridge camera creation validates inputs before scene mutation", async () => {
+  const source = await readUnityBridgeSources();
+  const createStart = source.indexOf("private static string CameraCreate");
+  const createEnd = source.indexOf("private static string CameraTarget", createStart);
+  const createBlock = source.slice(createStart, createEnd);
+  const lensStart = source.indexOf("private static string CameraLens");
+  const lensEnd = source.indexOf("private static int ClampScreenshotDimension", lensStart);
+  const lensBlock = source.slice(lensStart, lensEnd);
+
+  assert.ok(createStart > -1, "CameraCreate should exist");
+  assert.ok(createEnd > createStart, "CameraCreate block should be bounded");
+  assert.match(source, /private static CameraClearFlags ParseCameraClearFlags/);
+  assert.match(source, /E_CAMERA_CLEAR_FLAGS_INVALID/);
+  assert.match(createBlock, /ResolveUniqueTarget\(parent, "camera\.create --parent <go> not found\."\)/);
+  assert.match(createBlock, /ParseCameraClearFlags\(request\.StringArg\("clearFlags"\)\)/);
+  assert.match(createBlock, /var gameObject = new GameObject\(name\)/);
+  assert.ok(createBlock.indexOf("ResolveUniqueTarget(parent") < createBlock.indexOf("new GameObject(name)"), "camera.create must validate parent before creating a GameObject");
+  assert.ok(createBlock.indexOf("ParseCameraClearFlags") < createBlock.indexOf("new GameObject(name)"), "camera.create must validate clearFlags before creating a GameObject");
+  assert.match(lensBlock, /ParseCameraClearFlags\(request\.StringArg\("clearFlags"\)\)/);
 });
 
 test("Unity Bridge editor commands expose state, play/pause/stop, menu execution and busy diagnostics", async () => {
@@ -746,7 +768,7 @@ test("Unity Bridge editor commands expose state, play/pause/stop, menu execution
   assert.match(source, /private static string EditorConsole\(BridgeRequest request\)/);
   assert.match(source, /private static string BridgeBuildStamp\(\)/);
   assert.match(source, /private static string BridgeHealthJson\(\)/);
-  assert.match(source, /private const string BridgeDiagnosticsFingerprint = "health-fingerprint-play-mode-guard-v2"/);
+  assert.match(source, /private const string BridgeDiagnosticsFingerprint = "health-fingerprint-play-mode-guard-v3"/);
   assert.match(source, /private static string AssemblyMvid\(Assembly assembly\)/);
   assert.match(source, /private static string AssemblyLocation\(Assembly assembly\)/);
   assert.match(source, /private static string RuntimeDiagnosticsPath\(\)/);
@@ -807,9 +829,8 @@ test("Unity Bridge treats PlayMode switching as editor-command busy state", asyn
   assert.match(busyBlock, /E_UNITY_BUSY/);
 });
 
-test("Bridge Execute allows editor.state and runtime tools during Play Mode", async () => {
-  // Regression: editor.state must be allowed during Play Mode (not just transitions)
-  // so callers can query state to determine when Play Mode is ready.
+test("Bridge Execute only blocks Play Mode transitions", async () => {
+  // 回归保护：稳定 Play Mode 不应阻塞 CLI 工具，AI 需要能在游戏运行时继续通过 Bridge 操作 Unity。
   const source = await readUnityBridgeSources();
   const executeStart = source.indexOf("private static string Execute(BridgeRequest request)");
   const executeEnd = source.indexOf("RequiresDestructiveSecurityProof", executeStart);
@@ -818,29 +839,19 @@ test("Bridge Execute allows editor.state and runtime tools during Play Mode", as
   assert.ok(executeStart > -1, "Could not find Execute method");
   assert.ok(executeEnd > executeStart, "Could not find end of Execute method");
 
-  // editor.state must be in the always-allowed list
-  assert.match(executeBlock, /request\.Command == "editor\.state"/, "editor.state must be allowed during Play Mode");
+  // guard 只应在 Play Mode 切换期拒绝命令，稳定运行态必须放行。
+  assert.match(executeBlock, /!EditorApplication\.isPlaying && !allowedDuringPlayModeTransition/, "Execute must only block transition-time commands");
+  assert.match(executeBlock, /execute-guard-v3/, "Execute transition error must include the v3 marker");
+  assert.doesNotMatch(executeBlock, /editor-domain write commands are not available/, "Stable Play Mode must not reject editor-domain tools");
 
-  // project-tool.list must be in the always-allowed list (needed for tool discovery)
-  assert.match(executeBlock, /request\.Command == "project-tool\.list"/, "project-tool.list must be allowed during Play Mode");
-
-  // editor.console must be in the always-allowed list (read-only query)
-  assert.match(executeBlock, /request\.Command == "editor\.console"/, "editor.console must be allowed during Play Mode");
-
-  // Runtime tool commands must remain allowed
-  assert.match(executeBlock, /request\.Command == "runtime-tool\.list"/, "runtime-tool.list must be allowed during Play Mode");
-  assert.match(executeBlock, /request\.Command == "runtime-tool\.run"/, "runtime-tool.run must be allowed during Play Mode");
-
-  // The guard must distinguish between transitions and stable Play Mode
-  // During stable Play Mode, write commands should be non-transient
-  assert.match(executeBlock, /!EditorApplication\.isPlaying/, "Execute must check isPlaying to distinguish transition from stable Play Mode");
-  assert.match(executeBlock, /is in Play Mode.*editor-domain write/, "Stable Play Mode error must mention 'editor-domain write'");
+  // 切换期 allowlist 仍保留，用于安全的状态查询和运行态控制。
+  assert.match(executeBlock, /request\.Command == "editor\.state"/, "editor.state must remain allowed during Play Mode transitions");
+  assert.match(executeBlock, /request\.Command == "runtime-tool\.list"/, "runtime-tool.list must remain allowed during Play Mode transitions");
+  assert.match(executeBlock, /request\.Command == "runtime-tool\.run"/, "runtime-tool.run must remain allowed during Play Mode transitions");
 });
 
-test("BridgeHttpServer HandleHttpCore Play Mode guard matches Execute allowlist", async () => {
-  // Regression: the HTTP pre-queue guard in HandleHttpCore must allow the same
-  // commands as the Execute() method's Play Mode guard. If they drift, requests
-  // that Execute() would accept get blocked at the HTTP layer before reaching the queue.
+test("BridgeHttpServer Play Mode guard only blocks transitions", async () => {
+  // 回归保护：HTTP 入队前 guard 不应在稳定 Play Mode 下提前拒绝工具调用。
   const source = await readUnityBridgeSources();
   const handleHttpCoreStart = source.indexOf("private static void HandleHttpCore");
   const handleHttpCoreEnd = source.indexOf("private sealed class BridgeWorkItem", handleHttpCoreStart);
@@ -848,23 +859,23 @@ test("BridgeHttpServer HandleHttpCore Play Mode guard matches Execute allowlist"
 
   assert.ok(handleHttpCoreStart > -1, "Could not find HandleHttpCore method");
 
-  // The same always-allowed commands must appear in HandleHttpCore's Play Mode guard
-  assert.match(httpBlock, /request\.Command == "editor\.state"/, "HandleHttpCore must allow editor.state during Play Mode");
-  assert.match(httpBlock, /request\.Command == "editor\.console"/, "HandleHttpCore must allow editor.console during Play Mode");
-  assert.match(httpBlock, /request\.Command == "editor\.pause"/, "HandleHttpCore must allow editor.pause during Play Mode");
-  assert.match(httpBlock, /request\.Command == "editor\.stop"/, "HandleHttpCore must allow editor.stop during Play Mode");
-  assert.match(httpBlock, /request\.Command == "runtime-tool\.list"/, "HandleHttpCore must allow runtime-tool.list during Play Mode");
-  assert.match(httpBlock, /request\.Command == "runtime-tool\.run"/, "HandleHttpCore must allow runtime-tool.run during Play Mode");
-  assert.match(httpBlock, /request\.Command == "project-tool\.list"/, "HandleHttpCore must allow project-tool.list during Play Mode");
-  assert.match(httpBlock, /request\.Command == "diagnose\.preflight"/, "HandleHttpCore must allow diagnose.preflight during Play Mode");
+  assert.match(httpBlock, /!cachedIsPlaying && !allowedDuringPlayModeTransition/, "HandleHttpCore must only block transition-time commands");
+  assert.match(httpBlock, /http-guard-v3/, "HandleHttpCore transition error must include the v3 marker");
+  assert.doesNotMatch(httpBlock, /editor-domain write commands are not available/, "Stable Play Mode must not be rejected before queueing");
 
-  // The guard must distinguish between transitions and stable Play Mode
-  assert.match(httpBlock, /cachedIsPlaying/, "HandleHttpCore must use cachedIsPlaying to distinguish transition from stable Play Mode");
-  assert.match(httpBlock, /is in Play Mode.*editor-domain write/, "Stable Play Mode error in HandleHttpCore must mention 'editor-domain write'");
+  // HandleHttpCore 的切换期 allowlist 需要与 Execute 保持一致。
+  assert.match(httpBlock, /request\.Command == "editor\.state"/, "HandleHttpCore must allow editor.state during Play Mode transitions");
+  assert.match(httpBlock, /request\.Command == "editor\.console"/, "HandleHttpCore must allow editor.console during Play Mode transitions");
+  assert.match(httpBlock, /request\.Command == "editor\.pause"/, "HandleHttpCore must allow editor.pause during Play Mode transitions");
+  assert.match(httpBlock, /request\.Command == "editor\.stop"/, "HandleHttpCore must allow editor.stop during Play Mode transitions");
+  assert.match(httpBlock, /request\.Command == "runtime-tool\.list"/, "HandleHttpCore must allow runtime-tool.list during Play Mode transitions");
+  assert.match(httpBlock, /request\.Command == "runtime-tool\.run"/, "HandleHttpCore must allow runtime-tool.run during Play Mode transitions");
+  assert.match(httpBlock, /request\.Command == "project-tool\.list"/, "HandleHttpCore must allow project-tool.list during Play Mode transitions");
+  assert.match(httpBlock, /request\.Command == "diagnose\.preflight"/, "HandleHttpCore must allow diagnose.preflight during Play Mode transitions");
 });
 
-test("EnsureEditorNotBusy distinguishes transition from stable Play Mode", async () => {
-  // Regression: the error message must accurately describe the state
+test("EnsureEditorNotBusy only blocks Play Mode transitions", async () => {
+  // 回归保护：命令级 busy 检查不应在稳定 Play Mode 下拒绝工具。
   const source = await readUnityBridgeSources();
   const busyStart = source.indexOf("private static void EnsureEditorNotBusy");
   const busyEnd = source.indexOf("Removed: WaitForPlayModeState", busyStart);
@@ -873,17 +884,12 @@ test("EnsureEditorNotBusy distinguishes transition from stable Play Mode", async
   assert.ok(busyStart > -1);
   assert.ok(busyEnd > busyStart);
 
-  // EnsureEditorNotBusy must also check isPlaying for accurate messaging
-  assert.match(busyBlock, /!EditorApplication\.isPlaying/, "EnsureEditorNotBusy must check isPlaying to distinguish transition from stable Play Mode");
-
-  // Must have distinct messages for transition vs stable Play Mode
-  assert.match(busyBlock, /is in Play Mode/, "Must have 'is in Play Mode' message for stable Play Mode");
+  assert.match(busyBlock, /&& !EditorApplication\.isPlaying/, "EnsureEditorNotBusy must only block transition-time commands");
+  assert.doesNotMatch(busyBlock, /this editor-domain command is not available/, "Stable Play Mode must not reject editor-domain commands");
 });
 
-test("Play Mode guard includes diagnostic version markers (http-guard-v2 / execute-guard-v2)", async () => {
-  // Regression: add version markers to Play Mode guard error messages so we can
-  // verify from the error output or Bridge log whether the new or old guard is active.
-  // If the retest shows errors WITHOUT these markers, the old C# code is running.
+test("Play Mode guard includes diagnostic version markers (http-guard-v3 / execute-guard-v3)", async () => {
+  // 回归保护：版本标记用于确认当前运行的是稳定 Play Mode 放行 guard。
   const source = await readUnityBridgeSources();
 
   // HandleHttpCore guard
@@ -891,15 +897,15 @@ test("Play Mode guard includes diagnostic version markers (http-guard-v2 / execu
   const httpEnd = source.indexOf("private static void StopStaleBridgeListeners", httpStart);
   const httpBlock = source.slice(httpStart, httpEnd > httpStart ? httpEnd : undefined);
   assert.ok(httpStart > -1, "Could not find HandleHttpCore method");
-  assert.match(httpBlock, /http-guard-v2/, "HandleHttpCore Play Mode guard must include http-guard-v2 version marker");
+  assert.match(httpBlock, /http-guard-v3/, "HandleHttpCore Play Mode guard must include http-guard-v3 version marker");
 
   // Execute() guard
   const executeStart = source.indexOf("private static string Execute(BridgeRequest request)");
   const executeEnd = source.indexOf("RequiresDestructiveSecurityProof", executeStart);
   const executeBlock = source.slice(executeStart, executeEnd > executeStart ? executeEnd : undefined);
   assert.ok(executeStart > -1, "Could not find Execute method");
-  assert.match(executeBlock, /execute-guard-v2/, "Execute() Play Mode guard must include execute-guard-v2 version marker");
+  assert.match(executeBlock, /execute-guard-v3/, "Execute() Play Mode guard must include execute-guard-v3 version marker");
 
   // Bridge diagnostics fingerprint must be updated to reflect the guard change
-  assert.match(source, /play-mode-guard-v2/, "BridgeDiagnosticsFingerprint must include play-mode-guard-v2");
+  assert.match(source, /play-mode-guard-v3/, "BridgeDiagnosticsFingerprint must include play-mode-guard-v3");
 });

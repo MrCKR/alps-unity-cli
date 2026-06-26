@@ -44,9 +44,26 @@ test("bridge specs resolve for screenshot tools", () => {
 });
 
 test("contract entries exist for screenshot tools with present C# handler", () => {
-  for (const name of ["screenshot.game-view", "screenshot.scene-view", "screenshot.isolated-object", "screenshot.orbit"]) {
+  for (const name of ["screenshot.capture", "screenshot.game-view", "screenshot.scene-view", "screenshot.isolated-object", "screenshot.orbit"]) {
     const contract = findCommandContract(name);
     assert.ok(contract, `${name} should be in contract`);
     assert.equal(contract.csharp_handler, "present", `${name} should have present C# handler`);
+  }
+});
+
+test("screenshot tools expose play mode support, side effects and output schema", () => {
+  const expected: Record<string, { playModeSupport: string; sideEffects?: string[] }> = {
+    "screenshot.capture": { playModeSupport: "editor-only", sideEffects: ["asset-write"] },
+    "screenshot.game-view": { playModeSupport: "supported", sideEffects: ["asset-write"] },
+    "screenshot.scene-view": { playModeSupport: "editor-only", sideEffects: ["asset-write"] },
+    "screenshot.isolated-object": { playModeSupport: "editor-only", sideEffects: ["asset-write"] },
+    "screenshot.orbit": { playModeSupport: "editor-only", sideEffects: ["asset-write"] }
+  };
+  for (const [name, exp] of Object.entries(expected)) {
+    const tool = findToolByName(name)!;
+    assert.equal(tool.playModeSupport, exp.playModeSupport, `${name} playModeSupport`);
+    assert.ok(tool.sideEffects?.some((s) => exp.sideEffects!.includes(s)), `${name} should declare side effects`);
+    assert.ok(tool.outputSchema, `${name} should expose output schema`);
+    assert.ok(tool.examples?.length, `${name} should expose examples`);
   }
 });

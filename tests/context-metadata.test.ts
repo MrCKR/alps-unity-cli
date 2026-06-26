@@ -45,9 +45,15 @@ test("all builtin contexts have outputSchema", () => {
   }
 });
 
-test("all builtin contexts have handler=bridge", () => {
+test("all builtin contexts expose playModeSupport", () => {
   for (const ctx of builtinContextMetadata()) {
-    assert.equal(ctx.handler, "bridge", `${ctx.name} handler must be "bridge"`);
+    assert.ok(["supported", "runtime-only", "session-affecting", "editor-only", "unknown"].includes(ctx.playModeSupport ?? ""), `${ctx.name} must have playModeSupport`);
+  }
+});
+
+test("all builtin contexts declare an explicit handler", () => {
+  for (const ctx of builtinContextMetadata()) {
+    assert.ok(["bridge", "bridge-runtime", "offline"].includes(ctx.handler ?? ""), `${ctx.name} handler must be explicit`);
   }
 });
 
@@ -115,6 +121,32 @@ test("editor.tool-states has equivalentUnityMcp='none' with semantic difference 
   assert.ok(toolStates.equivalentUnityMcpNote, "editor.tool-states must have equivalentUnityMcpNote");
   assert.ok(toolStates.equivalentUnityMcpNote!.includes("MCP tool discovery"), "Note must explain that unity-mcp tool-states is about MCP tool discovery");
   assert.ok(toolStates.equivalentUnityMcpNote!.includes("Unity Editor tool settings"), "Note must explain that this context is about Unity Editor tool settings");
+  const schema = toolStates.outputSchema as { properties: Record<string, unknown> };
+  assert.ok(schema.properties.transform, "editor.tool-states must expose transform settings");
+  assert.ok(schema.properties.snap, "editor.tool-states must expose snap settings");
+  assert.ok(schema.properties.gridAvailable, "editor.tool-states must expose grid availability");
+});
+
+test("editor contexts describe read-only runtime-safe observations", () => {
+  const expected = ["editor.state", "editor.selection", "editor.active-tool", "editor.windows", "editor.tool-states", "editor.menu-items"];
+  for (const name of expected) {
+    const ctx = findContextByName(name);
+    assert.ok(ctx, `${name} must exist`);
+    assert.equal(ctx.category, "editor", `${name} must stay in editor category`);
+    assert.equal(ctx.playModeSupport ?? "supported", "supported", `${name} must be readable in Play Mode`);
+    assert.equal(ctx.handler, "bridge", `${name} must route through bridge`);
+  }
+
+  const editorState = findContextByName("editor.state")!;
+  assert.match(editorState.description, /busy/i, "editor.state must explain busy state");
+  const stateSchema = editorState.outputSchema as { properties: Record<string, unknown> };
+  assert.ok(stateSchema.properties.state, "editor.state must expose wrapped state payload");
+
+  const menuItems = findContextByName("editor.menu-items")!;
+  assert.match(menuItems.description, /no stable public API/i, "editor.menu-items must disclose Unity menu enumeration limitation");
+  assert.match(menuItems.description, /editor\.menu/, "editor.menu-items must distinguish read context from menu execution tool");
+  const menuSchema = menuItems.outputSchema as { properties: Record<string, unknown> };
+  assert.ok(menuSchema.properties.diagnostics, "editor.menu-items must expose diagnostics");
 });
 
 test("scene.renderer-features has source=built-in (not extension)", () => {
@@ -135,13 +167,27 @@ test("scene.gameobject has id/path/target input parameters", () => {
   assert.ok(schema.properties.path, "scene.gameobject must accept path");
 });
 
-test("tests.list has mode input parameter (not platform)", () => {
+test("tests and tools contexts expose runtime-accurate schemas", () => {
   const tests = findContextByName("tests.list");
   assert.ok(tests, "tests.list must exist");
   const schema = tests.inputSchema as { type: string; properties: Record<string, unknown> };
   assert.equal(schema.type, "object");
   assert.ok(schema.properties.mode, "tests.list must accept mode (not platform)");
   assert.ok(!schema.properties.platform, "tests.list must NOT accept platform parameter");
+  const testsOutput = tests.outputSchema as { properties: Record<string, unknown> };
+  assert.ok(testsOutput.properties.tests, "tests.list must expose tests array");
+  assert.ok(testsOutput.properties.count, "tests.list must expose count");
+
+  const toolsGroups = findContextByName("tools.groups");
+  assert.ok(toolsGroups, "tools.groups must exist");
+  assert.equal(toolsGroups.handler, "offline", "tools.groups must disclose that it reads the local CLI registry");
+  assert.equal(toolsGroups.availabilityScope, "always", "tools.groups must be available without a Unity session");
+
+  const toolsCustom = findContextByName("tools.custom");
+  assert.ok(toolsCustom, "tools.custom must exist");
+  const customOutput = toolsCustom.outputSchema as { properties: Record<string, unknown> };
+  assert.ok(customOutput.properties.tools, "tools.custom must expose tools array");
+  assert.ok(customOutput.properties.count, "tools.custom must expose count");
 });
 
 test("builtinContextCategories returns expected categories", () => {

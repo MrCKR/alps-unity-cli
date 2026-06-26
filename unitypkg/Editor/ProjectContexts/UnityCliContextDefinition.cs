@@ -38,6 +38,7 @@ namespace UnityCli
         // --- Execution ---
         public string Target { get; set; }
         public string AvailabilityScope { get; set; }
+        public string PlayModeSupport { get; set; }
         public string RefreshBehavior { get; set; }
         public string ResourceUri { get; set; }
 

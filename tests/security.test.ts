@@ -20,6 +20,9 @@ test("bridge registry marks destructive commands from security policy", () => {
   const assetDelete = bridgeCommandRegistry.lookup("asset", "delete");
   const goDelete = bridgeCommandRegistry.lookup("go", "delete");
   const sceneSave = bridgeCommandRegistry.lookup("scene", "save");
+  const graphicsBakeStart = bridgeCommandRegistry.lookup("graphics", "bake-start");
+  const graphicsBakeClear = bridgeCommandRegistry.lookup("graphics", "bake-clear");
+  const graphicsBakeReflectionProbe = bridgeCommandRegistry.lookup("graphics", "bake-reflection-probe");
 
   assert.equal(assetDelete?.destructiveHint, true);
   assert.equal(assetDelete?.supportsDryRun, true);
@@ -27,6 +30,12 @@ test("bridge registry marks destructive commands from security policy", () => {
   assert.equal(goDelete?.supportsDryRun, true);
   assert.equal(sceneSave?.destructiveHint, true);
   assert.equal(sceneSave?.supportsDryRun, true);
+  assert.equal(graphicsBakeStart?.destructiveHint, true);
+  assert.equal(graphicsBakeStart?.supportsDryRun, undefined);
+  assert.equal(graphicsBakeClear?.destructiveHint, true);
+  assert.equal(graphicsBakeClear?.supportsDryRun, undefined);
+  assert.equal(graphicsBakeReflectionProbe?.destructiveHint, true);
+  assert.equal(graphicsBakeReflectionProbe?.supportsDryRun, undefined);
 });
 
 test("security policy covers all destructive commands including CLI-only", async () => {
@@ -37,13 +46,13 @@ test("security policy covers all destructive commands including CLI-only", async
     "probuilder.delete-faces", "probuilder.detach-faces", "probuilder.combine-meshes",
     "probuilder.merge-objects", "probuilder.flip-normals",
     "cinemachine.extension", "urp.feature", "editor.menu", "script.edit", "script.apply-edits", "package.remove",
-    "batch.run", "instances.prune", "jobs.cancel", "controller.remove-layer", "profiler.clear", "console.clear",
+    "batch.run", "instances.prune", "jobs.cancel", "controller.remove-layer", "profiler.clear", "console.clear", "graphics.bake-start", "graphics.bake-clear", "graphics.bake-reflection-probe",
     "package.embed", "editor.selection.set", "editor.active-tool.set", "ui.attach-document", "ui.create-panel-settings",
     "go.set-parent", "scene.unload", "prefab.unpack", "texture.generate", "script.update-or-create",
     "component.modify", "object.modify", "reflection.method.call"
   ];
   assert.deepEqual(policyCommands.sort(), expected.sort());
-  assert.equal(destructiveCommands().length, 35);
+  assert.equal(destructiveCommands().length, 38);
 });
 
 test("destructive dry-run forwards envelope preview without --yes", async () => {

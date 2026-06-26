@@ -583,6 +583,7 @@ namespace UnityCli
                 .Prop("destructiveHint", definition.DestructiveHint)
                 .Prop("target", definition.Target)
                 .Prop("availabilityScope", definition.AvailabilityScope)
+                .Prop("playModeSupport", definition.PlayModeSupport)
                 .Prop("available", playModeReady)
                 .Prop("defaultTimeoutMs", definition.DefaultTimeoutMs)
                 .Prop("maxTimeoutMs", definition.MaxTimeoutMs)

@@ -56,7 +56,7 @@ namespace UnityCli
                 return TargetResolution.FromMatches(matches);
             }
 
-            foreach (var gameObject in UnityEngine.Object.FindObjectsOfType<GameObject>())
+            foreach (var gameObject in UnityEngine.Object.FindObjectsOfType<GameObject>(true))
             {
                 if (gameObject.name == target || gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) == target || HierarchyPath(gameObject) == target)
                 {
@@ -73,7 +73,7 @@ namespace UnityCli
                 throw new BridgeCommandException("E_TARGET_NOT_FOUND", requiredMessage, "Pass a GameObject name, hierarchy path or instance id.");
             }
             var matches = new List<GameObject>();
-            foreach (var gameObject in UnityEngine.Object.FindObjectsOfType<GameObject>())
+            foreach (var gameObject in UnityEngine.Object.FindObjectsOfType<GameObject>(true))
             {
                 if (gameObject.name == target || gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) == target || HierarchyPath(gameObject) == target)
                 {
@@ -86,7 +86,7 @@ namespace UnityCli
             }
             if (matches.Count == 0)
             {
-                throw new BridgeCommandException("E_TARGET_NOT_FOUND", "Target not found: " + target, "Run unity_cli scene hierarchy or pass a hierarchy path / instance id.");
+                throw new BridgeCommandException("E_TARGET_NOT_FOUND", "Target not found: " + target, "Run unity_cli tools run scene.hierarchy or pass a hierarchy path / instance id.");
             }
             return matches[0];
         }
@@ -121,21 +121,25 @@ namespace UnityCli
             {
                 name = "GameObject";
             }
-            GameObject gameObject;
+            var parent = request.StringArg("parent");
+            var parentTransform = string.IsNullOrEmpty(parent) ? null : ResolveUniqueTarget(parent, "Parent GameObject is required.").transform;
             var primitive = request.StringArg("primitive");
-            if (!string.IsNullOrEmpty(primitive))
+            var primitiveType = string.IsNullOrEmpty(primitive) ? (PrimitiveType?)null : ParsePrimitiveType(primitive);
+            ValidateGameObjectMutationInputs(request);
+
+            GameObject gameObject;
+            if (primitiveType.HasValue)
             {
-                gameObject = GameObject.CreatePrimitive(ParsePrimitiveType(primitive));
+                gameObject = GameObject.CreatePrimitive(primitiveType.Value);
                 gameObject.name = name;
             }
             else
             {
                 gameObject = new GameObject(name);
             }
-            var parent = request.StringArg("parent");
-            if (!string.IsNullOrEmpty(parent))
+            if (parentTransform != null)
             {
-                gameObject.transform.SetParent(ResolveUniqueTarget(parent, "Parent GameObject is required.").transform, false);
+                gameObject.transform.SetParent(parentTransform, false);
             }
             ApplyGameObjectMutations(gameObject, request);
             Undo.RegisterCreatedObjectUndo(gameObject, "unity_cli go.create");
@@ -147,6 +151,7 @@ namespace UnityCli
         {
             EnsureEditorNotBusy("go.modify");
             var gameObject = ResolveUniqueTarget(RequiredTarget(request, "GameObject modify requires a target."), "GameObject modify requires a target.");
+            ValidateGameObjectMutationInputs(request);
             Undo.RecordObject(gameObject.transform, "unity_cli go.modify");
             Undo.RecordObject(gameObject, "unity_cli go.modify");
             ApplyGameObjectMutations(gameObject, request);
@@ -158,11 +163,12 @@ namespace UnityCli
         {
             EnsureEditorNotBusy("go.duplicate");
             var source = ResolveUniqueTarget(RequiredTarget(request, "GameObject duplicate requires a target."), "GameObject duplicate requires a target.");
+            var parent = request.StringArg("parent");
+            var parentTransform = string.IsNullOrEmpty(parent) ? source.transform.parent : ResolveUniqueTarget(parent, "Parent GameObject is required.").transform;
             var duplicate = UnityEngine.Object.Instantiate(source);
             Undo.RegisterCreatedObjectUndo(duplicate, "unity_cli go.duplicate");
             duplicate.name = request.StringArg("newName") ?? request.StringArg("name") ?? (source.name + " Copy");
-            var parent = request.StringArg("parent");
-            duplicate.transform.SetParent(string.IsNullOrEmpty(parent) ? source.transform.parent : ResolveUniqueTarget(parent, "Parent GameObject is required.").transform, true);
+            duplicate.transform.SetParent(parentTransform, true);
             duplicate.transform.SetSiblingIndex(source.transform.GetSiblingIndex() + 1);
             EditorSceneManager.MarkSceneDirty(duplicate.scene);
             return SuccessJson(GameObjectMutationJson("go.duplicate", duplicate));
@@ -184,7 +190,7 @@ namespace UnityCli
             EnsureEditorNotBusy("go.look-at");
             var gameObject = ResolveUniqueTarget(RequiredTarget(request, "GameObject look-at requires a target."), "GameObject look-at requires a target.");
             var lookAtName = request.StringArg("lookAt") ?? request.StringArg("destination");
-            var lookAt = ResolveUniqueTarget(lookAtName, "GameObject look-at requires --look-at <target>.");
+            var lookAt = ResolveUniqueTarget(lookAtName, "GameObject look-at requires a lookAt target. Use unity_cli tools run go.look-at --input '{\"target\":\"CameraRig\",\"lookAt\":\"Player\"}'.");
             Undo.RecordObject(gameObject.transform, "unity_cli go.look-at");
             gameObject.transform.LookAt(lookAt.transform);
             EditorSceneManager.MarkSceneDirty(gameObject.scene);
@@ -237,6 +243,7 @@ namespace UnityCli
             var gameObject = ResolveUniqueTarget(RequiredTarget(request, "go.set-parent requires a target."), "go.set-parent requires a target.");
             var parentName = request.StringArg("parent");
             var worldPositionStays = request.BoolArg("worldPositionStays", true);
+            var newParent = string.IsNullOrEmpty(parentName) ? null : ResolveUniqueTarget(parentName, "Parent GameObject is required.").transform;
             if (request.DryRun)
             {
                 return SuccessJson(new UnityCliJsonWriter().BeginObject()
@@ -245,16 +252,6 @@ namespace UnityCli
                     .Prop("parent", parentName ?? "<root>")
                     .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "go.set-parent").Prop("parent", parentName ?? "<root>").EndObject())
                     .Prop("logPath", LogPath()).EndObject().ToString());
-            }
-            Transform newParent = null;
-            if (!string.IsNullOrEmpty(parentName))
-            {
-                var parentGo = ObjectRefResolver.FindGameObjectByPath(parentName);
-                if (parentGo == null)
-                {
-                    throw new BridgeCommandException("E_PARENT_NOT_FOUND", "Parent GameObject not found: " + parentName, "Pass a valid hierarchy path or name.");
-                }
-                newParent = parentGo.transform;
             }
             Undo.SetTransformParent(gameObject.transform, newParent, "go.set-parent");
             gameObject.transform.SetParent(newParent, worldPositionStays);
@@ -268,30 +265,43 @@ namespace UnityCli
                 .Prop("logPath", LogPath()).EndObject().ToString());
         }
 
+        /// <summary>添加 Component，并可在创建后一次性设置简单公开字段/属性。</summary>
         private static string ComponentAdd(BridgeRequest request)
         {
             EnsureEditorNotBusy("component.add");
             var gameObject = ResolveUniqueTarget(RequiredTarget(request, "Component add requires a target."), "Component add requires a target.");
             var componentName = RequiredComponentName(request);
-            if (ResolveComponent(gameObject, componentName) != null)
-            {
-                throw new BridgeCommandException("E_COMPONENT_EXISTS", "Component already exists on target: " + componentName, "Use component set to modify existing component properties.");
-            }
             var type = ResolveComponentType(componentName);
+            if (!AllowsMultipleComponents(type) && gameObject.GetComponent(type) != null)
+            {
+                throw new BridgeCommandException("E_COMPONENT_EXISTS", "Component already exists on target: " + componentName, "Use component.set or component.modify to update existing component properties.");
+            }
+            var propertyChanges = BuildComponentPropertyChanges(type, ComponentPropertiesJson(request));
             var component = Undo.AddComponent(gameObject, type);
+            if (component == null || !type.IsInstanceOfType(component))
+            {
+                if (!object.ReferenceEquals(component, null))
+                {
+                    Undo.DestroyObjectImmediate(component);
+                }
+                throw new BridgeCommandException("E_COMPONENT_ADD_FAILED", "Unity did not add component type: " + componentName, "The type may be restricted by Unity on this GameObject. Run component.get to inspect existing components, then choose a different component type or update the existing component.");
+            }
+            ApplyComponentPropertyChanges(component, propertyChanges);
             EditorSceneManager.MarkSceneDirty(gameObject.scene);
-            return SuccessJson(ComponentMutationJson("component.add", gameObject, component, null));
+            return SuccessJson(ComponentMutationJson("component.add", gameObject, component, null, propertyChanges, null));
         }
 
+        /// <summary>删除目标 GameObject 上的 Component，支持 componentIndex 精确选择重复组件。</summary>
         private static string ComponentRemove(BridgeRequest request)
         {
             EnsureEditorNotBusy("component.remove");
             var gameObject = ResolveUniqueTarget(RequiredTarget(request, "Component remove requires a target."), "Component remove requires a target.");
             var componentName = RequiredComponentName(request);
-            var component = ResolveComponent(gameObject, componentName);
+            var componentIndex = request.OptionalIntArg("componentIndex");
+            var component = ResolveComponent(gameObject, componentName, componentIndex);
             if (component == null)
             {
-                throw new BridgeCommandException("E_COMPONENT_NOT_FOUND", "Component not found on target: " + componentName, "Run unity_cli go inspect <target> to list components.");
+                throw new BridgeCommandException("E_COMPONENT_NOT_FOUND", "Component not found on target: " + componentName, "Run unity_cli tools run component.get or context read scene.gameobject.components to list components.");
             }
             if (component is Transform)
             {
@@ -303,6 +313,7 @@ namespace UnityCli
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropRaw("target", GameObjectTargetJson(gameObject))
                 .PropRaw("component", removed)
+                .Prop("componentIndex", componentIndex.HasValue ? componentIndex.Value.ToString(CultureInfo.InvariantCulture) : null)
                 .PropArray("plannedEffects", arr => arr
                     .RawValue(new UnityCliJsonWriter().BeginObject()
                         .Prop("type", "component.remove")
@@ -314,48 +325,50 @@ namespace UnityCli
                 .ToString());
         }
 
+        /// <summary>设置 Component 的一个或多个简单公开字段/属性。</summary>
         private static string ComponentSet(BridgeRequest request)
         {
             EnsureEditorNotBusy("component.set");
             var gameObject = ResolveUniqueTarget(RequiredTarget(request, "Component set requires a target."), "Component set requires a target.");
             var componentName = RequiredComponentName(request);
-            var propertyName = request.StringArg("property");
-            if (string.IsNullOrEmpty(propertyName))
-            {
-                throw new BridgeCommandException("E_COMPONENT_PROPERTY_REQUIRED", "component.set requires --property <name>.", "Pass a writable component property name.");
-            }
-            var component = ResolveComponent(gameObject, componentName);
+            var componentIndex = request.OptionalIntArg("componentIndex");
+            var component = ResolveComponent(gameObject, componentName, componentIndex);
             if (component == null)
             {
-                throw new BridgeCommandException("E_COMPONENT_NOT_FOUND", "Component not found on target: " + componentName, "Run unity_cli go inspect <target> to list components.");
+                throw new BridgeCommandException("E_COMPONENT_NOT_FOUND", "Component not found on target: " + componentName, "Run unity_cli tools run component.get or context read scene.gameobject.components to list components.");
             }
-            SetComponentProperty(component, propertyName, request.StringArg("value"));
+
+            var propertyName = request.StringArg("property");
+            var propertiesJson = ComponentPropertiesJson(request);
+            if (string.IsNullOrEmpty(propertyName) && string.IsNullOrEmpty(propertiesJson))
+            {
+                throw new BridgeCommandException("E_COMPONENT_PROPERTY_REQUIRED", "component.set requires property/value or a properties object.", "Pass --input '{\"target\":\"Player\",\"component\":\"Rigidbody\",\"properties\":{\"mass\":5}}'.");
+            }
+
+            var propertyChanges = new List<ComponentPropertyChange>();
+            if (!string.IsNullOrEmpty(propertyName))
+            {
+                if (!request.HasArg("value"))
+                {
+                    throw new BridgeCommandException("E_COMPONENT_VALUE_REQUIRED", "component.set requires a value when property is provided.", "Pass value as --input JSON so booleans/numbers keep their type.");
+                }
+                propertyChanges.Add(BuildComponentPropertyChange(component.GetType(), propertyName, request.RawJsonArg("value")));
+            }
+            propertyChanges.AddRange(BuildComponentPropertyChanges(component.GetType(), propertiesJson));
+
+            Undo.RecordObject(component, "unity_cli component.set");
+            ApplyComponentPropertyChanges(component, propertyChanges);
             EditorUtility.SetDirty(component);
             EditorSceneManager.MarkSceneDirty(gameObject.scene);
-            return SuccessJson(ComponentMutationJson("component.set", gameObject, component, propertyName));
+            return SuccessJson(ComponentMutationJson("component.set", gameObject, component, propertyName, propertyChanges, componentIndex));
         }
 
         /// <summary>深读单个 Component：输出 fields/props，支持 paths/viewQuery/maxDepth。对齐 Ivan gameobject-component-get。</summary>
+        /// <summary>深读单个 Component：支持 paths/viewQuery 互斥的 token-safe 读取。</summary>
         private static string ComponentGet(BridgeRequest request)
         {
             var component = ObjectRefResolver.ResolveComponent(request);
-            var options = new ObjectSerializer.Options
-            {
-                MaxDepth = request.IntArg("maxDepth", 4),
-                IncludeFields = request.BoolArg("includeFields", true),
-                IncludeProperties = request.BoolArg("includeProperties", true),
-                DeepSerialization = request.BoolArg("deepSerialization", true)
-            };
-            var pathsRaw = request.RawJsonArg("paths");
-            if (!string.IsNullOrEmpty(pathsRaw))
-            {
-                options.Paths = new HashSet<string>();
-                foreach (var p in pathsRaw.Trim('[', ']').Split(','))
-                {
-                    var clean = p.Trim().Trim('"');
-                    if (!string.IsNullOrEmpty(clean)) options.Paths.Add(clean);
-                }
-            }
+            var options = BuildSerializerOptions(request);
             var memberJson = ObjectSerializer.Serialize(component, options);
             var w = new UnityCliJsonWriter().BeginObject();
             w.Prop("command", "component.get");
@@ -364,7 +377,7 @@ namespace UnityCli
             w.PropRaw("gameObject", GameObjectTargetJson(component.gameObject));
             w.PropRaw("data", memberJson);
             w.Prop("logPath", LogPath());
-            return w.EndObject().ToString();
+            return SuccessJson(w.EndObject().ToString());
         }
 
         /// <summary>深改单个 Component：支持 pathPatches 与 jsonPatch (Merge Patch)。对齐 Ivan gameobject-component-modify。</summary>
@@ -391,7 +404,7 @@ namespace UnityCli
                 dry.PropArray("plannedEffects", arr => arr.BeginObject()
                     .Prop("type", "component.modify").Prop("target", component.gameObject.name).EndObject());
                 dry.Prop("logPath", LogPath());
-                return dry.EndObject().ToString();
+                return SuccessJson(dry.EndObject().ToString());
             }
             // 执行顺序对齐 IvanMurzak: jsonPatch/componentDiff → pathPatches
             ObjectPatch.PatchResult result = null;
@@ -418,7 +431,7 @@ namespace UnityCli
             w.PropArray("logs", arr => { foreach (var l in result.Logs) arr.Value(l); });
             w.PropRaw("audit", ObjectPatch.ResultToJson(result));
             w.Prop("logPath", LogPath());
-            return w.EndObject().ToString();
+            return SuccessJson(w.EndObject().ToString());
         }
 
         /// <summary>枚举当前项目可用的 Component 类型。对齐 Ivan gameobject-component-list-all。</summary>
@@ -462,36 +475,87 @@ namespace UnityCli
             });
             w.PropObject("pageInfo", p => p.Prop("pageSize", (long)pageSize).Prop("cursor", (long)cursor).Prop("nextCursor", nextCursor).Prop("total", (long)total));
             w.Prop("logPath", LogPath());
-            return w.EndObject().ToString();
+            return SuccessJson(w.EndObject().ToString());
         }
 
         private static string GameObjectFind(BridgeRequest request)
         {
-            var target = request.StringArg("target");
-            if (string.IsNullOrEmpty(target))
+            var searchTerm = request.StringArg("searchTerm") ?? request.StringArg("query") ?? request.StringArg("target") ?? request.StringArg("name") ?? request.StringArg("tag") ?? request.StringArg("layer") ?? request.StringArg("component") ?? request.StringArg("path") ?? request.StringArg("id");
+            if (string.IsNullOrEmpty(searchTerm))
             {
-                target = request.StringArg("name");
+                return ErrorJson("E_TARGET_NOT_FOUND", "GameObject find requires a search term.", "Pass --input '{\"searchTerm\":\"Player\",\"searchMethod\":\"by_name\"}'.");
             }
-            if (string.IsNullOrEmpty(target))
-            {
-                return ErrorJson("E_TARGET_NOT_FOUND", "GameObject find requires --name or a target.", "Pass unity_cli go find --name <name>, a hierarchy path, or an instance id.");
-            }
-            var resolution = ResolveGameObjectTarget(target);
-            var items = new List<string>();
-            foreach (var gameObject in resolution.Matches)
-            {
-                items.Add(HierarchyItemJson(gameObject.transform));
-            }
+            var searchMethod = request.StringArg("searchMethod") ?? InferGameObjectSearchMethod(request);
+            var includeInactive = request.BoolArg("includeInactive", false);
+            var pageSize = Math.Max(1, Math.Min(request.IntArg("pageSize", 50), 500));
+            var cursor = Math.Max(0, request.IntArg("cursor", 0));
+            var matches = SearchGameObjects(searchMethod, searchTerm, includeInactive);
+            var total = matches.Count;
+            var page = matches.Skip(cursor).Take(pageSize).ToList();
+            var nextCursor = cursor + page.Count < total ? (cursor + page.Count).ToString(CultureInfo.InvariantCulture) : null;
+
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
-                .Prop("query", target)
-                .Prop("matchCount", (long)resolution.Matches.Count)
-                .PropArray("items", arr => { foreach (var item in items) { arr.RawValue(item); } })
+                .Prop("query", searchTerm)
+                .Prop("searchMethod", searchMethod)
+                .Prop("includeInactive", includeInactive)
+                .Prop("matchCount", (long)total)
+                .PropArray("items", arr => { foreach (var gameObject in page) { arr.RawValue(HierarchyItemJson(gameObject.transform)); } })
+                .PropObject("pageInfo", p => p.Prop("pageSize", (long)pageSize).Prop("cursor", (long)cursor).Prop("nextCursor", nextCursor).Prop("total", (long)total))
                 .Prop("logPath", LogPath())
                 .EndObject()
                 .ToString());
         }
 
+        private static string InferGameObjectSearchMethod(BridgeRequest request)
+        {
+            if (!string.IsNullOrEmpty(request.StringArg("tag"))) return "by_tag";
+            if (!string.IsNullOrEmpty(request.StringArg("layer"))) return "by_layer";
+            if (!string.IsNullOrEmpty(request.StringArg("component"))) return "by_component";
+            if (!string.IsNullOrEmpty(request.StringArg("path"))) return "by_path";
+            if (!string.IsNullOrEmpty(request.StringArg("id"))) return "by_id";
+            return "by_name";
+        }
+
+        private static List<GameObject> SearchGameObjects(string searchMethod, string searchTerm, bool includeInactive)
+        {
+            var normalized = (searchMethod ?? "by_name").Trim().ToLowerInvariant();
+            var allObjects = UnityEngine.Object.FindObjectsOfType<GameObject>(includeInactive).OrderBy(HierarchyPath, StringComparer.Ordinal).ToList();
+            if (normalized == "by_id")
+            {
+                return allObjects.Where(gameObject => gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) == searchTerm).ToList();
+            }
+            if (normalized == "by_path")
+            {
+                return allObjects.Where(gameObject => string.Equals(HierarchyPath(gameObject), searchTerm, StringComparison.Ordinal)).ToList();
+            }
+            if (normalized == "by_tag")
+            {
+                return allObjects.Where(gameObject => string.Equals(gameObject.tag, searchTerm, StringComparison.Ordinal)).ToList();
+            }
+            if (normalized == "by_layer")
+            {
+                var layer = ParseLayer(searchTerm);
+                return allObjects.Where(gameObject => gameObject.layer == layer).ToList();
+            }
+            if (normalized == "by_component")
+            {
+                var type = ResolveComponentType(searchTerm);
+                return allObjects.Where(gameObject => gameObject.GetComponent(type) != null).ToList();
+            }
+            if (normalized != "by_name")
+            {
+                throw new BridgeCommandException("E_SEARCH_METHOD_INVALID", "Unsupported GameObject searchMethod: " + searchMethod, "Use by_name, by_tag, by_layer, by_component, by_path, or by_id.");
+            }
+            return allObjects.Where(gameObject => string.Equals(gameObject.name, searchTerm, StringComparison.Ordinal)).ToList();
+        }
+
         private static string HierarchyItemJson(Transform transform)
+        {
+            return HierarchyItemJson(transform, -1, true);
+        }
+
+        /// <summary>生成轻量 GameObject 层级项；components 可关闭以控制大场景返回量。</summary>
+        private static string HierarchyItemJson(Transform transform, int depth, bool includeComponents)
         {
             var componentNames = new List<string>();
             foreach (var component in transform.GetComponents<Component>())
@@ -499,19 +563,49 @@ namespace UnityCli
                 componentNames.Add(component != null ? component.GetType().Name : "MissingScript");
             }
             var gameObject = transform.gameObject;
-            return new UnityCliJsonWriter().BeginObject()
+            var writer = new UnityCliJsonWriter().BeginObject()
                 .Prop("id", (long)gameObject.GetInstanceID())
                 .Prop("name", gameObject.name)
                 .Prop("path", HierarchyPath(gameObject))
                 .Prop("active", gameObject.activeSelf)
+                .Prop("activeInHierarchy", gameObject.activeInHierarchy)
                 .Prop("tag", gameObject.tag)
                 .Prop("layer", (long)gameObject.layer)
-                .Prop("componentCount", (long)componentNames.Count)
-                .PropArray("components", arr => { foreach (var name in componentNames) { arr.Value(name); } })
-                .EndObject()
-                .ToString();
+                .Prop("childCount", (long)transform.childCount)
+                .Prop("componentCount", (long)componentNames.Count);
+            if (depth >= 0)
+            {
+                writer.Prop("depth", (long)depth);
+            }
+            if (includeComponents)
+            {
+                writer.PropArray("components", arr => { foreach (var name in componentNames) { arr.Value(name); } });
+            }
+            return writer.EndObject().ToString();
         }
 
+        /// <summary>按深度、名称过滤和 inactive 策略收集层级摘要，分页在调用方统一处理。</summary>
+        private static void CollectHierarchy(Transform transform, List<string> items, int depth, int maxDepth, string nameFilter, bool includeInactive, bool includeComponents)
+        {
+            var gameObject = transform.gameObject;
+            if (includeInactive || gameObject.activeInHierarchy)
+            {
+                if (string.IsNullOrEmpty(nameFilter) || gameObject.name.IndexOf(nameFilter, StringComparison.OrdinalIgnoreCase) >= 0 || HierarchyPath(gameObject).IndexOf(nameFilter, StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    items.Add(HierarchyItemJson(transform, depth, includeComponents));
+                }
+            }
+            if (depth >= maxDepth)
+            {
+                return;
+            }
+            foreach (Transform child in transform)
+            {
+                CollectHierarchy(child, items, depth + 1, maxDepth, nameFilter, includeInactive, includeComponents);
+            }
+        }
+
+        /// <summary>兼容 Prefab/Context 分页层级读取：统计整棵 Transform 树节点数。</summary>
         private static int CountHierarchy(Transform transform)
         {
             var count = 1;
@@ -522,6 +616,7 @@ namespace UnityCli
             return count;
         }
 
+        /// <summary>兼容 Prefab/Context 分页层级读取：按 DFS 顺序跳过 cursor 后收集 pageSize 个节点。</summary>
         private static void CollectHierarchy(Transform transform, List<string> items, int cursor, int pageSize, Counter counter)
         {
             if (counter.Value >= cursor && items.Count < pageSize)
@@ -555,6 +650,20 @@ namespace UnityCli
             return target;
         }
 
+        private static void ValidateGameObjectMutationInputs(BridgeRequest request)
+        {
+            var tagValue = request.StringArg("tagValue");
+            if (!string.IsNullOrEmpty(tagValue) && !IsKnownTag(tagValue))
+            {
+                throw new BridgeCommandException("E_TAG_NOT_FOUND", "Tag not found: " + tagValue, "Create the tag first with project.tag or pass an existing Unity tag.");
+            }
+            var layerValue = request.StringArg("layerValue");
+            if (!string.IsNullOrEmpty(layerValue))
+            {
+                ParseLayer(layerValue);
+            }
+        }
+
         private static void ApplyGameObjectMutations(GameObject gameObject, BridgeRequest request)
         {
             var newName = request.StringArg("newName");
@@ -584,12 +693,18 @@ namespace UnityCli
 
         private static PrimitiveType ParsePrimitiveType(string value)
         {
+            if (string.Equals(value, "cube", StringComparison.OrdinalIgnoreCase)) return PrimitiveType.Cube;
             if (string.Equals(value, "sphere", StringComparison.OrdinalIgnoreCase)) return PrimitiveType.Sphere;
             if (string.Equals(value, "capsule", StringComparison.OrdinalIgnoreCase)) return PrimitiveType.Capsule;
             if (string.Equals(value, "cylinder", StringComparison.OrdinalIgnoreCase)) return PrimitiveType.Cylinder;
             if (string.Equals(value, "plane", StringComparison.OrdinalIgnoreCase)) return PrimitiveType.Plane;
             if (string.Equals(value, "quad", StringComparison.OrdinalIgnoreCase)) return PrimitiveType.Quad;
-            return PrimitiveType.Cube;
+            throw new BridgeCommandException("E_PRIMITIVE_TYPE_INVALID", "Unsupported primitive type: " + value, "Use cube, sphere, capsule, cylinder, plane, or quad.");
+        }
+
+        private static bool IsKnownTag(string value)
+        {
+            return UnityEditorInternal.InternalEditorUtility.tags.Contains(value);
         }
 
         private static int ParseLayer(string value)
@@ -727,41 +842,141 @@ namespace UnityCli
             return type;
         }
 
+        /// <summary>判断 Component 类型是否允许在同一 GameObject 上添加多个实例。</summary>
+        private static bool AllowsMultipleComponents(Type type)
+        {
+            return type.GetCustomAttributes(typeof(DisallowMultipleComponent), true).Length == 0;
+        }
+
         private static Component ResolveComponent(GameObject gameObject, string componentName)
         {
-            var type = ResolveComponentType(componentName);
-            return gameObject.GetComponent(type);
+            return ResolveComponent(gameObject, componentName, null);
         }
 
-        private static void SetComponentProperty(Component component, string propertyName, string value)
+        private static Component ResolveComponent(GameObject gameObject, string componentName, int? componentIndex)
+        {
+            var type = ResolveComponentType(componentName);
+            if (!componentIndex.HasValue)
+            {
+                return gameObject.GetComponent(type);
+            }
+            var components = gameObject.GetComponents(type);
+            if (componentIndex.Value < 0 || componentIndex.Value >= components.Length)
+            {
+                throw new BridgeCommandException("E_COMPONENT_INDEX_OUT_OF_RANGE", "componentIndex " + componentIndex.Value + " is out of range for " + componentName + ".", "Run context read scene.gameobject.components to discover component indices.");
+            }
+            return components[componentIndex.Value];
+        }
+
+        private static string ComponentPropertiesJson(BridgeRequest request)
+        {
+            var propertiesJson = request.RawJsonArg("properties") ?? request.RawJsonArg("componentProperties");
+            if (string.IsNullOrEmpty(propertiesJson)) return null;
+            var trimmed = propertiesJson.Trim();
+            if (trimmed.Length >= 2 && trimmed[0] == (char)34 && trimmed[trimmed.Length - 1] == (char)34)
+            {
+                trimmed = JsonUnescape(trimmed.Substring(1, trimmed.Length - 2));
+            }
+            if (!trimmed.StartsWith("{") || !trimmed.EndsWith("}"))
+            {
+                throw new BridgeCommandException("E_COMPONENT_PROPERTIES_INVALID", "component properties must be a JSON object.", "Pass properties as --input '{\"properties\":{\"mass\":5}}'.");
+            }
+            return trimmed;
+        }
+
+        private static List<ComponentPropertyChange> BuildComponentPropertyChanges(Type componentType, string propertiesJson)
+        {
+            var changes = new List<ComponentPropertyChange>();
+            if (string.IsNullOrEmpty(propertiesJson)) return changes;
+            foreach (var propertyName in JsonObjectPropertyNames(propertiesJson))
+            {
+                changes.Add(BuildComponentPropertyChange(componentType, propertyName, JsonRawProperty(propertiesJson, propertyName)));
+            }
+            return changes;
+        }
+
+        private static ComponentPropertyChange BuildComponentPropertyChange(Type componentType, string propertyName, string rawJson)
         {
             var flags = BindingFlags.Instance | BindingFlags.Public;
-            var property = component.GetType().GetProperty(propertyName, flags);
+            var property = componentType.GetProperty(propertyName, flags);
             if (property != null && property.CanWrite)
             {
-                property.SetValue(component, ConvertComponentValue(value, property.PropertyType), null);
-                return;
+                return new ComponentPropertyChange(propertyName, ConvertComponentJsonValue(rawJson, property.PropertyType), property.PropertyType, property, null, rawJson);
             }
-            var field = component.GetType().GetField(propertyName, flags);
+            var field = componentType.GetField(propertyName, flags);
             if (field != null)
             {
-                field.SetValue(component, ConvertComponentValue(value, field.FieldType));
-                return;
+                return new ComponentPropertyChange(propertyName, ConvertComponentJsonValue(rawJson, field.FieldType), field.FieldType, null, field, rawJson);
             }
-            throw new BridgeCommandException("E_COMPONENT_PROPERTY_NOT_FOUND", "Writable component property not found: " + propertyName, "Use a public writable field or property name.");
+            throw new BridgeCommandException("E_COMPONENT_PROPERTY_NOT_FOUND", "Writable component property not found: " + propertyName, "Use component.get or type.schema to inspect writable public fields/properties.");
         }
 
-        private static object ConvertComponentValue(string value, Type type)
+        private static void ApplyComponentPropertyChanges(Component component, List<ComponentPropertyChange> changes)
         {
-            if (type == typeof(string)) return value ?? string.Empty;
-            if (type == typeof(bool)) return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase) || value == "1";
-            if (type == typeof(int)) return int.Parse(value ?? "0", CultureInfo.InvariantCulture);
-            if (type == typeof(float)) return float.Parse(value ?? "0", CultureInfo.InvariantCulture);
-            if (type == typeof(double)) return double.Parse(value ?? "0", CultureInfo.InvariantCulture);
-            if (type == typeof(Vector2)) return ParseVector2(value);
-            if (type == typeof(Vector3)) return ParseVector3(value);
-            if (type.IsEnum) return Enum.Parse(type, value ?? string.Empty, true);
-            throw new BridgeCommandException("E_COMPONENT_PROPERTY_TYPE_UNSUPPORTED", "Unsupported component property type: " + type.Name, "Supported property types: string, bool, int, float, double, enum, Vector2, Vector3.");
+            foreach (var change in changes)
+            {
+                if (change.Property != null) change.Property.SetValue(component, change.Value, null);
+                else if (change.Field != null) change.Field.SetValue(component, change.Value);
+            }
+        }
+
+        private static object ConvertComponentJsonValue(string rawJson, Type type)
+        {
+            var value = (rawJson ?? "null").Trim();
+            if (Nullable.GetUnderlyingType(type) != null)
+            {
+                if (value == "null") return null;
+                type = Nullable.GetUnderlyingType(type);
+            }
+            if (type == typeof(string)) return JsonValueToString(value);
+            if (type == typeof(bool)) return JsonValueToBool(value);
+            if (type == typeof(int)) return (int)JsonValueToLong(value);
+            if (type == typeof(long)) return JsonValueToLong(value);
+            if (type == typeof(float)) return JsonValueToFloat(value);
+            if (type == typeof(double)) return JsonValueToDouble(value);
+            if (type == typeof(Vector2)) return ParseVector2(JsonValueToString(value));
+            if (type == typeof(Vector3)) return ParseVector3(JsonValueToString(value));
+            if (type.IsEnum) return Enum.Parse(type, JsonValueToString(value) ?? string.Empty, true);
+            throw new BridgeCommandException("E_COMPONENT_PROPERTY_TYPE_UNSUPPORTED", "Unsupported component property type: " + type.Name, "Use component.modify for nested/object references, or simple string/bool/int/float/double/enum/Vector2/Vector3 here.");
+        }
+
+        private static string JsonValueToString(string value)
+        {
+            if (value == "null") return null;
+            if (value.Length >= 2 && value[0] == (char)34 && value[value.Length - 1] == (char)34)
+            {
+                return JsonUnescape(value.Substring(1, value.Length - 2));
+            }
+            return value;
+        }
+
+        private static bool JsonValueToBool(string value)
+        {
+            var text = JsonValueToString(value);
+            if (string.Equals(text, "true", StringComparison.OrdinalIgnoreCase) || text == "1") return true;
+            if (string.Equals(text, "false", StringComparison.OrdinalIgnoreCase) || text == "0") return false;
+            throw new BridgeCommandException("E_COMPONENT_VALUE_INVALID", "Expected boolean component value but got: " + text, "Pass true/false as JSON booleans in --input.");
+        }
+
+        private static long JsonValueToLong(string value)
+        {
+            var text = JsonValueToString(value);
+            long parsed;
+            if (long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed)) return parsed;
+            throw new BridgeCommandException("E_COMPONENT_VALUE_INVALID", "Expected integer component value but got: " + text, "Pass a JSON number or numeric string.");
+        }
+
+        private static float JsonValueToFloat(string value)
+        {
+            return (float)JsonValueToDouble(value);
+        }
+
+        private static double JsonValueToDouble(string value)
+        {
+            var text = JsonValueToString(value);
+            double parsed;
+            if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed)) return parsed;
+            throw new BridgeCommandException("E_COMPONENT_VALUE_INVALID", "Expected numeric component value but got: " + text, "Pass a JSON number or numeric string.");
         }
 
         private static Vector2 ParseVector2(string value)
@@ -776,12 +991,24 @@ namespace UnityCli
             return new Vector3(parts.Length > 0 ? ParseFloat(parts[0], "x") : 0f, parts.Length > 1 ? ParseFloat(parts[1], "y") : 0f, parts.Length > 2 ? ParseFloat(parts[2], "z") : 0f);
         }
 
-        private static string ComponentMutationJson(string type, GameObject gameObject, Component component, string propertyName)
+        private static string ComponentMutationJson(string type, GameObject gameObject, Component component, string propertyName, List<ComponentPropertyChange> changes, int? componentIndex)
         {
             return new UnityCliJsonWriter().BeginObject()
                 .PropRaw("target", GameObjectTargetJson(gameObject))
                 .PropRaw("component", ComponentSummaryJson(component))
                 .Prop("property", propertyName)
+                .Prop("componentIndex", componentIndex.HasValue ? componentIndex.Value.ToString(CultureInfo.InvariantCulture) : null)
+                .PropArray("changedProperties", arr =>
+                {
+                    foreach (var change in changes ?? new List<ComponentPropertyChange>())
+                    {
+                        arr.BeginObject()
+                            .Prop("name", change.Name)
+                            .Prop("type", change.ValueType.Name)
+                            .PropRaw("value", change.RawJson)
+                            .EndObject();
+                    }
+                })
                 .PropArray("plannedEffects", arr => arr
                     .RawValue(new UnityCliJsonWriter().BeginObject()
                         .Prop("type", type)
@@ -791,6 +1018,26 @@ namespace UnityCli
                 .Prop("logPath", LogPath())
                 .EndObject()
                 .ToString();
+        }
+
+        private sealed class ComponentPropertyChange
+        {
+            public ComponentPropertyChange(string name, object value, Type valueType, PropertyInfo property, FieldInfo field, string rawJson)
+            {
+                Name = name;
+                Value = value;
+                ValueType = valueType;
+                Property = property;
+                Field = field;
+                RawJson = rawJson;
+            }
+
+            public string Name { get; private set; }
+            public object Value { get; private set; }
+            public Type ValueType { get; private set; }
+            public PropertyInfo Property { get; private set; }
+            public FieldInfo Field { get; private set; }
+            public string RawJson { get; private set; }
         }
 
         private sealed class Counter

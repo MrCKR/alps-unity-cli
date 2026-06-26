@@ -63,10 +63,10 @@ namespace UnityCli
         private static string GraphicsQuality(BridgeRequest request)
         {
             var effects = new List<string>();
-            var requestedQualityLevel = request.OptionalIntArg("qualityLevel");
-            if (requestedQualityLevel.HasValue)
+            var requestedQualityLevel = request.RawJsonArg("qualityLevel");
+            if (!string.IsNullOrEmpty(requestedQualityLevel))
             {
-                SetQualityLevel(requestedQualityLevel.Value, effects);
+                SetQualityLevel(requestedQualityLevel, effects);
             }
             ApplyQualityInt(request, "vSyncCount", "vSyncCount", delegate(int value) { QualitySettings.vSyncCount = value; }, effects);
             ApplyQualityInt(request, "antiAliasing", "antiAliasing", delegate(int value) { QualitySettings.antiAliasing = value; }, effects);
@@ -283,14 +283,29 @@ namespace UnityCli
                 .EndObject().ToString();
         }
 
-        private static void SetQualityLevel(int level, List<string> effects)
+        private static void SetQualityLevel(string rawLevel, List<string> effects)
         {
-            if (level < 0 || level >= QualitySettings.names.Length)
-            {
-                throw new BridgeCommandException("E_QUALITY_LEVEL_INVALID", "Quality level is out of range: " + level.ToString(CultureInfo.InvariantCulture), "Run unity_cli graphics quality to inspect available quality level names and indexes.");
-            }
+            var level = ResolveQualityLevel(rawLevel);
             QualitySettings.SetQualityLevel(level, true);
             effects.Add(EffectJson("graphics.quality", "qualityLevel", level.ToString(CultureInfo.InvariantCulture)));
+        }
+
+        private static int ResolveQualityLevel(string rawLevel)
+        {
+            var value = JsonValueToString(rawLevel);
+            int level;
+            if (int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out level))
+            {
+                if (level >= 0 && level < QualitySettings.names.Length) return level;
+            }
+            for (var index = 0; index < QualitySettings.names.Length; index++)
+            {
+                if (string.Equals(QualitySettings.names[index], value, StringComparison.OrdinalIgnoreCase))
+                {
+                    return index;
+                }
+            }
+            throw new BridgeCommandException("E_QUALITY_LEVEL_INVALID", "Quality level is invalid: " + value, "Run tools run graphics.quality --input '{}' to inspect available quality level names and indexes.");
         }
 
         private static void ApplyGenericGraphicsSetting(BridgeRequest request, List<string> effects)
@@ -346,7 +361,7 @@ namespace UnityCli
             var baking = Lightmapping.isRunning;
             if (baking)
             {
-                return ErrorJson("E_BAKE_ALREADY_RUNNING", "Lightmapping bake is already running.", "Run unity_cli graphics bake-status to inspect progress or graphics bake-cancel to stop it.");
+                return ErrorJson("E_BAKE_ALREADY_RUNNING", "Lightmapping bake is already running.", "Run tools run graphics.bake-status --input '{}' to inspect progress or tools run graphics.bake-cancel --input '{}' to stop it.");
             }
             Lightmapping.BakeAsync();
             WriteLog("graphics_bake_started");
@@ -444,7 +459,7 @@ namespace UnityCli
             var probe = ResolveReflectionProbe(target);
             if (probe == null)
             {
-                return ErrorJson("E_REFLECTION_PROBE_NOT_FOUND", "ReflectionProbe not found: " + target, "Run unity_cli graphics reflection-probe to inspect probes or pass a GameObject name / hierarchy path with a ReflectionProbe component.");
+                return ErrorJson("E_REFLECTION_PROBE_NOT_FOUND", "ReflectionProbe not found: " + target, "Run tools run graphics.reflection-probe --input '{}' to inspect probes or pass a GameObject name / hierarchy path with a ReflectionProbe component.");
             }
             var probePath = request.StringArg("path");
             if (string.IsNullOrEmpty(probePath))
@@ -467,6 +482,22 @@ namespace UnityCli
             var lightingSettings = Lightmapping.GetLightingSettingsForScene(scene);
             var effects = new List<string>();
             var changed = false;
+            var hasWriteArgs = HasBakeSettingsWriteArgs(request);
+            if (lightingSettings == null && hasWriteArgs)
+            {
+                lightingSettings = new LightingSettings();
+                changed = true;
+                effects.Add(EffectJson("graphics.bake-settings", "lightingSettings", "created"));
+            }
+            if (lightingSettings == null)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .PropRaw("settings", LightingSettingsJson(lightingSettings))
+                    .Prop("scene", scene.path)
+                    .PropArray("plannedEffects", arr => { })
+                    .Prop("logPath", LogPath())
+                    .EndObject().ToString());
+            }
             if (request.HasArg("lightingMode"))
             {
                 var value = request.StringArg("lightingMode");
@@ -565,6 +596,19 @@ namespace UnityCli
                 .PropArray("plannedEffects", arr => { foreach (var e in effects) arr.RawValue(e); })
                 .Prop("logPath", LogPath())
                 .EndObject().ToString());
+        }
+
+        /// <summary>判断 bake-settings 是否包含会写入 LightingSettings 的字段。</summary>
+        private static bool HasBakeSettingsWriteArgs(BridgeRequest request)
+        {
+            return request.HasArg("lightingMode")
+                || request.HasArg("bakedGI")
+                || request.HasArg("realtimeGI")
+                || request.HasArg("directSamples")
+                || request.HasArg("indirectSamples")
+                || request.HasArg("environmentSamples")
+                || request.HasArg("bounces")
+                || request.HasArg("filtering");
         }
 
         private static Scene ResolveLightingScene(BridgeRequest request)
@@ -1046,9 +1090,9 @@ namespace UnityCli
             var path = request.StringArg("material");
             if (string.IsNullOrEmpty(path))
             {
-                throw new BridgeCommandException("E_MATERIAL_PATH_REQUIRED", "Pass --material <Assets/*.mat path>.", "Use unity_cli graphics skybox-set-material --material Assets/Skyboxes/Day.mat.");
+                throw new BridgeCommandException("E_MATERIAL_PATH_REQUIRED", "Pass --material <Assets/*.mat path>.", "Use tools run graphics.skybox-set-material --input '{\"material\":\"Assets/Skyboxes/Day.mat\"}'.");
             }
-            var material = AssetDatabase.LoadAssetAtPath<Material>(NormalizeAssetPath(path));
+            var material = ResolveSkyboxMaterial(path);
             if (material == null)
             {
                 return ErrorJson("E_MATERIAL_NOT_FOUND", "Skybox material not found: " + path, "Pass an existing Assets/*.mat path.");
@@ -1064,12 +1108,22 @@ namespace UnityCli
                 .EndObject().ToString());
         }
 
+        /// <summary>解析 skybox 材质路径，并允许恢复 Unity 内置 Default-Skybox。</summary>
+        private static Material ResolveSkyboxMaterial(string path)
+        {
+            if (string.Equals(path, "builtin:Default-Skybox", StringComparison.OrdinalIgnoreCase) || string.Equals(path, "Default-Skybox", StringComparison.OrdinalIgnoreCase))
+            {
+                return AssetDatabase.GetBuiltinExtraResource<Material>("Default-Skybox.mat");
+            }
+            return AssetDatabase.LoadAssetAtPath<Material>(NormalizeAssetPath(path));
+        }
+
         private static string GraphicsSkyboxSetProperties(BridgeRequest request)
         {
             var skybox = RenderSettings.skybox;
             if (skybox == null)
             {
-                return ErrorJson("E_SKYBOX_NOT_SET", "No skybox material is assigned to RenderSettings.", "Use unity_cli graphics skybox-set-material --material <path> first.");
+                return ErrorJson("E_SKYBOX_NOT_SET", "No skybox material is assigned to RenderSettings.", "Use tools run graphics.skybox-set-material --input '{\"material\":\"Assets/Skyboxes/Day.mat\"}' first.");
             }
             var effects = new List<string>();
             var property = request.StringArg("property");
@@ -1330,10 +1384,10 @@ namespace UnityCli
         private static string GraphicsPipelineQuality(BridgeRequest request)
         {
             var effects = new List<string>();
-            var level = request.OptionalIntArg("qualityLevel");
-            if (level.HasValue)
+            var level = request.RawJsonArg("qualityLevel");
+            if (!string.IsNullOrEmpty(level))
             {
-                SetQualityLevel(level.Value, effects);
+                SetQualityLevel(level, effects);
                 AssetDatabase.SaveAssets();
             }
             return SuccessJson(new UnityCliJsonWriter().BeginObject()

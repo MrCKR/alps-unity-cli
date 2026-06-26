@@ -81,7 +81,7 @@ namespace UnityCli
             }
             if (shader == null)
             {
-                throw new BridgeCommandException("E_SHADER_NOT_FOUND", "Shader not found.", "Run shader.list to discover shader paths.");
+                throw new BridgeCommandException("E_SHADER_NOT_FOUND", "Shader not found.", "Run tools run shader.list --input '{\"keyword\":\"<keyword>\"}' to discover shader paths.");
             }
             var w = new UnityCliJsonWriter().BeginObject();
             w.Prop("command", "shader.get-data");
@@ -102,7 +102,7 @@ namespace UnityCli
             });
             w.Prop("propertyCount", (long)shader.GetPropertyCount());
             w.Prop("logPath", LogPath());
-            return w.EndObject().ToString();
+            return SuccessJson(w.EndObject().ToString());
         }
 
         private static string ShaderInfo(BridgeRequest request)
@@ -185,7 +185,7 @@ namespace UnityCli
             var path = NormalizeAssetPath(rawPath);
             if (string.IsNullOrEmpty(path))
             {
-                throw new BridgeCommandException("E_SHADER_PATH_REQUIRED", "Pass an Assets/*.shader or Assets/*.shadergraph path.", "Use unity_cli shader info <path> or pass --path Assets/Shaders/Example.shader.");
+                throw new BridgeCommandException("E_SHADER_PATH_REQUIRED", "Pass an Assets/*.shader or Assets/*.shadergraph path.", "Use tools run shader.list --input '{\"keyword\":\"<keyword>\"}' to discover the path, or pass an Assets/*.shader path.");
             }
             if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || (!path.EndsWith(".shader", StringComparison.OrdinalIgnoreCase) && !path.EndsWith(".shadergraph", StringComparison.OrdinalIgnoreCase)))
             {
@@ -199,7 +199,7 @@ namespace UnityCli
             var path = RequireShaderPath(rawPath);
             if (!AssetExists(path))
             {
-                throw new BridgeCommandException("E_SHADER_NOT_FOUND", "Shader asset not found: " + path, "Check the path or run unity_cli asset search --type shader.");
+                throw new BridgeCommandException("E_SHADER_NOT_FOUND", "Shader asset not found: " + path, "Check the path or run tools run asset.search --input '{\"filter\":\"t:Shader\"}' to discover the path.");
             }
             return path;
         }
@@ -209,7 +209,7 @@ namespace UnityCli
             var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
             if (asset == null)
             {
-                throw new BridgeCommandException("E_SHADER_NOT_FOUND", "Shader asset not found: " + path, "Check the path or run unity_cli asset search --type shader.");
+                throw new BridgeCommandException("E_SHADER_NOT_FOUND", "Shader asset not found: " + path, "Check the path or run tools run asset.search --input '{\"filter\":\"t:Shader\"}' to discover the path.");
             }
             return asset;
         }

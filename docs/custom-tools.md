@@ -1,6 +1,6 @@
 # 自定义工具（Custom Tools）
 
-项目侧通过 C# `[UnityCliTool]` 特性注册统一 Tool，并用 `target` / `availabilityScope` 描述运行约束；自定义 Tool 与内置工具共享同一发现链和执行入口。
+项目侧通过 C# `[UnityCliTool]` 特性注册统一 Tool，并用 `target` / `availabilityScope` / `playModeSupport` 描述运行约束；自定义 Tool 与内置工具共享同一发现链和执行入口。
 
 ## 概述
 
@@ -28,7 +28,8 @@ using UnityCli;
     Title = "Sample Editor-targeted Tool",
     Group = "custom",
     Description = "A minimal editor-targeted tool.",
-    DestructiveHint = false)]
+    DestructiveHint = false,
+    PlayModeSupport = "editor-only")]
 public static class SampleEditorTool
 {
     // 类级别注册需要恰好一个 static Execute 或 Run 方法
@@ -58,7 +59,8 @@ public static class MyTools
     [UnityCliTool("my.tool-b",
         Title = "Tool B",
         Group = "custom",
-        DestructiveHint = true)]
+        DestructiveHint = true,
+        PlayModeSupport = "session-affecting")]
     public static object ToolB(Dictionary<string, object> input)
     {
         return new { result = "tool-b output" };
@@ -77,7 +79,8 @@ using UnityCli;
     Title = "Runtime Echo",
     Group = "custom",
     Description = "Echoes input during Play Mode.",
-    Target = "runtime")]
+    Target = "runtime",
+    PlayModeSupport = "runtime-only")]
 public static class SampleRuntimeTool
 {
     public static object Execute(Dictionary<string, object> input)
@@ -92,6 +95,7 @@ Runtime target 行为：
 - 仅在 Play Mode 活跃时可用
 - 非 Play Mode 时返回 `E_RUNTIME_NOT_READY`（transient error）
 - 通过 `tools group list custom --include-custom` 发现（Play Mode 下自动标记 `available: true/false`）
+- Runtime 工具通常声明 `PlayModeSupport = "runtime-only"`，提示 AI 不要把运行时结果当作持久资产修改
 
 ## 特性参数
 
@@ -103,13 +107,14 @@ Runtime target 行为：
 | `Description` | string | ❌ | 工具描述 |
 | `DestructiveHint` | bool | ❌ | 是否有破坏性（默认 false） |
 | `Target` | string | ❌ | 目标类型：`editor`（默认）/ `runtime` / `both` |
+| `PlayModeSupport` | string | ❌ | Play Mode 行为：`supported` / `runtime-only` / `session-affecting` / `editor-only` / `unknown` |
 
 ## Descriptor 自动生成
 
 Bridge 扫描已加载的 Unity Editor 程序集，自动从 `[UnityCliTool]` 特性推导：
 - `inputSchema` / `outputSchema` — 基于 Execute 方法签名
 - `fingerprint` — `sha256(handler-code + descriptor-v1)`
-- `handler` / `supportStatus` / `target` / `availabilityScope`
+- `handler` / `supportStatus` / `target` / `availabilityScope` / `playModeSupport`
 
 零手写配置，Class/Attribute-first 注册。
 
@@ -121,6 +126,7 @@ Bridge 扫描已加载的 Unity Editor 程序集，自动从 `[UnityCliTool]` �
 - 所有输入输出必须通过统一 envelope 格式
 - Fingerprint 校验保护，handler 代码变更时默认阻止执行
 - 破坏性工具（`DestructiveHint: true`）执行前需要 `--yes` 确认
+- `PlayModeSupport = "editor-only"` 的工具在 Play Mode 下返回 `E_TOOL_PLAYMODE_UNAVAILABLE`
 
 ### 禁止项
 

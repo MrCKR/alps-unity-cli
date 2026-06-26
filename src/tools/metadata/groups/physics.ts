@@ -1,179 +1,248 @@
 import type { ToolMetadata } from "../types.js";
-import { objSchema, pageSchema } from "../schemas.js";
+import { objSchema } from "../schemas.js";
 
 export const PHYSICS_TOOLS: ToolMetadata[] = [
   {
     name: "physics.settings",
     title: "Physics Settings",
-    description: "Get or set physics gravity, mode and other global settings.",
+    description: "Read or set physics gravity (3d/2d), default contact offset, bounce threshold, solver iterations and query flags. With no setting fields it is a read; with any setting field it writes ProjectSettings/DynamicsManager. Use mode 3d/2d to target the right manager.",
     group: "physics",
     inputSchema: objSchema({
-      mode: { type: "string", enum: ["3d", "2d"] },
-      gravityX: { type: "number" },
-      gravityY: { type: "number" },
-      gravityZ: { type: "number" },
-      gravity2dX: { type: "number" },
-      gravity2dY: { type: "number" },
-      defaultContactOffset: { type: "number" },
-      bounceThreshold: { type: "number" },
-      defaultSolverIterations: { type: "integer" },
-      defaultSolverVelocityIterations: { type: "integer" },
-      queriesHitTriggers: { type: "boolean" },
-      queriesHitBackfaces: { type: "boolean" },
-      queriesStartInColliders: { type: "boolean" },
-      autoSimulation: { type: "boolean" },
-      property: { type: "string" },
-      value: { type: "string" }
+      mode: { type: "string", enum: ["3d", "2d"], description: "Target 3D or 2D physics." },
+      gravityX: { type: "number" }, gravityY: { type: "number" }, gravityZ: { type: "number" },
+      gravity2dX: { type: "number" }, gravity2dY: { type: "number" },
+      defaultContactOffset: { type: "number" }, bounceThreshold: { type: "number" },
+      defaultSolverIterations: { type: "integer" }, defaultSolverVelocityIterations: { type: "integer" },
+      queriesHitTriggers: { type: "boolean" }, queriesHitBackfaces: { type: "boolean" }, queriesStartInColliders: { type: "boolean" },
+      autoSimulation: { type: "boolean" }, property: { type: "string" }, value: { type: "string" }
     }),
     destructiveHint: false,
+    sideEffects: ["project-settings-write"],
+    riskLevel: "low",
+    playModeSupport: "session-affecting",
     handler: "bridge",
+    supportStatus: "live-bridge",
     cliCommand: "tools run physics.settings",
-    docsTopic: "physics"
+    docsTopic: "physics",
+    equivalentUnityMcp: "manage_physics.set_settings",
+    examples: [
+      { description: "Read current physics settings", argv: ["tools", "run", "physics.settings", "--input", "{\"mode\":\"3d\"}"] }
+    ]
   },
   {
     name: "physics.collision-matrix",
     title: "Physics Collision Matrix",
-    description: "Read or update the layer collision ignore matrix between two layers.",
+    description: "Read or update the layer collision ignore matrix between two layers (layerA/layerB by name). Setting ignore=true disables collision between them. Writes ProjectSettings/TagManager.",
     group: "physics",
-    inputSchema: objSchema({ layerA: { type: "string" }, layerB: { type: "string" }, ignore: { type: "boolean" } }, ["layerA", "layerB"]),
+    inputSchema: objSchema({ layerA: { type: "string", description: "First layer name." }, layerB: { type: "string", description: "Second layer name." }, ignore: { type: "boolean", description: "True to ignore (disable) collision between the layers." } }, ["layerA", "layerB"]),
     destructiveHint: false,
+    sideEffects: ["project-settings-write"],
+    riskLevel: "low",
+    playModeSupport: "session-affecting",
     handler: "bridge",
+    supportStatus: "live-bridge",
     cliCommand: "tools run physics.collision-matrix",
     docsTopic: "physics",
-    equivalentUnityMcp: "manage_physics.collision_matrix"
+    equivalentUnityMcp: "manage_physics.collision_matrix",
+    examples: [
+      { description: "Read collision state between two layers", argv: ["tools", "run", "physics.collision-matrix", "--input", "{\"layerA\":\"Default\",\"layerB\":\"Ignore Raycast\"}"] }
+    ]
   },
   {
     name: "physics.material",
     title: "Physics Material",
-    description: "Create or update a PhysicMaterial asset with friction and bounciness settings.",
+    description: "Create or update a PhysicMaterial asset with friction and bounciness settings at an Assets/*.physicMaterial path.",
     group: "physics",
-    inputSchema: objSchema({ path: { type: "string" }, dynamicFriction: { type: "number" }, staticFriction: { type: "number" }, bounciness: { type: "number" }, overwrite: { type: "boolean" } }, ["path"]),
+    inputSchema: objSchema({ path: { type: "string", description: "Destination Assets/*.physicMaterial path." }, dynamicFriction: { type: "number" }, staticFriction: { type: "number" }, bounciness: { type: "number" }, overwrite: { type: "boolean" } }, ["path"]),
     destructiveHint: false,
+    sideEffects: ["asset-write", "asset-import"],
+    riskLevel: "low",
+    playModeSupport: "session-affecting",
     handler: "bridge",
+    supportStatus: "live-bridge",
     cliCommand: "tools run physics.material",
     docsTopic: "physics",
-    equivalentUnityMcp: "manage_physics.physics_material"
+    equivalentUnityMcp: "manage_physics.physics_material",
+    examples: [
+      { description: "Create a bouncy physic material", argv: ["tools", "run", "physics.material", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/_probe.physicMaterial\",\"bounciness\":0.8}"] }
+    ]
   },
   {
     name: "physics.joint",
     title: "Physics Joint",
-    description: "Add or configure a Joint component on a GameObject.",
+    description: "Add or configure a Joint component (Fixed/Hinge/Spring/Configurable) on a GameObject. target resolves by name, hierarchy path or instance id.",
     group: "physics",
-    inputSchema: objSchema({ target: { type: "string" }, type: { type: "string" }, connectedBody: { type: "string" }, anchor: { type: "string" } }, ["target", "type"]),
+    inputSchema: objSchema({ target: { type: "string", description: "Target GameObject with Rigidbody." }, type: { type: "string", description: "Joint type: Fixed, HingeJoint, SpringJoint, ConfigurableJoint." }, connectedBody: { type: "string", description: "Connected Rigidbody target." }, anchor: { type: "string", description: "Anchor reference." } }, ["target", "type"]),
     destructiveHint: false,
+    sideEffects: ["scene-modify"],
+    riskLevel: "low",
+    playModeSupport: "session-affecting",
     handler: "bridge",
+    supportStatus: "live-bridge",
     cliCommand: "tools run physics.joint",
     docsTopic: "physics",
-    equivalentUnityMcp: "manage_physics.joints"
+    equivalentUnityMcp: "manage_physics.joints",
+    examples: [
+      { description: "Add a FixedJoint to a Rigidbody", argv: ["tools", "run", "physics.joint", "--input", "{\"target\":\"PhysicsProbe\",\"type\":\"FixedJoint\"}"] }
+    ]
   },
   {
     name: "physics.force",
     title: "Physics Force",
-    description: "Apply a force, torque or explosion to a Rigidbody. Supports forceType normal/explosion and torque [x,y,z].",
+    description: "Apply a force, torque or explosion to a Rigidbody. Meaningful in Play Mode with auto-simulation; in Edit Mode the velocity is set but no integration runs. forceType normal applies force [x,y,z] + optional torque; explosion applies at a position with radius.",
     group: "physics",
-    inputSchema: objSchema({ target: { type: "string" }, x: { type: "number" }, y: { type: "number" }, z: { type: "number" }, mode: { type: "string" }, forceType: { type: "string", enum: ["normal", "explosion"] }, torqueX: { type: "number" }, torqueY: { type: "number" }, torqueZ: { type: "number" }, explosionX: { type: "number" }, explosionY: { type: "number" }, explosionZ: { type: "number" }, explosionRadius: { type: "number" }, explosionForce: { type: "number" }, upwardsModifier: { type: "number" } }, ["target"]),
+    inputSchema: objSchema({ target: { type: "string", description: "Target GameObject with Rigidbody." }, x: { type: "number" }, y: { type: "number" }, z: { type: "number" }, mode: { type: "string" }, forceType: { type: "string", enum: ["normal", "explosion"] }, torqueX: { type: "number" }, torqueY: { type: "number" }, torqueZ: { type: "number" }, explosionX: { type: "number" }, explosionY: { type: "number" }, explosionZ: { type: "number" }, explosionRadius: { type: "number" }, explosionForce: { type: "number" }, upwardsModifier: { type: "number" } }, ["target"]),
     destructiveHint: false,
+    sideEffects: ["runtime-state"],
+    riskLevel: "low",
+    playModeSupport: "runtime-only",
     handler: "bridge",
+    supportStatus: "live-bridge",
     cliCommand: "tools run physics.force",
     docsTopic: "physics",
-    equivalentUnityMcp: "manage_physics.forces"
+    equivalentUnityMcp: "manage_physics.forces",
+    examples: [
+      { description: "Apply an upward force", argv: ["tools", "run", "physics.force", "--input", "{\"target\":\"PhysicsProbe\",\"x\":0,\"y\":10,\"z\":0}"] }
+    ]
   },
   {
     name: "physics.overlap",
     title: "Physics Overlap Query",
-    description: "Run a sphere or box overlap query and return matching colliders.",
+    description: "Run a sphere or box overlap query at a position and return matching colliders. Read-only query. Use shape sphere with radius, or box with size.",
     group: "physics",
     inputSchema: objSchema({ shape: { type: "string", enum: ["sphere", "box"] }, originX: { type: "number" }, originY: { type: "number" }, originZ: { type: "number" }, radius: { type: "number" }, sizeX: { type: "number" }, sizeY: { type: "number" }, sizeZ: { type: "number" }, layerMask: { type: "integer" } }),
     destructiveHint: false,
+    playModeSupport: "supported",
     handler: "bridge",
+    supportStatus: "live-bridge",
     cliCommand: "tools run physics.overlap",
     docsTopic: "physics",
-    equivalentUnityMcp: "manage_physics.overlap_queries"
+    equivalentUnityMcp: "manage_physics.overlap_queries",
+    examples: [
+      { description: "Sphere overlap at origin", argv: ["tools", "run", "physics.overlap", "--input", "{\"shape\":\"sphere\",\"originX\":0,\"originY\":0,\"originZ\":0,\"radius\":5}"] }
+    ]
   },
   {
     name: "physics.rigidbody",
     title: "Physics Rigidbody",
-    description: "Validate or configure Rigidbody mass, drag, gravity and kinematic flags.",
+    description: "Validate or configure a Rigidbody's mass, drag, angularDrag, useGravity and isKinematic flags. target resolves by name, hierarchy path or instance id. Pass validate=true to only check configuration.",
     group: "physics",
-    inputSchema: objSchema({ target: { type: "string" }, mass: { type: "number" }, drag: { type: "number" }, angularDrag: { type: "number" }, useGravity: { type: "boolean" }, isKinematic: { type: "boolean" }, validate: { type: "boolean" } }, ["target"]),
+    inputSchema: objSchema({ target: { type: "string", description: "Target GameObject with Rigidbody." }, mass: { type: "number" }, drag: { type: "number" }, angularDrag: { type: "number" }, useGravity: { type: "boolean" }, isKinematic: { type: "boolean" }, validate: { type: "boolean", description: "Only validate, do not change." } }, ["target"]),
     destructiveHint: false,
+    sideEffects: ["scene-modify"],
+    riskLevel: "low",
+    playModeSupport: "session-affecting",
     handler: "bridge",
+    supportStatus: "live-bridge",
     cliCommand: "tools run physics.rigidbody",
     docsTopic: "physics",
-    equivalentUnityMcp: "manage_physics.rigidbody"
+    equivalentUnityMcp: "manage_physics.rigidbody",
+    examples: [
+      { description: "Configure a Rigidbody", argv: ["tools", "run", "physics.rigidbody", "--input", "{\"target\":\"PhysicsProbe\",\"mass\":2.0,\"useGravity\":true}"] }
+    ]
   },
   {
     name: "physics.raycast",
     title: "Physics Raycast",
-    description: "Cast a ray and report the first hit.",
+    description: "Cast a ray (3d/2d) from origin along direction and report the first hit (or all hits with all=true). Returns hit point, normal, distance, collider and transform reference. Read-only query.",
     group: "physics",
     inputSchema: objSchema({ originX: { type: "number" }, originY: { type: "number" }, originZ: { type: "number" }, directionX: { type: "number" }, directionY: { type: "number" }, directionZ: { type: "number" }, distance: { type: "number" }, mode: { type: "string", enum: ["3d", "2d"] }, layerMask: { type: "integer" }, all: { type: "boolean" } }),
     destructiveHint: false,
+    playModeSupport: "supported",
     handler: "bridge",
+    supportStatus: "live-bridge",
     cliCommand: "tools run physics.raycast",
-    docsTopic: "physics"
+    docsTopic: "physics",
+    equivalentUnityMcp: "manage_physics.raycast",
+    examples: [
+      { description: "Raycast forward from origin", argv: ["tools", "run", "physics.raycast", "--input", "{\"originX\":0,\"originY\":0,\"originZ\":0,\"directionX\":0,\"directionY\":0,\"directionZ\":1,\"distance\":100}"] }
+    ]
   },
   {
     name: "physics.simulation",
     title: "Physics Simulation",
-    description: "Step the physics simulation forward.",
+    description: "Step the physics simulation forward by N steps of deltaTime. Best used in Play Mode (runtime-only semantics); in Edit Mode it manually steps without rendering. Use mode 3d/2d.",
     group: "physics",
     inputSchema: objSchema({ steps: { type: "integer" }, deltaTime: { type: "number" }, simulate: { type: "boolean" }, mode: { type: "string", enum: ["3d", "2d"] } }),
     destructiveHint: false,
+    sideEffects: ["runtime-state"],
+    riskLevel: "low",
+    playModeSupport: "runtime-only",
     handler: "bridge",
+    supportStatus: "live-bridge",
     cliCommand: "tools run physics.simulation",
-    docsTopic: "physics"
+    docsTopic: "physics",
+    equivalentUnityMcp: "manage_physics.simulate_step",
+    examples: [
+      { description: "Step simulation 10 frames", argv: ["tools", "run", "physics.simulation", "--input", "{\"steps\":10,\"deltaTime\":0.016,\"mode\":\"3d\"}"] }
+    ]
   },
   {
     name: "physics.raycast-all",
     title: "Physics Raycast All",
-    description: "Cast a ray and return all hits along its path.",
+    description: "Cast a ray (3d/2d) and return ALL hits along its path, sorted by distance. Read-only query. Use layerMask to filter.",
     group: "physics",
     inputSchema: objSchema({ originX: { type: "number" }, originY: { type: "number" }, originZ: { type: "number" }, directionX: { type: "number" }, directionY: { type: "number" }, directionZ: { type: "number" }, distance: { type: "number" }, mode: { type: "string", enum: ["3d", "2d"] }, layerMask: { type: "integer" } }),
     destructiveHint: false,
+    playModeSupport: "supported",
     handler: "bridge",
     supportStatus: "live-bridge",
     cliCommand: "tools run physics.raycast-all",
     docsTopic: "physics",
-    equivalentUnityMcp: "physics.raycast_all"
+    equivalentUnityMcp: "physics.raycast_all",
+    examples: [
+      { description: "Raycast all hits forward", argv: ["tools", "run", "physics.raycast-all", "--input", "{\"originX\":0,\"originY\":0,\"originZ\":0,\"directionX\":0,\"directionY\":0,\"directionZ\":1,\"distance\":100}"] }
+    ]
   },
   {
     name: "physics.linecast",
     title: "Physics Linecast",
-    description: "Check if a line between two points is blocked by colliders.",
+    description: "Check if a line segment between start and end points is blocked by colliders. Returns whether the line is blocked and the hit info. Read-only query. Use mode 3d/2d.",
     group: "physics",
     inputSchema: objSchema({ startX: { type: "number" }, startY: { type: "number" }, startZ: { type: "number" }, endX: { type: "number" }, endY: { type: "number" }, endZ: { type: "number" }, mode: { type: "string", enum: ["3d", "2d"] }, layerMask: { type: "integer" } }),
     destructiveHint: false,
+    playModeSupport: "supported",
     handler: "bridge",
     supportStatus: "live-bridge",
     cliCommand: "tools run physics.linecast",
     docsTopic: "physics",
-    equivalentUnityMcp: "physics.linecast"
+    equivalentUnityMcp: "physics.linecast",
+    examples: [
+      { description: "Linecast between two points", argv: ["tools", "run", "physics.linecast", "--input", "{\"startX\":0,\"startY\":0,\"startZ\":0,\"endX\":0,\"endY\":10,\"endZ\":0}"] }
+    ]
   },
   {
     name: "physics.shapecast",
     title: "Physics Shapecast",
-    description: "Cast a sphere, box or capsule shape and return all hits.",
+    description: "Cast a sphere, box or capsule shape along a direction and return all hits. Read-only query. shape sphere uses radius; box uses halfExtent; capsule uses points/height/capsuleDirection.",
     group: "physics",
     inputSchema: objSchema({ shape: { type: "string", enum: ["sphere", "box", "capsule"] }, originX: { type: "number" }, originY: { type: "number" }, originZ: { type: "number" }, directionX: { type: "number" }, directionY: { type: "number" }, directionZ: { type: "number" }, distance: { type: "number" }, radius: { type: "number" }, halfExtentX: { type: "number" }, halfExtentY: { type: "number" }, halfExtentZ: { type: "number" }, height: { type: "number" }, capsuleDirection: { type: "integer" }, point1X: { type: "number" }, point1Y: { type: "number" }, point1Z: { type: "number" }, point2X: { type: "number" }, point2Y: { type: "number" }, point2Z: { type: "number" }, layerMask: { type: "integer" } }),
     destructiveHint: false,
+    playModeSupport: "supported",
     handler: "bridge",
     supportStatus: "live-bridge",
     cliCommand: "tools run physics.shapecast",
     docsTopic: "physics",
-    equivalentUnityMcp: "physics.shapecast"
+    equivalentUnityMcp: "physics.shapecast",
+    examples: [
+      { description: "Sphere cast forward", argv: ["tools", "run", "physics.shapecast", "--input", "{\"shape\":\"sphere\",\"originX\":0,\"originY\":0,\"originZ\":0,\"directionX\":0,\"directionY\":0,\"directionZ\":1,\"distance\":50,\"radius\":1}"] }
+    ]
   },
   {
     name: "physics.validate",
     title: "Physics Validate",
-    description: "Validate Rigidbody/Collider configuration on a GameObject, reporting common issues.",
+    description: "Validate Rigidbody/Collider configuration on a GameObject, reporting common issues (missing Rigidbody, zero-mass, nested colliders, etc.). Read-only. target resolves by name, hierarchy path or instance id.",
     group: "physics",
-    inputSchema: objSchema({ target: { type: "string" }, path: { type: "string" } }, ["target"]),
+    inputSchema: objSchema({ target: { type: "string", description: "Target GameObject: name, hierarchy path or instance id." }, path: { type: "string", description: "Alias of target." } }, ["target"]),
     destructiveHint: false,
+    playModeSupport: "supported",
     handler: "bridge",
     supportStatus: "live-bridge",
     cliCommand: "tools run physics.validate",
     docsTopic: "physics",
-    equivalentUnityMcp: "physics.validate"
+    equivalentUnityMcp: "physics.validate",
+    examples: [
+      { description: "Validate a physics setup", argv: ["tools", "run", "physics.validate", "--input", "{\"target\":\"PhysicsProbe\"}"] }
+    ]
   }
 ];

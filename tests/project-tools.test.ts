@@ -34,7 +34,8 @@ test("tools group list <sample> --include-custom discovers Unity project custom 
     destructiveHint: false,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "tools run sample.echo"
+    cliCommand: "tools run sample.echo",
+    playModeSupport: "editor-only"
   };
 
   const result = await execute(["tools", "group", "list", "sample", "--include-custom"], {
@@ -48,9 +49,10 @@ test("tools group list <sample> --include-custom discovers Unity project custom 
   assert.equal(result.ok, true);
   assert.equal(requests.length, 1);
   assert.equal(requests[0].command, "project-tool.list");
-  const data = result.data as { tools: Array<{ name: string; source: string }> };
+  const data = result.data as { tools: Array<{ name: string; source: string; playModeSupport?: string }> };
   assert.deepEqual(data.tools.map((tool) => tool.name), ["sample.echo"]);
   assert.equal(data.tools[0].source, "project");
+  assert.equal(data.tools[0].playModeSupport, "editor-only");
 });
 
 test("tools describe resolves custom descriptor without hand-written CLI metadata", async () => {
@@ -66,7 +68,8 @@ test("tools describe resolves custom descriptor without hand-written CLI metadat
           description: "Echoes input from an Attribute-first Unity Editor tool.",
           group: "sample",
           inputSchema: { type: "object" },
-          destructiveHint: false
+          destructiveHint: false,
+          playModeSupport: "editor-only"
         }]
       }
     })
@@ -79,6 +82,7 @@ test("tools describe resolves custom descriptor without hand-written CLI metadat
   assert.equal(data.requiresUnity, true);
   assert.equal(data.supportStatus, "live-bridge");
   assert.equal(data.cliCommand, "tools run sample.echo");
+  assert.equal(data.playModeSupport, "editor-only");
 });
 
 test("Unity C# custom tool registry supports UnityCliToolAttribute descriptors and sample Editor tool", async () => {
@@ -88,6 +92,7 @@ test("Unity C# custom tool registry supports UnityCliToolAttribute descriptors a
 
   assert.match(attribute, /AttributeTargets\.Class \| AttributeTargets\.Method/);
   assert.match(attribute, /public string Group \{ get; set; \}/);
+  assert.match(attribute, /public string PlayModeSupport \{ get; set; \}/);
   assert.doesNotMatch(attribute, /ArchitectureSensitive|FrozenDecision|CoverageScope/);
   assert.match(registry, /typeof\(UnityCliToolAttribute\)/);
   assert.match(registry, /reason=ambiguous_class_level_execute_method/);
@@ -100,9 +105,11 @@ test("Unity C# custom tool registry supports UnityCliToolAttribute descriptors a
   assert.match(registry, /UnityCliProjectToolFingerprints/);
   assert.match(registry, /sha256-handler-code-plus-descriptor-v1/);
   assert.match(registry, /Prop\("descriptorSource", definition\.DescriptorSource\)/);
+  assert.match(registry, /Prop\("playModeSupport", definition\.PlayModeSupport\)/);
   assert.match(registry, /PropRaw\("fingerprint", ProjectToolFingerprintJson\(definition\)\)/);
   assert.match(registry, /Prop\("handler", "bridge"\)/);
   assert.match(sample, /\[UnityCliTool\(\s*"sample\.echo"/);
+  assert.match(sample, /PlayModeSupport\s*=\s*"editor-only"/);
   assert.doesNotMatch(sample, /manifest\.json|config\.json|\.yaml|\.yml/);
 });
 

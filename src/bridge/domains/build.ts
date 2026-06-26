@@ -8,7 +8,7 @@ export const buildBridgeSpecs: BridgeCommandSpec[] = [
 ];
 
 function buildScenesArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
-  return compactArgs({ action: stringFlag(flags, "action"), path: positionalTarget ?? stringFlag(flags, "path") });
+  return compactArgs({ action: stringFlag(flags, "action"), path: positionalTarget ?? stringFlag(flags, "path"), dryRun: boolFlag(flags, "dry-run") });
 }
 
 function buildPlatformArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {

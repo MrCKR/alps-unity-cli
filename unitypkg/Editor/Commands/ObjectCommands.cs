@@ -62,7 +62,7 @@ namespace UnityCli
                     .Prop("hasJsonPatch", !string.IsNullOrEmpty(jsonPatchJson))
                     .EndObject());
                 dry.Prop("logPath", LogPath());
-                return dry.EndObject().ToString();
+                return SuccessJson(dry.EndObject().ToString());
             }
 
             // 记录修改前数据用于回读
@@ -102,7 +102,7 @@ namespace UnityCli
             w.PropArray("logs", arr => { foreach (var l in result.Logs) arr.Value(l); });
             w.PropRaw("audit", ObjectPatch.ResultToJson(result));
             w.Prop("logPath", LogPath());
-            return w.EndObject().ToString();
+            return SuccessJson(w.EndObject().ToString());
         }
 
         private static ObjectSerializer.Options BuildSerializerOptions(BridgeRequest request)
@@ -115,13 +115,33 @@ namespace UnityCli
                 DeepSerialization = request.BoolArg("deepSerialization", true)
             };
             var pathsRaw = request.RawJsonArg("paths");
+            var viewQueryRaw = request.RawJsonArg("viewQuery");
+            if (!string.IsNullOrEmpty(pathsRaw) && !string.IsNullOrEmpty(viewQueryRaw))
+            {
+                throw new BridgeCommandException("E_OBJECT_READ_SCOPE_CONFLICT", "paths and viewQuery are mutually exclusive.", "Use paths for exact member reads, or viewQuery for one filtered subtree.");
+            }
             if (!string.IsNullOrEmpty(pathsRaw))
             {
                 options.Paths = new HashSet<string>();
-                foreach (var p in pathsRaw.Trim('[', ']').Split(','))
+                foreach (var p in JsonStringArray(pathsRaw))
                 {
-                    var clean = p.Trim().Trim('"');
+                    var clean = p == null ? null : p.Trim();
                     if (!string.IsNullOrEmpty(clean)) options.Paths.Add(clean);
+                }
+            }
+            if (!string.IsNullOrEmpty(viewQueryRaw))
+            {
+                options.ViewPath = JsonStringProperty(viewQueryRaw, "path") ?? JsonStringProperty(viewQueryRaw, "Path");
+                options.NamePattern = JsonStringProperty(viewQueryRaw, "namePattern") ?? JsonStringProperty(viewQueryRaw, "NamePattern");
+                options.TypeFilter = JsonStringProperty(viewQueryRaw, "typeFilter") ?? JsonStringProperty(viewQueryRaw, "TypeFilter");
+                var maxDepthRaw = JsonRawProperty(viewQueryRaw, "maxDepth") ?? JsonRawProperty(viewQueryRaw, "MaxDepth");
+                if (!string.IsNullOrEmpty(maxDepthRaw))
+                {
+                    int maxDepth;
+                    if (int.TryParse(maxDepthRaw.Trim('"'), NumberStyles.Integer, CultureInfo.InvariantCulture, out maxDepth))
+                    {
+                        options.MaxDepth = Math.Max(0, maxDepth);
+                    }
                 }
             }
             var nameFilter = request.StringArg("namePattern");

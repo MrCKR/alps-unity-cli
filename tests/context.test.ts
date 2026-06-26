@@ -3,6 +3,9 @@
  */
 
 import assert from "node:assert/strict";
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import test from "node:test";
 import { handleContextCommand } from "../src/context/commands.js";
 import { builtinContextDescriptors, builtinContextCategories, findBuiltinContextByName, filterContextsByCategory, searchContexts } from "../src/context/registry.js";
@@ -200,6 +203,73 @@ test("context read routes through bridge command", async () => {
   const runtime = makeRuntime(bridgeExecute);
   const result = await handleContextCommand("read", ["project.info"], {}, runtime, requestId);
   assert.equal(result.ok, true);
+});
+
+test("context read tools.groups uses offline CLI registry", async () => {
+  const payloads: unknown[] = [];
+  const runtime = makeRuntime(async (payload) => {
+    payloads.push(payload);
+    return { ok: true, data: {} };
+  });
+
+  const result = await handleContextCommand("read", ["tools.groups"], {}, runtime, requestId);
+
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.context, "tools.groups");
+  assert.ok(Array.isArray(data.groups), "tools.groups must return groups array");
+  assert.equal(typeof data.count, "number", "tools.groups must return count");
+  assert.deepEqual(payloads, [], "tools.groups must not call the Unity bridge");
+});
+
+test("context read forwards structured input and recovers PowerShell escaped JSON", async () => {
+  const payloads: Array<{ args: Record<string, unknown> }> = [];
+  const bridgeExecute = async (payload: { args: Record<string, unknown> }) => {
+    payloads.push(payload);
+    return { ok: true, data: { context: "scene.gameobject", gameObject: { name: "Main Camera" } } };
+  };
+  const runtime = makeRuntime(bridgeExecute);
+
+  const regular = await handleContextCommand("read", ["scene.gameobject"], { input: JSON.stringify({ target: "Main Camera", includeComponents: false }) }, runtime, requestId);
+  const pwshEscaped = await handleContextCommand("read", ["scene.gameobject"], { input: "{\\ target\\:\\Main Camera\\,\\includeComponents\\:false}" }, runtime, requestId);
+  const backslashQuoted = await handleContextCommand("read", ["scene.gameobject"], { input: '{\\"target\\":\\"Main Camera\\",\\"includeComponents\\":false}' }, runtime, requestId);
+
+  assert.equal(regular.ok, true);
+  assert.equal(pwshEscaped.ok, true);
+  assert.equal(backslashQuoted.ok, true);
+  assert.deepEqual(payloads[0].args, { name: "scene.gameobject", input: { target: "Main Camera", includeComponents: false }, target: "Main Camera", includeComponents: false });
+  assert.deepEqual(payloads[1].args, { name: "scene.gameobject", input: { target: "Main Camera", includeComponents: false }, target: "Main Camera", includeComponents: false });
+  assert.deepEqual(payloads[2].args, { name: "scene.gameobject", input: { target: "Main Camera", includeComponents: false }, target: "Main Camera", includeComponents: false });
+});
+
+test("context read rejects invalid --input JSON before bridge execution", async () => {
+  const payloads: unknown[] = [];
+  const runtime = makeRuntime(async (payload) => {
+    payloads.push(payload);
+    return { ok: true, data: {} };
+  });
+
+  const result = await handleContextCommand("read", ["scene.gameobject"], { input: "{not-json" }, runtime, requestId);
+
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_CONTEXT_INPUT_JSON_INVALID");
+  assert.deepEqual(payloads, []);
+});
+
+test("context read supports --input-file", async () => {
+  const tempDir = await mkdtemp(join(tmpdir(), "unity-cli-context-"));
+  const inputPath = join(tempDir, "input.json");
+  await writeFile(inputPath, JSON.stringify({ search: "File" }), "utf8");
+  const payloads: Array<{ args: Record<string, unknown> }> = [];
+  const runtime = makeRuntime(async (payload: { args: Record<string, unknown> }) => {
+    payloads.push(payload);
+    return { ok: true, data: { items: [], count: 0 } };
+  });
+
+  const result = await handleContextCommand("read", ["editor.menu-items"], { "input-file": inputPath }, runtime, requestId);
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(payloads[0].args, { name: "editor.menu-items", input: { search: "File" }, search: "File" });
 });
 
 // ── unknown subcommand ────────────────────────────────────────────────────

@@ -11,6 +11,8 @@
  */
 
 import { getString, getBoolean } from "../args.js";
+import { readFile } from "node:fs/promises";
+import { resolve } from "node:path";
 import { executeBridgeCommand, type BridgeRuntime } from "../bridge/index.js";
 import { builtinToolGroups, builtinToolMetadata, extensionToolMetadata } from "../tools/metadata/index.js";
 import {
@@ -200,7 +202,9 @@ async function handleContextRead(
     });
   }
 
-  const inputArgs = parseContextInput(flags);
+  const parsedInput = await parseContextInput(flags, requestId);
+  if (!parsedInput.ok) return parsedInput.error!;
+  const inputArgs = parsedInput.input;
 
   if (contextName === "tools.groups") {
     const tools = [...builtinToolMetadata(), ...extensionToolMetadata()];
@@ -228,16 +232,101 @@ async function handleContextRead(
   );
 }
 
-/** 解析 context read 的 JSON 输入，非法输入按空对象处理，保持现有容错语义。 */
-function parseContextInput(flags: Record<string, string | boolean>): Record<string, unknown> {
+interface ParsedContextInput {
+  ok: boolean;
+  input: Record<string, unknown>;
+  error?: CliResult;
+}
+
+/** 解析 context read 输入；非法 JSON 返回结构化错误，避免静默读错上下文。 */
+async function parseContextInput(flags: Record<string, string | boolean>, requestId: string): Promise<ParsedContextInput> {
+  const inputFilePath = getString(flags, "input-file");
+  if (inputFilePath) {
+    try {
+      const content = await readFile(resolve(inputFilePath), "utf8");
+      return parseContextInputString(content, requestId, "--input-file");
+    } catch (error) {
+      return {
+        ok: false,
+        input: {},
+        error: failure(requestId, "E_CONTEXT_INPUT_FILE_READ_FAILED", `Failed to read --input-file: ${error instanceof Error ? error.message : String(error)}`)
+      };
+    }
+  }
+
   const inputString = getString(flags, "input");
   if (!inputString) {
-    return {};
+    return { ok: true, input: {} };
+  }
+  return parseContextInputString(inputString, requestId, "--input");
+}
+
+function parseContextInputString(inputString: string, requestId: string, source: "--input" | "--input-file"): ParsedContextInput {
+  const parsed = parseJsonWithPowerShellFallback(inputString);
+  if (parsed.ok) {
+    const value = parsed.value;
+    return { ok: true, input: typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {} };
+  }
+  return {
+    ok: false,
+    input: {},
+    error: failure(requestId, "E_CONTEXT_INPUT_JSON_INVALID", `${source} must be valid JSON. ${parsed.message}`, [
+      "In PowerShell, use single quotes with unescaped JSON quotes, or pass --input-file <path> for complex JSON.",
+      "Do not type backslashes before JSON quotes inside PowerShell single quotes.",
+      "Run unity_cli context describe <context> and copy the inputSchema field names exactly."
+    ])
+  };
+}
+
+function parseJsonWithPowerShellFallback(inputString: string): { ok: true; value: unknown } | { ok: false; message: string } {
+  try {
+    return { ok: true, value: JSON.parse(inputString) };
+  } catch (error) {
+    const backslashQuoted = recoverBackslashQuotedJson(inputString);
+    if (backslashQuoted !== undefined) {
+      return { ok: true, value: backslashQuoted };
+    }
+    const recovered = recoverPowerShellEscapedJsonObject(inputString);
+    if (recovered) {
+      return { ok: true, value: recovered };
+    }
+    return { ok: false, message: error instanceof Error ? error.message : String(error) };
+  }
+}
+
+function recoverBackslashQuotedJson(inputString: string): unknown | undefined {
+  const trimmed = inputString.trim();
+  if (!/^[{\[]\\"/.test(trimmed)) {
+    return undefined;
   }
   try {
-    const parsed = JSON.parse(inputString);
-    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+    return JSON.parse(trimmed.replace(/\\"/g, '"'));
   } catch {
-    return {};
+    return undefined;
   }
+}
+
+function recoverPowerShellEscapedJsonObject(inputString: string): Record<string, unknown> | undefined {
+  const trimmed = inputString.trim();
+  if (!trimmed.startsWith("{\\") || (!trimmed.endsWith("}") && !trimmed.endsWith("\\}"))) {
+    return undefined;
+  }
+  const body = trimmed.replace(/^\{\\\s*/, "").replace(/\\?\}\s*$/, "");
+  const result: Record<string, unknown> = {};
+  for (const pair of body.split(/\\?,(?=\\?[^\\:]+\\:)/g)) {
+    const match = pair.match(/^\s*\\?([^\\:]+)\\:(.*)$/);
+    if (!match) return undefined;
+    const key = match[1].trim();
+    if (!key) return undefined;
+    result[key] = parseRecoveredScalar(match[2].replace(/\\$/g, "").trim());
+  }
+  return result;
+}
+
+function parseRecoveredScalar(value: string): unknown {
+  if (value === "true") return true;
+  if (value === "false") return false;
+  if (value === "null") return null;
+  if (/^-?\d+(?:\.\d+)?$/.test(value)) return Number(value);
+  return value.replace(/^\\/, "").replace(/\\:/g, ":").replace(/\\,/g, ",").replace(/\\\\/g, "\\");
 }

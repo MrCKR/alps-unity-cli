@@ -86,7 +86,7 @@ namespace UnityCli
             var gameObject = ResolveGameObject(source);
             if (gameObject == null)
             {
-                return ErrorJson("E_TARGET_NOT_FOUND", "Source GameObject not found: " + source, "Run unity_cli scene hierarchy or pass a hierarchy path / instance id.");
+                return ErrorJson("E_TARGET_NOT_FOUND", "Source GameObject not found: " + source, "Run tools run scene.hierarchy --instance <instance> to list objects, or pass a hierarchy path / instance id.");
             }
             if (AssetDatabase.LoadAssetAtPath<GameObject>(path) != null)
             {
@@ -150,7 +150,7 @@ namespace UnityCli
                     var child = root.transform.Find(removeChild);
                     if (child == null)
                     {
-                        throw new BridgeCommandException("E_PREFAB_CHILD_NOT_FOUND", "Prefab child not found: " + removeChild, "Run unity_cli prefab hierarchy <path> to inspect child paths.");
+                        throw new BridgeCommandException("E_PREFAB_CHILD_NOT_FOUND", "Prefab child not found: " + removeChild, "Run tools run prefab.hierarchy --input '{\"path\":\"<path>\"}' to inspect child paths.");
                     }
                     UnityEngine.Object.DestroyImmediate(child.gameObject);
                     effects.Add(new UnityCliJsonWriter().BeginObject()
@@ -189,7 +189,7 @@ namespace UnityCli
             var stage = CurrentPrefabStage();
             if (stage != null && StageIsDirty(stage) && !string.Equals(StageAssetPath(stage), path, StringComparison.OrdinalIgnoreCase))
             {
-                return ErrorJson("E_PREFAB_DIRTY_CONFLICT", "Current Prefab Stage has unsaved changes.", "Run unity_cli prefab stage-save, or close/save the current Prefab Stage in Unity before opening another Prefab.");
+                return ErrorJson("E_PREFAB_DIRTY_CONFLICT", "Current Prefab Stage has unsaved changes.", "Run tools run prefab.stage-save or close/save the current Prefab Stage in Unity before opening another Prefab.");
             }
 
             if (!OpenPrefabStage(path))
@@ -220,7 +220,7 @@ namespace UnityCli
             var save = request.BoolArg("save", false);
             if (StageIsDirty(stage) && !save)
             {
-                return ErrorJson("E_PREFAB_DIRTY_CONFLICT", "Prefab Stage has unsaved changes: " + path, "Run unity_cli prefab stage-close --save or unity_cli prefab stage-save before closing.");
+                return ErrorJson("E_PREFAB_DIRTY_CONFLICT", "Prefab Stage has unsaved changes: " + path, "Run tools run prefab.stage-close --input '{\"path\":\"<path>\",\"save\":true}' or tools run prefab.stage-save before closing.");
             }
             if (save && !SavePrefabStage(stage))
             {
@@ -341,7 +341,7 @@ namespace UnityCli
             var path = NormalizeAssetPath(rawPath);
             if (string.IsNullOrEmpty(path))
             {
-                throw new BridgeCommandException("E_PREFAB_PATH_REQUIRED", "Pass an Assets/*.prefab path.", "Use unity_cli prefab info <path> or pass --path Assets/Example.prefab.");
+                throw new BridgeCommandException("E_PREFAB_PATH_REQUIRED", "Pass an Assets/*.prefab path.", "Use tools run prefab.info --input '{\"path\":\"<path>\"}' or pass an Assets/*.prefab path.");
             }
             if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || !path.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
             {
@@ -360,7 +360,7 @@ namespace UnityCli
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
             if (prefab == null)
             {
-                throw new BridgeCommandException("E_PREFAB_NOT_FOUND", "Prefab asset not found: " + path, "Check the path or run unity_cli asset search --type prefab.");
+                throw new BridgeCommandException("E_PREFAB_NOT_FOUND", "Prefab asset not found: " + path, "Check the path or run tools run asset.search --input '{\"filter\":\"t:Prefab\"}' to discover the path.");
             }
             if (PrefabUtility.GetPrefabAssetType(prefab) == PrefabAssetType.NotAPrefab)
             {
@@ -583,7 +583,7 @@ namespace UnityCli
             var stage = CurrentPrefabStage();
             if (stage == null)
             {
-                throw new BridgeCommandException("E_PREFAB_STAGE_NOT_OPEN", "No Prefab Stage is currently open.", "Run unity_cli prefab stage-open <path> first.");
+                throw new BridgeCommandException("E_PREFAB_STAGE_NOT_OPEN", "No Prefab Stage is currently open.", "Run tools run prefab.stage-open --input '{\"path\":\"<path>\"}' first.");
             }
             var path = StageAssetPath(stage);
             if (!string.IsNullOrEmpty(requestedPath) && !string.Equals(NormalizeAssetPath(requestedPath), path, StringComparison.OrdinalIgnoreCase))

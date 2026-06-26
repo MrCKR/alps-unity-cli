@@ -440,7 +440,7 @@ function resolveInstance(instances: UnityInstance[], aliases: Record<string, str
   if (matches.length > 1) {
     throw new InstanceRegistryError("E_TARGET_AMBIGUOUS", `Unity target selector is ambiguous: ${selector}.`, [
       "Run unity_cli instances list to inspect target ids.",
-      "Pass a full --target <instanceId> or set an alias."
+      "Pass a full --instance <instanceId> or set an alias."
     ], { targets: matches.map((instance) => targetSummary(instance, aliases)) });
   }
   if (aliasInstanceId) return { instance: matches[0], matchedBy: "alias" };

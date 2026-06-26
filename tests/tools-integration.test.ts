@@ -87,7 +87,7 @@ test("integration: capabilities via execute()", async () => {
   assert.equal(result.ok, true);
 
   const data = result.data as Record<string, unknown>;
-  assert.equal(data.command, "capabilities");
+  assert.equal(data.command, "diagnose.capabilities");
   assert.equal(data.mode, "offline");
 
   const staticData = data.static as Record<string, unknown>;
@@ -102,7 +102,7 @@ test("integration: docs built-in topics via canonical docs command", async () =>
 
   assert.equal(list.ok, true);
   assert.equal(topic.ok, true);
-  assert.equal((list.data as { command: string }).command, "docs.topics");
+  assert.equal((list.data as { command: string }).command, "docs.list");
   assert.equal((topic.data as { command: string; topic: string }).command, "docs.topic");
   assert.equal((topic.data as { topic: string }).topic, "scene");
 });

@@ -116,21 +116,30 @@ namespace UnityCli
             {
                 return ErrorJson("E_ANIMATOR_NOT_FOUND", "Animator component not found on target: " + HierarchyPath(gameObject), "Add an Animator component or choose another target.");
             }
-            if (animator.runtimeAnimatorController == null || animator.layerCount <= 0)
+            var runtimeLayerCount = animator.layerCount;
+            var effectiveLayerCount = EffectiveAnimatorLayerCount(animator);
+            if (animator.runtimeAnimatorController == null || effectiveLayerCount <= 0)
             {
-                return ErrorJson("E_ANIMATION_NO_CONTROLLER", "Animator has no RuntimeAnimatorController assigned (layerCount=0): " + HierarchyPath(gameObject), "Assign a RuntimeAnimatorController with at least one layer, then retry.");
+                return ErrorJson("E_ANIMATION_NO_CONTROLLER", "Animator has no RuntimeAnimatorController assigned or no effective layers are available: " + HierarchyPath(gameObject), "Assign a RuntimeAnimatorController with at least one layer, then retry.");
             }
             var state = request.StringArg("state");
             if (string.IsNullOrEmpty(state))
             {
                 return ErrorJson("E_ANIMATION_STATE_REQUIRED", "Animation play requires --state <name>.", "Pass an Animator state name or hash-compatible state path.");
             }
-            var layer = request.IntArg("layer", 0);
-            if (layer < 0 || layer >= animator.layerCount)
+            if (runtimeLayerCount <= 0 && effectiveLayerCount > 0)
             {
-                return ErrorJson("E_ANIMATION_LAYER_INVALID", "Animator layer is out of range: " + layer.ToString(CultureInfo.InvariantCulture), "Run unity_cli animation state --target <go> to inspect layer count.");
+                animator.Rebind();
+                animator.Update(0f);
+                runtimeLayerCount = animator.layerCount;
+                effectiveLayerCount = EffectiveAnimatorLayerCount(animator);
             }
-            animator.Play(state, layer, request.FloatArg("normalizedTime", 0f));
+            var layer = request.IntArg("layer", 0);
+            if (layer < 0 || layer >= effectiveLayerCount)
+            {
+                return ErrorJson("E_ANIMATION_LAYER_INVALID", "Animator layer is out of range: " + layer.ToString(CultureInfo.InvariantCulture), "Run tools run animation.state --input '{\"target\":\"<go>\"}' to inspect layer count.");
+            }
+            animator.Play(state, runtimeLayerCount > 0 ? layer : 0, request.FloatArg("normalizedTime", 0f));
             animator.Update(0f);
             EditorUtility.SetDirty(animator);
             WriteLog("animation_play target=" + HierarchyPath(gameObject) + " state=" + state + " layer=" + layer.ToString(CultureInfo.InvariantCulture));
@@ -167,7 +176,7 @@ namespace UnityCli
             var path = NormalizeAssetPath(rawPath);
             if (string.IsNullOrEmpty(path))
             {
-                throw new BridgeCommandException("E_ANIMATION_CLIP_PATH_REQUIRED", "Pass an Assets/*.anim path.", "Use unity_cli animation clip <path> or pass --path Assets/Animations/Example.anim.");
+                throw new BridgeCommandException("E_ANIMATION_CLIP_PATH_REQUIRED", "Pass an Assets/*.anim path.", "Use tools run animation.clip --input '{\"path\":\"Assets/Animations/Example.anim\"}', or pass path in the tool input.");
             }
             if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || !path.EndsWith(".anim", StringComparison.OrdinalIgnoreCase))
             {
@@ -181,7 +190,7 @@ namespace UnityCli
             var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
             if (clip == null)
             {
-                throw new BridgeCommandException("E_ANIMATION_CLIP_NOT_FOUND", "AnimationClip asset not found: " + path, "Check the path or create one with unity_cli animation clip <path> --create.");
+                throw new BridgeCommandException("E_ANIMATION_CLIP_NOT_FOUND", "AnimationClip asset not found: " + path, "Check the path or create one with tools run animation.clip --input '{\"path\":\"<Assets/...>.anim\",\"action\":\"create\"}'.");
             }
             return clip;
         }
@@ -224,12 +233,14 @@ namespace UnityCli
         {
             var controller = animator.runtimeAnimatorController;
             var controllerPath = controller == null ? null : NormalizeAssetPath(AssetDatabase.GetAssetPath(controller));
-            var layerCount = animator.layerCount;
+            var runtimeLayerCount = animator.layerCount;
+            var layerCount = EffectiveAnimatorLayerCount(animator);
             var safeLayer = layerCount <= 0 ? 0 : Mathf.Clamp(layer, 0, layerCount - 1);
-            var state = layerCount > 0 ? animator.GetCurrentAnimatorStateInfo(safeLayer) : default(AnimatorStateInfo);
+            var state = runtimeLayerCount > 0 && safeLayer < runtimeLayerCount ? animator.GetCurrentAnimatorStateInfo(safeLayer) : default(AnimatorStateInfo);
             return new UnityCliJsonWriter().BeginObject()
                 .Prop("enabled", animator.enabled)
                 .Prop("layerCount", (long)layerCount)
+                .Prop("runtimeLayerCount", (long)runtimeLayerCount)
                 .Prop("selectedLayer", (long)safeLayer)
                 .PropObject("runtimeAnimatorController", obj => obj
                     .Prop("name", controller == null ? null : controller.name)
@@ -241,6 +252,21 @@ namespace UnityCli
                     .Prop("normalizedTime", state.normalizedTime)
                     .Prop("length", state.length))
                 .EndObject().ToString();
+        }
+
+        /// <summary>读取 Animator 可用层数量；运行态缓存未初始化时回退到 AnimatorController 资产层。</summary>
+        private static int EffectiveAnimatorLayerCount(Animator animator)
+        {
+            if (animator == null)
+            {
+                return 0;
+            }
+            if (animator.layerCount > 0)
+            {
+                return animator.layerCount;
+            }
+            var controller = animator.runtimeAnimatorController as AnimatorController;
+            return controller == null || controller.layers == null ? 0 : controller.layers.Length;
         }
 
         // ── animator.* runtime-state tools ──────────────────────────
@@ -257,6 +283,57 @@ namespace UnityCli
         //     unity-mcp's ObjectResolver + action-prefix dispatch.
         //   - Includes plannedEffects and logPath in all mutation responses.
 
+        /// <summary>读取 Animator 参数定义；运行态缓存为空时回退到 AnimatorController 资产。</summary>
+        private static AnimatorControllerParameter[] AnimatorParameterDefinitions(Animator animator)
+        {
+            if (animator == null)
+            {
+                return new AnimatorControllerParameter[0];
+            }
+            if (animator.parameterCount > 0)
+            {
+                var runtimeParameters = new AnimatorControllerParameter[animator.parameterCount];
+                for (var i = 0; i < animator.parameterCount; i++)
+                {
+                    runtimeParameters[i] = animator.GetParameter(i);
+                }
+                return runtimeParameters;
+            }
+            var controller = animator.runtimeAnimatorController as AnimatorController;
+            return controller == null || controller.parameters == null ? new AnimatorControllerParameter[0] : controller.parameters;
+        }
+
+        /// <summary>按名称查找 Animator 参数定义，兼容运行态缓存和 Controller 资产。</summary>
+        private static AnimatorControllerParameter FindAnimatorParameter(Animator animator, string parameterName)
+        {
+            foreach (var parameter in AnimatorParameterDefinitions(animator))
+            {
+                if (parameter != null && parameter.name == parameterName)
+                {
+                    return parameter;
+                }
+            }
+            return null;
+        }
+
+        /// <summary>判断 Animator 当前运行态缓存是否包含参数，用于区分当前值和 Controller 默认值。</summary>
+        private static bool AnimatorHasRuntimeParameter(Animator animator, string parameterName)
+        {
+            if (animator == null)
+            {
+                return false;
+            }
+            for (var i = 0; i < animator.parameterCount; i++)
+            {
+                var parameter = animator.GetParameter(i);
+                if (parameter != null && parameter.name == parameterName)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
         private static string AnimatorGetInfo(BridgeRequest request)
         {
             var gameObject = ResolveUniqueTarget(request.StringArg("target"), "Animator info requires --target <go>.");
@@ -267,7 +344,10 @@ namespace UnityCli
             }
             var controller = animator.runtimeAnimatorController as AnimatorController;
             var controllerPath = animator.runtimeAnimatorController == null ? null : NormalizeAssetPath(AssetDatabase.GetAssetPath(animator.runtimeAnimatorController));
-            var layerCount = animator.layerCount;
+            var controllerLayers = controller == null || controller.layers == null ? new AnimatorControllerLayer[0] : controller.layers;
+            var parameterDefinitions = AnimatorParameterDefinitions(animator);
+            var runtimeLayerCount = animator.layerCount;
+            var layerCount = runtimeLayerCount > 0 ? runtimeLayerCount : controllerLayers.Length;
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropRaw("target", GameObjectTargetJson(gameObject))
                 .PropObject("animator", obj => obj
@@ -277,16 +357,16 @@ namespace UnityCli
                     .Prop("updateMode", animator.updateMode.ToString())
                     .Prop("cullingMode", animator.cullingMode.ToString())
                     .Prop("layerCount", (long)layerCount)
-                    .Prop("parameterCount", (long)animator.parameterCount)
+                    .Prop("parameterCount", (long)parameterDefinitions.Length)
                     .PropObject("runtimeAnimatorController", ctrl => ctrl
                         .Prop("name", animator.runtimeAnimatorController == null ? null : animator.runtimeAnimatorController.name)
                         .Prop("path", controllerPath)
                         .Prop("guid", string.IsNullOrEmpty(controllerPath) ? null : AssetDatabase.AssetPathToGUID(controllerPath)))
                     .PropArray("parameters", arr =>
                     {
-                        for (var i = 0; i < animator.parameterCount; i++)
+                        foreach (var p in parameterDefinitions)
                         {
-                            var p = animator.GetParameter(i);
+                            if (p == null) continue;
                             arr.BeginObject()
                                 .Prop("name", p.name)
                                 .Prop("type", p.type.ToString())
@@ -300,11 +380,14 @@ namespace UnityCli
                     {
                         for (var i = 0; i < layerCount; i++)
                         {
-                            var stateInfo = animator.GetCurrentAnimatorStateInfo(i);
-                            var inTransition = animator.IsInTransition(i);
+                            var hasRuntimeLayer = i < runtimeLayerCount;
+                            var hasControllerLayer = i < controllerLayers.Length;
+                            var stateInfo = hasRuntimeLayer ? animator.GetCurrentAnimatorStateInfo(i) : default(AnimatorStateInfo);
+                            var inTransition = hasRuntimeLayer && animator.IsInTransition(i);
                             arr.BeginObject()
                                 .Prop("index", (long)i)
-                                .Prop("weight", animator.GetLayerWeight(i))
+                                .Prop("name", hasControllerLayer ? controllerLayers[i].name : null)
+                                .Prop("weight", hasRuntimeLayer ? animator.GetLayerWeight(i) : hasControllerLayer ? controllerLayers[i].defaultWeight : 0f)
                                 .Prop("currentStateHash", (long)stateInfo.fullPathHash)
                                 .Prop("currentStateNormalizedTime", stateInfo.normalizedTime)
                                 .Prop("currentStateLength", stateInfo.length)
@@ -351,34 +434,24 @@ namespace UnityCli
             {
                 return ErrorJson("E_ANIMATOR_PARAMETER_NAME_REQUIRED", "Animator get-parameter requires --parameter-name <name>.", "Pass the name of an Animator parameter.");
             }
-            // Find the parameter definition to determine its type
-            AnimatorControllerParameter foundParam = null;
-            for (var i = 0; i < animator.parameterCount; i++)
+            var param = FindAnimatorParameter(animator, parameterName);
+            if (param == null)
             {
-                var p = animator.GetParameter(i);
-                if (p.name == parameterName)
-                {
-                    foundParam = p;
-                    break;
-                }
+                return ErrorJson("E_ANIMATOR_PARAMETER_NOT_FOUND", "Parameter '" + parameterName + "' not found on Animator: " + HierarchyPath(gameObject), "Run tools run animator.get-info --input '{\"target\":\"<go>\"}' to list available parameters.");
             }
-            if (foundParam == null)
-            {
-                return ErrorJson("E_ANIMATOR_PARAMETER_NOT_FOUND", "Parameter '" + parameterName + "' not found on Animator: " + HierarchyPath(gameObject), "Run animator.get-info --target <go> to list available parameters.");
-            }
-            var param = foundParam;
+            var hasRuntimeValue = AnimatorHasRuntimeParameter(animator, parameterName);
             object value;
             switch (param.type)
             {
                 case AnimatorControllerParameterType.Float:
-                    value = animator.GetFloat(parameterName);
+                    value = hasRuntimeValue ? animator.GetFloat(parameterName) : param.defaultFloat;
                     break;
                 case AnimatorControllerParameterType.Int:
-                    value = (long)animator.GetInteger(parameterName);
+                    value = hasRuntimeValue ? (long)animator.GetInteger(parameterName) : (long)param.defaultInt;
                     break;
                 case AnimatorControllerParameterType.Bool:
                 case AnimatorControllerParameterType.Trigger:
-                    value = animator.GetBool(parameterName);
+                    value = hasRuntimeValue ? animator.GetBool(parameterName) : param.defaultBool;
                     break;
                 default:
                     value = null;
@@ -407,23 +480,6 @@ namespace UnityCli
             {
                 return ErrorJson("E_ANIMATOR_PARAMETER_NAME_REQUIRED", "Animator set-parameter requires --parameter-name <name>.", "Pass the name of an Animator parameter.");
             }
-            // Find parameter definition to determine type
-            AnimatorControllerParameter foundParam = null;
-            for (var i = 0; i < animator.parameterCount; i++)
-            {
-                var p = animator.GetParameter(i);
-                if (p.name == parameterName)
-                {
-                    foundParam = p;
-                    break;
-                }
-            }
-            if (foundParam == null)
-            {
-                return ErrorJson("E_ANIMATOR_PARAMETER_NOT_FOUND", "Parameter '" + parameterName + "' not found on Animator: " + HierarchyPath(gameObject), "Run animator.get-info --target <go> to list available parameters.");
-            }
-            var param = foundParam;
-            var paramType = request.StringArg("parameterType");
             // In edit mode, modify the AnimatorController asset defaults.
             // unity-mcp also has a play-mode path (runtime SetFloat/SetInteger/SetBool),
             // but alps-unity-cli's execute guard blocks bridge write commands in Play Mode,
@@ -432,6 +488,11 @@ namespace UnityCli
             if (ac == null)
             {
                 return ErrorJson("E_ANIMATOR_NO_CONTROLLER", "Animator has no AnimatorController assigned (cannot set parameter defaults in edit mode): " + HierarchyPath(gameObject), "Assign an AnimatorController asset with at least one parameter, then retry.");
+            }
+            var param = FindAnimatorParameter(animator, parameterName);
+            if (param == null)
+            {
+                return ErrorJson("E_ANIMATOR_PARAMETER_NOT_FOUND", "Parameter '" + parameterName + "' not found on Animator: " + HierarchyPath(gameObject), "Run tools run animator.get-info --input '{\"target\":\"<go>\"}' to list available parameters.");
             }
             Undo.RecordObject(ac, "Set Animator Parameter Default");
             var parameters = ac.parameters;
@@ -462,7 +523,7 @@ namespace UnityCli
             }
             if (!found)
             {
-                return ErrorJson("E_ANIMATOR_PARAMETER_NOT_FOUND", "Parameter '" + parameterName + "' not found on AnimatorController: " + ac.name, "Run animator.get-info --target <go> to list available parameters.");
+                return ErrorJson("E_ANIMATOR_PARAMETER_NOT_FOUND", "Parameter '" + parameterName + "' not found on AnimatorController: " + ac.name, "Run tools run animator.get-info --input '{\"target\":\"<go>\"}' to list available parameters.");
             }
             ac.parameters = parameters;
             EditorUtility.SetDirty(ac);
@@ -486,9 +547,13 @@ namespace UnityCli
             {
                 return ErrorJson("E_ANIMATOR_NOT_FOUND", "Animator component not found on target: " + HierarchyPath(gameObject), "Add an Animator component or choose another target.");
             }
-            if (animator.runtimeAnimatorController == null || animator.layerCount <= 0)
+            var controller = animator.runtimeAnimatorController as AnimatorController;
+            var controllerLayers = controller == null || controller.layers == null ? new AnimatorControllerLayer[0] : controller.layers;
+            var runtimeLayerCount = animator.layerCount;
+            var effectiveLayerCount = runtimeLayerCount > 0 ? runtimeLayerCount : controllerLayers.Length;
+            if (animator.runtimeAnimatorController == null || effectiveLayerCount <= 0)
             {
-                return ErrorJson("E_ANIMATION_NO_CONTROLLER", "Animator has no RuntimeAnimatorController assigned (layerCount=0): " + HierarchyPath(gameObject), "Assign a RuntimeAnimatorController with at least one layer, then retry.");
+                return ErrorJson("E_ANIMATION_NO_CONTROLLER", "Animator has no RuntimeAnimatorController assigned or no layers are available: " + HierarchyPath(gameObject), "Assign a RuntimeAnimatorController with at least one layer, then retry.");
             }
             var stateName = request.StringArg("state");
             if (string.IsNullOrEmpty(stateName))
@@ -497,9 +562,23 @@ namespace UnityCli
             }
             var duration = request.FloatArg("duration", 0.25f);
             var layer = request.IntArg("layer", -1);
-            if (layer >= 0 && layer >= animator.layerCount)
+            if (layer >= 0 && layer >= effectiveLayerCount)
             {
-                return ErrorJson("E_ANIMATION_LAYER_INVALID", "Animator layer is out of range: " + layer.ToString(CultureInfo.InvariantCulture), "Run animator.get-info --target <go> to inspect layer count.");
+                return ErrorJson("E_ANIMATION_LAYER_INVALID", "Animator layer is out of range: " + layer.ToString(CultureInfo.InvariantCulture), "Run tools run animator.get-info --input '{\"target\":\"<go>\"}' to inspect layer count.");
+            }
+            var stateLookupLayer = layer >= 0 ? layer : 0;
+            if (controller != null && stateLookupLayer >= 0 && stateLookupLayer < controllerLayers.Length)
+            {
+                var stateMachine = controllerLayers[stateLookupLayer].stateMachine;
+                if (stateMachine != null && FindStateInLayer(stateMachine, stateName) == null)
+                {
+                    return ErrorJson("E_STATE_NOT_FOUND", "Animator state '" + stateName + "' not found in layer " + stateLookupLayer.ToString(CultureInfo.InvariantCulture) + ".", "Run tools run controller.get-info with the assigned controllerPath to inspect available states.");
+                }
+            }
+            if (runtimeLayerCount <= 0)
+            {
+                animator.Rebind();
+                animator.Update(0f);
             }
             animator.CrossFade(stateName, duration, layer);
             animator.Update(0f);
@@ -586,7 +665,7 @@ namespace UnityCli
             var path = NormalizeAssetPath(rawPath);
             if (string.IsNullOrEmpty(path))
             {
-                throw new BridgeCommandException("E_CONTROLLER_PATH_REQUIRED", "Pass --controller-path <Assets/...>.controller>.", "Use unity_cli controller create <path> to create one first.");
+                throw new BridgeCommandException("E_CONTROLLER_PATH_REQUIRED", "Pass --controller-path <Assets/...>.controller>.", "Use tools run controller.create --input '{\"controllerPath\":\"<Assets/...>.controller\"}' to create one first.");
             }
             if (!path.EndsWith(".controller", StringComparison.OrdinalIgnoreCase))
             {
@@ -595,11 +674,14 @@ namespace UnityCli
             return path;
         }
 
+        /// <summary>按短名或 Base Layer.State 这类完整路径查找 Controller 状态。</summary>
         private static AnimatorState FindStateInLayer(AnimatorStateMachine sm, string stateName)
         {
             foreach (var cs in sm.states)
             {
-                if (cs.state != null && cs.state.name == stateName) return cs.state;
+                if (cs.state == null) continue;
+                if (cs.state.name == stateName) return cs.state;
+                if (!string.IsNullOrEmpty(stateName) && stateName.EndsWith("." + cs.state.name, StringComparison.Ordinal)) return cs.state;
             }
             return null;
         }
@@ -634,31 +716,40 @@ namespace UnityCli
             var controller = LoadControllerAsset(controllerPath);
             if (controller == null)
             {
-                return ErrorJson("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + controllerPath, "Check the path or create one with unity_cli controller create <path>.");
+                return ErrorJson("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + controllerPath, "Check the path or create one with tools run controller.create --input '{\"controllerPath\":\"<Assets/...>.controller\"}'.");
             }
             var stateName = request.StringArg("stateName");
             if (string.IsNullOrEmpty(stateName))
             {
-                return ErrorJson("E_STATE_NAME_REQUIRED", "controller add-state requires --state-name <name>.", "Pass a name for the new state.");
+                return ErrorJson("E_STATE_NAME_REQUIRED", "controller.add-state requires stateName.", "Pass a name for the new state.");
             }
             var layerIndex = request.IntArg("layerIndex", 0);
             if (layerIndex < 0 || layerIndex >= controller.layers.Length)
             {
-                return ErrorJson("E_LAYER_INDEX_INVALID", "Layer index " + layerIndex.ToString(CultureInfo.InvariantCulture) + " out of range (controller has " + controller.layers.Length.ToString(CultureInfo.InvariantCulture) + " layers).", "Use controller get-info <path> to inspect available layers.");
+                return ErrorJson("E_LAYER_INDEX_INVALID", "Layer index " + layerIndex.ToString(CultureInfo.InvariantCulture) + " out of range (controller has " + controller.layers.Length.ToString(CultureInfo.InvariantCulture) + " layers).", "Run tools run controller.get-info with the same controllerPath to inspect available layers.");
             }
             var rootStateMachine = controller.layers[layerIndex].stateMachine;
             if (FindStateInLayer(rootStateMachine, stateName) != null)
             {
                 return ErrorJson("E_STATE_EXISTS", "State '" + stateName + "' already exists in layer " + layerIndex.ToString(CultureInfo.InvariantCulture) + ".", "Choose a different state name or use a different layer.");
             }
-            Undo.RecordObject(controller, "Add Animator State");
-            var state = rootStateMachine.AddState(stateName);
-            // Optionally assign a clip
+            // 先校验可选 clip，避免错误路径先创建 state 后返回失败。
             var clipPath = request.StringArg("clipPath");
+            AnimationClip clip = null;
             if (!string.IsNullOrEmpty(clipPath))
             {
-                var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(NormalizeAssetPath(clipPath));
-                if (clip != null) state.motion = clip;
+                var normalizedClipPath = NormalizeAssetPath(clipPath);
+                clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(normalizedClipPath);
+                if (clip == null)
+                {
+                    return ErrorJson("E_CLIP_NOT_FOUND", "AnimationClip not found at: " + normalizedClipPath, "Create the clip first with tools run animation.clip using action=create, or omit clipPath to add an empty state.");
+                }
+            }
+            Undo.RecordObject(controller, "Add Animator State");
+            var state = rootStateMachine.AddState(stateName);
+            if (clip != null)
+            {
+                state.motion = clip;
             }
             var speed = request.FloatArg("speed", 1f);
             state.speed = speed;
@@ -686,18 +777,18 @@ namespace UnityCli
             var controller = LoadControllerAsset(controllerPath);
             if (controller == null)
             {
-                return ErrorJson("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + controllerPath, "Check the path or create one with unity_cli controller create <path>.");
+                return ErrorJson("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + controllerPath, "Check the path or create one with tools run controller.create --input '{\"controllerPath\":\"<Assets/...>.controller\"}'.");
             }
             var fromStateName = request.StringArg("fromState");
             var toStateName = request.StringArg("toState");
             if (string.IsNullOrEmpty(fromStateName) || string.IsNullOrEmpty(toStateName))
             {
-                return ErrorJson("E_STATE_NAME_REQUIRED", "controller add-transition requires --from-state and --to-state.", "Pass source and destination state names.");
+                return ErrorJson("E_STATE_NAME_REQUIRED", "controller.add-transition requires fromState and toState.", "Pass source and destination state names.");
             }
             var layerIndex = request.IntArg("layerIndex", 0);
             if (layerIndex < 0 || layerIndex >= controller.layers.Length)
             {
-                return ErrorJson("E_LAYER_INDEX_INVALID", "Layer index " + layerIndex.ToString(CultureInfo.InvariantCulture) + " out of range.", "Use controller get-info <path> to inspect available layers.");
+                return ErrorJson("E_LAYER_INDEX_INVALID", "Layer index " + layerIndex.ToString(CultureInfo.InvariantCulture) + " out of range.", "Run tools run controller.get-info with the same controllerPath to inspect available layers.");
             }
             var rootStateMachine = controller.layers[layerIndex].stateMachine;
             var isAnyState = string.Equals(fromStateName, "AnyState", StringComparison.OrdinalIgnoreCase)
@@ -706,7 +797,7 @@ namespace UnityCli
             var toState = FindStateInLayer(rootStateMachine, toStateName);
             if (toState == null)
             {
-                return ErrorJson("E_STATE_NOT_FOUND", "Destination state '" + toStateName + "' not found in layer " + layerIndex.ToString(CultureInfo.InvariantCulture) + ".", "Use controller get-info <path> to inspect available states.");
+                return ErrorJson("E_STATE_NOT_FOUND", "Destination state '" + toStateName + "' not found in layer " + layerIndex.ToString(CultureInfo.InvariantCulture) + ".", "Run tools run controller.get-info with the same controllerPath to inspect available states.");
             }
             Undo.RecordObject(controller, "Add Animator Transition");
             AnimatorStateTransition transition;
@@ -720,7 +811,7 @@ namespace UnityCli
                 var fromState = FindStateInLayer(rootStateMachine, fromStateName);
                 if (fromState == null)
                 {
-                    return ErrorJson("E_STATE_NOT_FOUND", "Source state '" + fromStateName + "' not found in layer " + layerIndex.ToString(CultureInfo.InvariantCulture) + ".", "Use controller get-info <path> to inspect available states.");
+                    return ErrorJson("E_STATE_NOT_FOUND", "Source state '" + fromStateName + "' not found in layer " + layerIndex.ToString(CultureInfo.InvariantCulture) + ".", "Run tools run controller.get-info with the same controllerPath to inspect available states.");
                 }
                 transition = fromState.AddTransition(toState);
             }
@@ -778,12 +869,12 @@ namespace UnityCli
             var controller = LoadControllerAsset(controllerPath);
             if (controller == null)
             {
-                return ErrorJson("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + controllerPath, "Check the path or create one with unity_cli controller create <path>.");
+                return ErrorJson("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + controllerPath, "Check the path or create one with tools run controller.create --input '{\"controllerPath\":\"<Assets/...>.controller\"}'.");
             }
             var paramName = request.StringArg("parameterName");
             if (string.IsNullOrEmpty(paramName))
             {
-                return ErrorJson("E_PARAMETER_NAME_REQUIRED", "controller add-parameter requires --parameter-name <name>.", "Pass a name for the new parameter.");
+                return ErrorJson("E_PARAMETER_NAME_REQUIRED", "controller.add-parameter requires parameterName.", "Pass a name for the new parameter.");
             }
             var typeStr = (request.StringArg("parameterType") ?? "float").ToLowerInvariant();
             AnimatorControllerParameterType paramType;
@@ -849,7 +940,7 @@ namespace UnityCli
             var controller = LoadControllerAsset(controllerPath);
             if (controller == null)
             {
-                return ErrorJson("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + controllerPath, "Check the path or create one with unity_cli controller create <path>.");
+                return ErrorJson("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + controllerPath, "Check the path or create one with tools run controller.create --input '{\"controllerPath\":\"<Assets/...>.controller\"}'.");
             }
             var writer = new UnityCliJsonWriter().BeginObject()
                 .Prop("path", controllerPath)
@@ -862,29 +953,40 @@ namespace UnityCli
                     for (int i = 0; i < controller.layers.Length; i++)
                     {
                         var layer = controller.layers[i];
+                        var stateMachine = layer.stateMachine;
+                        var anyStateTransitions = stateMachine != null && stateMachine.anyStateTransitions != null
+                            ? stateMachine.anyStateTransitions
+                            : new AnimatorStateTransition[0];
                         arr.BeginObject()
                             .Prop("index", (long)i)
                             .Prop("name", layer.name)
                             .Prop("defaultWeight", layer.defaultWeight)
                             .Prop("blendingMode", layer.blendingMode.ToString())
-                            .Prop("stateCount", (long)(layer.stateMachine != null ? layer.stateMachine.states.Length : 0))
+                            .Prop("stateCount", (long)(stateMachine != null ? stateMachine.states.Length : 0))
+                            .Prop("anyStateTransitionCount", (long)anyStateTransitions.Length)
                             .PropArray("states", stateArr =>
                             {
-                                if (layer.stateMachine != null)
+                                if (stateMachine != null)
                                 {
-                                    foreach (var cs in layer.stateMachine.states)
+                                    foreach (var cs in stateMachine.states)
                                     {
+                                        if (cs.state == null) continue;
+                                        var transitions = cs.state.transitions ?? new AnimatorStateTransition[0];
                                         stateArr.BeginObject()
                                             .Prop("name", cs.state.name)
                                             .Prop("speed", cs.state.speed)
                                             .Prop("hasMotion", cs.state.motion != null)
                                             .Prop("motionName", cs.state.motion != null ? cs.state.motion.name : null)
-                                            .Prop("isDefault", layer.stateMachine.defaultState == cs.state)
-                                            .Prop("transitionCount", (long)cs.state.transitions.Length)
+                                            .Prop("motionType", cs.state.motion != null ? cs.state.motion.GetType().Name : null)
+                                            .PropRaw("blendTree", BlendTreeJson(cs.state.motion as BlendTree))
+                                            .Prop("isDefault", stateMachine.defaultState == cs.state)
+                                            .Prop("transitionCount", (long)transitions.Length)
+                                            .PropArray("transitions", transitionArr => WriteControllerTransitions(transitionArr, transitions))
                                             .EndObject();
                                     }
                                 }
                             })
+                            .PropArray("anyStateTransitions", transitionArr => WriteControllerTransitions(transitionArr, anyStateTransitions))
                             .EndObject();
                     }
                 })
@@ -906,20 +1008,76 @@ namespace UnityCli
             return SuccessJson(writer.ToString());
         }
 
+        /// <summary>写出 BlendTree 参数与子 motion 明细，供 AI 审计 blend tree 子节点是否落盘。</summary>
+        private static string BlendTreeJson(BlendTree blendTree)
+        {
+            if (blendTree == null) return "null";
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("name", blendTree.name)
+                .Prop("blendType", blendTree.blendType.ToString())
+                .Prop("blendParameter", blendTree.blendParameter)
+                .Prop("blendParameterY", blendTree.blendParameterY)
+                .Prop("childCount", (long)blendTree.children.Length)
+                .PropArray("children", arr =>
+                {
+                    foreach (var child in blendTree.children)
+                    {
+                        var motionPath = child.motion != null ? NormalizeAssetPath(AssetDatabase.GetAssetPath(child.motion)) : null;
+                        arr.BeginObject()
+                            .Prop("motionName", child.motion != null ? child.motion.name : null)
+                            .Prop("motionType", child.motion != null ? child.motion.GetType().Name : null)
+                            .Prop("motionPath", motionPath)
+                            .Prop("threshold", child.threshold)
+                            .PropObject("position", pos => pos.Prop("x", child.position.x).Prop("y", child.position.y))
+                            .EndObject();
+                    }
+                })
+                .EndObject()
+                .ToString();
+        }
+
+        /// <summary>写出 AnimatorController transition 的目标、时间参数与条件，供 AI 审计状态机修改结果。</summary>
+        private static void WriteControllerTransitions(UnityCliJsonWriter arr, AnimatorStateTransition[] transitions)
+        {
+            foreach (var transition in transitions ?? new AnimatorStateTransition[0])
+            {
+                if (transition == null) continue;
+                var conditions = transition.conditions ?? new AnimatorCondition[0];
+                arr.BeginObject()
+                    .Prop("destinationStateName", transition.destinationState != null ? transition.destinationState.name : null)
+                    .Prop("hasExitTime", transition.hasExitTime)
+                    .Prop("duration", transition.duration)
+                    .Prop("exitTime", transition.exitTime)
+                    .Prop("conditionCount", (long)conditions.Length)
+                    .PropArray("conditions", conditionArr =>
+                    {
+                        foreach (var condition in conditions)
+                        {
+                            conditionArr.BeginObject()
+                                .Prop("parameter", condition.parameter)
+                                .Prop("mode", condition.mode.ToString())
+                                .Prop("threshold", condition.threshold)
+                                .EndObject();
+                        }
+                    })
+                    .EndObject();
+            }
+        }
+
         private static string ControllerAssign(BridgeRequest request)
         {
             var controllerPath = RequireControllerPath(request.StringArg("controllerPath"));
             var controller = LoadControllerAsset(controllerPath);
             if (controller == null)
             {
-                return ErrorJson("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + controllerPath, "Check the path or create one with unity_cli controller create <path>.");
+                return ErrorJson("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + controllerPath, "Check the path or create one with tools run controller.create --input '{\"controllerPath\":\"<Assets/...>.controller\"}'.");
             }
             var targetStr = request.StringArg("target");
             if (string.IsNullOrEmpty(targetStr))
             {
-                return ErrorJson("E_TARGET_REQUIRED", "controller assign requires --target <GameObject>.", "Pass the name or path of a target GameObject.");
+                return ErrorJson("E_TARGET_REQUIRED", "controller.assign requires target.", "Pass the name or path of a target GameObject.");
             }
-            var gameObject = ResolveUniqueTarget(targetStr, "controller assign requires --target <GameObject>.");
+            var gameObject = ResolveUniqueTarget(targetStr, "controller.assign requires target.");
             var animator = gameObject.GetComponent<Animator>();
             if (animator == null)
             {
@@ -947,12 +1105,12 @@ namespace UnityCli
             var controller = LoadControllerAsset(controllerPath);
             if (controller == null)
             {
-                return ErrorJson("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + controllerPath, "Check the path or create one with unity_cli controller create <path>.");
+                return ErrorJson("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + controllerPath, "Check the path or create one with tools run controller.create --input '{\"controllerPath\":\"<Assets/...>.controller\"}'.");
             }
             var layerName = request.StringArg("layerName");
             if (string.IsNullOrEmpty(layerName))
             {
-                return ErrorJson("E_LAYER_NAME_REQUIRED", "controller add-layer requires --layer-name <name>.", "Pass a name for the new layer.");
+                return ErrorJson("E_LAYER_NAME_REQUIRED", "controller.add-layer requires layerName.", "Pass a name for the new layer.");
             }
             var weight = request.FloatArg("weight", 1f);
             var blendingModeStr = (request.StringArg("blendingMode") ?? "override").ToLowerInvariant();
@@ -987,13 +1145,13 @@ namespace UnityCli
             var controller = LoadControllerAsset(controllerPath);
             if (controller == null)
             {
-                return ErrorJson("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + controllerPath, "Check the path or create one with unity_cli controller create <path>.");
+                return ErrorJson("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + controllerPath, "Check the path or create one with tools run controller.create --input '{\"controllerPath\":\"<Assets/...>.controller\"}'.");
             }
             var layerIndexVal = request.OptionalIntArg("layerIndex");
             var layerName = request.StringArg("layerName");
             if (!layerIndexVal.HasValue && string.IsNullOrEmpty(layerName))
             {
-                return ErrorJson("E_LAYER_IDENTIFIER_REQUIRED", "controller remove-layer requires --layer-index or --layer-name.", "Pass either a layer index or a layer name.");
+                return ErrorJson("E_LAYER_IDENTIFIER_REQUIRED", "controller.remove-layer requires layerIndex or layerName.", "Pass either a layer index or a layer name.");
             }
             var layers = controller.layers;
             int targetIndex;
@@ -1002,7 +1160,7 @@ namespace UnityCli
                 targetIndex = layerIndexVal.Value;
                 if (targetIndex < 0 || targetIndex >= layers.Length)
                 {
-                    return ErrorJson("E_LAYER_INDEX_INVALID", "Layer index " + targetIndex.ToString(CultureInfo.InvariantCulture) + " out of range (0-" + (layers.Length - 1).ToString(CultureInfo.InvariantCulture) + ").", "Use controller get-info <path> to inspect available layers.");
+                    return ErrorJson("E_LAYER_INDEX_INVALID", "Layer index " + targetIndex.ToString(CultureInfo.InvariantCulture) + " out of range (0-" + (layers.Length - 1).ToString(CultureInfo.InvariantCulture) + ").", "Run tools run controller.get-info with the same controllerPath to inspect available layers.");
                 }
                 if (targetIndex == 0)
                 {
@@ -1019,7 +1177,7 @@ namespace UnityCli
                 }
                 if (targetIndex < 0)
                 {
-                    return ErrorJson("E_LAYER_NOT_FOUND", "Layer '" + layerName + "' not found.", "Use controller get-info <path> to inspect available layers.");
+                    return ErrorJson("E_LAYER_NOT_FOUND", "Layer '" + layerName + "' not found.", "Run tools run controller.get-info with the same controllerPath to inspect available layers.");
                 }
                 if (targetIndex == 0)
                 {
@@ -1046,13 +1204,13 @@ namespace UnityCli
             var controller = LoadControllerAsset(controllerPath);
             if (controller == null)
             {
-                return ErrorJson("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + controllerPath, "Check the path or create one with unity_cli controller create <path>.");
+                return ErrorJson("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + controllerPath, "Check the path or create one with tools run controller.create --input '{\"controllerPath\":\"<Assets/...>.controller\"}'.");
             }
             var layerIndexVal = request.OptionalIntArg("layerIndex");
             var layerName = request.StringArg("layerName");
             if (!layerIndexVal.HasValue && string.IsNullOrEmpty(layerName))
             {
-                return ErrorJson("E_LAYER_IDENTIFIER_REQUIRED", "controller set-layer-weight requires --layer-index or --layer-name.", "Pass either a layer index or a layer name.");
+                return ErrorJson("E_LAYER_IDENTIFIER_REQUIRED", "controller.set-layer-weight requires layerIndex or layerName.", "Pass either a layer index or a layer name.");
             }
             var weight = request.FloatArg("weight", 1f);
             var layers = controller.layers;
@@ -1062,7 +1220,7 @@ namespace UnityCli
                 targetIndex = layerIndexVal.Value;
                 if (targetIndex < 0 || targetIndex >= layers.Length)
                 {
-                    return ErrorJson("E_LAYER_INDEX_INVALID", "Layer index " + targetIndex.ToString(CultureInfo.InvariantCulture) + " out of range.", "Use controller get-info <path> to inspect available layers.");
+                    return ErrorJson("E_LAYER_INDEX_INVALID", "Layer index " + targetIndex.ToString(CultureInfo.InvariantCulture) + " out of range.", "Run tools run controller.get-info with the same controllerPath to inspect available layers.");
                 }
                 layerName = layers[targetIndex].name;
             }
@@ -1075,7 +1233,7 @@ namespace UnityCli
                 }
                 if (targetIndex < 0)
                 {
-                    return ErrorJson("E_LAYER_NOT_FOUND", "Layer '" + layerName + "' not found.", "Use controller get-info <path> to inspect available layers.");
+                    return ErrorJson("E_LAYER_NOT_FOUND", "Layer '" + layerName + "' not found.", "Run tools run controller.get-info with the same controllerPath to inspect available layers.");
                 }
             }
             Undo.RecordObject(controller, "Set Layer Weight");
@@ -1102,24 +1260,28 @@ namespace UnityCli
             var controller = LoadControllerAsset(controllerPath);
             if (controller == null)
             {
-                return ErrorJson("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + controllerPath, "Check the path or create one with unity_cli controller create <path>.");
+                return ErrorJson("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + controllerPath, "Check the path or create one with tools run controller.create --input '{\"controllerPath\":\"<Assets/...>.controller\"}'.");
             }
             var stateName = request.StringArg("stateName");
             if (string.IsNullOrEmpty(stateName))
             {
-                return ErrorJson("E_STATE_NAME_REQUIRED", "controller create-blend-tree-1d requires --state-name <name>.", "Pass a name for the blend tree state.");
+                return ErrorJson("E_STATE_NAME_REQUIRED", "controller.create-blend-tree-1d requires stateName.", "Pass a name for the blend tree state.");
             }
             var blendParameter = request.StringArg("blendParameter");
             if (string.IsNullOrEmpty(blendParameter))
             {
-                return ErrorJson("E_BLEND_PARAMETER_REQUIRED", "controller create-blend-tree-1d requires --blend-parameter <name>.", "Pass the name of the blend parameter.");
+                return ErrorJson("E_BLEND_PARAMETER_REQUIRED", "controller.create-blend-tree-1d requires blendParameter.", "Pass the name of the blend parameter.");
             }
             var layerIndex = request.IntArg("layerIndex", 0);
             if (layerIndex < 0 || layerIndex >= controller.layers.Length)
             {
-                return ErrorJson("E_LAYER_INDEX_INVALID", "Layer index " + layerIndex.ToString(CultureInfo.InvariantCulture) + " out of range.", "Use controller get-info <path> to inspect available layers.");
+                return ErrorJson("E_LAYER_INDEX_INVALID", "Layer index " + layerIndex.ToString(CultureInfo.InvariantCulture) + " out of range.", "Run tools run controller.get-info with the same controllerPath to inspect available layers.");
             }
             var stateMachine = controller.layers[layerIndex].stateMachine;
+            if (FindStateInLayer(stateMachine, stateName) != null)
+            {
+                return ErrorJson("E_STATE_EXISTS", "State '" + stateName + "' already exists in layer " + layerIndex.ToString(CultureInfo.InvariantCulture) + ".", "Choose a different state name or use controller.get-info to inspect existing states.");
+            }
             Undo.RecordObject(controller, "Create Blend Tree 1D");
             var state = stateMachine.AddState(stateName);
             var blendTree = new BlendTree
@@ -1151,23 +1313,23 @@ namespace UnityCli
             var controller = LoadControllerAsset(controllerPath);
             if (controller == null)
             {
-                return ErrorJson("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + controllerPath, "Check the path or create one with unity_cli controller create <path>.");
+                return ErrorJson("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + controllerPath, "Check the path or create one with tools run controller.create --input '{\"controllerPath\":\"<Assets/...>.controller\"}'.");
             }
             var stateName = request.StringArg("stateName");
             if (string.IsNullOrEmpty(stateName))
             {
-                return ErrorJson("E_STATE_NAME_REQUIRED", "controller create-blend-tree-2d requires --state-name <name>.", "Pass a name for the blend tree state.");
+                return ErrorJson("E_STATE_NAME_REQUIRED", "controller.create-blend-tree-2d requires stateName.", "Pass a name for the blend tree state.");
             }
             var blendParameterX = request.StringArg("blendParameterX");
             var blendParameterY = request.StringArg("blendParameterY");
             if (string.IsNullOrEmpty(blendParameterX) || string.IsNullOrEmpty(blendParameterY))
             {
-                return ErrorJson("E_BLEND_PARAMETER_REQUIRED", "controller create-blend-tree-2d requires --blend-parameter-x and --blend-parameter-y.", "Pass the names of both blend parameters.");
+                return ErrorJson("E_BLEND_PARAMETER_REQUIRED", "controller.create-blend-tree-2d requires blendParameterX and blendParameterY.", "Pass the names of both blend parameters.");
             }
             var layerIndex = request.IntArg("layerIndex", 0);
             if (layerIndex < 0 || layerIndex >= controller.layers.Length)
             {
-                return ErrorJson("E_LAYER_INDEX_INVALID", "Layer index " + layerIndex.ToString(CultureInfo.InvariantCulture) + " out of range.", "Use controller get-info <path> to inspect available layers.");
+                return ErrorJson("E_LAYER_INDEX_INVALID", "Layer index " + layerIndex.ToString(CultureInfo.InvariantCulture) + " out of range.", "Run tools run controller.get-info with the same controllerPath to inspect available layers.");
             }
             var blendTypeStr = (request.StringArg("blendType") ?? "simpledirectional2d").ToLowerInvariant();
             BlendTreeType blendType;
@@ -1178,6 +1340,10 @@ namespace UnityCli
                 default: blendType = BlendTreeType.SimpleDirectional2D; break;
             }
             var stateMachine = controller.layers[layerIndex].stateMachine;
+            if (FindStateInLayer(stateMachine, stateName) != null)
+            {
+                return ErrorJson("E_STATE_EXISTS", "State '" + stateName + "' already exists in layer " + layerIndex.ToString(CultureInfo.InvariantCulture) + ".", "Choose a different state name or use controller.get-info to inspect existing states.");
+            }
             Undo.RecordObject(controller, "Create Blend Tree 2D");
             var state = stateMachine.AddState(stateName);
             var blendTree = new BlendTree
@@ -1211,17 +1377,17 @@ namespace UnityCli
             var controller = LoadControllerAsset(controllerPath);
             if (controller == null)
             {
-                return ErrorJson("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + controllerPath, "Check the path or create one with unity_cli controller create <path>.");
+                return ErrorJson("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + controllerPath, "Check the path or create one with tools run controller.create --input '{\"controllerPath\":\"<Assets/...>.controller\"}'.");
             }
             var stateName = request.StringArg("stateName");
             if (string.IsNullOrEmpty(stateName))
             {
-                return ErrorJson("E_STATE_NAME_REQUIRED", "controller add-blend-tree-child requires --state-name <name>.", "Pass the name of the blend tree state.");
+                return ErrorJson("E_STATE_NAME_REQUIRED", "controller.add-blend-tree-child requires stateName.", "Pass the name of the blend tree state.");
             }
             var clipPath = request.StringArg("clipPath");
             if (string.IsNullOrEmpty(clipPath))
             {
-                return ErrorJson("E_CLIP_PATH_REQUIRED", "controller add-blend-tree-child requires --clip-path <path>.", "Pass the path of the AnimationClip to add.");
+                return ErrorJson("E_CLIP_PATH_REQUIRED", "controller.add-blend-tree-child requires clipPath.", "Pass the path of the AnimationClip to add.");
             }
             var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(NormalizeAssetPath(clipPath));
             if (clip == null)
@@ -1231,18 +1397,18 @@ namespace UnityCli
             var layerIndex = request.IntArg("layerIndex", 0);
             if (layerIndex < 0 || layerIndex >= controller.layers.Length)
             {
-                return ErrorJson("E_LAYER_INDEX_INVALID", "Layer index " + layerIndex.ToString(CultureInfo.InvariantCulture) + " out of range.", "Use controller get-info <path> to inspect available layers.");
+                return ErrorJson("E_LAYER_INDEX_INVALID", "Layer index " + layerIndex.ToString(CultureInfo.InvariantCulture) + " out of range.", "Run tools run controller.get-info with the same controllerPath to inspect available layers.");
             }
             var stateMachine = controller.layers[layerIndex].stateMachine;
             var state = FindStateInLayer(stateMachine, stateName);
             if (state == null)
             {
-                return ErrorJson("E_STATE_NOT_FOUND", "State '" + stateName + "' not found in layer " + layerIndex.ToString(CultureInfo.InvariantCulture) + ".", "Use controller get-info <path> to inspect available states.");
+                return ErrorJson("E_STATE_NOT_FOUND", "State '" + stateName + "' not found in layer " + layerIndex.ToString(CultureInfo.InvariantCulture) + ".", "Run tools run controller.get-info with the same controllerPath to inspect available states.");
             }
             var blendTree = state.motion as BlendTree;
             if (blendTree == null)
             {
-                return ErrorJson("E_NOT_A_BLEND_TREE", "State '" + stateName + "' does not have a BlendTree motion.", "Create a blend tree state with controller create-blend-tree-1d or create-blend-tree-2d first.");
+                return ErrorJson("E_NOT_A_BLEND_TREE", "State '" + stateName + "' does not have a BlendTree motion.", "Create a blend tree state with tools run controller.create-blend-tree-1d or tools run controller.create-blend-tree-2d first.");
             }
             Undo.RecordObject(blendTree, "Add Blend Tree Child");
             if (blendTree.blendType == BlendTreeType.Simple1D)
@@ -1325,3 +1491,6 @@ namespace UnityCli
     }
 }
 #endif
+
+
+

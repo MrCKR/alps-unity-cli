@@ -129,7 +129,7 @@ export async function handleCapabilitiesCommand(
   }
 
   const data: Record<string, unknown> = {
-    command: "capabilities",
+    command: "diagnose.capabilities",
     mode: runtimeCapabilities ? "hybrid" : "offline",
     requiresUnity: false,
     static: staticCapabilities,

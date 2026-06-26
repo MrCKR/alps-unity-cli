@@ -44,7 +44,7 @@ namespace UnityCli
             var camera = ResolveCamera(request.StringArg("target"));
             if (camera == null)
             {
-                return ErrorJson("E_CAMERA_NOT_FOUND", "Camera not found: " + request.StringArg("target"), "Run unity_cli camera list to inspect available cameras.");
+                return ErrorJson("E_CAMERA_NOT_FOUND", "Camera not found: " + request.StringArg("target"), "Run tools run camera.list, then retry with a camera name, hierarchy path, or instance id from the result.");
             }
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropRaw("camera", CameraJson(camera))
@@ -57,13 +57,13 @@ namespace UnityCli
             var target = request.StringArg("target");
             if (string.IsNullOrEmpty(target))
             {
-                return ErrorJson("E_TARGET_NOT_FOUND", "Camera screenshot requires a target Camera.", "Pass a Camera name, hierarchy path or instance id. Run unity_cli camera list to inspect available cameras.");
+                return ErrorJson("E_TARGET_NOT_FOUND", "Camera screenshot requires a target Camera.", "Pass a Camera name, hierarchy path or instance id. Run tools run camera.list before retrying.");
             }
 
             var camera = ResolveCamera(target);
             if (camera == null)
             {
-                return ErrorJson("E_TARGET_NOT_FOUND", "Camera not found: " + target, "Run unity_cli camera list to inspect available cameras.");
+                return ErrorJson("E_TARGET_NOT_FOUND", "Camera not found: " + target, "Run tools run camera.list, then retry with a camera name, hierarchy path, or instance id from the result.");
             }
 
             var capture = CaptureCamera(camera, request);
@@ -77,12 +77,12 @@ namespace UnityCli
             var overwrite = request.BoolArg("overwrite", false);
             if (File.Exists(outputPath) && !overwrite)
             {
-                throw new BridgeCommandException("E_OUTPUT_EXISTS", "Screenshot output already exists: " + outputPath);
+                throw new BridgeCommandException("E_OUTPUT_EXISTS", "Screenshot output already exists: " + outputPath, "Pass overwrite=true or choose a different output path.");
             }
 
             CreateScreenshotDirectory(outputPath);
-            var width = Math.Max(1, request.IntArg("width", camera.pixelWidth > 0 ? camera.pixelWidth : 1280));
-            var height = Math.Max(1, request.IntArg("height", camera.pixelHeight > 0 ? camera.pixelHeight : 720));
+            var width = ClampScreenshotDimension(request.IntArg("width", camera.pixelWidth > 0 ? camera.pixelWidth : 1280), "width");
+            var height = ClampScreenshotDimension(request.IntArg("height", camera.pixelHeight > 0 ? camera.pixelHeight : 720), "height");
             var transparent = request.BoolArg("transparent", false);
             var quality = Mathf.Clamp(request.IntArg("quality", 95), 1, 100);
             var previousTarget = camera.targetTexture;
@@ -209,20 +209,24 @@ namespace UnityCli
         {
             var name = request.OptionalStringArg("name") ?? "Camera";
             var parent = request.StringArg("parent");
+            var parentGo = string.IsNullOrEmpty(parent) ? null : ResolveUniqueTarget(parent, "camera.create --parent <go> not found.");
+            var position = request.HasArg("position") ? (Vector3?)ParseVector3(request.StringArg("position")) : null;
+            var rotation = request.HasArg("rotation") ? (Vector3?)ParseVector3(request.StringArg("rotation")) : null;
+            var clearFlags = request.HasArg("clearFlags") ? (CameraClearFlags?)ParseCameraClearFlags(request.StringArg("clearFlags")) : null;
+
             var gameObject = new GameObject(name);
-            if (!string.IsNullOrEmpty(parent))
+            if (parentGo != null)
             {
-                var parentGo = ResolveUniqueTarget(parent, "camera.create --parent <go> not found.");
                 gameObject.transform.SetParent(parentGo.transform, false);
             }
             var camera = gameObject.AddComponent<Camera>();
-            if (request.HasArg("position"))
+            if (position.HasValue)
             {
-                gameObject.transform.position = ParseVector3(request.StringArg("position"));
+                gameObject.transform.position = position.Value;
             }
-            if (request.HasArg("rotation"))
+            if (rotation.HasValue)
             {
-                gameObject.transform.eulerAngles = ParseVector3(request.StringArg("rotation"));
+                gameObject.transform.eulerAngles = rotation.Value;
             }
             if (request.HasArg("fieldOfView"))
             {
@@ -236,13 +240,9 @@ namespace UnityCli
             {
                 camera.orthographicSize = request.OptionalFloatArg("orthographicSize").Value;
             }
-            if (request.HasArg("clearFlags"))
+            if (clearFlags.HasValue)
             {
-                var value = request.StringArg("clearFlags");
-                if (Enum.TryParse<CameraClearFlags>(value, true, out var parsed))
-                {
-                    camera.clearFlags = parsed;
-                }
+                camera.clearFlags = clearFlags.Value;
             }
             if (request.HasArg("depth"))
             {
@@ -271,28 +271,30 @@ namespace UnityCli
             var target = request.StringArg("target");
             if (string.IsNullOrEmpty(target))
             {
-                return ErrorJson("E_TARGET_NOT_FOUND", "camera.target requires --target <camera>.", "Run unity_cli camera list to inspect available cameras.");
+                return ErrorJson("E_TARGET_NOT_FOUND", "camera.target requires target.", "Run tools run camera.list, then pass a camera name, hierarchy path, or instance id.");
             }
             var camera = ResolveCamera(target);
             if (camera == null)
             {
-                return ErrorJson("E_CAMERA_NOT_FOUND", "Camera not found: " + target, "Run unity_cli camera list to inspect available cameras.");
+                return ErrorJson("E_CAMERA_NOT_FOUND", "Camera not found: " + target, "Run tools run camera.list, then retry with a camera name, hierarchy path, or instance id from the result.");
             }
+            var lookAtGo = request.HasArg("lookAt") ? ResolveUniqueTarget(request.StringArg("lookAt"), "camera.target --look-at <go> not found.") : null;
+            var position = request.HasArg("position") ? (Vector3?)ParseVector3(request.StringArg("position")) : null;
+            var rotation = request.HasArg("rotation") ? (Vector3?)ParseVector3(request.StringArg("rotation")) : null;
             var effects = new List<string>();
-            if (request.HasArg("lookAt"))
+            if (lookAtGo != null)
             {
-                var lookAtGo = ResolveUniqueTarget(request.StringArg("lookAt"), "camera.target --look-at <go> not found.");
                 camera.transform.LookAt(lookAtGo.transform);
                 effects.Add(EffectJson("camera.target", "lookAt", HierarchyPath(lookAtGo)));
             }
-            if (request.HasArg("position"))
+            if (position.HasValue)
             {
-                camera.transform.position = ParseVector3(request.StringArg("position"));
+                camera.transform.position = position.Value;
                 effects.Add(EffectJson("camera.target", "position", request.StringArg("position")));
             }
-            if (request.HasArg("rotation"))
+            if (rotation.HasValue)
             {
-                camera.transform.eulerAngles = ParseVector3(request.StringArg("rotation"));
+                camera.transform.eulerAngles = rotation.Value;
                 effects.Add(EffectJson("camera.target", "rotation", request.StringArg("rotation")));
             }
             EditorUtility.SetDirty(camera);
@@ -308,13 +310,14 @@ namespace UnityCli
             var target = request.StringArg("target");
             if (string.IsNullOrEmpty(target))
             {
-                return ErrorJson("E_TARGET_NOT_FOUND", "camera.lens requires --target <camera>.", "Run unity_cli camera list to inspect available cameras.");
+                return ErrorJson("E_TARGET_NOT_FOUND", "camera.lens requires target.", "Run tools run camera.list, then pass a camera name, hierarchy path, or instance id.");
             }
             var camera = ResolveCamera(target);
             if (camera == null)
             {
-                return ErrorJson("E_CAMERA_NOT_FOUND", "Camera not found: " + target, "Run unity_cli camera list to inspect available cameras.");
+                return ErrorJson("E_CAMERA_NOT_FOUND", "Camera not found: " + target, "Run tools run camera.list, then retry with a camera name, hierarchy path, or instance id from the result.");
             }
+            var clearFlags = request.HasArg("clearFlags") ? (CameraClearFlags?)ParseCameraClearFlags(request.StringArg("clearFlags")) : null;
             var effects = new List<string>();
             if (request.HasArg("fieldOfView"))
             {
@@ -341,14 +344,10 @@ namespace UnityCli
                 camera.farClipPlane = request.OptionalFloatArg("farClipPlane").Value;
                 effects.Add(EffectJson("camera.lens", "farClipPlane", Number(camera.farClipPlane)));
             }
-            if (request.HasArg("clearFlags"))
+            if (clearFlags.HasValue)
             {
-                var value = request.StringArg("clearFlags");
-                if (Enum.TryParse<CameraClearFlags>(value, true, out var parsed))
-                {
-                    camera.clearFlags = parsed;
-                    effects.Add(EffectJson("camera.lens", "clearFlags", value));
-                }
+                camera.clearFlags = clearFlags.Value;
+                effects.Add(EffectJson("camera.lens", "clearFlags", request.StringArg("clearFlags")));
             }
             if (request.HasArg("depth"))
             {
@@ -363,12 +362,31 @@ namespace UnityCli
                 .EndObject().ToString());
         }
 
+        private static int ClampScreenshotDimension(int value, string name)
+        {
+            if (value < 1 || value > 8192)
+            {
+                throw new BridgeCommandException("E_SCREENSHOT_SIZE_INVALID", "Camera screenshot " + name + " must be between 1 and 8192 pixels: " + value.ToString(CultureInfo.InvariantCulture), "Use a smaller width/height before retrying.");
+            }
+            return value;
+        }
+
+        private static CameraClearFlags ParseCameraClearFlags(string value)
+        {
+            CameraClearFlags parsed;
+            if (!Enum.TryParse<CameraClearFlags>(value, true, out parsed))
+            {
+                throw new BridgeCommandException("E_CAMERA_CLEAR_FLAGS_INVALID", "Unsupported Camera clearFlags value: " + value, "Use Skybox, SolidColor, Depth, or Nothing.");
+            }
+            return parsed;
+        }
+
         private static string CameraMultiview(BridgeRequest request)
         {
             var targets = request.StringArg("targets");
             if (string.IsNullOrEmpty(targets))
             {
-                return ErrorJson("E_TARGET_NOT_FOUND", "camera.multiview requires --targets <cam1,cam2,...>.", "Run unity_cli camera list to inspect available cameras.");
+                return ErrorJson("E_TARGET_NOT_FOUND", "camera.multiview requires targets.", "Run tools run camera.list, then pass comma-separated camera names, hierarchy paths, or instance ids.");
             }
             var names = targets.Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries);
             var cameras = new List<Camera>();
@@ -377,7 +395,7 @@ namespace UnityCli
                 var camera = ResolveCamera(name.Trim());
                 if (camera == null)
                 {
-                    return ErrorJson("E_CAMERA_NOT_FOUND", "Camera not found: " + name.Trim(), "Run unity_cli camera list to inspect available cameras.");
+                    return ErrorJson("E_CAMERA_NOT_FOUND", "Camera not found: " + name.Trim(), "Run tools run camera.list, then retry with camera names, hierarchy paths, or instance ids from the result.");
                 }
                 cameras.Add(camera);
             }

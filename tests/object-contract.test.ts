@@ -32,11 +32,13 @@ test("object group tools exist with correct safety hints", () => {
   const getData = findToolByName("object.get-data")!;
   assert.equal(getData.destructiveHint, false);
   assert.equal(getData.handler, "bridge");
+  assert.equal(getData.playModeSupport, "supported");
   assert.equal(getData.equivalentUnityMcp, "object-get-data");
 
   const modify = findToolByName("object.modify")!;
   assert.equal(modify.destructiveHint, true);
   assert.equal(modify.supportsDryRun, true);
+  assert.equal(modify.playModeSupport, "runtime-only");
   assert.equal(modify.riskLevel, "high");
   assert.equal(modify.equivalentUnityMcp, "object-modify");
 });
@@ -48,13 +50,20 @@ test("object.modify input schema supports pathPatches and jsonPatch", () => {
   assert.ok(props.jsonPatch, "jsonPatch should be in schema");
 });
 
-test("object.get-data supports ObjectRef resolution fields", () => {
+test("object.get-data supports ObjectRef resolution and token-safe read scopes", () => {
   const getData = findToolByName("object.get-data")!;
   const props = getData.inputSchema.properties as Record<string, unknown>;
   assert.ok(props.instanceId, "instanceId should be supported");
   assert.ok(props.assetPath, "assetPath should be supported");
   assert.ok(props.guid, "guid should be supported");
   assert.ok(props.path, "path should be supported");
+  const output = getData.outputSchema?.properties as Record<string, unknown>;
+  assert.ok(props.paths, "paths should be supported for exact reads");
+  assert.ok(props.viewQuery, "viewQuery should be supported for scoped reads");
+  assert.ok(output.fields, "output schema should expose SerializedMember fields");
+  assert.ok(output.path, "output schema should expose SerializedMember path");
+  assert.equal(output.data, undefined, "output schema should not claim an extra data wrapper");
+  assert.match(getData.description, /mutually exclusive/, "describe text should warn paths/viewQuery are mutually exclusive");
 });
 
 test("bridge specs resolve for object tools", () => {
@@ -98,6 +107,21 @@ test("C# infrastructure files exist for ObjectRef, serializer and patch", async 
   assert.ok(names.includes("UnityCliObjectRef.cs"));
   assert.ok(names.includes("UnityCliObjectSerializer.cs"));
   assert.ok(names.includes("UnityCliObjectPatch.cs"));
+});
+
+test("object.modify C# wraps dry-run and execute results in SuccessJson", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Commands/ObjectCommands.cs", import.meta.url), "utf8");
+  const modifyBlock = source.slice(source.indexOf("ObjectModify(BridgeRequest request)"), source.indexOf("private static ObjectSerializer.Options BuildSerializerOptions"));
+  assert.match(modifyBlock, /return SuccessJson\(dry\.EndObject/, "dry-run branch must wrap payload in SuccessJson");
+  assert.match(modifyBlock, /PropRaw..audit[\s\S]*return SuccessJson\(w\.EndObject/, "execute branch must wrap payload in SuccessJson");
+});
+
+test("C# object serializer implements path aggregate and viewQuery conflict", async () => {
+  const serializer = await readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliObjectSerializer.cs", import.meta.url), "utf8");
+  const commands = await readFile(new URL("../unitypkg/Editor/Commands/ObjectCommands.cs", import.meta.url), "utf8");
+  assert.match(serializer, /BuildPathReadAggregate[\s\S]*UnityCli\.PathReadAggregate/, "paths should return a stable aggregate envelope");
+  assert.match(serializer, /TryReadPath[\s\S]*ReadPathSegment[\s\S]*ReadIndexer/, "paths should read exact nested members and indexers");
+  assert.match(commands, /E_OBJECT_READ_SCOPE_CONFLICT[\s\S]*paths and viewQuery are mutually exclusive/, "bridge should reject paths and viewQuery together");
 });
 
 test("no duplicate main entry: go.inspect stays lightweight, object.get-data is the deep reader", () => {

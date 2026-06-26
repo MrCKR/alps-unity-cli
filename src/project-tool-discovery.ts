@@ -1,6 +1,6 @@
 import { getBoolean, getString } from "./args.js";
 import { executeBridgeCommand, type BridgeRuntime } from "./bridge/index.js";
-import type { ToolMetadata } from "./tools/metadata/index.js";
+import { inferPlayModeSupport, type PlayModeSupport, type ToolMetadata } from "./tools/metadata/index.js";
 import type { CliResult } from "./types.js";
 
 export interface ProjectToolRuntime extends Partial<BridgeRuntime> {
@@ -68,6 +68,7 @@ export function projectDescriptorToToolMetadata(value: unknown): ToolMetadata | 
     inputSchema: objectProp(descriptor, "inputSchema") ?? {},
     outputSchema: objectProp(descriptor, "outputSchema"),
     destructiveHint: booleanProp(descriptor, "destructiveHint") ?? false,
+    playModeSupport: playModeSupportProp(descriptor, "playModeSupport"),
     timeoutMs: numberProp(descriptor, "defaultTimeoutMs") ?? numberProp(descriptor, "timeoutMs"),
     permissions: stringArrayProp(descriptor, "permissions"),
     docsTopic: stringProp(descriptor, "docsTopic") ?? "project-tool",
@@ -88,7 +89,8 @@ function ensureProjectToolDefaults(tool: ToolMetadata): ToolMetadata {
     cliCommand: tool.cliCommand ?? `tools run ${tool.name}`,
     docsTopic: tool.docsTopic ?? (tool.target === "runtime" ? "runtime-tool" : "project-tool"),
     target: tool.target ?? "editor",
-    availabilityScope: tool.availabilityScope ?? (tool.target === "runtime" ? "playModeSession" : "editorSession")
+    availabilityScope: tool.availabilityScope ?? (tool.target === "runtime" ? "playModeSession" : "editorSession"),
+    playModeSupport: tool.playModeSupport ?? inferPlayModeSupport(tool)
   };
 }
 
@@ -108,6 +110,11 @@ function booleanProp(record: Record<string, unknown>, key: string): boolean | un
 function numberProp(record: Record<string, unknown>, key: string): number | undefined {
   const value = record[key];
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function playModeSupportProp(record: Record<string, unknown>, key: string): PlayModeSupport | undefined {
+  const value = record[key];
+  return value === "supported" || value === "runtime-only" || value === "session-affecting" || value === "editor-only" || value === "unknown" ? value : undefined;
 }
 
 function objectProp(record: Record<string, unknown>, key: string): Record<string, unknown> | undefined {

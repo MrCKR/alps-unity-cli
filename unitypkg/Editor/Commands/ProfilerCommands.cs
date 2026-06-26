@@ -491,7 +491,7 @@ namespace UnityCli
                 w.Prop("totalBytes", total);
             }
             w.Prop("logPath", LogPath());
-            return w.EndObject().ToString();
+            return SuccessJson(w.EndObject().ToString());
         }
 
         /// <summary>渲染采样统计。profiler.* 表示采样/性能。</summary>
@@ -515,7 +515,7 @@ namespace UnityCli
                 w.Prop("diagnostics", "UnityStats type not available in this Unity version.");
             }
             w.Prop("logPath", LogPath());
-            return w.EndObject().ToString();
+            return SuccessJson(w.EndObject().ToString());
         }
 
         /// <summary>脚本采样统计。对齐 Ivan script stats。</summary>
@@ -527,7 +527,7 @@ namespace UnityCli
             w.Prop("monoHeapSize", (long)UnityEngine.Profiling.Profiler.GetMonoHeapSizeLong());
             w.Prop("monoUsedSize", (long)UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong());
             w.Prop("logPath", LogPath());
-            return w.EndObject().ToString();
+            return SuccessJson(w.EndObject().ToString());
         }
 
         private static string ProfilerCounter(BridgeRequest request)

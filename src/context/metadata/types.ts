@@ -9,6 +9,7 @@
  */
 
 export type ContextSource = "built-in" | "project" | "extension";
+export type ContextPlayModeSupport = "supported" | "runtime-only" | "session-affecting" | "editor-only" | "unknown";
 
 export interface ContextMetadata {
   /** Dotted context identifier, e.g. 'project.info'. Must be unique across all contexts. */
@@ -35,6 +36,8 @@ export interface ContextMetadata {
   target?: "editor" | "runtime" | "both";
   /** Availability scope for the context. */
   availabilityScope?: string;
+  /** Play Mode read semantics for AI routing and runtime safety. */
+  playModeSupport?: ContextPlayModeSupport;
   /** Whether the context is currently available based on session state. */
   available?: boolean;
   /** Unity package names required by this context at runtime. */

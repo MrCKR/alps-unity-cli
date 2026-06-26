@@ -1,5 +1,17 @@
 import { boolFlag, compactArgs, floatFlag, numberFlag, stringFlag, targetArgs } from "../args.js";
-import type { BridgeCommandSpec } from "../types.js";
+import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
+
+/** 从 --input 保留下来的结构化 JSON 中读取数组/对象参数。 */
+function structuredInput(flags: BridgeFlags): Record<string, unknown> {
+  const raw = typeof flags.__structuredInput === "string" ? flags.__structuredInput : undefined;
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed : {};
+  } catch {
+    return {};
+  }
+}
 
 export const animationBridgeSpecs: BridgeCommandSpec[] = [
   { group: "animation", command: "clip", bridgeCommand: "animation.clip", buildArgs: animationArgs },
@@ -93,6 +105,7 @@ function controllerArgs({ command, flags, positionalTarget }: Parameters<BridgeC
     });
   }
   if (command === "controller.add-transition") {
+    const structured = structuredInput(flags);
     return compactArgs({
       controllerPath: stringFlag(flags, "controller-path") ?? stringFlag(flags, "path"),
       fromState: stringFlag(flags, "from-state") ?? stringFlag(flags, "from"),
@@ -101,7 +114,7 @@ function controllerArgs({ command, flags, positionalTarget }: Parameters<BridgeC
       hasExitTime: boolFlag(flags, "has-exit-time"),
       duration: floatFlag(flags, "duration"),
       exitTime: floatFlag(flags, "exit-time"),
-      conditions: stringFlag(flags, "conditions")
+      conditions: stringFlag(flags, "conditions") ?? structured.conditions
     });
   }
   if (command === "controller.add-parameter") {

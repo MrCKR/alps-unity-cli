@@ -66,10 +66,11 @@ unity_cli tools search <keyword>
 
 执行规则：
 
-- 执行前先 `tools describe <tool>`，读取 `inputSchema`、`destructiveHint`、`supportsDryRun`、`requiresPackages`、`target`、`availabilityScope`。
+- 执行前先 `tools describe <tool>`，读取 `inputSchema`、`destructiveHint`、`supportsDryRun`、`requiresPackages`、`target`、`availabilityScope`、`playModeSupport`。
 - 用 `--input`、`--input-file` 或 `--stdin` 传参。
 - `destructiveHint: true` 的工具先用 `--dry-run`（如支持），确认后加 `--yes`。
 - Runtime 工具通常需要 Play Mode；遇到 `E_RUNTIME_NOT_READY`，按 `next_actions` 处理。
+- `playModeSupport: "editor-only"` 的工具不要在 Play Mode 下运行；
 - 长任务返回 job 时，用 `unity_cli jobs status <jobId>`、`unity_cli jobs logs <jobId>`、`unity_cli jobs cancel <jobId> --yes`。
 
 ## Context 自发现

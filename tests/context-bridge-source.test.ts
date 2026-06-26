@@ -32,6 +32,11 @@ test("Context built-in table contains all expected context names", async () => {
   }
 });
 
+test("Context built-in descriptor rows keep C# initializer commas", async () => {
+  const source = await readContextCommandsSource();
+  assert.doesNotMatch(source, /Description = "[^\n]+"\r?\n\s+Category = /, "Description initializer must be followed by a comma before Category");
+});
+
 test("Context read handlers never modify Unity state", async () => {
   const source = await readContextCommandsSource();
   // These are forbidden in context read handlers
@@ -88,8 +93,25 @@ test("editor.tool-states EquivalentUnityMcp is 'none' with note (B1)", async () 
   assert.match(block, /EquivalentUnityMcp = "none"/, "editor.tool-states EquivalentUnityMcp must be 'none'");
   assert.match(block, /EquivalentUnityMcpNote =/, "editor.tool-states must have EquivalentUnityMcpNote");
   assert.match(block, /MCP tool discovery/, "Note must mention MCP tool discovery");
+  assert.match(block, /gridAvailable/, "editor.tool-states output schema must match runtime field gridAvailable");
   // ContextDescriptorJson must output EquivalentUnityMcpNote when present
   assert.match(source, /equivalentUnityMcpNote/, "ContextDescriptorJson must handle equivalentUnityMcpNote");
+});
+
+test("editor context C# descriptors document read-only boundaries", async () => {
+  const source = await readContextCommandsSource();
+  const expectedNames = ["editor.state", "editor.selection", "editor.active-tool", "editor.windows", "editor.menu-items"];
+  for (const name of expectedNames) {
+    const index = source.indexOf(name);
+    assert.ok(index > -1, `Must find ${name} in source`);
+    const blockStart = source.lastIndexOf("new BuiltInContextDefinition", index);
+    const blockEnd = source.indexOf("ReadHandler =", index);
+    const block = source.slice(blockStart, blockEnd > blockStart ? blockEnd : index + 400);
+    assert.match(block, /Category = "editor"/, `${name} must stay in editor category`);
+    assert.match(block, /OutputSchema = "\{/, `${name} must expose output schema`);
+  }
+  assert.match(source, /no stable public API for full menu enumeration/i, "editor.menu-items must disclose enumeration limitation");
+  assert.match(source, /destructive Tool editor\.menu/, "editor.menu-items must distinguish execution tool");
 });
 
 test("Context availability-sensitive handlers return available=false with diagnostics", async () => {
@@ -98,6 +120,13 @@ test("Context availability-sensitive handlers return available=false with diagno
   assert.match(source, /Prop\("available", false\)/, "Availability-sensitive contexts must return available=false when unavailable");
   assert.match(source, /Prop\("diagnostics",/, "Availability-sensitive contexts must include diagnostics");
   assert.match(source, /PropArray\("next_actions"/, "Availability-sensitive contexts must include next_actions");
+});
+
+test("tools and tests Context handlers expose stable count fields", async () => {
+  const source = await readContextCommandsSource();
+  assert.match(source, /Name = "tools\.groups"[\s\S]*Handler = "offline"/, "tools.groups descriptor must disclose offline handling");
+  assert.match(source, /ReadToolsCustomContext[\s\S]*\.Prop\("count", \(long\)CountTopLevelJsonArrayItems\(toolsJson\)\)/, "tools.custom must include count matching tools array");
+  assert.match(source, /Prop\("available", false\)[\s\S]*\.Prop\("count", \(long\)0\)/, "tests.list unavailable branch must still include count");
 });
 
 test("Context commands are registered as non-mutating (allowed in Play Mode)", async () => {

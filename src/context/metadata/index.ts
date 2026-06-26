@@ -7,9 +7,9 @@
  * it must be a Tool, not a Context.
  */
 
-import type { ContextMetadata, ContextSource } from "./types.js";
+import type { ContextMetadata, ContextPlayModeSupport, ContextSource } from "./types.js";
 
-export type { ContextMetadata, ContextSource } from "./types.js";
+export type { ContextMetadata, ContextPlayModeSupport, ContextSource } from "./types.js";
 
 // ── Project contexts ──
 
@@ -72,7 +72,7 @@ const PROJECT_LAYERS: ContextMetadata = {
 const EDITOR_STATE: ContextMetadata = {
   name: "editor.state",
   title: "Editor State",
-  description: "Current editor state: compilation state, play mode, and general editor status.",
+  description: "Read-only snapshot of current Unity Editor state: Play Mode, compile/import/build busy flags, active scene, Prefab Stage, Bridge build stamp, and runtime session status. Use this before live tools to avoid acting while Unity is busy.",
   kind: "context",
   source: "built-in",
   category: "editor",
@@ -81,7 +81,7 @@ const EDITOR_STATE: ContextMetadata = {
   target: "editor",
   availabilityScope: "editorSession",
   resourceUri: "unity-cli://editor/state",
-  outputSchema: { type: "object", properties: { playMode: { type: "string" }, busy: { type: "boolean" }, activeScene: { type: "string" }, prefabStage: { type: "object" }, bridge: { type: "object" }, runtime: { type: "object" }, schemaVersion: { type: "string" }, observedAt: { type: "string" }, availability: { type: "object" }, next_actions: { type: "array" } } },
+  outputSchema: { type: "object", properties: { schemaVersion: { type: "string" }, observedAt: { type: "string" }, state: { type: "object", properties: { playMode: { type: "object" }, busy: { type: "object" }, activeScene: { type: "object" }, prefabStage: { type: "object" }, bridge: { type: "object" }, runtime: { type: "object" } } } } },
   equivalentUnityMcp: "mcpforunity://editor/state",
   handler: "bridge",
   cliCommand: "context read editor.state"
@@ -90,7 +90,7 @@ const EDITOR_STATE: ContextMetadata = {
 const EDITOR_SELECTION: ContextMetadata = {
   name: "editor.selection",
   title: "Editor Selection",
-  description: "Currently selected objects in the Unity Editor hierarchy or project browser.",
+  description: "Read the current Unity Editor selection in Hierarchy or Project Browser. Returns object/GameObject names and asset GUIDs only; it does not select, focus, ping, or modify anything.",
   kind: "context",
   source: "built-in",
   category: "editor",
@@ -108,7 +108,7 @@ const EDITOR_SELECTION: ContextMetadata = {
 const EDITOR_ACTIVE_TOOL: ContextMetadata = {
   name: "editor.active-tool",
   title: "Active Tool",
-  description: "Currently active editor tool (move, rotate, scale, rect, etc.).",
+  description: "Read the currently active Unity Editor transform/tool handle plus pivot mode, pivot rotation, handle position, and handle rotation. Does not change the active tool.",
   kind: "context",
   source: "built-in",
   category: "editor",
@@ -126,7 +126,7 @@ const EDITOR_ACTIVE_TOOL: ContextMetadata = {
 const EDITOR_WINDOWS: ContextMetadata = {
   name: "editor.windows",
   title: "Editor Windows",
-  description: "List currently open editor windows and their types.",
+  description: "Read currently open Unity EditorWindow instances with title, type names, focused state, and instance IDs. This observes editor UI state without opening, closing, focusing, or moving windows.",
   kind: "context",
   source: "built-in",
   category: "editor",
@@ -144,7 +144,7 @@ const EDITOR_WINDOWS: ContextMetadata = {
 const EDITOR_TOOL_STATES: ContextMetadata = {
   name: "editor.tool-states",
   title: "Tool States",
-  description: "Current state of editor tools (enabled/disabled, snap, grid settings).",
+  description: "Read Unity Editor transform tool settings, pivot mode/rotation, snap settings, and grid availability. This is not MCP tool discovery; it observes editor tool configuration only.",
   kind: "context",
   source: "built-in",
   category: "editor",
@@ -153,7 +153,7 @@ const EDITOR_TOOL_STATES: ContextMetadata = {
   target: "editor",
   availabilityScope: "editorSession",
   resourceUri: "unity-cli://editor/tool-states",
-  outputSchema: { type: "object", properties: { transform: { type: "object" }, snap: { type: "object" }, grid: { type: "object" }, activeTool: { type: "string" } } },
+  outputSchema: { type: "object", properties: { transform: { type: "object" }, snap: { type: "object" }, gridAvailable: { type: "boolean" } } },
   equivalentUnityMcp: "none",
   equivalentUnityMcpNote: "unity-mcp 'get_tool_states' (mcpforunity://editor/tool-states) returns MCP tool discovery/enabled state (which MCP tools are available). This context returns Unity Editor tool settings (move/rotate/scale, pivot mode, snap, grid). No direct unity-mcp equivalent exists.",
   handler: "bridge",
@@ -181,16 +181,16 @@ const PREFAB_STAGE: ContextMetadata = {
 const EDITOR_MENU_ITEMS: ContextMetadata = {
   name: "editor.menu-items",
   title: "Menu Items",
-  description: "Enumerate available menu items in the Unity Editor.",
+  description: "Attempt to enumerate Unity Editor menu items as read-only discovery. Unity has no stable public API for full menu enumeration, so this context may return an empty `items` array with diagnostics; executing a menu path remains the destructive Tool `editor.menu`.",
   kind: "context",
   source: "built-in",
   category: "editor",
-  inputSchema: { type: "object", properties: { search: { type: "string", description: "Optional filter substring." } } },
+  inputSchema: { type: "object", properties: { search: { type: "string", description: "Optional menu path/title substring filter if a Unity version exposes enumerable menu data." } } },
   refreshBehavior: "static",
   target: "editor",
   availabilityScope: "editorSession",
   resourceUri: "unity-cli://editor/menu-items",
-  outputSchema: { type: "object", properties: { items: { type: "array", items: { type: "object", properties: { path: { type: "string" }, label: { type: "string" } } } }, count: { type: "integer" } } },
+  outputSchema: { type: "object", properties: { items: { type: "array", items: { type: "object", properties: { path: { type: "string" }, label: { type: "string" } } } }, count: { type: "integer" }, diagnostics: { type: "string" } } },
   equivalentUnityMcp: "mcpforunity://menu-items",
   handler: "bridge",
   cliCommand: "context read editor.menu-items"
@@ -201,22 +201,23 @@ const EDITOR_MENU_ITEMS: ContextMetadata = {
 const SCENE_GAMEOBJECT: ContextMetadata = {
   name: "scene.gameobject",
   title: "Scene GameObject",
-  description: "Read a specific GameObject's properties from the active scene.",
+  description: "Read one GameObject's lightweight scene summary by id, hierarchy path, or name. Use this before go.inspect, component.get, object.get-data, or mutation tools to confirm the stable path/id. Does not modify the scene; for full component fields use component.get.",
   kind: "context",
   source: "built-in",
   category: "scene",
   inputSchema: {
     type: "object",
     properties: {
-      target: { type: "string", description: "GameObject name or path." },
+      target: { type: "string", description: "GameObject name or hierarchy path. If multiple objects match, pass path or id." },
       id: { type: "integer", description: "GameObject instance ID (takes priority over target/path)." },
-      path: { type: "string", description: "Hierarchy path, e.g. 'Main Camera/Directional Light'." },
-      includeComponents: { type: "boolean", description: "Include component summaries in the output." }
+      path: { type: "string", description: "Hierarchy path, e.g. 'Canvas/Button' or 'Main Camera'." },
+      includeComponents: { type: "boolean", default: true, description: "Include lightweight component summaries. Set false when you only need the GameObject reference." }
     }
   },
   refreshBehavior: "on-demand",
   target: "editor",
   availabilityScope: "editorSession",
+  playModeSupport: "supported",
   resourceUri: "unity-cli://scene/gameobject/{instance_id}",
   outputSchema: { type: "object", properties: { gameObject: { type: "object", properties: { name: { type: "string" }, path: { type: "string" }, instanceID: { type: "integer" }, active: { type: "boolean" }, components: { type: "array" } } } } },
   equivalentUnityMcp: "mcpforunity://scene/gameobject/{instance_id}",
@@ -227,7 +228,7 @@ const SCENE_GAMEOBJECT: ContextMetadata = {
 const SCENE_CAMERAS: ContextMetadata = {
   name: "scene.cameras",
   title: "Scene Cameras",
-  description: "List all cameras in the active scene with their key properties.",
+  description: "List all active scene cameras with stable GameObject path, tag, enabled state, projection, FOV/orthographic size, depth, target texture, and pixel size. Read-only camera inventory.",
   kind: "context",
   source: "built-in",
   category: "scene",
@@ -245,7 +246,7 @@ const SCENE_CAMERAS: ContextMetadata = {
 const SCENE_VOLUMES: ContextMetadata = {
   name: "scene.volumes",
   title: "Scene Volumes",
-  description: "List all volume components in the active scene.",
+  description: "List Volume components in the active scene with target GameObject, enabled state, global flag, priority, weight, profile reference, and pagination metadata. Returns an empty list when Volume type is unavailable.",
   kind: "context",
   source: "built-in",
   category: "scene",
@@ -270,7 +271,7 @@ const SCENE_VOLUMES: ContextMetadata = {
 const SCENE_RENDERER_FEATURES: ContextMetadata = {
   name: "scene.renderer-features",
   title: "Renderer Features",
-  description: "List URP renderer features configured in the project.",
+  description: "Read URP renderer feature availability and configured feature names for the active/default render pipeline. If URP or a pipeline asset is unavailable, returns available=false with diagnostics and next_actions.",
   kind: "context",
   source: "built-in",
   category: "scene",
@@ -279,7 +280,7 @@ const SCENE_RENDERER_FEATURES: ContextMetadata = {
   target: "editor",
   availabilityScope: "editorSession",
   resourceUri: "unity-cli://scene/renderer-features",
-  outputSchema: { type: "object", properties: { available: { type: "boolean" }, renderer: { type: "object" }, features: { type: "array", items: { type: "object" } }, diagnostics: { type: "string" } } },
+  outputSchema: { type: "object", properties: { available: { type: "boolean" }, renderer: { type: "string" }, features: { type: "array", items: { type: "string" } }, count: { type: "integer" }, diagnostics: { type: "string" }, next_actions: { type: "array", items: { type: "string" } } } },
   equivalentUnityMcp: "mcpforunity://pipeline/renderer-features",
   requiresPackages: ["com.unity.render-pipelines.universal"],
   handler: "bridge",
@@ -289,7 +290,7 @@ const SCENE_RENDERER_FEATURES: ContextMetadata = {
 const SCENE_RENDERING_STATS: ContextMetadata = {
   name: "scene.rendering-stats",
   title: "Rendering Stats",
-  description: "Current rendering statistics from the active scene camera.",
+  description: "Read current rendering statistics from UnityStats when available. If Unity's internal stats API is unavailable, returns available=false with diagnostics and next_actions.",
   kind: "context",
   source: "built-in",
   category: "scene",
@@ -298,7 +299,7 @@ const SCENE_RENDERING_STATS: ContextMetadata = {
   target: "editor",
   availabilityScope: "editorSession",
   resourceUri: "unity-cli://scene/rendering-stats",
-  outputSchema: { type: "object", properties: { available: { type: "boolean" }, stats: { type: "object" }, diagnostics: { type: "string" } } },
+  outputSchema: { type: "object", properties: { available: { type: "boolean" }, stats: { type: "object", properties: { batches: { type: "string" }, triangles: { type: "string" }, vertices: { type: "string" }, screenResolution: { type: "string" } } }, diagnostics: { type: "string" }, next_actions: { type: "array", items: { type: "string" } } } },
   equivalentUnityMcp: "mcpforunity://rendering/stats",
   handler: "bridge",
   cliCommand: "context read scene.rendering-stats"
@@ -309,14 +310,15 @@ const SCENE_RENDERING_STATS: ContextMetadata = {
 const SCENE_GAMEOBJECT_COMPONENTS: ContextMetadata = {
   name: "scene.gameobject.components",
   title: "Scene GameObject Components",
-  description: "Lightweight list of components attached to a GameObject: type names, enabled state and a short summary. Does NOT return full fields/props. For deep component data use `tools run component.get`.",
+  description: "Lightweight list of components attached to a GameObject: type names, enabled state and optional readable property preview. Use this before component.get/component.modify to choose component name or index. Does NOT return full fields/props; for deep component data use `tools run component.get`.",
   kind: "context",
   source: "built-in",
   category: "scene",
-  inputSchema: { type: "object", properties: { target: { type: "string" }, id: { type: "integer" }, path: { type: "string" }, includeProperties: { type: "boolean" } } },
+  inputSchema: { type: "object", properties: { target: { type: "string", description: "GameObject name or hierarchy path. If ambiguous, pass path or id." }, id: { type: "integer", description: "GameObject instance ID." }, path: { type: "string", description: "Hierarchy path, e.g. Main Camera." }, includeProperties: { type: "boolean", default: true, description: "Include shallow readable properties for each component; set false for a compact type list." } } },
   refreshBehavior: "on-demand",
   target: "editor",
   availabilityScope: "editorSession",
+  playModeSupport: "supported",
   resourceUri: "unity-cli://scene/gameobject/{instance_id}/components",
   outputSchema: { type: "object", properties: { gameObject: { type: "object" }, components: { type: "array", items: { type: "object" } }, count: { type: "integer" } } },
   equivalentUnityMcp: "mcpforunity://scene/gameobject/{id}/components",
@@ -327,14 +329,15 @@ const SCENE_GAMEOBJECT_COMPONENTS: ContextMetadata = {
 const SCENE_GAMEOBJECT_COMPONENT: ContextMetadata = {
   name: "scene.gameobject.component",
   title: "Scene GameObject Component",
-  description: "Lightweight preview of one component attached to a GameObject. Does NOT replace deep reads. For complete fields/props use `tools run component.get`.",
+  description: "Lightweight preview of one component attached to a GameObject. Use scene.gameobject.components first when unsure which component name exists. Does NOT replace deep reads; for complete fields/props use `tools run component.get`.",
   kind: "context",
   source: "built-in",
   category: "scene",
-  inputSchema: { type: "object", properties: { target: { type: "string" }, id: { type: "integer" }, path: { type: "string" }, component: { type: "string" } }, required: ["component"] },
+  inputSchema: { type: "object", properties: { target: { type: "string", description: "GameObject name or hierarchy path." }, id: { type: "integer", description: "GameObject instance ID." }, path: { type: "string", description: "Hierarchy path, e.g. Main Camera." }, component: { type: "string", description: "Component type name, e.g. Camera, Transform, or UnityEngine.Camera." } }, required: ["component"] },
   refreshBehavior: "on-demand",
   target: "editor",
   availabilityScope: "editorSession",
+  playModeSupport: "supported",
   resourceUri: "unity-cli://scene/gameobject/{instance_id}/component/{name}",
   outputSchema: { type: "object", properties: { gameObject: { type: "object" }, component: { type: "object" } } },
   equivalentUnityMcp: "mcpforunity://scene/gameobject/{id}/component/{name}",
@@ -345,7 +348,7 @@ const SCENE_GAMEOBJECT_COMPONENT: ContextMetadata = {
 const SCENE_OPENED: ContextMetadata = {
   name: "scene.opened",
   title: "Opened Scenes",
-  description: "List currently loaded (opened) scenes in the Editor, with name, path, build index, isLoaded and isDirty. Read-only state surface for multi-scene observation.",
+  description: "List currently loaded scenes in the Editor with name, path, build index, loaded state, dirty state, and active scene. Read-only; does not load, unload, save, or switch scenes.",
   kind: "context",
   source: "built-in",
   category: "scene",
@@ -354,7 +357,7 @@ const SCENE_OPENED: ContextMetadata = {
   target: "editor",
   availabilityScope: "editorSession",
   resourceUri: "unity-cli://scene/opened",
-  outputSchema: { type: "object", properties: { scenes: { type: "array", items: { type: "object", properties: { name: { type: "string" }, path: { type: "string" }, buildIndex: { type: "integer" }, isLoaded: { type: "boolean" }, isDirty: { type: "boolean" } } } }, count: { type: "integer" }, activeScene: { type: "string" } } },
+  outputSchema: { type: "object", properties: { scenes: { type: "array", items: { type: "object", properties: { name: { type: "string" }, path: { type: "string" }, buildIndex: { type: "integer" }, isLoaded: { type: "boolean" }, isDirty: { type: "boolean" } } } }, count: { type: "integer" }, activeScene: { type: "string" }, logPath: { type: "string" } } },
   equivalentUnityMcp: "mcpforunity://scene/opened",
   handler: "bridge",
   cliCommand: "context read scene.opened"
@@ -399,18 +402,18 @@ const PREFAB_HIERARCHY: ContextMetadata = {
 const TOOLS_GROUPS: ContextMetadata = {
   name: "tools.groups",
   title: "Tool Groups",
-  description: "Read built-in and available extension tool groups with counts and discovery commands.",
+  description: "Read built-in and available extension tool groups with counts and discovery commands from the local CLI registry; no Unity connection is required.",
   kind: "context",
   source: "built-in",
   category: "tools",
   inputSchema: {},
-  refreshBehavior: "on-demand",
+  refreshBehavior: "static",
   target: "editor",
   availabilityScope: "always",
   resourceUri: "unity-cli://tools/groups",
   outputSchema: { type: "object", properties: { groups: { type: "array", items: { type: "object" } }, count: { type: "integer" } } },
   equivalentUnityMcp: "mcpforunity://tool-groups",
-  handler: "bridge",
+  handler: "offline",
   cliCommand: "context read tools.groups"
 };
 
@@ -487,9 +490,24 @@ const BUILTIN_CONTEXTS: ContextMetadata[] = [
   TOOLS_CUSTOM
 ];
 
+/** 推导 Context 的 Play Mode 读取语义；Context 保持只读，不产生 Unity 副作用。 */
+export function inferContextPlayModeSupport(context: ContextMetadata): ContextPlayModeSupport {
+  if (context.target === "runtime" || context.handler === "bridge-runtime") return "runtime-only";
+  if (context.availabilityScope === "always") return "supported";
+  return "supported";
+}
+
+/** Normalize a context metadata entry to include runtime defaults. */
+export function normalizeContextMetadata(context: ContextMetadata): ContextMetadata & { playModeSupport: ContextPlayModeSupport } {
+  return {
+    ...context,
+    playModeSupport: context.playModeSupport ?? inferContextPlayModeSupport(context)
+  };
+}
+
 /** Return all built-in context metadata entries. */
 export function builtinContextMetadata(): ContextMetadata[] {
-  return BUILTIN_CONTEXTS;
+  return BUILTIN_CONTEXTS.map(normalizeContextMetadata);
 }
 
 /** Return distinct context category names from built-in metadata. */

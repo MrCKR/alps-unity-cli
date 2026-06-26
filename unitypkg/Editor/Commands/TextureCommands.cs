@@ -256,7 +256,7 @@ namespace UnityCli
             var path = NormalizeAssetPath(rawPath);
             if (string.IsNullOrEmpty(path))
             {
-                throw new BridgeCommandException("E_TEXTURE_PATH_REQUIRED", "Pass a texture path under Assets/.", "Use unity_cli texture info <path> or pass --path Assets/Textures/Example.png.");
+                throw new BridgeCommandException("E_TEXTURE_PATH_REQUIRED", "Pass a texture path under Assets/.", "Use tools run asset.search --input '{\"filter\":\"t:Texture2D\"}' to discover the path, or pass an Assets/*.png path.");
             }
             if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || !IsTextureExtension(path))
             {
@@ -270,7 +270,7 @@ namespace UnityCli
             var path = RequireTexturePath(rawPath);
             if (!AssetExists(path))
             {
-                throw new BridgeCommandException("E_TEXTURE_NOT_FOUND", "Texture asset not found: " + path, "Check the path or run unity_cli asset search --type texture.");
+                throw new BridgeCommandException("E_TEXTURE_NOT_FOUND", "Texture asset not found: " + path, "Check the path or run tools run asset.search --input '{\"filter\":\"t:Texture2D\"}' to discover the path.");
             }
             return path;
         }

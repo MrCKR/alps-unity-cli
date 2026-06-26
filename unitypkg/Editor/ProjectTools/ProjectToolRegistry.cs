@@ -54,6 +54,7 @@ namespace UnityCli
             definition.CapabilityType = string.IsNullOrEmpty(definition.CapabilityType) ? "project-write" : definition.CapabilityType;
             definition.Target = string.IsNullOrEmpty(definition.Target) ? "editor" : definition.Target;
             definition.AvailabilityScope = string.IsNullOrEmpty(definition.AvailabilityScope) ? (definition.Target == "runtime" ? "playModeSession" : "editorSession") : definition.AvailabilityScope;
+            definition.PlayModeSupport = NormalizeProjectToolPlayModeSupport(definition.PlayModeSupport, definition.Target);
             definition.DefaultTimeoutMs = definition.DefaultTimeoutMs <= 0 ? 30000 : definition.DefaultTimeoutMs;
             definition.MaxTimeoutMs = definition.MaxTimeoutMs <= 0 ? 600000 : definition.MaxTimeoutMs;
             definition.RegisteredBy = string.IsNullOrEmpty(definition.RegisteredBy) ? "unity-editor-package" : definition.RegisteredBy;
@@ -137,6 +138,7 @@ namespace UnityCli
                 CapabilityType = attribute.CapabilityType,
                 DestructiveHint = attribute.DestructiveHint,
                 Target = attribute.Target ?? "editor",
+                PlayModeSupport = attribute.PlayModeSupport,
                 DefaultTimeoutMs = attribute.DefaultTimeoutMs,
                 MaxTimeoutMs = attribute.MaxTimeoutMs,
                 SupportsJob = attribute.SupportsJob,
@@ -208,6 +210,18 @@ namespace UnityCli
             }
 
             var definition = ProjectTools[name];
+
+            if (EditorApplication.isPlaying && string.Equals(definition.PlayModeSupport, "editor-only", StringComparison.OrdinalIgnoreCase))
+            {
+                return ErrorJsonWithDetails("E_TOOL_PLAYMODE_UNAVAILABLE",
+                    "Tool " + name + " is editor-only and cannot run while Unity is in Play Mode.",
+                    new UnityCliJsonWriter().BeginObject()
+                        .Prop("toolName", name)
+                        .Prop("playModeSupport", definition.PlayModeSupport)
+                        .Prop("isPlaying", true)
+                        .EndObject().ToString(),
+                    "Exit Play Mode before running this tool, or use a runtime tool with PlayModeSupport=runtime-only.");
+            }
 
             // If the tool has Target=runtime, reject from project-tool.run and suggest runtime-tool.run
             if (definition.Target == "runtime")
@@ -346,6 +360,7 @@ namespace UnityCli
                 .Prop("destructiveHint", definition.DestructiveHint)
                 .Prop("target", definition.Target)
                 .Prop("availabilityScope", definition.AvailabilityScope)
+                .Prop("playModeSupport", definition.PlayModeSupport)
                 .Prop("defaultTimeoutMs", definition.DefaultTimeoutMs)
                 .Prop("maxTimeoutMs", definition.MaxTimeoutMs)
                 .Prop("supportsJob", definition.SupportsJob)
@@ -552,12 +567,23 @@ namespace UnityCli
                 + "\noutputSchema=" + NormalizeFingerprintJson(definition.OutputSchema)
                 + "\ncapabilityType=" + (definition.CapabilityType ?? string.Empty)
                 + "\ndestructiveHint=" + Bool(definition.DestructiveHint)
+                + "\nplayModeSupport=" + (definition.PlayModeSupport ?? string.Empty)
                 + "\ndefaultTimeoutMs=" + definition.DefaultTimeoutMs.ToString(CultureInfo.InvariantCulture)
                 + "\nmaxTimeoutMs=" + definition.MaxTimeoutMs.ToString(CultureInfo.InvariantCulture)
                 + "\nsupportsJob=" + Bool(definition.SupportsJob)
                 + "\nartifactKinds=" + string.Join(",", (definition.ArtifactKinds ?? new string[0]).OrderBy(value => value, StringComparer.Ordinal).ToArray())
                 + "\nrequiredInput=" + string.Join(",", (definition.RequiredInput ?? new string[0]).OrderBy(value => value, StringComparer.Ordinal).ToArray())
                 + "\ndescriptorSource=" + (definition.DescriptorSource ?? string.Empty);
+        }
+
+        private static string NormalizeProjectToolPlayModeSupport(string value, string target)
+        {
+            if (string.Equals(value, "supported", StringComparison.OrdinalIgnoreCase)) return "supported";
+            if (string.Equals(value, "runtime-only", StringComparison.OrdinalIgnoreCase)) return "runtime-only";
+            if (string.Equals(value, "session-affecting", StringComparison.OrdinalIgnoreCase)) return "session-affecting";
+            if (string.Equals(value, "editor-only", StringComparison.OrdinalIgnoreCase)) return "editor-only";
+            if (string.Equals(value, "unknown", StringComparison.OrdinalIgnoreCase)) return "unknown";
+            return string.Equals(target, "runtime", StringComparison.OrdinalIgnoreCase) ? "runtime-only" : "editor-only";
         }
 
         private static string ProjectToolHandlerFingerprintMaterial(UnityCliProjectToolDefinition definition)

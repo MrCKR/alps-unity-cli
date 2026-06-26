@@ -21,6 +21,7 @@ namespace UnityCli
             Group = "custom";
             CapabilityType = "project-write";
             Target = "editor";
+            PlayModeSupport = "editor-only";
             DefaultTimeoutMs = 30000;
             MaxTimeoutMs = 600000;
             SupportsJob = true;
@@ -48,6 +49,14 @@ namespace UnityCli
         /// and are routed through the RuntimeExecutor.
         /// </summary>
         public string Target { get; set; }
+
+        /// <summary>
+        /// Play Mode execution semantics: "supported", "runtime-only",
+        /// "session-affecting", "editor-only", or "unknown".
+        /// Editor-domain project tools default to editor-only; runtime tools
+        /// should set runtime-only when their changes do not persist after Play Mode.
+        /// </summary>
+        public string PlayModeSupport { get; set; }
 
         /// <summary>
         /// Optional pinned fingerprint for tamper detection. When omitted, the

@@ -130,7 +130,7 @@ namespace UnityCli
                 joint.connectedBody = connectedGo.GetComponent<Rigidbody>();
             }
             EditorSceneManager.MarkSceneDirty(target.scene);
-            return SuccessJson(ComponentMutationJson("physics.joint", target, joint, null));
+            return SuccessJson(ComponentMutationJson("physics.joint", target, joint, null, null, null));
         }
 
         private static string PhysicsForceCommand(BridgeRequest request)
@@ -333,7 +333,7 @@ namespace UnityCli
             w.Prop("hasRigidbody2D", rb2d != null);
             w.Prop("colliderCount", (long)(colliders.Length + colliders2d.Length));
             w.Prop("logPath", LogPath());
-            return w.EndObject().ToString();
+            return SuccessJson(w.EndObject().ToString());
         }
 
         private static string PhysicsRaycast(BridgeRequest request)

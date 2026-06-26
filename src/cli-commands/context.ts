@@ -85,6 +85,7 @@ async function handleContextList(
     requiresUnity: c.requiresUnity,
     target: c.target,
     availabilityScope: c.availabilityScope,
+    playModeSupport: c.playModeSupport,
     equivalentUnityMcp: c.equivalentUnityMcp,
     equivalentUnityMcpNote: c.equivalentUnityMcpNote,
     cliCommand: c.cliCommand,

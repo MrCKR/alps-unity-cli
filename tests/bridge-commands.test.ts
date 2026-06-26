@@ -58,6 +58,15 @@ test("bridge HTTP timeout matches Unity queue window for regular commands", () =
   assert.equal(bridgeHttpTimeoutMs({ requestId: "req", command: "scene.hierarchy", args: {} }), 65_000);
 });
 
+test("CLI help advertises --instance for live target selection", async () => {
+  const result = await execute(["--help"]);
+  assert.equal(result.ok, true);
+  const commands = (result.data as { commands: string[] }).commands;
+  assert.ok(commands.some((command) => command.includes("tools run <name>") && command.includes("--instance <id|alias>")));
+  assert.ok(commands.some((command) => command.includes("context read <name>") && command.includes("--instance <id|alias>") && command.includes("--input-file <path>")));
+  assert.ok(!commands.some((command) => command.includes("--target <instance>")));
+});
+
 function instance(overrides: Record<string, unknown> = {}) {
   return {
     instanceId: "editor-1",
@@ -157,6 +166,44 @@ test("bridge command routes --instance to the matching ready endpoint", async ()
   assert.equal(target.runtimeSessionId, null);
   assert.equal(target.toolCatalogFingerprint, null);
   assert.equal(requests[0].command, "scene.hierarchy");
+});
+
+test("tools run go.inspect keeps --target for instance selection and input target for GameObject", async () => {
+  const runtime = await makeRuntime();
+  await writeRegistry(runtime.dataDir, [instance({ instanceId: "editor-2", projectPath: process.cwd(), projectHash: "hash-two", bridgeEndpoint: healthEndpoint2 })]);
+  const requests: BridgeRequest[] = [];
+
+  const result = await execute(["tools", "run", "go.inspect", "--target", "editor-2", "--input", "{\"target\":\"Main Camera\"}"], {
+    ...runtime,
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { gameObject: { name: "Main Camera" } } };
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal((result.data as { selectedInstance: { instanceId: string } }).selectedInstance.instanceId, "editor-2");
+  assert.equal(requests[0].command, "go.inspect");
+  assert.deepEqual(requests[0].args, { target: "Main Camera" });
+});
+
+test("tools run go.find keeps --target for instance selection and input target as search term", async () => {
+  const runtime = await makeRuntime();
+  await writeRegistry(runtime.dataDir, [instance({ instanceId: "editor-2", projectPath: process.cwd(), projectHash: "hash-two", bridgeEndpoint: healthEndpoint2 })]);
+  const requests: BridgeRequest[] = [];
+
+  const result = await execute(["tools", "run", "go.find", "--target", "editor-2", "--input", "{\"target\":\"Main Camera\",\"pageSize\":5}"], {
+    ...runtime,
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { items: [], pageInfo: { total: 0 } } };
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal((result.data as { selectedInstance: { instanceId: string } }).selectedInstance.instanceId, "editor-2");
+  assert.equal(requests[0].command, "go.find");
+  assert.deepEqual(requests[0].args, { searchTerm: "Main Camera", target: "Main Camera", pageSize: 5 });
 });
 
 
@@ -270,6 +317,87 @@ test("query command forwards stable bridge envelope", async () => {
   assert.equal(((result.data as { items: Array<{ path: string }> }).items[0]).path, "Main Camera");
 });
 
+test("console get forwards filter and cursor pagination", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+  const result = await execute(["tools", "run", "console.get", "--type", "error", "--filter", "AlignmentProbe", "--count", "2", "--cursor", "4"], {
+    ...runtime,
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { command: payload.command, items: [], pageInfo: { pageSize: payload.args.count, cursor: payload.args.cursor } } };
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(requests[0].command, "console.get");
+  assert.deepEqual(requests[0].args, { type: "error", filter: "AlignmentProbe", count: 2, cursor: 4 });
+});
+
+test("console.get forwards structured --input fields", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+
+  const result = await execute(["tools", "run", "console.get", "--input", JSON.stringify({ type: "warning", search: "CS", count: 3, cursor: 6 })], {
+    ...runtime,
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { command: payload.command, items: [], pageInfo: { pageSize: payload.args.count, cursor: payload.args.cursor } } };
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(requests[0].command, "console.get");
+  assert.deepEqual(requests[0].args, { type: "warning", filter: "CS", count: 3, cursor: 6 });
+});
+
+test("controller transition forwards structured conditions from --input", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+  const input = {
+    controllerPath: "Assets/UnityCliAlignmentFixtures/Alignment.controller",
+    fromState: "Idle",
+    toState: "Run",
+    hasExitTime: false,
+    conditions: [{ parameter: "Speed", mode: "greater", threshold: 0.1 }]
+  };
+
+  const result = await execute(["tools", "run", "controller.add-transition", "--yes", "--input", JSON.stringify(input)], {
+    ...runtime,
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { command: payload.command } };
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.equal(requests[0].command, "controller.add-transition");
+  assert.deepEqual(requests[0].args, { ...input, layerIndex: 0 });
+});
+
+test("controller transition recovers PowerShell-escaped nested condition arrays", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+  const escapedInput = "{\\controllerPath\\:\\Assets/UnityCliAlignmentFixtures/Alignment.controller\\,\\fromState\\:\\Idle\\,\\toState\\:\\Run\\,\\hasExitTime\\:false,\\conditions\\:[{\\parameter\\:\\Speed\\,\\mode\\:\\greater\\,\\threshold\\:0.1}]}";
+
+  const result = await execute(["tools", "run", "controller.add-transition", "--yes", "--input", escapedInput], {
+    ...runtime,
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { command: payload.command } };
+    }
+  });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(requests[0].args, {
+    controllerPath: "Assets/UnityCliAlignmentFixtures/Alignment.controller",
+    fromState: "Idle",
+    toState: "Run",
+    layerIndex: 0,
+    hasExitTime: false,
+    conditions: [{ parameter: "Speed", mode: "greater", threshold: 0.1 }]
+  });
+});
+
 test("edit command forwards target and plannedEffects", async () => {
   const runtime = await makeRuntime();
   const requests: BridgeRequest[] = [];
@@ -285,6 +413,59 @@ test("edit command forwards target and plannedEffects", async () => {
   assert.equal(requests[0].command, "component.set");
   assert.deepEqual(requests[0].args, { target: "Player", component: "Camera", property: "enabled", value: "false" });
   assert.deepEqual((result.data as { plannedEffects: unknown[] }).plannedEffects, [{ type: "component.set", property: "enabled" }]);
+});
+
+test("component lifecycle tools forward structured --input fields", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+
+  const addInput = { target: "UnityCliAlignmentProbe", component: "Rigidbody", properties: { mass: 2, useGravity: false } };
+  const addResult = await execute(["tools", "run", "component.add", "--input", JSON.stringify(addInput)], {
+    ...runtime,
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { command: payload.command } };
+    }
+  });
+  assert.equal(addResult.ok, true);
+  assert.equal(requests[0].command, "component.add");
+  assert.deepEqual(requests[0].args, addInput);
+
+  const setInput = { target: "UnityCliAlignmentProbe", component: "Rigidbody", componentIndex: 1, properties: { mass: 5, useGravity: false } };
+  const setResult = await execute(["tools", "run", "component.set", "--input", JSON.stringify(setInput)], {
+    ...runtime,
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { command: payload.command } };
+    }
+  });
+  assert.equal(setResult.ok, true);
+  assert.equal(requests[1].command, "component.set");
+  assert.deepEqual(requests[1].args, setInput);
+
+  const singleInput = { target: "Main Camera", component: "Camera", property: "enabled", value: false };
+  const singleResult = await execute(["tools", "run", "component.set", "--input", JSON.stringify(singleInput)], {
+    ...runtime,
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { command: payload.command } };
+    }
+  });
+  assert.equal(singleResult.ok, true);
+  assert.equal(requests[2].command, "component.set");
+  assert.deepEqual(requests[2].args, singleInput);
+
+  const removeInput = { target: "UnityCliAlignmentProbe", component: "BoxCollider", componentIndex: 0 };
+  const removeResult = await execute(["tools", "run", "component.remove", "--yes", "--input", JSON.stringify(removeInput)], {
+    ...runtime,
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { command: payload.command } };
+    }
+  });
+  assert.equal(removeResult.ok, true);
+  assert.equal(requests[3].command, "component.remove");
+  assert.deepEqual(requests[3].args, removeInput);
 });
 
 test("script create reads content file", async () => {
@@ -306,6 +487,53 @@ test("script create reads content file", async () => {
   assert.equal(requests[0].args.content, "public class Player {}\n");
 });
 
+test("script read and find-in-file forward structured --input fields", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+  const bridgeExecute = async (payload: BridgeRequest) => {
+    requests.push(payload);
+    return { ok: true, data: { command: payload.command, path: payload.args.path, content: "class Probe {}", matches: [] } };
+  };
+
+  const read = await execute(["tools", "run", "script.read", "--input", JSON.stringify({ path: "Assets/Scripts/Probe.cs", lineFrom: 2, lineTo: 8 })], { ...runtime, bridgeExecute });
+  const find = await execute(["tools", "run", "script.find-in-file", "--input", JSON.stringify({ path: "Assets/Scripts/Probe.cs", query: "Probe", regex: false, ignoreCase: true })], { ...runtime, bridgeExecute });
+  const pwshEscaped = await execute([
+    "tools",
+    "run",
+    "script.read",
+    "--input",
+    "{\\",
+    "path\\:\\Assets/Scripts/Probe.cs\\,\\lineFrom\\:2,\\lineTo\\:8}"
+  ], { ...runtime, bridgeExecute });
+  const backslashQuoted = await execute(["tools", "run", "script.read", "--input", '{\\"path\\":\\"Assets/Scripts/Probe.cs\\",\\"lineFrom\\":2,\\"lineTo\\":8}'], { ...runtime, bridgeExecute });
+
+  assert.equal(read.ok, true);
+  assert.equal(find.ok, true);
+  assert.equal(pwshEscaped.ok, true);
+  assert.equal(backslashQuoted.ok, true);
+  assert.deepEqual(requests.map((request) => request.command), ["script.read", "script.find-in-file", "script.read", "script.read"]);
+  assert.deepEqual(requests[0].args, { path: "Assets/Scripts/Probe.cs", lineFrom: 2, lineTo: 8 });
+  assert.deepEqual(requests[1].args, { path: "Assets/Scripts/Probe.cs", query: "Probe", regex: false, ignoreCase: true });
+  assert.deepEqual(requests[2].args, { path: "Assets/Scripts/Probe.cs", lineFrom: 2, lineTo: 8 });
+  assert.deepEqual(requests[3].args, { path: "Assets/Scripts/Probe.cs", lineFrom: 2, lineTo: 8 });
+});
+
+test("tools run rejects invalid --input JSON before bridge execution", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+  const result = await execute(["tools", "run", "script.read", "--input", "{not-json"], {
+    ...runtime,
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: {} };
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_TOOL_INPUT_JSON_INVALID");
+  assert.deepEqual(requests, []);
+});
+
 test("screenshot command forwards output path", async () => {
   const runtime = await makeRuntime();
   const requests: BridgeRequest[] = [];
@@ -322,6 +550,29 @@ test("screenshot command forwards output path", async () => {
   assert.equal(requests[0].command, "screenshot.capture");
   assert.deepEqual(requests[0].args, { path: "Artifacts/after.png", width: 1280, height: 720 });
   assert.equal((result.data as { screenshotPath: string }).screenshotPath, "Artifacts/after.png");
+});
+
+test("build commands forward settings and dry-run arguments", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+  const bridgeExecute = async (payload: BridgeRequest) => {
+    requests.push(payload);
+    return { ok: true, data: { command: payload.command, plannedEffects: payload.dryRun ? [{ type: payload.command }] : [] } };
+  };
+
+  const scenes = await execute(["tools", "run", "build.scenes", "--input", "{\"action\":\"add\",\"path\":\"Assets/Scenes/Main.unity\"}", "--dry-run"], { ...runtime, bridgeExecute });
+  const platform = await execute(["tools", "run", "build.platform", "--input", "{\"action\":\"set\",\"target\":\"StandaloneWindows64\"}", "--dry-run"], { ...runtime, bridgeExecute });
+  const settings = await execute(["tools", "run", "build.settings", "--input", "{}"], { ...runtime, bridgeExecute });
+
+  assert.equal(scenes.ok, true);
+  assert.equal(platform.ok, true);
+  assert.equal(settings.ok, true);
+  assert.deepEqual(requests.map((request) => request.command), ["build.scenes", "build.platform", "build.settings"]);
+  assert.deepEqual(requests[0].args, { action: "add", path: "Assets/Scenes/Main.unity", dryRun: true });
+  assert.equal(requests[0].dryRun, true);
+  assert.deepEqual(requests[1].args, { action: "set", target: "StandaloneWindows64", dryRun: true });
+  assert.equal(requests[1].dryRun, true);
+  assert.deepEqual(requests[2].args, {});
 });
 
 test("camera commands forward target and screenshot options", async () => {
@@ -358,6 +609,29 @@ test("camera commands forward target and screenshot options", async () => {
   assert.deepEqual(requests.map((request) => request.command), ["camera.list", "camera.info", "camera.screenshot"]);
   assert.deepEqual(requests[1].args, { target: "Main Camera" });
   assert.deepEqual(requests[2].args, { path: "Artifacts/camera.png", format: "png", width: 1920, height: 1080, transparent: true, quality: 90, overwrite: true, target: "Main Camera" });
+});
+
+test("camera mutation tools forward structured --input fields", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+  const bridgeExecute = async (payload: BridgeRequest) => {
+    requests.push(payload);
+    return { ok: true, data: { command: payload.command, plannedEffects: [{ type: payload.command }] } };
+  };
+
+  const create = await execute(["tools", "run", "camera.create", "--input", "{\"name\":\"AlignmentCam\",\"position\":\"0,2,-6\",\"rotation\":\"15,0,0\",\"fieldOfView\":60,\"orthographic\":false,\"orthographicSize\":5,\"clearFlags\":\"SolidColor\",\"depth\":2,\"tag\":\"MainCamera\"}"], { ...runtime, bridgeExecute });
+  const target = await execute(["tools", "run", "camera.target", "--input", "{\"target\":\"AlignmentCam\",\"lookAt\":\"UnityCliAlignmentProbe\",\"position\":\"0,3,-8\",\"rotation\":\"20,0,0\"}"], { ...runtime, bridgeExecute });
+  const lens = await execute(["tools", "run", "camera.lens", "--input", "{\"target\":\"AlignmentCam\",\"fieldOfView\":45,\"orthographic\":true,\"orthographicSize\":10,\"nearClipPlane\":0.1,\"farClipPlane\":500,\"clearFlags\":\"Skybox\",\"depth\":3}"], { ...runtime, bridgeExecute });
+  const multiview = await execute(["tools", "run", "camera.multiview", "--input", "{\"targets\":\"Main Camera,AlignmentCam\",\"output\":\"Artifacts/cameras\",\"width\":320,\"height\":180,\"format\":\"png\"}"], { ...runtime, bridgeExecute });
+
+  for (const result of [create, target, lens, multiview]) {
+    assert.equal(result.ok, true);
+  }
+  assert.deepEqual(requests.map((request) => request.command), ["camera.create", "camera.target", "camera.lens", "camera.multiview"]);
+  assert.deepEqual(requests[0].args, { name: "AlignmentCam", position: "0,2,-6", rotation: "15,0,0", fieldOfView: 60, orthographic: false, orthographicSize: 5, clearFlags: "SolidColor", depth: 2, tag: "MainCamera" });
+  assert.deepEqual(requests[1].args, { target: "AlignmentCam", lookAt: "UnityCliAlignmentProbe", position: "0,3,-8", rotation: "20,0,0" });
+  assert.deepEqual(requests[2].args, { target: "AlignmentCam", fieldOfView: 45, orthographic: true, orthographicSize: 10, nearClipPlane: 0.1, farClipPlane: 500, clearFlags: "Skybox", depth: 3 });
+  assert.deepEqual(requests[3].args, { targets: "Main Camera,AlignmentCam", output: "Artifacts/cameras", width: 320, height: 180, format: "png" });
 });
 
 test("scene screenshot forwards output path and overwrite", async () => {
@@ -491,6 +765,30 @@ test("destructive bridge commands pass dryRun and security proof when explicitly
   assert.equal(requests[9].security?.destructiveFingerprint, "destructive-safety-v1");
 });
 
+test("asset mutation tools forward structured --input fields", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+  const bridgeExecute = async (payload: BridgeRequest) => {
+    requests.push(payload);
+    return { ok: true, data: { asset: { path: payload.args.path ?? payload.args.destination }, plannedEffects: [{ type: payload.command }] } };
+  };
+
+  const create = await execute(["tools", "run", "asset.create", "--input", "{\"path\":\"Assets/Generated/config.json\",\"type\":\"file\",\"content\":\"{}\",\"overwrite\":true}"], { ...runtime, bridgeExecute });
+  const duplicate = await execute(["tools", "run", "asset.duplicate", "--input", "{\"source\":\"Assets/Generated/config.json\",\"destination\":\"Assets/Generated/config-copy.json\"}"], { ...runtime, bridgeExecute });
+  const rename = await execute(["tools", "run", "asset.rename", "--input", "{\"path\":\"Assets/Generated/config-copy.json\",\"name\":\"config-renamed.json\"}"], { ...runtime, bridgeExecute });
+  const deleted = await execute(["tools", "run", "asset.delete", "--input", "{\"path\":\"Assets/Generated/config-renamed.json\"}", "--dry-run"], { ...runtime, bridgeExecute });
+
+  for (const result of [create, duplicate, rename, deleted]) {
+    assert.equal(result.ok, true);
+  }
+  assert.deepEqual(requests.map((request) => request.command), ["asset.create", "asset.duplicate", "asset.rename", "asset.delete"]);
+  assert.deepEqual(requests[0].args, { path: "Assets/Generated/config.json", type: "file", content: "{}", overwrite: true });
+  assert.deepEqual(requests[1].args, { path: "Assets/Generated/config.json", source: "Assets/Generated/config.json", destination: "Assets/Generated/config-copy.json" });
+  assert.deepEqual(requests[2].args, { path: "Assets/Generated/config-copy.json", name: "config-renamed.json" });
+  assert.deepEqual(requests[3].args, { path: "Assets/Generated/config-renamed.json", dryRun: true });
+  assert.equal(requests[3].dryRun, true);
+});
+
 test("material commands forward asset paths, target, values and planned effects", async () => {
   const runtime = await makeRuntime();
   const requests: BridgeRequest[] = [];
@@ -537,23 +835,27 @@ test("graphics commands forward settings and screenshot diagnostics", async () =
     return { ok: true, data: { graphics: { renderPipeline: { active: "Built-in" } }, plannedEffects: payload.args } };
   };
 
-  const quality = await execute(["tools", "run", "graphics.quality", "--quality-level", "2", "--v-sync-count", "1", "--shadow-distance", "75.5", "--soft-particles", "false"], { ...runtime, bridgeExecute });
+  const quality = await execute(["tools", "run", "graphics.quality", "--input", JSON.stringify({ level: "High", vSyncCount: 1, shadowDistance: 75.5, softParticles: false })], { ...runtime, bridgeExecute });
   const settings = await execute(["tools", "run", "graphics.settings", "--render-pipeline", "Assets/Settings/URP.asset", "--anti-aliasing", "4"], { ...runtime, bridgeExecute });
   const pipeline = await execute(["tools", "run", "graphics.pipeline"], { ...runtime, bridgeExecute });
+  const pipelineQuality = await execute(["tools", "run", "graphics.pipeline-quality", "--input", JSON.stringify({ level: "Medium" })], { ...runtime, bridgeExecute });
+  const pipelineSettings = await execute(["tools", "run", "graphics.pipeline-settings", "--input", JSON.stringify({ renderPipeline: "built-in" })], { ...runtime, bridgeExecute });
+  const pipelineInfo = await execute(["tools", "run", "graphics.pipeline-info"], { ...runtime, bridgeExecute });
   const volume = await execute(["tools", "run", "graphics.volume", "Global Volume"], { ...runtime, bridgeExecute });
   const screenshot = await execute(["tools", "run", "graphics.screenshot", "Artifacts/graphics.png", "--width", "1024", "--height", "768", "--include-diagnostics", "--overwrite"], { ...runtime, bridgeExecute });
 
-  assert.equal(quality.ok, true);
-  assert.equal(settings.ok, true);
-  assert.equal(pipeline.ok, true);
-  assert.equal(volume.ok, true);
-  assert.equal(screenshot.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["graphics.quality", "graphics.settings", "graphics.pipeline", "graphics.volume", "graphics.screenshot"]);
-  assert.deepEqual(requests[0].args, { qualityLevel: 2, vSyncCount: 1, shadowDistance: 75.5, softParticles: false });
+  for (const result of [quality, settings, pipeline, pipelineQuality, pipelineSettings, pipelineInfo, volume, screenshot]) {
+    assert.equal(result.ok, true);
+  }
+  assert.deepEqual(requests.map((request) => request.command), ["graphics.quality", "graphics.settings", "graphics.pipeline", "graphics.pipeline-quality", "graphics.pipeline-settings", "graphics.pipeline-info", "graphics.volume", "graphics.screenshot"]);
+  assert.deepEqual(requests[0].args, { qualityLevel: "High", vSyncCount: 1, shadowDistance: 75.5, softParticles: false });
   assert.deepEqual(requests[1].args, { antiAliasing: 4, renderPipeline: "Assets/Settings/URP.asset" });
   assert.deepEqual(requests[2].args, {});
-  assert.deepEqual(requests[3].args, { target: "Global Volume" });
-  assert.deepEqual(requests[4].args, { path: "Artifacts/graphics.png", width: 1024, height: 768, overwrite: true, includeDiagnostics: true });
+  assert.deepEqual(requests[3].args, { qualityLevel: "Medium" });
+  assert.deepEqual(requests[4].args, { renderPipeline: "built-in" });
+  assert.deepEqual(requests[5].args, {});
+  assert.deepEqual(requests[6].args, { target: "Global Volume" });
+  assert.deepEqual(requests[7].args, { path: "Artifacts/graphics.png", width: 1024, height: 768, overwrite: true, includeDiagnostics: true });
 });
 
 test("physics commands forward settings, raycast and simulation inputs", async () => {
@@ -850,6 +1152,32 @@ test("prefab bridge errors preserve structured diagnostics", async () => {
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "E_PREFAB_DIRTY_CONFLICT");
   assert.deepEqual(result.error?.next_actions, ["Run unity_cli tools run prefab.stage-close --save."]);
+});
+
+test("go commands forward structured search and transform inputs", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+  const bridgeExecute = async (payload: BridgeRequest) => {
+    requests.push(payload);
+    return { ok: true, data: { gameObject: { path: payload.args.target ?? payload.args.name }, items: [], pageInfo: { total: 0 }, plannedEffects: [{ type: payload.command }] } };
+  };
+
+  const find = await execute(["tools", "run", "go.find", "--input", JSON.stringify({ searchTerm: "Camera", searchMethod: "by_component", includeInactive: true, pageSize: 10, cursor: 20 })], { ...runtime, bridgeExecute });
+  const create = await execute(["tools", "run", "go.create", "--input", JSON.stringify({ name: "AlignmentCube", primitive: "cube", position: { x: 1, y: 2, z: 3 }, rotation: { x: 0, y: 45, z: 0 }, scale: { x: 2, y: 2, z: 2 }, active: false })], { ...runtime, bridgeExecute });
+  const modify = await execute(["tools", "run", "go.modify", "--input", JSON.stringify({ target: "AlignmentCube", newName: "AlignmentCubeRenamed", tagValue: "Untagged", layerValue: "Default", active: false })], { ...runtime, bridgeExecute });
+  const move = await execute(["tools", "run", "go.move-relative", "--input", JSON.stringify({ target: "AlignmentCubeRenamed", offset: { x: 0, y: 1, z: -2 } })], { ...runtime, bridgeExecute });
+  const parent = await execute(["tools", "run", "go.set-parent", "--dry-run", "--input", JSON.stringify({ target: "AlignmentCubeRenamed", parent: "Parent", worldPositionStays: false })], { ...runtime, bridgeExecute });
+
+  for (const result of [find, create, modify, move, parent]) {
+    assert.equal(result.ok, true);
+  }
+  assert.deepEqual(requests.map((request) => request.command), ["go.find", "go.create", "go.modify", "go.move-relative", "go.set-parent"]);
+  assert.deepEqual(requests[0].args, { pageSize: 10, cursor: 20, searchTerm: "Camera", searchMethod: "by_component", includeInactive: true });
+  assert.deepEqual(requests[1].args, { name: "AlignmentCube", active: false, primitive: "cube", x: 1, y: 2, z: 3, rotationX: 0, rotationY: 45, rotationZ: 0, scaleX: 2, scaleY: 2, scaleZ: 2 });
+  assert.deepEqual(requests[2].args, { target: "AlignmentCube", newName: "AlignmentCubeRenamed", active: false, layerValue: "Default", tagValue: "Untagged" });
+  assert.deepEqual(requests[3].args, { target: "AlignmentCubeRenamed", offsetX: 0, offsetY: 1, offsetZ: -2 });
+  assert.deepEqual(requests[4].args, { target: "AlignmentCubeRenamed", parent: "Parent", worldPositionStays: false, dryRun: true });
+  assert.equal(requests[4].dryRun, true);
 });
 
 test("bridge errors return CLI failure envelope", async () => {

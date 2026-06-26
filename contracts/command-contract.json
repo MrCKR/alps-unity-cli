@@ -911,7 +911,7 @@
       "command": "bake-reflection-probe",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -929,7 +929,7 @@
       "command": "bake-start",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {

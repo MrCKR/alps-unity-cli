@@ -30,6 +30,7 @@ function objectArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): R
     includeProperties: boolFlag(flags, "include-properties") ?? structured.includeProperties,
     deepSerialization: boolFlag(flags, "deep-serialization") ?? structured.deepSerialization,
     paths: structured.paths,
+    viewQuery: structured.viewQuery,
     namePattern: stringFlag(flags, "name-pattern") ?? structured.namePattern,
     pathPatches: structured.pathPatches,
     jsonPatch: structured.jsonPatch,
