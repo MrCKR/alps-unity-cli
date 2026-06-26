@@ -719,7 +719,7 @@ test("tools describe profiler.memory returns full metadata", async () => {
 });
 
 test("core bridge contract tools expose live-bridge support status", () => {
-  const liveBridgeNames = ["scene.active", "scene.build-settings", "scene.create", "scene.load", "scene.save", "go.inspect", "go.create", "go.modify", "go.delete", "component.add", "component.remove", "component.set", "script.create", "script.read", "script.edit", "script.validate"];
+  const liveBridgeNames = ["scene.active", "scene.build-settings", "scene.create", "scene.load", "scene.save", "go.inspect", "go.create", "go.modify", "go.delete", "component.add", "component.remove", "component.set"];
   for (const name of liveBridgeNames) {
     const tool = findToolByName(name);
     assert.ok(tool, `${name} should exist`);

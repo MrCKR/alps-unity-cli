@@ -19,7 +19,6 @@ import { profilerBridgeSpecs } from "./domains/profiler.js";
 import { reflectionBridgeSpecs } from "./domains/reflection.js";
 import { sceneBridgeSpecs } from "./domains/scene.js";
 import { screenshotBridgeSpecs } from "./domains/screenshot.js";
-import { scriptBridgeSpecs } from "./domains/script.js";
 import { scriptableObjectBridgeSpecs } from "./domains/scriptable-object.js";
 import { shaderBridgeSpecs } from "./domains/shader.js";
 import { textureBridgeSpecs } from "./domains/texture.js";
@@ -48,7 +47,6 @@ const CORE_DOMAIN_SPECS: BridgeCommandSpec[] = [
   ...textureBridgeSpecs,
   ...animationBridgeSpecs,
   ...uiBridgeSpecs,
-  ...scriptBridgeSpecs,
   ...editorBridgeSpecs,
   ...diagnoseBridgeSpecs,
   ...codeBridgeSpecs,

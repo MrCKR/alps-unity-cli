@@ -29,7 +29,6 @@ import { SHADER_TOOLS } from "./groups/shader.js";
 import { TEXTURE_TOOLS } from "./groups/texture.js";
 import { ANIMATION_TOOLS } from "./groups/animation.js";
 import { UI_TOOLS } from "./groups/ui.js";
-import { SCRIPT_TOOLS } from "./groups/script.js";
 import { SCRIPTABLE_OBJECT_TOOLS } from "./groups/scriptable-object.js";
 import { EDITOR_TOOLS } from "./groups/editor.js";
 import { DIAGNOSE_TOOLS } from "./groups/diagnose.js";
@@ -88,7 +87,6 @@ const CORE_TOOLS: ToolMetadata[] = [
   ...TEXTURE_TOOLS,
   ...ANIMATION_TOOLS,
   ...UI_TOOLS,
-  ...SCRIPT_TOOLS,
   ...SCRIPTABLE_OBJECT_TOOLS,
   ...EDITOR_TOOLS,
   ...DIAGNOSE_TOOLS,

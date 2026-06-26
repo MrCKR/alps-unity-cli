@@ -24,12 +24,6 @@ const filledCsharpHandlerCommands = [
   "component.add",
   "component.remove",
   "component.set",
-  "script.create",
-  "script.read",
-  "script.hash",
-  "script.edit",
-  "script.apply-edits",
-  "script.validate",
   "editor.undo",
   "editor.redo",
   "editor.resolution",
@@ -73,9 +67,9 @@ test("command contract marks C# handler gaps as present", async () => {
     assert.ok(allCsharpCommands.has(command), `${command} should be registered in C# BridgeCommandRegistry or an extension bundle`);
   }
 
-  assert.equal(csharpCommands.size, 211);
+  assert.equal(csharpCommands.size, 202);
   assert.equal(extensionCsharpCommands.size, 31);
-  assert.equal(allCsharpCommands.size, 242);
+  assert.equal(allCsharpCommands.size, 233);
 });
 
 async function registeredCsharpCommands(directory: URL): Promise<Set<string>> {

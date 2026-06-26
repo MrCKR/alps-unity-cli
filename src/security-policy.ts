@@ -8,7 +8,6 @@ export interface SecurityPolicyEntry {
 const SECURITY_POLICY: SecurityPolicyEntry[] = [
   { command: "asset.delete", title: "Delete Asset", destructiveHint: true, supportsDryRun: true },
   { command: "texture.generate", title: "Generate Texture", destructiveHint: true, supportsDryRun: true },
-  { command: "script.update-or-create", title: "Update or Create Script", destructiveHint: true, supportsDryRun: true },
   { command: "scene.save", title: "Save Scene", destructiveHint: true, supportsDryRun: true },
   { command: "code.exec", title: "Execute Live Code", destructiveHint: true, supportsDryRun: true },
   { command: "object.modify", title: "Modify Object", destructiveHint: true, supportsDryRun: true },
@@ -21,8 +20,6 @@ const SECURITY_POLICY: SecurityPolicyEntry[] = [
   { command: "cinemachine.extension", title: "Cinemachine Extension Remove", destructiveHint: true },
   { command: "urp.feature", title: "URP Renderer Feature Modify", destructiveHint: true },
   { command: "editor.menu", title: "Execute Editor Menu", destructiveHint: true },
-  { command: "script.edit", title: "Edit Script", destructiveHint: true },
-  { command: "script.apply-edits", title: "Apply Script Edits", destructiveHint: true },
   { command: "package.remove", title: "Package Remove", destructiveHint: true },
   { command: "batch.run", title: "Batch Run", destructiveHint: true, supportsDryRun: true },
   { command: "instances.prune", title: "Prune Unity Instances", destructiveHint: true },

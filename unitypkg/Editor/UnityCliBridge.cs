@@ -47,7 +47,6 @@ namespace UnityCli
         private static readonly string[] ShaderCommands = { "shader.info", "shader.read", "shader.create", "shader.update" };
         private static readonly string[] TextureCommands = { "texture.info", "texture.create", "texture.sprite", "texture.import-settings" };
         private static readonly string[] EditorCommands = { "editor.state", "editor.play", "editor.pause", "editor.stop", "editor.undo", "editor.redo", "editor.resolution", "editor.menu", "editor.console", "project.tag", "project.layer" };
-        private static readonly string[] ScriptCommands = { "script.create", "script.read", "script.hash", "script.edit", "script.apply-edits", "script.validate" };
         private static readonly string[] ScriptableObjectCommands = { "scriptable-object.create", "scriptable-object.info", "scriptable-object.modify" };
         private static readonly string[] CodeCommands = { "code.exec" };
         private static readonly string[] ProjectToolCommands = { "project-tool.list", "project-tool.run" };
@@ -261,8 +260,6 @@ namespace UnityCli
                 || command == "code.exec"
                 || command == "component.remove"
                 || command == "editor.menu"
-                || command == "script.edit"
-                || command == "script.apply-edits"
                 || command == "reflection.method.call";
         }
 

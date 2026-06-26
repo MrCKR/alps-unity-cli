@@ -58,7 +58,6 @@ test("Unity Bridge exposes documented core camera, screenshot, prefab, UI, mater
   assert.match(source, /w\.RawValue\(CapabilityJson\("physics", PhysicsCommands\)\)/);
   assert.match(source, /CapabilityJson\("shader", ShaderCommands\)/);
   assert.match(source, /CapabilityJson\("texture", TextureCommands\)/);
-  assert.match(source, /CapabilityJson\("script", ScriptCommands\)/);
   assert.match(source, /CapabilityJson\("code", CodeCommands\)/);
   assert.match(source, /CapabilityJson\("project-tool", ProjectToolCommands\)/);
   assert.match(source, /CapabilityJson\("runtime-tool", RuntimeToolCommands\)/);
@@ -220,17 +219,11 @@ test("Unity Bridge exposes documented core camera, screenshot, prefab, UI, mater
   assert.match(source, /RegisterCommand\(registry, "editor\.stop", "editor", false/);
   assert.match(source, /RegisterCommand\(registry, "editor\.menu", "editor", false/);
   assert.match(source, /RegisterCommand\(registry, "editor\.console", "editor", false/);
-  assert.match(source, /RegisterCommand\(registry, "script\.create", "script", true/);
-  assert.match(source, /RegisterCommand\(registry, "script\.read", "script", false/);
-  assert.match(source, /RegisterCommand\(registry, "script\.hash", "script", false/);
-  assert.match(source, /RegisterCommand\(registry, "script\.edit", "script", true/);
-  assert.match(source, /RegisterCommand\(registry, "script\.apply-edits", "script", true/);
-  assert.match(source, /RegisterCommand\(registry, "script\.validate", "script", false/);
   assert.match(source, /RegisterCommand\(registry, "code\.exec", "code", true/);
   assert.match(source, /RegisterCommand\(registry, "project-tool\.list", "project-tool", false/);
   assert.match(source, /RegisterCommand\(registry, "project-tool\.run", "project-tool", true/);
   assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.active`, `scene\.hierarchy`, `scene\.build-settings`, `scene\.screenshot`, `scene\.create`, `scene\.load`, `scene\.save`, `go\.find`, `go\.inspect`, `go\.create`, `go\.modify`, `go\.duplicate`, `go\.move-relative`, `go\.look-at`, `go\.delete`, `component\.add`, `component\.remove`, `component\.set`/);
-  assert.match(bridgeSection, /`script\.create`, `script\.read`, `script\.hash`, `script\.edit`, `script\.apply-edits`, `script\.validate`, `code\.exec`\./);
+  assert.match(bridgeSection, /`code\.exec`\./);
   assert.doesNotMatch(bridgeSection, /live query\/edit\/screenshot/);
   assert.doesNotMatch(bridgeSection, /not routed by this package yet/);
   assert.doesNotMatch(bridgeSection, /E_BRIDGE_COMMAND_UNSUPPORTED/);

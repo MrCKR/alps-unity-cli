@@ -42,14 +42,14 @@ test("security policy covers all destructive commands including CLI-only", async
     "asset.delete", "scene.save", "code.exec",
     "probuilder.delete-faces", "probuilder.detach-faces", "probuilder.combine-meshes",
     "probuilder.merge-objects", "probuilder.flip-normals",
-    "cinemachine.extension", "urp.feature", "editor.menu", "script.edit", "script.apply-edits", "package.remove",
+    "cinemachine.extension", "urp.feature", "editor.menu", "package.remove",
     "batch.run", "instances.prune", "jobs.cancel", "controller.remove-layer", "graphics.bake-start", "graphics.bake-clear", "graphics.bake-reflection-probe",
     "package.embed", "ui.create-panel-settings",
-    "texture.generate", "script.update-or-create",
+    "texture.generate",
     "object.modify", "reflection.method.call"
   ];
   assert.deepEqual(policyCommands.sort(), expected.sort());
-  assert.equal(destructiveCommands().length, 27);
+  assert.equal(destructiveCommands().length, 24);
 });
 
 test("destructive dry-run forwards envelope preview without --yes", async () => {

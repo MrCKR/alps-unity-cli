@@ -115,10 +115,6 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
     title: "UI Commands",
     summary: "Create and inspect UI elements (Canvas, Text, Button, Image, UI Document). Handler: bridge + offline fallback. Target: editor."
   },
-  script: {
-    title: "Script Commands",
-    summary: "Create, read, edit and validate C# script files. Handler: bridge. Target: editor. `script.edit` is destructive (requires --yes)."
-  },
   editor: {
     title: "Editor Commands",
     summary: "Control the Unity Editor: play mode, console, menu items and refresh jobs. Handlers: bridge (state/play/pause/stop/menu/console), job (refresh). Target: editor. `editor.menu` is destructive (requires --yes)."

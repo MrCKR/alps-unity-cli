@@ -47,7 +47,6 @@ namespace UnityCli
             w.RawValue(CapabilityJson("shader", ShaderCommands));
             w.RawValue(CapabilityJson("texture", TextureCommands));
             w.RawValue(CapabilityJson("editor", EditorCommands));
-            w.RawValue(CapabilityJson("script", ScriptCommands));
             w.RawValue(CapabilityJson("code", CodeCommands));
             w.RawValue(CapabilityJson("project-tool", ProjectToolCommands));
             w.RawValue(CapabilityJson("runtime-tool", RuntimeToolCommands));

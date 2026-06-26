@@ -664,8 +664,8 @@ Bridge 生命周期：
 **Runtime validation disclaimer:**
 - C# runtime behavior for empty camera targets, missing Cameras, screenshot IO failures, actual PNG/JPG artifacts, Prefab Stage open/save/close, Prefab dirty conflicts, nested/variant Prefab summaries, Material asset creation, Renderer/UI Graphic assignment, Material property writes, GraphicsSettings/QualitySettings persistence, render pipeline asset resolution, Physics/Physics2D project setting persistence, raycast collision hits, explicit simulation steps, AnimationClip asset creation/binding summaries, Animator state/play/stop behavior, VFX Graph asset creation, VisualEffect assignment, Shader import diagnostics, TextureImporter mutations, uGUI object creation, UIDocument/PanelSettings linking, UI hierarchy summaries and Runtime Code live execution must still be proven by real Windows + Unity Editor validation
 
-**Script & Code:**
-- `script.create`, `script.read`, `script.hash`, `script.edit`, `script.apply-edits`, `script.validate`, `code.exec`.
+**Code:**
+- `code.exec`.
 
 **Context & Extension:**
 - `context.list`, `context.describe`, `context.read` — read-only context observations

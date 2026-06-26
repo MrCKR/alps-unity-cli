@@ -127,18 +127,6 @@ test("prefab domain exposes instantiate/unpack", () => {
   assert.equal(unpack.supportsDryRun, true);
 });
 
-test("script domain exposes token-safe read/search tools", () => {
-  const read = findToolByName("script.read")!;
-  const readProps = read.inputSchema.properties as Record<string, unknown>;
-  assert.ok(readProps.lineFrom, "script.read should expose lineFrom for partial reads");
-  assert.ok(readProps.lineTo, "script.read should expose lineTo for partial reads");
-  assert.equal(read.playModeSupport, "supported");
-  const find = findToolByName("script.find-in-file")!;
-  assert.ok(find.outputSchema, "script.find-in-file should describe match output");
-  assert.equal(find.playModeSupport, "supported");
-  assert.ok(findToolByName("script.update-or-create")?.destructiveHint);
-});
-
 // screenshot 与 profiler 域详细契约测试已拆分至 screenshot-contract.test.ts 与 profiler-contract.test.ts
 
 test("console domain exposes get/clear; editor exposes selection.set/active-tool.set", () => {
@@ -163,7 +151,7 @@ test("editor console/menu handlers use current safe CLI guidance", async () => {
   assert.match(source, /E_EDITOR_CONSOLE_CLEAR_UNSUPPORTED[\s\S]*console\.clear --dry-run[\s\S]*console\.clear --yes/, "editor.console must reject legacy clear and point to console.clear safety flow");
 });
 
-test("console.get and script.read C# handlers return bounded bridge envelopes", async () => {
+test("console.get C# handler returns bounded bridge envelope", async () => {
   const csFiles = await listCsFiles(new URL("../unitypkg/Editor/", import.meta.url));
   const allSource = (
     await Promise.all(
@@ -171,7 +159,6 @@ test("console.get and script.read C# handlers return bounded bridge envelopes", 
     )
   ).join("\n");
   assert.match(allSource, /private static string ConsoleGet[\s\S]*return SuccessJson\(w\.EndObject\(\)\.ToString\(\)\);/, "console.get should return a bridge success envelope");
-  assert.match(allSource, /private static string ScriptRead[\s\S]*lineFrom[\s\S]*lineTo[\s\S]*truncated[\s\S]*SuccessJson/, "script.read should support bounded line ranges");
   assert.match(allSource, /private static int CountHierarchy\(Transform transform\)/, "prefab/context hierarchy callers should keep CountHierarchy compatibility");
   assert.match(allSource, /private static void CollectHierarchy\(Transform transform, List<string> items, int cursor, int pageSize, Counter counter\)/, "prefab/context hierarchy callers should keep paged CollectHierarchy compatibility");
 });
@@ -270,7 +257,6 @@ test("bridge specs resolve for all new domain 4-8 tools", () => {
     ["asset", "get-data", "asset.get-data"],
     ["shader", "list", "shader.list"],
     ["texture", "generate", "texture.generate"],
-    ["script", "update-or-create", "script.update-or-create"],
     ["console", "get", "console.get"],
     ["package", "embed", "package.embed"],
     ["editor", "selection-set", "editor.selection.set"],
@@ -291,7 +277,6 @@ test("all new tools have contract entries with present C# handler", () => {
     "go.set-parent", "prefab.instantiate", "prefab.unpack",
     "asset.search-built-in", "asset.get-data", "asset.preview",
     "shader.list", "shader.get-data", "texture.generate",
-    "script.update-or-create", "script.find-in-file", "script.capabilities",
     "console.get", "console.clear", "editor.selection.set", "editor.active-tool.set", "package.embed",
     "build.scenes", "build.platform", "build.settings",
     "physics.raycast-all", "physics.linecast", "physics.shapecast", "physics.validate"

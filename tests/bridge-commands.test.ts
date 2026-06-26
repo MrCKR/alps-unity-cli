@@ -468,60 +468,38 @@ test("component lifecycle tools forward structured --input fields", async () => 
   assert.deepEqual(requests[3].args, removeInput);
 });
 
-test("script create reads content file", async () => {
-  const runtime = await makeRuntime();
-  const contentFile = join(runtime.dataDir, "Player.cs");
-  await writeFile(contentFile, "public class Player {}\n", "utf8");
-  const requests: BridgeRequest[] = [];
-
-  const result = await execute(["tools", "run", "script.create", "Assets/Scripts/Player.cs", "--content-file", contentFile], {
-    ...runtime,
-    bridgeExecute: async (payload: BridgeRequest) => {
-      requests.push(payload);
-      return { ok: true, data: { script: { path: payload.args.path } } };
-    }
-  });
-
-  assert.equal(result.ok, true);
-  assert.equal(requests[0].command, "script.create");
-  assert.equal(requests[0].args.content, "public class Player {}\n");
-});
-
-test("script read and find-in-file forward structured --input fields", async () => {
+test("tools run forwards structured --input fields with pwsh escaping", async () => {
   const runtime = await makeRuntime();
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
     requests.push(payload);
-    return { ok: true, data: { command: payload.command, path: payload.args.path, content: "class Probe {}", matches: [] } };
+    return { ok: true, data: { command: payload.command, path: payload.args.path } };
   };
 
-  const read = await execute(["tools", "run", "script.read", "--input", JSON.stringify({ path: "Assets/Scripts/Probe.cs", lineFrom: 2, lineTo: 8 })], { ...runtime, bridgeExecute });
-  const find = await execute(["tools", "run", "script.find-in-file", "--input", JSON.stringify({ path: "Assets/Scripts/Probe.cs", query: "Probe", regex: false, ignoreCase: true })], { ...runtime, bridgeExecute });
+  const read = await execute(["tools", "run", "material.info", "--input", JSON.stringify({ path: "Assets/Materials/Probe.mat" })], { ...runtime, bridgeExecute });
   const pwshEscaped = await execute([
     "tools",
     "run",
-    "script.read",
+    "material.info",
     "--input",
     "{\\",
-    "path\\:\\Assets/Scripts/Probe.cs\\,\\lineFrom\\:2,\\lineTo\\:8}"
+    "path\\:\\Assets/Materials/Probe.mat}"
   ], { ...runtime, bridgeExecute });
-  const backslashQuoted = await execute(["tools", "run", "script.read", "--input", '{\\"path\\":\\"Assets/Scripts/Probe.cs\\",\\"lineFrom\\":2,\\"lineTo\\":8}'], { ...runtime, bridgeExecute });
+  const backslashQuoted = await execute(["tools", "run", "material.info", "--input", '{\\"path\\":\\"Assets/Materials/Probe.mat\\"}'], { ...runtime, bridgeExecute });
 
   assert.equal(read.ok, true);
-  assert.equal(find.ok, true);
   assert.equal(pwshEscaped.ok, true);
   assert.equal(backslashQuoted.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["script.read", "script.find-in-file", "script.read", "script.read"]);
-  assert.deepEqual(requests[0].args, { path: "Assets/Scripts/Probe.cs", lineFrom: 2, lineTo: 8 });
-  assert.deepEqual(requests[1].args, { path: "Assets/Scripts/Probe.cs", query: "Probe", regex: false, ignoreCase: true });
-  assert.deepEqual(requests[2].args, { path: "Assets/Scripts/Probe.cs", lineFrom: 2, lineTo: 8 });
-  assert.deepEqual(requests[3].args, { path: "Assets/Scripts/Probe.cs", lineFrom: 2, lineTo: 8 });
+  assert.deepEqual(requests.map((request) => request.command), ["material.info", "material.info", "material.info"]);
+  assert.deepEqual(requests[0].args, { path: "Assets/Materials/Probe.mat" });
+  assert.deepEqual(requests[1].args, { path: "Assets/Materials/Probe.mat" });
+  assert.deepEqual(requests[2].args, { path: "Assets/Materials/Probe.mat" });
 });
 
 test("tools run rejects invalid --input JSON before bridge execution", async () => {
   const runtime = await makeRuntime();
   const requests: BridgeRequest[] = [];
-  const result = await execute(["tools", "run", "script.read", "--input", "{not-json"], {
+  const result = await execute(["tools", "run", "material.info", "--input", "{not-json"], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);

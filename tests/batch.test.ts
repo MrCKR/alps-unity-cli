@@ -140,7 +140,7 @@ test("batch preflight accepts query edit test and screenshot example", async () 
     defaults: { project: ".", unity },
     steps: [
       { id: "query", command: ["tools", "run", "asset.search"], args: ["--query", "Player", "--type", "Prefab"] },
-      { id: "edit", command: ["tools", "run", "script.edit", "Assets/Scripts/Player.cs"], args: ["--find", "speed = 1", "--replace", "speed = 2"], dependsOn: ["query"] },
+      { id: "edit", command: ["tools", "run", "material.set", "Assets/Materials/Player.mat"], args: ["--property", "_Color", "--color", "1,0,0,1"], dependsOn: ["query"] },
       { id: "test", command: ["tools", "run", "test.run"], args: ["--platform", "EditMode"], dependsOn: ["edit"] },
       { id: "code", command: ["tools", "run", "code.exec"], args: ["--code", "return 1;"], dependsOn: ["edit"] },
       { id: "camera", command: ["tools", "run", "camera.info", "Main Camera"] },
