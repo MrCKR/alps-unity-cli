@@ -50,9 +50,9 @@ test("ui read tools are supported in any play mode", () => {
   }
 });
 
-test("ui destructive tools (attach-document/create-panel-settings) declare risk", () => {
+test("ui create-panel-settings declares risk; attach-document is non-destructive", () => {
   const attach = findToolByName("ui.attach-document")!;
-  assert.equal(attach.destructiveHint, true);
+  assert.equal(attach.destructiveHint, false);
   assert.equal(attach.riskLevel, "medium");
   assert.equal(attach.playModeSupport, "session-affecting");
 

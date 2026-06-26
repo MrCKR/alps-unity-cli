@@ -11,7 +11,7 @@ export const editorBridgeSpecs: BridgeCommandSpec[] = [
   { group: "editor", command: "redo", bridgeCommand: "editor.redo", buildArgs: editorArgs },
   { group: "editor", command: "resolution", bridgeCommand: "editor.resolution", buildArgs: editorArgs },
   { group: "editor", command: "menu", bridgeCommand: "editor.menu", buildArgs: editorArgs },
-  { group: "editor", command: "selection-set", bridgeCommand: "editor.selection.set", buildArgs: selectionSetArgs, supportsDryRun: true },
+  { group: "editor", command: "selection-set", bridgeCommand: "editor.selection.set", buildArgs: selectionSetArgs },
   { group: "editor", command: "active-tool-set", bridgeCommand: "editor.active-tool.set", buildArgs: activeToolSetArgs },
   { group: "project", command: "tag", bridgeCommand: "project.tag", buildArgs: editorArgs },
   { group: "project", command: "layer", bridgeCommand: "project.layer", buildArgs: editorArgs }

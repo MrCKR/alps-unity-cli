@@ -10,7 +10,7 @@ export const prefabBridgeSpecs: BridgeCommandSpec[] = [
   { group: "prefab", command: "stage-save", bridgeCommand: "prefab.stage-save", buildArgs: prefabArgs },
   { group: "prefab", command: "stage-close", bridgeCommand: "prefab.stage-close", buildArgs: prefabArgs },
   { group: "prefab", command: "instantiate", bridgeCommand: "prefab.instantiate", buildArgs: prefabInstantiateArgs, supportsDryRun: true },
-  { group: "prefab", command: "unpack", bridgeCommand: "prefab.unpack", buildArgs: prefabUnpackArgs, supportsDryRun: true }
+  { group: "prefab", command: "unpack", bridgeCommand: "prefab.unpack", buildArgs: prefabUnpackArgs }
 ];
 
 // 读取 tools run --input 中无法映射为简单 flag 的结构化字段（path/name/addChild 等）

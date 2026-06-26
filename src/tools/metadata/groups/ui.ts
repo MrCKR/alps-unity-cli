@@ -166,7 +166,7 @@ export const UI_TOOLS: ToolMetadata[] = [
     description: "Attach a UIDocument component to a GameObject, optionally with a UXML source asset and PanelSettings. Destructive: modifies the target GameObject. Aligns with CoplayDev manage_ui.attach_ui_document.",
     group: "ui",
     inputSchema: objSchema({ target: { type: "string", description: "Target GameObject: name, hierarchy path or instance id." }, sourceAsset: { type: "string", description: "Assets/*.uxml source asset." }, panelSettings: { type: "string", description: "PanelSettings asset path." }, sortOrder: { type: "integer", default: 0, description: "Sorting order." } }, ["target"]),
-    destructiveHint: true,
+    destructiveHint: false,
     sideEffects: ["scene-modify"],
     riskLevel: "medium",
     playModeSupport: "session-affecting",

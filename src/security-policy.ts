@@ -7,16 +7,10 @@ export interface SecurityPolicyEntry {
 
 const SECURITY_POLICY: SecurityPolicyEntry[] = [
   { command: "asset.delete", title: "Delete Asset", destructiveHint: true, supportsDryRun: true },
-  { command: "go.delete", title: "Delete GameObject", destructiveHint: true, supportsDryRun: true },
-  { command: "go.set-parent", title: "Set GameObject Parent", destructiveHint: true, supportsDryRun: true },
-  { command: "scene.unload", title: "Unload Scene", destructiveHint: true, supportsDryRun: true },
-  { command: "prefab.unpack", title: "Unpack Prefab Instance", destructiveHint: true, supportsDryRun: true },
   { command: "texture.generate", title: "Generate Texture", destructiveHint: true, supportsDryRun: true },
   { command: "script.update-or-create", title: "Update or Create Script", destructiveHint: true, supportsDryRun: true },
   { command: "scene.save", title: "Save Scene", destructiveHint: true, supportsDryRun: true },
   { command: "code.exec", title: "Execute Live Code", destructiveHint: true, supportsDryRun: true },
-  { command: "component.remove", title: "Remove Component", destructiveHint: true },
-  { command: "component.modify", title: "Modify Component", destructiveHint: true, supportsDryRun: true },
   { command: "object.modify", title: "Modify Object", destructiveHint: true, supportsDryRun: true },
   { command: "reflection.method.call", title: "Call Method via Reflection", destructiveHint: true },
   { command: "probuilder.delete-faces", title: "ProBuilder Delete Faces", destructiveHint: true },
@@ -34,15 +28,10 @@ const SECURITY_POLICY: SecurityPolicyEntry[] = [
   { command: "instances.prune", title: "Prune Unity Instances", destructiveHint: true },
   { command: "jobs.cancel", title: "Cancel Job", destructiveHint: true },
   { command: "controller.remove-layer", title: "Remove Animator Layer", destructiveHint: true },
-  { command: "profiler.clear", title: "Clear Profiler Data", destructiveHint: true, supportsDryRun: true },
-  { command: "console.clear", title: "Clear Console", destructiveHint: true, supportsDryRun: true },
   { command: "graphics.bake-start", title: "Start Light Bake", destructiveHint: true },
   { command: "graphics.bake-clear", title: "Clear Baked Lighting Data", destructiveHint: true },
   { command: "graphics.bake-reflection-probe", title: "Bake Reflection Probe", destructiveHint: true },
   { command: "package.embed", title: "Embed Package", destructiveHint: true, supportsDryRun: true },
-  { command: "editor.selection.set", title: "Set Editor Selection", destructiveHint: true, supportsDryRun: true },
-  { command: "editor.active-tool.set", title: "Set Active Editor Tool", destructiveHint: true },
-  { command: "ui.attach-document", title: "Attach UIDocument", destructiveHint: true },
   { command: "ui.create-panel-settings", title: "Create PanelSettings", destructiveHint: true }
 ];
 

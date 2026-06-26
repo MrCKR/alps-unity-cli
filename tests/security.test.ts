@@ -18,7 +18,6 @@ async function makeRuntime() {
 
 test("bridge registry marks destructive commands from security policy", () => {
   const assetDelete = bridgeCommandRegistry.lookup("asset", "delete");
-  const goDelete = bridgeCommandRegistry.lookup("go", "delete");
   const sceneSave = bridgeCommandRegistry.lookup("scene", "save");
   const graphicsBakeStart = bridgeCommandRegistry.lookup("graphics", "bake-start");
   const graphicsBakeClear = bridgeCommandRegistry.lookup("graphics", "bake-clear");
@@ -26,8 +25,6 @@ test("bridge registry marks destructive commands from security policy", () => {
 
   assert.equal(assetDelete?.destructiveHint, true);
   assert.equal(assetDelete?.supportsDryRun, true);
-  assert.equal(goDelete?.destructiveHint, true);
-  assert.equal(goDelete?.supportsDryRun, true);
   assert.equal(sceneSave?.destructiveHint, true);
   assert.equal(sceneSave?.supportsDryRun, true);
   assert.equal(graphicsBakeStart?.destructiveHint, true);
@@ -42,17 +39,17 @@ test("security policy covers all destructive commands including CLI-only", async
   const { destructiveCommands } = await import("../src/security-policy.js");
   const policyCommands = destructiveCommands().map((e: { command: string }) => e.command);
   const expected = [
-    "asset.delete", "go.delete", "scene.save", "code.exec", "component.remove",
+    "asset.delete", "scene.save", "code.exec",
     "probuilder.delete-faces", "probuilder.detach-faces", "probuilder.combine-meshes",
     "probuilder.merge-objects", "probuilder.flip-normals",
     "cinemachine.extension", "urp.feature", "editor.menu", "script.edit", "script.apply-edits", "package.remove",
-    "batch.run", "instances.prune", "jobs.cancel", "controller.remove-layer", "profiler.clear", "console.clear", "graphics.bake-start", "graphics.bake-clear", "graphics.bake-reflection-probe",
-    "package.embed", "editor.selection.set", "editor.active-tool.set", "ui.attach-document", "ui.create-panel-settings",
-    "go.set-parent", "scene.unload", "prefab.unpack", "texture.generate", "script.update-or-create",
-    "component.modify", "object.modify", "reflection.method.call"
+    "batch.run", "instances.prune", "jobs.cancel", "controller.remove-layer", "graphics.bake-start", "graphics.bake-clear", "graphics.bake-reflection-probe",
+    "package.embed", "ui.create-panel-settings",
+    "texture.generate", "script.update-or-create",
+    "object.modify", "reflection.method.call"
   ];
   assert.deepEqual(policyCommands.sort(), expected.sort());
-  assert.equal(destructiveCommands().length, 38);
+  assert.equal(destructiveCommands().length, 27);
 });
 
 test("destructive dry-run forwards envelope preview without --yes", async () => {

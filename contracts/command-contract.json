@@ -461,7 +461,7 @@
       "command": "modify",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": true,
+      "destructive": false,
       "timeout": 30000
     },
     {
@@ -470,7 +470,7 @@
       "command": "remove",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": true,
+      "destructive": false,
       "timeout": 30000
     },
     {
@@ -488,7 +488,7 @@
       "command": "clear",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": true,
+      "destructive": false,
       "timeout": 30000
     },
     {
@@ -695,7 +695,7 @@
       "command": "active-tool.set",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": true,
+      "destructive": false,
       "timeout": 30000
     },
     {
@@ -767,7 +767,7 @@
       "command": "selection.set",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": true,
+      "destructive": false,
       "timeout": 30000
     },
     {
@@ -821,7 +821,7 @@
       "command": "delete",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": true,
+      "destructive": false,
       "timeout": 30000
     },
     {
@@ -884,7 +884,7 @@
       "command": "set-parent",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": true,
+      "destructive": false,
       "timeout": 30000
     },
     {
@@ -1502,7 +1502,7 @@
       "command": "unpack",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": true,
+      "destructive": false,
       "timeout": 30000
     },
     {
@@ -1961,7 +1961,7 @@
       "command": "clear",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": true,
+      "destructive": false,
       "timeout": 30000
     },
     {
@@ -2285,7 +2285,7 @@
       "command": "unload",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": true,
+      "destructive": false,
       "timeout": 30000
     },
     {
@@ -2618,7 +2618,7 @@
       "command": "attach-document",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": true,
+      "destructive": false,
       "timeout": 30000
     },
     {

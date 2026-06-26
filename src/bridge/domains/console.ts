@@ -3,7 +3,7 @@ import type { BridgeCommandSpec } from "../types.js";
 
 export const consoleBridgeSpecs: BridgeCommandSpec[] = [
   { group: "console", command: "get", bridgeCommand: "console.get", buildArgs: consoleGetArgs },
-  { group: "console", command: "clear", bridgeCommand: "console.clear", buildArgs: ({ flags }) => compactArgs({ dryRun: boolFlag(flags, "dry-run") }), supportsDryRun: true }
+  { group: "console", command: "clear", bridgeCommand: "console.clear", buildArgs: ({ flags }) => compactArgs({ dryRun: boolFlag(flags, "dry-run") }) }
 ];
 
 function consoleGetArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {

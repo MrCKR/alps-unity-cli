@@ -64,6 +64,11 @@
       "type": "string",
       "description": "Availability scope for the context."
     },
+    "playModeSupport": {
+      "type": "string",
+      "enum": ["supported", "runtime-only", "session-affecting", "editor-only", "unknown"],
+      "description": "Play Mode read semantics for the context. Contexts are read-only, so most editor contexts are supported."
+    },
     "available": {
       "type": "boolean",
       "description": "Whether the context is currently available based on session state."

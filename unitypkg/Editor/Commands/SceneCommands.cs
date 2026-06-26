@@ -37,7 +37,7 @@ namespace UnityCli
             RegisterCommand(registry, "scene.create", "scene", true, SceneCreate);
             RegisterCommand(registry, "scene.load", "scene", true, SceneLoad);
             RegisterCommand(registry, "scene.save", "scene", true, SceneSave);
-            RegisterCommand(registry, "scene.unload", "scene", true, SceneUnload);
+            RegisterCommand(registry, "scene.unload", "scene", false, SceneUnload);
             RegisterCommand(registry, "scene.set-active", "scene", true, SceneSetActive);
             RegisterCommand(registry, "scene.list-opened", "scene", false, SceneListOpened);
             RegisterCommand(registry, "scene.data", "scene", false, SceneData);

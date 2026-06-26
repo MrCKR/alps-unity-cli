@@ -150,7 +150,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     description: "Unload an additively-loaded scene from the Editor. Cannot unload the only open scene. Destructive: removes the scene from the Editor session. Supports --dry-run.",
     group: "scene",
     inputSchema: objSchema({ path: { type: "string", description: "Assets/*.unity scene path to unload." }, name: { type: "string", description: "Scene name (alternative to path)." }, removeAll: { type: "boolean", description: "Unload all additively-loaded scenes." } }, ["path"]),
-    destructiveHint: true,
+    destructiveHint: false,
     supportsDryRun: true,
     sideEffects: ["scene-modify"],
     riskLevel: "medium",

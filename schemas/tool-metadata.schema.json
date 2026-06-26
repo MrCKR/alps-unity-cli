@@ -60,6 +60,11 @@
       "enum": ["safe", "low", "medium", "high", "critical"],
       "description": "Risk level classification for safety disclosure."
     },
+    "playModeSupport": {
+      "type": "string",
+      "enum": ["supported", "runtime-only", "session-affecting", "editor-only", "unknown"],
+      "description": "Play Mode execution semantics: supported, runtime-only, session-affecting, editor-only, or unknown."
+    },
     "equivalentUnityMcp": {
       "type": "string",
       "description": "Mapping to equivalent unity-mcp tool name, for parity tracking."

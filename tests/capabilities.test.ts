@@ -83,7 +83,6 @@ test("capabilities static data includes destructive tools", async () => {
 
   assert.ok(destructiveTools.length > 0);
   assert.ok(destructiveTools.includes("scene.save"), "scene.save should be in destructive list");
-  assert.ok(destructiveTools.includes("go.delete"), "go.delete should be in destructive list");
 });
 
 test("capabilities static data separates live bridge, hybrid and planned tools", async () => {

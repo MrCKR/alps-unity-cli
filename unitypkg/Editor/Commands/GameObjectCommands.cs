@@ -37,14 +37,14 @@ namespace UnityCli
             RegisterCommand(registry, "go.duplicate", "go", true, GameObjectDuplicate);
             RegisterCommand(registry, "go.move-relative", "go", true, GameObjectMoveRelative);
             RegisterCommand(registry, "go.look-at", "go", true, GameObjectLookAt);
-            RegisterCommand(registry, "go.delete", "go", true, GameObjectDelete);
-            RegisterCommand(registry, "go.set-parent", "go", true, GameObjectSetParent);
+            RegisterCommand(registry, "go.delete", "go", false, GameObjectDelete);
+            RegisterCommand(registry, "go.set-parent", "go", false, GameObjectSetParent);
             RegisterCommand(registry, "component.add", "component", true, ComponentAdd);
-            RegisterCommand(registry, "component.remove", "component", true, ComponentRemove);
+            RegisterCommand(registry, "component.remove", "component", false, ComponentRemove);
             RegisterCommand(registry, "component.set", "component", true, ComponentSet);
             // 深读写组件：对齐 IvanMurzak gameobject-component-get/modify/list-all
             RegisterCommand(registry, "component.get", "component", false, ComponentGet);
-            RegisterCommand(registry, "component.modify", "component", true, ComponentModify);
+            RegisterCommand(registry, "component.modify", "component", false, ComponentModify);
             RegisterCommand(registry, "component.list-types", "component", false, ComponentListTypes);
         }
 

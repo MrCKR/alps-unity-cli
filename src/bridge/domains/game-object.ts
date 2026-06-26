@@ -10,12 +10,12 @@ export const gameObjectBridgeSpecs: BridgeCommandSpec[] = [
   { group: "go", command: "move-relative", bridgeCommand: "go.move-relative", buildArgs: gameObjectArgs },
   { group: "go", command: "look-at", bridgeCommand: "go.look-at", buildArgs: gameObjectArgs },
   { group: "go", command: "delete", bridgeCommand: "go.delete", buildArgs: gameObjectArgs },
-  { group: "go", command: "set-parent", bridgeCommand: "go.set-parent", buildArgs: gameObjectArgs, supportsDryRun: true },
+  { group: "go", command: "set-parent", bridgeCommand: "go.set-parent", buildArgs: gameObjectArgs },
   { group: "component", command: "add", bridgeCommand: "component.add", buildArgs: componentArgs },
   { group: "component", command: "remove", bridgeCommand: "component.remove", buildArgs: componentArgs },
   { group: "component", command: "set", bridgeCommand: "component.set", buildArgs: componentArgs },
   { group: "component", command: "get", bridgeCommand: "component.get", buildArgs: componentDeepArgs },
-  { group: "component", command: "modify", bridgeCommand: "component.modify", buildArgs: componentDeepArgs, supportsDryRun: true },
+  { group: "component", command: "modify", bridgeCommand: "component.modify", buildArgs: componentDeepArgs },
   { group: "component", command: "list-types", bridgeCommand: "component.list-types", buildArgs: componentListTypesArgs }
 ];
 

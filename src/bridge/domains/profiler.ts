@@ -13,7 +13,7 @@ export const profilerBridgeSpecs: BridgeCommandSpec[] = [
   { group: "profiler", command: "status", bridgeCommand: "profiler.status", buildArgs: profilerArgs },
   { group: "profiler", command: "modules", bridgeCommand: "profiler.modules", buildArgs: profilerArgs },
   { group: "profiler", command: "module-enable", bridgeCommand: "profiler.module-enable", buildArgs: profilerModuleEnableArgs },
-  { group: "profiler", command: "clear", bridgeCommand: "profiler.clear", buildArgs: profilerArgs, supportsDryRun: true },
+  { group: "profiler", command: "clear", bridgeCommand: "profiler.clear", buildArgs: profilerArgs },
   { group: "profiler", command: "load", bridgeCommand: "profiler.load", buildArgs: profilerArgs },
   { group: "profiler", command: "areas", bridgeCommand: "profiler.areas", buildArgs: profilerArgs },
   { group: "profiler", command: "object-memory", bridgeCommand: "profiler.object-memory", buildArgs: profilerObjectMemoryArgs },

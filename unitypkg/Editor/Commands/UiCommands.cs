@@ -37,7 +37,7 @@ namespace UnityCli
             RegisterCommand(registry, "ui.document.info", "ui", false, UiDocumentInfo);
             RegisterCommand(registry, "ui.document.create", "ui", true, UiDocumentCreate);
             RegisterCommand(registry, "ui.hierarchy", "ui", false, UiHierarchy);
-            RegisterCommand(registry, "ui.attach-document", "ui", true, UiAttachDocument);
+            RegisterCommand(registry, "ui.attach-document", "ui", false, UiAttachDocument);
             RegisterCommand(registry, "ui.create-panel-settings", "ui", true, UiCreatePanelSettings);
             RegisterCommand(registry, "ui.get-visual-tree", "ui", false, UiGetVisualTree);
         }

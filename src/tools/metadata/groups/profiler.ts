@@ -155,7 +155,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     description: "Clear all collected profiler data. High-risk: discards profiling history.",
     group: "profiler",
     inputSchema: objSchema({}),
-    destructiveHint: true,
+    destructiveHint: false,
     supportsDryRun: true,
     handler: "bridge",
     playModeSupport: "session-affecting",

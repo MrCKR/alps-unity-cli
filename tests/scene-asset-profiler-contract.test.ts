@@ -39,7 +39,7 @@ test("scene domain exposes paged hierarchy and scene data tools", () => {
   assert.ok(hierarchyProps.includeComponents, "scene.hierarchy should expose component preview control");
   assert.match(hierarchy.description, /paged hierarchy/, "scene.hierarchy should describe paged lightweight hierarchy reads");
   const unload = findToolByName("scene.unload")!;
-  assert.equal(unload.destructiveHint, true);
+  assert.equal(unload.destructiveHint, false);
   assert.equal(unload.supportsDryRun, true);
   const data = findToolByName("scene.data")!;
 });
@@ -123,7 +123,7 @@ test("prefab domain exposes instantiate/unpack", () => {
   assert.equal(instantiate.destructiveHint, false);
   const unpack = findToolByName("prefab.unpack")!;
   assert.ok(unpack);
-  assert.equal(unpack.destructiveHint, true);
+  assert.equal(unpack.destructiveHint, false);
   assert.equal(unpack.supportsDryRun, true);
 });
 
@@ -148,13 +148,13 @@ test("console domain exposes get/clear; editor exposes selection.set/active-tool
   assert.ok(get.outputSchema, "console.get should describe paged log output");
   assert.equal(get.playModeSupport, "supported");
   const consoleClear = findToolByName("console.clear")!;
-  assert.ok(consoleClear.destructiveHint);
+  assert.equal(consoleClear.destructiveHint, false);
   assert.equal(consoleClear.supportsDryRun, true);
   assert.equal(consoleClear.playModeSupport, "session-affecting");
   assert.deepEqual(consoleClear.sideEffects, ["console-clear"]);
   assert.ok(consoleClear.outputSchema);
-  assert.ok(findToolByName("editor.selection.set")?.destructiveHint);
-  assert.ok(findToolByName("editor.active-tool.set")?.destructiveHint);
+  assert.equal(findToolByName("editor.selection.set")?.destructiveHint, false);
+  assert.equal(findToolByName("editor.active-tool.set")?.destructiveHint, false);
 });
 
 test("editor console/menu handlers use current safe CLI guidance", async () => {

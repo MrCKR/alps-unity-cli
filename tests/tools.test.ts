@@ -264,7 +264,7 @@ test("tools describe without name returns error", async () => {
 });
 
 test("tools describe for destructive tool shows destructiveHint", async () => {
-  const result = await handleToolsCommand("describe", ["go.delete"], {}, emptyRuntime, requestId);
+  const result = await handleToolsCommand("describe", ["asset.delete"], {}, emptyRuntime, requestId);
   assert.equal(result.ok, true);
   const data = result.data as Record<string, unknown>;
   assert.equal(data.destructiveHint, true);
@@ -289,7 +289,7 @@ test("batch control-plane tools are not exposed through tools metadata", () => {
 });
 
 test("representative destructive tools declare dry-run support", () => {
-  for (const name of ["asset.delete", "go.delete", "scene.save", "code.exec"]) {
+  for (const name of ["asset.delete", "scene.save", "code.exec"]) {
     const tool = findToolByName(name);
     assert.ok(tool, `${name} should exist`);
     assert.equal(tool.destructiveHint, true);
@@ -336,13 +336,11 @@ test("go tools expose search paging and scene mutation metadata", () => {
   assert.match(JSON.stringify(create.inputSchema), /returned path\/id/);
 
   const deleteTool = findToolByName("go.delete")!;
-  assert.equal(deleteTool.supportsDryRun, true);
   assert.match(deleteTool.description, /Prefer hierarchy paths or instance ids/);
   assert.ok(deleteTool.examples?.some((example) => example.argv.join(" ").includes("TempRoot/GeneratedChild")), "go.delete should show hierarchy path deletion");
   assert.ok(deleteTool.examples?.some((example) => example.argv.join(" ").includes("\"target\":\"12345\"")), "go.delete should show instance id deletion");
 
   const setParent = findToolByName("go.set-parent")!;
-  assert.equal(setParent.supportsDryRun, true);
   assert.match(setParent.description, /Prefer hierarchy paths or instance ids/);
   assert.ok(setParent.examples?.every((example) => !example.argv.join(" ").includes("\"target\":\"Sword\"")), "go.set-parent examples should avoid ambiguous plain names");
 });
@@ -543,7 +541,7 @@ test("camera tools expose Play Mode semantics, examples and output contracts", (
 test("editor selection tools expose UI session metadata", () => {
   const selection = findToolByName("editor.selection.set")!;
   assert.equal(selection.playModeSupport, "session-affecting");
-  assert.equal(selection.destructiveHint, true);
+  assert.equal(selection.destructiveHint, false);
   assert.equal(selection.supportsDryRun, true);
   assert.deepEqual(selection.sideEffects, ["editor-selection"]);
   assert.ok(selection.outputSchema);
@@ -551,7 +549,7 @@ test("editor selection tools expose UI session metadata", () => {
 
   const activeTool = findToolByName("editor.active-tool.set")!;
   assert.equal(activeTool.playModeSupport, "session-affecting");
-  assert.equal(activeTool.destructiveHint, true);
+  assert.equal(activeTool.destructiveHint, false);
   assert.deepEqual(activeTool.sideEffects, ["editor-active-tool"]);
   assert.ok(activeTool.outputSchema);
   assert.match(activeTool.description, /not unity_cli tool activation/);

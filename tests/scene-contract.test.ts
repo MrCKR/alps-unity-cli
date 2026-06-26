@@ -54,7 +54,7 @@ test("scene write tools are session-affecting with proper safety", () => {
   assert.equal(save.playModeSupport, "session-affecting");
 
   const unload = findToolByName("scene.unload")!;
-  assert.equal(unload.destructiveHint, true);
+  assert.equal(unload.destructiveHint, false);
   assert.equal(unload.supportsDryRun, true);
 });
 

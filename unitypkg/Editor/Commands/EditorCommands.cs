@@ -40,9 +40,9 @@ namespace UnityCli
             RegisterCommand(registry, "editor.menu", "editor", false, delegate(BridgeRequest request) { return SuccessJson(EditorMenuJson(request)); });
             RegisterCommand(registry, "editor.console", "editor", false, EditorConsole);
             RegisterCommand(registry, "console.get", "console", false, ConsoleGet);
-            RegisterCommand(registry, "console.clear", "console", true, ConsoleClear);
-            RegisterCommand(registry, "editor.selection.set", "editor", true, EditorSelectionSet);
-            RegisterCommand(registry, "editor.active-tool.set", "editor", true, EditorActiveToolSet);
+            RegisterCommand(registry, "console.clear", "console", false, ConsoleClear);
+            RegisterCommand(registry, "editor.selection.set", "editor", false, EditorSelectionSet);
+            RegisterCommand(registry, "editor.active-tool.set", "editor", false, EditorActiveToolSet);
             RegisterCommand(registry, "project.tag", "project", false, delegate(BridgeRequest request) { return SuccessJson(ProjectTagLayerJson(request, false)); });
             RegisterCommand(registry, "project.layer", "project", false, delegate(BridgeRequest request) { return SuccessJson(ProjectTagLayerJson(request, true)); });
             RegisterCommand(registry, "package.embed", "package", true, PackageEmbed);

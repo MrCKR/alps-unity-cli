@@ -42,7 +42,7 @@ test("component tools expose lifecycle and deep-read metadata", () => {
   assert.ok(add.examples?.some((example) => example.argv.includes("--input")));
 
   const remove = findToolByName("component.remove")!;
-  assert.equal(remove.destructiveHint, true);
+  assert.equal(remove.destructiveHint, false);
   assert.equal(remove.playModeSupport, "session-affecting");
   assert.deepEqual(remove.sideEffects, ["component-remove", "scene-modify"]);
   assert.equal(remove.equivalentUnityMcp, "manage_components.remove / gameobject-component-destroy");
@@ -59,7 +59,7 @@ test("component tools expose lifecycle and deep-read metadata", () => {
   assert.equal(get.equivalentUnityMcp, "gameobject-component-get");
 
   const modify = findToolByName("component.modify")!;
-  assert.equal(modify.destructiveHint, true);
+  assert.equal(modify.destructiveHint, false);
   assert.equal(modify.supportsDryRun, true);
   assert.equal(modify.playModeSupport, "session-affecting");
   assert.equal(modify.equivalentUnityMcp, "gameobject-component-modify");
@@ -121,9 +121,9 @@ test("contract entries exist for component tools with present C# handler", () =>
   }
 });
 
-test("destructive security policy covers component.modify", () => {
+test("component.modify is not in the destructive security policy", () => {
   const commands = new Set(destructiveCommands().map((e) => e.command));
-  assert.ok(commands.has("component.modify"));
+  assert.equal(commands.has("component.modify"), false);
 });
 
 test("C# RegisterCommand calls exist for component deep commands", async () => {

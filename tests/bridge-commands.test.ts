@@ -688,7 +688,7 @@ test("destructive bridge commands require --yes before execution", async () => {
   const runtime = await makeRuntime();
   let called = false;
 
-  const result = await execute(["tools", "run", "go.delete", "Player"], {
+  const result = await execute(["tools", "run", "asset.delete", "Assets/DeleteMe.asset"], {
     ...runtime,
     bridgeExecute: async () => {
       called = true;
@@ -705,14 +705,14 @@ test("destructive bridge commands pass dryRun and security proof when explicitly
   const runtime = await makeRuntime();
   const requests: BridgeRequest[] = [];
 
-  const confirmed = await execute(["tools", "run", "go.delete", "Player", "--yes"], {
+  const confirmed = await execute(["tools", "run", "asset.delete", "Assets/DeleteMe.asset", "--yes"], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
       return { ok: true, data: { plannedEffects: [] } };
     }
   });
-  const dryRun = await execute(["tools", "run", "go.delete", "Player", "--dry-run"], {
+  const dryRun = await execute(["tools", "run", "asset.delete", "Assets/DeleteMe.asset", "--dry-run"], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);

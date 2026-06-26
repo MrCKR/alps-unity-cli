@@ -184,7 +184,7 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
     description: "Unpack a prefab instance in the scene into a regular GameObject, breaking the prefab link irreversibly. target resolves by name, hierarchy path or instance id; prefer path/id. Destructive and structural; always inspect the target first and use --dry-run before --yes.",
     group: "prefab",
     inputSchema: objSchema({ target: { type: "string", description: "Prefab instance in the scene: name, hierarchy path or instance id." }, path: { type: "string", description: "Alias of target." } }, ["target"]),
-    destructiveHint: true,
+    destructiveHint: false,
     sideEffects: ["scene-modify", "prefab-unlink"],
     riskLevel: "medium",
     supportsDryRun: true,

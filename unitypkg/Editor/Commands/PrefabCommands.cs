@@ -38,7 +38,7 @@ namespace UnityCli
             RegisterCommand(registry, "prefab.stage-close", "prefab", true, PrefabStageClose);
             RegisterCommand(registry, "prefab.hierarchy", "prefab", false, PrefabHierarchy);
             RegisterCommand(registry, "prefab.instantiate", "prefab", false, PrefabInstantiate);
-            RegisterCommand(registry, "prefab.unpack", "prefab", true, PrefabUnpack);
+            RegisterCommand(registry, "prefab.unpack", "prefab", false, PrefabUnpack);
         }
 
         private static string PrefabInfo(BridgeRequest request)

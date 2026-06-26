@@ -47,7 +47,7 @@ test("prefab group tools exist with correct safety hints", () => {
   assert.equal(instantiate.playModeSupport, "session-affecting");
 
   const unpack = findToolByName("prefab.unpack")!;
-  assert.equal(unpack.destructiveHint, true);
+  assert.equal(unpack.destructiveHint, false);
   assert.equal(unpack.supportsDryRun, true);
 });
 

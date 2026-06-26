@@ -56,9 +56,9 @@ test("profiler control tools are session-affecting", () => {
   }
 });
 
-test("profiler.clear is destructive with dry-run", () => {
+test("profiler.clear is non-destructive with dry-run", () => {
   const clear = findToolByName("profiler.clear")!;
-  assert.equal(clear.destructiveHint, true);
+  assert.equal(clear.destructiveHint, false);
   assert.equal(clear.supportsDryRun, true);
 });
 
@@ -89,9 +89,9 @@ test("C# RegisterCommand calls exist for profiler commands", async () => {
   }
 });
 
-test("destructive security policy covers profiler.clear", () => {
+test("profiler.clear is not in the destructive security policy", () => {
   const commands = new Set(destructiveCommands().map((e) => e.command));
-  assert.ok(commands.has("profiler.clear"));
+  assert.equal(commands.has("profiler.clear"), false);
 });
 
 test("profiler C# has no legacy unity_cli command form", async () => {

@@ -200,9 +200,9 @@ test("Unity Bridge exposes documented core camera, screenshot, prefab, UI, mater
   assert.match(source, /RegisterCommand\(registry, "go\.duplicate", "go", true/);
   assert.match(source, /RegisterCommand\(registry, "go\.move-relative", "go", true/);
   assert.match(source, /RegisterCommand\(registry, "go\.look-at", "go", true/);
-  assert.match(source, /RegisterCommand\(registry, "go\.delete", "go", true/);
+  assert.match(source, /RegisterCommand\(registry, "go\.delete", "go", false/);
   assert.match(source, /RegisterCommand\(registry, "component\.add", "component", true/);
-  assert.match(source, /RegisterCommand\(registry, "component\.remove", "component", true/);
+  assert.match(source, /RegisterCommand\(registry, "component\.remove", "component", false/);
   assert.match(source, /RegisterCommand\(registry, "component\.set", "component", true/);
   assert.match(source, /RegisterCommand\(registry, "asset\.search", "asset", false/);
   assert.match(source, /RegisterCommand\(registry, "asset\.info", "asset", false/);

@@ -9,7 +9,7 @@ export const sceneBridgeSpecs: BridgeCommandSpec[] = [
   { group: "scene", command: "create", bridgeCommand: "scene.create", buildArgs: sceneFileArgs },
   { group: "scene", command: "load", bridgeCommand: "scene.load", buildArgs: sceneFileArgs },
   { group: "scene", command: "save", bridgeCommand: "scene.save", buildArgs: sceneFileArgs },
-  { group: "scene", command: "unload", bridgeCommand: "scene.unload", buildArgs: sceneFileArgs, supportsDryRun: true },
+  { group: "scene", command: "unload", bridgeCommand: "scene.unload", buildArgs: sceneFileArgs },
   { group: "scene", command: "set-active", bridgeCommand: "scene.set-active", buildArgs: sceneFileArgs },
   { group: "scene", command: "list-opened", bridgeCommand: "scene.list-opened", buildArgs: ({ flags }) => queryArgs(flags) },
   { group: "scene", command: "data", bridgeCommand: "scene.data", buildArgs: sceneDataArgs },

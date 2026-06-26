@@ -38,7 +38,7 @@ export const CONSOLE_TOOLS: ToolMetadata[] = [
     group: "console",
     inputSchema: objSchema({}),
     outputSchema: objSchema({ command: { type: "string" }, dryRun: { type: "boolean" }, cleared: { type: "boolean" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
-    destructiveHint: true,
+    destructiveHint: false,
     supportsDryRun: true,
     playModeSupport: "session-affecting",
     sideEffects: ["console-clear"],

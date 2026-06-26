@@ -40,7 +40,7 @@ namespace UnityCli
             RegisterCommand(registry, "profiler.status", "profiler", false, ProfilerStatus);
             RegisterCommand(registry, "profiler.modules", "profiler", false, ProfilerModules);
             RegisterCommand(registry, "profiler.module-enable", "profiler", true, ProfilerModuleEnable);
-            RegisterCommand(registry, "profiler.clear", "profiler", true, ProfilerClear);
+            RegisterCommand(registry, "profiler.clear", "profiler", false, ProfilerClear);
             RegisterCommand(registry, "profiler.load", "profiler", true, ProfilerLoad);
             RegisterCommand(registry, "profiler.areas", "profiler", false, ProfilerAreas);
             RegisterCommand(registry, "profiler.object-memory", "profiler", false, ProfilerObjectMemory);
