@@ -147,7 +147,8 @@ test("Unity Bridge exposes documented core camera, screenshot, prefab, UI, mater
   assert.match(source, /private static string ProfilerStart\(BridgeRequest request\)[\s\S]*?SetProfilerSessionEnabled\(true\);[\s\S]*?private static string ProfilerStop\(BridgeRequest request\)/);
   assert.match(source, /private static string ProfilerPause\(BridgeRequest request\)[\s\S]*?SetProfilerSessionEnabled\(!paused\);[\s\S]*?private static string ProfilerStatus\(BridgeRequest request\)/);
   assert.doesNotMatch(source, /private static string ProfilerStart\(BridgeRequest request\)[\s\S]*?UnityEngine\.Profiling\.Profiler\.enabled = true;[\s\S]*?private static string ProfilerStop\(BridgeRequest request\)/);
-  assert.doesNotMatch(source, /private static string ProfilerStart\(BridgeRequest request\)[\s\S]*?UnityEngine\.Profiling\.Profiler\.enableBinaryLog = true;[\s\S]*?private static string ProfilerStop\(BridgeRequest request\)/);
+  // ProfilerStart 仅在传入 logFile 时条件性启用 enableBinaryLog，对齐 CoplayDev profiler_start log_file
+  assert.match(source, /IsNullOrEmpty\(logFile\)[\s\S]*?Profiler\.enableBinaryLog = true/, "ProfilerStart should gate enableBinaryLog behind the logFile check");
   assert.doesNotMatch(source, /private static string ProfilerPause\(BridgeRequest request\)[\s\S]*?UnityEngine\.Profiling\.Profiler\.enabled = !paused;[\s\S]*?private static string ProfilerStatus\(BridgeRequest request\)/);
   assert.doesNotMatch(source, /private static string ProfilerPause\(BridgeRequest request\)[\s\S]*?UnityEngine\.Profiling\.Profiler\.enableBinaryLog = true;[\s\S]*?private static string ProfilerStatus\(BridgeRequest request\)/);
   assert.match(source, /\.Prop\("handlerFingerprint",/);

@@ -18,7 +18,13 @@ export const profilerBridgeSpecs: BridgeCommandSpec[] = [
   { group: "profiler", command: "areas", bridgeCommand: "profiler.areas", buildArgs: profilerArgs },
   { group: "profiler", command: "object-memory", bridgeCommand: "profiler.object-memory", buildArgs: profilerObjectMemoryArgs },
   { group: "profiler", command: "rendering-stats", bridgeCommand: "profiler.rendering-stats", buildArgs: profilerArgs },
-  { group: "profiler", command: "script-stats", bridgeCommand: "profiler.script-stats", buildArgs: profilerArgs }
+  { group: "profiler", command: "script-stats", bridgeCommand: "profiler.script-stats", buildArgs: profilerArgs },
+  { group: "profiler", command: "memory-snapshot.take", bridgeCommand: "profiler.memory-snapshot.take", buildArgs: profilerMemorySnapshotArgs },
+  { group: "profiler", command: "memory-snapshot.list", bridgeCommand: "profiler.memory-snapshot.list", buildArgs: profilerMemorySnapshotArgs },
+  { group: "profiler", command: "memory-snapshot.compare", bridgeCommand: "profiler.memory-snapshot.compare", buildArgs: profilerMemorySnapshotCompareArgs },
+  { group: "profiler", command: "frame-debugger.enable", bridgeCommand: "profiler.frame-debugger.enable", buildArgs: ({ flags }) => compactArgs({}) },
+  { group: "profiler", command: "frame-debugger.disable", bridgeCommand: "profiler.frame-debugger.disable", buildArgs: ({ flags }) => compactArgs({}) },
+  { group: "profiler", command: "frame-debugger.events", bridgeCommand: "profiler.frame-debugger.events", buildArgs: profilerFrameDebuggerEventsArgs }
 ];
 
 // 读取 tools run --input 中无法映射为简单 flag 的结构化字段
@@ -61,6 +67,8 @@ function profilerArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec[
     frames: numberFlag(flags, "frames") ?? numberField(flags, "frames"),
     overwrite: boolFlag(flags, "overwrite") ?? boolField(flags, "overwrite"),
     deepProfiling: boolFlag(flags, "deep-profiling") ?? boolField(flags, "deepProfiling"),
+    logFile: stringFlag(flags, "log-file") ?? stringField(flags, "logFile"),
+    enableCallstacks: boolFlag(flags, "enable-callstacks") ?? boolField(flags, "enableCallstacks"),
     paused: boolFlag(flags, "paused") ?? boolField(flags, "paused")
   });
 }
@@ -71,4 +79,25 @@ function profilerModuleEnableArgs({ flags }: Parameters<BridgeCommandSpec["build
 
 function profilerObjectMemoryArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({ target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target"), path: stringFlag(flags, "path") ?? stringField(flags, "path") });
+}
+
+// memory-snapshot.take/list：path 可选
+function profilerMemorySnapshotArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({ path: positionalTarget ?? stringFlag(flags, "path") ?? stringField(flags, "path") });
+}
+
+// memory-snapshot.compare：两个快照路径（snapshotA/B 或 pathA/B 别名）
+function profilerMemorySnapshotCompareArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({
+    snapshotA: stringFlag(flags, "snapshot-a") ?? stringFlag(flags, "path-a") ?? stringField(flags, "snapshotA") ?? stringField(flags, "pathA"),
+    snapshotB: stringFlag(flags, "snapshot-b") ?? stringFlag(flags, "path-b") ?? stringField(flags, "snapshotB") ?? stringField(flags, "pathB")
+  });
+}
+
+// frame-debugger.events：分页
+function profilerFrameDebuggerEventsArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({
+    pageSize: numberFlag(flags, "page-size") ?? numberField(flags, "pageSize"),
+    cursor: numberFlag(flags, "cursor") ?? numberField(flags, "cursor")
+  });
 }

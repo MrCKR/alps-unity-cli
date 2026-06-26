@@ -46,6 +46,12 @@ namespace UnityCli
             RegisterCommand(registry, "profiler.object-memory", "profiler", false, ProfilerObjectMemory);
             RegisterCommand(registry, "profiler.rendering-stats", "profiler", false, ProfilerRenderingStats);
             RegisterCommand(registry, "profiler.script-stats", "profiler", false, ProfilerScriptStats);
+            RegisterCommand(registry, "profiler.memory-snapshot.take", "profiler", true, ProfilerMemorySnapshotTake);
+            RegisterCommand(registry, "profiler.memory-snapshot.list", "profiler", false, ProfilerMemorySnapshotList);
+            RegisterCommand(registry, "profiler.memory-snapshot.compare", "profiler", false, ProfilerMemorySnapshotCompare);
+            RegisterCommand(registry, "profiler.frame-debugger.enable", "profiler", false, ProfilerFrameDebuggerEnable);
+            RegisterCommand(registry, "profiler.frame-debugger.disable", "profiler", false, ProfilerFrameDebuggerDisable);
+            RegisterCommand(registry, "profiler.frame-debugger.events", "profiler", false, ProfilerFrameDebuggerEvents);
         }
 
         private static void SetProfilerDeepProfiling(bool enabled)
@@ -91,8 +97,11 @@ namespace UnityCli
             return new UnityCliJsonWriter().BeginObject()
                 .Prop("enabled", GetProfilerSessionEnabled())
                 .Prop("enableBinaryLog", UnityEngine.Profiling.Profiler.enableBinaryLog)
+                .Prop("logFile", UnityEngine.Profiling.Profiler.logFile)
+                .Prop("enableAllocationCallstacks", UnityEngine.Profiling.Profiler.enableAllocationCallstacks)
                 .Prop("isPaused", EditorApplication.isPaused)
-                .Prop("supported", true)
+                .Prop("supported", UnityEngine.Profiling.Profiler.supported)
+                .Prop("maxUsedMemoryBytes", (long)UnityEngine.Profiling.Profiler.maxUsedMemory)
                 .Prop("handlerFingerprint", ProfilerHandlerFingerprint)
                 .EndObject().ToString();
         }
@@ -173,7 +182,55 @@ namespace UnityCli
                 .Prop("deltaTime", Time.deltaTime)
                 .Prop("module", module)
                 .PropRaw("modules", ProfilerModulesJson())
+                .PropRaw("frameTiming", ProfilerFrameTimingJson())
                 .EndObject().ToString();
+        }
+
+        /// <summary>
+        /// 采集 FrameTimingManager 当前帧的 12 个 CPU/GPU 计时字段。对齐 CoplayDev get_frame_timing。
+        /// 需 Project Settings > Player > Frame Timing Stats 开启（Development Build 总是开启）。
+        /// </summary>
+        private static string ProfilerFrameTimingJson()
+        {
+            var w = new UnityCliJsonWriter().BeginObject();
+#if UNITY_2022_2_OR_NEWER
+            bool featureEnabled;
+            try { featureEnabled = FrameTimingManager.IsFeatureEnabled(); }
+            catch { featureEnabled = false; }
+            if (!featureEnabled)
+            {
+                w.Prop("available", false);
+                w.Prop("note", "Frame Timing Stats is not enabled. Enable in Project Settings > Player > Other Settings > Frame Timing Stats, or use a Development Build.");
+                return w.EndObject().ToString();
+            }
+            FrameTimingManager.CaptureFrameTimings();
+            var timings = new FrameTiming[1];
+            uint count = FrameTimingManager.GetLatestTimings(1, timings);
+            if (count == 0)
+            {
+                w.Prop("available", false);
+                w.Prop("note", "No frame timing data available yet; capture needs a few frames.");
+                return w.EndObject().ToString();
+            }
+            var t = timings[0];
+            w.Prop("available", true);
+            w.Prop("cpuFrameTimeMs", (double)t.cpuFrameTime);
+            w.Prop("cpuMainThreadFrameTimeMs", (double)t.cpuMainThreadFrameTime);
+            w.Prop("cpuMainThreadPresentWaitTimeMs", (double)t.cpuMainThreadPresentWaitTime);
+            w.Prop("cpuRenderThreadFrameTimeMs", (double)t.cpuRenderThreadFrameTime);
+            w.Prop("gpuFrameTimeMs", (double)t.gpuFrameTime);
+            w.Prop("frameStartTimestamp", (long)t.frameStartTimestamp);
+            w.Prop("firstSubmitTimestamp", (long)t.firstSubmitTimestamp);
+            w.Prop("cpuTimePresentCalled", (double)t.cpuTimePresentCalled);
+            w.Prop("cpuTimeFrameComplete", (double)t.cpuTimeFrameComplete);
+            w.Prop("heightScale", (double)t.heightScale);
+            w.Prop("widthScale", (double)t.widthScale);
+            w.Prop("syncInterval", (long)t.syncInterval);
+#else
+            w.Prop("available", false);
+            w.Prop("note", "FrameTimingManager requires Unity 2022.2 or newer.");
+#endif
+            return w.EndObject().ToString();
         }
 
         private static string NormalizeProfilerFormat(string rawFormat, string outputPath)
@@ -338,9 +395,22 @@ namespace UnityCli
         private static string ProfilerStart(BridgeRequest request)
         {
             var deepProfiling = request.BoolArg("deepProfiling", false);
+            var logFile = request.StringArg("logFile");
+            var enableCallstacks = request.BoolArg("enableCallstacks", false);
             SetProfilerSessionEnabled(true);
             SetProfilerDeepProfiling(deepProfiling);
-            WriteLog("profiler_started deepProfiling=" + Bool(deepProfiling));
+            // 可选：启动时指定二进制日志文件，等价 Profiler.logFile + enableBinaryLog。
+            if (!string.IsNullOrEmpty(logFile))
+            {
+                UnityEngine.Profiling.Profiler.logFile = logFile;
+                UnityEngine.Profiling.Profiler.enableBinaryLog = true;
+            }
+            // 可选：启用分配调用栈采集，便于内存分析。
+            if (enableCallstacks)
+            {
+                UnityEngine.Profiling.Profiler.enableAllocationCallstacks = true;
+            }
+            WriteLog("profiler_started deepProfiling=" + Bool(deepProfiling) + " logFile=" + (logFile ?? "") + " callstacks=" + Bool(enableCallstacks));
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropRaw("profiler", ProfilerStateJson())
                 .PropArray("plannedEffects", arr =>
@@ -389,8 +459,21 @@ namespace UnityCli
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropRaw("profiler", ProfilerStateJson())
                 .PropRaw("modules", ProfilerModulesJson())
+                .Prop("platform", Application.platform.ToString())
+                .Prop("frameTimingAvailable", IsFrameTimingAvailable())
                 .Prop("logPath", LogPath())
                 .EndObject().ToString());
+        }
+
+        /// <summary>检测 FrameTimingManager 特性是否启用（Unity 2022.2+）。</summary>
+        private static bool IsFrameTimingAvailable()
+        {
+#if UNITY_2022_2_OR_NEWER
+            try { return FrameTimingManager.IsFeatureEnabled(); }
+            catch { return false; }
+#else
+            return false;
+#endif
         }
 
         /// <summary>列出 Profiler 模块。对齐 Ivan modules。</summary>
@@ -403,20 +486,39 @@ namespace UnityCli
                 .EndObject().ToString());
         }
 
-        /// <summary>启用/禁用 Profiler 模块。对齐 Ivan module-enable。</summary>
+        /// <summary>启用/禁用 Profiler 模块（area）。对齐 CoplayDev profiler_set_areas，通过反射调用 Profiler.SetAreaEnabled。</summary>
         private static string ProfilerModuleEnable(BridgeRequest request)
         {
             var moduleName = request.StringArg("module") ?? request.StringArg("name");
             var enabled = request.BoolArg("enabled", true);
-            var driverType = FindType("UnityEditorInternal.ProfilerDriver");
-            if (driverType == null)
+            // ProfilerArea 在 UnityEditorInternal 命名空间，包 asmdef 无法直接引用，用反射解析类型。
+            var areaType = FindType("UnityEditorInternal.ProfilerArea");
+            if (areaType == null || !areaType.IsEnum)
             {
-                return ErrorJson("E_PROFILER_DRIVER_UNAVAILABLE", "ProfilerDriver is not available.", "Run this in a Unity Editor with profiling support.");
+                return ErrorJson("E_PROFILER_AREAS_UNAVAILABLE", "ProfilerArea enum not available in this Unity version.", "Run profiler.areas to check availability; this is a known UnityEditorInternal type-resolution limitation.");
             }
+            if (string.IsNullOrEmpty(moduleName))
+            {
+                throw new BridgeCommandException("E_PROFILER_MODULE_REQUIRED", "profiler.module-enable requires --module.", "Pass a Profiler area name; run profiler.areas to list valid names.");
+            }
+            object areaValue;
+            try { areaValue = System.Enum.Parse(areaType, moduleName, true); }
+            catch
+            {
+                return ErrorJson("E_PROFILER_MODULE_UNKNOWN", "Unknown Profiler area: " + moduleName, "Run profiler.areas to see valid area names.");
+            }
+            // 反射调用 Profiler.SetAreaEnabled(ProfilerArea, bool) 切换模块可见性。
+            var setAreaMethod = typeof(UnityEngine.Profiling.Profiler).GetMethod("SetAreaEnabled", BindingFlags.Static | BindingFlags.Public);
+            if (setAreaMethod == null)
+            {
+                return ErrorJson("E_PROFILER_MODULE_UNSUPPORTED", "Profiler.SetAreaEnabled is not available in this Unity version.", "Use a newer Unity Editor version.");
+            }
+            try { setAreaMethod.Invoke(null, new object[] { areaValue, enabled }); }
+            catch (Exception ex) { return ErrorJson("E_PROFILER_MODULE_FAILED", "Failed to set Profiler area: " + ex.Message, "Check Unity Console for details."); }
+            WriteLog("profiler_module_enable module=" + moduleName + " enabled=" + Bool(enabled));
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .Prop("command", "profiler.module-enable")
                 .Prop("module", moduleName).Prop("enabled", enabled)
-                .Prop("note", "Module enable/disable uses Editor prefs; verify in Profiler window.")
                 .Prop("logPath", LogPath()).EndObject().ToString());
         }
 
@@ -633,6 +735,342 @@ namespace UnityCli
                 return ErrorJson("E_PROFILER_CAPTURE_FAILED", "Profiler artifact write failed: " + exception.Message, "Check output path permissions and Unity Profiler availability, then retry.");
             }
         }
+
+        #region Memory Snapshot — 对齐 CoplayDev memory_take/list/compare，需要 com.unity.memoryprofiler 包
+
+        /// <summary>查找 MemoryProfiler 类型（包 com.unity.memoryprofiler）。</summary>
+        private static Type MemoryProfilerType()
+        {
+            return FindType("Unity.Profiling.Memory.MemoryProfiler")
+                ?? FindType("UnityEngine.Profiling.Memory.Experimental.MemoryProfiler");
+        }
+
+        /// <summary>采集内存快照 .snap。TakeSnapshot 回调在主线程未来帧触发，用 deferred wait 等待。</summary>
+        private static string ProfilerMemorySnapshotTake(BridgeRequest request)
+        {
+            var profilerType = MemoryProfilerType();
+            if (profilerType == null)
+            {
+                return ErrorJson("E_PROFILER_PACKAGE_MISSING", "Package com.unity.memoryprofiler is required for memory snapshots.", "Install com.unity.memoryprofiler via the Package Manager.");
+            }
+            var outputPath = request.StringArg("path");
+            if (string.IsNullOrEmpty(outputPath))
+            {
+                var dir = Path.Combine(Application.temporaryCachePath, "MemoryCaptures");
+                Directory.CreateDirectory(dir);
+                outputPath = Path.Combine(dir, "snapshot_" + DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture) + ".snap");
+            }
+            // 查找 TakeSnapshot 重载：优先 3 参 (string, Action<string,bool>, CaptureFlags)，回退 2 参 (string, Action<string,bool>)。
+            var callbackType = typeof(Action<string, bool>);
+            var captureFlagsType = FindType("Unity.Profiling.Memory.CaptureFlags")
+                ?? FindType("UnityEngine.Profiling.Memory.Experimental.CaptureFlags");
+            MethodInfo takeMethod = null;
+            object[] invokeArgs = null;
+            if (captureFlagsType != null)
+            {
+                takeMethod = profilerType.GetMethod("TakeSnapshot", new[] { typeof(string), callbackType, captureFlagsType });
+            }
+            if (takeMethod != null)
+            {
+                invokeArgs = new object[] { outputPath, (Action<string, bool>)null, System.Enum.ToObject(captureFlagsType, 0) };
+            }
+            else
+            {
+                takeMethod = profilerType.GetMethod("TakeSnapshot", new[] { typeof(string), callbackType });
+            }
+            if (takeMethod == null)
+            {
+                return ErrorJson("E_PROFILER_API_UNSUPPORTED", "MemoryProfiler.TakeSnapshot API not found.", "The installed com.unity.memoryprofiler version may be incompatible.");
+            }
+
+            // 闭包状态：回调设置 flag + 路径/结果。主线程未来帧触发。
+            string capturedPath = null;
+            bool captureResult = false;
+            bool callbackFired = false;
+            Action<string, bool> callback = (path, result) =>
+            {
+                capturedPath = path;
+                captureResult = result;
+                callbackFired = true;
+            };
+            if (invokeArgs != null) { invokeArgs[1] = callback; }
+            else { invokeArgs = new object[] { outputPath, callback }; }
+            try { takeMethod.Invoke(null, invokeArgs); }
+            catch (Exception ex) { return ErrorJson("E_PROFILER_SNAPSHOT_FAILED", "Snapshot capture failed: " + ex.Message, "Check Unity Console and the Memory Profiler package."); }
+
+            // TakeSnapshot 回调可能同步触发或在未来帧；用 deferred wait 轮询，不阻塞主线程。
+            var item = currentWorkItem;
+            return StartDeferredWait(item,
+                () => callbackFired,
+                30000,
+                () =>
+                {
+                    if (!captureResult)
+                    {
+                        return ErrorJson("E_PROFILER_SNAPSHOT_FAILED", "Snapshot capture reported failure for path: " + outputPath, "Check Unity Console for Memory Profiler errors.");
+                    }
+                    var finalPath = capturedPath ?? outputPath;
+                    var fi = new FileInfo(finalPath);
+                    WriteLog("profiler_memory_snapshot_take path=" + finalPath);
+                    return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                        .Prop("command", "profiler.memory-snapshot.take")
+                        .Prop("path", finalPath)
+                        .Prop("sizeBytes", fi.Exists ? (long)fi.Length : 0L)
+                        .Prop("logPath", LogPath())
+                        .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "profiler.memory-snapshot.take").Prop("path", finalPath).EndObject())
+                        .EndObject().ToString());
+                },
+                "E_PROFILER_SNAPSHOT_TIMEOUT", "Memory snapshot timed out after 30 seconds.", "Reduce scene complexity or retry.");
+        }
+
+        /// <summary>列出 .snap 快照文件。对齐 CoplayDev memory_list_snapshots。</summary>
+        private static string ProfilerMemorySnapshotList(BridgeRequest request)
+        {
+            var searchPath = request.StringArg("path");
+            var dirs = new List<string>();
+            if (!string.IsNullOrEmpty(searchPath))
+            {
+                dirs.Add(searchPath);
+            }
+            else
+            {
+                dirs.Add(Path.Combine(Application.temporaryCachePath, "MemoryCaptures"));
+                dirs.Add(Path.Combine(Application.dataPath, "..", "MemoryCaptures"));
+            }
+            var w = new UnityCliJsonWriter().BeginObject();
+            w.Prop("command", "profiler.memory-snapshot.list");
+            w.PropArray("snapshots", arr =>
+            {
+                foreach (var dir in dirs)
+                {
+                    if (!Directory.Exists(dir)) continue;
+                    foreach (var file in Directory.GetFiles(dir, "*.snap"))
+                    {
+                        var fi = new FileInfo(file);
+                        arr.BeginObject()
+                            .Prop("path", fi.FullName)
+                            .Prop("sizeBytes", (long)fi.Length)
+                            .Prop("created", fi.CreationTimeUtc.ToString("O", CultureInfo.InvariantCulture))
+                            .EndObject();
+                    }
+                }
+            });
+            w.PropArray("searchedDirs", arr => { foreach (var d in dirs) arr.Value(d); });
+            w.Prop("logPath", LogPath());
+            return SuccessJson(w.EndObject().ToString());
+        }
+
+        /// <summary>比较两个 .snap 快照的文件级元数据。对齐 CoplayDev memory_compare_snapshots。</summary>
+        private static string ProfilerMemorySnapshotCompare(BridgeRequest request)
+        {
+            var pathA = request.StringArg("snapshotA") ?? request.StringArg("pathA");
+            var pathB = request.StringArg("snapshotB") ?? request.StringArg("pathB");
+            if (string.IsNullOrEmpty(pathA) || string.IsNullOrEmpty(pathB))
+            {
+                throw new BridgeCommandException("E_PROFILER_SNAPSHOT_PATH_REQUIRED", "profiler.memory-snapshot.compare requires --snapshot-a and --snapshot-b.", "Pass two .snap file paths.");
+            }
+            if (!File.Exists(pathA))
+            {
+                return ErrorJson("E_PROFILER_SNAPSHOT_NOT_FOUND", "Snapshot file not found: " + pathA, "Check the path or run profiler.memory-snapshot.list.");
+            }
+            if (!File.Exists(pathB))
+            {
+                return ErrorJson("E_PROFILER_SNAPSHOT_NOT_FOUND", "Snapshot file not found: " + pathB, "Check the path or run profiler.memory-snapshot.list.");
+            }
+            var fiA = new FileInfo(pathA);
+            var fiB = new FileInfo(pathB);
+            long deltaBytes = fiB.Length - fiA.Length;
+            var w = new UnityCliJsonWriter().BeginObject();
+            w.Prop("command", "profiler.memory-snapshot.compare");
+            w.PropObject("snapshotA", o => o.Prop("path", fiA.FullName).Prop("sizeBytes", (long)fiA.Length).Prop("created", fiA.CreationTimeUtc.ToString("O", CultureInfo.InvariantCulture)));
+            w.PropObject("snapshotB", o => o.Prop("path", fiB.FullName).Prop("sizeBytes", (long)fiB.Length).Prop("created", fiB.CreationTimeUtc.ToString("O", CultureInfo.InvariantCulture)));
+            w.PropObject("delta", o => o.Prop("sizeDeltaBytes", deltaBytes).Prop("timeDeltaSeconds", (fiB.CreationTimeUtc - fiA.CreationTimeUtc).TotalSeconds));
+            w.Prop("note", "File-level metadata comparison. For object-level diff, open both snapshots in the Memory Profiler window.");
+            w.Prop("logPath", LogPath());
+            return SuccessJson(w.EndObject().ToString());
+        }
+
+        #endregion
+
+        #region Frame Debugger — 对齐 CoplayDev frame_debugger，反射 UnityEditorInternal.FrameDebuggerUtility
+
+        // 缓存 FrameDebuggerUtility 反射成员，避免每次调用重复查找。
+        private static readonly Type FrameDebuggerUtilityType = FindType("UnityEditorInternal.FrameDebuggerInternal.FrameDebuggerUtility, UnityEditor")
+            ?? FindType("UnityEditorInternal.FrameDebuggerUtility, UnityEditor");
+        private static readonly PropertyInfo FrameDebuggerEventCountProp = FrameDebuggerUtilityType?.GetProperty("count", BindingFlags.Public | BindingFlags.Static)
+            ?? FrameDebuggerUtilityType?.GetProperty("eventsCount", BindingFlags.Public | BindingFlags.Static);
+        private static readonly MethodInfo FrameDebuggerEnableMethod = FrameDebuggerUtilityType?.GetMethod("SetEnabled", BindingFlags.Public | BindingFlags.Static, null, new[] { typeof(bool), typeof(int) }, null)
+            ?? FrameDebuggerUtilityType?.GetMethod("SetEnabled", BindingFlags.Public | BindingFlags.Static);
+        private static readonly MethodInfo FrameDebuggerGetEventsMethod = FrameDebuggerUtilityType?.GetMethod("GetFrameEvents", BindingFlags.Public | BindingFlags.Static);
+        private static readonly MethodInfo FrameDebuggerEventNameMethod = FrameDebuggerUtilityType?.GetMethod("GetFrameEventInfoName", BindingFlags.Public | BindingFlags.Static);
+        private static readonly Type FrameDebuggerEventDataType = FindType("UnityEditorInternal.FrameDebuggerInternal.FrameDebuggerEventData, UnityEditor")
+            ?? FindType("UnityEditorInternal.FrameDebuggerEventData, UnityEditor");
+        private static readonly MethodInfo FrameDebuggerGetEventDataMethod = FrameDebuggerEventDataType != null
+            ? FrameDebuggerUtilityType?.GetMethod("GetFrameEventData", BindingFlags.Public | BindingFlags.Static, null, new[] { typeof(int), FrameDebuggerEventDataType }, null)
+            : FrameDebuggerUtilityType?.GetMethod("GetFrameEventData", BindingFlags.Public | BindingFlags.Static);
+        private static bool FrameDebuggerAvailable => FrameDebuggerUtilityType != null && FrameDebuggerEventCountProp != null && FrameDebuggerEnableMethod != null;
+
+        private static void InvokeFrameDebuggerSetEnabled(bool value)
+        {
+            var paramCount = FrameDebuggerEnableMethod.GetParameters().Length;
+            if (paramCount == 2) { FrameDebuggerEnableMethod.Invoke(null, new object[] { value, 0 }); }
+            else if (paramCount == 1) { FrameDebuggerEnableMethod.Invoke(null, new object[] { value }); }
+            else { throw new InvalidOperationException("SetEnabled has unexpected " + paramCount + " parameters."); }
+        }
+
+        private static int GetFrameDebuggerEventCount()
+        {
+            try { return (int)FrameDebuggerEventCountProp.GetValue(null); }
+            catch { return 0; }
+        }
+
+        /// <summary>启用 Frame Debugger。对齐 CoplayDev frame_debugger_enable，需先暂停 Play Mode。</summary>
+        private static string ProfilerFrameDebuggerEnable(BridgeRequest request)
+        {
+            if (!FrameDebuggerAvailable)
+            {
+                return ErrorJson("E_FRAME_DEBUGGER_UNAVAILABLE", "FrameDebuggerUtility not found via reflection.", "Run in a Unity Editor with Frame Debugger support.");
+            }
+            // 打开 Frame Debugger 窗口（事件采集所需）。
+            EditorApplication.ExecuteMenuItem("Window/Analysis/Frame Debugger");
+            // Play Mode 下必须暂停才能采集事件。
+            if (EditorApplication.isPlaying && !EditorApplication.isPaused)
+            {
+                return ErrorJson("E_FRAME_DEBUGGER_REQUIRES_PAUSE", "Game must be paused before enabling Frame Debugger.", "Pause the editor (editor.pause) first, then retry profiler.frame-debugger.enable.");
+            }
+            try { InvokeFrameDebuggerSetEnabled(true); }
+            catch (Exception ex) { return ErrorJson("E_FRAME_DEBUGGER_FAILED", "Failed to enable Frame Debugger: " + ex.Message, "Check Unity Console."); }
+            WriteLog("profiler_frame_debugger_enable eventCount=" + GetFrameDebuggerEventCount().ToString(CultureInfo.InvariantCulture));
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("command", "profiler.frame-debugger.enable")
+                .Prop("enabled", true)
+                .Prop("eventCount", GetFrameDebuggerEventCount())
+                .Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        /// <summary>禁用 Frame Debugger。</summary>
+        private static string ProfilerFrameDebuggerDisable(BridgeRequest request)
+        {
+            if (!FrameDebuggerAvailable)
+            {
+                return ErrorJson("E_FRAME_DEBUGGER_UNAVAILABLE", "FrameDebuggerUtility not found via reflection.", "Run in a Unity Editor with Frame Debugger support.");
+            }
+            try { InvokeFrameDebuggerSetEnabled(false); }
+            catch (Exception ex) { return ErrorJson("E_FRAME_DEBUGGER_FAILED", "Failed to disable Frame Debugger: " + ex.Message, "Check Unity Console."); }
+            WriteLog("profiler_frame_debugger_disable");
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("command", "profiler.frame-debugger.disable")
+                .Prop("enabled", false)
+                .Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        /// <summary>读取 Frame Debugger 事件（draw calls），分页。对齐 CoplayDev frame_debugger_get_events。</summary>
+        private static string ProfilerFrameDebuggerEvents(BridgeRequest request)
+        {
+            if (!FrameDebuggerAvailable)
+            {
+                return ErrorJson("E_FRAME_DEBUGGER_UNAVAILABLE", "FrameDebuggerUtility not found via reflection.", "Run in a Unity Editor with Frame Debugger support.");
+            }
+            var pageSize = request.IntArg("pageSize", 50);
+            var cursor = request.IntArg("cursor", 0);
+            var totalEvents = GetFrameDebuggerEventCount();
+            var w = new UnityCliJsonWriter().BeginObject();
+            w.Prop("command", "profiler.frame-debugger.events");
+            w.Prop("totalEvents", totalEvents);
+            w.Prop("pageSize", pageSize);
+            w.Prop("cursor", cursor);
+            if (totalEvents == 0)
+            {
+                w.PropArray("events", arr => { });
+                w.Prop("note", "Frame Debugger has no events. Is it enabled?");
+                w.Prop("logPath", LogPath());
+                return SuccessJson(w.EndObject().ToString());
+            }
+            // 反射读取事件描述数组（含 type/name 信息）。
+            object[] frameEvents = null;
+            if (FrameDebuggerGetEventsMethod != null)
+            {
+                try
+                {
+                    var raw = FrameDebuggerGetEventsMethod.Invoke(null, null);
+                    if (raw is Array arr) { frameEvents = new object[arr.Length]; arr.CopyTo(frameEvents, 0); }
+                }
+                catch { /* 忽略，逐个读取 */ }
+            }
+            var end = Math.Min(cursor + pageSize, totalEvents);
+            w.PropArray("events", arr =>
+            {
+                for (int i = cursor; i < end; i++)
+                {
+                    var entry = arr.BeginObject();
+                    entry.Prop("index", i);
+                    if (FrameDebuggerEventNameMethod != null)
+                    {
+                        try { entry.Prop("name", (string)FrameDebuggerEventNameMethod.Invoke(null, new object[] { i })); }
+                        catch { /* 跳过 name */ }
+                    }
+                    if (frameEvents != null && i < frameEvents.Length)
+                    {
+                        TryAddFrameDebuggerField(frameEvents[i], "type", entry, "eventType");
+                        TryAddFrameDebuggerField(frameEvents[i], "gameObjectInstanceID", entry);
+                    }
+                    if (FrameDebuggerGetEventDataMethod != null)
+                    {
+                        try
+                        {
+                            var paramInfos = FrameDebuggerGetEventDataMethod.GetParameters();
+                            object eventData;
+                            if (paramInfos.Length == 2 && FrameDebuggerEventDataType != null)
+                            {
+                                eventData = Activator.CreateInstance(FrameDebuggerEventDataType);
+                                var args = new object[] { i, eventData };
+                                var ok = FrameDebuggerGetEventDataMethod.Invoke(null, args);
+                                eventData = (ok is true) ? args[1] : null;
+                            }
+                            else
+                            {
+                                eventData = FrameDebuggerGetEventDataMethod.Invoke(null, new object[] { i });
+                            }
+                            if (eventData != null)
+                            {
+                                TryAddFrameDebuggerField(eventData, "shaderName", entry);
+                                TryAddFrameDebuggerField(eventData, "passName", entry);
+                                TryAddFrameDebuggerField(eventData, "vertexCount", entry);
+                                TryAddFrameDebuggerField(eventData, "indexCount", entry);
+                                TryAddFrameDebuggerField(eventData, "instanceCount", entry);
+                                TryAddFrameDebuggerField(eventData, "meshName", entry);
+                            }
+                        }
+                        catch { /* 跳过该事件详细数据 */ }
+                    }
+                    entry.EndObject();
+                }
+            });
+            if (end < totalEvents) { w.Prop("nextCursor", end); }
+            w.Prop("logPath", LogPath());
+            return SuccessJson(w.EndObject().ToString());
+        }
+
+        /// <summary>反射读取 Frame Debugger 事件对象的字段/属性。</summary>
+        private static void TryAddFrameDebuggerField(object obj, string fieldName, UnityCliJsonWriter entry, string outputKey = null)
+        {
+            try
+            {
+                var type = obj.GetType();
+                var field = type.GetField(fieldName, BindingFlags.Public | BindingFlags.Instance)
+                         ?? type.GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);
+                var prop = type.GetProperty(fieldName, BindingFlags.Public | BindingFlags.Instance)
+                        ?? type.GetProperty(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);
+                object val = field != null ? field.GetValue(obj) : prop != null ? prop.GetValue(obj) : null;
+                if (val != null)
+                {
+                    entry.Prop(outputKey ?? fieldName, val.ToString());
+                }
+            }
+            catch { /* 跳过不可用字段 */ }
+        }
+
+        #endregion
 
         private sealed class ProfilerCounterSample
         {

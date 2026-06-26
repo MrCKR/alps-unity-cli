@@ -1992,6 +1992,33 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "profiler.frame-debugger.disable",
+      "group": "profiler",
+      "command": "frame-debugger.disable",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "profiler.frame-debugger.enable",
+      "group": "profiler",
+      "command": "frame-debugger.enable",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "profiler.frame-debugger.events",
+      "group": "profiler",
+      "command": "frame-debugger.events",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "profiler.load",
       "group": "profiler",
       "command": "load",
@@ -2008,6 +2035,42 @@
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
+    },
+    {
+      "bridgeCommand": "profiler.memory-snapshot.compare",
+      "group": "profiler",
+      "command": "memory-snapshot.compare",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.memoryprofiler"
+      ]
+    },
+    {
+      "bridgeCommand": "profiler.memory-snapshot.list",
+      "group": "profiler",
+      "command": "memory-snapshot.list",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.memoryprofiler"
+      ]
+    },
+    {
+      "bridgeCommand": "profiler.memory-snapshot.take",
+      "group": "profiler",
+      "command": "memory-snapshot.take",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.memoryprofiler"
+      ]
     },
     {
       "bridgeCommand": "profiler.module-enable",

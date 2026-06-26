@@ -829,7 +829,6 @@ namespace UnityCli
             AddToolGroupCounts(groups, "prefab", PrefabCommands);
             AddToolGroupCounts(groups, "physics", PhysicsCommands);
             AddToolGroupCounts(groups, "editor", EditorCommands);
-            AddToolGroupCounts(groups, "script", ScriptCommands);
             AddToolGroupCounts(groups, "scriptable-object", ScriptableObjectCommands);
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropArray("groups", arr => { foreach (var pair in groups.OrderBy(p => p.Key, StringComparer.Ordinal)) { arr.BeginObject().Prop("name", pair.Key).Prop("toolCount", (long)pair.Value).Prop("cliCommand", "tools group list " + pair.Key).EndObject(); } })

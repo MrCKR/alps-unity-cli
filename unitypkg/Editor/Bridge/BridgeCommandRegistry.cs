@@ -99,7 +99,6 @@ namespace UnityCli
             RegisterTextureCommands(registry);
             RegisterEditorCommands(registry);
             RegisterDiagnoseCommands(registry);
-            RegisterScriptCommands(registry);
             RegisterScriptableObjectCommands(registry);
             RegisterCodeExecCommand(registry);
             RegisterObjectCommands(registry);
