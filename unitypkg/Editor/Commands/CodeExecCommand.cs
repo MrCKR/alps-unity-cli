@@ -84,23 +84,39 @@ namespace UnityCli
                     .ToString();
                 return CodeExecutionResult.Fail("E_REFERENCE_RESOLUTION_FAILED", referenceError, details, "Check Unity/Editor/project assembly references and --refs.");
             }
-            foreach (var reference in references)
-            {
-                parameters.ReferencedAssemblies.Add(reference);
-            }
-            foreach (var define in SplitCsv(request.StringArg("defines")))
-            {
-                parameters.CompilerOptions += " /define:" + define;
-            }
-
-            CompilerResults compiled;
+            // 使用 response file 传引用，避免 Windows 32KB 命令行长度限制
+            // 参考 CoplayDev ExecuteCode.CodeDomCompile
+            var responseFilePath = Path.Combine(Path.GetTempPath(), "unity-cli-codedom-" + Guid.NewGuid().ToString("N") + ".rsp");
+            CompilerResults compiled = null;
             try
             {
-                compiled = provider.CompileAssemblyFromSource(parameters, WrapCodeSource(source));
+                using (var writer = new StreamWriter(responseFilePath, false, Encoding.UTF8))
+                {
+                    foreach (var reference in references)
+                    {
+                        writer.Write("/r:\"");
+                        writer.Write(reference);
+                        writer.WriteLine("\"");
+                    }
+                }
+                parameters.CompilerOptions = "@\"" + responseFilePath + "\"";
+                foreach (var define in SplitCsv(request.StringArg("defines")))
+                {
+                    parameters.CompilerOptions += " /define:" + define;
+                }
+
+                try
+                {
+                    compiled = provider.CompileAssemblyFromSource(parameters, WrapCodeSource(source));
+                }
+                catch (Exception exception)
+                {
+                    return CodeExecutionResult.Fail("E_REFERENCE_RESOLUTION_FAILED", "Failed to compile Runtime Code: " + exception.Message, CodeDetailsJson("[]", Quote(exception.GetType().Name), Quote(exception.Message), Quote(exception.StackTrace), "", ""), "Check Unity/Editor/project assembly references and --refs.");
+                }
             }
-            catch (Exception exception)
+            finally
             {
-                return CodeExecutionResult.Fail("E_REFERENCE_RESOLUTION_FAILED", "Failed to compile Runtime Code: " + exception.Message, CodeDetailsJson("[]", Quote(exception.GetType().Name), Quote(exception.Message), Quote(exception.StackTrace), "", ""), "Check Unity/Editor/project assembly references and --refs.");
+                try { if (File.Exists(responseFilePath)) File.Delete(responseFilePath); } catch { }
             }
 
             if (compiled.Errors.HasErrors)
@@ -157,21 +173,30 @@ namespace UnityCli
         private static IEnumerable<string> DefaultCodeReferences(string refsCsv)
         {
             var references = new List<string>();
-            AddReference(references, typeof(object).Assembly.Location);
-            AddReference(references, typeof(Enumerable).Assembly.Location);
-            AddReference(references, typeof(UnityEngine.Object).Assembly.Location);
-            AddReference(references, typeof(EditorApplication).Assembly.Location);
-            AddReferenceIfExists(references, Path.Combine(EditorApplication.applicationContentsPath, "Managed", "netstandard.dll"));
-            AddReferenceIfExists(references, Path.Combine(EditorApplication.applicationContentsPath, "Managed", "UnityEngine", "UnityEngine.dll"));
-            AddReferenceIfExists(references, Path.Combine(EditorApplication.applicationContentsPath, "Managed", "UnityEngine", "UnityEngine.CoreModule.dll"));
+            // CoplayDev 做法：遍历所有 AppDomain 程序集，只加有磁盘文件的
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
-                if (assembly.IsDynamic || string.IsNullOrEmpty(assembly.Location)) continue;
-                var name = assembly.GetName().Name;
-                if (name.Equals("netstandard", StringComparison.OrdinalIgnoreCase) || name.StartsWith("Assembly-CSharp", StringComparison.OrdinalIgnoreCase) || name.StartsWith("Unity.", StringComparison.OrdinalIgnoreCase))
+                if (assembly.IsDynamic) continue;
+                var location = assembly.Location;
+                if (string.IsNullOrEmpty(location) || !File.Exists(location)) continue;
+                AddReference(references, location);
+            }
+            // CodeDom (CSharpCodeProvider) 无法处理 type-forwarding，当 netstandard.dll 与 mscorlib 同存在时
+            // 系统类型会重复定义导致 CS0433。参考 CoplayDev FilterAssemblyPathsForCodeDom：
+            // 如果引用列表中有 netstandard.dll，则过滤掉 mscorlib 等重复程序集
+            var hasNetstandard = references.Any(p =>
+                string.Equals(Path.GetFileNameWithoutExtension(p), "netstandard", StringComparison.OrdinalIgnoreCase));
+            if (hasNetstandard)
+            {
+                var duplicates = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
                 {
-                    AddReference(references, assembly.Location);
-                }
+                    "mscorlib",
+                    "System.Runtime",
+                    "System.Private.CoreLib",
+                    "System.Collections"
+                };
+                references = references.Where(p =>
+                    !duplicates.Contains(Path.GetFileNameWithoutExtension(p))).ToList();
             }
             var scriptAssemblies = Path.Combine(ProjectRoot(), "Library", "ScriptAssemblies");
             if (Directory.Exists(scriptAssemblies))
