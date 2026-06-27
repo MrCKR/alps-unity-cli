@@ -31,7 +31,11 @@ test("package read tools are offline/non-destructive/supported", () => {
 test("package install/remove/resolve expose play mode + risk metadata", () => {
   const install = findToolByName("package.install")!;
   assert.equal(install.playModeSupport, "session-affecting");
+  assert.equal(install.destructiveHint, true);
+  assert.equal(install.riskLevel, "high");
   assert.ok(install.sideEffects?.includes("manifest-change"));
+  assert.match(install.description, /explicit version/, "package.install should explain explicit version requirement");
+  assert.match(JSON.stringify(install.examples), /3\.0\.7/, "package.install example should include a real SemVer version");
 
   const remove = findToolByName("package.remove")!;
   assert.equal(remove.destructiveHint, true);

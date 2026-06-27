@@ -82,13 +82,13 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
   {
     name: "package.install",
     title: "Package Install",
-    description: "Install a package into the project manifest and optionally resolve via Unity PackageManager. May trigger a Unity resolve job (session-affecting: manifest change + possible domain reload). Use package.search to confirm the name/version first.",
+    description: "Install a package into the project manifest and optionally resolve via Unity PackageManager. Destructive: manifest change + possible Unity resolve/domain reload. Requires an explicit version because Unity manifests do not accept 'latest'. Use package.search to confirm the name/version first.",
     group: "package",
-    inputSchema: objSchema({ name: { type: "string", description: "Package name to install." }, version: { type: "string", description: "Optional version or version range." }, project: { type: "string", description: "Unity project path." }, unity: { type: "string", description: "Unity executable path for batch resolve." }, wait: { type: "boolean", description: "Wait for resolve job to finish." } }, ["name"]),
+    inputSchema: objSchema({ name: { type: "string", description: "Package name to install. May include @version, e.g. com.unity.textmeshpro@3.0.7." }, version: { type: "string", description: "Required unless name includes @version. Use a SemVer package version accepted by Unity." }, project: { type: "string", description: "Unity project path." }, unity: { type: "string", description: "Unity executable path for batch resolve." }, wait: { type: "boolean", description: "Wait for resolve job to finish." } }, ["name"]),
     outputSchema: objSchema({ action: { type: "string" }, package: { type: "string" }, manifestPath: { type: "string" }, installedVersion: { type: "string" }, previousVersion: { type: "string" } }),
-    destructiveHint: false,
+    destructiveHint: true,
     sideEffects: ["manifest-change", "session-affecting"],
-    riskLevel: "medium",
+    riskLevel: "high",
     playModeSupport: "session-affecting",
     handler: "hybrid",
     supportStatus: "bridge-job",
@@ -96,7 +96,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     docsTopic: "package",
     equivalentUnityMcp: "manage_packages.add_package",
     examples: [
-      { description: "Install a package", argv: ["tools", "run", "package.install", "--input", "{\"name\":\"com.unity.textmeshpro\"}"] }
+      { description: "Install a package", argv: ["tools", "run", "package.install", "--input", "{\"name\":\"com.unity.textmeshpro\",\"version\":\"3.0.7\"}"] }
     ]
   },
   {

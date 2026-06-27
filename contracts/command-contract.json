@@ -1241,7 +1241,7 @@
       "command": "install",
       "handler_type": "hybrid",
       "csharp_handler": "none",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {

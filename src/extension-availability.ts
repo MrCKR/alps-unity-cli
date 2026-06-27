@@ -307,11 +307,10 @@ function buildToolUnavailableNextActions(
 ): string[] {
   const actions: string[] = [];
   actions.push(
-    `Install the required Unity package(s) manually via Unity Package Manager or Packages/manifest.json to enable ${extensionName}: ${missingPackageIds.join(", ")}.`
+    `Install the required Unity package(s) manually via Unity Package Manager, or run package.install with explicit package versions to enable ${extensionName}: ${missingPackageIds.join(", ")}.`
   );
   actions.push(
-    `If editing manifest.json, add dependencies: ` +
-    missingPackageIds.map((id) => `"${id}": "latest"`).join(", ")
+    `Do not write \"latest\" into manifest.json; Unity requires a SemVer/package source such as \"<version>\", \"file:<path>\" or a Git URL.`
   );
   actions.push(
     `After Unity resolves packages, run 'unity_cli extensions install <id> --project <path>' for the matching extension bundle.`
@@ -332,11 +331,10 @@ function buildContextUnavailableNextActions(
 ): string[] {
   const actions: string[] = [];
   actions.push(
-    `Install the required Unity package(s) manually via Unity Package Manager or Packages/manifest.json to enable ${extensionName}: ${missingPackageIds.join(", ")}.`
+    `Install the required Unity package(s) manually via Unity Package Manager, or run package.install with explicit package versions to enable ${extensionName}: ${missingPackageIds.join(", ")}.`
   );
   actions.push(
-    `If editing manifest.json, add dependencies: ` +
-    missingPackageIds.map((id) => `"${id}": "latest"`).join(", ")
+    `Do not write \"latest\" into manifest.json; Unity requires a SemVer/package source such as \"<version>\", \"file:<path>\" or a Git URL.`
   );
   actions.push(
     `Run 'unity_cli extensions doctor --project <path>' to diagnose all extension availability.`

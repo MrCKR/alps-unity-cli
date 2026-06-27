@@ -491,11 +491,10 @@ namespace UnityCli
         {
             var moduleName = request.StringArg("module") ?? request.StringArg("name");
             var enabled = request.BoolArg("enabled", true);
-            // ProfilerArea 在 UnityEditorInternal 命名空间，包 asmdef 无法直接引用，用反射解析类型。
-            var areaType = FindType("UnityEditorInternal.ProfilerArea");
+            var areaType = FindProfilerAreaType();
             if (areaType == null || !areaType.IsEnum)
             {
-                return ErrorJson("E_PROFILER_AREAS_UNAVAILABLE", "ProfilerArea enum not available in this Unity version.", "Run profiler.areas to check availability; this is a known UnityEditorInternal type-resolution limitation.");
+                return ErrorJson("E_PROFILER_AREAS_UNAVAILABLE", "ProfilerArea enum not available in this Unity version.", "Run in a Unity Editor with profiling support; Unity 2022+ normally exposes UnityEngine.Profiling.ProfilerArea.");
             }
             if (string.IsNullOrEmpty(moduleName))
             {
@@ -507,18 +506,21 @@ namespace UnityCli
             {
                 return ErrorJson("E_PROFILER_MODULE_UNKNOWN", "Unknown Profiler area: " + moduleName, "Run profiler.areas to see valid area names.");
             }
-            // 反射调用 Profiler.SetAreaEnabled(ProfilerArea, bool) 切换模块可见性。
-            var setAreaMethod = typeof(UnityEngine.Profiling.Profiler).GetMethod("SetAreaEnabled", BindingFlags.Static | BindingFlags.Public);
+            // 反射调用 Profiler.SetAreaEnabled(ProfilerArea, bool) 切换模块可见性，避免 asmdef 对版本差异产生编译期耦合。
+            var setAreaMethod = typeof(UnityEngine.Profiling.Profiler).GetMethod("SetAreaEnabled", BindingFlags.Static | BindingFlags.Public, null, new[] { areaType, typeof(bool) }, null);
+            var getAreaMethod = typeof(UnityEngine.Profiling.Profiler).GetMethod("GetAreaEnabled", BindingFlags.Static | BindingFlags.Public, null, new[] { areaType }, null);
             if (setAreaMethod == null)
             {
-                return ErrorJson("E_PROFILER_MODULE_UNSUPPORTED", "Profiler.SetAreaEnabled is not available in this Unity version.", "Use a newer Unity Editor version.");
+                return ErrorJson("E_PROFILER_MODULE_UNSUPPORTED", "Profiler.SetAreaEnabled is not available in this Unity version.", "Use a Unity Editor version that exposes Profiler.SetAreaEnabled(ProfilerArea,bool).");
             }
+            var wasEnabled = getAreaMethod != null && (bool)getAreaMethod.Invoke(null, new object[] { areaValue });
             try { setAreaMethod.Invoke(null, new object[] { areaValue, enabled }); }
             catch (Exception ex) { return ErrorJson("E_PROFILER_MODULE_FAILED", "Failed to set Profiler area: " + ex.Message, "Check Unity Console for details."); }
+            var isEnabled = getAreaMethod != null && (bool)getAreaMethod.Invoke(null, new object[] { areaValue });
             WriteLog("profiler_module_enable module=" + moduleName + " enabled=" + Bool(enabled));
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .Prop("command", "profiler.module-enable")
-                .Prop("module", moduleName).Prop("enabled", enabled)
+                .Prop("module", moduleName).Prop("enabled", enabled).Prop("wasEnabled", wasEnabled).Prop("isEnabled", isEnabled)
                 .Prop("logPath", LogPath()).EndObject().ToString());
         }
 
@@ -558,7 +560,7 @@ namespace UnityCli
         /// <summary>列出 Profiler area。对齐 CoplayDev profiler areas。</summary>
         private static string ProfilerAreas(BridgeRequest request)
         {
-            var areaType = FindType("UnityEditorInternal.ProfilerArea");
+            var areaType = FindProfilerAreaType();
             if (areaType == null || !areaType.IsEnum)
             {
                 return ErrorJson("E_PROFILER_AREAS_UNAVAILABLE", "ProfilerArea enum not available.", "Run in a Unity Editor with profiling support.");
@@ -566,8 +568,15 @@ namespace UnityCli
             var names = System.Enum.GetNames(areaType);
             return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "profiler.areas")
                 .Prop("count", (long)names.Length)
+                .Prop("enumType", areaType.FullName)
                 .PropArray("areas", arr => { foreach (var n in names) arr.Value(n); })
                 .Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        /// <summary>按 Unity 版本差异解析 ProfilerArea 枚举；Unity 2022+ 在 UnityEngine.Profiling 命名空间。</summary>
+        private static Type FindProfilerAreaType()
+        {
+            return FindType("UnityEngine.Profiling.ProfilerArea") ?? FindType("UnityEditorInternal.ProfilerArea");
         }
 
         /// <summary>查询指定对象内存。对齐 CoplayDev object-memory。</summary>

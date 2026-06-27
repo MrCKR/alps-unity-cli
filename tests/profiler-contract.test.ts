@@ -158,6 +158,7 @@ test("profiler.frame includes FrameTimingManager fields", async () => {
 test("profiler.module-enable calls SetAreaEnabled", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Commands/ProfilerCommands.cs", import.meta.url), "utf8");
   assert.match(source, /Profiler\.SetAreaEnabled/, "ProfilerModuleEnable should reference SetAreaEnabled");
+  assert.match(source, /UnityEngine\.Profiling\.ProfilerArea/, "ProfilerModuleEnable should resolve the Unity 2022+ ProfilerArea enum");
   assert.match(source, /Enum\.Parse\(areaType/, "ProfilerModuleEnable should parse the area enum via reflection");
   assert.doesNotMatch(source, /Module enable\/disable uses Editor prefs/, "ProfilerModuleEnable must not return the old note-only stub");
 });

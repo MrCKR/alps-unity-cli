@@ -255,6 +255,8 @@ test("resolveAvailability next actions suggest manual package install and extens
   assert.equal(result.status, "unavailable");
   assert.ok(result.nextActions.some((a) => a.includes("Unity Package Manager")));
   assert.ok(result.nextActions.some((a) => a.includes("manifest.json")));
+  assert.ok(result.nextActions.some((a) => a.includes("explicit package versions")));
+  assert.equal(result.nextActions.some((a) => a.includes('"latest"')), true, "next_actions should warn against writing latest");
   assert.ok(result.nextActions.some((a) => a.includes("unity_cli extensions install probuilder")));
 });
 

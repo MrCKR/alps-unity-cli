@@ -456,7 +456,7 @@ test("package install updates manifest, deploys bridge and can start package res
   const project = await makeUnityProject();
   const unity = await makeFakeUnity(`process.exit(0);`);
 
-  const installed = await execute(["tools", "run", "package.install", "com.acme.lib@2.0.0", "--project", project, "--unity", unity], runtime);
+  const installed = await execute(["tools", "run", "package.install", "com.acme.lib@2.0.0", "--project", project, "--unity", unity, "--yes"], runtime);
   assert.equal(installed.ok, true);
   const jobData = installed.data as { kind: string; result: { action: string; package: string; installedVersion: string; bridge: { dependencyName: string; bridgePath: string; installMode: string } } };
   assert.equal(jobData.kind, "package");
@@ -473,6 +473,16 @@ test("package install updates manifest, deploys bridge and can start package res
   assert.equal(manifest.dependencies["com.acme.lib"], "2.0.0");
   // com.unity_cli is NOT in manifest dependencies (copy mode: no file: reference)
   assert.equal(manifest.dependencies["com.unity_cli"], undefined);
+});
+
+test("package install requires an explicit manifest version", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  const installed = await execute(["tools", "run", "package.install", "com.acme.lib", "--project", project, "--yes"], runtime);
+  assert.equal(installed.ok, false);
+  assert.equal(installed.error?.code, "PACKAGE_VERSION_REQUIRED");
+  assert.equal(installed.error?.next_actions?.[0].includes("@<version>"), true);
 });
 
 test("package remove returns structured diagnostic for missing package", async () => {
@@ -553,7 +563,7 @@ test("package write commands require an existing Unity manifest", async () => {
   const runtime = await makeRuntime();
   const project = await mkdtemp(join(tmpdir(), "not-unity-project-"));
 
-  const result = await execute(["tools", "run", "package.install", "com.acme.lib", "--project", project], runtime);
+  const result = await execute(["tools", "run", "package.install", "com.acme.lib", "--project", project, "--yes"], runtime);
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "MANIFEST_NOT_FOUND");
 });

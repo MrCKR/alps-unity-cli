@@ -59,7 +59,7 @@ export interface PackageSnapshot {
 
 export interface PackageSpec {
   name: string;
-  version: string;
+  version?: string;
 }
 
 const bridgePackageName = "com.unity_cli";
@@ -100,6 +100,12 @@ export async function packageInfo(projectPath: string, name: string): Promise<Pa
 export async function installPackage(projectPath: string, spec: PackageSpec): Promise<{ manifestPath: string; previousVersion?: string; installedVersion: string }> {
   const paths = packagePaths(projectPath);
   const manifest = await readManifest(paths.manifestPath, false);
+  if (!spec.version) {
+    throw new PackageManagerError("PACKAGE_VERSION_REQUIRED", `Package install requires an explicit Unity package version for manifest writes: ${spec.name}`, [
+      "Pass a SemVer version with --version or append @<version> to the package name, e.g. com.unity.textmeshpro@3.0.7.",
+      "Use package.search or Unity Package Manager documentation to choose a compatible version."
+    ]);
+  }
   manifest.dependencies ??= {};
   const previousVersion = manifest.dependencies[spec.name];
   manifest.dependencies[spec.name] = spec.version;
@@ -332,7 +338,7 @@ export function parsePackageSpec(raw: string, explicitVersion?: string): Package
   if (atIndex > 0) {
     return { name: raw.slice(0, atIndex), version: explicitVersion ?? raw.slice(atIndex + 1) };
   }
-  return { name: raw, version: explicitVersion ?? "latest" };
+  return { name: raw, version: explicitVersion };
 }
 
 export function validatePackageName(name: string | undefined): string {

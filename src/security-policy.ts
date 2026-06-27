@@ -20,6 +20,7 @@ const SECURITY_POLICY: SecurityPolicyEntry[] = [
   { command: "cinemachine.extension", title: "Cinemachine Extension Remove", destructiveHint: true },
   { command: "urp.feature", title: "URP Renderer Feature Modify", destructiveHint: true },
   { command: "editor.menu", title: "Execute Editor Menu", destructiveHint: true },
+  { command: "package.install", title: "Package Install", destructiveHint: true },
   { command: "package.remove", title: "Package Remove", destructiveHint: true },
   { command: "batch.run", title: "Batch Run", destructiveHint: true, supportsDryRun: true },
   { command: "instances.prune", title: "Prune Unity Instances", destructiveHint: true },

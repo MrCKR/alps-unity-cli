@@ -234,12 +234,11 @@ function buildNextActions(
   const actions: string[] = [];
 
   actions.push(
-    `Install the required Unity package(s) manually via Unity Package Manager or Packages/manifest.json: ${missingPackageIds.join(", ")}.`
+    `Install the required Unity package(s) manually via Unity Package Manager, or run package.install with explicit package versions: ${missingPackageIds.join(", ")}.`
   );
 
   actions.push(
-    `If editing manifest.json, add dependencies: ` +
-    missingPackageIds.map((id) => `"${id}": "latest"`).join(", ")
+    `Do not write \"latest\" into manifest.json; Unity requires a SemVer/package source such as \"<version>\", \"file:<path>\" or a Git URL.`
   );
 
   actions.push(

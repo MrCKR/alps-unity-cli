@@ -17,9 +17,9 @@ import { stripBom } from "../util.js";
  *
  * Only packages that appear in packages-lock.json are considered "installed" —
  * this is the authoritative record of what Unity's package manager has actually
- * resolved and made available. A package declared in manifest.json with version
- * "latest" but absent from packages-lock.json has NOT been resolved and cannot
- * be used; reporting it as installed would produce false-positive diagnostics.
+ * resolved and made available. A package declared in manifest.json but absent
+ * from packages-lock.json has NOT been resolved and cannot be used; reporting it
+ * as installed would produce false-positive diagnostics.
  *
  * Returns a Map of package ID → resolved version string.
  *
@@ -30,8 +30,8 @@ export async function readInstalledUnityPackages(projectPath: string): Promise<M
   const packages = new Map<string, string>();
 
   // Only read packages-lock.json for RESOLVED (installed) packages.
-  // manifest.json declares intent but not resolution; a package listed as
-  // "latest" in manifest but absent from lock has not been resolved by Unity.
+  // manifest.json declares intent but not resolution; a package listed in
+  // manifest but absent from lock has not been resolved by Unity.
   const lockPath = join(resolve(projectPath), "Packages", "packages-lock.json");
   try {
     const lockContent = await readFile(lockPath, "utf8");
