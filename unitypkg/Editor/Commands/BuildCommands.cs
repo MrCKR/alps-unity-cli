@@ -105,19 +105,59 @@ namespace UnityCli
             return ErrorJson("E_BUILD_PLATFORM_ACTION", "Unknown action: " + action, "Use get or set.");
         }
 
-        /// <summary>读取 PlayerSettings 关键构建配置。</summary>
+        /// <summary>读取/修改 PlayerSettings 关键构建配置。对齐 CoplayDev manage_build settings。</summary>
         private static string BuildSettings(BridgeRequest request)
         {
-            var w = new UnityCliJsonWriter().BeginObject();
-            w.Prop("command", "build.settings");
-            w.Prop("productName", PlayerSettings.productName);
-            w.Prop("bundleVersion", PlayerSettings.bundleVersion);
-            w.Prop("companyId", PlayerSettings.companyName);
-            w.Prop("applicationIdentifier", PlayerSettings.applicationIdentifier);
-            w.Prop("scriptingBackend", PlayerSettings.GetScriptingBackend(BuildTargetGroup.Unknown).ToString());
-            w.Prop("apiCompatibilityLevel", PlayerSettings.GetApiCompatibilityLevel(BuildTargetGroup.Unknown).ToString());
-            w.Prop("logPath", LogPath());
-            return SuccessJson(w.EndObject().ToString());
+            var action = request.StringArg("action") ?? "get";
+            if (action == "get")
+            {
+                var w = new UnityCliJsonWriter().BeginObject();
+                w.Prop("command", "build.settings");
+                w.Prop("productName", PlayerSettings.productName);
+                w.Prop("bundleVersion", PlayerSettings.bundleVersion);
+                w.Prop("companyId", PlayerSettings.companyName);
+                w.Prop("applicationIdentifier", PlayerSettings.applicationIdentifier);
+                w.Prop("scriptingBackend", PlayerSettings.GetScriptingBackend(BuildTargetGroup.Unknown).ToString());
+                w.Prop("apiCompatibilityLevel", PlayerSettings.GetApiCompatibilityLevel(BuildTargetGroup.Unknown).ToString());
+                w.Prop("logPath", LogPath());
+                return SuccessJson(w.EndObject().ToString());
+            }
+            if (action == "set")
+            {
+                if (request.DryRun)
+                {
+                    return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                        .Prop("command", "build.settings").Prop("dryRun", true).Prop("action", "set")
+                        .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "build.settings.set").Prop("sideEffects", "player-settings-write").EndObject())
+                        .Prop("logPath", LogPath()).EndObject().ToString());
+                }
+                var changes = new List<string>();
+                var productName = request.StringArg("productName");
+                if (!string.IsNullOrEmpty(productName)) { PlayerSettings.productName = productName; changes.Add("productName"); }
+                var bundleVersion = request.StringArg("bundleVersion");
+                if (!string.IsNullOrEmpty(bundleVersion)) { PlayerSettings.bundleVersion = bundleVersion; changes.Add("bundleVersion"); }
+                var companyId = request.StringArg("companyId");
+                if (!string.IsNullOrEmpty(companyId)) { PlayerSettings.companyName = companyId; changes.Add("companyId"); }
+                var applicationIdentifier = request.StringArg("applicationIdentifier");
+                if (!string.IsNullOrEmpty(applicationIdentifier)) { PlayerSettings.SetApplicationIdentifier(applicationIdentifier); changes.Add("applicationIdentifier"); }
+                var scriptingBackend = request.StringArg("scriptingBackend");
+                if (!string.IsNullOrEmpty(scriptingBackend) && Enum.TryParse(scriptingBackend, true, out ScriptingBackend sb)) { PlayerSettings.SetScriptingBackend(BuildTargetGroup.Unknown, sb); changes.Add("scriptingBackend"); }
+                var apiCompatibilityLevel = request.StringArg("apiCompatibilityLevel");
+                if (!string.IsNullOrEmpty(apiCompatibilityLevel) && Enum.TryParse(apiCompatibilityLevel, true, out ApiCompatibilityLevel api)) { PlayerSettings.SetApiCompatibilityLevel(BuildTargetGroup.Unknown, api); changes.Add("apiCompatibilityLevel"); }
+                var w = new UnityCliJsonWriter().BeginObject();
+                w.Prop("command", "build.settings").Prop("action", "set");
+                w.PropArray("changed", arr => { foreach (var c in changes) arr.Value(c); });
+                w.Prop("productName", PlayerSettings.productName);
+                w.Prop("bundleVersion", PlayerSettings.bundleVersion);
+                w.Prop("companyId", PlayerSettings.companyName);
+                w.Prop("applicationIdentifier", PlayerSettings.applicationIdentifier);
+                w.Prop("scriptingBackend", PlayerSettings.GetScriptingBackend(BuildTargetGroup.Unknown).ToString());
+                w.Prop("apiCompatibilityLevel", PlayerSettings.GetApiCompatibilityLevel(BuildTargetGroup.Unknown).ToString());
+                w.PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "build.settings.set").Prop("changed", string.Join(",", changes.ToArray())).EndObject());
+                w.Prop("logPath", LogPath());
+                return SuccessJson(w.EndObject().ToString());
+            }
+            return ErrorJson("E_BUILD_SETTINGS_ACTION", "Unknown action: " + action, "Use get or set.");
         }
     }
 }

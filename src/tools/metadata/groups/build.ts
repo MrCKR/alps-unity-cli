@@ -48,19 +48,22 @@ export const BUILD_TOOLS: ToolMetadata[] = [
   },
   {
     name: "build.settings",
-    summary: "Read key PlayerSettings build configuration such as productName, bundleVersion, applicationIdentifier, scriptingBackend, and API compatibility level.",
-    description: "Read key PlayerSettings build configuration such as productName, bundleVersion, applicationIdentifier, scriptingBackend, and API compatibility level.",
+    summary: "Read or modify key PlayerSettings build configuration (productName, bundleVersion, applicationIdentifier, scriptingBackend, API compatibility level).",
+    description: "Read or modify key PlayerSettings build configuration. action=get (default) returns productName, bundleVersion, companyId, applicationIdentifier, scriptingBackend, and API compatibility level. action=set writes provided fields to PlayerSettings (persisted to ProjectSettings/ProjectSettings.asset); pass only the fields you want to change. Use --dry-run to preview a set without writing.",
     group: "build",
-    inputSchema: objSchema({}),
+    inputSchema: objSchema({ action: { type: "string", enum: ["get", "set"], default: "get", description: "Use get for read-only inspection; set writes provided fields to PlayerSettings." }, productName: { type: "string", description: "PlayerSettings.productName. Set only." }, bundleVersion: { type: "string", description: "PlayerSettings.bundleVersion. Set only." }, companyId: { type: "string", description: "PlayerSettings.companyName. Set only." }, applicationIdentifier: { type: "string", description: "Reverse-DNS application identifier. Set only." }, scriptingBackend: { type: "string", enum: ["Mono2x", "IL2CPP"], description: "ScriptingBackend enum. Set only." }, apiCompatibilityLevel: { type: "string", description: "ApiCompatibilityLevel enum name, e.g. NetStandard21, NetWeb, NetStandard. Set only." } }),
     destructiveHint: false,
+    sideEffects: ["player-settings-write"],
     playModeSupport: "supported",
+    supportsDryRun: true,
     handler: "bridge",
     supportStatus: "live-bridge",
     cliCommand: "tools run build.settings",
     docsTopic: "build",
     equivalentUnityMcp: "manage_build.settings",
     examples: [
-      { description: "Read PlayerSettings build configuration", argv: ["tools", "run", "build.settings", "--input", "{}"] }
+      { description: "Read PlayerSettings build configuration", argv: ["tools", "run", "build.settings", "--input", "{\"action\":\"get\"}"] },
+      { description: "Preview changing product name", argv: ["tools", "run", "build.settings", "--input", "{\"action\":\"set\",\"productName\":\"MyGame\"}", "--dry-run"] }
     ]
   }
 ];
