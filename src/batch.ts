@@ -267,6 +267,7 @@ const commandRegistry = new Map<string, { parallelSafe: boolean }>([
   ["ui.render-preview", { parallelSafe: false }],
   ["scriptable-object.create", { parallelSafe: false }],
   ["scriptable-object.info", { parallelSafe: true }],
+  ["scriptable-object.list-types", { parallelSafe: true }],
   ["scriptable-object.modify", { parallelSafe: false }],
   ["editor.console", { parallelSafe: true }],
   ["editor.state", { parallelSafe: true }],

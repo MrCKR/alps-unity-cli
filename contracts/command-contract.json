@@ -2519,7 +2519,7 @@
       "command": "create",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2532,12 +2532,21 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "scriptable-object.list-types",
+      "group": "scriptable-object",
+      "command": "list-types",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "scriptable-object.modify",
       "group": "scriptable-object",
       "command": "modify",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {

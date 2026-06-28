@@ -47,7 +47,7 @@ namespace UnityCli
         private static readonly string[] ShaderCommands = { "shader.info", "shader.read", "shader.create", "shader.update" };
         private static readonly string[] TextureCommands = { "texture.info", "texture.create", "texture.sprite", "texture.import-settings" };
         private static readonly string[] EditorCommands = { "editor.state", "editor.play", "editor.pause", "editor.stop", "editor.undo", "editor.redo", "editor.resolution", "editor.menu", "editor.console", "project.tag", "project.layer" };
-        private static readonly string[] ScriptableObjectCommands = { "scriptable-object.create", "scriptable-object.info", "scriptable-object.modify" };
+        private static readonly string[] ScriptableObjectCommands = { "scriptable-object.create", "scriptable-object.info", "scriptable-object.list-types", "scriptable-object.modify" };
         private static readonly string[] CodeCommands = { "code.exec" };
         private static readonly string[] ProjectToolCommands = { "project-tool.list", "project-tool.run" };
         private static readonly string[] RuntimeToolCommands = { "runtime-tool.list", "runtime-tool.run" };

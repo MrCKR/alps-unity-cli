@@ -655,10 +655,10 @@ namespace UnityCli
             {
                 return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "ui.render-preview").Prop("dryRun", true).Prop("target", target).Prop("output", output).PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "ui.render-preview").Prop("output", output).EndObject()).Prop("logPath", LogPath()).EndObject().ToString());
             }
-            var texture = AssetPreview.GetAssetPreview(previewTarget) ?? AssetPreview.GetMiniThumbnail(previewTarget);
+            var texture = UnityEditor.AssetPreview.GetAssetPreview(previewTarget) ?? UnityEditor.AssetPreview.GetMiniThumbnail(previewTarget);
             if (texture == null) throw new BridgeCommandException("E_UI_PREVIEW_UNAVAILABLE", "Unity did not provide an AssetPreview for: " + target, "Open/import the UI asset in Unity or retry after editor is idle.", true, 1000);
             CreateAssetDirectory(output);
-            var temp = new Texture2D(texture.width, texture.height, TextureFormat.RGBA32, false);
+            var temp = new Texture2D(texture.width, texture.height, TextureFormat.RGBA32, false, false);
             try
             {
                 temp.SetPixels(texture.GetPixels());

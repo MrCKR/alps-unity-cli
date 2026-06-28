@@ -42,6 +42,7 @@ namespace UnityCli
             w.RawValue(CapabilityJson("material", MaterialCommands));
             w.RawValue(CapabilityJson("graphics", GraphicsCommands));
             w.RawValue(CapabilityJson("physics", PhysicsCommands));
+            w.RawValue(CapabilityJson("scriptable-object", ScriptableObjectCommands));
             w.RawValue(CapabilityJson("profiler", ProfilerCommands));
             w.RawValue(CapabilityJson("animation", AnimationCommands));
             w.RawValue(CapabilityJson("shader", ShaderCommands));

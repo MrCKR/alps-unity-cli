@@ -39,7 +39,7 @@ test("security policy covers all destructive commands including CLI-only", async
   const { destructiveCommands } = await import("../src/security-policy.js");
   const policyCommands = destructiveCommands().map((e: { command: string }) => e.command);
   const expected = [
-    "asset.delete", "scene.save", "code.exec",
+    "asset.delete", "scriptable-object.create", "scriptable-object.modify", "scene.save", "code.exec",
     "probuilder.delete-faces", "probuilder.detach-faces", "probuilder.combine-meshes",
     "probuilder.merge-objects", "probuilder.flip-normals",
     "cinemachine.extension", "urp.feature", "editor.menu", "package.install", "package.remove",
@@ -49,7 +49,7 @@ test("security policy covers all destructive commands including CLI-only", async
     "object.modify", "reflection.method.call"
   ];
   assert.deepEqual(policyCommands.sort(), expected.sort());
-  assert.equal(destructiveCommands().length, 34);
+  assert.equal(destructiveCommands().length, 36);
 });
 
 test("destructive dry-run forwards envelope preview without --yes", async () => {
