@@ -139,9 +139,9 @@ namespace UnityCli
                 var companyId = request.StringArg("companyId");
                 if (!string.IsNullOrEmpty(companyId)) { PlayerSettings.companyName = companyId; changes.Add("companyId"); }
                 var applicationIdentifier = request.StringArg("applicationIdentifier");
-                if (!string.IsNullOrEmpty(applicationIdentifier)) { PlayerSettings.SetApplicationIdentifier(applicationIdentifier); changes.Add("applicationIdentifier"); }
+                if (!string.IsNullOrEmpty(applicationIdentifier)) { PlayerSettings.SetApplicationIdentifier(BuildTargetGroup.Unknown, applicationIdentifier); changes.Add("applicationIdentifier"); }
                 var scriptingBackend = request.StringArg("scriptingBackend");
-                if (!string.IsNullOrEmpty(scriptingBackend) && Enum.TryParse(scriptingBackend, true, out ScriptingBackend sb)) { PlayerSettings.SetScriptingBackend(BuildTargetGroup.Unknown, sb); changes.Add("scriptingBackend"); }
+                if (!string.IsNullOrEmpty(scriptingBackend) && Enum.TryParse(scriptingBackend, true, out UnityEditor.ScriptingImplementation sb)) { PlayerSettings.SetScriptingBackend(BuildTargetGroup.Unknown, sb); changes.Add("scriptingBackend"); }
                 var apiCompatibilityLevel = request.StringArg("apiCompatibilityLevel");
                 if (!string.IsNullOrEmpty(apiCompatibilityLevel) && Enum.TryParse(apiCompatibilityLevel, true, out ApiCompatibilityLevel api)) { PlayerSettings.SetApiCompatibilityLevel(BuildTargetGroup.Unknown, api); changes.Add("apiCompatibilityLevel"); }
                 var w = new UnityCliJsonWriter().BeginObject();
