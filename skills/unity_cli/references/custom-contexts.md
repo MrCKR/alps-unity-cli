@@ -32,7 +32,6 @@ public static class SampleContext
 {
     [UnityCliContext(
         "sample.project-summary",
-        Title = "Sample Project Summary",
         Description = "Returns a read-only summary of the Unity project.",
         Category = "sample",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"includeDisabled\":{\"type\":\"boolean\"}}}",
@@ -60,14 +59,13 @@ public static class SampleContext
 ## 关键属性
 
 - `Name`：唯一 Context 名，建议 dotted/kebab 风格，例如 `sample.project-summary`。
-- `Title` / `Description`：让 AI 能理解读取价值。
+- `Description`：必填说明，用于 `context list` / `context describe` 判断读取价值和只读边界。Context 不使用 `Summary`。
 - `Category`：分类，例如 `sample`、`project`、`scene`、`design`。
 - `InputSchema` / `OutputSchema`：JSON Schema；AI 读取前会通过 `context describe` 查看。
 - `Target`：`editor`、`runtime` 或 `both`。
 - `AvailabilityScope`：例如 `editorSession`、`playModeSession`。
 - `RefreshBehavior`：通常用 `onDemand`。
 - `RequiresPackages`：依赖 Unity Package 时声明。
-- `ResourceUri` / `EquivalentUnityMcp`：有资源映射时再填。
 - `Fingerprint`：可选固定指纹；缺省时 Bridge 会计算 handler + descriptor 指纹。
 
 ## 读取入口

@@ -29,9 +29,9 @@ import {
   type ToolMetadata
 } from "./tools/metadata/index.js";
 import { failure, success } from "./output.js";
-import { instanceSelectionFailure, selectInstanceForFlags, targetSummary } from "./instances.js";
+
 import { confirmDestructiveExecution } from "./security.js";
-import { supportStatusDescription, supportStatusForTool, supportStatusLabel } from "./tools/metadata/status.js";
+import { supportStatusForTool } from "./tools/metadata/status.js";
 import type { CliResult } from "./types.js";
 import { handleBuild } from "./cli-commands/build.js";
 import { handleEditor } from "./cli-commands/editor.js";
@@ -106,13 +106,16 @@ async function handleToolsGroup(
   const groupDescriptions: Record<string, string> = {
     scene: "Scene management: active scene, hierarchy, build settings, screenshots, create, load, save.",
     camera: "Camera inspection: list, info, screenshots.",
-    "game-object": "GameObject operations: find, inspect, create, modify, delete, components.",
+    go: "GameObject operations: find, inspect, create, modify, delete, parent, transform, and components.",
+    component: "Component operations: add, remove, get, modify, set properties, and list component types.",
     asset: "Asset management: search, info, create, import, modify, delete, duplicate, move, rename.",
     prefab: "Prefab operations: info, hierarchy, create, modify, stage open/save/close.",
     material: "Material management: info, create, assign, set properties.",
     graphics: "Graphics settings: quality, anti-aliasing, pipeline, volume.",
     physics: "Physics operations: settings, raycast, simulation.",
-    profiler: "Unity Profiler: status, start, stop, capture, export.",
+    profiler: "Unity Profiler: status, recording, counters, frame timing, memory snapshots, and Frame Debugger.",
+    animator: "Animator runtime controls: inspect state, read/set parameters, crossfade, speed, and enabled state.",
+    controller: "AnimatorController asset editing: create controllers, states, transitions, parameters, layers, and blend trees.",
     probuilder: "ProBuilder 3D modeling: shapes, CSG operations, mesh editing (requires com.unity.probuilder).",
     cinemachine: "Cinemachine smart camera system: virtual cameras, composition, blending, noise (requires com.unity.cinemachine).",
     urp: "Universal Render Pipeline: renderer features, volumes, pipeline settings (requires com.unity.render-pipelines.universal).",
@@ -125,14 +128,21 @@ async function handleToolsGroup(
     script: "Script management: create, read, edit, validate.",
     editor: "Editor control: console, state, play/pause/stop, menu, selection, active tool.",
     console: "Unity Editor console: read and clear logs.",
-    package: "Editor-side package operations: embed.",
+    package: "Unity package operations: list, inspect, install, remove, resolve, registries, and embed packages.",
+    project: "Project settings operations: tags and layers.",
+    test: "Unity test execution through CLI jobs.",
+    build: "Unity build discovery and build job execution.",
+    docs: "Built-in CLI docs and offline Unity API documentation lookup/search.",
+    reflect: "Offline reflection cache queries for C# and Unity types/members.",
+    tools: "Tool discovery and execution meta-tools: groups, group lists, search, describe, and run.",
     diagnose: "Diagnostics: preflight checks.",
-    screenshot: "Screenshot capture.",
+    screenshot: "Screenshot capture from screen, Game View, Scene View, isolated objects, and orbit shots.",
     code: "Code execution: exec C# code snippets.",
     object: "Generic Unity Object deep read/modify: serialized member trees, pathPatches, jsonPatch.",
     reflection: "Live Unity reflection: find and call C# methods, generate type schemas.",
     type: "Live type schema generation for C# / Unity types.",
-    "cli-only": "CLI-only commands: init, package, batch, docs, reflect, test, build, job management."
+    "scriptable-object": "ScriptableObject operations: create assets, read info, and modify serialized fields.",
+    "cli-only": "CLI-only commands: init, package, batch, docs, reflect, test, build, and job management."
   };
 
   const seen = new Set<string>();
@@ -146,9 +156,9 @@ async function handleToolsGroup(
 
   const groups = [...seen].sort().map((group) => ({
     name: group,
-    title: groupDescriptions[group] ?? `Tools in the ${group} domain.`,
+    summary: groupDescriptions[group] ?? `${group} tools.`,
     toolCount: groupCounts[group] ?? 0,
-    source: EXTENSION_GROUPS.has(group) ? "extension" : builtinGroups.includes(group) ? "core" : "project",
+    source: EXTENSION_GROUPS.has(group) ? "extension" : builtinGroups.includes(group) ? "built-in" : "project",
     cliCommand: `tools group list ${group}`
   }));
 
@@ -167,7 +177,7 @@ async function handleToolsGroup(
 
 /**
  * `tools group list <group>` — list tools in a specific group with short summaries.
- * Only shows name, title, destructive hint, source, availability.
+ * Only shows name, summary, destructive hint, source, availability.
  * Does NOT expand full schema.
  */
 async function handleToolsGroupList(
@@ -203,13 +213,12 @@ async function handleToolsGroupList(
     const supportStatus = supportStatusForTool(t);
     return {
       name: t.name,
-      title: t.title,
+      summary: t.summary,
       group: t.group,
       source: t.source ?? (customTools.includes(t) ? "project" : "built-in"),
       destructiveHint: t.destructiveHint,
       playModeSupport: t.playModeSupport,
       supportStatus,
-      supportStatusLabel: supportStatusLabel(supportStatus),
       target: t.target ?? "editor",
       requiresPackages: t.requiresPackages,
       cliCommand: t.cliCommand ?? `tools run ${t.name}`
@@ -246,7 +255,7 @@ async function handleToolsSearch(
   const availableExtensionTools = await resolveAvailableExtensionTools(flags);
   const extensionResults = availableExtensionTools.filter((t: ToolMetadata) =>
     t.name.toLowerCase().includes(keyword.toLowerCase()) ||
-    t.title.toLowerCase().includes(keyword.toLowerCase()) ||
+    t.summary.toLowerCase().includes(keyword.toLowerCase()) ||
     t.description.toLowerCase().includes(keyword.toLowerCase()) ||
     t.group.toLowerCase().includes(keyword.toLowerCase())
   );
@@ -259,7 +268,7 @@ async function handleToolsSearch(
     if (customTools.ok === false) return customTools;
     const customResults = customTools.tools.filter((t: ToolMetadata) =>
       t.name.toLowerCase().includes(keyword.toLowerCase()) ||
-      t.title.toLowerCase().includes(keyword.toLowerCase()) ||
+      t.summary.toLowerCase().includes(keyword.toLowerCase()) ||
       t.description.toLowerCase().includes(keyword.toLowerCase()) ||
       t.group.toLowerCase().includes(keyword.toLowerCase())
     );
@@ -270,12 +279,12 @@ async function handleToolsSearch(
     const supportStatus = supportStatusForTool(t);
     return {
       name: t.name,
-      title: t.title,
+      summary: t.summary,
       group: t.group,
+      source: t.source ?? "built-in",
       destructiveHint: t.destructiveHint,
       playModeSupport: t.playModeSupport,
       supportStatus,
-      supportStatusLabel: supportStatusLabel(supportStatus),
       cliCommand: t.cliCommand,
       target: t.target ?? "editor",
       availabilityScope: t.availabilityScope ?? (t.target === "runtime" ? "playModeSession" : "editorSession"),
@@ -286,14 +295,13 @@ async function handleToolsSearch(
   const format = getString(flags, "format");
   const data: Record<string, unknown> = {
     command: "tools.search",
-    target: await optionalTargetSummary(flags, runtime),
     keyword,
     count: summaries.length,
     tools: summaries
   };
 
   if (format === "text") {
-    const lines = summaries.map((s) => `${s.name} [${s.group}] ${s.supportStatusLabel} — ${s.title}`);
+    const lines = summaries.map((s) => `${s.name} [${s.group}] ${s.supportStatus} - ${s.summary}`);
     data.text = lines.join("\n");
   }
 
@@ -319,8 +327,9 @@ async function handleToolsDescribe(
       "Run unity_cli tools group to see tool groups.",
       "Run unity_cli tools group list <group> to see tools in a group.",
       "Run unity_cli tools group to see all tool groups.",
-      "Run unity_cli tools group list custom --include-custom to discover Unity project Editor custom tools.",
-      "Run unity_cli tools search <keyword> to find related tools."
+      "Run unity_cli context read tools.custom to inspect Unity project custom tools and their groups.",
+      "Run unity_cli tools group list <group> --include-custom for the custom tool's actual group.",
+      "Run unity_cli tools search <keyword> --include-custom to find related custom tools."
     ]);
   }
 
@@ -331,18 +340,10 @@ async function handleToolsDescribe(
   // the tool is usable.
   const extensionCheck = await checkToolExtensionAvailability(tool, flags);
 
-  const isProjectTool = builtinTool === undefined;
   const supportStatus = supportStatusForTool(tool);
-  const data: Record<string, unknown> = {
-    command: "tools.describe",
-    target: await optionalTargetSummary(flags, runtime),
-    mode: isProjectTool ? "bridge" : "offline",
-    requiresUnity: isProjectTool,
-    ...tool,
-    supportStatus,
-    supportStatusLabel: supportStatusLabel(supportStatus),
-    supportStatusDescription: supportStatusDescription(supportStatus)
-  };
+  const data: Record<string, unknown> = publicToolDescriptor(tool, supportStatus, {
+    command: "tools.describe"
+  });
 
   if (!extensionCheck.available) {
     data.extensionAvailability = "unavailable";
@@ -355,6 +356,29 @@ async function handleToolsDescribe(
   }
 
   return success(requestId, data);
+}
+
+function publicToolDescriptor(tool: ToolMetadata, supportStatus: ReturnType<typeof supportStatusForTool>, extra: Record<string, unknown> = {}): Record<string, unknown> {
+  const {
+    handler: _handler,
+    docsTopic: _docsTopic,
+    equivalentUnityMcp: _equivalentUnityMcp,
+    kind: _kind,
+    availabilityScope: _availabilityScope,
+    longRunning: _longRunning,
+    requiresMainThread: _requiresMainThread,
+    timeoutMs: _timeoutMs,
+    permissions: _permissions,
+    cancellationSemantics: _cancellationSemantics,
+    available: _available,
+    ...publicTool
+  } = tool;
+  return {
+    ...extra,
+    ...publicTool,
+    target: tool.target ?? "editor",
+    supportStatus
+  };
 }
 
 async function handleToolsRun(
@@ -445,7 +469,7 @@ async function handleToolsRun(
     if (spec.destructiveHint || tool.destructiveHint) {
       const confirmation = await confirmDestructiveExecution(mergedFlags, {
         command: toolName,
-        title: tool.title,
+        summary: tool.summary,
         destructiveHint: true,
         supportsDryRun: spec.supportsDryRun ?? tool.supportsDryRun,
         requestId
@@ -737,7 +761,7 @@ async function dispatchOfflineHandler(
   if (tool.destructiveHint) {
     const confirmation = await confirmDestructiveExecution(mergedFlags, {
       command: name,
-      title: tool.title,
+      summary: tool.summary,
       destructiveHint: true,
       supportsDryRun: tool.supportsDryRun,
       requestId
@@ -773,21 +797,6 @@ async function dispatchOfflineHandler(
   }
 }
 
-/**
- * Resolve a target summary when flags identify a reachable Unity instance.
- */
-async function optionalTargetSummary(flags: Record<string, string | boolean>, runtime: ToolsRuntime): Promise<Record<string, unknown> | null> {
-  try {
-    const selection = await selectInstanceForFlags(flags, runtime.dataDir ?? process.cwd());
-    return selection ? targetSummary(selection.instance) : null;
-  } catch (error) {
-    const result = instanceSelectionFailure("tools_target_probe", error);
-    if (result) {
-      return null;
-    }
-    throw error;
-  }
-}
 
 async function findProjectToolByName(
   name: string,

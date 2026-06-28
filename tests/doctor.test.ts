@@ -241,7 +241,7 @@ test("doctor reports runtime custom tools in unified discovery", async () => {
     dataDir,
     projectTools: [{
       name: "project.echo",
-      title: "Project Echo",
+      summary: "Project Echo",
       description: "Echo project data.",
       group: "project",
       inputSchema: { type: "object" },
@@ -317,12 +317,9 @@ test("doctor context_discovery reports project custom contexts from runtime", as
     projectContexts: [
       {
         name: "sample.project-summary",
-        title: "Project Summary",
         description: "Sample project summary context",
         category: "sample",
-        kind: "context",
         source: "project",
-        requiresUnity: true,
         inputSchema: { type: "object" }
       }
     ]
@@ -435,12 +432,9 @@ test("doctor context_discovery suggestions never suggest tools run", async () =>
     projectContexts: [
       {
         name: "conflict.context",
-        title: "Conflict",
         description: "Duplicate context",
         category: "test",
-        kind: "context",
         source: "project",
-        requiresUnity: true,
         inputSchema: { type: "object" },
         supportStatus: "unavailable"
       }

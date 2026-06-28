@@ -34,8 +34,8 @@ export interface UnityPackageRequirement {
 export interface ExtensionToolContribution {
   /** Tool name (dotted), e.g. "probuilder.shape". */
   name: string;
-  /** Human-readable short title. */
-  title: string;
+  /** Short tool summary for discovery. */
+  summary: string;
   /** One-paragraph description. */
   description: string;
   /** Logical group for tool discovery. */

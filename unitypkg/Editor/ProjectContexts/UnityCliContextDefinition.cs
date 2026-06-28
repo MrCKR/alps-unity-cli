@@ -8,14 +8,13 @@ namespace UnityCli
     /// ProjectContextRegistry during discovery from [UnityCliContext] attributed
     /// methods, and stored in the registry for lookup by context.list/describe/read.
     ///
-    /// Custom contexts are always Kind=context, Source=project,
-    /// and must not declare DestructiveHint, SupportsJob, or artifact kinds.
+    /// Custom contexts are always Source=project and must not declare
+    /// DestructiveHint, SupportsJob, or artifact kinds.
     /// </summary>
     public sealed class UnityCliContextDefinition
     {
         // --- Core identity ---
         public string Name { get; set; }
-        public string Title { get; set; }
         public string Description { get; set; }
         public string Category { get; set; }
         public string Version { get; set; }
@@ -26,11 +25,6 @@ namespace UnityCli
 
         // --- Fixed context descriptor fields ---
         /// <summary>
-        /// Always "context" for custom contexts.
-        /// </summary>
-        public string Kind { get; set; }
-
-        /// <summary>
         /// Always "project" for custom contexts.
         /// </summary>
         public string Source { get; set; }
@@ -40,14 +34,9 @@ namespace UnityCli
         public string AvailabilityScope { get; set; }
         public string PlayModeSupport { get; set; }
         public string RefreshBehavior { get; set; }
-        public string ResourceUri { get; set; }
 
         // --- Dependencies ---
         public string[] RequiresPackages { get; set; }
-
-        // --- MCP equivalence ---
-        public string EquivalentUnityMcp { get; set; }
-        public string EquivalentUnityMcpNote { get; set; }
 
         // --- Registration metadata ---
         public string RegisteredBy { get; set; }

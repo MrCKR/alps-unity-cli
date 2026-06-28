@@ -22,7 +22,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.extrude-faces",
-        Title = "ProBuilder Extrude Faces",
+        Summary = "ProBuilder Extrude Faces",
         Description = "Extrude selected faces of a ProBuilder mesh by a given distance.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"faceIndices\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"distance\":{\"type\":\"number\"},\"method\":{\"type\":\"string\",\"enum\":[\"vertex\",\"faceNormal\"]}},\"required\":[\"target\"]}",
@@ -81,7 +81,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.extrude-edges",
-        Title = "ProBuilder Extrude Edges",
+        Summary = "ProBuilder Extrude Edges",
         Description = "Extrude selected edges of a ProBuilder mesh.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"edgeIndices\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"edges\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"integer\"},\"b\":{\"type\":\"integer\"}}}},\"distance\":{\"type\":\"number\"},\"asGroup\":{\"type\":\"boolean\"}},\"required\":[\"target\"]}",
@@ -132,7 +132,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.delete-faces",
-        Title = "ProBuilder Delete Faces",
+        Summary = "ProBuilder Delete Faces",
         Description = "Delete selected faces from a ProBuilder mesh.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"faceIndices\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}}},\"required\":[\"target\",\"faceIndices\"]}",
@@ -184,7 +184,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.detach-faces",
-        Title = "ProBuilder Detach Faces",
+        Summary = "ProBuilder Detach Faces",
         Description = "Detach selected faces from a ProBuilder mesh into a new GameObject.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"faceIndices\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"deleteSourceFaces\":{\"type\":\"boolean\"}},\"required\":[\"target\",\"faceIndices\"]}",
@@ -259,7 +259,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.merge-faces",
-        Title = "ProBuilder Merge Faces",
+        Summary = "ProBuilder Merge Faces",
         Description = "Merge selected faces of a ProBuilder mesh into a single face.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"faceIndices\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}}},\"required\":[\"target\",\"faceIndices\"]}",
@@ -310,7 +310,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.subdivide",
-        Title = "ProBuilder Subdivide",
+        Summary = "ProBuilder Subdivide",
         Description = "Subdivide selected faces of a ProBuilder mesh, increasing face count.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"faceIndices\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}}},\"required\":[\"target\"]}",
@@ -362,7 +362,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.flip-normals",
-        Title = "ProBuilder Flip Normals",
+        Summary = "ProBuilder Flip Normals",
         Description = "Flip the normals of selected faces on a ProBuilder mesh.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"faceIndices\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}}},\"required\":[\"target\"]}",
@@ -413,7 +413,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.bridge-edges",
-        Title = "ProBuilder Bridge Edges",
+        Summary = "ProBuilder Bridge Edges",
         Description = "Create a bridge between two edges on a ProBuilder mesh.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"edgeA\":{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"integer\"},\"b\":{\"type\":\"integer\"}}},\"edgeB\":{\"type\":\"object\",\"properties\":{\"a\":{\"type\":\"integer\"},\"b\":{\"type\":\"integer\"}}},\"allowNonManifold\":{\"type\":\"boolean\"}},\"required\":[\"target\",\"edgeA\",\"edgeB\"]}",
@@ -467,7 +467,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.connect-elements",
-        Title = "ProBuilder Connect Elements",
+        Summary = "ProBuilder Connect Elements",
         Description = "Connect selected edges or faces on a ProBuilder mesh by inserting a new edge loop.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"edgeIndices\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"edges\":{\"type\":\"array\"},\"faceIndices\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}}},\"required\":[\"target\"]}",
@@ -522,7 +522,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.bevel-edges",
-        Title = "ProBuilder Bevel Edges",
+        Summary = "ProBuilder Bevel Edges",
         Description = "Bevel selected edges of a ProBuilder mesh by a given amount.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"edgeIndices\":{\"type\":\"array\"},\"edges\":{\"type\":\"array\"},\"amount\":{\"type\":\"number\"}},\"required\":[\"target\"]}",
@@ -575,7 +575,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.duplicate-and-flip",
-        Title = "ProBuilder Duplicate and Flip",
+        Summary = "ProBuilder Duplicate and Flip",
         Description = "Duplicate selected faces and flip their normals.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"faceIndices\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}}},\"required\":[\"target\"]}",
@@ -635,7 +635,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.combine-meshes",
-        Title = "ProBuilder Combine Meshes",
+        Summary = "ProBuilder Combine Meshes",
         Description = "Combine multiple ProBuilder meshes into a single mesh.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"targets\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"name\":{\"type\":\"string\"}},\"required\":[\"targets\"]}",
@@ -748,7 +748,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.merge-objects",
-        Title = "ProBuilder Merge Objects",
+        Summary = "ProBuilder Merge Objects",
         Description = "Merge multiple GameObjects into a single ProBuilder object. Optionally auto-convert non-ProBuilder meshes.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"targets\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"name\":{\"type\":\"string\"},\"autoConvert\":{\"type\":\"boolean\",\"default\":true}},\"required\":[\"targets\"]}",

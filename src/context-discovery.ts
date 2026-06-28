@@ -1,14 +1,10 @@
 /**
  * Context discovery: discovers custom project contexts from the Unity bridge.
- *
- * Mirrors project-tool-discovery.ts but for Context (read-only) capabilities.
- * Custom contexts are discovered via the `context.list` bridge command
- * and mapped to ContextMetadata.
  */
 
 import { getBoolean, getString } from "./args.js";
 import { executeBridgeCommand, type BridgeRuntime } from "./bridge/index.js";
-import type { ContextMetadata, ContextSource } from "./context/metadata/types.js";
+import type { ContextMetadata } from "./context/metadata/types.js";
 import type { CliResult } from "./types.js";
 
 export interface ContextDiscoveryRuntime extends Partial<BridgeRuntime> {
@@ -63,30 +59,26 @@ function projectDescriptorToContextMetadata(value: unknown): ContextMetadata | u
   }
   const descriptor = value as Record<string, unknown>;
   const name = stringProp(descriptor, "name");
-  if (!name) {
+  const description = stringProp(descriptor, "description");
+  if (!name || !description) {
     return undefined;
   }
-  const title = stringProp(descriptor, "title") ?? stringProp(descriptor, "displayName") ?? name;
   const category = stringProp(descriptor, "category") ?? categoryFromName(name);
-  const target = stringProp(descriptor, "target") ?? "editor";
+  const target = targetProp(descriptor, "target") ?? "editor";
 
   return ensureProjectContextDefaults({
     name,
-    title,
-    description: stringProp(descriptor, "description") ?? title,
-    kind: "context",
+    description,
     source: "project",
     category,
     inputSchema: objectProp(descriptor, "inputSchema") ?? {},
     outputSchema: objectProp(descriptor, "outputSchema"),
-    resourceUri: stringProp(descriptor, "resourceUri"),
     refreshBehavior: stringProp(descriptor, "refreshBehavior") as ContextMetadata["refreshBehavior"],
-    target: target as ContextMetadata["target"],
+    target,
     availabilityScope: stringProp(descriptor, "availabilityScope") ?? (target === "runtime" ? "playModeSession" : "editorSession"),
     available: booleanProp(descriptor, "available"),
     requiresPackages: stringArrayProp(descriptor, "requiresPackages"),
     fingerprint: stringProp(descriptor, "fingerprint"),
-    equivalentUnityMcp: stringProp(descriptor, "equivalentUnityMcp"),
     cliCommand: stringProp(descriptor, "cliCommand") ?? `context read ${name}`,
     handler: "bridge"
   });
@@ -95,7 +87,6 @@ function projectDescriptorToContextMetadata(value: unknown): ContextMetadata | u
 function ensureProjectContextDefaults(context: ContextMetadata): ContextMetadata {
   return {
     ...context,
-    kind: context.kind ?? "context",
     source: context.source ?? "project",
     category: context.category ?? categoryFromName(context.name),
     target: context.target ?? "editor",
@@ -120,6 +111,11 @@ function stringProp(record: Record<string, unknown>, key: string): string | unde
 
 function booleanProp(record: Record<string, unknown>, key: string): boolean | undefined {
   return typeof record[key] === "boolean" ? record[key] : undefined;
+}
+
+function targetProp(record: Record<string, unknown>, key: string): ContextMetadata["target"] | undefined {
+  const value = record[key];
+  return value === "editor" || value === "runtime" || value === "both" ? value : undefined;
 }
 
 function objectProp(record: Record<string, unknown>, key: string): Record<string, unknown> | undefined {

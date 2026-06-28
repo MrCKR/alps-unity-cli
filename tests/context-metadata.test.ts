@@ -14,26 +14,11 @@ test("builtin context metadata contains all required entries", () => {
   assert.equal(contexts.length, 23);
 });
 
-test("all builtin contexts have kind=context", () => {
+test("builtin context metadata does not expose removed public descriptor fields", () => {
+  const forbidden = ["title", "summary", "kind", "resourceUri", "equivalentUnityMcp", "equivalentUnityMcpNote", "destructiveHint", "bridgeCommand"];
   for (const ctx of builtinContextMetadata()) {
-    assert.equal(ctx.kind, "context", `${ctx.name} kind must be "context"`);
-  }
-});
-
-test("all builtin contexts have resourceUri starting with unity-cli://", () => {
-  for (const ctx of builtinContextMetadata()) {
-    assert.ok(ctx.resourceUri, `${ctx.name} must have resourceUri`);
-    assert.ok(ctx.resourceUri.startsWith("unity-cli://"), `${ctx.name} resourceUri must start with unity-cli://`);
-  }
-});
-
-test("all builtin contexts have equivalentUnityMcp (or 'none' with note)", () => {
-  for (const ctx of builtinContextMetadata()) {
-    assert.ok(ctx.equivalentUnityMcp, `${ctx.name} must have equivalentUnityMcp`);
-    if (ctx.equivalentUnityMcp === "none") {
-      assert.ok(ctx.equivalentUnityMcpNote, `${ctx.name} has equivalentUnityMcp='none' and must explain the semantic difference`);
-    } else {
-      assert.ok(ctx.equivalentUnityMcp.startsWith("mcpforunity://"), `${ctx.name} equivalentUnityMcp must start with mcpforunity://`);
+    for (const field of forbidden) {
+      assert.equal(field in ctx, false, `${ctx.name} must not expose ${field}`);
     }
   }
 });
@@ -111,16 +96,13 @@ test("prefab.stage is categorized as prefab (not editor)", () => {
   const prefabStage = findContextByName("prefab.stage");
   assert.ok(prefabStage, "prefab.stage must exist");
   assert.equal(prefabStage.category, "prefab");
-  assert.equal(prefabStage.equivalentUnityMcp, "mcpforunity://editor/prefab-stage");
+  assert.match(prefabStage.description, /Prefab Stage/i);
 });
 
-test("editor.tool-states has equivalentUnityMcp='none' with semantic difference note", () => {
+test("editor.tool-states describes Unity Editor tool settings", () => {
   const toolStates = findContextByName("editor.tool-states");
   assert.ok(toolStates, "editor.tool-states must exist");
-  assert.equal(toolStates.equivalentUnityMcp, "none");
-  assert.ok(toolStates.equivalentUnityMcpNote, "editor.tool-states must have equivalentUnityMcpNote");
-  assert.ok(toolStates.equivalentUnityMcpNote!.includes("MCP tool discovery"), "Note must explain that unity-mcp tool-states is about MCP tool discovery");
-  assert.ok(toolStates.equivalentUnityMcpNote!.includes("Unity Editor tool settings"), "Note must explain that this context is about Unity Editor tool settings");
+  assert.match(toolStates.description, /Unity Editor.*tool/i);
   const schema = toolStates.outputSchema as { properties: Record<string, unknown> };
   assert.ok(schema.properties.transform, "editor.tool-states must expose transform settings");
   assert.ok(schema.properties.snap, "editor.tool-states must expose snap settings");
@@ -154,7 +136,7 @@ test("scene.renderer-features has source=built-in (not extension)", () => {
   assert.ok(rendererFeatures, "scene.renderer-features must exist");
   assert.equal(rendererFeatures.source, "built-in");
   assert.deepEqual(rendererFeatures.requiresPackages, ["com.unity.render-pipelines.universal"]);
-  assert.equal(rendererFeatures.equivalentUnityMcp, "mcpforunity://pipeline/renderer-features");
+  assert.match(rendererFeatures.description, /URP/i);
 });
 
 test("scene.gameobject has id/path/target input parameters", () => {

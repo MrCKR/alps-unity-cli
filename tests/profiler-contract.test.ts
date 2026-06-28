@@ -19,7 +19,7 @@ async function listCsFiles(directory: URL): Promise<URL[]> {
   return urls.flat().sort((left, right) => left.pathname.localeCompare(right.pathname));
 }
 
-const PROFILER_COMMANDS = ["profiler.status", "profiler.start", "profiler.stop", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export", "profiler.modules", "profiler.module-enable", "profiler.clear", "profiler.load", "profiler.areas", "profiler.object-memory", "profiler.rendering-stats", "profiler.script-stats", "profiler.memory-snapshot.take", "profiler.memory-snapshot.list", "profiler.memory-snapshot.compare", "profiler.frame-debugger.enable", "profiler.frame-debugger.disable", "profiler.frame-debugger.events"];
+const PROFILER_COMMANDS = ["profiler.status", "profiler.start", "profiler.stop", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export", "profiler.modules", "profiler.module-enable", "profiler.clear", "profiler.load", "profiler.areas", "profiler.object-memory", "profiler.rendering-stats", "profiler.script-stats", "profiler.deep", "profiler.hierarchy", "profiler.memory-snapshot.take", "profiler.memory-snapshot.list", "profiler.memory-snapshot.compare", "profiler.frame-debugger.enable", "profiler.frame-debugger.disable", "profiler.frame-debugger.events"];
 
 /**
  * Profiler 域契约测试（23 工具）。
@@ -28,9 +28,9 @@ const PROFILER_COMMANDS = ["profiler.status", "profiler.start", "profiler.stop",
  * 验证 metadata/bridge/contract/C# 一致，read 工具业务字段不被 envelope 吞掉，Play Mode 语义。
  */
 
-test("profiler group exposes all 23 tools", () => {
+test("profiler group exposes all 25 tools", () => {
   const tools = filterToolsByGroup("profiler").map((t) => t.name).sort();
-  assert.equal(tools.length, 23);
+  assert.equal(tools.length, 25);
   for (const name of PROFILER_COMMANDS) {
     assert.ok(tools.includes(name), `${name} should exist`);
   }
@@ -44,7 +44,7 @@ test("profiler tools have playModeSupport", () => {
 });
 
 test("profiler read tools are supported", () => {
-  for (const name of ["profiler.status", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.modules", "profiler.areas", "profiler.object-memory", "profiler.rendering-stats", "profiler.script-stats", "profiler.memory-snapshot.list", "profiler.memory-snapshot.compare", "profiler.frame-debugger.events"]) {
+  for (const name of ["profiler.status", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.modules", "profiler.areas", "profiler.object-memory", "profiler.rendering-stats", "profiler.script-stats", "profiler.deep", "profiler.hierarchy", "profiler.memory-snapshot.list", "profiler.memory-snapshot.compare", "profiler.frame-debugger.events"]) {
     const tool = findToolByName(name)!;
     assert.equal(tool.playModeSupport, "supported", `${name} should be supported`);
   }
@@ -64,7 +64,7 @@ test("profiler.clear is non-destructive with dry-run", () => {
 });
 
 test("bridge specs resolve for profiler tools", () => {
-  for (const [cmd, expected] of [["status", "profiler.status"], ["start", "profiler.start"], ["stop", "profiler.stop"], ["pause", "profiler.pause"], ["counter", "profiler.counter"], ["memory", "profiler.memory"], ["frame", "profiler.frame"], ["capture", "profiler.capture"], ["export", "profiler.export"], ["modules", "profiler.modules"], ["module-enable", "profiler.module-enable"], ["clear", "profiler.clear"], ["load", "profiler.load"], ["areas", "profiler.areas"], ["object-memory", "profiler.object-memory"], ["rendering-stats", "profiler.rendering-stats"], ["script-stats", "profiler.script-stats"], ["memory-snapshot.take", "profiler.memory-snapshot.take"], ["memory-snapshot.list", "profiler.memory-snapshot.list"], ["memory-snapshot.compare", "profiler.memory-snapshot.compare"], ["frame-debugger.enable", "profiler.frame-debugger.enable"], ["frame-debugger.disable", "profiler.frame-debugger.disable"], ["frame-debugger.events", "profiler.frame-debugger.events"]] as const) {
+  for (const [cmd, expected] of [["status", "profiler.status"], ["start", "profiler.start"], ["stop", "profiler.stop"], ["pause", "profiler.pause"], ["counter", "profiler.counter"], ["memory", "profiler.memory"], ["frame", "profiler.frame"], ["capture", "profiler.capture"], ["export", "profiler.export"], ["modules", "profiler.modules"], ["module-enable", "profiler.module-enable"], ["clear", "profiler.clear"], ["load", "profiler.load"], ["areas", "profiler.areas"], ["object-memory", "profiler.object-memory"], ["rendering-stats", "profiler.rendering-stats"], ["script-stats", "profiler.script-stats"], ["deep", "profiler.deep"], ["hierarchy", "profiler.hierarchy"], ["memory-snapshot.take", "profiler.memory-snapshot.take"], ["memory-snapshot.list", "profiler.memory-snapshot.list"], ["memory-snapshot.compare", "profiler.memory-snapshot.compare"], ["frame-debugger.enable", "profiler.frame-debugger.enable"], ["frame-debugger.disable", "profiler.frame-debugger.disable"], ["frame-debugger.events", "profiler.frame-debugger.events"]] as const) {
     const spec = bridgeCommandRegistry.lookup("profiler", cmd);
     assert.equal(spec?.bridgeCommand, expected, `profiler ${cmd} should resolve`);
   }

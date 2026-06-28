@@ -34,12 +34,7 @@ namespace UnityCli
         public string Name { get; private set; }
 
         /// <summary>
-        /// Human-readable title shown in descriptor output.
-        /// </summary>
-        public string Title { get; set; }
-
-        /// <summary>
-        /// Longer description of what this context provides.
+        /// Required description used in context discovery and describe output.
         /// </summary>
         public string Description { get; set; }
 
@@ -86,24 +81,9 @@ namespace UnityCli
         public string RefreshBehavior { get; set; }
 
         /// <summary>
-        /// Optional resource URI pattern for MCP resource mapping.
-        /// </summary>
-        public string ResourceUri { get; set; }
-
-        /// <summary>
         /// Comma-separated list of Unity package names this context requires.
         /// </summary>
         public string RequiresPackages { get; set; }
-
-        /// <summary>
-        /// Name of the equivalent built-in Unity MCP context, if one exists.
-        /// </summary>
-        public string EquivalentUnityMcp { get; set; }
-
-        /// <summary>
-        /// Note about the equivalent Unity MCP context relationship.
-        /// </summary>
-        public string EquivalentUnityMcpNote { get; set; }
 
         /// <summary>
         /// Optional pinned fingerprint for tamper detection. When omitted, the

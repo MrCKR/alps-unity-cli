@@ -28,13 +28,10 @@ namespace UnityCli.Samples
         /// </summary>
         [UnityCliContext(
             "sample.project-summary",
-            Title = "Sample Project Summary",
             Description = "Returns a read-only summary of the Unity project: version, active scene, render pipeline, and build target.",
             Category = "sample",
             InputSchema = "{\"type\":\"object\",\"properties\":{\"includeDisabled\":{\"type\":\"boolean\"}}}",
             OutputSchema = "{\"type\":\"object\",\"properties\":{\"unityVersion\":{\"type\":\"string\"},\"activeScene\":{\"type\":\"string\"},\"renderPipeline\":{\"type\":\"string\"},\"buildTarget\":{\"type\":\"string\"},\"includeDisabled\":{\"type\":\"boolean\"}}}",
-            EquivalentUnityMcp = "get_project_info",
-            EquivalentUnityMcpNote = "Provides similar info to unity-mcp get_project_info resource",
             RefreshBehavior = "onDemand")]
         public static string Provide(UnityCliContextRequest request)
         {

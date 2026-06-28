@@ -19,7 +19,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.create-shape",
-        Title = "ProBuilder Create Shape",
+        Summary = "ProBuilder Create Shape",
         Description = "Create a ProBuilder primitive shape in the scene. Supports Cube, Cylinder, Sphere, Plane, Cone, Torus, Pipe, Arch, Stair, CurvedStair, Door, Prism.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"shapeType\":{\"type\":\"string\",\"enum\":[\"Cube\",\"Cylinder\",\"Sphere\",\"Plane\",\"Cone\",\"Torus\",\"Pipe\",\"Arch\",\"Stair\",\"CurvedStair\",\"Door\",\"Prism\"],\"description\":\"Shape type to create\"},\"name\":{\"type\":\"string\",\"description\":\"Name for the created GameObject\"},\"position\":{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"number\"},\"y\":{\"type\":\"number\"},\"z\":{\"type\":\"number\"}}},\"width\":{\"type\":\"number\"},\"height\":{\"type\":\"number\"},\"depth\":{\"type\":\"number\"},\"radius\":{\"type\":\"number\"},\"segments\":{\"type\":\"integer\"},\"sides\":{\"type\":\"integer\"}},\"required\":[\"shapeType\"]}",
@@ -133,7 +133,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.create-poly-shape",
-        Title = "ProBuilder Create Poly Shape",
+        Summary = "ProBuilder Create Poly Shape",
         Description = "Create a ProBuilder mesh from a set of 2D polygon points extruded to a given height.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"points\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"number\"},\"y\":{\"type\":\"number\"},\"z\":{\"type\":\"number\"}}}},\"extrudeHeight\":{\"type\":\"number\"},\"flipNormals\":{\"type\":\"boolean\"},\"name\":{\"type\":\"string\"}},\"required\":[\"points\"]}",

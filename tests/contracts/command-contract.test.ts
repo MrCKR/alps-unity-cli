@@ -53,7 +53,7 @@ test("command contract validates bridge registry and metadata", () => {
 
 test("command contract includes Profiler bridge commands", () => {
   const contracts = commandContracts().filter((entry) => entry.group === "profiler");
-  assert.deepEqual(contracts.map((entry) => entry.bridgeCommand), ["profiler.areas", "profiler.capture", "profiler.clear", "profiler.counter", "profiler.export", "profiler.frame", "profiler.frame-debugger.disable", "profiler.frame-debugger.enable", "profiler.frame-debugger.events", "profiler.load", "profiler.memory", "profiler.memory-snapshot.compare", "profiler.memory-snapshot.list", "profiler.memory-snapshot.take", "profiler.module-enable", "profiler.modules", "profiler.object-memory", "profiler.pause", "profiler.rendering-stats", "profiler.script-stats", "profiler.start", "profiler.status", "profiler.stop"]);
+  assert.deepEqual(contracts.map((entry) => entry.bridgeCommand), ["profiler.areas", "profiler.capture", "profiler.clear", "profiler.counter", "profiler.deep", "profiler.export", "profiler.frame", "profiler.frame-debugger.disable", "profiler.frame-debugger.enable", "profiler.frame-debugger.events", "profiler.hierarchy", "profiler.load", "profiler.memory", "profiler.memory-snapshot.compare", "profiler.memory-snapshot.list", "profiler.memory-snapshot.take", "profiler.module-enable", "profiler.modules", "profiler.object-memory", "profiler.pause", "profiler.rendering-stats", "profiler.script-stats", "profiler.start", "profiler.status", "profiler.stop"]);
 });
 
 test("command contract marks C# handler gaps as present", async () => {
@@ -67,9 +67,9 @@ test("command contract marks C# handler gaps as present", async () => {
     assert.ok(allCsharpCommands.has(command), `${command} should be registered in C# BridgeCommandRegistry or an extension bundle`);
   }
 
-  assert.equal(csharpCommands.size, 208);
+  assert.equal(csharpCommands.size, 210);
   assert.equal(extensionCsharpCommands.size, 31);
-  assert.equal(allCsharpCommands.size, 239);
+  assert.equal(allCsharpCommands.size, 241);
 });
 
 async function registeredCsharpCommands(directory: URL): Promise<Set<string>> {

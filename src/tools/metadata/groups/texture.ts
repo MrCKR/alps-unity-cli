@@ -10,7 +10,7 @@ const COMPRESSION_ENUM = ["Uncompressed", "Compressed", "CompressedLQ", "Compres
 export const TEXTURE_TOOLS: ToolMetadata[] = [
   {
     name: "texture.info",
-    title: "Texture Info",
+    summary: "Read dimensions, format, mip/stream flags and TextureImporter settings of a texture asset.",
     description: "Read dimensions, format, mip/stream flags and TextureImporter settings of a texture asset. Use this before texture.import-settings to inspect current values, or before texture.sprite to confirm the texture type. Use asset.search with filter t:Texture2D to discover paths when unknown.",
     group: "texture",
     inputSchema: objSchema({ path: { type: "string", description: "Existing Assets/* texture path (.png/.jpg/.jpeg/.tga/.psd/.exr)." } }, ["path"]),
@@ -49,7 +49,7 @@ export const TEXTURE_TOOLS: ToolMetadata[] = [
   },
   {
     name: "texture.create",
-    title: "Create Texture",
+    summary: "Create a texture asset.",
     description: "Create a texture asset. With a source path it copies an existing image file; otherwise it generates a solid-color .png/.jpg of the given width/height. Refuses to overwrite an existing asset unless overwrite is true. Use texture.generate for patterns/gradients/noise, or texture.import-settings to tune the importer afterward.",
     group: "texture",
     inputSchema: objSchema({
@@ -74,7 +74,7 @@ export const TEXTURE_TOOLS: ToolMetadata[] = [
   },
   {
     name: "texture.sprite",
-    title: "Texture Sprite",
+    summary: "Convert a texture asset's importer to Sprite type and optionally set sprite mode, pixels-per-unit and pivot.",
     description: "Convert a texture asset's importer to Sprite type and optionally set sprite mode, pixels-per-unit and pivot. This reimports the texture. Use texture.info first to confirm the current type, and asset.info to find sprite sub-assets afterward.",
     group: "texture",
     inputSchema: objSchema({
@@ -98,7 +98,7 @@ export const TEXTURE_TOOLS: ToolMetadata[] = [
   },
   {
     name: "texture.import-settings",
-    title: "Texture Import Settings",
+    summary: "Read and/or apply TextureImporter settings on a texture asset.",
     description: "Read and/or apply TextureImporter settings on a texture asset. With no setting fields it is a read returning current importSettings; with any setting field it reimports. Enum values mirror Unity's TextureImporter. Use texture.info for a pure read that never reimports.",
     group: "texture",
     inputSchema: objSchema({
@@ -133,7 +133,7 @@ export const TEXTURE_TOOLS: ToolMetadata[] = [
   },
   {
     name: "texture.generate",
-    title: "Generate Texture",
+    summary: "Generate a procedural texture and save it as PNG under Assets/.",
     description: "Generate a procedural texture and save it as PNG under Assets/. Patterns: solid, gradient (linear), radial, noise (Perlin), checkerboard, stripes, dots, grid, brick. color/color2 accept #hex; patternSize controls cell size. Supports --dry-run to preview planned effects without writing. Prefer this over texture.create for test/debug textures.",
     group: "texture",
     inputSchema: objSchema({

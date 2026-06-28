@@ -34,9 +34,9 @@ namespace UnityCli
 
         public static void RegisterProjectTool(UnityCliProjectToolDefinition definition)
         {
-            if (definition == null || string.IsNullOrEmpty(definition.Name) || definition.Execute == null)
+            if (definition == null || string.IsNullOrEmpty(definition.Name) || string.IsNullOrEmpty(definition.Summary) || definition.Execute == null)
             {
-                throw new ArgumentException("Custom tool registration requires name and Execute delegate.");
+                throw new ArgumentException("Custom tool registration requires name, summary, and Execute delegate.");
             }
             if (definition.ArtifactKinds == null)
             {
@@ -46,7 +46,6 @@ namespace UnityCli
             {
                 definition.RequiredInput = new string[0];
             }
-            definition.Title = string.IsNullOrEmpty(definition.Title) ? definition.Name : definition.Title;
             definition.Group = string.IsNullOrEmpty(definition.Group) ? ProjectToolGroupFromName(definition.Name) : definition.Group;
             definition.Version = string.IsNullOrEmpty(definition.Version) ? "1.0.0" : definition.Version;
             definition.InputSchema = string.IsNullOrEmpty(definition.InputSchema) ? "{}" : definition.InputSchema;
@@ -129,7 +128,7 @@ namespace UnityCli
             RegisterProjectTool(new UnityCliProjectToolDefinition
             {
                 Name = attribute.Name,
-                Title = string.IsNullOrEmpty(attribute.Title) ? attribute.Name : attribute.Title,
+                Summary = attribute.Summary,
                 Description = attribute.Description,
                 Group = attribute.Group,
                 Version = attribute.Version,
@@ -198,6 +197,26 @@ namespace UnityCli
                 .EndObject()
                 .ToString();
             return SuccessJson(data);
+        }
+
+        /// <summary>
+        /// 生成面向 discovery Context 的项目 Tool 摘要，避免暴露 handler、fingerprint 等内部实现字段。
+        /// </summary>
+        private static string ProjectToolPublicDiscoveryJson()
+        {
+            DiscoverProjectTools();
+            var tools = new List<string>();
+            foreach (var pair in ProjectTools)
+            {
+                tools.Add(ProjectToolPublicDefinitionJson(pair.Value));
+            }
+            tools.Sort(StringComparer.Ordinal);
+            var writer = new UnityCliJsonWriter().BeginArray();
+            foreach (var tool in tools)
+            {
+                writer.RawValue(tool);
+            }
+            return writer.EndArray().ToString();
         }
 
         private static string ProjectToolRun(BridgeRequest request)
@@ -350,7 +369,7 @@ namespace UnityCli
         {
             return new UnityCliJsonWriter().BeginObject()
                 .Prop("name", definition.Name)
-                .Prop("title", definition.Title)
+                .Prop("summary", definition.Summary)
                 .Prop("description", definition.Description)
                 .Prop("group", definition.Group)
                 .Prop("version", definition.Version)
@@ -374,6 +393,29 @@ namespace UnityCli
                 .Prop("assembly", definition.Assembly)
                 .Prop("method", definition.Method)
                 .PropRaw("fingerprint", ProjectToolFingerprintJson(definition))
+                .EndObject()
+                .ToString();
+        }
+
+        /// <summary>
+        /// 生成 AI-facing 的项目 Tool discovery 字段，隐藏 Bridge 内部路由、源码位置和指纹细节。
+        /// </summary>
+        private static string ProjectToolPublicDefinitionJson(UnityCliProjectToolDefinition definition)
+        {
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("name", definition.Name)
+                .Prop("summary", definition.Summary)
+                .Prop("description", definition.Description)
+                .Prop("group", definition.Group)
+                .Prop("source", "project")
+                .Prop("destructiveHint", definition.DestructiveHint)
+                .Prop("target", definition.Target)
+                .Prop("availabilityScope", definition.AvailabilityScope)
+                .Prop("playModeSupport", definition.PlayModeSupport)
+                .Prop("supportStatus", "live-bridge")
+                .Prop("cliCommand", "tools run " + definition.Name)
+                .PropRaw("inputSchema", definition.InputSchema)
+                .PropRaw("outputSchema", definition.OutputSchema)
                 .EndObject()
                 .ToString();
         }
@@ -559,7 +601,7 @@ namespace UnityCli
         private static string ProjectToolDescriptorFingerprintMaterial(UnityCliProjectToolDefinition definition)
         {
             return "name=" + (definition.Name ?? string.Empty)
-                + "\ntitle=" + (definition.Title ?? string.Empty)
+                + "\nsummary=" + (definition.Summary ?? string.Empty)
                 + "\ndescription=" + (definition.Description ?? string.Empty)
                 + "\ngroup=" + (definition.Group ?? string.Empty)
                 + "\nversion=" + (definition.Version ?? string.Empty)

@@ -4,7 +4,7 @@ import { objSchema, pageSchema } from "../schemas.js";
 export const EDITOR_TOOLS: ToolMetadata[] = [
   {
     name: "editor.console",
-    title: "Editor Console Logs",
+    summary: "Read recent Unity Editor console entries through the legacy editor alias.",
     description: "Read recent Unity Editor console entries through the legacy editor alias. Prefer console.get for filter/search/cursor pagination. This alias is read-only; use console.clear with --dry-run or --yes for destructive clearing.",
     group: "editor",
     inputSchema: objSchema({ type: { type: "string", enum: ["error", "warning", "log", "assert", "all"], default: "all" }, count: { type: "integer", default: 50, description: "Recent entries to return, clamped to 1..500." } }),
@@ -22,7 +22,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
   },
   {
     name: "editor.state",
-    title: "Editor State",
+    summary: "Query current Unity Editor readiness: Play Mode, pause, compile/import/build/domain-reload busy flags, active scene, prefab stage, bridge build stamp, and runtime...",
     description: "Query current Unity Editor readiness: Play Mode, pause, compile/import/build/domain-reload busy flags, active scene, prefab stage, bridge build stamp, and runtime tool availability. Use this before expensive tools and after editor.play/editor.stop/editor.menu to decide whether to retry later or continue.",
     group: "editor",
     inputSchema: objSchema({}),
@@ -40,7 +40,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
   },
   {
     name: "editor.play",
-    title: "Enter Play Mode",
+    summary: "Request Unity Editor Play Mode.",
     description: "Request Unity Editor Play Mode. This changes the editor session and may trigger script reload or Play Mode transition; poll editor.state until busy.playModeChanging is false before running runtime-only tools.",
     group: "editor",
     inputSchema: objSchema({ timeoutMs: { type: "integer", default: 7000, description: "Maximum wait for the initial Play Mode transition acknowledgement." } }),
@@ -59,7 +59,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
   },
   {
     name: "editor.pause",
-    title: "Toggle Play Mode Pause",
+    summary: "Toggle Unity Editor pause state.",
     description: "Toggle Unity Editor pause state. This changes the current editor/runtime session; call editor.state afterwards to confirm isPaused.",
     group: "editor",
     inputSchema: objSchema({}),
@@ -78,7 +78,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
   },
   {
     name: "editor.stop",
-    title: "Stop Play Mode",
+    summary: "Request exit from Unity Editor Play Mode.",
     description: "Request exit from Unity Editor Play Mode. The command returns immediately after setting isPlaying=false; poll editor.state until busy.playModeChanging is false before relying on Edit Mode state.",
     group: "editor",
     inputSchema: objSchema({ timeoutMs: { type: "integer", default: 7000, description: "Reserved timeout field for consistency with editor.play; callers should still poll editor.state." } }),
@@ -97,7 +97,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
   },
   {
     name: "editor.undo",
-    title: "Undo Last Editor Operation",
+    summary: "Run Unity Editor Undo.PerformUndo for the last undoable operation.",
     description: "Run Unity Editor Undo.PerformUndo for the last undoable operation. This can revert scene, asset, or editor state depending on the current undo stack; call editor.state or relevant context afterwards to verify the result.",
     group: "editor",
     inputSchema: objSchema({ timeoutMs: { type: "integer", default: 7000 } }),
@@ -116,7 +116,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
   },
   {
     name: "editor.redo",
-    title: "Redo Last Editor Operation",
+    summary: "Run Unity Editor Undo.PerformRedo for the last redoable operation.",
     description: "Run Unity Editor Undo.PerformRedo for the last redoable operation. This can reapply scene, asset, or editor state changes from the redo stack; verify with editor.state or a domain-specific context.",
     group: "editor",
     inputSchema: objSchema({ timeoutMs: { type: "integer", default: 7000 } }),
@@ -135,7 +135,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
   },
   {
     name: "editor.resolution",
-    title: "Set Game View Resolution",
+    summary: "Set PlayerSettings default screen width/height and optional fullscreen mode.",
     description: "Set PlayerSettings default screen width/height and optional fullscreen mode. This writes project/editor settings and may affect later Game View or Player build behavior.",
     group: "editor",
     inputSchema: objSchema({ width: { type: "integer", minimum: 1, description: "Default screen width in pixels." }, height: { type: "integer", minimum: 1, description: "Default screen height in pixels." }, fullscreen: { type: "boolean", description: "When provided, sets PlayerSettings.fullScreenMode to FullScreenWindow or Windowed." } }),
@@ -154,7 +154,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
   },
   {
     name: "editor.menu",
-    title: "Execute Editor Menu",
+    summary: "Invoke a Unity Editor menu item by exact path, such as Assets/Refresh or File/Save.",
     description: "Invoke a Unity Editor menu item by exact path, such as Assets/Refresh or File/Save. Menu actions are arbitrary editor commands, so this requires --yes and should be followed by editor.state or console.get when the menu can import, compile, save, or open UI.",
     group: "editor",
     inputSchema: objSchema({ path: { type: "string", description: "Exact Unity menu path, e.g. Assets/Refresh or File/Save." }, timeoutMs: { type: "integer", default: 7000, description: "Maximum synchronous menu execution time before E_MENU_TIMEOUT." } }, ["path"]),
@@ -173,7 +173,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
   },
   {
     name: "project.tag",
-    title: "Manage Project Tags",
+    summary: "Add or remove a tag in the Unity Tag Manager.",
     description: "Add or remove a tag in the Unity Tag Manager. Returns changed=false when the tag already exists (add) or is absent (remove). Use context read project.tags first to list valid tags before assigning them to GameObjects; new tags become available for go.modify's tag field.",
     group: "project",
     inputSchema: objSchema({ action: { type: "string", enum: ["add", "remove"], description: "Whether to add or remove the tag." }, name: { type: "string", description: "Tag name. Must be non-empty." } }, ["action", "name"]),
@@ -198,7 +198,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
   },
   {
     name: "project.layer",
-    title: "Manage Project Layers",
+    summary: "Add or remove a user layer in the Unity Tag Manager.",
     description: "Add or remove a user layer in the Unity Tag Manager. Built-in layers (0-7) cannot be removed. Optionally pin a layer to a specific index via index (0-31). Returns changed=false when the layer already exists (add) or is absent/built-in (remove). Use context read project.layers first to list valid layers.",
     group: "project",
     inputSchema: objSchema({ action: { type: "string", enum: ["add", "remove"], description: "Whether to add or remove the user layer." }, name: { type: "string", description: "Layer name. Must be non-empty." }, index: { type: "integer", description: "Optional target layer slot index (0-31) when adding." } }, ["action", "name"]),
@@ -223,7 +223,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
   },
   {
     name: "editor.refresh",
-    title: "Refresh Editor Assets",
+    summary: "Trigger AssetDatabase.Refresh in a separate Unity batch job, optionally requesting script compilation and waiting for readiness.",
     description: "Trigger AssetDatabase.Refresh in a separate Unity batch job, optionally requesting script compilation and waiting for readiness. Do not use this against a project already open in Unity; open projects can return UNITY_BUSY due to UnityLockfile.",
     group: "editor",
     inputSchema: objSchema({
@@ -250,7 +250,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
   },
   {
     name: "editor.selection.set",
-    title: "Set Editor Selection",
+    summary: "Set the active Unity Editor selection by instanceId, target name, or hierarchy path.",
     description: "Set the active Unity Editor selection by instanceId, target name, or hierarchy path. Reading selection is a Context (`context read editor.selection`); use --dry-run before selecting ambiguous scene objects.",
     group: "editor",
     inputSchema: objSchema({ instanceId: { type: "integer", description: "Unity instance ID from a prior tool/context result." }, target: { type: "string", description: "GameObject name or hierarchy path." }, path: { type: "string", description: "Alias for target; hierarchy path preferred for duplicate names." } }),
@@ -271,7 +271,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
   },
   {
     name: "editor.active-tool.set",
-    title: "Set Active Editor Tool",
+    summary: "Set the Unity Editor active transform tool (View/Move/Rotate/Scale/Rect/Transform).",
     description: "Set the Unity Editor active transform tool (View/Move/Rotate/Scale/Rect/Transform). This changes editor UI state only; it is not unity_cli tool activation or tool discovery.",
     group: "editor",
     inputSchema: objSchema({ tool: { type: "string", enum: ["view", "move", "rotate", "scale", "rect", "transform"], description: "Unity Editor transform tool to activate." } }, ["tool"]),

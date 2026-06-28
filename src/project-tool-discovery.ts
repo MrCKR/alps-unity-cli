@@ -56,14 +56,18 @@ export function projectDescriptorToToolMetadata(value: unknown): ToolMetadata | 
   if (!name) {
     return undefined;
   }
-  const title = stringProp(descriptor, "title") ?? name;
+  const summary = stringProp(descriptor, "summary");
+  if (!summary) {
+    return undefined;
+  }
   const group = stringProp(descriptor, "group") ?? groupFromName(name);
   const target = stringProp(descriptor, "target") ?? "editor";
   const availabilityScope = stringProp(descriptor, "availabilityScope") ?? (target === "runtime" ? "playModeSession" : "editorSession");
   return ensureProjectToolDefaults({
     name,
-    title,
-    description: stringProp(descriptor, "description") ?? title,
+    summary,
+    description: stringProp(descriptor, "description") ?? summary,
+    source: "project",
     group,
     inputSchema: objectProp(descriptor, "inputSchema") ?? {},
     outputSchema: objectProp(descriptor, "outputSchema"),

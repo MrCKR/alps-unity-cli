@@ -1,5 +1,5 @@
 import { getString } from "./args.js";
-import { builtinToolMetadata, extensionToolMetadata, allRegisteredToolMetadata, supportStatusDescription, supportStatusForTool, supportStatusLabel, type ToolMetadata } from "./tools/metadata/index.js";
+import { builtinToolMetadata, extensionToolMetadata, allRegisteredToolMetadata, supportStatusForTool, type ToolMetadata } from "./tools/metadata/index.js";
 import { failure, success } from "./output.js";
 import type { CliResult } from "./types.js";
 
@@ -288,14 +288,14 @@ export function buildTopics(projectTools: ToolMetadata[] = []): DocTopic[] {
 }
 
 function toolLine(tool: ToolMetadata): string {
-  const status = supportStatusLabel(supportStatusForTool(tool));
+  const status = supportStatusForTool(tool);
   const target = tool.target ?? "editor";
   const notes = [
-    status,
-    tool.destructiveHint ? "⚠ destructive" : undefined,
+    `supportStatus:${status}`,
+    tool.destructiveHint ? "destructive" : undefined,
     `target:${target}`
   ].filter(Boolean).join(", ");
-  return `${tool.name}${tool.cliCommand ? ` (${tool.cliCommand})` : ""} — ${tool.title}; ${notes}. ${supportStatusDescription(supportStatusForTool(tool))}`;
+  return `${tool.name}${tool.cliCommand ? ` (${tool.cliCommand})` : ""} - ${tool.summary}; ${notes}.`;
 }
 
 function titleFromKey(key: string): string {

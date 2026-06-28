@@ -20,7 +20,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.ping",
-        Title = "ProBuilder Ping",
+        Summary = "ProBuilder Ping",
         Description = "Check ProBuilder package availability and bridge status. Returns package info if installed.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{}}",
@@ -51,7 +51,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.mesh-info",
-        Title = "ProBuilder Mesh Info",
+        Summary = "ProBuilder Mesh Info",
         Description = "Get detailed information about a ProBuilder mesh including vertex, face, edge counts and bounds.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\",\"description\":\"Target GameObject\"},\"include\":{\"type\":\"string\",\"enum\":[\"summary\",\"faces\",\"edges\",\"all\"],\"description\":\"Level of detail\"}},\"required\":[\"target\"]}",
@@ -133,7 +133,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.validate-mesh",
-        Title = "ProBuilder Validate Mesh",
+        Summary = "ProBuilder Validate Mesh",
         Description = "Validate a ProBuilder mesh for issues like degenerate triangles and unused vertices.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\",\"description\":\"Target GameObject\"}},\"required\":[\"target\"]}",

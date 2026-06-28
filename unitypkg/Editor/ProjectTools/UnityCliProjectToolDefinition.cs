@@ -30,7 +30,7 @@ namespace UnityCli
     public sealed class UnityCliProjectToolDefinition
     {
         public string Name { get; set; }
-        public string Title { get; set; }
+        public string Summary { get; set; }
         public string Description { get; set; }
         public string Group { get; set; }
         public string Version { get; set; }

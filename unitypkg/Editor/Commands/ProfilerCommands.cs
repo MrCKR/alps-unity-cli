@@ -46,6 +46,8 @@ namespace UnityCli
             RegisterCommand(registry, "profiler.object-memory", "profiler", false, ProfilerObjectMemory);
             RegisterCommand(registry, "profiler.rendering-stats", "profiler", false, ProfilerRenderingStats);
             RegisterCommand(registry, "profiler.script-stats", "profiler", false, ProfilerScriptStats);
+            RegisterCommand(registry, "profiler.deep", "profiler", false, ProfilerDeep);
+            RegisterCommand(registry, "profiler.hierarchy", "profiler", false, ProfilerHierarchy);
             RegisterCommand(registry, "profiler.memory-snapshot.take", "profiler", true, ProfilerMemorySnapshotTake);
             RegisterCommand(registry, "profiler.memory-snapshot.list", "profiler", false, ProfilerMemorySnapshotList);
             RegisterCommand(registry, "profiler.memory-snapshot.compare", "profiler", false, ProfilerMemorySnapshotCompare);
@@ -286,7 +288,7 @@ namespace UnityCli
         /// Returns DeferredResponseMarker — the BridgeWorkItem is completed asynchronously
         /// when all frames have been captured or an error occurs.
         /// </summary>
-        private static string CaptureRawProfilerDeferred(string outputPath, int durationMs, int totalFrames, string requestId, string effectType, DateTime startedAt, string format)
+        private static string CaptureRawProfilerDeferred(string outputPath, int durationMs, int totalFrames, string requestId, string effectType, DateTime startedAt, string format, string captureTag, long startFrame)
         {
             var item = currentWorkItem;
             var previousLogFile = UnityEngine.Profiling.Profiler.logFile;
@@ -341,6 +343,11 @@ namespace UnityCli
 
                     var finishedAt = DateTime.UtcNow;
                     var elapsedMs = (long)(finishedAt - startedAt).TotalMilliseconds;
+                    var endFrame = (long)Time.frameCount;
+                    if (!string.IsNullOrEmpty(captureTag))
+                    {
+                        WriteCaptureMetadataSidecar(outputPath, requestId, captureTag, startFrame, endFrame, startedAt, finishedAt);
+                    }
                     WriteLog(effectType.Replace('.', '_') + "_deferred artifactPath=" + outputPath + " durationMs=" + elapsedMs.ToString(CultureInfo.InvariantCulture));
                     item.Response = SuccessJson(new UnityCliJsonWriter().BeginObject()
                         .Prop("artifactPath", outputPath)
@@ -349,6 +356,10 @@ namespace UnityCli
                         .Prop("durationMs", elapsedMs)
                         .Prop("requestedDurationMs", (long)durationMs)
                         .Prop("frames", (long)totalFrames)
+                        .Prop("startFrame", startFrame)
+                        .Prop("endFrame", endFrame)
+                        .Prop("captureTag", captureTag)
+                        .Prop("metadataSidecar", string.IsNullOrEmpty(captureTag) ? null : outputPath + ".metadata.json")
                         .PropRaw("profiler", ProfilerStateJson())
                         .PropArray("plannedEffects", arr =>
                         {
@@ -611,19 +622,42 @@ namespace UnityCli
             var statsType = FindType("UnityEditor.UnityStats");
             var w = new UnityCliJsonWriter().BeginObject();
             w.Prop("command", "profiler.rendering-stats");
-            if (statsType != null)
+            if (statsType == null)
             {
-                w.Prop("batches", StringMemberValue(statsType, null, "batches"));
-                w.Prop("triangles", StringMemberValue(statsType, null, "triangles"));
-                w.Prop("vertices", StringMemberValue(statsType, null, "vertices"));
-                w.Prop("setPassCalls", StringMemberValue(statsType, null, "setPassCalls"));
-                w.Prop("screenRes", StringMemberValue(statsType, null, "screenRes"));
-                w.Prop("usedTextureMemory", StringMemberValue(statsType, null, "usedTextureMemory"));
-                w.Prop("renderTextureCount", StringMemberValue(statsType, null, "renderTextureCount"));
+                // UnityStats 是 internal Editor 类型，不同 Unity 版本/反射策略下可能取不到。
+                w.Prop("available", false);
+                w.Prop("diagnostics", "UnityStats type is not available in this Unity version.");
+                w.PropArray("next_actions", arr =>
+                {
+                    arr.Value("Use a Unity 2022.x Editor where UnityEditor.UnityStats is reachable via reflection.");
+                    arr.Value("For per-frame GPU/render counts prefer profiler.frame or profiler.hierarchy while the Profiler is recording.");
+                });
             }
             else
             {
-                w.Prop("diagnostics", "UnityStats type not available in this Unity version.");
+                // UnityStats 字段只在 Game View/实际渲染帧被填充。非 Play 或无 Game View 时为 null，
+                // 这里显式标注采样状态，避免使用者把空值当成数据丢失。
+                var anyValue = false;
+                var fields = new[] { "batches", "triangles", "vertices", "setPassCalls", "screenRes", "usedTextureMemory", "renderTextureCount" };
+                w.PropObject("stats", stats =>
+                {
+                    foreach (var name in fields)
+                    {
+                        var value = StringMemberValue(statsType, null, name);
+                        if (!string.IsNullOrEmpty(value)) anyValue = true;
+                        stats.Prop(name, value);
+                    }
+                });
+                w.Prop("available", anyValue);
+                if (!anyValue)
+                {
+                    w.Prop("diagnostics", "UnityStats fields are null for the sampled frame. Rendering statistics are only populated while the Game View is actively rendering (enter Play Mode or focus the Game View and retry).");
+                    w.PropArray("next_actions", arr =>
+                    {
+                        arr.Value("Enter Play Mode or make the Game View render at least one frame, then retry.");
+                        arr.Value("For stable per-frame timings use profiler.frame (FrameTimingManager) or profiler.hierarchy.");
+                    });
+                }
             }
             w.Prop("logPath", LogPath());
             return SuccessJson(w.EndObject().ToString());
@@ -639,6 +673,168 @@ namespace UnityCli
             w.Prop("monoUsedSize", (long)UnityEngine.Profiling.Profiler.GetMonoUsedSizeLong());
             w.Prop("logPath", LogPath());
             return SuccessJson(w.EndObject().ToString());
+        }
+
+        // C1: 运行时切换/读取深度分析（Deep Profiling）。
+        // Unity 机制约束：deep profiling 只能在 Profiler 会话停止时变更。若请求变更但 Profiler 正在记录，
+        // 返回结构化错误并提示先 stop，避免静默失败。enabled 缺省时为只读查询。
+        private static string ProfilerDeep(BridgeRequest request)
+        {
+            var previous = GetProfilerDeepProfiling();
+            var hasEnabled = request.OptionalBoolArg("enabled").HasValue;
+            var desired = request.OptionalBoolArg("enabled");
+            var sessionEnabled = GetProfilerSessionEnabled();
+            if (hasEnabled && sessionEnabled)
+            {
+                return ErrorJsonWithDetails("E_PROFILER_DEEP_REQUIRES_STOP",
+                    "Cannot change Deep Profiling while the Profiler is recording.",
+                    new UnityCliJsonWriter().BeginObject()
+                        .Prop("command", "profiler.deep")
+                        .Prop("deepProfiling", previous)
+                        .Prop("profilerRecording", true)
+                        .EndObject().ToString(),
+                    "Run tools run profiler.stop first, then set deep profiling, then profiler.start again.");
+            }
+            var applied = previous;
+            if (hasEnabled)
+            {
+                SetProfilerDeepProfiling(desired.Value);
+                applied = desired.Value;
+                WriteLog("profiler_deep enabled=" + applied.ToString().ToLowerInvariant() + " previous=" + previous.ToString().ToLowerInvariant());
+            }
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("command", "profiler.deep")
+                .Prop("deepProfiling", applied)
+                .Prop("previous", previous)
+                .Prop("changed", hasEnabled && applied != previous)
+                .PropRaw("profiler", ProfilerStateJson())
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        private static bool GetProfilerDeepProfiling()
+        {
+            var property = typeof(UnityEngine.Profiling.Profiler).GetProperty("deepProfiling", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            if (property != null && property.CanRead)
+            {
+                try { return (bool)property.GetValue(null, null); } catch { return false; }
+            }
+            return false;
+        }
+
+        // C2: 导出某一帧某线程的 CPU 调用树（逐 marker），对齐用户期望的 profiler.hierarchy。
+        // 使用 UnityEditorInternal.ProfilerDriver.GetHierarchyFrameDataView 拿到 HierarchyFrameDataView，
+        // 递归 GetItemChildren 输出 name/depth/ms/children，限定 top/depth 防止单帧调用树过大。
+        private static string ProfilerHierarchy(BridgeRequest request)
+        {
+            var driverType = FindType("UnityEditorInternal.ProfilerDriver");
+            if (driverType == null)
+            {
+                return ErrorJson("E_PROFILER_HIERARCHY_UNAVAILABLE", "UnityEditorInternal.ProfilerDriver is not available; hierarchy requires the Editor Profiler.", "Run this in the Unity Editor (not batchmode without profiler support).");
+            }
+            var frame = request.OptionalIntArg("frame") ?? -1; // -1 表示最新已采集帧
+            var threadIndex = request.OptionalIntArg("thread") ?? 0;
+            var top = Math.Max(1, Math.Min(request.OptionalIntArg("top") ?? 50, 5000));
+            var maxDepth = Math.Max(1, Math.Min(request.OptionalIntArg("depth") ?? 8, 32));
+
+            // GetHierarchyFrameDataView(int frame, int threadIndex, HierarchyFrameDataView.ViewModes viewMode, ...) → HierarchyFrameDataView
+            var hierarchyViewType = FindType("UnityEngine.Profiling.HierarchyFrameDataView");
+            if (hierarchyViewType == null)
+            {
+                return ErrorJson("E_PROFILER_HIERARCHY_UNAVAILABLE", "HierarchyFrameDataView type not available in this Unity version.", "Use Unity 2018.4+ where UnityEngine.Profiling.HierarchyFrameDataView exists.");
+            }
+            var getHierarchy = driverType.GetMethod("GetHierarchyFrameDataView", new[] { typeof(int), typeof(int), hierarchyViewType.GetTypeInfo().GetDeclaredNestedType("ViewModes")?.AsType() ?? typeof(int), typeof(int), typeof(int) });
+            // 不同 Unity 版本签名不同；退回 (int,int) 最简重载。
+            if (getHierarchy == null)
+            {
+                getHierarchy = driverType.GetMethod("GetHierarchyFrameDataView", new[] { typeof(int), typeof(int) });
+            }
+            if (getHierarchy == null)
+            {
+                return ErrorJson("E_PROFILER_HIERARCHY_UNAVAILABLE", "ProfilerDriver.GetHierarchyFrameDataView overload not found.", "Unity version may not expose this API via reflection.");
+            }
+
+            object view = null;
+            try
+            {
+                view = getHierarchy.GetParameters().Length == 2
+                    ? getHierarchy.Invoke(null, new object[] { frame, threadIndex })
+                    : getHierarchy.Invoke(null, new object[] { frame, threadIndex, 0, 0, 0 });
+            }
+            catch (Exception exception)
+            {
+                return ErrorJsonWithDetails("E_PROFILER_HIERARCHY_UNAVAILABLE",
+                    "Failed to acquire hierarchy frame data: " + exception.Message,
+                    new UnityCliJsonWriter().BeginObject()
+                        .Prop("command", "profiler.hierarchy")
+                        .Prop("frame", (long)frame)
+                        .Prop("thread", (long)threadIndex)
+                        .Prop("profilerRecording", GetProfilerSessionEnabled())
+                        .EndObject().ToString(),
+                    "Make sure the Profiler has recorded frames; pass profiler.start then profiler.stop, then query a recorded frame (or omit frame to use the latest).");
+            }
+            if (view == null)
+            {
+                return ErrorJson("E_PROFILER_HIERARCHY_NO_DATA", "No hierarchy data available for the requested frame/thread.", "Record profiler frames first (profiler.start → play → profiler.stop), then query a valid frame.");
+            }
+
+            var validProp = hierarchyViewType.GetProperty("valid");
+            if (validProp != null && !(bool)validProp.GetValue(view, null))
+            {
+                return ErrorJson("E_PROFILER_HIERARCHY_NO_DATA", "HierarchyFrameDataView is invalid for the requested frame/thread.", "Record profiler frames first, then query a valid frame.");
+            }
+
+            var resolvedFrame = frame < 0 ? (int)hierarchyViewType.GetProperty("frameIndex").GetValue(view, null) : frame;
+            var w = new UnityCliJsonWriter().BeginObject();
+            w.Prop("command", "profiler.hierarchy");
+            w.Prop("frame", (long)resolvedFrame);
+            w.Prop("thread", (long)threadIndex);
+            w.PropArray("rootItems", arr => { BuildHierarchyItems(view, hierarchyViewType, 0, top, maxDepth, 0, arr); });
+            w.Prop("logPath", LogPath());
+            return SuccessJson(w.EndObject().ToString());
+        }
+
+        // 递归输出调用树节点，按 top 限制每层子项数量、depth 限制最大深度，避免单帧树过大。
+        private static void BuildHierarchyItems(object view, Type viewType, int itemId, int top, int maxDepth, int depth, UnityCliJsonWriter arr)
+        {
+            if (depth > maxDepth) return;
+            // 子项集合通过 GetItemChildren(int, List<int>) 获取
+            var childrenProp = viewType.GetMethod("GetItemChildren", new[] { typeof(int), typeof(List<int>) });
+            var nameMethod = viewType.GetMethod("GetItemName", new[] { typeof(int) });
+            var msMethod = viewType.GetMethod("GetItemThreadMS", new[] { typeof(int) });
+            var instanceMethod = viewType.GetMethod("GetItemInstanceMetadata", Type.EmptyTypes);
+            var descendantsMethod = viewType.GetMethod("GetItemDescendantsThatHaveChildren", new[] { typeof(int), typeof(List<int>) });
+            var childIds = new List<int>();
+            try
+            {
+                if (childrenProp != null) childrenProp.Invoke(view, new object[] { itemId, childIds });
+            }
+            catch { return; }
+
+            var emitted = 0;
+            foreach (var childId in childIds)
+            {
+                if (emitted >= top) break;
+                string name = null;
+                double ms = 0;
+                try { if (nameMethod != null) name = nameMethod.Invoke(view, new object[] { childId }) as string; } catch { }
+                try { if (msMethod != null) { var v = msMethod.Invoke(view, new object[] { childId }); if (v is double d) ms = d; else if (v is float f) ms = f; } } catch { }
+                arr.BeginObject()
+                    .Prop("id", (long)childId)
+                    .Prop("name", name ?? "(unknown)")
+                    .Prop("depth", (long)depth)
+                    .Prop("ms", ms)
+                    .Prop("childCount", (long)childIds.Count);
+                // 递归子项写入 children 数组
+                var grandChildren = new List<int>();
+                try { if (childrenProp != null) childrenProp.Invoke(view, new object[] { childId, grandChildren }); } catch { }
+                if (grandChildren.Count > 0 && depth + 1 <= maxDepth)
+                {
+                    arr.PropArray("children", childArr => BuildHierarchyItems(view, viewType, childId, top, maxDepth, depth + 1, childArr));
+                }
+                arr.EndObject();
+                emitted++;
+            }
         }
 
         private static string ProfilerCounter(BridgeRequest request)
@@ -687,6 +883,30 @@ namespace UnityCli
             return ProfilerWriteArtifact(request, "profiler.capture", durationMs, frames);
         }
 
+        // C4: 采集起始/结束帧与 tag，便于外部脚本把 raw 采集与逻辑采样点对齐归档。
+        // 返回帧范围字段；若调用方传入 captureTag，则在 artifact 旁写一份 <path>.metadata.json sidecar。
+        private static void WriteCaptureMetadataSidecar(string outputPath, string requestId, string captureTag, long startFrame, long endFrame, DateTime startedAt, DateTime finishedAt)
+        {
+            try
+            {
+                var sidecarPath = outputPath + ".metadata.json";
+                File.WriteAllText(sidecarPath, new UnityCliJsonWriter().BeginObject()
+                    .Prop("requestId", requestId)
+                    .Prop("captureTag", captureTag)
+                    .Prop("artifactPath", outputPath)
+                    .Prop("startFrame", startFrame)
+                    .Prop("endFrame", endFrame)
+                    .Prop("startedAt", startedAt.ToString("O", CultureInfo.InvariantCulture))
+                    .Prop("finishedAt", finishedAt.ToString("O", CultureInfo.InvariantCulture))
+                    .Prop("sidecarVersion", "unity-cli-profiler-capture-v1")
+                    .EndObject().ToString(), Encoding.UTF8);
+            }
+            catch (Exception exception)
+            {
+                WriteLog("profiler_capture_metadata_failed artifactPath=" + outputPath + " " + exception.GetType().Name + ": " + exception.Message);
+            }
+        }
+
         private static string ProfilerWriteArtifact(BridgeRequest request, string effectType, int durationMs, int frames)
         {
             var outputPath = ResolveOutputPath(request.StringArg("path"));
@@ -708,7 +928,7 @@ namespace UnityCli
                     // that spreads samples across EditorApplication.update callbacks.
                     if (durationMs > 0 || frames > 1)
                     {
-                        return CaptureRawProfilerDeferred(outputPath, durationMs, Math.Max(1, frames), request.RequestId, effectType, startedAt, format);
+                        return CaptureRawProfilerDeferred(outputPath, durationMs, Math.Max(1, frames), request.RequestId, effectType, startedAt, format, request.OptionalStringArg("captureTag"), (long)Time.frameCount);
                     }
                     // Single-frame capture: synchronous, no Thread.Sleep needed.
                     CaptureRawProfilerSync(outputPath);
@@ -719,6 +939,14 @@ namespace UnityCli
                 }
                 var finishedAt = DateTime.UtcNow;
                 var elapsedMs = (long)(finishedAt - startedAt).TotalMilliseconds;
+                var captureTag = request.OptionalStringArg("captureTag");
+                var startFrame = (long)Time.frameCount;
+                // 单帧同步采集：起止帧为同一帧。
+                var endFrame = startFrame;
+                if (!string.IsNullOrEmpty(captureTag))
+                {
+                    WriteCaptureMetadataSidecar(outputPath, request.RequestId, captureTag, startFrame, endFrame, startedAt, finishedAt);
+                }
                 WriteLog(effectType.Replace('.', '_') + " artifactPath=" + outputPath + " durationMs=" + elapsedMs.ToString(CultureInfo.InvariantCulture));
                 return SuccessJson(new UnityCliJsonWriter().BeginObject()
                     .Prop("artifactPath", outputPath)
@@ -727,6 +955,10 @@ namespace UnityCli
                     .Prop("durationMs", elapsedMs)
                     .Prop("requestedDurationMs", (long)durationMs)
                     .Prop("frames", (long)frames)
+                    .Prop("startFrame", startFrame)
+                    .Prop("endFrame", endFrame)
+                    .Prop("captureTag", captureTag)
+                    .Prop("metadataSidecar", string.IsNullOrEmpty(captureTag) ? null : outputPath + ".metadata.json")
                     .PropRaw("profiler", ProfilerStateJson())
                     .PropArray("plannedEffects", arr =>
                     {

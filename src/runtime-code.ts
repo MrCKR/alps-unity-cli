@@ -41,7 +41,7 @@ export async function handleCode(command: string | undefined, flags: Record<stri
 
   const confirmation = await confirmDestructiveExecution(flags, {
     command: "code.exec",
-    title: "Execute Live Code",
+    summary: "Execute Live Code",
     destructiveHint: true,
     supportsDryRun: true,
     requestId

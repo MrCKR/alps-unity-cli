@@ -38,7 +38,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
   {
     ...CM_COMMON,
     name: "cinemachine.create",
-    title: "Cinemachine Create",
+    summary: "Create a Cinemachine virtual camera with an optional preset (follow, third_person, freelook, dolly, static, top_down, side_scroller) that configures Body/Aim pipeline...",
     description: "Create a Cinemachine virtual camera with an optional preset (follow, third_person, freelook, dolly, static, top_down, side_scroller) that configures Body/Aim pipeline components. Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({
       preset: { type: "string", enum: ["follow", "third_person", "freelook", "dolly", "static", "top_down", "side_scroller"] },
@@ -63,7 +63,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
   {
     ...CM_COMMON,
     name: "cinemachine.target",
-    title: "Cinemachine Target",
+    summary: "Set the Follow and/or LookAt targets on a Cinemachine virtual camera.",
     description: "Set the Follow and/or LookAt targets on a Cinemachine virtual camera. Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({ target: { type: "string" }, follow: { type: "string" }, lookAt: { type: "string" } }, ["target"]),
     destructiveHint: false,
@@ -75,7 +75,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
   {
     ...CM_COMMON,
     name: "cinemachine.lens",
-    title: "Cinemachine Lens",
+    summary: "Get or set lens properties (fieldOfView, nearClipPlane, farClipPlane, orthographicSize, dutch) on a Cinemachine virtual camera via SerializedObject to survive...",
     description: "Get or set lens properties (fieldOfView, nearClipPlane, farClipPlane, orthographicSize, dutch) on a Cinemachine virtual camera via SerializedObject to survive internal field renames. Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({
       target: { type: "string" },
@@ -94,7 +94,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
   {
     ...CM_COMMON,
     name: "cinemachine.priority",
-    title: "Cinemachine Priority",
+    summary: "Get or set the priority (and enabled flag) on a Cinemachine virtual camera via SerializedObject PrioritySettings struct.",
     description: "Get or set the priority (and enabled flag) on a Cinemachine virtual camera via SerializedObject PrioritySettings struct. Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({ target: { type: "string" }, priority: { type: "integer" }, enabled: { type: "boolean" } }, ["target"]),
     destructiveHint: false,
@@ -106,7 +106,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
   {
     ...CM_COMMON,
     name: "cinemachine.blend",
-    title: "Cinemachine Blend",
+    summary: "Get or set the DefaultBlend (style + duration) on the CinemachineBrain of a target camera owner.",
     description: "Get or set the DefaultBlend (style + duration) on the CinemachineBrain of a target camera owner. Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({ target: { type: "string" }, style: { type: "string", enum: ["cut", "ease_in_out", "ease_in", "ease_out", "hard_in", "hard_out", "linear", "soft_in", "soft_out"] }, duration: { type: "number" } }),
     destructiveHint: false,
@@ -118,7 +118,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
   {
     ...CM_COMMON,
     name: "cinemachine.body",
-    title: "Cinemachine Body",
+    summary: "Swap or configure the Cinemachine Body pipeline component on a virtual camera (e.g.",
     description: "Swap or configure the Cinemachine Body pipeline component on a virtual camera (e.g. CinemachineFollow, CinemachinePositionComposer, CinemachineOrbitalFollow, CinemachineSplineDolly, CinemachineThirdPersonFollow). Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({ target: { type: "string" }, body: { type: "string" }, property: { type: "string" }, value: { type: "string" } }, ["target"]),
     destructiveHint: false,
@@ -130,7 +130,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
   {
     ...CM_COMMON,
     name: "cinemachine.aim",
-    title: "Cinemachine Aim",
+    summary: "Swap or configure the Cinemachine Aim pipeline component on a virtual camera (e.g.",
     description: "Swap or configure the Cinemachine Aim pipeline component on a virtual camera (e.g. CinemachineRotationComposer, CinemachineHardLookAt). Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({ target: { type: "string" }, aim: { type: "string" }, property: { type: "string" }, value: { type: "string" } }, ["target"]),
     destructiveHint: false,
@@ -142,7 +142,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
   {
     ...CM_COMMON,
     name: "cinemachine.noise",
-    title: "Cinemachine Noise",
+    summary: "Add, configure or remove a CinemachineBasicMultiChannelPerlin noise component on a virtual camera.",
     description: "Add, configure or remove a CinemachineBasicMultiChannelPerlin noise component on a virtual camera. Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({ target: { type: "string" }, noiseProfile: { type: "string" }, amplitude: { type: "number" }, frequency: { type: "number" }, remove: { type: "boolean" } }, ["target"]),
     destructiveHint: false,
@@ -154,7 +154,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
   {
     ...CM_COMMON,
     name: "cinemachine.brain",
-    title: "Cinemachine Brain",
+    summary: "Ensure a CinemachineBrain is attached to the target camera owner, or report the brain's active virtual camera, blending state and active blend.",
     description: "Ensure a CinemachineBrain is attached to the target camera owner, or report the brain's active virtual camera, blending state and active blend. Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({ target: { type: "string" }, action: { type: "string", enum: ["ensure", "status"] } }, ["target"]),
     destructiveHint: false,
@@ -166,7 +166,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
   {
     ...CM_COMMON,
     name: "cinemachine.extension",
-    title: "Cinemachine Extension",
+    summary: "List, add or remove CinemachineExtension-derived components on a virtual camera.",
     description: "List, add or remove CinemachineExtension-derived components on a virtual camera. Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({
       target: { type: "string" },

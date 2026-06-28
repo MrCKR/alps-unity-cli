@@ -26,7 +26,7 @@ test("every tool has the required frozen fields", () => {
   const tools = builtinToolMetadata();
   for (const tool of tools) {
     assert.ok(tool.name, `missing name in ${JSON.stringify(tool)}`);
-    assert.ok(tool.title, `missing title in ${tool.name}`);
+    assert.ok(tool.summary, `missing summary in ${tool.name}`);
     assert.ok(tool.description, `missing description in ${tool.name}`);
     assert.ok(tool.group, `missing group in ${tool.name}`);
     assert.ok(tool.inputSchema, `missing inputSchema in ${tool.name}`);
@@ -148,7 +148,7 @@ test("tools group list <unknown> returns error", async () => {
 test("tools group list includes tools with short summaries", async () => {
   const result = await handleToolsCommand("group", ["list", "scene"], {}, emptyRuntime, requestId);
   assert.equal(result.ok, true);
-  const data = result.data as { count: number; tools: Array<{ name: string; title: string }> };
+  const data = result.data as { count: number; tools: Array<{ name: string; summary: string }> };
   assert.ok(data.count > 0);
   assert.ok(data.tools.some((t) => t.name === "scene.hierarchy"), "scene.hierarchy should be in scene group");
 });
@@ -156,7 +156,7 @@ test("tools group list includes tools with short summaries", async () => {
 test("tools group list includes custom project tools when available", async () => {
   const customTool = {
     name: "custom.my-tool",
-    title: "My Custom Tool",
+    summary: "My Custom Tool",
     description: "A custom tool for testing",
     group: "custom",
     inputSchema: { type: "object" as const, properties: {} },
@@ -196,7 +196,7 @@ test("tools group keeps built-in groups without custom context", async () => {
 test("tools group includes runtime custom tool groups", async () => {
   const runtime: ToolsRuntime = { projectTools: [{
     name: "project.bake",
-    title: "Project Bake",
+    summary: "Project Bake",
     description: "Bakes project data.",
     group: "project",
     inputSchema: { type: "object" },
@@ -247,8 +247,8 @@ test("tools describe scene.hierarchy returns full metadata", async () => {
   assert.ok(data.inputSchema);
   assert.ok(data.description);
   assert.ok(Array.isArray(data.examples));
-  assert.equal((data as { mode: string }).mode, "offline");
-  assert.equal((data as { requiresUnity: boolean }).requiresUnity, false);
+  assert.equal("mode" in data, false);
+  assert.equal("requiresUnity" in data, false);
 });
 
 test("tools describe for unknown tool returns E_TOOL_NOT_FOUND_FOR_TARGET", async () => {
@@ -654,8 +654,8 @@ test("tools describe test.run returns full metadata", async () => {
   const data = result.data as Record<string, unknown>;
   assert.equal(data.name, "test.run");
   assert.equal(data.group, "test");
-  assert.equal(data.handler, "job");
-  assert.equal(data.longRunning, true);
+  assert.equal("handler" in data, false);
+  assert.equal("longRunning" in data, false);
 });
 
 test("tools describe build.run returns full metadata", async () => {
@@ -664,8 +664,8 @@ test("tools describe build.run returns full metadata", async () => {
   const data = result.data as Record<string, unknown>;
   assert.equal(data.name, "build.run");
   assert.equal(data.group, "build");
-  assert.equal(data.handler, "job");
-  assert.equal(data.longRunning, true);
+  assert.equal("handler" in data, false);
+  assert.equal("longRunning" in data, false);
 });
 
 test("tools describe editor.refresh returns job metadata", async () => {
@@ -673,8 +673,8 @@ test("tools describe editor.refresh returns job metadata", async () => {
   assert.equal(result.ok, true);
   const data = result.data as Record<string, unknown>;
   assert.equal(data.name, "editor.refresh");
-  assert.equal(data.handler, "job");
-  assert.equal(data.longRunning, true);
+  assert.equal("handler" in data, false);
+  assert.equal("longRunning" in data, false);
 });
 
 // ── S3.2 metadata: graphics, physics, animation, vfx ───────
@@ -686,7 +686,7 @@ test("S3.2 graphics group has quality, pipeline, volume and screenshot tools", (
 
 test("S3.4 profiler domain exposes expected tools and safety hints", () => {
   const profilerTools = filterToolsByGroup("profiler");
-  const expectedNames = ["profiler.status", "profiler.start", "profiler.stop", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export", "profiler.modules", "profiler.module-enable", "profiler.clear", "profiler.load", "profiler.areas", "profiler.object-memory", "profiler.rendering-stats", "profiler.script-stats", "profiler.memory-snapshot.take", "profiler.memory-snapshot.list", "profiler.memory-snapshot.compare", "profiler.frame-debugger.enable", "profiler.frame-debugger.disable", "profiler.frame-debugger.events"];
+  const expectedNames = ["profiler.status", "profiler.start", "profiler.stop", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export", "profiler.modules", "profiler.module-enable", "profiler.clear", "profiler.load", "profiler.areas", "profiler.object-memory", "profiler.rendering-stats", "profiler.script-stats", "profiler.deep", "profiler.hierarchy", "profiler.memory-snapshot.take", "profiler.memory-snapshot.list", "profiler.memory-snapshot.compare", "profiler.frame-debugger.enable", "profiler.frame-debugger.disable", "profiler.frame-debugger.events"];
   assert.deepEqual(profilerTools.map((tool) => tool.name), expectedNames);
 
   for (const name of expectedNames) {
@@ -947,7 +947,7 @@ test("tools describe graphics.volume returns bridge metadata", async () => {
   const data = result.data as Record<string, unknown>;
   assert.equal(data.name, "graphics.volume");
   assert.equal(data.group, "graphics");
-  assert.equal(data.handler, "bridge");
+  assert.equal("handler" in data, false);
   assert.equal(data.cliCommand, "tools run graphics.volume");
 });
 
@@ -957,7 +957,7 @@ test("tools describe animation.play returns full bridge metadata", async () => {
   const data = result.data as Record<string, unknown>;
   assert.equal(data.name, "animation.play");
   assert.equal(data.group, "animation");
-  assert.equal(data.handler, "bridge");
+  assert.equal("handler" in data, false);
   assert.equal(data.cliCommand, "tools run animation.play");
 });
 
@@ -1002,7 +1002,7 @@ test("tools run with target=runtime project tool routes to runtime-tool.run", as
   const runtime: ToolsRuntime = {
     projectTools: [{
       name: "sample.runtime-echo",
-      title: "Sample Runtime Echo",
+      summary: "Sample Runtime Echo",
       description: "Echoes input from runtime",
       group: "sample",
       inputSchema: { type: "object", properties: { message: { type: "string" } }, required: ["message"] },
@@ -1027,7 +1027,7 @@ test("tools run target=both with --runtime flag routes to runtime-tool.run", asy
   const runtime: ToolsRuntime = {
     projectTools: [{
       name: "dual.tool",
-      title: "Dual Tool",
+      summary: "Dual Tool",
       description: "Works in both domains",
       group: "sample",
       inputSchema: { type: "object" },
@@ -1052,7 +1052,7 @@ test("tools run custom editor-domain tool routes to project-tool.run", async () 
   const runtime: ToolsRuntime = {
     projectTools: [{
       name: "dual.tool",
-      title: "Dual Tool",
+      summary: "Dual Tool",
       description: "Works in both domains",
       group: "sample",
       inputSchema: { type: "object" },
@@ -1089,7 +1089,7 @@ test("tools run custom editor tool routes to project-tool.run", async () => {
   const runtime: ToolsRuntime = {
     projectTools: [{
       name: "my.editor-tool",
-      title: "Editor Tool",
+      summary: "Editor Tool",
       description: "Editor-only tool",
       group: "custom",
       inputSchema: { type: "object" },
@@ -1115,7 +1115,7 @@ test("tools run runtime tool discovery uses runtime-tool.list (not project-tool.
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
       if (payload.command === "runtime-tool.list") {
-        return { ok: true, data: { tools: [{ name: "sample.runtime-echo", title: "Sample Runtime Echo", description: "Echoes input from runtime", group: "sample", target: "runtime", handler: "bridge-runtime" }] } };
+        return { ok: true, data: { tools: [{ name: "sample.runtime-echo", summary: "Sample Runtime Echo", description: "Echoes input from runtime", group: "sample", target: "runtime", handler: "bridge-runtime" }] } };
       }
       return { ok: true, data: { result: { requestId: "req", isPlaying: true } } };
     }
@@ -1137,7 +1137,7 @@ test("tools run editor-domain tool discovery falls back to project-tool.list", a
         return { ok: true, data: { tools: [] } };
       }
       if (payload.command === "project-tool.list") {
-        return { ok: true, data: { tools: [{ name: "my.editor-tool", title: "Editor Tool", description: "Editor-only", group: "custom", target: "editor" }] } };
+        return { ok: true, data: { tools: [{ name: "my.editor-tool", summary: "Editor Tool", description: "Editor-only", group: "custom", target: "editor" }] } };
       }
       return { ok: true, data: { result: "ok" } };
     }
@@ -1354,7 +1354,7 @@ test("tools run custom project tool passes name and input to project-tool.run", 
   const runtime: ToolsRuntime = {
     projectTools: [{
       name: "sample.echo",
-      title: "Sample Echo",
+      summary: "Sample Echo",
       description: "Echoes input",
       group: "sample",
       inputSchema: { type: "object", properties: { message: { type: "string" } } },
@@ -1426,7 +1426,7 @@ test("tools run discovers runtime tools when --target flag is provided without -
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
       if (payload.command === "runtime-tool.list") {
-        return { ok: true, data: { tools: [{ name: "runtime.wait", title: "Runtime Wait", description: "Wait in runtime", group: "runtime", target: "runtime", handler: "bridge-runtime" }] } };
+        return { ok: true, data: { tools: [{ name: "runtime.wait", summary: "Runtime Wait", description: "Wait in runtime", group: "runtime", target: "runtime", handler: "bridge-runtime" }] } };
       }
       return { ok: true, data: { result: { requestId: "req", isPlaying: true } } };
     }
@@ -1445,7 +1445,7 @@ test("tools run discovers runtime tools when --runtime flag is provided", async 
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
       if (payload.command === "runtime-tool.list") {
-        return { ok: true, data: { tools: [{ name: "sample.runtime-echo", title: "Sample Runtime Echo", description: "Echoes input from runtime", group: "sample", target: "runtime", handler: "bridge-runtime" }] } };
+        return { ok: true, data: { tools: [{ name: "sample.runtime-echo", summary: "Sample Runtime Echo", description: "Echoes input from runtime", group: "sample", target: "runtime", handler: "bridge-runtime" }] } };
       }
       return { ok: true, data: { result: { requestId: "req", isPlaying: true } } };
     }
@@ -1462,7 +1462,7 @@ test("tools run discovers runtime tools when --runtime flag is provided", async 
 test("normalizeToolMetadata fills default kind and source", () => {
   const normalized = normalizeToolMetadata({
     name: "test.tool",
-    title: "Test",
+    summary: "Test",
     description: "Test tool",
     group: "test",
     inputSchema: {},

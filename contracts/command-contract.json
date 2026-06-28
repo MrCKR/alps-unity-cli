@@ -1974,6 +1974,15 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "profiler.deep",
+      "group": "profiler",
+      "command": "deep",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "profiler.export",
       "group": "profiler",
       "command": "export",
@@ -2013,6 +2022,15 @@
       "bridgeCommand": "profiler.frame-debugger.events",
       "group": "profiler",
       "command": "frame-debugger.events",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "profiler.hierarchy",
+      "group": "profiler",
+      "command": "hierarchy",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,

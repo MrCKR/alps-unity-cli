@@ -4,7 +4,7 @@ import { objSchema } from "../schemas.js";
 export const PREFAB_TOOLS: ToolMetadata[] = [
   {
     name: "prefab.info",
-    title: "Prefab Info",
+    summary: "Read a prefab asset's metadata: root name, guid, variant flag, source/instance roots, parents and modification status.",
     description: "Read a prefab asset's metadata: root name, guid, variant flag, source/instance roots, parents and modification status. Use asset.search with filter t:Prefab to discover paths when unknown, and prefab.hierarchy to inspect children.",
     group: "prefab",
     inputSchema: objSchema({ path: { type: "string", description: "Existing Assets/*.prefab path." } }, ["path"]),
@@ -24,7 +24,7 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
   },
   {
     name: "prefab.create",
-    title: "Create Prefab",
+    summary: "Save a scene GameObject as a new prefab asset at an Assets/*.prefab path. source resolves by name, hierarchy path or instance id; prefer path/id.",
     description: "Save a scene GameObject as a new prefab asset at an Assets/*.prefab path. source resolves by name, hierarchy path or instance id; prefer path/id. Refuses to overwrite an existing prefab unless overwrite is true. Use go.create first to build the source object.",
     group: "prefab",
     inputSchema: objSchema({
@@ -46,7 +46,7 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
   },
   {
     name: "prefab.modify",
-    title: "Modify Prefab",
+    summary: "Apply small prefab asset edits headlessly without opening the stage: rename the root, or add/remove a direct child by name.",
     description: "Apply small prefab asset edits headlessly without opening the stage: rename the root, or add/remove a direct child by name. For interactive editing (component fields, nested transforms) open the stage and edit inside it, then save. Use prefab.hierarchy to inspect child paths before removeChild.",
     group: "prefab",
     inputSchema: objSchema({
@@ -70,7 +70,7 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
   },
   {
     name: "prefab.stage-open",
-    title: "Open Prefab Stage",
+    summary: "Open a prefab asset in Prefab isolation mode (Prefab Stage) for interactive editing with GameObject/component tools.",
     description: "Open a prefab asset in Prefab isolation mode (Prefab Stage) for interactive editing with GameObject/component tools. Only one Prefab Stage can be open at a time; an unsaved stage returns E_PREFAB_DIRTY_CONFLICT (save or close it first). Use prefab.stage-save/close to persist and exit.",
     group: "prefab",
     inputSchema: objSchema({ path: { type: "string", description: "Existing Assets/*.prefab path to open." } }, ["path"]),
@@ -88,7 +88,7 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
   },
   {
     name: "prefab.stage-save",
-    title: "Save Prefab Stage",
+    summary: "Save modifications in the currently open Prefab Stage to the prefab asset.",
     description: "Save modifications in the currently open Prefab Stage to the prefab asset. Requires a stage to be open (use prefab.stage-open first). After saving the stage remains open; use prefab.stage-close to exit.",
     group: "prefab",
     inputSchema: objSchema({ path: { type: "string", description: "Optional prefab path to confirm the open stage target." } }),
@@ -106,7 +106,7 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
   },
   {
     name: "prefab.stage-close",
-    title: "Close Prefab Stage",
+    summary: "Close the currently open Prefab Stage and return to the main scene.",
     description: "Close the currently open Prefab Stage and return to the main scene. Pass save=true to persist before closing; omitting it with unsaved changes returns E_PREFAB_DIRTY_CONFLICT. Requires a stage to be open.",
     group: "prefab",
     inputSchema: objSchema({ path: { type: "string", description: "Optional prefab path to confirm the open stage target." }, save: { type: "boolean", description: "Persist modifications before closing." } }),
@@ -125,7 +125,7 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
   },
   {
     name: "prefab.hierarchy",
-    title: "Prefab Hierarchy",
+    summary: "List the child hierarchy of a prefab asset (loaded via LoadPrefabContents and unloaded without modification).",
     description: "List the child hierarchy of a prefab asset (loaded via LoadPrefabContents and unloaded without modification). Paged by pageSize/cursor; use this before prefab.modify removeChild or before prefab.stage-open. For scene object hierarchies use scene.hierarchy instead.",
     group: "prefab",
     inputSchema: objSchema({
@@ -153,7 +153,7 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
   },
   {
     name: "prefab.instantiate",
-    title: "Instantiate Prefab",
+    summary: "Instantiate a prefab asset into the active scene, optionally under a parent and at a position. parent resolves by name, hierarchy path or instance id.",
     description: "Instantiate a prefab asset into the active scene, optionally under a parent and at a position. parent resolves by name, hierarchy path or instance id. Use go.find/scene.hierarchy first to locate the parent. Supports --dry-run to preview without creating the instance.",
     group: "prefab",
     inputSchema: objSchema({
@@ -180,7 +180,7 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
   },
   {
     name: "prefab.unpack",
-    title: "Unpack Prefab Instance",
+    summary: "Unpack a prefab instance in the scene into a regular GameObject, breaking the prefab link irreversibly. target resolves by name, hierarchy path or instance id; prefer...",
     description: "Unpack a prefab instance in the scene into a regular GameObject, breaking the prefab link irreversibly. target resolves by name, hierarchy path or instance id; prefer path/id. Destructive and structural; always inspect the target first and use --dry-run before --yes.",
     group: "prefab",
     inputSchema: objSchema({ target: { type: "string", description: "Prefab instance in the scene: name, hierarchy path or instance id." }, path: { type: "string", description: "Alias of target." } }, ["target"]),

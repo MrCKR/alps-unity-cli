@@ -20,7 +20,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.convert-to-probuilder",
-        Title = "ProBuilder Convert to ProBuilder",
+        Summary = "ProBuilder Convert to ProBuilder",
         Description = "Convert a regular Unity mesh to a ProBuilder mesh.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"}},\"required\":[\"target\"]}",
@@ -81,7 +81,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.set-smoothing",
-        Title = "ProBuilder Set Smoothing",
+        Summary = "ProBuilder Set Smoothing",
         Description = "Set the smoothing group for selected faces on a ProBuilder mesh.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"faceIndices\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"smoothingGroup\":{\"type\":\"integer\"}},\"required\":[\"target\",\"smoothingGroup\"]}",
@@ -136,7 +136,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.auto-smooth",
-        Title = "ProBuilder Auto Smooth",
+        Summary = "ProBuilder Auto Smooth",
         Description = "Automatically apply smoothing to faces based on an angle threshold.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"angleThreshold\":{\"type\":\"number\"},\"faceIndices\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}}},\"required\":[\"target\"]}",
@@ -188,7 +188,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.center-pivot",
-        Title = "ProBuilder Center Pivot",
+        Summary = "ProBuilder Center Pivot",
         Description = "Center the pivot point of a ProBuilder mesh to its bounds center.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"}},\"required\":[\"target\"]}",
@@ -242,7 +242,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.freeze-transform",
-        Title = "ProBuilder Freeze Transform",
+        Summary = "ProBuilder Freeze Transform",
         Description = "Bake the current transform into the ProBuilder mesh vertices, resetting the transform to identity.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"}},\"required\":[\"target\"]}",
@@ -318,7 +318,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.set-pivot",
-        Title = "ProBuilder Set Pivot",
+        Summary = "ProBuilder Set Pivot",
         Description = "Set the pivot point of a ProBuilder mesh to a specific position.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"x\":{\"type\":\"number\"},\"y\":{\"type\":\"number\"},\"z\":{\"type\":\"number\"}},\"required\":[\"target\"]}",
@@ -365,7 +365,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.repair-mesh",
-        Title = "ProBuilder Repair Mesh",
+        Summary = "ProBuilder Repair Mesh",
         Description = "Attempt to repair a ProBuilder mesh by removing degenerate triangles and unused vertices.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"}},\"required\":[\"target\"]}",

@@ -36,7 +36,7 @@ export const URP_TOOLS: ToolMetadata[] = [
   {
     ...URP_COMMON,
     name: "urp.feature",
-    title: "URP Renderer Feature",
+    summary: "List, add, remove, toggle or configure URP Renderer Features on the active Universal Render Pipeline asset.",
     description: "List, add, remove, toggle or configure URP Renderer Features on the active Universal Render Pipeline asset. Requires URP (com.unity.render-pipelines.universal) to be the active render pipeline.",
     inputSchema: objSchema({
       action: { type: "string", enum: ["list", "add", "remove", "toggle", "configure"] },
@@ -57,7 +57,7 @@ export const URP_TOOLS: ToolMetadata[] = [
   {
     ...URP_COMMON,
     name: "urp.volume",
-    title: "URP Volume",
+    summary: "List, create or configure URP Volume components and their profile effects.",
     description: "List, create or configure URP Volume components and their profile effects. Requires URP (com.unity.render-pipelines.universal) to be the active render pipeline.",
     inputSchema: objSchema({
       target: { type: "string" },
@@ -79,7 +79,7 @@ export const URP_TOOLS: ToolMetadata[] = [
   {
     ...URP_COMMON,
     name: "urp.settings",
-    title: "URP Pipeline Settings",
+    summary: "Get or set Universal Render Pipeline asset settings (renderScale, supportsHDR, msaaSampleCount, shadowDistance, etc.).",
     description: "Get or set Universal Render Pipeline asset settings (renderScale, supportsHDR, msaaSampleCount, shadowDistance, etc.). Requires URP (com.unity.render-pipelines.universal) to be the active render pipeline.",
     inputSchema: objSchema({
       property: { type: "string" },

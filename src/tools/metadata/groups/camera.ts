@@ -31,7 +31,7 @@ const artifactSchema = {
 export const CAMERA_TOOLS: ToolMetadata[] = [
   {
     name: "camera.list",
-    title: "Camera List",
+    summary: "List active scene Unity Camera components with name, hierarchy path, projection, FOV/ortho size, depth, targetTexture, and pixel size.",
     description: "List active scene Unity Camera components with name, hierarchy path, projection, FOV/ortho size, depth, targetTexture, and pixel size. Read-only; use paths or ids from this output for camera.info/screenshot/lens/target.",
     group: "camera",
     inputSchema: objSchema({}),
@@ -48,7 +48,7 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
   },
   {
     name: "camera.info",
-    title: "Camera Info",
+    summary: "Get one Camera's serializable settings.",
     description: "Get one Camera's serializable settings. Resolves by Camera name, hierarchy path, or instance id; returns E_CAMERA_NOT_FOUND with recovery guidance when missing.",
     group: "camera",
     inputSchema: objSchema({ target: { type: "string", description: "Camera name, hierarchy path, or instance id from camera.list." } }, ["target"]),
@@ -65,7 +65,7 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
   },
   {
     name: "camera.screenshot",
-    title: "Camera Screenshot",
+    summary: "Render a screenshot from a specific Camera into a PNG/JPG artifact file.",
     description: "Render a screenshot from a specific Camera into a PNG/JPG artifact file. Restores the camera targetTexture, clearFlags, backgroundColor, and active RenderTexture after capture. Output must be explicit; pass overwrite only when replacing the file is intended.",
     group: "camera",
     inputSchema: objSchema({ target: { type: "string", description: "Camera name, hierarchy path, or instance id." }, output: { type: "string", description: "File path for the artifact; relative paths resolve under the Unity project root." }, width: { type: "integer", default: 1280, description: "Output width in pixels, clamped by the bridge for safety." }, height: { type: "integer", default: 720, description: "Output height in pixels, clamped by the bridge for safety." }, format: { type: "string", enum: ["png", "jpg", "jpeg"], description: "Defaults from output extension; jpeg is normalized to jpg." }, transparent: { type: "boolean", description: "Use transparent solid-color background for PNG-style captures." }, quality: { type: "integer", description: "JPG quality, clamped to 1..100." }, overwrite: { type: "boolean", description: "Allow replacing an existing output file." } }, ["target", "output"]),
@@ -83,7 +83,7 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
   },
   {
     name: "camera.create",
-    title: "Create Camera",
+    summary: "Create a Unity Camera GameObject in the active scene with optional parent, transform, projection, clear flags, depth, and MainCamera tag.",
     description: "Create a Unity Camera GameObject in the active scene with optional parent, transform, projection, clear flags, depth, and MainCamera tag. Parent and enum inputs are validated before mutation to avoid partial objects.",
     group: "camera",
     inputSchema: objSchema({
@@ -113,7 +113,7 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
   },
   {
     name: "camera.target",
-    title: "Camera Target",
+    summary: "Set a Camera transform by looking at a GameObject and/or assigning explicit position/rotation.",
     description: "Set a Camera transform by looking at a GameObject and/or assigning explicit position/rotation. Session-affecting: marks the Camera dirty and can affect the running Play Mode view without persisting runtime-only state.",
     group: "camera",
     inputSchema: objSchema({
@@ -137,7 +137,7 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
   },
   {
     name: "camera.lens",
-    title: "Camera Lens Settings",
+    summary: "Update Camera lens/projection settings: FOV, orthographic mode/size, near/far clip planes, clear flags, and depth.",
     description: "Update Camera lens/projection settings: FOV, orthographic mode/size, near/far clip planes, clear flags, and depth. Invalid clearFlags returns E_CAMERA_CLEAR_FLAGS_INVALID instead of silently doing nothing.",
     group: "camera",
     inputSchema: objSchema({
@@ -165,7 +165,7 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
   },
   {
     name: "camera.multiview",
-    title: "Camera Multiview Screenshot",
+    summary: "Capture one PNG/JPG artifact per named Camera into an output directory.",
     description: "Capture one PNG/JPG artifact per named Camera into an output directory. This is a file-artifact variant of CoplayDev's multiview/contact-sheet idea; keep target count and resolution small for token and disk efficiency.",
     group: "camera",
     inputSchema: objSchema({

@@ -4,7 +4,7 @@ import { objSchema, pageSchema } from "../schemas.js";
 export const ASSET_TOOLS: ToolMetadata[] = [
   {
     name: "asset.search",
-    title: "Search Assets",
+    summary: "Search the Unity AssetDatabase with Unity's native filter syntax.",
     description: "Search the Unity AssetDatabase with Unity's native filter syntax. Use filter for labels (l:), types (t:), bundles (b:), area (a:) or glob: expressions; use path/searchInFolders only for Assets/ or Packages/ folder scopes. Use this before asset.get-data when the exact assetPath is unknown. Results are paged; keep pageSize/maxResults small before deep-reading assets.",
     group: "asset",
     inputSchema: objSchema({
@@ -30,7 +30,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
   },
   {
     name: "asset.info",
-    title: "Asset Info",
+    summary: "Get metadata and path information for an existing Assets/* asset.",
     description: "Get metadata and path information for an existing Assets/* asset. Use this before mutate/delete operations when you need the GUID, type, folder flag, or file size.",
     group: "asset",
     inputSchema: objSchema({ path: { type: "string", description: "Existing Assets/* asset or folder path." } }, ["path"]),
@@ -46,7 +46,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
   },
   {
     name: "asset.create",
-    title: "Create Asset",
+    summary: "Create a folder or UTF-8 text asset inside Assets/.",
     description: "Create a folder or UTF-8 text asset inside Assets/. Folder creation is idempotent; file creation refuses existing files unless overwrite is true.",
     group: "asset",
     inputSchema: objSchema({ path: { type: "string", description: "Destination Assets/* path." }, type: { type: "string", enum: ["file", "folder"], description: "Create a text file or folder. If omitted, extensionless paths are treated as folders." }, content: { type: "string", description: "Text content for file assets." }, overwrite: { type: "boolean", description: "Allow replacing an existing text file." } }, ["path"]),
@@ -64,7 +64,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
   },
   {
     name: "asset.import",
-    title: "Import Asset",
+    summary: "Copy an external file or supplied text content into Assets/ and force Unity to import it.",
     description: "Copy an external file or supplied text content into Assets/ and force Unity to import it. Use overwrite only when replacing the destination is intended.",
     group: "asset",
     inputSchema: objSchema({ path: { type: "string", description: "Destination Assets/* path." }, source: { type: "string", description: "External file path or existing Assets/* source file to copy." }, content: { type: "string", description: "Inline text content when no source file is supplied." }, overwrite: { type: "boolean", description: "Allow replacing an existing destination file." } }, ["path"]),
@@ -81,7 +81,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
   },
   {
     name: "asset.modify",
-    title: "Modify Asset",
+    summary: "Replace text-like asset file content and force a reimport.",
     description: "Replace text-like asset file content and force a reimport. This is for text assets; use typed tools for Unity object assets such as Materials or AnimatorControllers.",
     group: "asset",
     inputSchema: objSchema({ path: { type: "string", description: "Existing Assets/* text-like asset path." }, content: { type: "string", description: "Replacement UTF-8 text content." } }, ["path", "content"]),
@@ -98,7 +98,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
   },
   {
     name: "asset.delete",
-    title: "Delete Asset",
+    summary: "Delete an Assets/* asset or folder permanently.",
     description: "Delete an Assets/* asset or folder permanently. Always inspect with asset.info first and prefer --dry-run before passing --yes.",
     group: "asset",
     inputSchema: objSchema({ path: { type: "string", description: "Existing Assets/* asset or folder path to delete." } }, ["path"]),
@@ -117,7 +117,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
   },
   {
     name: "asset.duplicate",
-    title: "Duplicate Asset",
+    summary: "Copy an existing asset to a new Assets/* path.",
     description: "Copy an existing asset to a new Assets/* path. The destination must not already exist.",
     group: "asset",
     inputSchema: objSchema({ source: { type: "string", description: "Existing source Assets/* path." }, destination: { type: "string", description: "New destination Assets/* path." } }, ["source", "destination"]),
@@ -134,7 +134,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
   },
   {
     name: "asset.move",
-    title: "Move Asset",
+    summary: "Move an existing asset from one Assets/* path to another.",
     description: "Move an existing asset from one Assets/* path to another. This changes the asset path while preserving Unity's GUID when Unity can move it successfully.",
     group: "asset",
     inputSchema: objSchema({ source: { type: "string", description: "Existing source Assets/* path." }, destination: { type: "string", description: "Destination Assets/* path." } }, ["source", "destination"]),
@@ -151,7 +151,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
   },
   {
     name: "asset.rename",
-    title: "Rename Asset",
+    summary: "Rename an existing asset within its current folder.",
     description: "Rename an existing asset within its current folder. Pass only the new file name; use asset.move when changing directories.",
     group: "asset",
     inputSchema: objSchema({ path: { type: "string", description: "Existing Assets/* path." }, name: { type: "string", description: "New file name without folder separators." } }, ["path", "name"]),
@@ -168,7 +168,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
   },
   {
     name: "asset.search-built-in",
-    title: "Search Built-in Assets",
+    summary: "Search Resources/ and Packages/ assets by keyword and optional type filter.",
     description: "Search Resources/ and Packages/ assets by keyword and optional type filter. Results are capped by pageSize; use asset.search for regular project Assets/* searches.",
     group: "asset",
     inputSchema: objSchema({ keyword: { type: "string", description: "AssetDatabase search text." }, type: { type: "string", description: "Optional main asset type name, e.g. Texture2D or Material." }, pageSize: { type: "integer", default: 100, description: "Maximum returned assets, clamped to 1..500." } }),
@@ -185,7 +185,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
   },
   {
     name: "asset.get-data",
-    title: "Get Asset Data",
+    summary: "Deep-serialize an asset's main Unity Object.",
     description: "Deep-serialize an asset's main Unity Object. Use asset.search first when the path is unknown. Control payload with exact paths or one viewQuery; they are mutually exclusive. Avoid default-deep reads on large prefabs, textures, or ScriptableObjects.",
     group: "asset",
     inputSchema: objSchema({
@@ -223,7 +223,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
   },
   {
     name: "asset.preview",
-    title: "Asset Preview",
+    summary: "Generate/read the asset preview thumbnail metadata (size, dimensions, transient state).",
     description: "Generate/read the asset preview thumbnail metadata (size, dimensions, transient state). Preview generation can be session-affecting because Unity may refresh transient preview cache.",
     group: "asset",
     inputSchema: objSchema({ assetPath: { type: "string" }, path: { type: "string" } }, ["assetPath"]),

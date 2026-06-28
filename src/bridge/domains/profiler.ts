@@ -17,6 +17,8 @@ export const profilerBridgeSpecs: BridgeCommandSpec[] = [
   { group: "profiler", command: "load", bridgeCommand: "profiler.load", buildArgs: profilerArgs },
   { group: "profiler", command: "areas", bridgeCommand: "profiler.areas", buildArgs: profilerArgs },
   { group: "profiler", command: "object-memory", bridgeCommand: "profiler.object-memory", buildArgs: profilerObjectMemoryArgs },
+  { group: "profiler", command: "deep", bridgeCommand: "profiler.deep", buildArgs: ({ flags }) => compactArgs({ enabled: boolFlag(flags, "enabled") ?? boolField(flags, "enabled") }) },
+  { group: "profiler", command: "hierarchy", bridgeCommand: "profiler.hierarchy", buildArgs: profilerHierarchyArgs },
   { group: "profiler", command: "rendering-stats", bridgeCommand: "profiler.rendering-stats", buildArgs: profilerArgs },
   { group: "profiler", command: "script-stats", bridgeCommand: "profiler.script-stats", buildArgs: profilerArgs },
   { group: "profiler", command: "memory-snapshot.take", bridgeCommand: "profiler.memory-snapshot.take", buildArgs: profilerMemorySnapshotArgs },
@@ -99,5 +101,15 @@ function profilerFrameDebuggerEventsArgs({ flags }: Parameters<BridgeCommandSpec
   return compactArgs({
     pageSize: numberFlag(flags, "page-size") ?? numberField(flags, "pageSize"),
     cursor: numberFlag(flags, "cursor") ?? numberField(flags, "cursor")
+  });
+}
+
+// hierarchy：指定帧/线程/广度 top/深度 depth
+function profilerHierarchyArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({
+    frame: numberFlag(flags, "frame") ?? numberField(flags, "frame"),
+    thread: numberFlag(flags, "thread") ?? numberField(flags, "thread"),
+    top: numberFlag(flags, "top") ?? numberField(flags, "top"),
+    depth: numberFlag(flags, "depth") ?? numberField(flags, "depth")
   });
 }

@@ -89,6 +89,11 @@ export async function handleDoctorCommand(
     checks.push(fingerprintCheck);
   }
 
+  const compileCheck = checkCompileStatus(checks);
+  if (compileCheck) {
+    checks.push(compileCheck);
+  }
+
   // Unified CLI/tools discovery surface
   checks.push(await checkUnifiedDiscovery(flags, runtime, requestId));
 
@@ -250,6 +255,38 @@ function checkBridgeFingerprintStatus(checks: DoctorCheck[]): DoctorCheck | unde
       ? `Custom tool fingerprints match for ${toolCount} tool(s) (mode: ${mode}).`
       : `Custom tool fingerprint issues: ${blockedCount} blocked, ${warnCount} warning(s) (mode: ${mode}).`,
     details: { fingerprint }
+  };
+}
+
+function checkCompileStatus(checks: DoctorCheck[]): DoctorCheck | undefined {
+  const bridgeCheck = checks.find((check) => check.name === "bridge_connectivity" && check.status === "pass");
+  const bridgeResponse = (bridgeCheck?.details as { bridgeResponse?: unknown } | undefined)?.bridgeResponse;
+  if (!bridgeResponse || typeof bridgeResponse !== "object") {
+    return undefined;
+  }
+  const checksArray = (bridgeResponse as { checks?: unknown }).checks;
+  if (!Array.isArray(checksArray)) {
+    return undefined;
+  }
+  const compile = checksArray.find((entry): entry is Record<string, unknown> =>
+    typeof entry === "object" && entry !== null && (entry as Record<string, unknown>).name === "compileStatus");
+  if (!compile) {
+    return undefined;
+  }
+  const compiling = compile.compiling === true;
+  const hasErrors = compile.hasCompileErrors === true;
+  const errors = Array.isArray(compile.compileErrors) ? compile.compileErrors.filter((e): e is string => typeof e === "string") : [];
+  const status: DoctorCheck["status"] = hasErrors ? "fail" : compiling ? "warn" : "pass";
+  const message = hasErrors
+    ? `Unity has compile errors (${errors.length} shown). Often caused by a broken extension under Packages/com.unity_cli/Extensions.`
+    : compiling
+      ? "Unity is currently compiling scripts."
+      : "Unity scripts compiled cleanly.";
+  return {
+    name: "compile_status",
+    status,
+    message,
+    details: { compiling, hasCompileErrors: hasErrors, compileErrors: errors.slice(0, 10), nextActions: compile.next_actions }
   };
 }
 
@@ -561,14 +598,12 @@ function checkContextDiscovery(flags: Record<string, string | boolean>, runtime:
     };
   }
 
-  // Verify all contexts have required fields.
-  const missingResourceUri = contexts.filter((c) => !c.resourceUri);
-  const missingEquivalent = contexts.filter((c) => !c.equivalentUnityMcp);
+  // Verify all contexts have the public descriptor fields required for discovery.
+  const missingDescription = contexts.filter((c) => !c.description);
   const missingOutputSchema = contexts.filter((c) => !c.outputSchema);
 
   const warnings: string[] = [];
-  if (missingResourceUri.length > 0) warnings.push(`${missingResourceUri.length} context(s) missing resourceUri`);
-  if (missingEquivalent.length > 0) warnings.push(`${missingEquivalent.length} context(s) missing equivalentUnityMcp`);
+  if (missingDescription.length > 0) warnings.push(`${missingDescription.length} context(s) missing description`);
   if (missingOutputSchema.length > 0) warnings.push(`${missingOutputSchema.length} context(s) missing outputSchema`);
 
   if (warnings.length > 0) {

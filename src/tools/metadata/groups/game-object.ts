@@ -4,7 +4,7 @@ import { objSchema, pageSchema } from "../schemas.js";
 export const GO_TOOLS: ToolMetadata[] = [
   {
     name: "go.find",
-    title: "Find GameObject",
+    summary: "Search active scene GameObjects by name, tag, layer, component, hierarchy path, or instance id.",
     description: "Search active scene GameObjects by name, tag, layer, component, hierarchy path, or instance id. Results are lightweight and paged; use go.inspect, object.get-data, component.get, or context read scene.gameobject.components for deep data after selecting a stable path/id.",
     group: "go",
     inputSchema: objSchema({
@@ -32,7 +32,7 @@ export const GO_TOOLS: ToolMetadata[] = [
   },
   {
     name: "go.inspect",
-    title: "Inspect GameObject",
+    summary: "Inspect one GameObject by name, hierarchy path, or instance id.",
     description: "Inspect one GameObject by name, hierarchy path, or instance id. Returns transform, components and direct children; use object.get-data or component.get for deeper serialized data and keep go.find/scene.hierarchy for discovery.",
     group: "go",
     inputSchema: objSchema({ target: { type: "string", description: "GameObject name, hierarchy path, or instance id." } }, ["target"]),
@@ -50,7 +50,7 @@ export const GO_TOOLS: ToolMetadata[] = [
   },
   {
     name: "go.create",
-    title: "Create GameObject",
+    summary: "Create a scene GameObject, optionally as a Unity primitive, parented under another object, and with simple transform/tag/layer/active values.",
     description: "Create a scene GameObject, optionally as a Unity primitive, parented under another object, and with simple transform/tag/layer/active values. When parenting under an object created earlier in the workflow, use the returned hierarchy path or instance id instead of a plain name. In Play Mode this changes only the current editor/runtime session unless persisted by normal Unity workflows.",
     group: "go",
     inputSchema: objSchema({
@@ -82,7 +82,7 @@ export const GO_TOOLS: ToolMetadata[] = [
   },
   {
     name: "go.modify",
-    title: "Modify GameObject",
+    summary: "Modify one GameObject's name, active state, tag, layer, absolute transform values, or parent.",
     description: "Modify one GameObject's name, active state, tag, layer, absolute transform values, or parent. Prefer hierarchy paths or instance ids for target and parent after create or duplicate operations. For component fields use component.set/modify; for deep object data use object.modify.",
     group: "go",
     inputSchema: objSchema({
@@ -114,7 +114,7 @@ export const GO_TOOLS: ToolMetadata[] = [
   },
   {
     name: "go.duplicate",
-    title: "Duplicate GameObject",
+    summary: "Duplicate a GameObject in the active scene, optionally assigning a new name or parent.",
     description: "Duplicate a GameObject in the active scene, optionally assigning a new name or parent. Prefer hierarchy paths or instance ids for target and parent; returns the duplicate path/id so follow-up calls can avoid ambiguous names.",
     group: "go",
     inputSchema: objSchema({ target: { type: "string", description: "Source GameObject hierarchy path or instance id; a plain name is allowed only when unique." }, name: { type: "string", description: "New duplicate name alias." }, newName: { type: "string", description: "New duplicate name." }, parent: { type: "string", description: "Optional parent hierarchy path or instance id; a plain name is allowed only when unique." } }, ["target"]),
@@ -133,7 +133,7 @@ export const GO_TOOLS: ToolMetadata[] = [
   },
   {
     name: "go.move-relative",
-    title: "Move GameObject Relative",
+    summary: "Move a GameObject by a relative XYZ offset without replacing its absolute transform.",
     description: "Move a GameObject by a relative XYZ offset without replacing its absolute transform. Use go.modify when you need absolute position; prefer hierarchy paths or instance ids after create/duplicate operations.",
     group: "go",
     inputSchema: objSchema({ target: { type: "string", description: "GameObject hierarchy path or instance id; a plain name is allowed only when unique." }, offset: { type: "object", description: "Optional {x,y,z}; equivalent to offsetX/Y/Z." }, offsetX: { type: "number" }, offsetY: { type: "number" }, offsetZ: { type: "number" } }, ["target"]),
@@ -152,7 +152,7 @@ export const GO_TOOLS: ToolMetadata[] = [
   },
   {
     name: "go.look-at",
-    title: "Rotate GameObject To Look At Target",
+    summary: "Rotate a GameObject so its forward vector looks at another GameObject.",
     description: "Rotate a GameObject so its forward vector looks at another GameObject. Prefer hierarchy paths or instance ids for both target and lookAt after create/duplicate operations. This changes Transform rotation in the current scene/session.",
     group: "go",
     inputSchema: objSchema({ target: { type: "string", description: "Object to rotate, preferably a hierarchy path or instance id." }, lookAt: { type: "string", description: "Destination GameObject hierarchy path or instance id; a plain name is allowed only when unique." }, destination: { type: "string", description: "Alias for lookAt." } }, ["target", "lookAt"]),
@@ -171,7 +171,7 @@ export const GO_TOOLS: ToolMetadata[] = [
   },
   {
     name: "go.delete",
-    title: "Delete GameObject",
+    summary: "Delete one GameObject from the scene.",
     description: "Delete one GameObject from the scene. This recursively removes its children and requires --yes unless --dry-run is used. Prefer hierarchy paths or instance ids, especially after create/duplicate operations where plain names may be ambiguous.",
     group: "go",
     inputSchema: objSchema({ target: { type: "string", description: "GameObject hierarchy path or instance id; a plain name is allowed only when unique." } }, ["target"]),
@@ -191,7 +191,7 @@ export const GO_TOOLS: ToolMetadata[] = [
   },
   {
     name: "go.set-parent",
-    title: "Set GameObject Parent",
+    summary: "Reparent a GameObject under another GameObject or detach it to the scene root.",
     description: "Reparent a GameObject under another GameObject or detach it to the scene root. Prefer hierarchy paths or instance ids for target and parent; plain names can be ambiguous after duplicate/create operations. Use --dry-run first for hierarchy work; worldPositionStays defaults to true.",
     group: "go",
     inputSchema: objSchema({ target: { type: "string", description: "Child GameObject hierarchy path or instance id; a plain name is allowed only when unique." }, parent: { type: "string", description: "Parent hierarchy path or instance id; omit to detach to root. Plain names are allowed only when unique." }, worldPositionStays: { type: "boolean", default: true } }, ["target"]),
@@ -214,7 +214,7 @@ export const GO_TOOLS: ToolMetadata[] = [
 export const COMPONENT_TOOLS: ToolMetadata[] = [
   {
     name: "component.add",
-    title: "Add Component",
+    summary: "Add a Unity Component to a GameObject, optionally setting simple public fields/properties from a properties object after the component is created.",
     description: "Add a Unity Component to a GameObject, optionally setting simple public fields/properties from a properties object after the component is created. Use component.list-types first when the exact type name is unclear. In Play Mode, scene changes affect the current session and should not be assumed persistent.",
     group: "component",
     inputSchema: objSchema({
@@ -237,7 +237,7 @@ export const COMPONENT_TOOLS: ToolMetadata[] = [
   },
   {
     name: "component.remove",
-    title: "Remove Component",
+    summary: "Remove a non-Transform Component from a GameObject.",
     description: "Remove a non-Transform Component from a GameObject. Pass componentIndex when multiple components of the same type exist. This is irreversible; inspect components first with context read scene.gameobject.components or component.get.",
     group: "component",
     inputSchema: objSchema({
@@ -260,7 +260,7 @@ export const COMPONENT_TOOLS: ToolMetadata[] = [
   },
   {
     name: "component.set",
-    title: "Set Component Property",
+    summary: "Set one simple public field/property, or multiple simple fields/properties via properties, on a Component attached to a GameObject.",
     description: "Set one simple public field/property, or multiple simple fields/properties via properties, on a Component attached to a GameObject. For nested values, object references, arrays, or SerializedObject-style patches, use component.modify after component.get/type.schema. In Play Mode, scene component changes are runtime/session state unless later persisted by Unity workflow.",
     group: "component",
     inputSchema: objSchema({
@@ -287,7 +287,7 @@ export const COMPONENT_TOOLS: ToolMetadata[] = [
   },
   {
     name: "component.get",
-    title: "Get Component Data",
+    summary: "Deep-read one Component after selecting a GameObject with go.find/go.inspect or context read scene.gameobject.components.",
     description: "Deep-read one Component after selecting a GameObject with go.find/go.inspect or context read scene.gameobject.components. For token safety, pass exact paths or one viewQuery; they are mutually exclusive and skip full fields/props expansion. Use componentIndex/componentInstanceId when duplicate components exist. Keep maxDepth low before expanding MonoBehaviours.",
     group: "component",
     inputSchema: objSchema({
@@ -326,7 +326,7 @@ export const COMPONENT_TOOLS: ToolMetadata[] = [
   },
   {
     name: "component.modify",
-    title: "Modify Component",
+    summary: "Apply pathPatches, jsonPatch (Merge Patch) or componentDiff to a Component.",
     description: "Apply pathPatches, jsonPatch (Merge Patch) or componentDiff to a Component. Returns updated data, changed paths, logs and audit. Use component.get first. In Play Mode, scene component changes affect only the current runtime session unless later persisted by Unity workflow; in Edit Mode they mark scene/component state dirty.",
     group: "component",
     inputSchema: objSchema({
@@ -356,7 +356,7 @@ export const COMPONENT_TOOLS: ToolMetadata[] = [
   },
   {
     name: "component.list-types",
-    title: "List Component Types",
+    summary: "Enumerate Component types available in the current project across loaded assemblies.",
     description: "Enumerate Component types available in the current project across loaded assemblies. Use keyword plus pageSize/cursor to bound token usage before calling component.add/get/set/modify. Returns fullName/name/assembly/namespace and pageInfo.nextCursor.",
     group: "component",
     inputSchema: objSchema({ keyword: { type: "string", description: "Optional name/namespace filter." }, pageSize: { type: "integer", default: 100, maximum: 500 }, cursor: { type: "integer", default: 0 } }),

@@ -573,7 +573,7 @@ namespace UnityCli
         {
             return new UnityCliJsonWriter().BeginObject()
                 .Prop("name", definition.Name)
-                .Prop("title", definition.Title)
+                .Prop("summary", definition.Summary)
                 .Prop("description", definition.Description)
                 .Prop("group", definition.Group)
                 .Prop("version", definition.Version)

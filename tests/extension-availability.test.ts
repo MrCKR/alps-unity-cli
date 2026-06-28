@@ -208,7 +208,7 @@ test("checkToolExtensionAvailability returns unavailable for tool with missing p
   const result = await checkToolExtensionAvailability(
     {
       name: "probuilder.ping",
-      title: "ProBuilder Shape",
+      summary: "ProBuilder Shape",
       description: "Create shape",
       group: "probuilder",
       inputSchema: {},
@@ -232,7 +232,7 @@ test("checkToolExtensionAvailability returns available when packages present", a
   const result = await checkToolExtensionAvailability(
     {
       name: "probuilder.ping",
-      title: "ProBuilder Shape",
+      summary: "ProBuilder Shape",
       description: "Create shape",
       group: "probuilder",
       inputSchema: {},
@@ -252,7 +252,7 @@ test("checkToolExtensionAvailability returns available for tools without require
   const result = await checkToolExtensionAvailability(
     {
       name: "scene.hierarchy",
-      title: "Scene Hierarchy",
+      summary: "Scene Hierarchy",
       description: "Get scene hierarchy",
       group: "scene",
       inputSchema: {},
@@ -410,7 +410,7 @@ test("validateExtensionManifestContracts detects group mismatch", () => {
       ...PROBUILDER_MANIFEST.contributions,
       tools: [{
         name: "probuilder.ping",
-        title: "ProBuilder Shape",
+        summary: "ProBuilder Shape",
         description: "Create shape",
         group: "wrong-group", // mismatch!
         bridgeCommand: "probuilder.ping",

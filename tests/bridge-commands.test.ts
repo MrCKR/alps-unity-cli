@@ -158,13 +158,8 @@ test("bridge command routes --instance to the matching ready endpoint", async ()
 
   assert.equal(result.ok, true);
   assert.equal((result.data as { bridgeEndpoint: string }).bridgeEndpoint, healthEndpoint2);
-  assert.equal((result.data as { selectedInstance: { instanceId: string } }).selectedInstance.instanceId, "editor-2");
-  const target = (result.data as { target: { id: string; editorState: unknown; playModeState: unknown; runtimeSessionId: unknown; toolCatalogFingerprint: unknown } }).target;
-  assert.equal(target.id, "editor-2");
-  assert.deepEqual(target.editorState, { playMode: false, compiling: false, domainReloading: false });
-  assert.deepEqual(target.playModeState, { isPlaying: false, isPaused: false, isPlayingOrWillChangePlaymode: false });
-  assert.equal(target.runtimeSessionId, null);
-  assert.equal(target.toolCatalogFingerprint, null);
+  assert.equal("selectedInstance" in (result.data as Record<string, unknown>), false);
+  assert.equal("target" in (result.data as Record<string, unknown>), false);
   assert.equal(requests[0].command, "scene.hierarchy");
 });
 
@@ -182,7 +177,8 @@ test("tools run go.inspect keeps --target for instance selection and input targe
   });
 
   assert.equal(result.ok, true);
-  assert.equal((result.data as { selectedInstance: { instanceId: string } }).selectedInstance.instanceId, "editor-2");
+  assert.equal((result.data as { bridgeEndpoint: string }).bridgeEndpoint, healthEndpoint2);
+  assert.equal("selectedInstance" in (result.data as Record<string, unknown>), false);
   assert.equal(requests[0].command, "go.inspect");
   assert.deepEqual(requests[0].args, { target: "Main Camera" });
 });
@@ -201,7 +197,8 @@ test("tools run go.find keeps --target for instance selection and input target a
   });
 
   assert.equal(result.ok, true);
-  assert.equal((result.data as { selectedInstance: { instanceId: string } }).selectedInstance.instanceId, "editor-2");
+  assert.equal((result.data as { bridgeEndpoint: string }).bridgeEndpoint, healthEndpoint2);
+  assert.equal("selectedInstance" in (result.data as Record<string, unknown>), false);
   assert.equal(requests[0].command, "go.find");
   assert.deepEqual(requests[0].args, { searchTerm: "Main Camera", target: "Main Camera", pageSize: 5 });
 });
@@ -267,7 +264,8 @@ test("bridge command auto-selects by current project path", async () => {
   });
 
   assert.equal(result.ok, true);
-  assert.equal((result.data as { selectedInstance: { matchedBy: string } }).selectedInstance.matchedBy, "cwd");
+  assert.equal((result.data as { bridgeEndpoint: string }).bridgeEndpoint, healthEndpoint1);
+  assert.equal("selectedInstance" in (result.data as Record<string, unknown>), false);
 });
 
 test("bridge command reports missing, stale and ambiguous instances", async () => {

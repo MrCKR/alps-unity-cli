@@ -9,6 +9,7 @@ export type { CliError };
 export interface CliResult<T = unknown> {
   ok: boolean;
   requestId: string;
+  curInstances?: string;
   data?: T;
   warnings?: string[];
   logsRef?: string;

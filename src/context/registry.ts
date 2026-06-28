@@ -3,8 +3,7 @@
  *
  * Provides lookup, listing, search, and discovery functions for the context
  * command family. Built-in contexts are static; custom contexts are discovered
- * at runtime from the Unity Bridge (context.list custom descriptor endpoint)
- * and from installed extensions.
+ * at runtime from the Unity Bridge and from installed extensions.
  */
 
 import { builtinContextMetadata } from "./metadata/index.js";
@@ -46,12 +45,11 @@ export function searchContexts(keyword: string): ContextDescriptor[] {
   const lower = keyword.toLowerCase();
   return builtinContextDescriptors().filter((c) =>
     c.name.toLowerCase().includes(lower) ||
-    c.title.toLowerCase().includes(lower) ||
     c.description.toLowerCase().includes(lower) ||
     c.category.toLowerCase().includes(lower)
   ).sort((a, b) => {
-    const aScore = scoreSearch(a.name.toLowerCase(), lower) + scoreSearch(a.title.toLowerCase(), lower);
-    const bScore = scoreSearch(b.name.toLowerCase(), lower) + scoreSearch(b.title.toLowerCase(), lower);
+    const aScore = scoreSearch(a.name.toLowerCase(), lower) + scoreSearch(a.description.toLowerCase(), lower);
+    const bScore = scoreSearch(b.name.toLowerCase(), lower) + scoreSearch(b.description.toLowerCase(), lower);
     return bScore - aScore;
   });
 }
@@ -79,42 +77,32 @@ export async function extensionContextDescriptors(
 function contextMetadataToDescriptor(metadata: ContextMetadata): ContextDescriptor {
   return {
     name: metadata.name,
-    title: metadata.title,
     description: metadata.description,
     category: metadata.category,
-    source: metadata.source === "built-in" ? "built-in" : "custom",
-    target: metadata.target === "runtime" ? "runtime" : "editor",
+    source: metadata.source,
+    target: metadata.target ?? "editor",
     availabilityScope: metadata.availabilityScope === "playModeSession" || metadata.availabilityScope === "always" ? metadata.availabilityScope : "editorSession",
     playModeSupport: metadata.playModeSupport ?? "supported",
-    requiresUnity: metadata.handler === "bridge" || metadata.handler === "bridge-runtime",
     available: metadata.available,
     inputSchema: metadata.inputSchema,
     outputSchema: metadata.outputSchema ?? { type: "object", properties: {} },
-    destructiveHint: false,
-    bridgeCommand: "context.read",
     cliCommand: metadata.cliCommand ?? `context read ${metadata.name}`,
+    supportStatus: metadata.handler === "bridge-runtime" ? "live-bridge-runtime" : metadata.handler === "offline" ? "cli-only" : "live-bridge",
     requiresPackages: metadata.requiresPackages,
-    docsTopic: metadata.category,
-    resourceUri: metadata.resourceUri,
-    equivalentUnityMcp: metadata.equivalentUnityMcp,
-    equivalentUnityMcpNote: metadata.equivalentUnityMcpNote,
-    fingerprint: metadata.fingerprint
+    refreshBehavior: metadata.refreshBehavior
   };
 }
 
 function extensionContributionToDescriptor(ec: ExtensionContextContribution): ContextDescriptor {
   return {
     name: ec.key,
-    title: ec.key,
     description: ec.description,
     category: "extension",
-    source: "custom",
+    source: "extension",
     target: "editor",
     availabilityScope: "editorSession",
     playModeSupport: "supported",
-    requiresUnity: true,
-    destructiveHint: false,
-    bridgeCommand: "context.read",
+    supportStatus: "live-bridge",
     cliCommand: `context read ${ec.key}`,
     inputSchema: { type: "object", properties: {} },
     outputSchema: { type: "object", properties: {} },
@@ -130,18 +118,15 @@ export interface ContextBridgeRuntime {
 /** Discover custom context descriptors from a connected Unity instance. */
 export async function discoverCustomContexts(
   runtime: ContextBridgeRuntime,
-  requestId: string
+  requestId: string,
+  flags: Record<string, string | boolean> = {}
 ): Promise<CustomContextDescriptor[]> {
-  if (!runtime.bridgeExecute && !runtime.bridgeEndpoint && !process.env.UNITY_CLI_BRIDGE_ENDPOINT) {
-    return [];
-  }
-
   try {
     const { executeBridgeCommand } = await import("../bridge/index.js");
     const result = await executeBridgeCommand(
       requestId,
       "context.list",
-      {},
+      flags,
       undefined,
       runtime as import("../bridge/types.js").BridgeRuntime
     );
@@ -155,21 +140,24 @@ export async function discoverCustomContexts(
       return [];
     }
 
-    return data.contexts.map((ctx: unknown) => {
+    const contexts: CustomContextDescriptor[] = [];
+    for (const ctx of data.contexts) {
       const c = ctx as Record<string, unknown>;
-      return {
-        name: String(c.name ?? ""),
-        title: String(c.title ?? c.name ?? ""),
-        description: String(c.description ?? ""),
+      const name = String(c.name ?? "");
+      const description = String(c.description ?? "");
+      if (!name || !description) {
+        continue;
+      }
+      contexts.push({
+        name,
+        description,
         category: String(c.category ?? "custom"),
-        handlerClass: c.handlerClass ? String(c.handlerClass) : undefined,
-        handlerMethod: c.handlerMethod ? String(c.handlerMethod) : undefined,
         inputSchema: typeof c.inputSchema === "object" && c.inputSchema !== null ? c.inputSchema as Record<string, unknown> : undefined,
         outputSchema: typeof c.outputSchema === "object" && c.outputSchema !== null ? c.outputSchema as Record<string, unknown> : undefined,
         extensionId: c.extensionId ? String(c.extensionId) : undefined,
-        fingerprint: c.fingerprint ? String(c.fingerprint) : undefined,
-      };
-    });
+      });
+    }
+    return contexts;
   } catch {
     return [];
   }
@@ -179,23 +167,17 @@ export async function discoverCustomContexts(
 export function customContextToDescriptor(custom: CustomContextDescriptor): ContextDescriptor {
   return {
     name: custom.name,
-    title: custom.title,
     description: custom.description,
     category: custom.category,
-    source: "custom",
+    source: "project",
     target: "editor",
     availabilityScope: "editorSession",
     playModeSupport: "supported",
-    requiresUnity: true,
-    destructiveHint: false,
-    bridgeCommand: "context.read",
+    supportStatus: "live-bridge",
     cliCommand: `context read ${custom.name}`,
     inputSchema: custom.inputSchema ?? { type: "object", properties: {} },
     outputSchema: custom.outputSchema ?? { type: "object", properties: {} },
     extensionId: custom.extensionId,
-    fingerprint: custom.fingerprint,
-    handlerClass: custom.handlerClass,
-    handlerMethod: custom.handlerMethod,
   };
 }
 
@@ -213,7 +195,7 @@ export async function allContextDescriptors(
 
   let custom: ContextDescriptor[] = [];
   if (options?.includeCustom) {
-    const customDescs = await discoverCustomContexts(runtime, requestId);
+    const customDescs = await discoverCustomContexts(runtime, requestId, flags);
     custom = customDescs.map(customContextToDescriptor);
   }
 
@@ -235,12 +217,14 @@ export async function allContextDescriptors(
 export function toListEntry(ctx: ContextDescriptor): ContextListEntry {
   return {
     name: ctx.name,
-    title: ctx.title,
     description: ctx.description,
     category: ctx.category,
     source: ctx.source,
     target: ctx.target,
     playModeSupport: ctx.playModeSupport,
+    supportStatus: ctx.supportStatus,
+    cliCommand: ctx.cliCommand,
     available: ctx.available,
+    requiresPackages: ctx.requiresPackages,
   };
 }

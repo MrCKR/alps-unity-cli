@@ -12,7 +12,7 @@ export type PlayModeSupport = "supported" | "runtime-only" | "session-affecting"
 
 export interface ToolMetadata {
   name: string;
-  title: string;
+  summary: string;
   description: string;
   /** Discriminator: always 'tool' for ToolMetadata. Distinguishes from ContextMetadata (kind='context'). Defaults to 'tool' when omitted. */
   kind?: "tool";

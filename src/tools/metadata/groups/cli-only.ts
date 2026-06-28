@@ -9,7 +9,7 @@ import { objSchema, pageSchema } from "../schemas.js";
 export const CLI_ONLY_TOOLS: ToolMetadata[] = [
   {
     name: "package.list",
-    title: "Package List",
+    summary: "List installed packages and their requested/locked versions in the project manifest.",
     description: "List installed packages and their requested/locked versions in the project manifest. Offline (reads manifest directly, no Unity needed). Use package.status for a manifest+lock summary or package.info for one package.",
     group: "package",
     inputSchema: objSchema({ project: { type: "string", description: "Unity project path. Defaults to the current target project." } }),
@@ -27,7 +27,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
   },
   {
     name: "package.status",
-    title: "Package Status",
+    summary: "Summarize manifest and lock state: package count, registry, scoped registries, and per-package resolved flag.",
     description: "Summarize manifest and lock state: package count, registry, scoped registries, and per-package resolved flag. Offline.",
     group: "package",
     inputSchema: objSchema({ project: { type: "string", description: "Unity project path." } }),
@@ -45,7 +45,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
   },
   {
     name: "package.info",
-    title: "Package Info",
+    summary: "Show detailed info for one installed package by name.",
     description: "Show detailed info for one installed package by name. Returns PACKAGE_NOT_FOUND if the package is not in the manifest; use package.list first.",
     group: "package",
     inputSchema: objSchema({ name: { type: "string", description: "Package name, e.g. com.unity.render-pipelines.universal." }, project: { type: "string", description: "Unity project path." } }, ["name"]),
@@ -63,7 +63,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
   },
   {
     name: "package.search",
-    title: "Package Search",
+    summary: "Search a Unity package registry by name and return candidate packages with versions/descriptions.",
     description: "Search a Unity package registry by name and return candidate packages with versions/descriptions. Offline (HTTP to registry, no Unity needed). Use this before package.install.",
     group: "package",
     inputSchema: objSchema({ query: { type: "string", description: "Package name search text." }, registry: { type: "string", description: "Registry URL. Defaults to the project registry or https://packages.unity.com." } }, ["query"]),
@@ -81,7 +81,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
   },
   {
     name: "package.install",
-    title: "Package Install",
+    summary: "Install a package into the project manifest and optionally resolve via Unity PackageManager.",
     description: "Install a package into the project manifest and optionally resolve via Unity PackageManager. Destructive: manifest change + possible Unity resolve/domain reload. Requires an explicit version because Unity manifests do not accept 'latest'. Use package.search to confirm the name/version first.",
     group: "package",
     inputSchema: objSchema({ name: { type: "string", description: "Package name to install. May include @version, e.g. com.unity.textmeshpro@3.0.7." }, version: { type: "string", description: "Required unless name includes @version. Use a SemVer package version accepted by Unity." }, project: { type: "string", description: "Unity project path." }, unity: { type: "string", description: "Unity executable path for batch resolve." }, wait: { type: "boolean", description: "Wait for resolve job to finish." } }, ["name"]),
@@ -101,7 +101,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
   },
   {
     name: "package.remove",
-    title: "Package Remove",
+    summary: "Remove a package from the project manifest and optionally resolve.",
     description: "Remove a package from the project manifest and optionally resolve. Destructive: manifest change + possible Unity resolve/domain reload. Requires explicit confirmation; inspect with package.list first.",
     group: "package",
     inputSchema: objSchema({ name: { type: "string", description: "Package name to remove." }, project: { type: "string", description: "Unity project path." }, unity: { type: "string", description: "Unity executable path for batch resolve." }, wait: { type: "boolean", description: "Wait for resolve job to finish." } }, ["name"]),
@@ -122,7 +122,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
   },
   {
     name: "package.resolve",
-    title: "Package Resolve",
+    summary: "Resolve all packages in the project manifest by running Unity PackageManager (batch job).",
     description: "Resolve all packages in the project manifest by running Unity PackageManager (batch job). Long-running; use after manual manifest edits or install/remove. Triggers import/domain reload in Unity.",
     group: "package",
     inputSchema: objSchema({ project: { type: "string", description: "Unity project path." }, unity: { type: "string", description: "Unity executable path." }, wait: { type: "boolean", default: true, description: "Wait for the resolve job to finish." } }),
@@ -139,7 +139,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
   },
   {
     name: "package.registry",
-    title: "Package Registry",
+    summary: "Get, set, or clear the primary registry URL in the project manifest. action=get reads, set writes url, clear removes.",
     description: "Get, set, or clear the primary registry URL in the project manifest. action=get reads, set writes url, clear removes. Offline (manifest edit).",
     group: "package",
     inputSchema: objSchema({ action: { type: "string", enum: ["get", "set", "clear"], description: "Registry action." }, url: { type: "string", description: "Registry URL (required for set)." }, project: { type: "string", description: "Unity project path." } }, ["action"]),
@@ -157,7 +157,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
   },
   {
     name: "package.scoped-registry",
-    title: "Package Scoped Registry",
+    summary: "List, add, or remove scoped registries in the project manifest. action=list reads all; add requires name/url/(scope|scopes); remove requires name.",
     description: "List, add, or remove scoped registries in the project manifest. action=list reads all; add requires name/url/(scope|scopes); remove requires name. Offline (manifest edit).",
     group: "package",
     inputSchema: objSchema({ action: { type: "string", enum: ["list", "add", "remove"], description: "Scoped registry action." }, name: { type: "string", description: "Scoped registry name (required for add/remove)." }, url: { type: "string", description: "Registry URL (required for add)." }, scope: { type: "string", description: "Single scope (add)." }, scopes: { type: "string", description: "Comma-separated scopes (add)." }, project: { type: "string", description: "Unity project path." } }, ["action"]),
@@ -175,7 +175,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
   },
       {
     name: "docs.list",
-    title: "Docs List",
+    summary: "List built-in Unity CLI documentation topics without requiring a Unity Editor connection.",
     description: "List built-in Unity CLI documentation topics without requiring a Unity Editor connection. Use this before docs.topic when the topic key is unknown.",
     group: "docs",
     inputSchema: objSchema({ format: { type: "string", enum: ["json", "text"], description: "Output mode for human-readable text or structured JSON." } }),
@@ -192,7 +192,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
   },
   {
     name: "docs.topic",
-    title: "Docs Topic",
+    summary: "Read one built-in Unity CLI documentation topic by key.",
     description: "Read one built-in Unity CLI documentation topic by key. This is offline CLI guidance, not Unity ScriptReference content.",
     group: "docs",
     inputSchema: objSchema({ topic: { type: "string", description: "Built-in topic key from docs.list, e.g. scene, component, tools, package." }, format: { type: "string", enum: ["json", "text"], description: "Output mode for human-readable text or structured JSON." } }, ["topic"]),
@@ -209,7 +209,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
   },
   {
     name: "docs.get",
-    title: "Docs Get",
+    summary: "Read one Unity API document from an offline docs cache.",
     description: "Read one Unity API document from an offline docs cache. Requires a populated docs cache via --docs-dir or UNITY_CLI_DOCS_DIR; if the API is ambiguous, rerun docs.search and pass the exact name.",
     group: "docs",
     inputSchema: objSchema({ api: { type: "string", description: "Exact or unique Unity API name, e.g. UnityEngine.Camera." }, docsDir: { type: "string", description: "Path to a populated offline Unity docs cache containing docs-index.json, unity-docs.json, docs.json, index.json, or Markdown files." }, unityVersion: { type: "string", description: "Optional Unity version hint used to select a versioned docs cache." }, format: { type: "string", enum: ["json", "text"], description: "Use text for compact human-readable output; JSON includes structured doc fields." } }, ["api"]),
@@ -226,7 +226,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
   },
   {
     name: "docs.search",
-    title: "Docs Search",
+    summary: "Search the offline Unity API documentation cache with cursor pagination.",
     description: "Search the offline Unity API documentation cache with cursor pagination. Use this before docs.get when the exact API name is unknown or ambiguous.",
     group: "docs",
     inputSchema: objSchema({ query: { type: "string", description: "Search text, usually a Unity type/member name fragment." }, docsDir: { type: "string", description: "Path to a populated offline Unity docs cache." }, pageSize: { type: "integer", default: 20, description: "Maximum results to return in one call." }, cursor: { type: "string", default: "0", description: "Cursor from pageInfo.nextCursor for the next page." }, format: { type: "string", enum: ["json", "text"], description: "Output mode for compact text or structured JSON." } }, ["query"]),
@@ -243,7 +243,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
   },
   {
     name: "reflect.type",
-    title: "Reflect Type",
+    summary: "Look up a C# type and its member names in the offline Unity reflection cache.",
     description: "Look up a C# type and its member names in the offline Unity reflection cache. Use this to verify a type exists and read its public member names before writing C# or calling reflection.method.*. Use reflect.search first when the exact type name is unknown.",
     group: "reflect",
     inputSchema: objSchema({ name: { type: "string", description: "Fully-qualified or simple C# type name, e.g. UnityEngine.Camera." }, reflectDir: { type: "string", description: "Offline reflection cache directory. Defaults to UNITY_CLI_REFLECT_DIR or <dataDir>/reflect." }, unityVersion: { type: "string", description: "Optional Unity version filter for the cache." }, format: { type: "string", enum: ["text", "json"], description: "Output format. text adds a readable signature; json is structured." } }, ["name"]),
@@ -260,7 +260,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
   },
   {
     name: "reflect.member",
-    title: "Reflect Member",
+    summary: "Look up a single member's full signature on a C# type in the offline reflection cache.",
     description: "Look up a single member's full signature on a C# type in the offline reflection cache. Pass the member as Type.Member (last dot splits type and member). Use this for detailed parameter/return info; use reflect.type for the whole member list.",
     group: "reflect",
     inputSchema: objSchema({ member: { type: "string", description: "Member target as Type.Member, e.g. UnityEngine.Camera.Render." }, reflectDir: { type: "string", description: "Offline reflection cache directory." }, format: { type: "string", enum: ["text", "json"], description: "Output format." } }, ["member"]),
@@ -277,7 +277,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
   },
   {
     name: "reflect.search",
-    title: "Reflect Search",
+    summary: "Search cached C# types and members by query, returning ranked, paged results.",
     description: "Search cached C# types and members by query, returning ranked, paged results. Use this to discover exact type/member names before reflect.type or reflect.member. Results include both type and member matches scored by the query.",
     group: "reflect",
     inputSchema: objSchema({ query: { type: "string", description: "Search text matched against type and member names." }, reflectDir: { type: "string", description: "Offline reflection cache directory." }, pageSize: { type: "integer", default: 100, description: "Maximum results per page." }, cursor: { type: "integer", default: 0, description: "Zero-based result offset." }, format: { type: "string", enum: ["text", "json"], description: "Output format." } }, ["query"]),
@@ -294,7 +294,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
   },
                         {
     name: "diagnose.capabilities",
-    title: "Capabilities",
+    summary: "Summarize built-in CLI capabilities, tool/context catalog counts, extension availability, and optional live Unity bridge capabilities when --bridge-endpoint is provided.",
     description: "Summarize built-in CLI capabilities, tool/context catalog counts, extension availability, and optional live Unity bridge capabilities when --bridge-endpoint is provided. Safe to run offline; runtime data is best-effort.",
     group: "diagnose",
     inputSchema: objSchema({ json: { type: "boolean", description: "Return JSON mode even when the caller requested text output." }, bridgeEndpoint: { type: "string", description: "Optional live Unity bridge endpoint used to include diagnose.preflight runtime data." }, project: { type: "string", description: "Optional Unity project path used for extension and custom context discovery." } }),
@@ -312,7 +312,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
   },
   {
     name: "test.run",
-    title: "Test Run",
+    summary: "Run Unity EditMode or PlayMode tests as a batch job.",
     description: "Run Unity EditMode or PlayMode tests as a batch job. Returns a job ID that can be polled for status.",
     group: "test",
     inputSchema: objSchema({
@@ -337,7 +337,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
   },
         {
     name: "build.run",
-    title: "Build Run",
+    summary: "Trigger a Unity batchmode player build as a long-running job.",
     description: "Trigger a Unity batchmode player build as a long-running job. Returns a job ID; poll job status/logs instead of rerunning. This writes build output and can import/compile assets.",
     group: "build",
     inputSchema: objSchema({

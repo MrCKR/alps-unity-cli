@@ -4,7 +4,7 @@ import { objSchema, pageSchema } from "../schemas.js";
 export const CODE_TOOLS: ToolMetadata[] = [
   {
     name: "code.exec",
-    title: "Execute Live Code",
+    summary: "Execute trusted C# code in the Unity Editor live bridge or a Unity batchmode job.",
     description: "Execute trusted C# code in the Unity Editor live bridge or a Unity batchmode job. This is high risk: code can modify scenes/assets, call Unity APIs, write artifacts, hang the Editor, or trigger import/compile. Use --dry-run first to inspect source hash/channel/artifactDir; real execution requires --yes.",
     group: "code",
     inputSchema: objSchema({

@@ -89,7 +89,7 @@ async function handleContextList(
 
   if (format === "text") {
     const lines = entries.map((e) =>
-      `${e.name} [${e.category}] ${e.source} ${e.target} — ${e.title}`
+      `${e.name} [${e.category}] ${e.source} ${e.target} - ${e.description}`
     );
     data.text = lines.join("\n");
   }
@@ -113,7 +113,7 @@ async function resolveContextDescriptor(
 
   const includeCustom = shouldDiscoverProjectTools(flags, runtime) || getBoolean(flags, "include-custom");
   if (includeCustom) {
-    const customDescs = await discoverCustomContexts(runtime, requestId);
+    const customDescs = await discoverCustomContexts(runtime, requestId, flags);
     const custom = customDescs.find((c) => c.name === contextName);
     if (custom) {
       return { found: true, descriptor: customContextToDescriptor(custom) };
@@ -143,7 +143,6 @@ async function handleContextDescribe(
     const data: Record<string, unknown> = {
       command: "context.describe",
       ...resolved.descriptor,
-      supportStatusLabel: "已路由可执行",
     };
     if (!availability.available) {
       data.extensionAvailability = "unavailable";

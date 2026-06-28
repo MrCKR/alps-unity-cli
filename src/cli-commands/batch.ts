@@ -20,7 +20,7 @@ export async function handleBatch(command: string | undefined, filePath: string 
 
   const confirmation = await confirmDestructiveExecution(flags, {
     command: "batch.run",
-    title: "Batch Run",
+    summary: "Batch Run",
     destructiveHint: true,
     supportsDryRun: true,
     requestId

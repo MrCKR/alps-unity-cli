@@ -18,7 +18,7 @@ import { createRequestId, failure, printJson, success } from "./output.js";
 import { defaultDataDir, ensureWindows } from "./platform.js";
 import { handleToolsCommand } from "./tools.js";
 import { handleDoctorCommand } from "./doctor.js";
-import { handleInstancesCommand, handleTargetCommand } from "./instances.js";
+import { currentInstanceProjectPath, handleInstancesCommand, handleTargetCommand } from "./instances.js";
 import { confirmDestructiveExecution } from "./security.js";
 import type { CliResult } from "./types.js";
 
@@ -52,11 +52,11 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
     }
 
     if (getBoolean(parsed.flags, "version")) {
-      return success(requestId, { version: await packageVersion() });
+      return withCurrentInstancePath(await success(requestId, { version: await packageVersion() }), parsed.flags, runtime);
     }
 
     if (!group || getBoolean(parsed.flags, "help")) {
-      return success(requestId, help());
+      return withCurrentInstancePath(success(requestId, help()), parsed.flags, runtime);
     }
 
     ensureWindows();
@@ -70,7 +70,7 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
       requestId
     });
     if (cliResult) {
-      return cliResult;
+      return withCurrentInstancePath(cliResult, parsed.flags, runtime);
     }
 
     // Bridge registry 仅是内部路由，不再作为顶层执行入口(README Project Baseline)。
@@ -92,6 +92,14 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
 function createRuntime(dataDir = defaultDataDir()): Runtime {
   const store = new JobStore(dataDir);
   return { dataDir, store, runner: new JobRunner(store, dataDir) };
+}
+
+async function withCurrentInstancePath<T>(result: CliResult<T>, flags: Record<string, string | boolean>, runtime: Runtime): Promise<CliResult<T>> {
+  if (!result.ok) {
+    return result;
+  }
+  const projectPath = await currentInstanceProjectPath(flags, runtime.dataDir);
+  return projectPath ? { ...result, curInstances: projectPath } : result;
 }
 
 async function runJobWorker(flags: Record<string, string | boolean>, requestId: string): Promise<CliResult> {
@@ -147,7 +155,7 @@ async function handleTopLevelInstances(
   if (subCommand === "prune") {
     const confirmation = await confirmDestructiveExecution(flags, {
       command: "instances.prune",
-      title: "Prune Unity Instances",
+      summary: "Prune Unity Instances",
       destructiveHint: true,
       supportsDryRun: false,
       requestId
@@ -169,7 +177,7 @@ async function handleTopLevelJobs(
   if (command === "cancel") {
     const confirmation = await confirmDestructiveExecution(mergedFlags, {
       command: "jobs.cancel",
-      title: "Cancel Job",
+      summary: "Cancel Job",
       destructiveHint: true,
       supportsDryRun: false,
       requestId
@@ -208,13 +216,13 @@ function help(): Record<string, unknown> {
   return {
     usage: "unity_cli <command> [options]",
     commands: [
-      "tools group [--include-custom] [--format json|text]",
-      "tools group list <group> [--include-custom] [--format json|text]",
-      "tools describe <tool>",
+      "tools group [--include-custom] [--instance <id|alias>] [--format json|text]",
+      "tools group list <group> [--include-custom] [--instance <id|alias>] [--format json|text]",
+      "tools describe <tool> [--instance <id|alias>]",
       "tools run <name> [--input <json>] [--input-file <path>] [--timeout-ms <n>] [--fingerprint-mode warn|block] [--artifact-dir <path>] [--runtime] [--instance <id|alias>]",
-      "tools search <keyword> [--format json|text]",
-      "context list [--category <cat>] [--include-custom] [--format json|text]",
-      "context describe <name>",
+      "tools search <keyword> [--instance <id|alias>] [--format json|text]",
+      "context list [--category <cat>] [--include-custom] [--instance <id|alias>] [--format json|text]",
+      "context describe <name> [--instance <id|alias>]",
       "context read <name> [--input <json>] [--input-file <path>] [--instance <id|alias>] [--bridge-endpoint <url>]",
       "extensions list [--project <path>] [--format json|text]",
       "extensions install <id|name> [--project <path>]",
@@ -235,7 +243,7 @@ function help(): Record<string, unknown> {
       "batch run <file> [--preflight] [--parallel <n>] [--fail-fast true|false] --yes",
       "doctor [--project <path>] [--bridge-endpoint <url>]"
     ],
-    note: "Top-level commands are: tools, context, extensions, init, target, instances, jobs, batch, doctor. Unity capabilities (scene, asset, package, build, test, docs, reflect, editor, physics, profiler, ...) are exposed via `tools run <tool> --input <json>` and `context read <name>`. CLI control-plane state uses `target`, `instances`, `jobs`, `batch`, and `doctor`."
+    note: "Top-level commands are: tools, context, extensions, init, target, instances, jobs, batch, doctor. Unity capabilities (scene, asset, package, build, test, docs, reflect, editor, physics, profiler, ...) are exposed via `tools run <tool> --input <json>` and `context read <name>`. CLI control-plane state uses `target`, `instances`, `jobs`, `batch`, and `doctor`. `--instance <id|alias>` (alias `--target`) applies to every bridge-backed subcommand: tools group/list/describe/run/search, context list/describe/read, and diagnose.capabilities. In multi-instance scenarios prefer `--instance <alias>` (set via `target alias set`) over a mutable global active target, so each caller is bound to its own project."
   };
 }
 export function isCliEntryPoint(metaUrl: string, argvPath: string | undefined): boolean {

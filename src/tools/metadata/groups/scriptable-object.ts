@@ -4,7 +4,7 @@ import { objSchema } from "../schemas.js";
 export const SCRIPTABLE_OBJECT_TOOLS: ToolMetadata[] = [
   {
     name: "scriptable-object.create",
-    title: "Create ScriptableObject",
+    summary: "Create a ScriptableObject asset of a specified type at an Assets/*.asset path.",
     description: "Create a ScriptableObject asset of a specified type at an Assets/*.asset path. The type must derive from UnityEngine.ScriptableObject and be resolvable by full name or unique class name. Refuses to overwrite an existing asset unless overwrite is true. Use reflect.search or asset.search-built-in first to confirm the type name exists.",
     group: "scriptable-object",
     inputSchema: objSchema({
@@ -27,7 +27,7 @@ export const SCRIPTABLE_OBJECT_TOOLS: ToolMetadata[] = [
   },
   {
     name: "scriptable-object.info",
-    title: "ScriptableObject Info",
+    summary: "Read a ScriptableObject asset's type, guid, name and public readable field/property values.",
     description: "Read a ScriptableObject asset's type, guid, name and public readable field/property values. Use this before scriptable-object.modify to discover valid member names and types. Use asset.search with filter t:ScriptableObject to discover paths when unknown.",
     group: "scriptable-object",
     inputSchema: objSchema({ path: { type: "string", description: "Existing Assets/*.asset path." } }, ["path"]),
@@ -53,7 +53,7 @@ export const SCRIPTABLE_OBJECT_TOOLS: ToolMetadata[] = [
   },
   {
     name: "scriptable-object.modify",
-    title: "Modify ScriptableObject",
+    summary: "Set a single public writable field or property on a ScriptableObject asset.",
     description: "Set a single public writable field or property on a ScriptableObject asset. Supported value types: string, bool, int, long, float, double, enum. Inspect valid member names with scriptable-object.info first; an unknown member returns E_SCRIPTABLE_OBJECT_PROPERTY_NOT_FOUND and an unsupported type returns E_SCRIPTABLE_OBJECT_VALUE_TYPE_UNSUPPORTED. This edits the shared asset and is recorded in Undo.",
     group: "scriptable-object",
     inputSchema: objSchema({

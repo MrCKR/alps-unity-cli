@@ -205,6 +205,37 @@ async function handleTargetAliasCommand(
   return failure(requestId, "UNKNOWN_TARGET_ALIAS_COMMAND", "Expected target alias set <instanceId> <alias>, target alias unset <alias>, or target alias list.");
 }
 
+export async function currentInstanceProjectPath(
+  flags: Record<string, string | boolean>,
+  dataDir: string
+): Promise<string | undefined> {
+  const explicit = stringFlag(flags, "target") ?? stringFlag(flags, "instance");
+  const instances = await readInstances(dataDir, Date.now(), { useCache: true });
+  const aliases = await readAliases(dataDir);
+
+  try {
+    if (explicit) {
+      return resolve(resolveRequiredTarget(instances, aliases, explicit, "target").instance.projectPath);
+    }
+
+    // 与 selectInstanceForFlags 保持一致：CWD 落在某个就绪实例项目目录下时优先返回该实例，
+    // 否则回退到全局 activeTarget。
+    const ready = readyInstances(instances);
+    const cwdMatch = ready.find((instance) => isPathWithin(process.cwd(), instance.projectPath));
+    if (cwdMatch) {
+      return resolve(cwdMatch.projectPath);
+    }
+
+    const config = await readTargetConfig(dataDir);
+    if (!config.activeTarget) {
+      return undefined;
+    }
+    return resolve(resolveRequiredTarget(instances, aliases, config.activeTarget, "activeTarget").instance.projectPath);
+  } catch {
+    return undefined;
+  }
+}
+
 export async function selectInstanceForFlags(
   flags: Record<string, string | boolean>,
   dataDir: string,
@@ -222,14 +253,18 @@ export async function selectInstanceForFlags(
   }
 
   const config = await readTargetConfig(dataDir);
-  if (config.activeTarget) {
-    return resolveRequiredTarget(instances, aliases, config.activeTarget, "activeTarget");
-  }
 
+  // 进程级隔离优先于全局活动目标：当前工作目录落在某个已就绪实例的项目路径下时，
+  // 直接选中该实例。这让多 AI 在各自项目目录下并发工作时不被任何会话写过的
+  // 全局 activeTarget 抢占。仅当 CWD 不在任何项目目录下时，才回退到全局 activeTarget。
   const ready = readyInstances(instances);
   const cwdMatch = ready.find((instance) => isPathWithin(cwd, instance.projectPath));
   if (cwdMatch) {
     return { instance: cwdMatch, matchedBy: "cwd" };
+  }
+
+  if (config.activeTarget) {
+    return resolveRequiredTarget(instances, aliases, config.activeTarget, "activeTarget");
   }
   if (ready.length === 1) {
     return { instance: ready[0], matchedBy: "singleReady" };

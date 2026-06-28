@@ -8,7 +8,7 @@ import { objSchema } from "../schemas.js";
 export const PACKAGE_TOOLS: ToolMetadata[] = [
   {
     name: "package.embed",
-    title: "Embed Package",
+    summary: "Embed a Packages/ package into Assets/ as a local copy.",
     description: "Embed a Packages/ package into Assets/ as a local copy. High-risk: causes domain reload, manifest change and file copy. Aligns with CoplayDev embed_package.",
     group: "package",
     inputSchema: objSchema({ package: { type: "string" }, packageId: { type: "string" } }, ["package"]),

@@ -20,7 +20,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.select-faces",
-        Title = "ProBuilder Select Faces",
+        Summary = "ProBuilder Select Faces",
         Description = "Select faces on a ProBuilder mesh using direction/grow/flood/loop/ring criteria.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"direction\":{\"type\":\"string\",\"enum\":[\"north\",\"south\",\"east\",\"west\",\"up\",\"down\"]},\"grow\":{\"type\":\"integer\"},\"flood\":{\"type\":\"boolean\"},\"loop\":{\"type\":\"boolean\"},\"ring\":{\"type\":\"boolean\"}},\"required\":[\"target\"]}",
@@ -138,7 +138,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.set-face-material",
-        Title = "ProBuilder Set Face Material",
+        Summary = "ProBuilder Set Face Material",
         Description = "Assign a material to selected faces of a ProBuilder mesh.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"faceIndices\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"materialPath\":{\"type\":\"string\"}},\"required\":[\"target\",\"materialPath\"]}",
@@ -218,7 +218,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.set-face-color",
-        Title = "ProBuilder Set Face Color",
+        Summary = "ProBuilder Set Face Color",
         Description = "Set the vertex color of selected faces on a ProBuilder mesh.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"faceIndices\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"r\":{\"type\":\"number\"},\"g\":{\"type\":\"number\"},\"b\":{\"type\":\"number\"},\"a\":{\"type\":\"number\"}},\"required\":[\"target\"]}",
@@ -292,7 +292,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.set-face-uvs",
-        Title = "ProBuilder Set Face UVs",
+        Summary = "ProBuilder Set Face UVs",
         Description = "Set UV parameters for selected faces on a ProBuilder mesh.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"faceIndices\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"scale\":{\"type\":\"number\"},\"offset\":{\"type\":\"object\"},\"rotation\":{\"type\":\"number\"},\"flipU\":{\"type\":\"boolean\"},\"flipV\":{\"type\":\"boolean\"}},\"required\":[\"target\"]}",

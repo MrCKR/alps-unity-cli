@@ -16,7 +16,7 @@ const SCREENSHOT_OUTPUT = objSchema({
 export const SCREENSHOT_TOOLS: ToolMetadata[] = [
   {
     name: "screenshot.capture",
-    title: "Capture Screenshot",
+    summary: "Capture the active SceneView (or main Camera when no SceneView is open) to an Assets/* image path.",
     description: "Capture the active SceneView (or main Camera when no SceneView is open) to an Assets/* image path. A lightweight alias of scene.screenshot; prefer screenshot.scene-view or screenshot.game-view for explicit source control. Returns the saved artifact path and size.",
     group: "screenshot",
     inputSchema: objSchema({
@@ -41,7 +41,7 @@ export const SCREENSHOT_TOOLS: ToolMetadata[] = [
   },
   {
     name: "screenshot.game-view",
-    title: "Game View Screenshot",
+    summary: "Capture the Game View by rendering all active cameras to an Assets/* image.",
     description: "Capture the Game View by rendering all active cameras to an Assets/* image. Optionally include rendering diagnostics. Use this for runtime gameplay output; use screenshot.scene-view for the editor viewport. Default 1280x720.",
     group: "screenshot",
     inputSchema: objSchema({
@@ -67,7 +67,7 @@ export const SCREENSHOT_TOOLS: ToolMetadata[] = [
   },
   {
     name: "screenshot.scene-view",
-    title: "Scene View Screenshot",
+    summary: "Capture the Editor SceneView camera to an Assets/* image.",
     description: "Capture the Editor SceneView camera to an Assets/* image. Use this for editor authoring output; in Play Mode prefer screenshot.game-view. Supports png/jpg via format.",
     group: "screenshot",
     inputSchema: objSchema({
@@ -93,7 +93,7 @@ export const SCREENSHOT_TOOLS: ToolMetadata[] = [
   },
   {
     name: "screenshot.isolated-object",
-    title: "Isolated Object Screenshot",
+    summary: "Render a single GameObject in isolation with a temporary camera and save to an Assets/* image.",
     description: "Render a single GameObject in isolation with a temporary camera and save to an Assets/* image. Useful for clean asset previews. target resolves by name, hierarchy path or instance id. Orthographic (default) frames the object by size; perspective needs radius. Aligns with IvanMurzak isolated render.",
     group: "screenshot",
     inputSchema: objSchema({
@@ -121,7 +121,7 @@ export const SCREENSHOT_TOOLS: ToolMetadata[] = [
   },
   {
     name: "screenshot.orbit",
-    title: "Orbit Screenshot",
+    summary: "Capture multiple screenshots orbiting a target GameObject at evenly spaced angles, saving each PNG under output-dir. target resolves by name, hierarchy path or...",
     description: "Capture multiple screenshots orbiting a target GameObject at evenly spaced angles, saving each PNG under output-dir. target resolves by name, hierarchy path or instance id. Use this to generate turntable previews. Aligns with CoplayDev orbit/surround.",
     group: "screenshot",
     inputSchema: objSchema({

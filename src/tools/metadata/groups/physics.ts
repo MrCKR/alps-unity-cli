@@ -4,7 +4,7 @@ import { objSchema } from "../schemas.js";
 export const PHYSICS_TOOLS: ToolMetadata[] = [
   {
     name: "physics.settings",
-    title: "Physics Settings",
+    summary: "Read or set physics gravity (3d/2d), default contact offset, bounce threshold, solver iterations and query flags.",
     description: "Read or set physics gravity (3d/2d), default contact offset, bounce threshold, solver iterations and query flags. With no setting fields it is a read; with any setting field it writes ProjectSettings/DynamicsManager. Use mode 3d/2d to target the right manager.",
     group: "physics",
     inputSchema: objSchema({
@@ -31,7 +31,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "physics.collision-matrix",
-    title: "Physics Collision Matrix",
+    summary: "Read or update the layer collision ignore matrix between two layers (layerA/layerB by name).",
     description: "Read or update the layer collision ignore matrix between two layers (layerA/layerB by name). Setting ignore=true disables collision between them. Writes ProjectSettings/TagManager.",
     group: "physics",
     inputSchema: objSchema({ layerA: { type: "string", description: "First layer name." }, layerB: { type: "string", description: "Second layer name." }, ignore: { type: "boolean", description: "True to ignore (disable) collision between the layers." } }, ["layerA", "layerB"]),
@@ -50,7 +50,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "physics.material",
-    title: "Physics Material",
+    summary: "Create or update a PhysicMaterial asset with friction and bounciness settings at an Assets/*.physicMaterial path.",
     description: "Create or update a PhysicMaterial asset with friction and bounciness settings at an Assets/*.physicMaterial path.",
     group: "physics",
     inputSchema: objSchema({ path: { type: "string", description: "Destination Assets/*.physicMaterial path." }, dynamicFriction: { type: "number" }, staticFriction: { type: "number" }, bounciness: { type: "number" }, overwrite: { type: "boolean" } }, ["path"]),
@@ -69,7 +69,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "physics.joint",
-    title: "Physics Joint",
+    summary: "Add or configure a Joint component (Fixed/Hinge/Spring/Configurable) on a GameObject. target resolves by name, hierarchy path or instance id.",
     description: "Add or configure a Joint component (Fixed/Hinge/Spring/Configurable) on a GameObject. target resolves by name, hierarchy path or instance id.",
     group: "physics",
     inputSchema: objSchema({ target: { type: "string", description: "Target GameObject with Rigidbody." }, type: { type: "string", description: "Joint type: Fixed, HingeJoint, SpringJoint, ConfigurableJoint." }, connectedBody: { type: "string", description: "Connected Rigidbody target." }, anchor: { type: "string", description: "Anchor reference." } }, ["target", "type"]),
@@ -88,7 +88,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "physics.force",
-    title: "Physics Force",
+    summary: "Apply a force, torque or explosion to a Rigidbody.",
     description: "Apply a force, torque or explosion to a Rigidbody. Meaningful in Play Mode with auto-simulation; in Edit Mode the velocity is set but no integration runs. forceType normal applies force [x,y,z] + optional torque; explosion applies at a position with radius.",
     group: "physics",
     inputSchema: objSchema({ target: { type: "string", description: "Target GameObject with Rigidbody." }, x: { type: "number" }, y: { type: "number" }, z: { type: "number" }, mode: { type: "string" }, forceType: { type: "string", enum: ["normal", "explosion"] }, torqueX: { type: "number" }, torqueY: { type: "number" }, torqueZ: { type: "number" }, explosionX: { type: "number" }, explosionY: { type: "number" }, explosionZ: { type: "number" }, explosionRadius: { type: "number" }, explosionForce: { type: "number" }, upwardsModifier: { type: "number" } }, ["target"]),
@@ -107,7 +107,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "physics.overlap",
-    title: "Physics Overlap Query",
+    summary: "Run a sphere or box overlap query at a position and return matching colliders.",
     description: "Run a sphere or box overlap query at a position and return matching colliders. Read-only query. Use shape sphere with radius, or box with size.",
     group: "physics",
     inputSchema: objSchema({ shape: { type: "string", enum: ["sphere", "box"] }, originX: { type: "number" }, originY: { type: "number" }, originZ: { type: "number" }, radius: { type: "number" }, sizeX: { type: "number" }, sizeY: { type: "number" }, sizeZ: { type: "number" }, layerMask: { type: "integer" } }),
@@ -124,7 +124,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "physics.rigidbody",
-    title: "Physics Rigidbody",
+    summary: "Validate or configure a Rigidbody's mass, drag, angularDrag, useGravity and isKinematic flags. target resolves by name, hierarchy path or instance id.",
     description: "Validate or configure a Rigidbody's mass, drag, angularDrag, useGravity and isKinematic flags. target resolves by name, hierarchy path or instance id. Pass validate=true to only check configuration.",
     group: "physics",
     inputSchema: objSchema({ target: { type: "string", description: "Target GameObject with Rigidbody." }, mass: { type: "number" }, drag: { type: "number" }, angularDrag: { type: "number" }, useGravity: { type: "boolean" }, isKinematic: { type: "boolean" }, validate: { type: "boolean", description: "Only validate, do not change." } }, ["target"]),
@@ -143,7 +143,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "physics.raycast",
-    title: "Physics Raycast",
+    summary: "Cast a ray (3d/2d) from origin along direction and report the first hit (or all hits with all=true).",
     description: "Cast a ray (3d/2d) from origin along direction and report the first hit (or all hits with all=true). Returns hit point, normal, distance, collider and transform reference. Read-only query.",
     group: "physics",
     inputSchema: objSchema({ originX: { type: "number" }, originY: { type: "number" }, originZ: { type: "number" }, directionX: { type: "number" }, directionY: { type: "number" }, directionZ: { type: "number" }, distance: { type: "number" }, mode: { type: "string", enum: ["3d", "2d"] }, layerMask: { type: "integer" }, all: { type: "boolean" } }),
@@ -160,7 +160,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "physics.simulation",
-    title: "Physics Simulation",
+    summary: "Step the physics simulation forward by N steps of deltaTime.",
     description: "Step the physics simulation forward by N steps of deltaTime. Best used in Play Mode (runtime-only semantics); in Edit Mode it manually steps without rendering. Use mode 3d/2d.",
     group: "physics",
     inputSchema: objSchema({ steps: { type: "integer" }, deltaTime: { type: "number" }, simulate: { type: "boolean" }, mode: { type: "string", enum: ["3d", "2d"] } }),
@@ -179,7 +179,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "physics.raycast-all",
-    title: "Physics Raycast All",
+    summary: "Cast a ray (3d/2d) and return ALL hits along its path, sorted by distance.",
     description: "Cast a ray (3d/2d) and return ALL hits along its path, sorted by distance. Read-only query. Use layerMask to filter.",
     group: "physics",
     inputSchema: objSchema({ originX: { type: "number" }, originY: { type: "number" }, originZ: { type: "number" }, directionX: { type: "number" }, directionY: { type: "number" }, directionZ: { type: "number" }, distance: { type: "number" }, mode: { type: "string", enum: ["3d", "2d"] }, layerMask: { type: "integer" } }),
@@ -196,7 +196,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "physics.linecast",
-    title: "Physics Linecast",
+    summary: "Check if a line segment between start and end points is blocked by colliders.",
     description: "Check if a line segment between start and end points is blocked by colliders. Returns whether the line is blocked and the hit info. Read-only query. Use mode 3d/2d.",
     group: "physics",
     inputSchema: objSchema({ startX: { type: "number" }, startY: { type: "number" }, startZ: { type: "number" }, endX: { type: "number" }, endY: { type: "number" }, endZ: { type: "number" }, mode: { type: "string", enum: ["3d", "2d"] }, layerMask: { type: "integer" } }),
@@ -213,7 +213,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "physics.shapecast",
-    title: "Physics Shapecast",
+    summary: "Cast a sphere, box or capsule shape along a direction and return all hits.",
     description: "Cast a sphere, box or capsule shape along a direction and return all hits. Read-only query. shape sphere uses radius; box uses halfExtent; capsule uses points/height/capsuleDirection.",
     group: "physics",
     inputSchema: objSchema({ shape: { type: "string", enum: ["sphere", "box", "capsule"] }, originX: { type: "number" }, originY: { type: "number" }, originZ: { type: "number" }, directionX: { type: "number" }, directionY: { type: "number" }, directionZ: { type: "number" }, distance: { type: "number" }, radius: { type: "number" }, halfExtentX: { type: "number" }, halfExtentY: { type: "number" }, halfExtentZ: { type: "number" }, height: { type: "number" }, capsuleDirection: { type: "integer" }, point1X: { type: "number" }, point1Y: { type: "number" }, point1Z: { type: "number" }, point2X: { type: "number" }, point2Y: { type: "number" }, point2Z: { type: "number" }, layerMask: { type: "integer" } }),
@@ -230,7 +230,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "physics.validate",
-    title: "Physics Validate",
+    summary: "Validate Rigidbody/Collider configuration on a GameObject, reporting common issues (missing Rigidbody, zero-mass, nested colliders, etc.).",
     description: "Validate Rigidbody/Collider configuration on a GameObject, reporting common issues (missing Rigidbody, zero-mass, nested colliders, etc.). Read-only. target resolves by name, hierarchy path or instance id.",
     group: "physics",
     inputSchema: objSchema({ target: { type: "string", description: "Target GameObject: name, hierarchy path or instance id." }, path: { type: "string", description: "Alias of target." } }, ["target"]),

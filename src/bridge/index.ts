@@ -3,7 +3,7 @@ import { resolve } from "node:path";
 import type { CliResult } from "../types.js";
 import { durationMsFrom, failure, success } from "../output.js";
 import { withRetry, type RetryOptions } from "../envelope.js";
-import { instanceSelectionFailure, selectInstanceForFlags, targetSummary, type InstanceSelection } from "../instances.js";
+import { instanceSelectionFailure, selectInstanceForFlags, type InstanceSelection } from "../instances.js";
 import { BridgeArgumentError } from "./args.js";
 import { bridgeCommandRegistry } from "./registry.js";
 import { confirmDestructiveExecution, destructiveSecurityProof, isDryRunRequested } from "../security.js";
@@ -23,7 +23,7 @@ export async function executeBridgeCommand(
     const spec = bridgeCommandRegistry.lookupBridgeCommand(command);
     const confirmation = await confirmDestructiveExecution(flags, {
       command,
-      title: command,
+      summary: command,
       destructiveHint: spec?.destructiveHint,
       supportsDryRun: spec?.supportsDryRun,
       requestId
@@ -110,7 +110,6 @@ export async function executeBridgePayload(
       return success(requestId, {
         command,
         bridgeEndpoint: endpoint,
-        ...(selectedInstance ? { target: selectedInstanceSummary(selectedInstance), selectedInstance: selectedInstanceSummary(selectedInstance) } : {}),
         ...bridgeResult.data
       });
     } catch (error) {
@@ -138,16 +137,6 @@ function bridgeEndpoint(flags: BridgeFlags, runtime: BridgeRuntime, selectedInst
 function selectionFlags(command: string, flags: BridgeFlags): BridgeFlags {
   const { target: _target, ...rest } = flags;
   return rest;
-}
-
-function selectedInstanceSummary(selection: InstanceSelection): Record<string, unknown> {
-  return {
-    ...targetSummary(selection.instance),
-    matchedBy: selection.matchedBy,
-    instanceId: selection.instance.instanceId,
-    projectHash: selection.instance.projectHash,
-    bridgeEndpoint: selection.instance.bridgeEndpoint
-  };
 }
 
 async function readUiDocumentOffline(requestId: string, command: string, path: string): Promise<CliResult> {

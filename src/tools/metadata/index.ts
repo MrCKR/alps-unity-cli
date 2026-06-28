@@ -43,7 +43,7 @@ import { CLI_ONLY_TOOLS } from "./groups/cli-only.js";
 import { TOOLS_DISCOVERY_TOOLS } from "./groups/tools.js";
 import type { PlayModeSupport, ToolMetadata, ToolSource } from "./types.js";
 
-export { supportStatusDescription, supportStatusForTool, supportStatusLabel } from "./status.js";
+export { supportStatusForTool } from "./status.js";
 export type { PlayModeSupport, ToolExample, ToolHandler, ToolMetadata, ToolSource, ToolRiskLevel, ToolSupportStatus } from "./types.js";
 
 /** Extension groups that register through the contribution loader, not core aggregation. */
@@ -179,17 +179,17 @@ export function filterToolsByGroup(group: string): ToolMetadata[] {
   return allRegisteredToolMetadata().filter((t) => t.group === group);
 }
 
-/** Search tools by keyword across name, title, description, group (core + extension). */
+/** Search tools by keyword across name, summary, description, group (built-in + extension). */
 export function searchTools(keyword: string): ToolMetadata[] {
   const lower = keyword.toLowerCase();
   return allRegisteredToolMetadata().filter((t) =>
     t.name.toLowerCase().includes(lower) ||
-    t.title.toLowerCase().includes(lower) ||
+    t.summary.toLowerCase().includes(lower) ||
     t.description.toLowerCase().includes(lower) ||
     t.group.toLowerCase().includes(lower)
   ).sort((a, b) => {
-    const aScore = scoreSearch(a.name.toLowerCase(), lower) + scoreSearch(a.title.toLowerCase(), lower);
-    const bScore = scoreSearch(b.name.toLowerCase(), lower) + scoreSearch(b.title.toLowerCase(), lower);
+    const aScore = scoreSearch(a.name.toLowerCase(), lower) + scoreSearch(a.summary.toLowerCase(), lower);
+    const bScore = scoreSearch(b.name.toLowerCase(), lower) + scoreSearch(b.summary.toLowerCase(), lower);
     return bScore - aScore;
   });
 }

@@ -4,7 +4,7 @@ import { objSchema } from "../schemas.js";
 export const MATERIAL_TOOLS: ToolMetadata[] = [
   {
     name: "material.info",
-    title: "Material Info",
+    summary: "Read shader, properties and texture references of a Material asset.",
     description: "Read shader, properties and texture references of a Material asset. Use this before material.set to discover valid property names and types. Keep payloads small by passing namePattern for the few properties you need; omit it only for a full material audit. For discovering material paths, use asset.search with filter t:Material instead.",
     group: "material",
     inputSchema: objSchema({
@@ -45,7 +45,7 @@ export const MATERIAL_TOOLS: ToolMetadata[] = [
   },
   {
     name: "material.create",
-    title: "Create Material",
+    summary: "Create a new Material asset from a named shader at an Assets/*.mat path.",
     description: "Create a new Material asset from a named shader at an Assets/*.mat path. Use shader.list or asset.search-built-in to discover a valid shader name before calling; an unknown shader returns E_SHADER_NOT_FOUND. Refuses to overwrite an existing material unless overwrite is true.",
     group: "material",
     inputSchema: objSchema({
@@ -67,7 +67,7 @@ export const MATERIAL_TOOLS: ToolMetadata[] = [
   },
   {
     name: "material.assign",
-    title: "Assign Material",
+    summary: "Assign a Material asset to a GameObject renderer or UI Graphic. target resolves by name, hierarchy path or instance id; prefer path/id when names are ambiguous.",
     description: "Assign a Material asset to a GameObject renderer or UI Graphic. target resolves by name, hierarchy path or instance id; prefer path/id when names are ambiguous. This writes sharedMaterials on Renderers, so the assignment affects every object sharing that material slot. Use component.list-types or go.inspect first when the target components are unknown.",
     group: "material",
     inputSchema: objSchema({
@@ -89,7 +89,7 @@ export const MATERIAL_TOOLS: ToolMetadata[] = [
   },
   {
     name: "material.set",
-    title: "Set Material Property",
+    summary: "Set a named shader property on a Material asset (color, float, vector or texture).",
     description: "Set a named shader property on a Material asset (color, float, vector or texture). Inspect valid property names and types with material.info first; a wrong type returns E_MATERIAL_PROPERTY_TYPE_MISMATCH. This edits the shared asset, so changes apply to all objects using the material. Color accepts #RRGGBB, #RRGGBBAA or comma-separated r,g,b[,a]; texture accepts an Assets/* path or 'null' to clear.",
     group: "material",
     inputSchema: objSchema({

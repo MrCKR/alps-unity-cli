@@ -4,7 +4,7 @@ import { objSchema } from "../schemas.js";
 export const UI_TOOLS: ToolMetadata[] = [
   {
     name: "ui.canvas.create",
-    title: "Create UI Canvas",
+    summary: "Create a new uGUI Canvas GameObject in the active scene (with Canvas + CanvasScaler + GraphicRaycaster).",
     description: "Create a new uGUI Canvas GameObject in the active scene (with Canvas + CanvasScaler + GraphicRaycaster). Use this as the parent root before creating Text/Button/Image elements.",
     group: "ui",
     inputSchema: objSchema({ name: { type: "string", description: "Canvas GameObject name." } }, ["name"]),
@@ -23,7 +23,7 @@ export const UI_TOOLS: ToolMetadata[] = [
   },
   {
     name: "ui.text.create",
-    title: "Create UI Text",
+    summary: "Create a uGUI Text element under a parent Canvas/RectTransform. parent resolves by name, hierarchy path or instance id.",
     description: "Create a uGUI Text element under a parent Canvas/RectTransform. parent resolves by name, hierarchy path or instance id. Create a Canvas first via ui.canvas.create if none exists.",
     group: "ui",
     inputSchema: objSchema({
@@ -49,7 +49,7 @@ export const UI_TOOLS: ToolMetadata[] = [
   },
   {
     name: "ui.button.create",
-    title: "Create UI Button",
+    summary: "Create a uGUI Button element (with Text child) under a parent Canvas/RectTransform. parent resolves by name, hierarchy path or instance id.",
     description: "Create a uGUI Button element (with Text child) under a parent Canvas/RectTransform. parent resolves by name, hierarchy path or instance id.",
     group: "ui",
     inputSchema: objSchema({
@@ -72,7 +72,7 @@ export const UI_TOOLS: ToolMetadata[] = [
   },
   {
     name: "ui.image.create",
-    title: "Create UI Image",
+    summary: "Create a uGUI Image element under a parent Canvas/RectTransform.",
     description: "Create a uGUI Image element under a parent Canvas/RectTransform. Optionally assign a Sprite asset. parent resolves by name, hierarchy path or instance id.",
     group: "ui",
     inputSchema: objSchema({
@@ -95,7 +95,7 @@ export const UI_TOOLS: ToolMetadata[] = [
   },
   {
     name: "ui.document.info",
-    title: "UI Document Info",
+    summary: "Read info on a UI Toolkit UIDocument component (on a GameObject) or a UXML asset. target resolves to a UIDocument GameObject or an Assets/*.uxml path.",
     description: "Read info on a UI Toolkit UIDocument component (on a GameObject) or a UXML asset. target resolves to a UIDocument GameObject or an Assets/*.uxml path. Read-only.",
     group: "ui",
     inputSchema: objSchema({
@@ -116,7 +116,7 @@ export const UI_TOOLS: ToolMetadata[] = [
   },
   {
     name: "ui.document.create",
-    title: "Create UI Document",
+    summary: "Create a new UI Toolkit UI Document (.uxml) asset from a UXML template.",
     description: "Create a new UI Toolkit UI Document (.uxml) asset from a UXML template. Optionally pair a .uss stylesheet and a PanelSettings. Refuses to overwrite unless overwrite is true.",
     group: "ui",
     inputSchema: objSchema({
@@ -140,7 +140,7 @@ export const UI_TOOLS: ToolMetadata[] = [
   },
   {
     name: "ui.hierarchy",
-    title: "UI Hierarchy",
+    summary: "List UI elements under a Canvas (uGUI) or UI Document (UIToolkit) hierarchy.",
     description: "List UI elements under a Canvas (uGUI) or UI Document (UIToolkit) hierarchy. Paged by pageSize/cursor. Use this to inspect UI structure before modifying elements.",
     group: "ui",
     inputSchema: objSchema({
@@ -162,7 +162,7 @@ export const UI_TOOLS: ToolMetadata[] = [
   },
   {
     name: "ui.attach-document",
-    title: "Attach UIDocument",
+    summary: "Attach a UIDocument component to a GameObject, optionally with a UXML source asset and PanelSettings.",
     description: "Attach a UIDocument component to a GameObject, optionally with a UXML source asset and PanelSettings. Destructive: modifies the target GameObject. Aligns with CoplayDev manage_ui.attach_ui_document.",
     group: "ui",
     inputSchema: objSchema({ target: { type: "string", description: "Target GameObject: name, hierarchy path or instance id." }, sourceAsset: { type: "string", description: "Assets/*.uxml source asset." }, panelSettings: { type: "string", description: "PanelSettings asset path." }, sortOrder: { type: "integer", default: 0, description: "Sorting order." } }, ["target"]),
@@ -181,7 +181,7 @@ export const UI_TOOLS: ToolMetadata[] = [
   },
   {
     name: "ui.create-panel-settings",
-    title: "Create PanelSettings",
+    summary: "Create a PanelSettings asset with scale mode and reference resolution.",
     description: "Create a PanelSettings asset with scale mode and reference resolution. Destructive: writes a new asset (overwrites existing at path). Aligns with CoplayDev manage_ui.create_panel_settings.",
     group: "ui",
     inputSchema: objSchema({ path: { type: "string", description: "Destination Assets/*.asset PanelSettings path." }, scaleMode: { type: "string", enum: ["ConstantPixelSize", "ConstantPhysicalSize", "ScaleWithScreenSize"], default: "ScaleWithScreenSize", description: "Panel scale mode." }, referenceWidth: { type: "integer", default: 1920, description: "Reference resolution width." }, referenceHeight: { type: "integer", default: 1080, description: "Reference resolution height." } }, ["path"]),
@@ -200,7 +200,7 @@ export const UI_TOOLS: ToolMetadata[] = [
   },
   {
     name: "ui.get-visual-tree",
-    title: "Get Visual Tree",
+    summary: "Inspect the visual tree of a UIDocument: element name, type, classes, child count up to maxDepth.",
     description: "Inspect the visual tree of a UIDocument: element name, type, classes, child count up to maxDepth. Read-only. Aligns with CoplayDev manage_ui.get_visual_tree.",
     group: "ui",
     inputSchema: objSchema({ target: { type: "string", description: "UIDocument GameObject: name, hierarchy path or instance id." }, maxDepth: { type: "integer", default: 10, description: "Maximum traversal depth." } }, ["target"]),

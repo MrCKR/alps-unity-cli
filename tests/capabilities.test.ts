@@ -134,10 +134,10 @@ test("capabilities static data includes schemaFeatures", async () => {
 });
 
 test("capabilities includes custom tools in unified static manifest when available", async () => {
-  const runtime: BridgeRuntime & { projectTools: Array<{ name: string; title: string; description: string; group: string; inputSchema: Record<string, unknown>; destructiveHint: boolean }> } = {
+  const runtime: BridgeRuntime & { projectTools: Array<{ name: string; summary: string; description: string; group: string; inputSchema: Record<string, unknown>; destructiveHint: boolean }> } = {
     projectTools: [{
       name: "project.audit",
-      title: "Project Audit",
+      summary: "Project Audit",
       description: "Audits project state.",
       group: "project",
       inputSchema: { type: "object" },
@@ -172,12 +172,9 @@ test("capabilities includes customContexts when project contexts are available",
     projectContexts: [
       {
         name: "sample.project-summary",
-        title: "Project Summary",
         description: "Sample project summary context",
         category: "sample",
-        kind: "context",
         source: "project",
-        requiresUnity: true,
         inputSchema: { type: "object" }
       }
     ]

@@ -20,7 +20,7 @@ import { objSchema, pageSchema } from "../schemas.js";
 export const VFX_TOOLS: ToolMetadata[] = [
   {
     name: "vfx.graph",
-    title: "VFX Graph",
+    summary: "Get info on a Visual Effect graph asset, optionally create one.",
     description: "Get info on a Visual Effect graph asset, optionally create one. Requires the Visual Effect Graph package (com.unity.visualeffectgraph) to be installed in the target project.",
     group: "vfx",
     kind: "tool",
@@ -34,7 +34,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
   },
   {
     name: "vfx.effect",
-    title: "VFX Effect",
+    summary: "Manage a Visual Effect instance on a GameObject.",
     description: "Manage a Visual Effect instance on a GameObject. Requires the Visual Effect Graph package (com.unity.visualeffectgraph) to be installed in the target project.",
     group: "vfx",
     kind: "tool",
@@ -48,7 +48,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
   },
   {
     name: "vfx.parameter",
-    title: "VFX Parameter",
+    summary: "Set exposed parameters on a Visual Effect instance (float, int, bool, vector, color, texture, mesh, gradient, animation curve).",
     description: "Set exposed parameters on a Visual Effect instance (float, int, bool, vector, color, texture, mesh, gradient, animation curve). Requires the Visual Effect Graph package (com.unity.visualeffectgraph) to be installed in the target project.",
     group: "vfx",
     kind: "tool",
@@ -79,7 +79,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
   },
   {
     name: "vfx.control",
-    title: "VFX Control",
+    summary: "Control playback of a Visual Effect instance (play, stop, pause, reinit, set play rate, set seed).",
     description: "Control playback of a Visual Effect instance (play, stop, pause, reinit, set play rate, set seed). Requires the Visual Effect Graph package (com.unity.visualeffectgraph) to be installed in the target project.",
     group: "vfx",
     kind: "tool",
@@ -103,7 +103,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
   },
   {
     name: "vfx.event",
-    title: "VFX Event",
+    summary: "Send a named event to a Visual Effect instance, optionally with attribute payloads (position, velocity, size, etc.).",
     description: "Send a named event to a Visual Effect instance, optionally with attribute payloads (position, velocity, size, etc.). Requires the Visual Effect Graph package (com.unity.visualeffectgraph) to be installed in the target project.",
     group: "vfx",
     kind: "tool",
@@ -128,7 +128,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
   },
   {
     name: "vfx.template",
-    title: "VFX Template",
+    summary: "Create a Visual Effect Graph asset from a built-in VFX Graph template.",
     description: "Create a Visual Effect Graph asset from a built-in VFX Graph template. Requires the Visual Effect Graph package (com.unity.visualeffectgraph) to be installed in the target project.",
     group: "vfx",
     kind: "tool",
@@ -150,7 +150,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
   // ===== ParticleSystem =====
   {
     name: "vfx.particle-create",
-    title: "Create ParticleSystem",
+    summary: "Create a ParticleSystem on a new or existing GameObject with optional initial settings.",
     description: "Create a ParticleSystem on a new or existing GameObject with optional initial settings.",
     group: "vfx",
     inputSchema: objSchema({
@@ -170,7 +170,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
   },
   {
     name: "vfx.particle-info",
-    title: "ParticleSystem Info",
+    summary: "Get ParticleSystem state, particle count, and main module settings.",
     description: "Get ParticleSystem state, particle count, and main module settings.",
     group: "vfx",
     inputSchema: objSchema({ target: { type: "string" } }, ["target"]),
@@ -182,7 +182,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
   },
   {
     name: "vfx.particle-main",
-    title: "Set ParticleSystem Main Module",
+    summary: "Set main module properties: duration, lifetime, speed, size, color, rotation, gravity, max particles, loop, simulation space, scaling mode.",
     description: "Set main module properties: duration, lifetime, speed, size, color, rotation, gravity, max particles, loop, simulation space, scaling mode.",
     group: "vfx",
     inputSchema: objSchema({
@@ -208,7 +208,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
   },
   {
     name: "vfx.particle-emission",
-    title: "Set ParticleSystem Emission",
+    summary: "Set emission module: enabled, rate over time/distance, burst count.",
     description: "Set emission module: enabled, rate over time/distance, burst count.",
     group: "vfx",
     inputSchema: objSchema({
@@ -226,7 +226,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
   },
   {
     name: "vfx.particle-shape",
-    title: "Set ParticleSystem Shape",
+    summary: "Set shape module: type, radius, angle, arc, length, box dimensions, random direction.",
     description: "Set shape module: type, radius, angle, arc, length, box dimensions, random direction.",
     group: "vfx",
     inputSchema: objSchema({
@@ -250,7 +250,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
   },
   {
     name: "vfx.particle-play",
-    title: "ParticleSystem Play Control",
+    summary: "Play, stop, pause, or clear a ParticleSystem.",
     description: "Play, stop, pause, or clear a ParticleSystem.",
     group: "vfx",
     inputSchema: objSchema({
@@ -267,7 +267,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
   },
   {
     name: "vfx.particle-module",
-    title: "ParticleSystem Module Toggle",
+    summary: "Enable or disable ParticleSystem modules: color/size/rotation/velocity/force over lifetime, noise, collision, sub-emitters, texture animation, lights, trails, inherit...",
     description: "Enable or disable ParticleSystem modules: color/size/rotation/velocity/force over lifetime, noise, collision, sub-emitters, texture animation, lights, trails, inherit velocity, limit velocity.",
     group: "vfx",
     inputSchema: objSchema({
@@ -284,7 +284,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
   // ===== Line Renderer =====
   {
     name: "vfx.line-create",
-    title: "Create Line Renderer",
+    summary: "Create a LineRenderer on a new or existing GameObject with optional width, color, and position settings.",
     description: "Create a LineRenderer on a new or existing GameObject with optional width, color, and position settings.",
     group: "vfx",
     inputSchema: objSchema({
@@ -306,7 +306,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
   },
   {
     name: "vfx.line-positions",
-    title: "Set Line Renderer Positions",
+    summary: "Set all positions or a single position by index on a LineRenderer.",
     description: "Set all positions or a single position by index on a LineRenderer.",
     group: "vfx",
     inputSchema: objSchema({
@@ -324,7 +324,7 @@ export const VFX_TOOLS: ToolMetadata[] = [
   // ===== Trail Renderer =====
   {
     name: "vfx.trail",
-    title: "Trail Renderer",
+    summary: "Create or modify a TrailRenderer: time, width, vertex distance, emitting, autodestruct.",
     description: "Create or modify a TrailRenderer: time, width, vertex distance, emitting, autodestruct.",
     group: "vfx",
     inputSchema: objSchema({

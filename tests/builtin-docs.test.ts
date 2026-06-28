@@ -8,7 +8,7 @@ const requestId = "test_req_builtin_docs_001";
 function customTool(overrides: Partial<ToolMetadata> = {}): ToolMetadata {
   return {
     name: "terrain.bake",
-    title: "Terrain Bake",
+    summary: "Terrain Bake",
     description: "Bake terrain data.",
     group: "terrain-tools",
     inputSchema: { type: "object" },
@@ -46,11 +46,10 @@ test("buildTopics formats custom tool lines", () => {
   const [line] = topic?.tools ?? [];
 
   assert.ok(line);
-  assert.ok(line.includes("terrain.bake (tools run terrain.bake) — Terrain Bake"));
-  assert.ok(line.includes("已路由可执行"));
+  assert.ok(line.includes("terrain.bake (tools run terrain.bake) - Terrain Bake"));
+  assert.ok(line.includes("supportStatus:live-bridge"));
   assert.ok(line.includes("target:editor"));
-  assert.ok(line.includes("⚠ destructive"));
-  assert.ok(line.includes("Bundled Unity Editor Bridge serves this command"));
+  assert.ok(line.includes("destructive"));
 });
 
 test("listBuiltinDocs includes runtime custom topics", () => {

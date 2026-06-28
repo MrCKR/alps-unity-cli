@@ -4,7 +4,7 @@ import { objSchema } from "../schemas.js";
 export const DIAGNOSE_TOOLS: ToolMetadata[] = [
   {
     name: "diagnose.preflight",
-    title: "Preflight Diagnostics",
+    summary: "Run a live Unity Editor health check for project path, editor busy state, bridge capabilities, custom tool/context fingerprints, and recoverable checks.",
     description: "Run a live Unity Editor health check for project path, editor busy state, bridge capabilities, custom tool/context fingerprints, and recoverable checks. Use this before live bridge work when Unity may be compiling, importing, or using stale custom tool/context metadata.",
     group: "diagnose",
     inputSchema: objSchema({ command: { type: "string", description: "Optional target command name to echo in diagnostics, useful when preflighting a specific tool." } }),

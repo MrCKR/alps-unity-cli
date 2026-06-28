@@ -8,7 +8,7 @@ import { objSchema } from "../schemas.js";
 export const BUILD_TOOLS: ToolMetadata[] = [
   {
     name: "build.scenes",
-    title: "Build Scenes",
+    summary: "Read or modify Editor Build Settings scenes list.",
     description: "Read or modify Editor Build Settings scenes list. Use action=get for a safe read; add/remove/enable/disable change EditorBuildSettings.scenes and support --dry-run.",
     group: "build",
     inputSchema: objSchema({ action: { type: "string", enum: ["get", "add", "remove", "enable", "disable"], default: "get", description: "Use get for read-only inspection; add/remove/enable/disable mutate Build Settings scenes." }, path: { type: "string", description: "Scene asset path, required for add/remove/enable/disable." } }),
@@ -28,7 +28,7 @@ export const BUILD_TOOLS: ToolMetadata[] = [
   },
   {
     name: "build.platform",
-    title: "Build Platform",
+    summary: "Read or set the active BuildTarget.",
     description: "Read or set the active BuildTarget. Setting a target can trigger platform import, compilation, or domain reload; prefer action=get or --dry-run before switching.",
     group: "build",
     inputSchema: objSchema({ action: { type: "string", enum: ["get", "set"], default: "get", description: "Use get for read-only inspection; set switches EditorUserBuildSettings active target." }, target: { type: "string", description: "BuildTarget enum name, e.g. StandaloneWindows64, Android, iOS, WebGL." } }),
@@ -48,7 +48,7 @@ export const BUILD_TOOLS: ToolMetadata[] = [
   },
   {
     name: "build.settings",
-    title: "Build Settings",
+    summary: "Read key PlayerSettings build configuration such as productName, bundleVersion, applicationIdentifier, scriptingBackend, and API compatibility level.",
     description: "Read key PlayerSettings build configuration such as productName, bundleVersion, applicationIdentifier, scriptingBackend, and API compatibility level.",
     group: "build",
     inputSchema: objSchema({}),

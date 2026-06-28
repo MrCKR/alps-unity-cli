@@ -28,7 +28,7 @@ using UnityCli;
 
 [UnityCliTool(
     "sample.echo",
-    Title = "Sample Echo",
+    Summary = "Echo the supplied input JSON from a Unity project Editor C# tool.",
     Description = "Echoes the supplied input JSON from a Unity project Editor C# tool.",
     Group = "sample",
     InputSchema = "{\"type\":\"object\",\"properties\":{\"message\":{\"type\":\"string\"}},\"required\":[\"message\"]}",
@@ -60,7 +60,7 @@ public static class MyProjectTools
 {
     [UnityCliTool(
         "my.asset-summary",
-        Title = "Asset Summary",
+        Summary = "Read a project-specific asset summary for one asset path.",
         Description = "Returns a project-specific asset summary.",
         Group = "custom",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"path\":{\"type\":\"string\"}},\"required\":[\"path\"]}",
@@ -76,7 +76,8 @@ public static class MyProjectTools
 ## 关键属性
 
 - `Name`：唯一 Tool 名，建议 dotted/kebab 风格，例如 `my.asset-summary`。
-- `Title` / `Description`：让 AI 能理解用途。
+- `Summary`：必填短说明，用于 `tools group list` / `tools search` / `tools describe` 的快速判断。
+- `Description`：完整说明工具用途、边界和关键副作用。
 - `Group`：分组名；项目专用工具常用 `custom` 或项目域名或功能域名。
 - `InputSchema` / `OutputSchema`：JSON Schema；AI 执行前会通过 `tools describe` 读取。
 - `DestructiveHint`：删除、覆盖、不可逆修改必须设为 `true`。
@@ -90,11 +91,13 @@ public static class MyProjectTools
 AI 使用这些命令发现和执行自定义 Tool：
 
 ```powershell
-unity_cli tools group list custom --include-custom
+unity_cli context read tools.custom
 unity_cli tools group list <group> --include-custom
-unity_cli tools describe <custom-tool>
-unity_cli tools run <custom-tool> --input '<json>'
+unity_cli tools describe <custom-tool> --include-custom
+unity_cli tools run <custom-tool> --include-custom --input '<json>'
 ```
+
+`<group>` 必须来自 `tools.custom` 或 `tools group list <group> --include-custom` 的真实输出；不要假设所有项目自定义 Tool 都在 `custom` 组。
 
 runtime Tool 通常先进入 Play Mode，并声明 `PlayModeSupport = "runtime-only"`：
 

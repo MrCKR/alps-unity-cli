@@ -20,9 +20,6 @@ const CONTEXT_COMMON = {
   target: "editor" as const,
   availabilityScope: "editorSession" as const,
   playModeSupport: "supported" as const,
-  requiresUnity: true,
-  destructiveHint: false as const,
-  bridgeCommand: "context.read",
   available: true,
 };
 
@@ -30,7 +27,6 @@ const CONTEXT_COMMON = {
 
 const PROJECT_INFO: ContextDescriptor = {
   name: "project.info",
-  title: "Project Info",
   description: "Basic project metadata: name, root path, Unity version, platform, and assets path.",
   category: "project",
   cliCommand: "context read project.info",
@@ -46,13 +42,11 @@ const PROJECT_INFO: ContextDescriptor = {
     },
     required: ["projectRoot", "projectName", "unityVersion"]
   },
-  docsTopic: "project",
   ...CONTEXT_COMMON,
 };
 
 const PROJECT_TAGS: ContextDescriptor = {
   name: "project.tags",
-  title: "Project Tags",
   description: "All tags defined in the project's Tag Manager.",
   category: "project",
   cliCommand: "context read project.tags",
@@ -64,13 +58,11 @@ const PROJECT_TAGS: ContextDescriptor = {
     },
     required: ["tags"]
   },
-  docsTopic: "project",
   ...CONTEXT_COMMON,
 };
 
 const PROJECT_LAYERS: ContextDescriptor = {
   name: "project.layers",
-  title: "Project Layers",
   description: "All layers defined in the project's Tag Manager, including built-in and user layers.",
   category: "project",
   cliCommand: "context read project.layers",
@@ -93,7 +85,6 @@ const PROJECT_LAYERS: ContextDescriptor = {
     },
     required: ["layers"]
   },
-  docsTopic: "project",
   ...CONTEXT_COMMON,
 };
 
@@ -101,7 +92,6 @@ const PROJECT_LAYERS: ContextDescriptor = {
 
 const EDITOR_STATE: ContextDescriptor = {
   name: "editor.state",
-  title: "Editor State",
   description: "Read-only snapshot of current Unity Editor state: Play Mode, compile/import/build busy flags, active scene, Prefab Stage, Bridge build stamp, and runtime session status. Use this before live tools to avoid acting while Unity is busy.",
   category: "editor",
   cliCommand: "context read editor.state",
@@ -125,13 +115,11 @@ const EDITOR_STATE: ContextDescriptor = {
     },
     required: ["state"]
   },
-  docsTopic: "editor",
   ...CONTEXT_COMMON,
 };
 
 const EDITOR_SELECTION: ContextDescriptor = {
   name: "editor.selection",
-  title: "Editor Selection",
   description: "Read the current Unity Editor selection in Hierarchy or Project Browser. Returns object/GameObject names and asset GUIDs only; it does not select, focus, ping, or modify anything.",
   category: "editor",
   cliCommand: "context read editor.selection",
@@ -148,13 +136,11 @@ const EDITOR_SELECTION: ContextDescriptor = {
     },
     required: ["objects", "gameObjects", "assetGUIDs"]
   },
-  docsTopic: "editor",
   ...CONTEXT_COMMON,
 };
 
 const EDITOR_ACTIVE_TOOL: ContextDescriptor = {
   name: "editor.active-tool",
-  title: "Editor Active Tool",
   description: "Read the currently active Unity Editor transform/tool handle plus pivot mode, pivot rotation, handle position, and handle rotation. Does not change the active tool.",
   category: "editor",
   cliCommand: "context read editor.active-tool",
@@ -171,13 +157,11 @@ const EDITOR_ACTIVE_TOOL: ContextDescriptor = {
     },
     required: ["activeTool", "pivotMode", "pivotRotation"]
   },
-  docsTopic: "editor",
   ...CONTEXT_COMMON,
 };
 
 const EDITOR_WINDOWS: ContextDescriptor = {
   name: "editor.windows",
-  title: "Editor Windows",
   description: "Read currently open Unity EditorWindow instances with title, type names, focused state, and instance IDs. This observes editor UI state without opening, closing, focusing, or moving windows.",
   category: "editor",
   cliCommand: "context read editor.windows",
@@ -203,13 +187,11 @@ const EDITOR_WINDOWS: ContextDescriptor = {
     },
     required: ["windows"]
   },
-  docsTopic: "editor",
   ...CONTEXT_COMMON,
 };
 
 const EDITOR_TOOL_STATES: ContextDescriptor = {
   name: "editor.tool-states",
-  title: "Editor Tool States",
   description: "Read Unity Editor transform tool settings, pivot mode/rotation, snap settings, and grid availability. This is not MCP tool discovery; it observes editor tool configuration only.",
   category: "editor",
   cliCommand: "context read editor.tool-states",
@@ -223,13 +205,11 @@ const EDITOR_TOOL_STATES: ContextDescriptor = {
     },
     required: ["transform", "snap", "gridAvailable"]
   },
-  docsTopic: "editor",
   ...CONTEXT_COMMON,
 };
 
 const EDITOR_MENU_ITEMS: ContextDescriptor = {
   name: "editor.menu-items",
-  title: "Editor Menu Items",
   description: "Attempt to enumerate Unity Editor menu items as read-only discovery. Unity has no stable public API for full menu enumeration, so this context may return an empty items array with diagnostics; executing a menu path remains the destructive Tool editor.menu.",
   category: "editor",
   cliCommand: "context read editor.menu-items",
@@ -260,13 +240,11 @@ const EDITOR_MENU_ITEMS: ContextDescriptor = {
     },
     required: ["items", "count"]
   },
-  docsTopic: "editor",
   ...CONTEXT_COMMON,
 };
 
 const EDITOR_PREFAB_STAGE: ContextDescriptor = {
   name: "prefab.stage",
-  title: "Prefab Stage",
   description: "Current Prefab editing stage state: whether a prefab is being edited, its path, and dirty status.",
   category: "prefab",
   cliCommand: "context read prefab.stage",
@@ -280,7 +258,6 @@ const EDITOR_PREFAB_STAGE: ContextDescriptor = {
     },
     required: ["isOpen"]
   },
-  docsTopic: "prefab",
   ...CONTEXT_COMMON,
 };
 
@@ -288,7 +265,6 @@ const EDITOR_PREFAB_STAGE: ContextDescriptor = {
 
 const SCENE_GAMEOBJECT: ContextDescriptor = {
   name: "scene.gameobject",
-  title: "Scene GameObject",
   description: "Read one GameObject's lightweight scene summary by id, hierarchy path, or name. Use this before go.inspect, component.get, object.get-data, or mutation tools to confirm the stable path/id. Does not modify the scene; for full component fields use component.get.",
   category: "scene",
   cliCommand: "context read scene.gameobject",
@@ -315,13 +291,11 @@ const SCENE_GAMEOBJECT: ContextDescriptor = {
     },
     required: ["name", "instanceId", "active"]
   },
-  docsTopic: "scene",
   ...CONTEXT_COMMON,
 };
 
 const SCENE_GAMEOBJECT_COMPONENTS: ContextDescriptor = {
   name: "scene.gameobject.components",
-  title: "Scene GameObject Components",
   description: "Lightweight list of components attached to a GameObject: type names, enabled state and optional readable property preview. Use this before component.get/component.modify to choose component name or index. Does NOT return full fields/props; for deep component data use `tools run component.get`.",
   category: "scene",
   cliCommand: "context read scene.gameobject.components",
@@ -343,15 +317,11 @@ const SCENE_GAMEOBJECT_COMPONENTS: ContextDescriptor = {
     },
     required: ["gameObject", "components", "count"]
   },
-  docsTopic: "scene",
-  resourceUri: "unity-cli://scene/gameobject/{instance_id}/components",
-  equivalentUnityMcp: "mcpforunity://scene/gameobject/{id}/components",
   ...CONTEXT_COMMON,
 };
 
 const SCENE_GAMEOBJECT_COMPONENT: ContextDescriptor = {
   name: "scene.gameobject.component",
-  title: "Scene GameObject Component",
   description: "Lightweight preview of one component attached to a GameObject. Use scene.gameobject.components first when unsure which component name exists. Does NOT replace deep reads; for complete fields/props use `tools run component.get`.",
   category: "scene",
   cliCommand: "context read scene.gameobject.component",
@@ -373,15 +343,11 @@ const SCENE_GAMEOBJECT_COMPONENT: ContextDescriptor = {
     },
     required: ["gameObject", "component"]
   },
-  docsTopic: "scene",
-  resourceUri: "unity-cli://scene/gameobject/{instance_id}/component/{name}",
-  equivalentUnityMcp: "mcpforunity://scene/gameobject/{id}/component/{name}",
   ...CONTEXT_COMMON,
 };
 
 const SCENE_OPENED: ContextDescriptor = {
   name: "scene.opened",
-  title: "Opened Scenes",
   description: "List currently loaded scenes in the Editor with name, path, build index, loaded state, dirty state, and active scene. Read-only; does not load, unload, save, or switch scenes.",
   category: "scene",
   cliCommand: "context read scene.opened",
@@ -408,15 +374,11 @@ const SCENE_OPENED: ContextDescriptor = {
     },
     required: ["scenes", "count"]
   },
-  docsTopic: "scene",
-  resourceUri: "unity-cli://scene/opened",
-  equivalentUnityMcp: "mcpforunity://scene/opened",
   ...CONTEXT_COMMON,
 };
 
 const SCENE_CAMERAS: ContextDescriptor = {
   name: "scene.cameras",
-  title: "Scene Cameras",
   description: "List all active scene cameras with stable GameObject path, tag, enabled state, projection, FOV/orthographic size, depth, target texture, and pixel size. Read-only camera inventory.",
   category: "scene",
   cliCommand: "context read scene.cameras",
@@ -450,13 +412,11 @@ const SCENE_CAMERAS: ContextDescriptor = {
     },
     required: ["cameras", "count"]
   },
-  docsTopic: "scene",
   ...CONTEXT_COMMON,
 };
 
 const SCENE_VOLUMES: ContextDescriptor = {
   name: "scene.volumes",
-  title: "Scene Volumes",
   description: "List Volume components in the active scene with target GameObject, enabled state, global flag, priority, weight, profile reference, and pagination metadata. Returns an empty list when Volume type is unavailable.",
   category: "scene",
   cliCommand: "context read scene.volumes",
@@ -485,13 +445,11 @@ const SCENE_VOLUMES: ContextDescriptor = {
     },
     required: ["volumes", "count", "pageInfo"]
   },
-  docsTopic: "graphics",
   ...CONTEXT_COMMON,
 };
 
 const SCENE_RENDERER_FEATURES: ContextDescriptor = {
   name: "scene.renderer-features",
-  title: "Renderer Features",
   description: "Read URP renderer feature availability and configured feature names for the active/default render pipeline. If URP or a pipeline asset is unavailable, returns available=false with diagnostics and next_actions.",
   category: "scene",
   cliCommand: "context read scene.renderer-features",
@@ -508,13 +466,11 @@ const SCENE_RENDERER_FEATURES: ContextDescriptor = {
     },
     required: ["available", "features"]
   },
-  docsTopic: "graphics",
   ...CONTEXT_COMMON,
 };
 
 const SCENE_RENDERING_STATS: ContextDescriptor = {
   name: "scene.rendering-stats",
-  title: "Rendering Stats",
   description: "Read current rendering statistics from UnityStats when available. If Unity's internal stats API is unavailable, returns available=false with diagnostics and next_actions.",
   category: "scene",
   cliCommand: "context read scene.rendering-stats",
@@ -529,7 +485,6 @@ const SCENE_RENDERING_STATS: ContextDescriptor = {
     },
     required: ["available"]
   },
-  docsTopic: "graphics",
   ...CONTEXT_COMMON,
 };
 
@@ -537,7 +492,6 @@ const SCENE_RENDERING_STATS: ContextDescriptor = {
 
 const PREFAB_INFO: ContextDescriptor = {
   name: "prefab.info",
-  title: "Prefab Info",
   description: "Read Prefab asset metadata, dependencies, variant information, and nested prefab references.",
   category: "prefab",
   cliCommand: "context read prefab.info",
@@ -555,15 +509,11 @@ const PREFAB_INFO: ContextDescriptor = {
     },
     required: ["prefab"]
   },
-  docsTopic: "prefab",
-  resourceUri: "unity-cli://prefab/{path}",
-  equivalentUnityMcp: "mcpforunity://prefab/{path}",
   ...CONTEXT_COMMON,
 };
 
 const PREFAB_HIERARCHY: ContextDescriptor = {
   name: "prefab.hierarchy",
-  title: "Prefab Hierarchy",
   description: "Read a Prefab's hierarchy without opening or modifying the Prefab Stage.",
   category: "prefab",
   cliCommand: "context read prefab.hierarchy",
@@ -585,9 +535,6 @@ const PREFAB_HIERARCHY: ContextDescriptor = {
     },
     required: ["prefab", "items", "pageInfo"]
   },
-  docsTopic: "prefab",
-  resourceUri: "unity-cli://prefab/{path}/hierarchy",
-  equivalentUnityMcp: "mcpforunity://prefab/{path}/hierarchy",
   ...CONTEXT_COMMON,
 };
 
@@ -595,7 +542,6 @@ const PREFAB_HIERARCHY: ContextDescriptor = {
 
 const TOOLS_GROUPS: ContextDescriptor = {
   name: "tools.groups",
-  title: "Tool Groups",
   description: "Read built-in and available extension tool groups with counts and discovery commands from the local CLI registry; no Unity connection is required.",
   category: "tools",
   cliCommand: "context read tools.groups",
@@ -608,17 +554,12 @@ const TOOLS_GROUPS: ContextDescriptor = {
     },
     required: ["groups", "count"]
   },
-  docsTopic: "tools",
-  resourceUri: "unity-cli://tools/groups",
-  equivalentUnityMcp: "mcpforunity://tool-groups",
   ...CONTEXT_COMMON,
-  requiresUnity: false,
   availabilityScope: "always",
 };
 
 const TOOLS_CUSTOM: ContextDescriptor = {
   name: "tools.custom",
-  title: "Custom Tools",
   description: "Read custom Unity project tools discovered through [UnityCliTool].",
   category: "tools",
   cliCommand: "context read tools.custom",
@@ -631,9 +572,6 @@ const TOOLS_CUSTOM: ContextDescriptor = {
     },
     required: ["tools", "count"]
   },
-  docsTopic: "custom-tools",
-  resourceUri: "unity-cli://tools/custom",
-  equivalentUnityMcp: "mcpforunity://custom-tools",
   ...CONTEXT_COMMON,
 };
 
@@ -641,7 +579,6 @@ const TOOLS_CUSTOM: ContextDescriptor = {
 
 const TESTS_LIST: ContextDescriptor = {
   name: "tests.list",
-  title: "Test List",
   description: "Available test assemblies, classes, and methods for EditMode and PlayMode tests.",
   category: "tests",
   cliCommand: "context read tests.list",
@@ -665,7 +602,6 @@ const TESTS_LIST: ContextDescriptor = {
     },
     required: ["available", "tests", "count"]
   },
-  docsTopic: "test",
   ...CONTEXT_COMMON,
 };
 

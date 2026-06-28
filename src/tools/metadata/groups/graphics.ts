@@ -10,7 +10,7 @@ const targetOutput = { type: "object" };
 export const GRAPHICS_TOOLS: ToolMetadata[] = [
   {
     name: "graphics.quality",
-    title: "Graphics Quality Level",
+    summary: "Read or update Unity QualitySettings: current quality level, VSync, anti-aliasing, shadows, LOD and related render-quality toggles.",
     description: "Read or update Unity QualitySettings: current quality level, VSync, anti-aliasing, shadows, LOD and related render-quality toggles. Pass level/qualityLevel as an index or quality level name; call without inputs to inspect available names first. Changes affect project/editor graphics state and current Play Mode session.",
     group: "graphics",
     inputSchema: objSchema({
@@ -44,7 +44,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.settings",
-    title: "Graphics Settings",
+    summary: "Read or update common GraphicsSettings and QualitySettings fields.",
     description: "Read or update common GraphicsSettings and QualitySettings fields. Use renderPipeline:'built-in' or null to clear the default SRP asset, or pass an Assets/*.asset RenderPipelineAsset path. For detailed pipeline-asset properties use graphics.pipeline-info first and pipeline-specific extension tools where available.",
     group: "graphics",
     inputSchema: objSchema({
@@ -74,7 +74,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.pipeline",
-    title: "Graphics Render Pipeline",
+    summary: "Read a compact active/default render pipeline and current QualitySettings summary.",
     description: "Read a compact active/default render pipeline and current QualitySettings summary. This is the quick pipeline ping equivalent; use graphics.pipeline-info for the fuller shape.",
     group: "graphics",
     inputSchema: objSchema({}),
@@ -93,7 +93,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.volume",
-    title: "Graphics Volume",
+    summary: "Query Volume components and assigned profiles in the active scene.",
     description: "Query Volume components and assigned profiles in the active scene. This is read-only and returns an empty list when SRP Volume types are unavailable.",
     group: "graphics",
     inputSchema: objSchema({ target: { type: "string", description: "Optional GameObject name/path/id to filter one Volume." }, pageSize: { type: "integer" }, cursor: { type: "string" } }),
@@ -113,7 +113,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.screenshot",
-    title: "Graphics Screenshot",
+    summary: "Capture a SceneView or active Camera screenshot with optional graphics diagnostics.",
     description: "Capture a SceneView or active Camera screenshot with optional graphics diagnostics. Writes an image artifact; pass path under a deliberate artifact/output directory.",
     group: "graphics",
     inputSchema: objSchema({ path: { type: "string" }, width: { type: "integer" }, height: { type: "integer" }, format: { type: "string" }, overwrite: { type: "boolean" }, includeDiagnostics: { type: "boolean" } }, ["path"]),
@@ -132,7 +132,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.bake-start",
-    title: "Start Light Bake",
+    summary: "Start Unity Lightmapping.BakeAsync for the active scene.",
     description: "Start Unity Lightmapping.BakeAsync for the active scene. This may run for a long time, produce lighting artifacts, and requires --yes; use graphics.bake-status first and only run after explicit approval.",
     group: "graphics",
     inputSchema: objSchema({}),
@@ -153,7 +153,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.bake-cancel",
-    title: "Cancel Light Bake",
+    summary: "Cancel the current lighting bake if one is running.",
     description: "Cancel the current lighting bake if one is running. Safe to call when no bake is active; returns cancelled:false.",
     group: "graphics",
     inputSchema: objSchema({}),
@@ -172,7 +172,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.bake-status",
-    title: "Light Bake Status",
+    summary: "Query current lighting bake running state, progress, and lighting mode without starting or cancelling a bake.",
     description: "Query current lighting bake running state, progress, and lighting mode without starting or cancelling a bake.",
     group: "graphics",
     inputSchema: objSchema({}),
@@ -191,7 +191,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.bake-clear",
-    title: "Clear Baked Lighting Data",
+    summary: "Clear baked and/or realtime lighting data for the current scene/project.",
     description: "Clear baked and/or realtime lighting data for the current scene/project. This is destructive diagnostic cleanup and requires --yes; dry-run is not supported by the bridge handler.",
     group: "graphics",
     inputSchema: objSchema({ bakedData: { type: "boolean", default: true }, realtimeData: { type: "boolean", default: true } }),
@@ -211,7 +211,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.bake-reflection-probe",
-    title: "Bake Reflection Probe",
+    summary: "Bake one ReflectionProbe cubemap.",
     description: "Bake one ReflectionProbe cubemap. Requires an existing ReflectionProbe target, may write probe cubemap data, and requires --yes; use only when a real probe bake is intended.",
     group: "graphics",
     inputSchema: objSchema({ target: { type: "string", description: "ReflectionProbe GameObject name, hierarchy path, or instance id." }, path: { type: "string", description: "Optional output path for baked cubemap." } }, ["target"]),
@@ -231,7 +231,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.bake-settings",
-    title: "Light Bake Settings",
+    summary: "Read or update LightingSettings for the active or named scene.",
     description: "Read or update LightingSettings for the active or named scene. Passing no inputs is read-only; setting fields creates a LightingSettings object when the scene has none and marks lighting settings/scene dirty.",
     group: "graphics",
     inputSchema: objSchema({
@@ -261,7 +261,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.light-probe-group",
-    title: "Light Probe Group",
+    summary: "Read, create, or update a LightProbeGroup component.",
     description: "Read, create, or update a LightProbeGroup component. Use hierarchy paths or instance ids when duplicate names exist; positions are a space-separated list of x,y,z triples.",
     group: "graphics",
     inputSchema: objSchema({ target: { type: "string" }, create: { type: "boolean" }, positions: { type: "string", description: "Space-separated Vector3 list, e.g. '0,0,0 1,1,1'." } }),
@@ -280,7 +280,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.reflection-probe",
-    title: "Reflection Probe",
+    summary: "Read, create, or update a ReflectionProbe component on a scene GameObject.",
     description: "Read, create, or update a ReflectionProbe component on a scene GameObject. Use path/id targets for reliability after creating temporary probe objects.",
     group: "graphics",
     inputSchema: objSchema({
@@ -308,7 +308,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.probe-positions",
-    title: "Probe Positions",
+    summary: "Set probe positions for a LightProbeGroup or ReflectionProbe.",
     description: "Set probe positions for a LightProbeGroup or ReflectionProbe. Reflection probes use the first Vector3 as center; LightProbeGroup uses all supplied positions.",
     group: "graphics",
     inputSchema: objSchema({ target: { type: "string" }, type: { type: "string", enum: ["reflection", "light"] }, positions: { type: "string", description: "Space-separated Vector3 list." } }, ["target"]),
@@ -327,7 +327,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.stats",
-    title: "Graphics Render Stats",
+    summary: "Query current rendering statistics such as draw calls, batches, triangles, vertices, render textures and set-pass calls.",
     description: "Query current rendering statistics such as draw calls, batches, triangles, vertices, render textures and set-pass calls.",
     group: "graphics",
     inputSchema: objSchema({}),
@@ -346,7 +346,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.stats-counters",
-    title: "Graphics Stats Counters",
+    summary: "List a compact array of render stat counters for dashboards and quick diagnostics.",
     description: "List a compact array of render stat counters for dashboards and quick diagnostics.",
     group: "graphics",
     inputSchema: objSchema({}),
@@ -365,7 +365,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.stats-memory",
-    title: "Graphics Stats Memory",
+    summary: "Query GPU/render memory counters including texture memory, render texture bytes and vertex buffer usage.",
     description: "Query GPU/render memory counters including texture memory, render texture bytes and vertex buffer usage.",
     group: "graphics",
     inputSchema: objSchema({}),
@@ -384,7 +384,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.scene-debug",
-    title: "Scene Debug Mode",
+    summary: "Set the active SceneView shading/camera draw mode for visual debugging.",
     description: "Set the active SceneView shading/camera draw mode for visual debugging. This changes only the current Editor UI session and returns whether a SceneView was available.",
     group: "graphics",
     inputSchema: objSchema({ shadingMode: { type: "string" }, drawMode: { type: "string" } }),
@@ -404,7 +404,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.skybox-get",
-    title: "Get Skybox Settings",
+    summary: "Read current RenderSettings skybox material, sun, ambient, fog, and reflection settings.",
     description: "Read current RenderSettings skybox material, sun, ambient, fog, and reflection settings.",
     group: "graphics",
     inputSchema: objSchema({}),
@@ -423,7 +423,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.skybox-set-material",
-    title: "Set Skybox Material",
+    summary: "Assign an existing Assets/*.mat material as RenderSettings.skybox.",
     description: "Assign an existing Assets/*.mat material as RenderSettings.skybox. Use graphics.skybox-get first to record the previous material; pass builtin:Default-Skybox to restore Unity's built-in default skybox.",
     group: "graphics",
     inputSchema: objSchema({ material: { type: "string", description: "Existing Assets/*.mat material path or builtin:Default-Skybox." } }, ["material"]),
@@ -443,7 +443,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.skybox-set-properties",
-    title: "Set Skybox Properties",
+    summary: "Set one named property on the currently assigned skybox material.",
     description: "Set one named property on the currently assigned skybox material. If no skybox is assigned, first call graphics.skybox-set-material.",
     group: "graphics",
     inputSchema: objSchema({ property: { type: "string" }, value: { type: "string" } }, ["property", "value"]),
@@ -462,7 +462,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.skybox-set-ambient",
-    title: "Set Ambient Light",
+    summary: "Set RenderSettings ambient mode, intensity and colors for the current scene/session.",
     description: "Set RenderSettings ambient mode, intensity and colors for the current scene/session. Call graphics.skybox-get first if you need to restore previous values.",
     group: "graphics",
     inputSchema: objSchema({
@@ -488,7 +488,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.skybox-set-fog",
-    title: "Set Fog Settings",
+    summary: "Set RenderSettings fog enabled, mode, color, density and distance for the current scene/session.",
     description: "Set RenderSettings fog enabled, mode, color, density and distance for the current scene/session.",
     group: "graphics",
     inputSchema: objSchema({
@@ -514,7 +514,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.skybox-set-reflection",
-    title: "Set Reflection Settings",
+    summary: "Set RenderSettings environment reflection mode, bounces, intensity and default resolution.",
     description: "Set RenderSettings environment reflection mode, bounces, intensity and default resolution.",
     group: "graphics",
     inputSchema: objSchema({
@@ -538,7 +538,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.skybox-set-sun",
-    title: "Set Sun Source",
+    summary: "Set RenderSettings.sun from a GameObject with a Light component, or omit target to clear/use the current sun reference.",
     description: "Set RenderSettings.sun from a GameObject with a Light component, or omit target to clear/use the current sun reference. Prefer hierarchy path or instance id when names can duplicate.",
     group: "graphics",
     inputSchema: objSchema({ target: { type: "string", description: "Optional Light GameObject name/path/id." } }),
@@ -557,7 +557,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.pipeline-settings",
-    title: "Graphics Pipeline Settings",
+    summary: "Read or update the default Scriptable Render Pipeline asset assignment.",
     description: "Read or update the default Scriptable Render Pipeline asset assignment. Pass renderPipeline:'built-in' or null to clear SRP and use the Built-in pipeline, or pass an Assets/*.asset RenderPipelineAsset path. This changes project/editor graphics settings.",
     group: "graphics",
     inputSchema: objSchema({ renderPipeline: { type: "string", description: "Assets/*.asset RenderPipelineAsset path, built-in, or null." } }),
@@ -577,7 +577,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.pipeline-quality",
-    title: "Graphics Pipeline Quality",
+    summary: "Read or set the active QualitySettings level by numeric index or exact level name.",
     description: "Read or set the active QualitySettings level by numeric index or exact level name. This is a focused alias of graphics.quality for pipeline workflows.",
     group: "graphics",
     inputSchema: objSchema({ qualityLevel: { type: ["integer", "string"], description: "Quality level index or exact quality level name." }, level: { type: ["integer", "string"], description: "Alias for qualityLevel." } }),
@@ -597,7 +597,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.pipeline-info",
-    title: "Graphics Pipeline Info",
+    summary: "Read active/default pipeline, pipeline asset path/type, and current QualitySettings summary.",
     description: "Read active/default pipeline, pipeline asset path/type, and current QualitySettings summary. Use this before graphics.settings/pipeline-settings or URP/HDRP extension tools.",
     group: "graphics",
     inputSchema: objSchema({}),

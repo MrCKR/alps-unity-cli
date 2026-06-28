@@ -341,11 +341,11 @@ export function validateManifest(manifest: ExtensionManifest): void {
       );
     }
     for (const tool of manifest.contributions.tools) {
-      if (!tool.name || !tool.title || !tool.description || !tool.group || !tool.bridgeCommand || !tool.cliCommand) {
+      if (!tool.name || !tool.summary || !tool.description || !tool.group || !tool.bridgeCommand || !tool.cliCommand) {
         throw new ExtensionRegistryError(
           "INVALID_MANIFEST",
           `Extension '${manifest.id}' has an incomplete tool contribution: ${tool.name ?? "<missing name>"}.`,
-          ["Each tool must have: name, title, description, group, bridgeCommand, cliCommand."]
+          ["Each tool must have: name, summary, description, group, bridgeCommand, cliCommand."]
         );
       }
     }

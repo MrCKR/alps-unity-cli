@@ -228,13 +228,16 @@ unity_cli jobs cancel <jobId>
 
 ## 命令支持状态
 
-| 状态 | 含义 |
+`supportStatus` 是稳定机器字段，AI 应直接读取字段值：
+
+| supportStatus | 含义 |
 |------|------|
-| 已路由可执行 | 通过 Bridge `POST /bridge/execute` 实时执行 |
-| 已路由可执行 + 可 batch/job | 支持 Bridge 实时 + batch/job 双通道 |
-| 仅 batch/job | 通过 Unity batchmode/job 执行 |
-| 仅 CLI 离线 | 本地 CLI 执行，无需 Unity 连接 |
-| 规划中 | CLI 命令合约已声明，Bridge 处理程序待实现 |
+| `live-bridge` | 通过 Unity Bridge 实时执行 |
+| `bridge-job` | 支持 Bridge 实时执行，也支持 batch/job 通道 |
+| `batch-job` | 通过 Unity batchmode/job 执行 |
+| `cli-only` | 本地 CLI 执行，无需 Unity 连接 |
+| `live-bridge-runtime` | 通过 Play Mode runtime Bridge 执行 |
+| `planned` | CLI 命令合约已声明，Bridge 处理程序待实现 |
 
 ## 全部命令参考
 
@@ -685,7 +688,10 @@ Bridge 生命周期：
 Unity 项目 C# 代码通过 `[UnityCliTool]` 特性注册自定义工具：
 
 ```csharp
-[UnityCliTool("my.editor-tool", Title = "My Editor-targeted Tool", Group = "custom")]
+[UnityCliTool(
+    "my.editor-tool",
+    Summary = "Run the project-specific editor action and return a structured result.",
+    Group = "custom")]
 public static class MyEditorTool
 {
     public static object Execute(Dictionary<string, object> input)
@@ -698,10 +704,10 @@ public static class MyEditorTool
 
 特性参数：
 - `name`：工具唯一标识（如 `my.editor-tool`）
-- `Title`：人类可读标题
+- `Summary`：必填短说明，用于 discovery/list/search
 - `Group`：工具分组（如 `custom`）
-- `Description`：工具描述
-- `DestructiveHint`：是否有破坏性（默认 false）
+- `Description`：完整工具描述
+- `DestructiveHint`：是否需要 `--yes`（默认 false）
 
 发现与执行：
 ```powershell

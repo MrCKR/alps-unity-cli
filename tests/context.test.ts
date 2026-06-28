@@ -26,22 +26,18 @@ test("builtin context descriptors cover all required contexts", () => {
   assert.equal(contexts.length, 23, `Expected 23 built-in contexts, got ${contexts.length}`);
 });
 
-test("all builtin contexts are read-only", () => {
-  for (const ctx of builtinContextDescriptors()) {
-    assert.equal(ctx.destructiveHint, false, `${ctx.name} should not be destructive`);
-  }
-});
-
 test("all builtin contexts have required fields", () => {
   for (const ctx of builtinContextDescriptors()) {
     assert.ok(ctx.name, "name required");
-    assert.ok(ctx.title, "title required");
     assert.ok(ctx.description, "description required");
+    assert.equal("title" in ctx, false, `${ctx.name} should not expose title`);
+    assert.equal("summary" in ctx, false, `${ctx.name} should not expose summary`);
     assert.ok(ctx.category, "category required");
     assert.ok(ctx.inputSchema, "inputSchema required");
     assert.ok(ctx.outputSchema, "outputSchema required");
     assert.ok(ctx.cliCommand, "cliCommand required");
-    assert.equal(ctx.bridgeCommand, "context.read", "bridgeCommand should be context.read");
+    assert.equal("bridgeCommand" in ctx, false, `${ctx.name} should not expose bridgeCommand`);
+    assert.equal("destructiveHint" in ctx, false, `${ctx.name} should not expose destructiveHint`);
   }
 });
 
@@ -111,7 +107,9 @@ test("context list returns all builtin contexts", async () => {
   const contexts = data.contexts as Array<Record<string, unknown>>;
   assert.equal(contexts.length, 23);
   assert.ok(contexts[0].name);
-  assert.ok(contexts[0].title);
+  assert.ok(contexts[0].description);
+  assert.equal("title" in contexts[0], false);
+  assert.equal("summary" in contexts[0], false);
   assert.ok(contexts[0].category);
   assert.ok(contexts[0].source);
 });
@@ -155,10 +153,12 @@ test("context describe returns full descriptor for builtin context", async () =>
   const data = result.data as Record<string, unknown>;
   assert.equal(data.command, "context.describe");
   assert.equal(data.name, "project.info");
-  assert.equal(data.destructiveHint, false);
+  assert.equal("destructiveHint" in data, false);
+  assert.equal("bridgeCommand" in data, false);
+  assert.equal("title" in data, false);
+  assert.equal("summary" in data, false);
   assert.ok(data.inputSchema);
   assert.ok(data.outputSchema);
-  assert.ok(data.supportStatusLabel);
 });
 
 test("context describe without name returns error", async () => {

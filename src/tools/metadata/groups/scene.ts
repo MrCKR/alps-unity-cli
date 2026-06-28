@@ -4,7 +4,7 @@ import { objSchema, pageSchema } from "../schemas.js";
 export const SCENE_TOOLS: ToolMetadata[] = [
   {
     name: "scene.hierarchy",
-    title: "Scene Hierarchy",
+    summary: "Read a lightweight, paged hierarchy of active scene GameObjects.",
     description: "Read a lightweight, paged hierarchy of active scene GameObjects. Use parent to list a subtree, maxDepth to bound recursion, nameFilter/filter to narrow results, and includeComponents only when component previews are needed. For deep object or component fields, use go.inspect, object.get-data, or component.get after selecting a stable path/id.",
     group: "scene",
     inputSchema: objSchema({
@@ -32,7 +32,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
   },
   {
     name: "scene.active",
-    title: "Active Scene Info",
+    summary: "Return name, path and build index of the currently active scene.",
     description: "Return name, path and build index of the currently active scene. Read-only; use scene.list-opened for all loaded scenes and scene.set-active to change the active scene.",
     group: "scene",
     inputSchema: objSchema({}),
@@ -51,7 +51,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
   },
   {
     name: "scene.build-settings",
-    title: "Build Settings",
+    summary: "List scenes registered in the Editor Build Settings (enabled scenes and their paths).",
     description: "List scenes registered in the Editor Build Settings (enabled scenes and their paths). Read-only; use build.scenes to add/remove scenes from build.",
     group: "scene",
     inputSchema: objSchema({}),
@@ -69,7 +69,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
   },
   {
     name: "scene.screenshot",
-    title: "Scene Screenshot",
+    summary: "Capture a screenshot of the active scene viewport and save to an Assets/* image path.",
     description: "Capture a screenshot of the active scene viewport and save to an Assets/* image path. Use screenshot.scene-view for explicit viewport control.",
     group: "scene",
     inputSchema: objSchema({ path: { type: "string", description: "Destination Assets/* image path." }, width: { type: "integer", default: 1280 }, height: { type: "integer", default: 720 }, format: { type: "string", enum: ["png", "jpg"], default: "png" }, overwrite: { type: "boolean" } }, ["path"]),
@@ -88,7 +88,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
   },
   {
     name: "scene.create",
-    title: "Create Scene",
+    summary: "Create a new empty scene at an Assets/*.unity path and optionally load it.",
     description: "Create a new empty scene at an Assets/*.unity path and optionally load it. Refuses to overwrite an existing scene asset.",
     group: "scene",
     inputSchema: objSchema({ path: { type: "string", description: "Destination Assets/*.unity path." }, name: { type: "string", description: "Optional scene name (defaults to file name)." } }),
@@ -107,7 +107,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
   },
   {
     name: "scene.load",
-    title: "Load Scene",
+    summary: "Load a scene by Assets/*.unity path or name.",
     description: "Load a scene by Assets/*.unity path or name. In Editor this opens the scene; use scene.list-opened to confirm loaded scenes. Triggers import if the scene asset is new.",
     group: "scene",
     inputSchema: objSchema({ path: { type: "string", description: "Assets/*.unity scene path." }, name: { type: "string", description: "Scene name (alternative to path)." } }),
@@ -126,7 +126,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
   },
   {
     name: "scene.save",
-    title: "Save Scene",
+    summary: "Save the active scene to disk.",
     description: "Save the active scene to disk. Requires --path for unsaved scenes. Destructive: writes the .unity asset. Supports --dry-run to preview.",
     group: "scene",
     inputSchema: objSchema({ path: { type: "string", description: "Assets/*.unity destination (required for unsaved scenes)." }, name: { type: "string", description: "Scene name (alternative to path)." } }),
@@ -146,7 +146,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
   },
   {
     name: "scene.unload",
-    title: "Unload Scene",
+    summary: "Unload an additively-loaded scene from the Editor.",
     description: "Unload an additively-loaded scene from the Editor. Cannot unload the only open scene. Destructive: removes the scene from the Editor session. Supports --dry-run.",
     group: "scene",
     inputSchema: objSchema({ path: { type: "string", description: "Assets/*.unity scene path to unload." }, name: { type: "string", description: "Scene name (alternative to path)." }, removeAll: { type: "boolean", description: "Unload all additively-loaded scenes." } }, ["path"]),
@@ -166,7 +166,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
   },
   {
     name: "scene.set-active",
-    title: "Set Active Scene",
+    summary: "Set the active scene among currently loaded scenes.",
     description: "Set the active scene among currently loaded scenes. The target scene must already be loaded (use scene.load first). Affects which scene new GameObjects are created in.",
     group: "scene",
     inputSchema: objSchema({ path: { type: "string", description: "Assets/*.unity path of a loaded scene." }, name: { type: "string", description: "Scene name (alternative to path)." } }, ["path"]),
@@ -185,7 +185,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
   },
   {
     name: "scene.list-opened",
-    title: "List Opened Scenes",
+    summary: "List currently loaded (opened) scenes with name, path, build index, loaded/dirty state and active flag.",
     description: "List currently loaded (opened) scenes with name, path, build index, loaded/dirty state and active flag. Read-only.",
     group: "scene",
     inputSchema: objSchema({}),
@@ -203,7 +203,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
   },
   {
     name: "scene.data",
-    title: "Scene Data",
+    summary: "Parameterized deep read of the active scene hierarchy: maxDepth, nameFilter, includeComponents, maxResults.",
     description: "Parameterized deep read of the active scene hierarchy: maxDepth, nameFilter, includeComponents, maxResults. Read-only; for paged lightweight state use scene.hierarchy or context read scene.*.",
     group: "scene",
     inputSchema: objSchema({ maxDepth: { type: "integer", default: 2, description: "Maximum traversal depth." }, maxResults: { type: "integer", default: 200, description: "Maximum items returned." }, nameFilter: { type: "string", description: "Case-insensitive name filter." }, includeComponents: { type: "boolean", default: false, description: "Include component type names per item." } }),
@@ -221,7 +221,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
   },
   {
     name: "scene.view-frame",
-    title: "Frame Scene View",
+    summary: "Frame the Editor SceneView on a target GameObject or frame all.",
     description: "Frame the Editor SceneView on a target GameObject or frame all. Does not modify scene data, only the viewport. target resolves by name, hierarchy path or instance id.",
     group: "scene",
     inputSchema: objSchema({ target: { type: "string", description: "GameObject to frame: name, hierarchy path or instance id." }, path: { type: "string", description: "Alias of target." }, frameAll: { type: "boolean", description: "Frame all objects instead of one target." } }),

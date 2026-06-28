@@ -8,7 +8,7 @@ import { objSchema } from "../schemas.js";
 export const CONSOLE_TOOLS: ToolMetadata[] = [
   {
     name: "console.get",
-    title: "Get Console Logs",
+    summary: "Read Unity Editor console logs newest-first with optional type filter, message/path search, count and cursor pagination.",
     description: "Read Unity Editor console logs newest-first with optional type filter, message/path search, count and cursor pagination. Use small count values when checking compile errors; entries include message, file and line but not full stack traces. Use console.clear only when explicitly asked to clear ephemeral Console UI state.",
     group: "console",
     inputSchema: objSchema({
@@ -33,7 +33,7 @@ export const CONSOLE_TOOLS: ToolMetadata[] = [
   },
   {
     name: "console.clear",
-    title: "Clear Console",
+    summary: "Clear the Unity Editor Console UI state.",
     description: "Clear the Unity Editor Console UI state. This is destructive for ephemeral diagnostics: use console.get first, prefer --dry-run to preview, and run with --yes only when old logs are no longer needed.",
     group: "console",
     inputSchema: objSchema({}),

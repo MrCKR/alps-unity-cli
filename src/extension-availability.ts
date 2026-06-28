@@ -263,7 +263,7 @@ export async function collectExtensionToolDescriptors(
   const allTools = collectAllTools(registry, installedPackages);
   return allTools.map((extTool) => ({
     name: extTool.name,
-    title: extTool.title,
+    summary: extTool.summary,
     description: extTool.description,
     group: extTool.group,
     inputSchema: {},

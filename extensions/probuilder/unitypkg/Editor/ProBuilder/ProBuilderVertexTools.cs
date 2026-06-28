@@ -21,7 +21,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.merge-vertices",
-        Title = "ProBuilder Merge Vertices",
+        Summary = "ProBuilder Merge Vertices",
         Description = "Merge selected vertices on a ProBuilder mesh into a single vertex.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"vertexIndices\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"collapseToFirst\":{\"type\":\"boolean\"}},\"required\":[\"target\",\"vertexIndices\"]}",
@@ -70,7 +70,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.weld-vertices",
-        Title = "ProBuilder Weld Vertices",
+        Summary = "ProBuilder Weld Vertices",
         Description = "Weld vertices within a radius on a ProBuilder mesh.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"vertexIndices\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"radius\":{\"type\":\"number\"}},\"required\":[\"target\"]}",
@@ -116,7 +116,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.split-vertices",
-        Title = "ProBuilder Split Vertices",
+        Summary = "ProBuilder Split Vertices",
         Description = "Split shared vertices on a ProBuilder mesh into separate vertices per face.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"vertexIndices\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}}},\"required\":[\"target\",\"vertexIndices\"]}",
@@ -163,7 +163,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.move-vertices",
-        Title = "ProBuilder Move Vertices",
+        Summary = "ProBuilder Move Vertices",
         Description = "Move selected vertices on a ProBuilder mesh by an offset.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"vertexIndices\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"x\":{\"type\":\"number\"},\"y\":{\"type\":\"number\"},\"z\":{\"type\":\"number\"}},\"required\":[\"target\",\"vertexIndices\"]}",
@@ -215,7 +215,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.insert-vertex",
-        Title = "ProBuilder Insert Vertex",
+        Summary = "ProBuilder Insert Vertex",
         Description = "Insert a new vertex on an edge or face of a ProBuilder mesh.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"edge\":{\"type\":\"object\"},\"faceIndex\":{\"type\":\"integer\"},\"point\":{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"number\"},\"y\":{\"type\":\"number\"},\"z\":{\"type\":\"number\"}}}},\"required\":[\"target\"]}",
@@ -282,7 +282,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.append-vertices-to-edge",
-        Title = "ProBuilder Append Vertices to Edge",
+        Summary = "ProBuilder Append Vertices to Edge",
         Description = "Append new vertices along an edge of a ProBuilder mesh.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"edgeIndices\":{\"type\":\"array\"},\"edges\":{\"type\":\"array\"},\"count\":{\"type\":\"integer\"}},\"required\":[\"target\"]}",
@@ -340,7 +340,7 @@ namespace UnityCli.ProBuilder
     /// </summary>
     [UnityCliTool(
         "probuilder.create-polygon",
-        Title = "ProBuilder Create Polygon",
+        Summary = "ProBuilder Create Polygon",
         Description = "Create a new polygon face from selected vertices on a ProBuilder mesh.",
         Group = "probuilder",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"target\":{\"type\":\"string\"},\"vertexIndices\":{\"type\":\"array\",\"items\":{\"type\":\"integer\"}},\"unordered\":{\"type\":\"boolean\"}},\"required\":[\"target\",\"vertexIndices\"]}",

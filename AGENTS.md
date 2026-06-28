@@ -91,7 +91,7 @@ Tool 用于动作，Context 用于观察。
 Tool 规则：
 
 - 任何可能修改 Unity 状态、项目文件、资源、Package、场景、GameObject、Component、PlayMode 状态或产生 artifact 的能力，必须是 Tool。
-- Tool 必须通过 descriptor 暴露完整信息，包括 `name`、`title`、`description`、`group`、`inputSchema`、`outputSchema`、`destructiveHint`、`handler`、`supportStatus`、`target`、`availabilityScope`、`playModeSupport`。
+- Tool 必须通过 descriptor 暴露 AI 调用所需信息，包括 `name`、`summary`、`description`、`group`、`inputSchema`、`outputSchema`、`destructiveHint`、`supportStatus`、`target`、`availabilityScope`、`playModeSupport`；内部路由字段不得混入公开 descriptor。
 - Tool 输出必须机器可读，返回稳定字段；禁止只返回自然语言说明。
 - Tool 的错误必须结构化，包含稳定 `error.code`、`message`、`transient`、`retry_after_ms`、`next_actions`。
 

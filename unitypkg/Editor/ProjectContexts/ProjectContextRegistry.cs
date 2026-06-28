@@ -81,8 +81,8 @@ namespace UnityCli
 
         /// <summary>
         /// Register a project custom context definition. Enforces:
-        /// - name + Read delegate required
-        /// - Kind=context, Source=project (fixed)
+        /// - name + description + Read delegate required
+        /// - Source=project (fixed)
         /// - No destructive/write descriptor fields
         /// - Source guard on handler source
         /// - Name conflict detection against built-in contexts
@@ -90,9 +90,9 @@ namespace UnityCli
         /// </summary>
         public static void RegisterProjectContext(UnityCliContextDefinition definition)
         {
-            if (definition == null || string.IsNullOrEmpty(definition.Name))
+            if (definition == null || string.IsNullOrEmpty(definition.Name) || string.IsNullOrEmpty(definition.Description))
             {
-                throw new ArgumentException("Custom context registration requires a non-null definition with a name.");
+                throw new ArgumentException("Custom context registration requires a non-null definition with name and description.");
             }
             if (definition.Read == null)
             {
@@ -100,7 +100,6 @@ namespace UnityCli
             }
 
             // ── Fixed descriptor constraints ──
-            definition.Kind = "context";
             definition.Source = "project";
 
             // ── Reject forbidden descriptor fields (write/destructive semantics) ──
@@ -135,7 +134,6 @@ namespace UnityCli
             }
 
             // ── Defaults ──
-            definition.Title = string.IsNullOrEmpty(definition.Title) ? definition.Name : definition.Title;
             definition.Category = string.IsNullOrEmpty(definition.Category) ? "custom" : definition.Category;
             definition.Version = string.IsNullOrEmpty(definition.Version) ? "1.0.0" : definition.Version;
             definition.InputSchema = string.IsNullOrEmpty(definition.InputSchema) ? "{}" : definition.InputSchema;
@@ -170,7 +168,6 @@ namespace UnityCli
 
             ProjectContexts[definition.Name] = definition;
             WriteLog("custom_context_registered name=" + definition.Name +
-                " kind=" + definition.Kind +
                 " source=" + definition.Source +
                 " fingerprint=" + definition.Fingerprint);
         }
@@ -239,7 +236,6 @@ namespace UnityCli
                 RegisterProjectContext(new UnityCliContextDefinition
                 {
                     Name = attribute.Name,
-                    Title = attribute.Title,
                     Description = attribute.Description,
                     Category = attribute.Category,
                     Version = attribute.Version,
@@ -249,10 +245,7 @@ namespace UnityCli
                     AvailabilityScope = attribute.AvailabilityScope,
                     PlayModeSupport = attribute.PlayModeSupport,
                     RefreshBehavior = attribute.RefreshBehavior,
-                    ResourceUri = attribute.ResourceUri,
                     RequiresPackages = SplitCsv(attribute.RequiresPackages).ToArray(),
-                    EquivalentUnityMcp = attribute.EquivalentUnityMcp,
-                    EquivalentUnityMcpNote = attribute.EquivalentUnityMcpNote,
                     RegisteredBy = "unity-editor-package",
                     DescriptorSource = "UnityCliContextAttribute",
                     Assembly = assembly.GetName().Name,
@@ -394,23 +387,18 @@ namespace UnityCli
         private static string ProjectContextDescriptorFingerprintMaterial(UnityCliContextDefinition definition)
         {
             return "name=" + (definition.Name ?? string.Empty)
-                + "\ntitle=" + (definition.Title ?? string.Empty)
                 + "\ndescription=" + (definition.Description ?? string.Empty)
                 + "\ncategory=" + (definition.Category ?? string.Empty)
                 + "\nversion=" + (definition.Version ?? string.Empty)
                 + "\ninputSchema=" + NormalizeFingerprintJson(definition.InputSchema)
                 + "\noutputSchema=" + NormalizeFingerprintJson(definition.OutputSchema)
-                + "\nkind=" + (definition.Kind ?? string.Empty)
                 + "\nsource=" + (definition.Source ?? string.Empty)
                 + "\ntarget=" + (definition.Target ?? string.Empty)
                 + "\navailabilityScope=" + (definition.AvailabilityScope ?? string.Empty)
                 + "\nplayModeSupport=" + (definition.PlayModeSupport ?? string.Empty)
                 + "\nrefreshBehavior=" + (definition.RefreshBehavior ?? string.Empty)
-                + "\nresourceUri=" + (definition.ResourceUri ?? string.Empty)
                 + "\nrequiresPackages=" + string.Join(",", (definition.RequiresPackages ?? new string[0])
                     .OrderBy(value => value, StringComparer.Ordinal).ToArray())
-                + "\nequivalentUnityMcp=" + (definition.EquivalentUnityMcp ?? string.Empty)
-                + "\nequivalentUnityMcpNote=" + (definition.EquivalentUnityMcpNote ?? string.Empty)
                 + "\ndescriptorSource=" + (definition.DescriptorSource ?? string.Empty);
         }
 
@@ -497,10 +485,14 @@ namespace UnityCli
                 var descriptor = new Dictionary<string, object>(StringComparer.Ordinal)
                 {
                     { "name", ctx.Name },
-                    { "title", ctx.Title },
+                    { "description", ctx.Description },
                     { "source", ctx.Source ?? "built-in" },
                     { "category", ctx.Category ?? "" },
-                    { "kind", "context" },
+                    { "target", ctx.Target ?? "editor" },
+                    { "availabilityScope", ctx.AvailabilityScope ?? "editorSession" },
+                    { "playModeSupport", "supported" },
+                    { "supportStatus", string.Equals(ctx.Handler, "offline", StringComparison.Ordinal) ? "cli-only" : "live-bridge" },
+                    { "cliCommand", "context read " + ctx.Name },
                 };
                 BuiltInContextDescriptors[ctx.Name] = descriptor;
             }
@@ -701,7 +693,6 @@ namespace UnityCli
                 {
                     ctx.Prop("name", definition.Name)
                         .Prop("version", definition.Version)
-                        .Prop("kind", definition.Kind)
                         .Prop("source", definition.Source);
                 })
                 .PropObject("execution", execution =>
@@ -723,26 +714,19 @@ namespace UnityCli
         {
             return new UnityCliJsonWriter().BeginObject()
                 .Prop("name", definition.Name)
-                .Prop("title", definition.Title)
                 .Prop("description", definition.Description)
                 .Prop("category", definition.Category)
                 .Prop("version", definition.Version)
                 .PropRaw("inputSchema", definition.InputSchema)
                 .PropRaw("outputSchema", definition.OutputSchema)
-                .Prop("kind", definition.Kind)
                 .Prop("source", definition.Source)
                 .Prop("target", definition.Target)
                 .Prop("availabilityScope", definition.AvailabilityScope)
                 .Prop("playModeSupport", definition.PlayModeSupport)
                 .Prop("refreshBehavior", definition.RefreshBehavior)
-                .Prop("resourceUri", definition.ResourceUri ?? string.Empty)
                 .PropRaw("requiresPackages", StringArrayJson(definition.RequiresPackages))
-                .Prop("equivalentUnityMcp", definition.EquivalentUnityMcp ?? string.Empty)
-                .Prop("equivalentUnityMcpNote", definition.EquivalentUnityMcpNote ?? string.Empty)
-                .Prop("handler", "bridge")
                 .Prop("supportStatus", "live-bridge")
                 .Prop("cliCommand", "context read " + definition.Name)
-                .Prop("docsTopic", "project-context")
                 .Prop("descriptorSource", definition.DescriptorSource)
                 .Prop("registeredBy", definition.RegisteredBy)
                 .Prop("assembly", definition.Assembly)
@@ -756,7 +740,6 @@ namespace UnityCli
         {
             var w = new UnityCliJsonWriter().BeginObject()
                 .Prop("name", name)
-                .Prop("kind", "context")
                 .Prop("source", "built-in");
             if (descriptor != null)
             {

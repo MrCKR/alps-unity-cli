@@ -21,7 +21,7 @@ namespace UnityCli
     /// </summary>
     [UnityCliTool(
         "runtime.wait",
-        Title = "Runtime Wait",
+        Summary = "Runtime Wait",
         Description = "Waits for a specified number of frames or seconds in Play Mode. Returns the actual frames waited and elapsed time. This is a runtime-only cross-frame primitive.",
         Group = "runtime",
         Target = "runtime",

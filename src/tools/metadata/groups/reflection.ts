@@ -9,7 +9,7 @@ import { objSchema } from "../schemas.js";
 export const REFLECTION_TOOLS: ToolMetadata[] = [
   {
     name: "reflection.method.find",
-    title: "Find Methods",
+    summary: "Find C# methods on a live Unity type.",
     description: "Find C# methods on a live Unity type. No scope restriction: public/private/static/instance methods are all discoverable. Read-only. Use this before reflection.method.call to discover signatures and parameters.",
     group: "reflection",
     inputSchema: objSchema({
@@ -39,7 +39,7 @@ export const REFLECTION_TOOLS: ToolMetadata[] = [
   },
   {
     name: "reflection.method.call",
-    title: "Call Method",
+    summary: "Invoke any C# method via reflection.",
     description: "Invoke any C# method via reflection. No scope restriction: public/private/static/instance, any namespace/assembly, Editor/Runtime. Critical risk: run --dry-run first to preview the target and planned effects, then rerun with --yes only for a known safe method. Use reflection.method.find first to discover signatures.",
     group: "reflection",
     inputSchema: objSchema({
@@ -75,7 +75,7 @@ export const REFLECTION_TOOLS: ToolMetadata[] = [
   },
   {
     name: "type.schema",
-    title: "Type JSON Schema",
+    summary: "Generate a live JSON Schema for any C# / Unity type by reflecting over its public fields and properties.",
     description: "Generate a live JSON Schema for any C# / Unity type by reflecting over its public fields and properties. Useful before object.modify/component.modify to understand writable structure.",
     group: "type",
     inputSchema: objSchema({

@@ -12,7 +12,7 @@ namespace UnityCli.Samples
     /// </summary>
     [UnityCliTool(
         "sample.runtime-echo",
-        Title = "Sample Runtime Echo",
+        Summary = "Echo a required message payload from Play Mode with runtime frame state.",
         Description = "Echoes the supplied input JSON from a Unity project runtime (Play Mode) C# tool. Only available in Play Mode.",
         Group = "sample",
         Target = "runtime",

@@ -83,19 +83,17 @@ test("C# descriptor includes inputSchema and outputSchema (B2)", async () => {
   assert.match(source, /OutputSchema = "\{/, "At least one context must have non-empty OutputSchema");
 });
 
-test("editor.tool-states EquivalentUnityMcp is 'none' with note (B1)", async () => {
+test("editor.tool-states keeps purpose in description without MCP descriptor fields", async () => {
   const source = await readContextCommandsSource();
   const tsIndex = source.indexOf("editor.tool-states");
   assert.ok(tsIndex > -1, "Must find editor.tool-states in source");
   const blockStart = source.lastIndexOf("new BuiltInContextDefinition", tsIndex);
   const blockEnd = source.indexOf("ReadHandler =", tsIndex);
   const block = source.slice(blockStart, blockEnd > blockStart ? blockEnd : tsIndex + 300);
-  assert.match(block, /EquivalentUnityMcp = "none"/, "editor.tool-states EquivalentUnityMcp must be 'none'");
-  assert.match(block, /EquivalentUnityMcpNote =/, "editor.tool-states must have EquivalentUnityMcpNote");
-  assert.match(block, /MCP tool discovery/, "Note must mention MCP tool discovery");
+  assert.match(block, /Description = .*Unity Editor transform tool settings/, "editor.tool-states must explain its Editor tool settings purpose");
   assert.match(block, /gridAvailable/, "editor.tool-states output schema must match runtime field gridAvailable");
-  // ContextDescriptorJson must output EquivalentUnityMcpNote when present
-  assert.match(source, /equivalentUnityMcpNote/, "ContextDescriptorJson must handle equivalentUnityMcpNote");
+  assert.doesNotMatch(source, /equivalentUnityMcp/i, "Context descriptors must not expose MCP equivalence fields");
+  assert.doesNotMatch(source, /resourceUri/i, "Context descriptors must not expose resourceUri fields");
 });
 
 test("editor context C# descriptors document read-only boundaries", async () => {
@@ -125,7 +123,7 @@ test("Context availability-sensitive handlers return available=false with diagno
 test("tools and tests Context handlers expose stable count fields", async () => {
   const source = await readContextCommandsSource();
   assert.match(source, /Name = "tools\.groups"[\s\S]*Handler = "offline"/, "tools.groups descriptor must disclose offline handling");
-  assert.match(source, /ReadToolsCustomContext[\s\S]*\.Prop\("count", \(long\)CountTopLevelJsonArrayItems\(toolsJson\)\)/, "tools.custom must include count matching tools array");
+  assert.match(source, /ReadToolsCustomContext[\s\S]*ProjectToolPublicDiscoveryJson\(\)[\s\S]*\.Prop\("count", \(long\)CountTopLevelJsonArrayItems\(toolsJson\)\)/, "tools.custom must expose public tool descriptors with a matching count");
   assert.match(source, /Prop\("available", false\)[\s\S]*\.Prop\("count", \(long\)0\)/, "tests.list unavailable branch must still include count");
 });
 

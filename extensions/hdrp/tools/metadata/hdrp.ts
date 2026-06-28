@@ -33,7 +33,7 @@ export const HDRP_TOOLS: ToolMetadata[] = [
   {
     ...HDRP_COMMON,
     name: "hdrp.volume",
-    title: "HDRP Volume",
+    summary: "List, create or configure HDRP Volume components and their profile effects.",
     description: "List, create or configure HDRP Volume components and their profile effects. Requires HDRP (com.unity.render-pipelines.high-definition) to be the active render pipeline.",
     inputSchema: objSchema({
       target: { type: "string" },
@@ -55,7 +55,7 @@ export const HDRP_TOOLS: ToolMetadata[] = [
   {
     ...HDRP_COMMON,
     name: "hdrp.settings",
-    title: "HDRP Pipeline Settings",
+    summary: "Get or set High Definition Render Pipeline asset settings.",
     description: "Get or set High Definition Render Pipeline asset settings. Requires HDRP (com.unity.render-pipelines.high-definition) to be the active render pipeline.",
     inputSchema: objSchema({
       property: { type: "string" },

@@ -28,7 +28,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   // ─── Utility ───────────────────────────────────────────
   {
     name: "probuilder.ping",
-    title: "ProBuilder Ping",
+    summary: "Check ProBuilder package availability and bridge status.",
     description: "Check ProBuilder package availability and bridge status. Returns package info if installed.",
     ...PB_COMMON,
     inputSchema: objSchema({}),
@@ -40,7 +40,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   // ─── Shape Creation ────────────────────────────────────
   {
     name: "probuilder.create-shape",
-    title: "ProBuilder Create Shape",
+    summary: "Create a ProBuilder primitive shape in the scene.",
     description: "Create a ProBuilder primitive shape in the scene. Supports Cube, Cylinder, Sphere, Plane, Cone, Torus, Pipe, Arch, Stair, CurvedStair, Door, Prism.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -65,7 +65,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "probuilder.create-poly-shape",
-    title: "ProBuilder Create Poly Shape",
+    summary: "Create a ProBuilder mesh from a set of 2D polygon points extruded to a given height.",
     description: "Create a ProBuilder mesh from a set of 2D polygon points extruded to a given height.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -82,7 +82,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   // ─── Face Operations ──────────────────────────────────
   {
     name: "probuilder.extrude-faces",
-    title: "ProBuilder Extrude Faces",
+    summary: "Extrude selected faces of a ProBuilder mesh by a given distance.",
     description: "Extrude selected faces of a ProBuilder mesh by a given distance.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -97,7 +97,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "probuilder.delete-faces",
-    title: "ProBuilder Delete Faces",
+    summary: "Delete selected faces from a ProBuilder mesh.",
     description: "Delete selected faces from a ProBuilder mesh.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -110,7 +110,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "probuilder.detach-faces",
-    title: "ProBuilder Detach Faces",
+    summary: "Detach selected faces from a ProBuilder mesh into a new GameObject.",
     description: "Detach selected faces from a ProBuilder mesh into a new GameObject.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -124,7 +124,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "probuilder.merge-faces",
-    title: "ProBuilder Merge Faces",
+    summary: "Merge selected faces of a ProBuilder mesh into a single face.",
     description: "Merge selected faces of a ProBuilder mesh into a single face.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -137,7 +137,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "probuilder.subdivide",
-    title: "ProBuilder Subdivide",
+    summary: "Subdivide selected faces of a ProBuilder mesh, increasing face count.",
     description: "Subdivide selected faces of a ProBuilder mesh, increasing face count.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -150,7 +150,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "probuilder.flip-normals",
-    title: "ProBuilder Flip Normals",
+    summary: "Flip the normals of selected faces on a ProBuilder mesh.",
     description: "Flip the normals of selected faces on a ProBuilder mesh.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -163,7 +163,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "probuilder.select-faces",
-    title: "ProBuilder Select Faces",
+    summary: "Select faces on a ProBuilder mesh using direction/grow/flood/loop/ring criteria.",
     description: "Select faces on a ProBuilder mesh using direction/grow/flood/loop/ring criteria.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -180,7 +180,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "probuilder.set-face-material",
-    title: "ProBuilder Set Face Material",
+    summary: "Assign a material to selected faces of a ProBuilder mesh.",
     description: "Assign a material to selected faces of a ProBuilder mesh.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -194,7 +194,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "probuilder.set-face-color",
-    title: "ProBuilder Set Face Color",
+    summary: "Set the vertex color of selected faces on a ProBuilder mesh.",
     description: "Set the vertex color of selected faces on a ProBuilder mesh.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -211,7 +211,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "probuilder.set-face-uvs",
-    title: "ProBuilder Set Face UVs",
+    summary: "Set UV parameters for selected faces on a ProBuilder mesh.",
     description: "Set UV parameters for selected faces on a ProBuilder mesh.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -230,7 +230,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   // ─── Edge Operations ──────────────────────────────────
   {
     name: "probuilder.extrude-edges",
-    title: "ProBuilder Extrude Edges",
+    summary: "Extrude selected edges of a ProBuilder mesh.",
     description: "Extrude selected edges of a ProBuilder mesh.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -246,7 +246,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "probuilder.bevel-edges",
-    title: "ProBuilder Bevel Edges",
+    summary: "Bevel selected edges of a ProBuilder mesh by a given amount.",
     description: "Bevel selected edges of a ProBuilder mesh by a given amount.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -261,7 +261,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "probuilder.bridge-edges",
-    title: "ProBuilder Bridge Edges",
+    summary: "Create a bridge between two edges on a ProBuilder mesh.",
     description: "Create a bridge between two edges on a ProBuilder mesh.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -276,7 +276,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "probuilder.connect-elements",
-    title: "ProBuilder Connect Elements",
+    summary: "Connect selected edges or faces on a ProBuilder mesh by inserting a new edge loop.",
     description: "Connect selected edges or faces on a ProBuilder mesh by inserting a new edge loop.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -292,7 +292,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   // ─── Mesh Combine / Merge ─────────────────────────────
   {
     name: "probuilder.combine-meshes",
-    title: "ProBuilder Combine Meshes",
+    summary: "Combine multiple ProBuilder meshes into a single mesh.",
     description: "Combine multiple ProBuilder meshes into a single mesh.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -305,7 +305,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "probuilder.merge-objects",
-    title: "ProBuilder Merge Objects",
+    summary: "Merge multiple GameObjects into a single ProBuilder object.",
     description: "Merge multiple GameObjects into a single ProBuilder object. Optionally auto-convert non-ProBuilder meshes.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -319,7 +319,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "probuilder.duplicate-and-flip",
-    title: "ProBuilder Duplicate and Flip",
+    summary: "Duplicate selected faces and flip their normals.",
     description: "Duplicate selected faces and flip their normals.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -332,7 +332,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "probuilder.create-polygon",
-    title: "ProBuilder Create Polygon",
+    summary: "Create a new polygon face from selected vertices on a ProBuilder mesh.",
     description: "Create a new polygon face from selected vertices on a ProBuilder mesh.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -347,7 +347,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   // ─── Vertex Operations ────────────────────────────────
   {
     name: "probuilder.merge-vertices",
-    title: "ProBuilder Merge Vertices",
+    summary: "Merge selected vertices on a ProBuilder mesh into a single vertex.",
     description: "Merge selected vertices on a ProBuilder mesh into a single vertex.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -361,7 +361,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "probuilder.weld-vertices",
-    title: "ProBuilder Weld Vertices",
+    summary: "Weld vertices within a radius on a ProBuilder mesh.",
     description: "Weld vertices within a radius on a ProBuilder mesh.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -375,7 +375,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "probuilder.split-vertices",
-    title: "ProBuilder Split Vertices",
+    summary: "Split shared vertices on a ProBuilder mesh into separate vertices per face.",
     description: "Split shared vertices on a ProBuilder mesh into separate vertices per face.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -388,7 +388,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "probuilder.move-vertices",
-    title: "ProBuilder Move Vertices",
+    summary: "Move selected vertices on a ProBuilder mesh by an offset.",
     description: "Move selected vertices on a ProBuilder mesh by an offset.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -404,7 +404,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "probuilder.insert-vertex",
-    title: "ProBuilder Insert Vertex",
+    summary: "Insert a new vertex on an edge or face of a ProBuilder mesh.",
     description: "Insert a new vertex on an edge or face of a ProBuilder mesh.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -419,7 +419,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "probuilder.append-vertices-to-edge",
-    title: "ProBuilder Append Vertices to Edge",
+    summary: "Append new vertices along an edge of a ProBuilder mesh.",
     description: "Append new vertices along an edge of a ProBuilder mesh.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -435,7 +435,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   // ─── Info / Inspection ────────────────────────────────
   {
     name: "probuilder.mesh-info",
-    title: "ProBuilder Mesh Info",
+    summary: "Get detailed information about a ProBuilder mesh including vertex, face, edge counts and bounds.",
     description: "Get detailed information about a ProBuilder mesh including vertex, face, edge counts and bounds.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -448,7 +448,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "probuilder.validate-mesh",
-    title: "ProBuilder Validate Mesh",
+    summary: "Validate a ProBuilder mesh for issues like degenerate triangles and unused vertices.",
     description: "Validate a ProBuilder mesh for issues like degenerate triangles and unused vertices.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -461,7 +461,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   // ─── Conversion ───────────────────────────────────────
   {
     name: "probuilder.convert-to-probuilder",
-    title: "ProBuilder Convert to ProBuilder",
+    summary: "Convert a regular Unity mesh to a ProBuilder mesh.",
     description: "Convert a regular Unity mesh to a ProBuilder mesh.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -474,7 +474,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   // ─── Smoothing ────────────────────────────────────────
   {
     name: "probuilder.set-smoothing",
-    title: "ProBuilder Set Smoothing",
+    summary: "Set the smoothing group for selected faces on a ProBuilder mesh.",
     description: "Set the smoothing group for selected faces on a ProBuilder mesh.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -488,7 +488,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "probuilder.auto-smooth",
-    title: "ProBuilder Auto Smooth",
+    summary: "Automatically apply smoothing to faces based on an angle threshold.",
     description: "Automatically apply smoothing to faces based on an angle threshold.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -503,7 +503,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   // ─── Pivot / Transform ────────────────────────────────
   {
     name: "probuilder.center-pivot",
-    title: "ProBuilder Center Pivot",
+    summary: "Center the pivot point of a ProBuilder mesh to its bounds center.",
     description: "Center the pivot point of a ProBuilder mesh to its bounds center.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -515,7 +515,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "probuilder.freeze-transform",
-    title: "ProBuilder Freeze Transform",
+    summary: "Bake the current transform into the ProBuilder mesh vertices, resetting the transform to identity.",
     description: "Bake the current transform into the ProBuilder mesh vertices, resetting the transform to identity.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -527,7 +527,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "probuilder.set-pivot",
-    title: "ProBuilder Set Pivot",
+    summary: "Set the pivot point of a ProBuilder mesh to a specific position.",
     description: "Set the pivot point of a ProBuilder mesh to a specific position.",
     ...PB_COMMON,
     inputSchema: objSchema({
@@ -543,7 +543,7 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
   // ─── Repair ───────────────────────────────────────────
   {
     name: "probuilder.repair-mesh",
-    title: "ProBuilder Repair Mesh",
+    summary: "Attempt to repair a ProBuilder mesh by removing degenerate triangles and unused vertices.",
     description: "Attempt to repair a ProBuilder mesh by removing degenerate triangles and unused vertices.",
     ...PB_COMMON,
     inputSchema: objSchema({

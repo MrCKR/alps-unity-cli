@@ -26,7 +26,7 @@ test("tools group list <sample> --include-custom discovers Unity project custom 
   const requests: BridgeRequest[] = [];
   const customDescriptor = {
     name: "sample.echo",
-    title: "Sample Echo",
+    summary: "Echoes input from an Attribute-first Unity Editor tool.",
     description: "Echoes input from an Attribute-first Unity Editor tool.",
     group: "sample",
     inputSchema: { type: "object", properties: { message: { type: "string" } }, required: ["message"] },
@@ -64,7 +64,7 @@ test("tools describe resolves custom descriptor without hand-written CLI metadat
       data: {
         tools: [{
           name: "sample.echo",
-          title: "Sample Echo",
+          summary: "Echoes input from an Attribute-first Unity Editor tool.",
           description: "Echoes input from an Attribute-first Unity Editor tool.",
           group: "sample",
           inputSchema: { type: "object" },
@@ -78,8 +78,9 @@ test("tools describe resolves custom descriptor without hand-written CLI metadat
   assert.equal(result.ok, true);
   const data = result.data as Record<string, unknown>;
   assert.equal(data.name, "sample.echo");
-  assert.equal(data.mode, "bridge");
-  assert.equal(data.requiresUnity, true);
+  assert.equal(data.source, "project");
+  assert.equal("mode" in data, false);
+  assert.equal("requiresUnity" in data, false);
   assert.equal(data.supportStatus, "live-bridge");
   assert.equal(data.cliCommand, "tools run sample.echo");
   assert.equal(data.playModeSupport, "editor-only");

@@ -4,7 +4,7 @@ import { objSchema } from "../schemas.js";
 export const TOOLS_DISCOVERY_TOOLS: ToolMetadata[] = [
   {
     name: "tools.group",
-    title: "Tool Groups",
+    summary: "List the available tool groups with counts.",
     description: "List the available tool groups with counts. Primary discovery entry point in the group-first model; run this first to find the group containing a capability, then tools group list <group> and tools describe <tool>.",
     group: "tools",
     inputSchema: objSchema({}),
@@ -21,7 +21,7 @@ export const TOOLS_DISCOVERY_TOOLS: ToolMetadata[] = [
   },
   {
     name: "tools.group-list",
-    title: "List Tools in Group",
+    summary: "List tools in a specific group with short summaries (name, title, destructiveHint, supportStatus).",
     description: "List tools in a specific group with short summaries (name, title, destructiveHint, supportStatus). Does NOT expand full schema — use tools describe <tool> for the complete input/output schema. Pass includeCustom to include project custom tools.",
     group: "tools",
     inputSchema: objSchema({
@@ -41,7 +41,7 @@ export const TOOLS_DISCOVERY_TOOLS: ToolMetadata[] = [
   },
   {
     name: "tools.search",
-    title: "Search Tools",
+    summary: "Search tools by keyword across name, title, description, and group.",
     description: "Search tools by keyword across name, title, description, and group. Use this when you do not know the exact group; results are ranked. Then tools describe <tool> for full schema.",
     group: "tools",
     inputSchema: objSchema({
@@ -60,7 +60,7 @@ export const TOOLS_DISCOVERY_TOOLS: ToolMetadata[] = [
   },
   {
     name: "tools.describe",
-    title: "Describe Tool",
+    summary: "Show full metadata for a specific tool: input schema, output schema, handler, support status, playModeSupport, sideEffects, riskLevel and examples.",
     description: "Show full metadata for a specific tool: input schema, output schema, handler, support status, playModeSupport, sideEffects, riskLevel and examples. This is the primary entry before tools run — read it once to construct a correct one-shot call. Unknown names return E_TOOL_NOT_FOUND_FOR_TARGET.",
     group: "tools",
     inputSchema: objSchema({
@@ -79,7 +79,7 @@ export const TOOLS_DISCOVERY_TOOLS: ToolMetadata[] = [
   },
   {
     name: "tools.run",
-    title: "Run Tool (Unified)",
+    summary: "Execute a tool by its dotted name using the unified tools contract.",
     description: "Execute a tool by its dotted name using the unified tools contract. This is the primary execution entry point — the router determines the execution channel (bridge, bridge-runtime, job, offline, or hybrid) based on the tool's handler and target descriptor. Runtime target tools require the Editor to be in Play Mode; if not in Play Mode, the CLI returns E_RUNTIME_NOT_READY (transient).",
     group: "tools",
     inputSchema: objSchema({

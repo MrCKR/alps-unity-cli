@@ -78,7 +78,7 @@ test("integration: tools describe scene.hierarchy via execute()", async () => {
   assert.equal(data.destructiveHint, false);
   assert.ok(data.inputSchema);
   assert.ok(Array.isArray(data.examples));
-  assert.equal((data as { mode: string }).mode, "offline");
+  assert.equal("mode" in data, false);
 });
 
 test("integration: capabilities via execute()", async () => {

@@ -7,7 +7,7 @@ import test from "node:test";
 import { execute } from "../src/cli.js";
 import { JobRunner } from "../src/job-runner.js";
 import { JobStore } from "../src/job-store.js";
-import { readInstances, writeInstances, type UnityInstance } from "../src/instances.js";
+import { readInstances, writeInstances, selectInstanceForFlags, type UnityInstance } from "../src/instances.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
@@ -245,4 +245,35 @@ test("instances list reads UTF-8 BOM prefixed registry files", async () => {
   assert.equal(instances[0].instanceId, "editor-bom");
   // Health check will fail (unreachable), but instanceId is preserved - the key is BOM does not prevent parsing
   assert.equal(instances[0].instanceId, "editor-bom");
+});
+
+// B1: 进程级隔离优先于全局活动目标。当 CWD 落在某个已就绪实例的项目目录下时，
+// 应选中该实例，即使存在全局 activeTarget 指向另一个实例。
+test("selectInstanceForFlags prefers CWD match over global activeTarget", async () => {
+  const runtime = await makeRuntime();
+  const projectA = await mkdtemp(join(tmpdir(), "unity_cli-cwd-pinned-A-"));
+  const projectB = await mkdtemp(join(tmpdir(), "unity_cli-cwd-pinned-B-"));
+  await writeInstances(runtime.dataDir, [
+    makeInstance({ instanceId: "inst_A", projectPath: projectA, projectHash: "hashA" }),
+    makeInstance({ instanceId: "inst_B", projectPath: projectB, projectHash: "hashB" })
+  ]);
+
+  // 设置全局 activeTarget 指向 A
+  await execute(["target", "set", "inst_A"], runtime);
+
+  // CWD 落在 B 项目目录下 → 应选中 B（目录隔离），而非 activeTarget(A)
+  const selection = await selectInstanceForFlags({}, runtime.dataDir, projectB);
+  assert.equal(selection?.instance.instanceId, "inst_B");
+  assert.equal(selection?.matchedBy, "cwd");
+
+  // CWD 落在任何项目之外 → 回退到全局 activeTarget(A)
+  const nowhere = await mkdtemp(join(tmpdir(), "unity_cli-cwd-nowhere-"));
+  const fallback = await selectInstanceForFlags({}, runtime.dataDir, nowhere);
+  assert.equal(fallback?.instance.instanceId, "inst_A");
+  assert.equal(fallback?.matchedBy, "activeTarget");
+
+  // --instance 仍然最优先，覆盖 CWD
+  const explicit = await selectInstanceForFlags({ instance: "inst_A" }, runtime.dataDir, projectB);
+  assert.equal(explicit?.instance.instanceId, "inst_A");
+  assert.equal(explicit?.matchedBy, "instanceId");
 });

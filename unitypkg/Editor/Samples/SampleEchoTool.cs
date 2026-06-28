@@ -10,7 +10,7 @@ namespace UnityCli.Samples
     /// </summary>
     [UnityCliTool(
         "sample.echo",
-        Title = "Sample Echo",
+        Summary = "Echo a required message payload from a project-local Editor tool.",
         Description = "Echoes the supplied input JSON from a Unity project Editor C# tool.",
         Group = "sample",
         InputSchema = "{\"type\":\"object\",\"properties\":{\"message\":{\"type\":\"string\"}},\"required\":[\"message\"]}",

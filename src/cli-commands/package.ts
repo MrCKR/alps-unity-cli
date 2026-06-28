@@ -243,7 +243,7 @@ export async function handlePackage(command: string | undefined, args: string[],
     const name = validatePackageName(args[0] ?? getString(flags, "name"));
     const confirmation = await confirmDestructiveExecution(flags, {
       command: "cli.package.remove",
-      title: "Package Remove",
+      summary: "Package Remove",
       destructiveHint: true,
       requestId
     });

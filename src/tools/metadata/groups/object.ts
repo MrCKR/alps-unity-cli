@@ -8,7 +8,7 @@ import { objSchema } from "../schemas.js";
 export const OBJECT_TOOLS: ToolMetadata[] = [
   {
     name: "object.get-data",
-    title: "Get Object Data",
+    summary: "Deep-serialize any UnityEngine.Object (GameObject, Component, Asset, ScriptableObject) into a SerializedMember tree.",
     description: "Deep-serialize any UnityEngine.Object (GameObject, Component, Asset, ScriptableObject) into a SerializedMember tree. Use asset.get-data for known asset paths and component.get for a single component. For token safety, pass exact paths or one viewQuery; they are mutually exclusive. Keep maxDepth low for full reads.",
     group: "object",
     inputSchema: objSchema({
@@ -49,7 +49,7 @@ export const OBJECT_TOOLS: ToolMetadata[] = [
   },
   {
     name: "object.modify",
-    title: "Modify Object",
+    summary: "Apply pathPatches or jsonPatch (JSON Merge Patch, RFC 7386) to any Unity Object.",
     description: "Apply pathPatches or jsonPatch (JSON Merge Patch, RFC 7386) to any Unity Object. Returns updated data, changed paths, logs and structured audit. Use object.get-data first to read current values. In Play Mode, scene/runtime object changes are runtime-only and asset changes can affect the editor session.",
     group: "object",
     inputSchema: objSchema({

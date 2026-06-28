@@ -9,7 +9,7 @@ export const CONFIRMED_FLAG = "__destructiveConfirmed";
 
 export interface DestructiveGuardOptions {
   command: string;
-  title?: string;
+  summary?: string;
   destructiveHint?: boolean;
   supportsDryRun?: boolean;
   requestId: string;
@@ -49,7 +49,7 @@ export async function confirmDestructiveExecution(
   }
 
   if (stdin.isTTY && stdout.isTTY && process.env.CI !== "true") {
-    const label = options.title ? `${options.command} (${options.title})` : options.command;
+    const label = options.summary ? `${options.command} (${options.summary})` : options.command;
     const answer = await promptConfirmation(`Destructive Unity CLI command ${label} requires confirmation. Type "yes" to continue: `);
     if (answer.trim().toLowerCase() === "yes") {
       flags[CONFIRMED_FLAG] = true;
@@ -62,7 +62,7 @@ export async function confirmDestructiveExecution(
     "Rerun with --yes to execute, or add --dry-run when the tool supports preview."
   ], {
     command: options.command,
-    title: options.title ?? null,
+    summary: options.summary ?? null,
     destructiveHint: true,
     supportsDryRun: options.supportsDryRun === true,
     dryRunFlag: "--dry-run",
