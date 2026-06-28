@@ -59,14 +59,14 @@ const PROJECT_LAYERS: ContextMetadata = {
 
 const EDITOR_STATE: ContextMetadata = {
   name: "editor.state",
-  description: "Read-only snapshot of current Unity Editor state: Play Mode, compile/import/build busy flags, active scene, Prefab Stage, Bridge build stamp, and runtime session status. Use this before live tools to avoid acting while Unity is busy.",
+  description: "Read-only snapshot of current Unity Editor state: Play Mode, compile/import/build busy flags, active scene, Prefab Stage, Bridge build stamp, and runtime session status. Use this before live tools to avoid acting while Unity is busy. Pass waitReady=true to block on the main thread until Unity is no longer busy, reducing AI polling round-trips; on timeout it returns the latest snapshot with timedOut=true.",
   source: "built-in",
   category: "editor",
-  inputSchema: {},
+  inputSchema: { type: "object", properties: { waitReady: { type: "boolean", description: "If true, block on the Unity main thread until the editor is no longer busy (compile/import/build/playmode/domain-reload), then return the idle snapshot. Defaults to false." }, timeoutMs: { type: "integer", default: 60000, description: "Maximum milliseconds to wait when waitReady=true. On timeout the latest snapshot is returned with timedOut=true." } } },
   refreshBehavior: "live",
   target: "editor",
   availabilityScope: "editorSession",
-  outputSchema: { type: "object", properties: { schemaVersion: { type: "string" }, observedAt: { type: "string" }, state: { type: "object", properties: { playMode: { type: "object" }, busy: { type: "object" }, activeScene: { type: "object" }, prefabStage: { type: "object" }, bridge: { type: "object" }, runtime: { type: "object" } } } } },
+  outputSchema: { type: "object", properties: { schemaVersion: { type: "string" }, observedAt: { type: "string" }, timedOut: { type: "boolean" }, diagnostics: { type: "string" }, state: { type: "object", properties: { playMode: { type: "object" }, busy: { type: "object" }, activeScene: { type: "object" }, prefabStage: { type: "object" }, bridge: { type: "object" }, runtime: { type: "object" } } } } },
   handler: "bridge",
   cliCommand: "context read editor.state"
 };

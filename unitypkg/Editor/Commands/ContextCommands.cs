@@ -92,10 +92,10 @@ namespace UnityCli
                 // ── Editor contexts ──
                 new BuiltInContextDefinition
                 {
-                    Name = "editor.state", Description = "Read-only snapshot of current Unity Editor state: Play Mode, compile/import/build busy flags, active scene, Prefab Stage, Bridge build stamp, and runtime session status. Use this before live tools to avoid acting while Unity is busy.",
+                    Name = "editor.state", Description = "Read-only snapshot of current Unity Editor state: Play Mode, compile/import/build busy flags, active scene, Prefab Stage, Bridge build stamp, and runtime session status. Use this before live tools to avoid acting while Unity is busy. Pass waitReady=true to block on the main thread until Unity is no longer busy (compiling/updating/building/playmode-switching/domain-reloading), reducing AI polling round-trips; on timeout it returns the latest snapshot with timedOut=true instead of erroring.",
                     Category = "editor", Source = "built-in", RefreshBehavior = "live", Target = "editor", AvailabilityScope = "editorSession", Handler = "bridge",
-                    InputSchema = "{}",
-                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"schemaVersion\":{\"type\":\"string\"},\"observedAt\":{\"type\":\"string\"},\"state\":{\"type\":\"object\",\"properties\":{\"playMode\":{\"type\":\"object\"},\"busy\":{\"type\":\"object\"},\"activeScene\":{\"type\":\"object\"},\"prefabStage\":{\"type\":\"object\"},\"bridge\":{\"type\":\"object\"},\"runtime\":{\"type\":\"object\"}}}}}",
+                    InputSchema = "{\"type\":\"object\",\"properties\":{\"waitReady\":{\"type\":\"boolean\",\"description\":\"If true, block on the Unity main thread until the editor is no longer busy (compile/import/build/playmode/domain-reload), then return the idle snapshot. Defaults to false (immediate snapshot).\"},\"timeoutMs\":{\"type\":\"integer\",\"default\":60000,\"description\":\"Maximum milliseconds to wait when waitReady=true. On timeout the latest snapshot is returned with timedOut=true.\"}}}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"schemaVersion\":{\"type\":\"string\"},\"observedAt\":{\"type\":\"string\"},\"timedOut\":{\"type\":\"boolean\"},\"diagnostics\":{\"type\":\"string\"},\"state\":{\"type\":\"object\",\"properties\":{\"playMode\":{\"type\":\"object\"},\"busy\":{\"type\":\"object\"},\"activeScene\":{\"type\":\"object\"},\"prefabStage\":{\"type\":\"object\"},\"bridge\":{\"type\":\"object\"},\"runtime\":{\"type\":\"object\"}}}}}",
                     RequiresPackages = null, ReadHandler = ReadEditorStateContext
                 },
                 new BuiltInContextDefinition
@@ -351,14 +351,59 @@ namespace UnityCli
 
         private static string ReadEditorStateContext(BridgeRequest request)
         {
-            // Reuse existing EditorStateJson() and wrap with context envelope fields
+            var waitReady = request.BoolArg("waitReady", false);
+            var timeoutMs = Math.Max(0, request.IntArg("timeoutMs", 60000));
             var stateJson = EditorStateJson();
-            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+            var isBusy = EditorApplication.isCompiling || EditorApplication.isUpdating || EditorApplication.isPlayingOrWillChangePlaymode || BuildPipeline.isBuildingPlayer || domainReloading;
+            // wait-ready：当前 busy 且允许延迟时，在主线程轮询到 idle，避免 AI 反复轮询消耗往返。
+            // 超时不报错，返回当前状态 + timedOut=true，让 AI 至少拿到快照。
+            if (waitReady && isBusy && currentWorkItem != null)
+            {
+                var item = currentWorkItem;
+                var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
+                EditorApplication.CallbackFunction waiter = null;
+                waiter = () =>
+                {
+                    try
+                    {
+                        var stillBusy = EditorApplication.isCompiling || EditorApplication.isUpdating || EditorApplication.isPlayingOrWillChangePlaymode || BuildPipeline.isBuildingPlayer || domainReloading;
+                        if (!stillBusy || DateTime.UtcNow > deadline)
+                        {
+                            EditorApplication.update -= waiter;
+                            UnregisterDeferredItem(item);
+                            var timedOut = DateTime.UtcNow > deadline;
+                            item.Response = SuccessJson(EditorStateContextEnvelopeJson(EditorStateJson(), timedOut));
+                            item.Completed.Set();
+                            WriteLog("editor_state_wait_completed requestId=" + item.Request.RequestId + " timedOut=" + timedOut.ToString().ToLowerInvariant());
+                        }
+                    }
+                    catch (Exception exception)
+                    {
+                        EditorApplication.update -= waiter;
+                        UnregisterDeferredItem(item);
+                        item.Response = SuccessJson(EditorStateContextEnvelopeJson(EditorStateJson(), true));
+                        item.Completed.Set();
+                        WriteLog("editor_state_wait_exception requestId=" + item.Request.RequestId + " " + exception.GetType().Name + ": " + exception.Message);
+                    }
+                };
+                item.MarkDeferred();
+                lock (DeferredItems) { DeferredItems.Add(item); }
+                EditorApplication.update += waiter;
+                WriteLog("editor_state_wait_started requestId=" + item.Request.RequestId + " timeoutMs=" + timeoutMs.ToString(CultureInfo.InvariantCulture));
+                return DeferredResponseMarker;
+            }
+            return SuccessJson(EditorStateContextEnvelopeJson(stateJson, false));
+        }
+
+        // editor.state Context envelope：schemaVersion + observedAt + state + 可选 timedOut。
+        private static string EditorStateContextEnvelopeJson(string stateJson, bool timedOut)
+        {
+            var w = new UnityCliJsonWriter().BeginObject()
                 .Prop("schemaVersion", "1.0")
                 .Prop("observedAt", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture))
-                .PropRaw("state", stateJson)
-                .EndObject()
-                .ToString());
+                .PropRaw("state", stateJson);
+            if (timedOut) w.Prop("timedOut", true).Prop("diagnostics", "wait-ready timed out before Unity reached idle; returned the latest snapshot.");
+            return w.EndObject().ToString();
         }
 
         private static string ReadEditorSelection(BridgeRequest request)

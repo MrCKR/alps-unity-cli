@@ -92,15 +92,23 @@ const PROJECT_LAYERS: ContextDescriptor = {
 
 const EDITOR_STATE: ContextDescriptor = {
   name: "editor.state",
-  description: "Read-only snapshot of current Unity Editor state: Play Mode, compile/import/build busy flags, active scene, Prefab Stage, Bridge build stamp, and runtime session status. Use this before live tools to avoid acting while Unity is busy.",
+  description: "Read-only snapshot of current Unity Editor state: Play Mode, compile/import/build busy flags, active scene, Prefab Stage, Bridge build stamp, and runtime session status. Use this before live tools to avoid acting while Unity is busy. Pass waitReady=true to block on the main thread until Unity is no longer busy (compiling/updating/building/playmode-switching/domain-reloading), reducing AI polling round-trips; on timeout it returns the latest snapshot with timedOut=true instead of erroring.",
   category: "editor",
   cliCommand: "context read editor.state",
-  inputSchema: { type: "object", properties: {} },
+  inputSchema: {
+    type: "object",
+    properties: {
+      waitReady: { type: "boolean", description: "If true, block on the Unity main thread until the editor is no longer busy (compile/import/build/playmode/domain-reload), then return the idle snapshot. Defaults to false (immediate snapshot)." },
+      timeoutMs: { type: "integer", default: 60000, description: "Maximum milliseconds to wait when waitReady=true. On timeout the latest snapshot is returned with timedOut=true." }
+    }
+  },
   outputSchema: {
     type: "object",
     properties: {
       schemaVersion: { type: "string", description: "Context schema version." },
       observedAt: { type: "string", description: "UTC observation timestamp." },
+      timedOut: { type: "boolean", description: "Present and true only when waitReady timed out before reaching idle; the returned state is the latest snapshot." },
+      diagnostics: { type: "string", description: "Present only when timedOut=true, explaining the wait-ready timeout." },
       state: {
         type: "object",
         properties: {

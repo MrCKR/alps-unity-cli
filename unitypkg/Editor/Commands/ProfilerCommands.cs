@@ -597,6 +597,7 @@ namespace UnityCli
             var go = string.IsNullOrEmpty(target) ? null : ObjectRefResolver.FindGameObjectByPath(target);
             var w = new UnityCliJsonWriter().BeginObject();
             w.Prop("command", "profiler.object-memory");
+            w.Prop("target", target);
             if (go != null)
             {
                 long total = 0;
