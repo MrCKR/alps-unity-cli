@@ -5,6 +5,7 @@ import type { CliResult } from "./types.js";
 
 export interface BuiltinDocsRuntime {
   projectTools?: ToolMetadata[];
+  fetch?: (url: string) => Promise<{ ok: boolean; status: number; text: () => Promise<string> }>;
 }
 
 interface DocTopic {

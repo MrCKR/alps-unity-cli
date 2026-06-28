@@ -149,6 +149,44 @@ test("docs cache missing returns structured diagnostic", async () => {
   assert.equal(result.error?.next_actions?.[0].includes("--docs-dir"), true);
 });
 
+test("docs get falls back online when default cache is missing", async () => {
+  const runtime = await makeRuntime();
+  const urls: string[] = [];
+  const onlineRuntime = Object.assign(runtime, {
+    fetch: async (url: string) => {
+      urls.push(url);
+      return { ok: url.endsWith("Camera.html"), status: url.endsWith("Camera.html") ? 200 : 404, text: async () => "<html><title>Camera - Unity</title><body>Camera renders scenes.</body></html>" };
+    }
+  });
+  const result = await execute(["tools", "run", "docs.get", "UnityEngine.Camera"], onlineRuntime);
+
+  assert.equal(result.ok, true);
+  const data = result.data as { mode: string; source: { kind: string; offlineFallbackFrom: string }; doc: { name: string; title: string; url: string }; diagnostics: Array<{ code: string }> };
+  assert.equal(data.mode, "online");
+  assert.equal(data.source.kind, "online");
+  assert.equal(data.source.offlineFallbackFrom, "DOCS_CACHE_MISSING");
+  assert.equal(data.doc.name, "UnityEngine.Camera");
+  assert.equal(data.doc.title, "Camera");
+  assert.ok(urls.some((url) => url.endsWith("Camera.html")));
+  assert.equal(data.diagnostics[0].code, "DOCS_ONLINE_FALLBACK");
+});
+
+test("docs search falls back online when offline cache has no matches", async () => {
+  const runtime = await makeRuntime();
+  const docsDir = await makeDocsCache();
+  const onlineRuntime = Object.assign(runtime, {
+    fetch: async () => ({ ok: true, status: 200, text: async () => "<a href=\"Rigidbody.html\">Rigidbody</a>" })
+  });
+  const result = await execute(["tools", "run", "docs.search", "Rigidbody", "--docs-dir", docsDir], onlineRuntime);
+
+  assert.equal(result.ok, true);
+  const data = result.data as { mode: string; source: { offlineFallbackFrom: string }; items: Array<{ name: string; url: string }> };
+  assert.equal(data.mode, "online");
+  assert.equal(data.source.offlineFallbackFrom, "DOCS_QUERY_NOT_FOUND");
+  assert.equal(data.items[0].name, "Rigidbody");
+  assert.match(data.items[0].url, /Rigidbody\.html$/);
+});
+
 test("reflect type and member read signatures and assembly source", async () => {
   const runtime = await makeRuntime();
   const reflectDir = await makeReflectCache();

@@ -1,6 +1,6 @@
 import { access, readFile, readdir, stat } from "node:fs/promises";
 import { basename, extname, join, relative, resolve, sep } from "node:path";
-import { getNumber, getString } from "./args.js";
+import { getBoolean, getNumber, getString } from "./args.js";
 import { handleBuiltinDocsCommand } from "./builtin-docs.js";
 import type { BuiltinDocsRuntime } from "./builtin-docs.js";
 import { failure, success } from "./output.js";
@@ -90,13 +90,19 @@ export async function handleDocsCommand(
     const cache = await loadDocsCache(cacheDir);
     const versioned = filterVersion(cache, getString(flags, "unity-version") ?? getString(flags, "version"), "DOCS_VERSION_NOT_FOUND");
     if (command === "get") {
-      return await docsGet(args[0] ?? getString(flags, "api"), flags, requestId, versioned);
+      return await docsGet(args[0] ?? getString(flags, "api"), flags, requestId, versioned, runtime);
     }
     if (command === "search") {
-      return docsSearch(args[0] ?? getString(flags, "query"), flags, requestId, versioned);
+      return docsSearch(args[0] ?? getString(flags, "query"), flags, requestId, versioned, runtime);
     }
     return failure(requestId, "UNKNOWN_DOCS_COMMAND", "Expected tools run docs.list, docs.topic, docs.get, or docs.search.");
   } catch (error) {
+    if (command === "get" && shouldUseOnlineDocsFallback(flags, error)) {
+      return docsGetOnline(args[0] ?? getString(flags, "api"), flags, requestId, runtime, cacheFailure(requestId, error));
+    }
+    if (command === "search" && shouldUseOnlineDocsFallback(flags, error)) {
+      return docsSearchOnline(args[0] ?? getString(flags, "query"), flags, requestId, runtime, cacheFailure(requestId, error));
+    }
     return cacheFailure(requestId, error);
   }
 }
@@ -133,16 +139,17 @@ export async function handleReflectCommand(
   }
 }
 
-async function docsGet(api: string | undefined, flags: Record<string, string | boolean>, requestId: string, cache: CacheIndex): Promise<CliResult> {
+async function docsGet(api: string | undefined, flags: Record<string, string | boolean>, requestId: string, cache: CacheIndex, runtime: BuiltinDocsRuntime): Promise<CliResult> {
   if (!api) {
     return failure(requestId, "DOCS_API_REQUIRED", "Pass an API name: tools run docs.get --input '{\"api\":\"<api>\"}'.");
   }
   const matches = cache.entries.filter((entry) => entryMatchesName(entry, api));
   if (matches.length === 0) {
-    return failure(requestId, "DOCS_API_NOT_FOUND", `Unity API documentation was not found in the offline cache: ${api}.`, [
+    const offlineFailure = failure(requestId, "DOCS_API_NOT_FOUND", `Unity API documentation was not found in the offline cache: ${api}.`, [
       "Run tools run docs.search --input '{\"query\":\"<query>\"}' to inspect cached APIs.",
       "Pass --docs-dir <path> or set UNITY_CLI_DOCS_DIR to a populated cache."
     ]);
+    return shouldUseOnlineDocsFallback(flags) ? docsGetOnline(api, flags, requestId, runtime, offlineFailure) : offlineFailure;
   }
   if (matches.length > 1) {
     return failure(requestId, "DOCS_API_AMBIGUOUS", `Multiple cached Unity APIs matched: ${api}.`, [
@@ -166,13 +173,16 @@ async function docsGet(api: string | undefined, flags: Record<string, string | b
   return success(requestId, data);
 }
 
-function docsSearch(query: string | undefined, flags: Record<string, string | boolean>, requestId: string, cache: CacheIndex): CliResult {
+async function docsSearch(query: string | undefined, flags: Record<string, string | boolean>, requestId: string, cache: CacheIndex, runtime: BuiltinDocsRuntime): Promise<CliResult> {
   if (!query) {
     return failure(requestId, "DOCS_QUERY_REQUIRED", "Pass a search query: tools run docs.search --input '{\"query\":\"<query>\"}'.");
   }
   const scored = scoreEntries(cache.entries, query)
     .filter((entry) => entry.score > 0)
     .map(({ entry }) => publicDoc(entry, false));
+  if (scored.length === 0 && shouldUseOnlineDocsFallback(flags)) {
+    return docsSearchOnline(query, flags, requestId, runtime, failure(requestId, "DOCS_QUERY_NOT_FOUND", `No offline docs matched: ${query}.`, ["Try a broader query or provide a populated docs cache."]));
+  }
   const page = paginate(scored, flags);
   const format = outputFormat(flags);
   return success(requestId, {
@@ -186,6 +196,148 @@ function docsSearch(query: string | undefined, flags: Record<string, string | bo
     ...page,
     ...(format === "text" ? { text: page.items.map((entry) => `${entry.name} - ${entry.title ?? entry.summary ?? ""}`.trim()).join("\n") } : {})
   });
+}
+
+function shouldUseOnlineDocsFallback(flags: Record<string, string | boolean>, error?: unknown): boolean {
+  if (getBoolean(flags, "offline-only")) return false;
+  const explicitDocsDir = getString(flags, "docs-dir") !== undefined || getString(flags, "cache") !== undefined || process.env.UNITY_CLI_DOCS_DIR !== undefined;
+  const missingExplicitCache = explicitDocsDir && error instanceof CacheError && error.code === "DOCS_CACHE_MISSING";
+  return !missingExplicitCache || getBoolean(flags, "online-fallback");
+}
+
+async function docsGetOnline(api: string | undefined, flags: Record<string, string | boolean>, requestId: string, runtime: BuiltinDocsRuntime, offlineFailure: CliResult): Promise<CliResult> {
+  if (!api) {
+    return failure(requestId, "DOCS_API_REQUIRED", "Pass an API name: tools run docs.get --input '{\"api\":\"<api>\"}'.");
+  }
+  const fetcher = docsFetcher(runtime);
+  if (!fetcher) return offlineFailure;
+  const candidates = docsUrlCandidates(api);
+  for (const url of candidates) {
+    const response = await safeFetch(fetcher, url);
+    if (!response || !response.ok) continue;
+    const html = await response.text();
+    const title = extractTitle(html) ?? api;
+    const content = htmlToText(html);
+    const format = outputFormat(flags);
+    const doc = { name: api, title, summary: firstSentence(content), content, url, kind: "online" };
+    return success(requestId, {
+      command: "docs.get",
+      mode: "online",
+      requiresUnity: false,
+      source: { kind: "online", url, offlineFallbackFrom: offlineFailure.error?.code },
+      unityVersion: unityVersionHint(flags),
+      api,
+      format,
+      doc: format === "json" ? doc : { name: doc.name, title: doc.title, summary: doc.summary, url: doc.url, kind: doc.kind },
+      diagnostics: [{ level: "warning", code: "DOCS_ONLINE_FALLBACK", message: `Offline docs failed with ${offlineFailure.error?.code}; fetched docs.unity3d.com instead.` }],
+      ...(format === "text" ? { text: content } : {})
+    });
+  }
+  return failure(requestId, "DOCS_ONLINE_UNAVAILABLE", `Unity online documentation was not reachable for: ${api}.`, [
+    "Retry later, pass --offline-only to skip online lookup, or provide --docs-dir with a populated cache."
+  ], { offlineError: offlineFailure.error?.code, attemptedUrls: candidates });
+}
+
+async function docsSearchOnline(query: string | undefined, flags: Record<string, string | boolean>, requestId: string, runtime: BuiltinDocsRuntime, offlineFailure: CliResult): Promise<CliResult> {
+  if (!query) {
+    return failure(requestId, "DOCS_QUERY_REQUIRED", "Pass a search query: tools run docs.search --input '{\"query\":\"<query>\"}'.");
+  }
+  const fetcher = docsFetcher(runtime);
+  if (!fetcher) return offlineFailure;
+  const url = `https://docs.unity3d.com/ScriptReference/30_search.html?q=${encodeURIComponent(query)}`;
+  const response = await safeFetch(fetcher, url);
+  if (!response || !response.ok) {
+    return failure(requestId, "DOCS_ONLINE_UNAVAILABLE", `Unity online documentation search was not reachable for: ${query}.`, [
+      "Retry later, pass --offline-only to skip online lookup, or provide --docs-dir with a populated cache."
+    ], { offlineError: offlineFailure.error?.code, attemptedUrl: url });
+  }
+  const html = await response.text();
+  const items = extractSearchItems(html, query);
+  const page = paginate(items, flags);
+  const format = outputFormat(flags);
+  return success(requestId, {
+    command: "docs.search",
+    mode: "online",
+    requiresUnity: false,
+    source: { kind: "online", url, offlineFallbackFrom: offlineFailure.error?.code },
+    unityVersion: unityVersionHint(flags),
+    query,
+    format,
+    diagnostics: [{ level: "warning", code: "DOCS_ONLINE_FALLBACK", message: `Offline docs failed with ${offlineFailure.error?.code}; searched docs.unity3d.com instead.` }],
+    ...page,
+    ...(format === "text" ? { text: page.items.map((entry) => `${entry.name} - ${entry.summary ?? ""}`.trim()).join("\n") } : {})
+  });
+}
+
+function docsFetcher(runtime: BuiltinDocsRuntime): BuiltinDocsRuntime["fetch"] | undefined {
+  if (runtime.fetch) return runtime.fetch;
+  if (typeof fetch !== "function") return undefined;
+  return async (url: string) => {
+    const response = await fetch(url);
+    return { ok: response.ok, status: response.status, text: () => response.text() };
+  };
+}
+
+async function safeFetch(fetcher: NonNullable<BuiltinDocsRuntime["fetch"]>, url: string): Promise<{ ok: boolean; status: number; text: () => Promise<string> } | undefined> {
+  try {
+    return await fetcher(url);
+  } catch {
+    return undefined;
+  }
+}
+
+function docsUrlCandidates(api: string): string[] {
+  const normalized = api.trim();
+  const shortName = normalized.replace(/^UnityEngine\./, "").replace(/^UnityEditor\./, "");
+  return Array.from(new Set([
+    `https://docs.unity3d.com/ScriptReference/${normalized}.html`,
+    `https://docs.unity3d.com/ScriptReference/${shortName}.html`,
+    `https://docs.unity3d.com/ScriptReference/${shortName.replace(/\./g, "-")}.html`
+  ]));
+}
+
+function extractTitle(html: string): string | undefined {
+  return html.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/\s*-\s*Unity.*$/i, "").trim();
+}
+
+function htmlToText(html: string): string {
+  return html
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    .replace(/<[^>]+>/g, " ")
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function firstSentence(text: string): string {
+  return text.split(/(?<=[.!?])\s+/)[0]?.slice(0, 240) ?? "";
+}
+
+function extractSearchItems(html: string, query: string): Array<{ name: string; title?: string; summary?: string; url?: string; kind: string }> {
+  const matches = Array.from(html.matchAll(/<a[^>]+href=["']([^"']+)["'][^>]*>([\s\S]*?)<\/a>/gi));
+  const items = matches
+    .map((match) => {
+      const href = match[1];
+      const title = htmlToText(match[2]);
+      if (!href || !title) return undefined;
+      const url = href.startsWith("http") ? href : `https://docs.unity3d.com/ScriptReference/${href.replace(/^\.\//, "")}`;
+      return { name: title, title, summary: url, url, kind: "online" };
+    })
+    .filter((item): item is { name: string; title: string; summary: string; url: string; kind: string } => item !== undefined);
+  return items.length > 0 ? items : [{ name: query, title: query, summary: urlSearchHint(query), url: `https://docs.unity3d.com/ScriptReference/30_search.html?q=${encodeURIComponent(query)}`, kind: "online" }];
+}
+
+function urlSearchHint(query: string): string {
+  return `Online Unity documentation search for ${query}.`;
+}
+
+function unityVersionHint(flags: Record<string, string | boolean>): { requested?: string; resolved?: string; source: string } {
+  const requested = getString(flags, "unity-version") ?? getString(flags, "version");
+  return { requested, resolved: requested, source: "online" };
 }
 
 function reflectType(name: string | undefined, flags: Record<string, string | boolean>, requestId: string, cache: CacheIndex): CliResult {
