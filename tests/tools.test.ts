@@ -499,7 +499,7 @@ test("S3.1 creation domains have frozen metadata coverage", () => {
   const expectedByGroup = new Map([
     ["camera", ["camera.list", "camera.info", "camera.screenshot", "camera.create", "camera.target", "camera.lens", "camera.multiview"]],
     ["material", ["material.info", "material.create", "material.assign", "material.set", "material.set-renderer-color"]],
-    ["shader", ["shader.info", "shader.read", "shader.create", "shader.update", "shader.list", "shader.get-data"]],
+    ["shader", ["shader.info", "shader.read", "shader.create", "shader.update", "shader.delete", "shader.list", "shader.get-data"]],
     ["texture", ["texture.info", "texture.create", "texture.sprite", "texture.modify", "texture.delete", "texture.import-settings", "texture.generate"]],
     ["ui", ["ui.canvas.create", "ui.text.create", "ui.button.create", "ui.image.create", "ui.document.info", "ui.document.create", "ui.hierarchy", "ui.attach-document", "ui.create-panel-settings", "ui.get-visual-tree"]]
   ]);

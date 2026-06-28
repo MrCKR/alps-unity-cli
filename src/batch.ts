@@ -214,6 +214,7 @@ const commandRegistry = new Map<string, { parallelSafe: boolean }>([
   ["shader.read", { parallelSafe: true }],
   ["shader.create", { parallelSafe: false }],
   ["shader.update", { parallelSafe: false }],
+  ["shader.delete", { parallelSafe: false }],
   ["shader.list", { parallelSafe: true }],
   ["shader.get-data", { parallelSafe: true }],
   ["texture.info", { parallelSafe: true }],

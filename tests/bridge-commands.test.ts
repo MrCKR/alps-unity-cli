@@ -986,16 +986,22 @@ test("shader commands forward paths, content and overwrite", async () => {
   const read = await execute(["tools", "run", "shader.read", "Assets/Shaders/Unlit.shader"], { ...runtime, bridgeExecute });
   const create = await execute(["tools", "run", "shader.create", "Assets/Shaders/Created.shader", "--content-file", contentFile, "--overwrite"], { ...runtime, bridgeExecute });
   const update = await execute(["tools", "run", "shader.update", "Assets/Shaders/Unlit.shader", "--content", "Shader X {}"], { ...runtime, bridgeExecute });
+  const del = await execute(["tools", "run", "shader.delete", "Assets/Shaders/Unlit.shader", "--dry-run"], { ...runtime, bridgeExecute });
+  const getData = await execute(["tools", "run", "shader.get-data", "--input", "{\"assetPath\":\"Assets/Shaders/Unlit.shader\",\"includeSubshaders\":true,\"includeSourceCode\":false,\"maxPasses\":4}"], { ...runtime, bridgeExecute });
 
   assert.equal(info.ok, true);
   assert.equal(read.ok, true);
   assert.equal(create.ok, true);
   assert.equal(update.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["shader.info", "shader.read", "shader.create", "shader.update"]);
+  assert.equal(del.ok, true);
+  assert.equal(getData.ok, true);
+  assert.deepEqual(requests.map((request) => request.command), ["shader.info", "shader.read", "shader.create", "shader.update", "shader.delete", "shader.get-data"]);
   assert.deepEqual(requests[0].args, { path: "Assets/Shaders/Unlit.shader", target: "Assets/Shaders/Unlit.shader" });
   assert.equal(requests[2].args.content, "Shader \"UnityCli/Test\" {}\n");
   assert.equal(requests[2].args.overwrite, true);
   assert.equal(requests[3].args.content, "Shader X {}");
+  assert.equal(requests[4].dryRun, true);
+  assert.deepEqual(requests[5].args, { path: "Assets/Shaders/Unlit.shader", assetPath: "Assets/Shaders/Unlit.shader", target: "Assets/Shaders/Unlit.shader", includeSubshaders: true, includeSourceCode: false, maxPasses: 4 });
 });
 
 test("texture commands forward importer, sprite and creation options", async () => {

@@ -100,6 +100,28 @@ export const SHADER_TOOLS: ToolMetadata[] = [
     ]
   },
   {
+    name: "shader.delete",
+    summary: "Delete an existing Shader or ShaderGraph asset through a shader-specific destructive tool.",
+    description: "Delete an existing Shader or ShaderGraph asset through a shader-specific destructive tool. This is equivalent in effect to asset.delete for shader files, but is discoverable from the shader group. Use --dry-run before --yes when the path was discovered programmatically.",
+    group: "shader",
+    inputSchema: objSchema({ path: { type: "string", description: "Existing Assets/*.shader or Assets/*.shadergraph path to delete." } }, ["path"]),
+    outputSchema: objSchema({ shader: { type: "object" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
+    destructiveHint: true,
+    sideEffects: ["asset-delete", "asset-import"],
+    riskLevel: "high",
+    supportsDryRun: true,
+    playModeSupport: "session-affecting",
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run shader.delete",
+    docsTopic: "shader",
+    equivalentUnityMcp: "manage_shader.delete",
+    examples: [
+      { description: "Preview deleting a generated shader", argv: ["tools", "run", "shader.delete", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/GeneratedProbe.shader\"}", "--dry-run"] },
+      { description: "Delete a generated shader after confirmation", argv: ["tools", "run", "shader.delete", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/GeneratedProbe.shader\"}", "--yes"] }
+    ]
+  },
+  {
     name: "shader.list",
     summary: "List shader assets in the project with name, path, guid, property count and render queue.",
     description: "List shader assets in the project with name, path, guid, property count and render queue. Keep pageSize small; use this to discover a valid shader name for material.create. Results are capped by pageSize (clamped 1..500).",
@@ -126,21 +148,31 @@ export const SHADER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "shader.get-data",
-    summary: "Read shader property definitions (name, description, type, flags), render queue, supported status and compile messages.",
-    description: "Read shader property definitions (name, description, type, flags), render queue, supported status and compile messages. Accepts an Assets/* path or a shader name resolved via Shader.Find. Use shader.list or asset.search with filter t:Shader first to locate the path. This returns property definitions (not material instance values); for material values use material.info.",
+    summary: "Read shader properties, diagnostics, SubShader and Pass structure with token-safe include switches.",
+    description: "Read shader properties, diagnostics, SubShader and Pass structure with token-safe include switches. Accepts an Assets/* path or a shader name resolved via Shader.Find. Defaults include compile messages, properties and capped SubShader/Pass structure; source code is omitted unless includeSourceCode=true. Use shader.list or asset.search with filter t:Shader first to locate the path. This returns property definitions, not material instance values; for material values use material.info.",
     group: "shader",
     inputSchema: objSchema({
       path: { type: "string", description: "Exact Assets/* shader path." },
       assetPath: { type: "string", description: "Alias of path." },
-      name: { type: "string", description: "Shader name resolved via Shader.Find when no path is supplied." }
+      name: { type: "string", description: "Shader name resolved via Shader.Find when no path is supplied." },
+      includeMessages: { type: "boolean", default: true, description: "Include ShaderUtil compile messages in diagnostics.messages." },
+      includeProperties: { type: "boolean", default: true, description: "Include shader property definitions." },
+      includeSubshaders: { type: "boolean", default: true, description: "Include SubShader and Pass structure, capped by maxSubshaders/maxPasses." },
+      includeSourceCode: { type: "boolean", default: false, description: "Include pass sourceCode when Unity exposes it. Can be large." },
+      maxSubshaders: { type: "integer", default: 8, description: "Maximum SubShaders returned, clamped 0..64." },
+      maxPasses: { type: "integer", default: 16, description: "Maximum Passes per SubShader returned, clamped 0..128." }
     }),
     outputSchema: objSchema({
       command: { type: "string" },
       name: { type: "string" },
       renderQueue: { type: "integer" },
       isSupported: { type: "boolean" },
+      passCount: { type: "integer" },
       propertyCount: { type: "integer" },
-      properties: { type: "array", items: objSchema({ name: { type: "string" }, description: { type: "string" }, type: { type: "string" }, flags: { type: "string" } }) }
+      diagnostics: { type: "object" },
+      properties: { type: "array", items: objSchema({ name: { type: "string" }, description: { type: "string" }, type: { type: "string" }, flags: { type: "string" }, nameId: { type: "integer" } }) },
+      subshaderDataAvailable: { type: "boolean" },
+      subshaders: { type: "array", items: objSchema({ index: { type: "integer" }, passCount: { type: "integer" }, passes: { type: "array", items: objSchema({ index: { type: "integer" }, name: { type: "string" }, sourceCode: { type: "string" } }) } }) }
     }),
     destructiveHint: false,
     playModeSupport: "supported",
@@ -150,8 +182,8 @@ export const SHADER_TOOLS: ToolMetadata[] = [
     docsTopic: "shader",
     equivalentUnityMcp: "assets-shader-get-data",
     examples: [
-      { description: "Read shader property definitions by path", argv: ["tools", "run", "shader.get-data", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeShader.shader\"}"] },
-      { description: "Resolve a built-in shader by name", argv: ["tools", "run", "shader.get-data", "--input", "{\"name\":\"Standard\"}"] }
+      { description: "Read shader property definitions and pass structure by path", argv: ["tools", "run", "shader.get-data", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeShader.shader\",\"includeSubshaders\":true,\"maxPasses\":8}"] },
+      { description: "Resolve a built-in shader by name without source code", argv: ["tools", "run", "shader.get-data", "--input", "{\"name\":\"Standard\",\"includeSourceCode\":false}"] }
     ]
   }
 ];

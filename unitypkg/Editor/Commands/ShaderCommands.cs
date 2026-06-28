@@ -34,6 +34,7 @@ namespace UnityCli
             RegisterCommand(registry, "shader.read", "shader", false, ShaderRead);
             RegisterCommand(registry, "shader.create", "shader", true, ShaderCreate);
             RegisterCommand(registry, "shader.update", "shader", true, ShaderUpdate);
+            RegisterCommand(registry, "shader.delete", "shader", true, ShaderDelete);
             RegisterCommand(registry, "shader.list", "shader", false, ShaderList);
             RegisterCommand(registry, "shader.get-data", "shader", false, ShaderGetData);
         }
@@ -83,24 +84,51 @@ namespace UnityCli
             {
                 throw new BridgeCommandException("E_SHADER_NOT_FOUND", "Shader not found.", "Run tools run shader.list --input '{\"keyword\":\"<keyword>\"}' to discover shader paths.");
             }
+            var includeMessages = request.BoolArg("includeMessages", true);
+            var includeProperties = request.BoolArg("includeProperties", true);
+            var includeSubshaders = request.BoolArg("includeSubshaders", true) || request.BoolArg("includeSourceCode", false);
+            var includeSourceCode = request.BoolArg("includeSourceCode", false);
+            var maxSubshaders = Math.Max(0, Math.Min(request.IntArg("maxSubshaders", 8), 64));
+            var maxPasses = Math.Max(0, Math.Min(request.IntArg("maxPasses", 16), 128));
             var w = new UnityCliJsonWriter().BeginObject();
             w.Prop("command", "shader.get-data");
             w.Prop("name", shader.name);
             w.Prop("renderQueue", (long)shader.renderQueue);
             w.Prop("isSupported", shader.isSupported);
+            w.Prop("passCount", (long)shader.passCount);
+            w.Prop("propertyCount", (long)shader.GetPropertyCount());
+            w.PropRaw("diagnostics", includeMessages ? ShaderDiagnosticsJson(shader) : ShaderDiagnosticsSummaryJson(shader));
             w.PropArray("properties", arr =>
             {
+                if (!includeProperties) return;
                 for (var i = 0; i < shader.GetPropertyCount(); i++)
                 {
+                    var propType = shader.GetPropertyType(i);
                     arr.BeginObject()
                         .Prop("name", shader.GetPropertyName(i))
                         .Prop("description", shader.GetPropertyDescription(i))
-                        .Prop("type", shader.GetPropertyType(i).ToString())
+                        .Prop("type", propType.ToString())
                         .Prop("flags", shader.GetPropertyFlags(i).ToString())
-                        .EndObject();
+                        .Prop("nameId", (long)shader.GetPropertyNameId(i));
+                    if (propType == ShaderPropertyType.Range)
+                    {
+                        var range = shader.GetPropertyRangeLimits(i);
+                        arr.PropRaw("range", new UnityCliJsonWriter().BeginObject().Prop("min", range.x).Prop("max", range.y).EndObject().ToString());
+                    }
+                    if (propType == ShaderPropertyType.Texture)
+                    {
+                        arr.Prop("defaultTextureName", shader.GetPropertyTextureDefaultName(i));
+                    }
+                    var attributes = shader.GetPropertyAttributes(i);
+                    arr.PropArray("attributes", attr => { foreach (var a in attributes) attr.Value(a); });
+                    arr.EndObject();
                 }
             });
-            w.Prop("propertyCount", (long)shader.GetPropertyCount());
+            w.Prop("subshaderDataAvailable", ShaderDataObject(shader) != null);
+            w.PropArray("subshaders", arr =>
+            {
+                if (includeSubshaders) WriteShaderSubshadersJson(arr, shader, includeSourceCode, maxSubshaders, maxPasses);
+            });
             w.Prop("logPath", LogPath());
             return SuccessJson(w.EndObject().ToString());
         }
@@ -178,6 +206,32 @@ namespace UnityCli
             AssetDatabase.SaveAssets();
             WriteLog("shader_updated path=" + path);
             return SuccessJson(ShaderMutationJson("shader.update", path));
+        }
+
+        /// <summary>删除 Shader 或 ShaderGraph asset；这是 shader 组内可发现的持久删除入口。</summary>
+        private static string ShaderDelete(BridgeRequest request)
+        {
+            var path = ResolveShaderPath(request.StringArg("path") ?? request.StringArg("target"));
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("command", "shader.delete")
+                    .Prop("dryRun", true)
+                    .PropRaw("shader", ShaderAssetJson(path, AssetDatabase.LoadAssetAtPath<Shader>(path), false))
+                    .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "shader.delete").Prop("path", path).EndObject())
+                    .Prop("logPath", LogPath())
+                    .EndObject().ToString());
+            }
+            if (!AssetDatabase.DeleteAsset(path))
+            {
+                throw new BridgeCommandException("E_SHADER_DELETE_FAILED", "Failed to delete shader asset: " + path, "Check Unity Console and file permissions.");
+            }
+            AssetDatabase.Refresh();
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropObject("shader", s => s.Prop("path", path).Prop("exists", false))
+                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "shader.delete").Prop("path", path).EndObject())
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string RequireShaderPath(string rawPath)
@@ -265,6 +319,91 @@ namespace UnityCli
                 .Prop("encoding", includeContentMetadata ? "utf-8" : null)
                 .PropRaw("diagnostics", ShaderDiagnosticsJson(shader))
                 .EndObject().ToString();
+        }
+
+        private static string ShaderDiagnosticsSummaryJson(Shader shader)
+        {
+            if (shader == null)
+            {
+                return new UnityCliJsonWriter().BeginObject().PropNull("supported").Prop("messageCount", 0L).PropArray("messages", arr => { }).EndObject().ToString();
+            }
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("supported", shader.isSupported)
+                .Prop("messageCount", (long)ShaderMessagesJson(shader).Count)
+                .PropArray("messages", arr => { })
+                .EndObject().ToString();
+        }
+
+        /// <summary>通过 ShaderUtil 反射读取 SubShader/Pass 结构；Unity 版本不支持时返回空数组。</summary>
+        private static void WriteShaderSubshadersJson(UnityCliJsonWriter arr, Shader shader, bool includeSourceCode, int maxSubshaders, int maxPasses)
+        {
+            var shaderData = ShaderDataObject(shader);
+            if (shaderData == null) return;
+            var subshaderCount = Math.Min(ReflectionInt(shaderData, "SubshaderCount"), maxSubshaders);
+            for (var s = 0; s < subshaderCount; s++)
+            {
+                var subshader = ReflectionInvoke(shaderData, "GetSubshader", s);
+                if (subshader == null) continue;
+                var passCount = Math.Min(ReflectionInt(subshader, "PassCount"), maxPasses);
+                arr.BeginObject().Prop("index", (long)s).Prop("passCount", (long)ReflectionInt(subshader, "PassCount"));
+                arr.PropArray("passes", passes =>
+                {
+                    for (var p = 0; p < passCount; p++)
+                    {
+                        var pass = ReflectionInvoke(subshader, "GetPass", p);
+                        passes.BeginObject().Prop("index", (long)p);
+                        if (pass != null)
+                        {
+                            passes.Prop("name", ReflectionValue(pass.GetType(), pass, "Name"));
+                            if (includeSourceCode) passes.Prop("sourceCode", ReflectionValue(pass.GetType(), pass, "SourceCode"));
+                        }
+                        passes.EndObject();
+                    }
+                });
+                arr.EndObject();
+            }
+        }
+
+        private static object ShaderDataObject(Shader shader)
+        {
+            var shaderUtil = Type.GetType("UnityEditor.ShaderUtil,UnityEditor");
+            if (shaderUtil == null) return null;
+            foreach (var method in shaderUtil.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
+            {
+                if (method.Name != "GetShaderData") continue;
+                var parameters = method.GetParameters();
+                if (parameters.Length == 1 && parameters[0].ParameterType == typeof(Shader))
+                {
+                    return method.Invoke(null, new object[] { shader });
+                }
+            }
+            return null;
+        }
+
+        private static object ReflectionInvoke(object target, string name, int index)
+        {
+            if (target == null) return null;
+            var method = target.GetType().GetMethod(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            return method == null ? null : method.Invoke(target, new object[] { index });
+        }
+
+        private static int ReflectionInt(object target, string name)
+        {
+            if (target == null) return 0;
+            var type = target.GetType();
+            var property = type.GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (property != null)
+            {
+                var value = property.GetValue(target, null);
+                if (value is int) return (int)value;
+            }
+            var field = type.GetField(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (field != null)
+            {
+                var value = field.GetValue(target);
+                if (value is int) return (int)value;
+            }
+            return 0;
         }
 
         private static string ShaderDiagnosticsJson(Shader shader)

@@ -9,6 +9,7 @@ const SECURITY_POLICY: SecurityPolicyEntry[] = [
   { command: "asset.delete", summary: "Delete Asset", destructiveHint: true, supportsDryRun: true },
   { command: "texture.modify", summary: "Modify Texture", destructiveHint: true, supportsDryRun: true },
   { command: "texture.delete", summary: "Delete Texture", destructiveHint: true, supportsDryRun: true },
+  { command: "shader.delete", summary: "Delete Shader", destructiveHint: true, supportsDryRun: true },
   { command: "texture.generate", summary: "Generate Texture", destructiveHint: true, supportsDryRun: true },
   { command: "scene.save", summary: "Save Scene", destructiveHint: true, supportsDryRun: true },
   { command: "code.exec", summary: "Execute Live Code", destructiveHint: true, supportsDryRun: true },

@@ -2532,6 +2532,15 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "shader.delete",
+      "group": "shader",
+      "command": "delete",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "shader.get-data",
       "group": "shader",
       "command": "get-data",
