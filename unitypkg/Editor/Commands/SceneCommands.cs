@@ -41,6 +41,8 @@ namespace UnityCli
             RegisterCommand(registry, "scene.set-active", "scene", true, SceneSetActive);
             RegisterCommand(registry, "scene.list-opened", "scene", false, SceneListOpened);
             RegisterCommand(registry, "scene.data", "scene", false, SceneData);
+            RegisterCommand(registry, "scene.move-object", "scene", false, SceneMoveObject);
+            RegisterCommand(registry, "scene.validate", "scene", false, SceneValidate);
             RegisterCommand(registry, "scene.view-frame", "scene", true, SceneViewFrame);
             RegisterCommand(registry, "screenshot.capture", "scene", true, SceneScreenshot);
         }
@@ -155,13 +157,20 @@ namespace UnityCli
                         throw new BridgeCommandException("E_SCENE_UNLOAD_LAST", "Cannot unload the only open scene.", "Open another scene first.");
                     }
                     var opts = request.BoolArg("removeAll", false) ? UnloadSceneOptions.UnloadAllEmbeddedSceneObjects : UnloadSceneOptions.None;
+                    var saveDirty = request.BoolArg("save", false);
                     if (request.DryRun)
                     {
                         return SuccessJson(new UnityCliJsonWriter().BeginObject()
                             .Prop("command", "scene.unload").Prop("dryRun", true)
                             .Prop("path", path).Prop("sceneName", scene.name)
-                            .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "scene.unload").Prop("path", path).EndObject())
+                            .Prop("isDirty", scene.isDirty).Prop("willSave", saveDirty && scene.isDirty)
+                            .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "scene.unload").Prop("path", path).Prop("saveDirty", saveDirty && scene.isDirty).EndObject())
                             .Prop("logPath", LogPath()).EndObject().ToString());
+                    }
+                    // dirty 保存策略：save=true 且场景有未保存改动时先保存再卸载，避免丢失改动。
+                    if (saveDirty && scene.isDirty && !string.IsNullOrEmpty(scene.path))
+                    {
+                        EditorSceneManager.SaveScene(scene);
                     }
                     EditorSceneManager.CloseScene(scene, opts == UnloadSceneOptions.UnloadAllEmbeddedSceneObjects);
                     return SuccessJson(SceneMutationJson("scene.unload", SceneManager.GetActiveScene(), path));
@@ -263,6 +272,86 @@ namespace UnityCli
             var p = t.parent;
             while (p != null) { path = p.name + "/" + path; p = p.parent; }
             return path;
+        }
+
+        // 将 GameObject 移动到另一个已加载场景。对齐 CoplayDev manage_scene move_to_scene。
+        private static string SceneMoveObject(BridgeRequest request)
+        {
+            EnsureEditorNotBusy("scene.move-object");
+            var target = request.StringArg("target") ?? request.StringArg("path");
+            var instanceId = request.OptionalIntArg("instanceId");
+            var destScenePath = request.StringArg("scene");
+            if (string.IsNullOrEmpty(destScenePath))
+            {
+                throw new BridgeCommandException("E_SCENE_DESTINATION_REQUIRED", "scene.move-object requires --scene (destination scene path).", "Run context read scene.opened to list loaded scenes.");
+            }
+            UnityEngine.GameObject go = null;
+            if (instanceId.HasValue && instanceId.Value != 0) go = EditorUtility.InstanceIDToObject(instanceId.Value) as UnityEngine.GameObject;
+            if (go == null && !string.IsNullOrEmpty(target)) go = ObjectRefResolver.FindGameObjectByPath(target);
+            if (go == null)
+            {
+                throw new BridgeCommandException("E_TARGET_NOT_FOUND", "GameObject not found: " + (target ?? instanceId?.ToString()), "Pass a valid target path or instanceId.");
+            }
+            var destScene = UnityEngine.SceneManagement.SceneManager.GetSceneByPath(destScenePath);
+            if (!destScene.IsValid() || !destScene.isLoaded)
+            {
+                throw new BridgeCommandException("E_SCENE_NOT_OPEN", "Destination scene is not loaded: " + destScenePath, "Load the destination scene first via scene.load, or run context read scene.opened.");
+            }
+            if (go.scene == destScene)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "scene.move-object").Prop("target", go.name).Prop("scene", destScenePath).Prop("moved", false).Prop("reason", "already in destination scene").Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "scene.move-object").Prop("dryRun", true).Prop("target", go.name).Prop("fromScene", go.scene.path).Prop("toScene", destScenePath).PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "scene.move-object").Prop("target", go.name).EndObject()).Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(go, destScene);
+            return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "scene.move-object").Prop("target", go.name).Prop("fromScene", go.scene.path).Prop("toScene", destScenePath).Prop("moved", true).Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        // 校验场景：缺失脚本、null 引用、构建配置。对齐 CoplayDev manage_scene validate。
+        private static string SceneValidate(BridgeRequest request)
+        {
+            var scene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
+            var path = request.StringArg("path");
+            if (!string.IsNullOrEmpty(path))
+            {
+                scene = UnityEngine.SceneManagement.SceneManager.GetSceneByPath(path);
+                if (!scene.IsValid()) throw new BridgeCommandException("E_SCENE_NOT_OPEN", "Scene is not loaded: " + path, "Load the scene first or run context read scene.opened.");
+            }
+            var issues = new System.Collections.Generic.List<string>();
+            var missingScriptCount = 0;
+            var nullReferenceCount = 0;
+            foreach (var root in scene.GetRootGameObjects())
+            {
+                foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                {
+                    foreach (var c in t.GetComponents<Component>())
+                    {
+                        // 缺失脚本（MonoBehaviour 引用的程序集丢失）表现为 null 组件。
+                        if (c == null) { missingScriptCount++; issues.Add(t.gameObject.name + ": missing script component"); continue; }
+                    }
+                }
+            }
+            // 构建 scenes 配置校验：当前场景是否在 EditorBuildSettings.scenes。
+            var inBuildSettings = false;
+            foreach (var bs in EditorBuildSettings.scenes ?? new EditorBuildSettingsScene[0])
+            {
+                if (string.Equals(bs.path, scene.path, StringComparison.OrdinalIgnoreCase)) { inBuildSettings = true; break; }
+            }
+            if (!string.IsNullOrEmpty(scene.path) && !inBuildSettings)
+            {
+                issues.Add("scene not in Build Settings scenes: " + scene.path);
+            }
+            var ok = missingScriptCount == 0 && nullReferenceCount == 0;
+            var w = new UnityCliJsonWriter().BeginObject();
+            w.Prop("command", "scene.validate").Prop("scene", scene.name).Prop("path", scene.path).Prop("valid", ok);
+            w.Prop("missingScriptCount", (long)missingScriptCount).Prop("nullReferenceCount", (long)nullReferenceCount);
+            w.Prop("inBuildSettings", inBuildSettings);
+            w.PropArray("issues", arr => { foreach (var i in issues) arr.Value(i); });
+            w.PropArray("next_actions", arr => { if (!ok) arr.Value("Fix missing scripts/null references before building."); if (!inBuildSettings && !string.IsNullOrEmpty(scene.path)) arr.Value("Add the scene to Build Settings via build.scenes --action add --path " + scene.path); });
+            w.Prop("logPath", LogPath());
+            return SuccessJson(w.EndObject().ToString());
         }
 
         private static string SceneViewFrame(BridgeRequest request)

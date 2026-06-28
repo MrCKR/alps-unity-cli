@@ -220,6 +220,41 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     ]
   },
   {
+    name: "scene.move-object",
+    summary: "Move a GameObject from its current scene into another already-loaded scene.",
+    description: "Move a GameObject (resolved by target path or instanceId) into another already-loaded destination scene (--scene path). Useful for multi-scene editing. Requires the destination scene to be loaded (scene.load); returns moved=false if the object is already in the destination.",
+    group: "scene",
+    inputSchema: objSchema({ target: { type: "string", description: "GameObject name or hierarchy path to move." }, path: { type: "string", description: "Alias of target." }, instanceId: { type: "integer", description: "Instance id of the GameObject." }, scene: { type: "string", description: "Destination scene asset path (must be loaded). Required." } }, ["scene"]),
+    destructiveHint: false,
+    playModeSupport: "session-affecting",
+    supportsDryRun: true,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run scene.move-object",
+    docsTopic: "scene",
+    equivalentUnityMcp: "manage_scene.move_to_scene",
+    examples: [
+      { description: "Move an object to another scene", argv: ["tools", "run", "scene.move-object", "--input", "{\"target\":\"Player\",\"scene\":\"Assets/Scenes/Gameplay.unity\"}"] }
+    ]
+  },
+  {
+    name: "scene.validate",
+    summary: "Validate a scene for missing scripts, null references, and Build Settings inclusion.",
+    description: "Validate the active scene (or --path scene) for common issues: missing script components (null components from missing assemblies), null references, and whether the scene is included in Editor Build Settings scenes. Returns valid flag, issue counts, and next_actions to fix.",
+    group: "scene",
+    inputSchema: objSchema({ path: { type: "string", description: "Scene asset path to validate; defaults to the active scene." } }),
+    destructiveHint: false,
+    playModeSupport: "supported",
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run scene.validate",
+    docsTopic: "scene",
+    equivalentUnityMcp: "manage_scene.validate",
+    examples: [
+      { description: "Validate the active scene", argv: ["tools", "run", "scene.validate", "--input", "{}"] }
+    ]
+  },
+  {
     name: "scene.view-frame",
     summary: "Frame the Editor SceneView on a target GameObject or frame all.",
     description: "Frame the Editor SceneView on a target GameObject or frame all. Does not modify scene data, only the viewport. target resolves by name, hierarchy path or instance id.",

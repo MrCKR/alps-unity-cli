@@ -13,6 +13,8 @@ export const sceneBridgeSpecs: BridgeCommandSpec[] = [
   { group: "scene", command: "set-active", bridgeCommand: "scene.set-active", buildArgs: sceneFileArgs },
   { group: "scene", command: "list-opened", bridgeCommand: "scene.list-opened", buildArgs: ({ flags }) => queryArgs(flags) },
   { group: "scene", command: "data", bridgeCommand: "scene.data", buildArgs: sceneDataArgs },
+  { group: "scene", command: "move-object", bridgeCommand: "scene.move-object", buildArgs: sceneMoveObjectArgs },
+  { group: "scene", command: "validate", bridgeCommand: "scene.validate", buildArgs: sceneValidateArgs },
   { group: "scene", command: "view-frame", bridgeCommand: "scene.view-frame", buildArgs: ({ flags }) => { const s = structuredInput(flags); return compactArgs({ target: stringFlag(flags, "target") ?? stringValue(s.target), path: stringFlag(flags, "path") ?? stringValue(s.path), frameAll: boolFlag(flags, "frame-all") ?? boolValue(s.frameAll) }); } }
 ];
 
@@ -24,6 +26,24 @@ function sceneFileArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec
 function sceneDataArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   const structured = structuredInput(flags);
   return compactArgs({ maxDepth: numberFlag(flags, "max-depth") ?? numberValue(structured.maxDepth), maxResults: numberFlag(flags, "max-results") ?? numberValue(structured.maxResults), nameFilter: stringFlag(flags, "name-filter") ?? stringValue(structured.nameFilter), includeComponents: boolFlag(flags, "include-components") ?? boolValue(structured.includeComponents) });
+}
+
+// scene.move-object: target GameObject + destination scene path
+function sceneMoveObjectArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  const structured = structuredInput(flags);
+  return compactArgs({
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringValue(structured.target),
+    path: stringFlag(flags, "path") ?? stringValue(structured.path),
+    instanceId: numberFlag(flags, "instance-id") ?? numberValue(structured.instanceId),
+    scene: stringFlag(flags, "scene") ?? stringValue(structured.scene),
+    dryRun: boolFlag(flags, "dry-run") ?? boolValue(structured.dryRun)
+  });
+}
+
+// scene.validate: optional scene path
+function sceneValidateArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  const structured = structuredInput(flags);
+  return compactArgs({ path: stringFlag(flags, "path") ?? stringValue(structured.path) });
 }
 
 /** scene.hierarchy 的参数构建：对齐 Coplay get_hierarchy 的 parent/depth/filter/组件预览控制。 */

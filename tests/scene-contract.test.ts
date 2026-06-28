@@ -18,7 +18,7 @@ async function listCsFiles(directory: URL): Promise<URL[]> {
   return urls.flat().sort((left, right) => left.pathname.localeCompare(right.pathname));
 }
 
-const SCENE_COMMANDS = ["scene.active", "scene.build-settings", "scene.screenshot", "scene.create", "scene.load", "scene.save", "scene.unload", "scene.set-active", "scene.list-opened", "scene.data", "scene.view-frame"];
+const SCENE_COMMANDS = ["scene.active", "scene.build-settings", "scene.screenshot", "scene.create", "scene.load", "scene.save", "scene.unload", "scene.set-active", "scene.list-opened", "scene.data", "scene.move-object", "scene.validate", "scene.view-frame"];
 
 /**
  * Scene 域契约测试（除已 PASS scene.hierarchy 外的 11 个工具）。
@@ -26,9 +26,9 @@ const SCENE_COMMANDS = ["scene.active", "scene.build-settings", "scene.screensho
  * 错误恢复提示迁移到 `tools run` 形态，SceneListOpened/SceneData 业务字段不被 envelope 吞掉。
  */
 
-test("scene group exposes 12 tools total (11 tested + hierarchy)", () => {
+test("scene group exposes 14 tools total", () => {
   const tools = filterToolsByGroup("scene").map((t) => t.name).sort();
-  assert.equal(tools.length, 12);
+  assert.equal(tools.length, 14);
   for (const name of SCENE_COMMANDS) {
     assert.ok(tools.includes(name), `${name} should exist`);
   }

@@ -2334,6 +2334,15 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "scene.move-object",
+      "group": "scene",
+      "command": "move-object",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "scene.save",
       "group": "scene",
       "command": "save",
@@ -2364,6 +2373,15 @@
       "bridgeCommand": "scene.unload",
       "group": "scene",
       "command": "unload",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "scene.validate",
+      "group": "scene",
+      "command": "validate",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
