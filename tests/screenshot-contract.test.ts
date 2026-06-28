@@ -5,17 +5,18 @@ import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { findCommandContract } from "../src/contracts/command-contract.js";
 
 /**
- * Screenshot 域契约测试：game-view / scene-view / isolated-object / orbit。
+ * Screenshot 域契约测试：game-view / scene-view / isolated-object / orbit / surround。
  * 对齐 IvanMurzak screenshot 与 CoplayDev orbit/surround。
  * camera.screenshot 保留为主入口，不新增 screenshot.camera 重复主实现。
  */
 
-test("screenshot domain exposes game-view/scene-view/isolated-object/orbit", () => {
+test("screenshot domain exposes game-view/scene-view/isolated-object/orbit/surround", () => {
   const screenshotTools = filterToolsByGroup("screenshot").map((t) => t.name);
   assert.ok(screenshotTools.includes("screenshot.game-view"));
   assert.ok(screenshotTools.includes("screenshot.scene-view"));
   assert.ok(screenshotTools.includes("screenshot.isolated-object"));
   assert.ok(screenshotTools.includes("screenshot.orbit"));
+  assert.ok(screenshotTools.includes("screenshot.surround"));
   // camera.screenshot remains the main camera entry (not duplicated as screenshot.camera)
   assert.ok(findToolByName("camera.screenshot"));
   assert.ok(!findToolByName("screenshot.camera"));
@@ -27,6 +28,10 @@ test("screenshot tools have correct safety hints", () => {
     assert.equal(tool.destructiveHint, false, `${name} should not be destructive`);
     assert.equal(tool.handler, "bridge");
   }
+  const surround = findToolByName("screenshot.surround")!;
+  assert.equal(surround.destructiveHint, true);
+  assert.equal(surround.supportsDryRun, true);
+  assert.equal(surround.handler, "bridge");
 });
 
 test("bridge specs resolve for screenshot tools", () => {
@@ -34,7 +39,8 @@ test("bridge specs resolve for screenshot tools", () => {
     ["screenshot", "game-view", "screenshot.game-view"],
     ["screenshot", "scene-view", "screenshot.scene-view"],
     ["screenshot", "isolated-object", "screenshot.isolated-object"],
-    ["screenshot", "orbit", "screenshot.orbit"]
+    ["screenshot", "orbit", "screenshot.orbit"],
+    ["screenshot", "surround", "screenshot.surround"]
   ] as const;
   for (const [group, command, bridgeCommand] of checks) {
     const spec = bridgeCommandRegistry.lookup(group, command);
@@ -44,7 +50,7 @@ test("bridge specs resolve for screenshot tools", () => {
 });
 
 test("contract entries exist for screenshot tools with present C# handler", () => {
-  for (const name of ["screenshot.capture", "screenshot.game-view", "screenshot.scene-view", "screenshot.isolated-object", "screenshot.orbit"]) {
+  for (const name of ["screenshot.capture", "screenshot.game-view", "screenshot.scene-view", "screenshot.isolated-object", "screenshot.orbit", "screenshot.surround"]) {
     const contract = findCommandContract(name);
     assert.ok(contract, `${name} should be in contract`);
     assert.equal(contract.csharp_handler, "present", `${name} should have present C# handler`);
@@ -57,7 +63,8 @@ test("screenshot tools expose play mode support, side effects and output schema"
     "screenshot.game-view": { playModeSupport: "supported", sideEffects: ["asset-write"] },
     "screenshot.scene-view": { playModeSupport: "editor-only", sideEffects: ["asset-write"] },
     "screenshot.isolated-object": { playModeSupport: "editor-only", sideEffects: ["asset-write"] },
-    "screenshot.orbit": { playModeSupport: "editor-only", sideEffects: ["asset-write"] }
+    "screenshot.orbit": { playModeSupport: "editor-only", sideEffects: ["asset-write"] },
+    "screenshot.surround": { playModeSupport: "editor-only", sideEffects: ["asset-write"] }
   };
   for (const [name, exp] of Object.entries(expected)) {
     const tool = findToolByName(name)!;
@@ -66,4 +73,17 @@ test("screenshot tools expose play mode support, side effects and output schema"
     assert.ok(tool.outputSchema, `${name} should expose output schema`);
     assert.ok(tool.examples?.length, `${name} should expose examples`);
   }
+});
+
+test("screenshot inline base64 and surround fields are self-describing", () => {
+  for (const name of ["screenshot.capture", "screenshot.game-view", "screenshot.scene-view", "screenshot.isolated-object"]) {
+    const props = findToolByName(name)!.inputSchema.properties as Record<string, unknown>;
+    assert.ok(props.inlineBase64, `${name} should document inlineBase64`);
+  }
+  const surround = findToolByName("screenshot.surround")!;
+  const props = surround.inputSchema.properties as Record<string, unknown>;
+  assert.ok(props.contactSheetPath, "surround should document contactSheetPath");
+  assert.ok(props.inlineBase64, "surround should document optional contact sheet base64");
+  assert.match(surround.description, /six fixed angles/i);
+  assert.match(surround.description, /--dry-run/);
 });

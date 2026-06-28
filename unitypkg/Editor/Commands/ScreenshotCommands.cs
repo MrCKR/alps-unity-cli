@@ -19,6 +19,7 @@ namespace UnityCli
             RegisterCommand(registry, "screenshot.scene-view", "screenshot", true, ScreenshotSceneView);
             RegisterCommand(registry, "screenshot.isolated-object", "screenshot", true, ScreenshotIsolatedObject);
             RegisterCommand(registry, "screenshot.orbit", "screenshot", true, ScreenshotOrbit);
+            RegisterCommand(registry, "screenshot.surround", "screenshot", true, ScreenshotSurround);
         }
 
         /// <summary>Game View 截图：对齐 Ivan game-view。可带 diagnostics。</summary>
@@ -35,6 +36,7 @@ namespace UnityCli
             var height = Math.Max(1, request.IntArg("height", 720));
             var includeDiagnostics = request.BoolArg("includeDiagnostics", false);
             // 使用临时 RenderTexture 渲染所有相机模拟 Game View
+            byte[] bytes;
             var rt = new RenderTexture(width, height, 24);
             var texture = new Texture2D(width, height, TextureFormat.RGB24, false);
             try
@@ -53,7 +55,7 @@ namespace UnityCli
                 texture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
                 texture.Apply();
                 RenderTexture.active = prev;
-                var bytes = outputPath.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ? texture.EncodeToJPG(95) : texture.EncodeToPNG();
+                bytes = outputPath.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ? texture.EncodeToJPG(95) : texture.EncodeToPNG();
                 WriteScreenshotBytes(outputPath, bytes);
             }
             finally
@@ -65,6 +67,7 @@ namespace UnityCli
             var w = new UnityCliJsonWriter().BeginObject();
             w.Prop("command", "screenshot.game-view");
             w.PropRaw("artifact", ScreenshotArtifactJson("game-view", outputPath, width, height, "Camera.main/allCameras"));
+            if (request.BoolArg("inlineBase64", false)) AppendInlineScreenshot(w, Convert.ToBase64String(bytes), width, height, outputPath.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ? "image/jpeg" : "image/png");
             if (includeDiagnostics)
             {
                 w.PropRaw("diagnostics", GraphicsStatsSummaryJson());
@@ -119,6 +122,7 @@ namespace UnityCli
             tempGo.transform.LookAt(bounds.center);
             var prevActive = go.activeSelf;
             // 渲染
+            byte[] bytes;
             var rt = new RenderTexture(width, height, 24);
             var texture = new Texture2D(width, height, TextureFormat.RGB24, false);
             try
@@ -130,7 +134,7 @@ namespace UnityCli
                 texture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
                 texture.Apply();
                 RenderTexture.active = prev;
-                var bytes = outputPath.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ? texture.EncodeToJPG(95) : texture.EncodeToPNG();
+                bytes = outputPath.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ? texture.EncodeToJPG(95) : texture.EncodeToPNG();
                 WriteScreenshotBytes(outputPath, bytes);
             }
             finally
@@ -143,6 +147,7 @@ namespace UnityCli
             var w = new UnityCliJsonWriter().BeginObject();
             w.Prop("command", "screenshot.isolated-object");
             w.PropRaw("artifact", ScreenshotArtifactJson("isolated-object", outputPath, width, height, "isolated:" + go.name));
+            if (request.BoolArg("inlineBase64", false)) AppendInlineScreenshot(w, Convert.ToBase64String(bytes), width, height, outputPath.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ? "image/jpeg" : "image/png");
             w.Prop("target", go.name);
             w.Prop("logPath", LogPath());
             return w.EndObject().ToString();
@@ -213,6 +218,116 @@ namespace UnityCli
             return w.EndObject().ToString();
         }
 
+        /// <summary>6 角度环绕截图并生成 contact sheet。用于 AI 快速检查对象外观。</summary>
+        private static string ScreenshotSurround(BridgeRequest request)
+        {
+            var target = request.StringArg("target") ?? request.StringArg("path");
+            var go = string.IsNullOrEmpty(target) ? null : ObjectRefResolver.FindGameObjectByPath(target);
+            if (go == null)
+            {
+                throw new BridgeCommandException("E_TARGET_NOT_FOUND", "screenshot.surround requires a target GameObject.", "Pass --target <path>.");
+            }
+            var outputDir = request.StringArg("output-dir") ?? request.StringArg("dir") ?? "Assets/Screenshots/Surround";
+            var outputFullDir = AssetFullPath(outputDir);
+            var contactSheetRaw = request.StringArg("contactSheetPath") ?? request.StringArg("contact-sheet") ?? Path.Combine(outputDir, "surround_contact_sheet.png");
+            var contactSheetPath = ResolveScreenshotOutputPath(contactSheetRaw);
+            var overwrite = request.BoolArg("overwrite", false);
+            var width = Math.Max(1, request.IntArg("width", 512));
+            var height = Math.Max(1, request.IntArg("height", 512));
+            var bounds = TargetRenderBounds(go);
+            var center = bounds.center;
+            var radius = request.OptionalFloatArg("radius") ?? Mathf.Max(bounds.extents.magnitude * 2.5f, 5f);
+            var labels = new[] { "front", "back", "left", "right", "top", "bird_eye" };
+            var positions = new[]
+            {
+                center + new Vector3(0, 0, -radius),
+                center + new Vector3(0, 0, radius),
+                center + new Vector3(-radius, 0, 0),
+                center + new Vector3(radius, 0, 0),
+                center + new Vector3(0, radius, 0),
+                center + new Vector3(radius * 0.7f, radius * 0.7f, -radius * 0.7f)
+            };
+            var shotPaths = new List<string>();
+            for (var i = 0; i < labels.Length; i++)
+            {
+                var path = Path.Combine(outputFullDir, "surround_" + labels[i] + ".png");
+                if (File.Exists(path) && !overwrite)
+                {
+                    throw new BridgeCommandException("E_OUTPUT_EXISTS", "Screenshot output already exists: " + path, "Pass overwrite=true or choose a different output-dir.");
+                }
+                shotPaths.Add(path);
+            }
+            if (File.Exists(contactSheetPath) && !overwrite)
+            {
+                throw new BridgeCommandException("E_OUTPUT_EXISTS", "Contact sheet output already exists: " + contactSheetPath, "Pass overwrite=true or choose a different contactSheetPath.");
+            }
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("command", "screenshot.surround")
+                    .Prop("dryRun", true)
+                    .Prop("target", go.name)
+                    .PropRaw("center", Vector3Json(center))
+                    .Prop("radius", radius)
+                    .PropRaw("contactSheet", ScreenshotArtifactJson("surround-contact-sheet", contactSheetPath, width * 3, height * 2, "surround"))
+                    .PropArray("plannedArtifacts", arr =>
+                    {
+                        for (var i = 0; i < labels.Length; i++) arr.RawValue(SurroundShotJson(labels[i], shotPaths[i], width, height, positions[i]));
+                    })
+                    .Prop("logPath", LogPath())
+                    .EndObject().ToString());
+            }
+            Directory.CreateDirectory(outputFullDir);
+            CreateScreenshotDirectory(contactSheetPath);
+            var tempGo = new GameObject("__unity_cli_surround_cam__");
+            var cam = tempGo.AddComponent<Camera>();
+            cam.fieldOfView = Mathf.Clamp(request.FloatArg("fov", 60f), 10f, 120f);
+            cam.nearClipPlane = 0.1f;
+            cam.farClipPlane = Mathf.Max(radius * 6f, 100f);
+            cam.clearFlags = CameraClearFlags.SolidColor;
+            cam.backgroundColor = new Color(0.18f, 0.18f, 0.18f, 1f);
+            var tiles = new List<Texture2D>();
+            var artifacts = new List<string>();
+            byte[] contactBytes;
+            try
+            {
+                for (var i = 0; i < labels.Length; i++)
+                {
+                    cam.transform.position = positions[i];
+                    cam.transform.LookAt(center);
+                    var tile = RenderScreenshotTexture(cam, width, height);
+                    tiles.Add(tile);
+                    WriteScreenshotBytes(shotPaths[i], tile.EncodeToPNG());
+                    artifacts.Add(SurroundShotJson(labels[i], shotPaths[i], width, height, positions[i]));
+                }
+                var contact = ComposeScreenshotContactSheet(tiles, width, height);
+                try
+                {
+                    contactBytes = contact.EncodeToPNG();
+                    WriteScreenshotBytes(contactSheetPath, contactBytes);
+                }
+                finally
+                {
+                    UnityEngine.Object.DestroyImmediate(contact);
+                }
+            }
+            finally
+            {
+                foreach (var tile in tiles) UnityEngine.Object.DestroyImmediate(tile);
+                UnityEngine.Object.DestroyImmediate(tempGo);
+            }
+            var w = new UnityCliJsonWriter().BeginObject()
+                .Prop("command", "screenshot.surround")
+                .Prop("target", go.name)
+                .PropRaw("center", Vector3Json(center))
+                .Prop("radius", radius)
+                .Prop("count", 6L)
+                .PropRaw("contactSheet", ScreenshotArtifactJson("surround-contact-sheet", contactSheetPath, width * 3, height * 2, "surround"))
+                .PropArray("artifacts", arr => { foreach (var artifact in artifacts) arr.RawValue(artifact); });
+            if (request.BoolArg("inlineBase64", false)) AppendInlineScreenshot(w, Convert.ToBase64String(contactBytes), width * 3, height * 2);
+            return w.Prop("logPath", LogPath()).EndObject().ToString();
+        }
+
         private static string ScreenshotArtifactJson(string source, string path, int width, int height, string camera)
         {
             return new UnityCliJsonWriter().BeginObject()
@@ -223,6 +338,77 @@ namespace UnityCli
                 .Prop("height", (long)height)
                 .Prop("format", path.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ? "jpg" : "png")
                 .EndObject().ToString();
+        }
+
+        private static void AppendInlineScreenshot(UnityCliJsonWriter writer, string imageBase64, int width, int height, string mimeType = "image/png")
+        {
+            if (string.IsNullOrEmpty(imageBase64)) return;
+            writer.Prop("imageBase64", imageBase64)
+                .Prop("imageWidth", (long)width)
+                .Prop("imageHeight", (long)height)
+                .Prop("imageMimeType", mimeType);
+        }
+
+        private static string SurroundShotJson(string label, string path, int width, int height, Vector3 position)
+        {
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("angle", label)
+                .PropRaw("artifact", ScreenshotArtifactJson("surround", path, width, height, "surround:" + label))
+                .PropRaw("cameraPosition", Vector3Json(position))
+                .EndObject().ToString();
+        }
+
+        private static Bounds TargetRenderBounds(GameObject go)
+        {
+            var renderers = go.GetComponentsInChildren<Renderer>();
+            if (renderers.Length == 0) return new Bounds(go.transform.position, Vector3.one);
+            var bounds = renderers[0].bounds;
+            for (var i = 1; i < renderers.Length; i++)
+            {
+                if (renderers[i] != null && renderers[i].gameObject.activeInHierarchy) bounds.Encapsulate(renderers[i].bounds);
+            }
+            return bounds;
+        }
+
+        private static Texture2D RenderScreenshotTexture(Camera camera, int width, int height)
+        {
+            var previousTarget = camera.targetTexture;
+            var previousActive = RenderTexture.active;
+            var rt = new RenderTexture(width, height, 24, RenderTextureFormat.ARGB32);
+            var texture = new Texture2D(width, height, TextureFormat.RGB24, false);
+            try
+            {
+                camera.targetTexture = rt;
+                camera.Render();
+                RenderTexture.active = rt;
+                texture.ReadPixels(new Rect(0, 0, width, height), 0, 0);
+                texture.Apply();
+                return texture;
+            }
+            finally
+            {
+                RenderTexture.active = previousActive;
+                camera.targetTexture = previousTarget;
+                rt.Release();
+                UnityEngine.Object.DestroyImmediate(rt);
+            }
+        }
+
+        private static Texture2D ComposeScreenshotContactSheet(List<Texture2D> tiles, int tileWidth, int tileHeight)
+        {
+            var columns = 3;
+            var rows = 2;
+            var sheet = new Texture2D(tileWidth * columns, tileHeight * rows, TextureFormat.RGB24, false);
+            var fill = Enumerable.Repeat(new Color(0.05f, 0.05f, 0.05f, 1f), sheet.width * sheet.height).ToArray();
+            sheet.SetPixels(fill);
+            for (var i = 0; i < tiles.Count; i++)
+            {
+                var column = i % columns;
+                var row = rows - 1 - (i / columns);
+                sheet.SetPixels(column * tileWidth, row * tileHeight, tileWidth, tileHeight, tiles[i].GetPixels());
+            }
+            sheet.Apply();
+            return sheet;
         }
 
         private static string GraphicsStatsSummaryJson()

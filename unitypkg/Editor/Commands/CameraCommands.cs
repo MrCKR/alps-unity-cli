@@ -106,6 +106,9 @@ namespace UnityCli
                 texture.Apply();
                 var bytes = format == "jpg" ? texture.EncodeToJPG(quality) : texture.EncodeToPNG();
                 WriteScreenshotBytes(outputPath, bytes);
+                var imageBase64 = request.BoolArg("inlineBase64", false) ? Convert.ToBase64String(bytes) : null;
+                WriteLog("screenshot_written path=" + outputPath + " width=" + width + " height=" + height + " format=" + format);
+                return new ScreenshotResult(outputPath, format, width, height, transparent, quality, imageBase64);
             }
             finally
             {
@@ -118,8 +121,6 @@ namespace UnityCli
                 UnityEngine.Object.DestroyImmediate(renderTexture);
             }
 
-            WriteLog("screenshot_written path=" + outputPath + " width=" + width + " height=" + height + " format=" + format);
-            return new ScreenshotResult(outputPath, format, width, height, transparent, quality);
         }
 
         private static Camera ResolveCamera(string target)
@@ -174,7 +175,7 @@ namespace UnityCli
 
         private static string ScreenshotJson(ScreenshotResult capture, string source, string target)
         {
-            return new UnityCliJsonWriter().BeginObject()
+            var w = new UnityCliJsonWriter().BeginObject()
                 .Prop("screenshotPath", capture.Path)
                 .Prop("artifactPath", capture.Path)
                 .Prop("format", capture.Format)
@@ -183,15 +184,14 @@ namespace UnityCli
                 .Prop("transparent", capture.Transparent)
                 .Prop("quality", (long)capture.Quality)
                 .Prop("source", source)
-                .Prop("target", target)
-                .Prop("logPath", LogPath())
-                .EndObject()
-                .ToString();
+                .Prop("target", target);
+            AppendInlineScreenshot(w, capture.ImageBase64, capture.Width, capture.Height, capture.Format == "jpg" ? "image/jpeg" : "image/png");
+            return w.Prop("logPath", LogPath()).EndObject().ToString();
         }
 
         private static string ScreenshotDataJson(ScreenshotResult capture, string source, string target)
         {
-            return new UnityCliJsonWriter().BeginObject()
+            var w = new UnityCliJsonWriter().BeginObject()
                 .Prop("screenshotPath", capture.Path)
                 .Prop("artifactPath", capture.Path)
                 .Prop("format", capture.Format)
@@ -200,9 +200,9 @@ namespace UnityCli
                 .Prop("transparent", capture.Transparent)
                 .Prop("quality", (long)capture.Quality)
                 .Prop("source", source)
-                .Prop("target", target)
-                .EndObject()
-                .ToString();
+                .Prop("target", target);
+            AppendInlineScreenshot(w, capture.ImageBase64, capture.Width, capture.Height, capture.Format == "jpg" ? "image/jpeg" : "image/png");
+            return w.EndObject().ToString();
         }
 
         private static string CameraCreate(BridgeRequest request)

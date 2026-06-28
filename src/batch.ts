@@ -288,6 +288,7 @@ const commandRegistry = new Map<string, { parallelSafe: boolean }>([
   ["screenshot.scene-view", { parallelSafe: false }],
   ["screenshot.isolated-object", { parallelSafe: false }],
   ["screenshot.orbit", { parallelSafe: false }],
+  ["screenshot.surround", { parallelSafe: false }],
   ["code.exec", { parallelSafe: false }],
   ["console.get", { parallelSafe: true }],
   ["console.clear", { parallelSafe: false }],

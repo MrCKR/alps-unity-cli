@@ -10,7 +10,11 @@ const SCREENSHOT_OUTPUT = objSchema({
   sizeBytes: { type: "integer" },
   format: { type: "string" },
   camera: { type: "string" },
-  diagnostics: { type: "array", items: { type: "object" }, description: "Present when includeDiagnostics is requested." }
+  diagnostics: { type: "array", items: { type: "object" }, description: "Present when includeDiagnostics is requested." },
+  imageBase64: { type: "string", description: "Present only when inlineBase64=true." },
+  imageWidth: { type: "integer" },
+  imageHeight: { type: "integer" },
+  imageMimeType: { type: "string" }
 });
 
 export const SCREENSHOT_TOOLS: ToolMetadata[] = [
@@ -23,7 +27,8 @@ export const SCREENSHOT_TOOLS: ToolMetadata[] = [
       path: { type: "string", description: "Destination Assets/* image path (.png/.jpg)." },
       width: { type: "integer", description: "Optional capture width." },
       height: { type: "integer", description: "Optional capture height." },
-      format: { type: "string", enum: ["png", "jpg"], description: "Image format when not inferred from path." }
+      format: { type: "string", enum: ["png", "jpg"], description: "Image format when not inferred from path." },
+      inlineBase64: { type: "boolean", description: "Also return the encoded image as base64. Defaults false to avoid large output." }
     }, ["path"]),
     outputSchema: SCREENSHOT_OUTPUT,
     destructiveHint: false,
@@ -49,7 +54,8 @@ export const SCREENSHOT_TOOLS: ToolMetadata[] = [
       width: { type: "integer", default: 1280 },
       height: { type: "integer", default: 720 },
       overwrite: { type: "boolean", description: "Allow replacing an existing image." },
-      includeDiagnostics: { type: "boolean", description: "Append rendering diagnostics to the result." }
+      includeDiagnostics: { type: "boolean", description: "Append rendering diagnostics to the result." },
+      inlineBase64: { type: "boolean", description: "Also return the encoded image as base64. Defaults false to avoid large output." }
     }, ["path"]),
     outputSchema: SCREENSHOT_OUTPUT,
     destructiveHint: false,
@@ -75,7 +81,8 @@ export const SCREENSHOT_TOOLS: ToolMetadata[] = [
       width: { type: "integer", description: "Optional capture width; defaults to SceneView size." },
       height: { type: "integer", description: "Optional capture height; defaults to SceneView size." },
       format: { type: "string", enum: ["png", "jpg"], default: "png" },
-      overwrite: { type: "boolean", description: "Allow replacing an existing image." }
+      overwrite: { type: "boolean", description: "Allow replacing an existing image." },
+      inlineBase64: { type: "boolean", description: "Also return the encoded image as base64. Defaults false to avoid large output." }
     }, ["path"]),
     outputSchema: SCREENSHOT_OUTPUT,
     destructiveHint: false,
@@ -103,7 +110,8 @@ export const SCREENSHOT_TOOLS: ToolMetadata[] = [
       height: { type: "integer", default: 512 },
       orthographic: { type: "boolean", default: true, description: "Use an orthographic framing camera." },
       size: { type: "number", default: 2, description: "Orthographic frustum size around the object." },
-      overwrite: { type: "boolean", description: "Allow replacing an existing image." }
+      overwrite: { type: "boolean", description: "Allow replacing an existing image." },
+      inlineBase64: { type: "boolean", description: "Also return the encoded image as base64. Defaults false to avoid large output." }
     }, ["target", "path"]),
     outputSchema: SCREENSHOT_OUTPUT,
     destructiveHint: false,
@@ -120,8 +128,46 @@ export const SCREENSHOT_TOOLS: ToolMetadata[] = [
     ]
   },
   {
+    name: "screenshot.surround",
+    summary: "Capture six fixed angles around a target GameObject and save a 3x2 contact sheet plus the six source PNGs.",
+    description: "Capture six fixed angles around a target GameObject (front, back, left, right, top, bird_eye) and save a 3x2 contact sheet plus the six source PNGs. target resolves by name, hierarchy path or instance id. This writes image artifacts; use --dry-run to preview paths or --yes to execute. inlineBase64 returns the contact sheet as base64 only when explicitly requested.",
+    group: "screenshot",
+    inputSchema: objSchema({
+      target: { type: "string", description: "GameObject to surround: name, hierarchy path or instance id." },
+      "output-dir": { type: "string", description: "Assets/* directory for the generated six PNG shots. Defaults to Assets/Screenshots/Surround." },
+      contactSheetPath: { type: "string", description: "Destination path for the generated 3x2 contact sheet PNG. Defaults under output-dir." },
+      width: { type: "integer", default: 512, description: "Width of each source angle tile." },
+      height: { type: "integer", default: 512, description: "Height of each source angle tile." },
+      radius: { type: "number", description: "Camera radius from the target center. Defaults from renderer bounds." },
+      fov: { type: "number", default: 60, description: "Temporary camera field of view in degrees." },
+      overwrite: { type: "boolean", description: "Allow replacing existing shot/contact sheet files." },
+      inlineBase64: { type: "boolean", description: "Also return the contact sheet as base64. Defaults false to avoid large output." }
+    }, ["target"]),
+    outputSchema: objSchema({
+      command: { type: "string" },
+      target: { type: "string" },
+      count: { type: "integer" },
+      contactSheet: { type: "object" },
+      artifacts: { type: "array", items: { type: "object" } },
+      imageBase64: { type: "string", description: "Present only when inlineBase64=true." }
+    }),
+    destructiveHint: true,
+    supportsDryRun: true,
+    sideEffects: ["artifact-write", "asset-write"],
+    riskLevel: "medium",
+    playModeSupport: "editor-only",
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run screenshot.surround",
+    docsTopic: "screenshot",
+    equivalentUnityMcp: "manage_camera.screenshot batch=surround",
+    examples: [
+      { description: "Create a six-angle contact sheet", argv: ["tools", "run", "screenshot.surround", "--input", "{\"target\":\"AlignmentProbe\",\"output-dir\":\"Assets/UnityCliAlignmentFixtures/SurroundShots\",\"overwrite\":true}", "--yes"] }
+    ]
+  },
+  {
     name: "screenshot.orbit",
-    summary: "Capture multiple screenshots orbiting a target GameObject at evenly spaced angles, saving each PNG under output-dir. target resolves by name, hierarchy path or...",
+    summary: "Capture multiple screenshots orbiting a target GameObject at evenly spaced angles and save each PNG under output-dir.",
     description: "Capture multiple screenshots orbiting a target GameObject at evenly spaced angles, saving each PNG under output-dir. target resolves by name, hierarchy path or instance id. Use this to generate turntable previews. Aligns with CoplayDev orbit/surround.",
     group: "screenshot",
     inputSchema: objSchema({

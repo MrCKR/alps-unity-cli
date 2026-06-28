@@ -36,7 +36,7 @@ namespace UnityCli
         private static readonly string[] GameObjectCommands = { "go.find", "go.inspect", "go.create", "go.modify", "go.duplicate", "go.move-relative", "go.look-at", "go.delete", "component.add", "component.remove", "component.set" };
         private static readonly string[] AssetCommands = { "asset.search", "asset.info", "asset.create", "asset.import", "asset.modify", "asset.delete", "asset.duplicate", "asset.move", "asset.rename" };
         private static readonly string[] DiagnoseCommands = { "diagnose.preflight" };
-        private static readonly string[] ScreenshotCommands = { "screenshot.capture" };
+        private static readonly string[] ScreenshotCommands = { "screenshot.capture", "screenshot.game-view", "screenshot.scene-view", "screenshot.isolated-object", "screenshot.orbit", "screenshot.surround" };
         private static readonly string[] PrefabCommands = { "prefab.info", "prefab.hierarchy", "prefab.create", "prefab.modify", "prefab.stage-open", "prefab.stage-save", "prefab.stage-close" };
         private static readonly string[] UiCommands = { "ui.canvas.create", "ui.text.create", "ui.button.create", "ui.image.create", "ui.document.info", "ui.document.create", "ui.hierarchy" };
         private static readonly string[] MaterialCommands = { "material.info", "material.create", "material.assign", "material.set" };
@@ -260,7 +260,8 @@ namespace UnityCli
                 || command == "code.exec"
                 || command == "component.remove"
                 || command == "editor.menu"
-                || command == "reflection.method.call";
+                || command == "reflection.method.call"
+                || command == "screenshot.surround";
         }
 
         /// <summary>

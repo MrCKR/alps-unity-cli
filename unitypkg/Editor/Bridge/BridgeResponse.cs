@@ -30,7 +30,7 @@ namespace UnityCli
     {
         private sealed class ScreenshotResult
         {
-            public ScreenshotResult(string path, string format, int width, int height, bool transparent, int quality)
+            public ScreenshotResult(string path, string format, int width, int height, bool transparent, int quality, string imageBase64)
             {
                 Path = path;
                 Format = format;
@@ -38,6 +38,7 @@ namespace UnityCli
                 Height = height;
                 Transparent = transparent;
                 Quality = quality;
+                ImageBase64 = imageBase64;
             }
 
             public string Path { get; private set; }
@@ -46,6 +47,7 @@ namespace UnityCli
             public int Height { get; private set; }
             public bool Transparent { get; private set; }
             public int Quality { get; private set; }
+            public string ImageBase64 { get; private set; }
         }
     }
 }

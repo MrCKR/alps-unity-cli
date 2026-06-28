@@ -2505,6 +2505,15 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "screenshot.surround",
+      "group": "screenshot",
+      "command": "surround",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "scriptable-object.create",
       "group": "scriptable-object",
       "command": "create",

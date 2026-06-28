@@ -522,22 +522,33 @@ test("tools run rejects invalid --input JSON before bridge execution", async () 
   assert.deepEqual(requests, []);
 });
 
-test("screenshot command forwards output path", async () => {
+test("screenshot commands forward output and surround arguments", async () => {
   const runtime = await makeRuntime();
   const requests: BridgeRequest[] = [];
 
-  const result = await execute(["tools", "run", "screenshot.capture", "Artifacts/after.png", "--width", "1280", "--height", "720"], {
+  const result = await execute(["tools", "run", "screenshot.capture", "Artifacts/after.png", "--width", "1280", "--height", "720", "--inline-base64"], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
       return { ok: true, data: { screenshotPath: payload.args.path, plannedEffects: [{ type: payload.command, path: payload.args.path }] } };
     }
   });
+  const surround = await execute(["tools", "run", "screenshot.surround", "Player", "--output-dir", "Assets/Shots", "--contact-sheet", "Assets/Shots/contact.png", "--width", "320", "--height", "240", "--radius", "6.5", "--fov", "55", "--inline-base64", "--dry-run"], {
+    ...runtime,
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { command: payload.command, dryRun: payload.dryRun, plannedArtifacts: [] } };
+    }
+  });
 
   assert.equal(result.ok, true);
+  assert.equal(surround.ok, true);
   assert.equal(requests[0].command, "screenshot.capture");
-  assert.deepEqual(requests[0].args, { path: "Artifacts/after.png", width: 1280, height: 720 });
+  assert.deepEqual(requests[0].args, { path: "Artifacts/after.png", width: 1280, height: 720, inlineBase64: true });
   assert.equal((result.data as { screenshotPath: string }).screenshotPath, "Artifacts/after.png");
+  assert.equal(requests[1].command, "screenshot.surround");
+  assert.equal(requests[1].dryRun, true);
+  assert.deepEqual(requests[1].args, { target: "Player", "output-dir": "Assets/Shots", contactSheetPath: "Assets/Shots/contact.png", width: 320, height: 240, radius: 6.5, fov: 55, inlineBase64: true });
 });
 
 test("build commands forward settings and dry-run arguments", async () => {

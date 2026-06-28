@@ -38,7 +38,8 @@ const SECURITY_POLICY: SecurityPolicyEntry[] = [
   { command: "ui.document.delete", summary: "Delete UI Document", destructiveHint: true, supportsDryRun: true },
   { command: "ui.update-panel-settings", summary: "Update PanelSettings", destructiveHint: true, supportsDryRun: true },
   { command: "ui.link-stylesheet", summary: "Link Stylesheet", destructiveHint: true, supportsDryRun: true },
-  { command: "ui.render-preview", summary: "Render UI Preview", destructiveHint: true, supportsDryRun: true }
+  { command: "ui.render-preview", summary: "Render UI Preview", destructiveHint: true, supportsDryRun: true },
+  { command: "screenshot.surround", summary: "Create Surround Screenshot Contact Sheet", destructiveHint: true, supportsDryRun: true }
 ];
 
 const BY_COMMAND = new Map(SECURITY_POLICY.map((entry) => [entry.command, entry]));
