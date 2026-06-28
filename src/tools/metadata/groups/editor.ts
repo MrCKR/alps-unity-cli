@@ -23,7 +23,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
   {
     name: "editor.state",
     summary: "Query current Unity Editor readiness: Play Mode, pause, compile/import/build/domain-reload busy flags, active scene, prefab stage, bridge build stamp, and runtime...",
-    description: "Query current Unity Editor readiness: Play Mode, pause, compile/import/build/domain-reload busy flags, active scene, prefab stage, bridge build stamp, and runtime tool availability. Use this before expensive tools and after editor.play/editor.stop/editor.menu to decide whether to retry later or continue.",
+    description: "Query current Unity Editor readiness: Play Mode, pause, compile/import/build/domain-reload busy flags, active scene, prefab stage, bridge build stamp, and runtime tool availability. Bridge commands run on Unity's main thread; use this before expensive tools and after editor.play/editor.stop/editor.menu to decide whether to retry later or continue. The bridge listener re-registers after domain reload; heartbeat/build stamp changes here are the observable reconnect signal.",
     group: "editor",
     inputSchema: objSchema({}),
     outputSchema: objSchema({ playMode: { type: "object" }, busy: { type: "object", description: "busy.isBusy or busy.compiling/updating/domainReloading/playModeChanging means AI should wait/retry before stateful operations." }, activeScene: { type: "object" }, prefabStage: { type: ["object", "null"] }, bridge: { type: "object" }, runtime: { type: "object" } }),

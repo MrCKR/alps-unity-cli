@@ -80,13 +80,14 @@ export const TOOLS_DISCOVERY_TOOLS: ToolMetadata[] = [
   {
     name: "tools.run",
     summary: "Execute a tool by its dotted name using the unified tools contract.",
-    description: "Execute a tool by its dotted name using the unified tools contract. This is the primary execution entry point — the router determines the execution channel (bridge, bridge-runtime, job, offline, or hybrid) based on the tool's handler and target descriptor. Runtime target tools require the Editor to be in Play Mode; if not in Play Mode, the CLI returns E_RUNTIME_NOT_READY (transient).",
+    description: "Execute a tool by its dotted name using the unified tools contract. The router determines the execution channel (bridge, runtime, job, offline, or hybrid). Bridge tools are scheduled onto Unity's main thread; if the Editor is compiling, importing, switching Play Mode, or domain reloading, inspect editor.state/waitReady and retry after the busy state clears. The Bridge listener auto-registers after domain reload and reports heartbeat/build stamp through editor.state. Runtime target tools require Play Mode; otherwise the CLI returns transient E_RUNTIME_NOT_READY.",
     group: "tools",
     inputSchema: objSchema({
       name: { type: "string", description: "Dotted tool name, e.g. 'scene.hierarchy', 'sample.echo', 'runtime.echo'" },
       input: { type: "string", description: "JSON input for the tool" },
       inputFile: { type: "string", description: "Path to JSON input file" },
       timeoutMs: { type: "integer", description: "Override default timeout" },
+      stdin: { type: "boolean", description: "Read JSON input from standard input for tools that do not already use stdin for a tool-specific payload." },
       fingerprintMode: { type: "string", enum: ["block", "warn"], description: "Fingerprint mismatch handling: block (default) or warn" },
       runtime: { type: "boolean", description: "Force runtime execution path for target=both tools" }
     }, ["name"]),

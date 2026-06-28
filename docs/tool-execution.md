@@ -37,7 +37,7 @@ echo '{"target":"Main Camera"}' | unity_cli tools run camera.screenshot --stdin
 
 ## 输入校验
 
-`tools run` 会用 `inputSchema` 校验输入参数。校验失败返回 `E_INPUT_VALIDATION_FAILED`。
+`tools run` 会用 `inputSchema.required` 做执行前必填字段校验。校验失败返回 `E_SCHEMA_INVALID`，`next_actions` 指向 `tools describe <tool>`。
 
 ```powershell
 # 正确：提供 inputSchema 要求的字段
@@ -45,8 +45,14 @@ unity_cli tools run camera.screenshot --input '{"target":"Main Camera","output":
 
 # 错误：缺少必需字段
 unity_cli tools run camera.screenshot --input '{}'
-# → E_INPUT_VALIDATION_FAILED, next_actions 指向 tools describe
+# → E_SCHEMA_INVALID, next_actions 指向 tools describe
 ```
+
+## Bridge 执行约束
+
+Bridge-backed tools 由 Unity Editor 侧队列调度到 Unity 主线程执行。Unity 正在 compile/import/build、切换 Play Mode 或 domain reload 时，工具可能返回 busy/transient 错误；先读 `tools run editor.state --input '{"waitReady":true}'`，等 `busy.isBusy=false` 后再重试。
+
+Bridge listener 会在 domain reload 后重新注册并恢复 heartbeat。`editor.state` 输出里的 `bridge` build stamp 与 heartbeat 是 AI 判断自动重连是否恢复的公开信号；不要直接读内部注册文件或手动 ping endpoint 替代这个检查。
 
 ## Fingerprint 保护
 
@@ -114,7 +120,7 @@ unity_cli jobs status <jobId>
 |--------|------|---------|
 | `E_TOOL_NOT_FOUND_FOR_TARGET` | 工具在目标不可用 | 检查 requiresPackages 和 available |
 | `E_RUNTIME_NOT_READY` | Runtime 工具但非 Play Mode | 先执行 `tools run editor.play`，transient 可重试 |
-| `E_INPUT_VALIDATION_FAILED` | 输入不符合 inputSchema | 查看 `tools describe` 的 inputSchema |
+| `E_SCHEMA_INVALID` | 输入缺少 inputSchema.required 字段 | 查看 `tools describe` 的 inputSchema |
 | `E_TOOL_FINGERPRINT_MISMATCH` | handler 代码变更 | 审计后 `--fingerprint-mode warn` |
 | `E_DRY_RUN_UNSUPPORTED` | 工具不支持 dry-run | 直接使用 `--yes` 确认 |
 | `E_DESTRUCTIVE_CONFIRMATION_REQUIRED` | 破坏性工具未确认 | 添加 `--yes` 标志 |

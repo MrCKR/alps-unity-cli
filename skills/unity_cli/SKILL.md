@@ -77,7 +77,9 @@ unity_cli tools search <keyword>
 执行规则：
 
 - 执行前先 `tools describe <tool>`，读取 `inputSchema`、`destructiveHint`、`supportsDryRun`、`requiresPackages`、`target`、`availabilityScope`、`playModeSupport`。
-- 用 `--input`、`--input-file` 或 `--stdin` 传参。
+- 用 `--input`、`--input-file` 或 `--stdin` 传参；缺少 `inputSchema.required` 字段会在执行前返回 `E_SCHEMA_INVALID`。
+- Bridge 工具在 Unity 主线程执行；Unity 正在 compile/import/build、Play Mode 切换或 domain reload 时，先用 `tools run editor.state --input '{"waitReady":true}'` 等待 `busy.isBusy=false`。
+- Bridge listener 会在 domain reload 后自动重连；用 `editor.state` 的 `bridge` heartbeat/build stamp 判断恢复，不要手动读注册文件或 ping endpoint。
 - `destructiveHint: true` 的工具先用 `--dry-run`（如支持），确认后加 `--yes`。
 - Runtime 工具通常需要 Play Mode；遇到 `E_RUNTIME_NOT_READY`，按 `next_actions` 处理。
 - `playModeSupport: "editor-only"` 的工具不要在 Play Mode 下运行；

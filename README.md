@@ -266,6 +266,8 @@ unity_cli tools run <tool-name> --input-file params.json
 unity_cli tools run <tool-name> --stdin
 ```
 
+Bridge-backed 工具会在 Unity 主线程执行。Unity 处于 compile/import/build、Play Mode 切换或 domain reload 时，先执行 `unity_cli tools run editor.state --input '{"waitReady":true}'` 等待 `busy.isBusy=false`。Bridge listener 会在 domain reload 后自动重连，`editor.state` 的 `bridge` heartbeat/build stamp 是公开恢复信号。
+
 ### 场景与截图
 
 ```powershell
