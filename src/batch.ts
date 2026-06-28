@@ -46,6 +46,7 @@ interface BatchStepDefinition {
 interface BatchDefinition {
   defaults?: BatchDefaults;
   failFast?: boolean;
+  fail_fast?: boolean;
   parallel?: number;
   envAllowlist?: string[];
   steps: BatchStepDefinition[];
@@ -352,6 +353,7 @@ export function batchJsonSchema(): Record<string, unknown> {
         }
       },
       failFast: { type: "boolean", default: true },
+      fail_fast: { type: "boolean", default: true, description: "Alias of failFast for snake_case JSON producers." },
       parallel: { type: "integer", minimum: 1, default: 1 },
       envAllowlist: { type: "array", items: { type: "string", pattern: "^[A-Z_][A-Z0-9_]*$" }, uniqueItems: true },
       steps: {
@@ -388,7 +390,7 @@ export async function runBatch(options: BatchRunOptions): Promise<CliResult> {
     });
   }
 
-  const effectiveFailFast = options.failFast ?? loaded.batch.failFast ?? true;
+  const effectiveFailFast = options.failFast ?? loaded.batch.failFast ?? loaded.batch.fail_fast ?? true;
   const effectiveParallel = options.parallel ?? loaded.batch.parallel ?? 1;
   const normalized = normalizeBatch(loaded.batch, batchPath);
   const preflight = validateBatch(loaded.batch, normalized, effectiveParallel);

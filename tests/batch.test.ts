@@ -31,6 +31,53 @@ test("batch schema exposes defaults, steps and env allowlist", async () => {
   assert.ok(schema.properties.defaults);
   assert.ok(schema.properties.steps);
   assert.ok(schema.properties.envAllowlist);
+  assert.ok(schema.properties.failFast);
+  assert.ok(schema.properties.fail_fast);
+});
+
+test("batch run accepts inline JSON input", async () => {
+  const runtime = await makeRuntime();
+  const inline = JSON.stringify({
+    steps: [{ id: "groups", command: ["tools", "run", "tools.group"] }]
+  });
+
+  const result = await execute(["batch", "run", "--input", inline, "--yes"], runtime);
+
+  assert.equal(result.ok, true);
+  const data = result.data as { batchPath: string; summary: { succeeded: number }; steps: Array<{ id: string; envelope: { ok: boolean } }> };
+  assert.match(data.batchPath, /batches[\\/]inline[\\/]/);
+  assert.equal(data.summary.succeeded, 1);
+  assert.equal(data.steps[0].id, "groups");
+  assert.equal(data.steps[0].envelope.ok, true);
+});
+
+test("batch run inline JSON reports parse errors", async () => {
+  const runtime = await makeRuntime();
+
+  const result = await execute(["batch", "run", "--input", "{bad", "--yes"], runtime);
+
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "BATCH_INPUT_JSON_INVALID");
+});
+
+test("batch fail_fast false allows independent ready steps to continue", async () => {
+  const runtime = await makeRuntime();
+  const inline = JSON.stringify({
+    fail_fast: false,
+    steps: [
+      { id: "missing", command: ["jobs", "status", "missing"] },
+      { id: "groups", command: ["tools", "run", "tools.group"] }
+    ]
+  });
+
+  const result = await execute(["batch", "run", "--input", inline, "--yes"], runtime);
+
+  assert.equal(result.ok, false);
+  const data = result.data as { failFast: boolean; summary: { failed: number; succeeded: number; skipped: number } };
+  assert.equal(data.failFast, false);
+  assert.equal(data.summary.failed, 1);
+  assert.equal(data.summary.succeeded, 1);
+  assert.equal(data.summary.skipped, 0);
 });
 
 test("batch run orders steps by dependsOn and aggregates envelopes", async () => {
