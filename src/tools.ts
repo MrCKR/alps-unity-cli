@@ -451,7 +451,10 @@ async function handleToolsRun(
 
   // code.exec 是 hybrid，但需要先经过原生 handler 完成本地校验、dry-run、artifact 与 batchmode job 逻辑。
   if (builtinTool && toolName === "code.exec") {
-    const parsedInput = await parseToolInput(flags, requestId);
+    // code.exec 既支持 tools 通用 --stdin，也保留历史的“代码源来自 stdin”语义；
+    // 当没有 --input/--input-file 时，--stdin 交给 handleCode 作为代码源处理。
+    const usesCodeSourceStdin = getBoolean(flags, "stdin") && getString(flags, "input") === undefined && getString(flags, "input-file") === undefined;
+    const parsedInput = usesCodeSourceStdin ? { ok: true, input: {} } as ParsedToolInput : await parseToolInput(flags, requestId);
     if (!parsedInput.ok) return parsedInput.error!;
     return handleCode("exec", mergeInputToFlags(parsedInput.input, flags), runtime as Runtime, requestId);
   }
@@ -465,6 +468,9 @@ async function handleToolsRun(
     if (!parsedInput.ok) return parsedInput.error!;
     const mergedFlags = mergeInputToFlags(parsedInput.input, flags);
     const spec = findBridgeSpecForTool(toolName)!;
+    let args = await spec.buildArgs({ command: toolName, flags: mergedFlags, positionalTarget: positional[1] });
+    const validationError = validateRequiredInputFields(tool, args as Record<string, unknown>, mergedFlags, positional[1], requestId);
+    if (validationError) return validationError;
     // 破坏性工具确认(对齐旧 cli.ts bridge 路径)。
     if (spec.destructiveHint || tool.destructiveHint) {
       const confirmation = await confirmDestructiveExecution(mergedFlags, {
@@ -476,7 +482,6 @@ async function handleToolsRun(
       });
       if (confirmation) return confirmation;
     }
-    let args = await spec.buildArgs({ command: toolName, flags: mergedFlags, positionalTarget: positional[1] });
     let bridgeCommand = spec.bridgeCommand;
     if (spec.toolName) {
       args = { name: spec.toolName, input: args };
@@ -524,6 +529,13 @@ async function parseToolInput(flags: Record<string, string | boolean>, requestId
     const content = await readFile(resolve(inputFilePath), "utf8");
     return parseToolInputString(content, requestId, "--input-file");
   }
+  // S 节：通用 --stdin 从标准输入读 JSON，对齐 IvanMurzak run-tool --stdin。
+  if (getBoolean(flags, "stdin")) {
+    const stdinContent = await readStdin();
+    if (stdinContent.length > 0) {
+      return parseToolInputString(stdinContent, requestId, "--stdin");
+    }
+  }
   const inputString = getString(flags, "input");
   if (inputString !== undefined) {
     return parseToolInputString(inputString, requestId, "--input");
@@ -531,8 +543,59 @@ async function parseToolInput(flags: Record<string, string | boolean>, requestId
   return { ok: true, input: {} };
 }
 
+/** 从 process.stdin 读取全部内容（管道/重定向场景）。 */
+async function readStdin(): Promise<string> {
+  return new Promise((resolve) => {
+    let settled = false;
+    let data = "";
+    const done = (value: string) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      resolve(value);
+    };
+    const timer = setTimeout(() => done(data), 50);
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (chunk) => { data += chunk; });
+    process.stdin.on("end", () => done(data));
+    process.stdin.on("error", () => done(""));
+    // 如果 stdin 不是管道（TTY），立即返回空
+    if (process.stdin.isTTY) done("");
+  });
+}
+
+/** S 节：按 metadata inputSchema.required 做轻量必填字段校验，在执行前拦截参数缺失。 */
+function validateRequiredInputFields(
+  tool: ToolMetadata,
+  input: Record<string, unknown>,
+  flags: Record<string, string | boolean>,
+  positionalTarget: string | undefined,
+  requestId: string
+): CliResult | undefined {
+  const required = tool.inputSchema?.required;
+  if (!Array.isArray(required) || required.length === 0) return undefined;
+  // 同时检查 --input JSON 与显式 CLI flags；显式 flags 仍是合法调用方式。
+  const missing: string[] = [];
+  for (const field of required) {
+    const kebab = camelToKebab(field);
+    const snake = field.replace(/-/g, "_");
+    const positionalSatisfiesField = positionalTarget !== undefined && (required.length === 1 || ["target", "name", "keyword", "group", "query", "searchTerm", "path", "assetPath", "scenePath", "packageId", "id", "action"].includes(field));
+    const fieldPresent = input[field] !== undefined || input[kebab] !== undefined || input[snake] !== undefined || flags[field] !== undefined || flags[kebab] !== undefined || flags[snake] !== undefined;
+    const assetSourceAliasPresent = (tool.name === "asset.duplicate" || tool.name === "asset.move") && field === "source" && (input.path !== undefined || flags.path !== undefined || positionalTarget !== undefined);
+    const assetPathAliasPresent = (tool.name === "asset.get-data" || tool.name === "asset.preview") && field === "assetPath" && (input.path !== undefined || flags.path !== undefined || positionalTarget !== undefined);
+    if (!positionalSatisfiesField && !fieldPresent && !assetSourceAliasPresent && !assetPathAliasPresent) {
+      missing.push(field);
+    }
+  }
+  if (missing.length === 0) return undefined;
+  return failure(requestId, "E_SCHEMA_INVALID", `Missing required field(s): ${missing.join(", ")}`, [
+    `Run unity_cli tools describe ${tool.name} to see the required input fields.`,
+    `Required: ${required.join(", ")}.`
+  ]);
+}
+
 /** 解析 tools run 输入；兼容 PowerShell 将 escaped JSON 拆坏后的常见形态。 */
-function parseToolInputString(inputString: string, requestId: string, source: "--input" | "--input-file"): ParsedToolInput {
+function parseToolInputString(inputString: string, requestId: string, source: "--input" | "--input-file" | "--stdin"): ParsedToolInput {
   const parsed = parseJsonWithPowerShellFallback(inputString);
   if (parsed.ok) {
     const value = parsed.value;
@@ -711,6 +774,8 @@ async function dispatchJobHandler(
 
   const parsedInput = await parseToolInput(flags, requestId);
   if (!parsedInput.ok) return parsedInput.error!;
+  const validationError = validateRequiredInputFields(tool, parsedInput.input, flags, undefined, requestId);
+  if (validationError) return validationError;
   const mergedFlags = mergeInputToFlags(parsedInput.input, flags);
 
   let result: CliResult | undefined;
@@ -755,6 +820,8 @@ async function dispatchOfflineHandler(
 
   const parsedInput = await parseToolInput(flags, requestId);
   if (!parsedInput.ok) return parsedInput.error!;
+  const validationError = validateRequiredInputFields(tool, parsedInput.input, flags, positional[1], requestId);
+  if (validationError) return validationError;
   const mergedFlags = mergeInputToFlags(parsedInput.input, flags);
 
   // 破坏性 offline 工具确认(package.remove 等)。

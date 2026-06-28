@@ -5,6 +5,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { bridgeCommandRegistry, type BridgeRequest } from "../src/bridge/index.js";
 import { handleToolsCommand, type ToolsRuntime } from "../src/tools.js";
@@ -1210,6 +1211,48 @@ test("tools run scene.hierarchy passes --input as bridge args", async () => {
   assert.equal(result.ok, true);
   assert.equal(requests[0].command, "scene.hierarchy");
   assert.deepEqual((requests[0].args as Record<string, unknown>).pageSize, 1);
+});
+
+test("tools run validates required input fields before bridge execution", async () => {
+  const requests: BridgeRequest[] = [];
+  const runtime: ToolsRuntime = {
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: {} };
+    }
+  };
+
+  const result = await handleToolsCommand("run", ["go.modify"], {}, runtime, requestId);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_SCHEMA_INVALID");
+  assert.equal(requests.length, 0);
+});
+
+test("tools run required field validation accepts explicit CLI flags", async () => {
+  const requests: BridgeRequest[] = [];
+  const runtime: ToolsRuntime = {
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { gameObject: { path: "Player" } } };
+    }
+  };
+
+  const result = await handleToolsCommand("run", ["go.modify"], { target: "Player" }, runtime, requestId);
+  assert.equal(result.ok, true);
+  assert.equal(requests.length, 1);
+  assert.equal((requests[0].args as Record<string, unknown>).target, "Player");
+});
+
+test("tools run --stdin reads JSON input for offline tools", () => {
+  const cliPath = fileURLToPath(new URL("../src/cli.js", import.meta.url));
+  const child = spawnSync(process.execPath, [cliPath, "tools", "run", "tools.describe", "--stdin"], {
+    input: JSON.stringify({ name: "scene.hierarchy" }),
+    encoding: "utf8"
+  });
+  assert.equal(child.status, 0, child.stderr || child.stdout);
+  const output = JSON.parse(child.stdout) as { ok: boolean; data?: { name?: string } };
+  assert.equal(output.ok, true);
+  assert.equal(output.data?.name, "scene.hierarchy");
 });
 
 test("tools run built-in bridge tool without --input sends empty args", async () => {
