@@ -222,6 +222,45 @@ export const ASSET_TOOLS: ToolMetadata[] = [
     ]
   },
   {
+    name: "asset.get-components",
+    summary: "Read importer and Prefab/GameObject component summaries for an asset without deep-serializing the whole object graph.",
+    description: "Read importer and Prefab/GameObject component summaries for an asset without deep-serializing the whole object graph. For prefab assets, returns paged component rows with hierarchy path, GameObject active state, component type, and componentIndex. For non-GameObject assets, returns importer/main object metadata with componentCount=0.",
+    group: "asset",
+    inputSchema: objSchema({ assetPath: { type: "string", description: "Exact Assets/* path to inspect." }, path: { type: "string", description: "Alias of assetPath." }, includeInactive: { type: "boolean", default: true }, pageSize: { type: "integer", default: 200, maximum: 1000 }, cursor: { type: "integer", default: 0 } }, ["assetPath"]),
+    outputSchema: pageSchema({ type: "object", properties: { path: { type: "string" }, gameObject: { type: "string" }, componentIndex: { type: "integer" }, type: { type: "string" }, fullName: { type: "string" }, enabled: { type: "boolean" } } }),
+    destructiveHint: false,
+    playModeSupport: "supported",
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run asset.get-components",
+    docsTopic: "asset",
+    equivalentUnityMcp: "manage_asset.get_components",
+    examples: [
+      { description: "List components in a prefab asset", argv: ["tools", "run", "asset.get-components", "--input", "{\"assetPath\":\"Assets/Prefabs/Player.prefab\",\"pageSize\":50}"] }
+    ]
+  },
+  {
+    name: "asset.refresh",
+    summary: "Refresh the AssetDatabase in the live Editor, or import one asset path with refresh options.",
+    description: "Refresh the AssetDatabase in the live Editor, or import one asset path with refresh options. This is the asset-domain live equivalent of editor.refresh batch jobs; use path for one asset or omit path to refresh the whole AssetDatabase. Supports dry-run for planned effects.",
+    group: "asset",
+    inputSchema: objSchema({ path: { type: "string", description: "Optional Assets/* path to import instead of refreshing the whole AssetDatabase." }, assetPath: { type: "string", description: "Alias of path." }, forceUpdate: { type: "boolean", default: false, description: "Use ImportAssetOptions.ForceUpdate." }, importRecursive: { type: "boolean", default: false, description: "Use ImportAssetOptions.ImportRecursive for folder paths." } }),
+    outputSchema: objSchema({ command: { type: "string" }, path: { type: "string" }, options: { type: "string" }, refreshed: { type: "boolean" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
+    destructiveHint: false,
+    sideEffects: ["asset-import", "asset-refresh"],
+    playModeSupport: "session-affecting",
+    supportsDryRun: true,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run asset.refresh",
+    docsTopic: "asset",
+    equivalentUnityMcp: "assets-refresh",
+    examples: [
+      { description: "Refresh the AssetDatabase", argv: ["tools", "run", "asset.refresh", "--input", "{}"] },
+      { description: "Preview importing one asset", argv: ["tools", "run", "asset.refresh", "--input", "{\"path\":\"Assets/Generated/config.json\",\"forceUpdate\":true}", "--dry-run"] }
+    ]
+  },
+  {
     name: "asset.preview",
     summary: "Generate/read the asset preview thumbnail metadata (size, dimensions, transient state).",
     description: "Generate/read the asset preview thumbnail metadata (size, dimensions, transient state). Preview generation can be session-affecting because Unity may refresh transient preview cache.",

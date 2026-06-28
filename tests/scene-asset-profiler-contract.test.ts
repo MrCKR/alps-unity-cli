@@ -44,8 +44,8 @@ test("scene domain exposes paged hierarchy and scene data tools", () => {
   const data = findToolByName("scene.data")!;
 });
 
-test("asset domain exposes paged search/get-data/preview with Play Mode metadata", () => {
-  for (const name of ["asset.search", "asset.search-built-in", "asset.get-data", "asset.preview"]) {
+test("asset domain exposes paged search/get-data/get-components/refresh/preview with Play Mode metadata", () => {
+  for (const name of ["asset.search", "asset.search-built-in", "asset.get-data", "asset.get-components", "asset.refresh", "asset.preview"]) {
     const tool = findToolByName(name);
     assert.ok(tool, `${name} should exist`);
     assert.ok(tool.playModeSupport, `${name} should expose playModeSupport`);
@@ -65,6 +65,13 @@ test("asset domain exposes paged search/get-data/preview with Play Mode metadata
   assert.ok(getDataOutput.fields, "asset.get-data output should expose SerializedMember fields");
   assert.ok(getDataOutput.path, "asset.get-data output should expose SerializedMember path");
   assert.match(getDataTool.description, /mutually exclusive/, "asset.get-data should warn paths/viewQuery are mutually exclusive");
+  const getComponents = findToolByName("asset.get-components")!;
+  const getComponentsProps = getComponents.inputSchema.properties as Record<string, unknown>;
+  assert.ok(getComponentsProps.pageSize, "asset.get-components should expose pagination");
+  assert.match(getComponents.description, /component summaries/, "asset.get-components should describe lightweight component summaries");
+  const refresh = findToolByName("asset.refresh")!;
+  assert.equal(refresh.supportsDryRun, true);
+  assert.deepEqual(refresh.sideEffects, ["asset-import", "asset-refresh"]);
   assert.equal(findToolByName("asset.preview")!.playModeSupport, "session-affecting");
 });
 
@@ -75,9 +82,11 @@ test("asset.search C# handler supports native filters and scoped folders", async
   assert.match(source, /E_ASSET_SEARCH_SCOPE_INVALID[\s\S]*path\/searchInFolders only for folder scopes/, "invalid folder scopes should be recoverable errors");
 });
 
-test("asset get-data and preview handlers return bridge success envelopes", async () => {
+test("asset get-data/get-components/refresh/preview handlers return bridge success envelopes", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Commands/AssetCommands.cs", import.meta.url), "utf8");
   assert.match(source, /private static string AssetGetData[\s\S]*return SuccessJson\(w\.EndObject\(\)\.ToString\(\)\);/, "asset.get-data must wrap data in SuccessJson");
+  assert.match(source, /private static string AssetGetComponents[\s\S]*return SuccessJson\(new UnityCliJsonWriter\(\)\.BeginObject\(\)/, "asset.get-components must wrap data in SuccessJson");
+  assert.match(source, /private static string AssetRefresh[\s\S]*AssetDatabase\.Refresh\(options\)/, "asset.refresh should call live AssetDatabase.Refresh");
   assert.match(source, /private static string AssetPreview[\s\S]*return SuccessJson\(w\.EndObject\(\)\.ToString\(\)\);/, "asset.preview must wrap data in SuccessJson");
   assert.doesNotMatch(source, /unity_cli asset/, "asset error guidance must not use removed top-level asset commands");
 });
@@ -258,6 +267,8 @@ test("bridge specs resolve for all new domain 4-8 tools", () => {
     ["prefab", "instantiate", "prefab.instantiate"],
     ["prefab", "unpack", "prefab.unpack"],
     ["asset", "get-data", "asset.get-data"],
+    ["asset", "get-components", "asset.get-components"],
+    ["asset", "refresh", "asset.refresh"],
     ["shader", "list", "shader.list"],
     ["texture", "generate", "texture.generate"],
     ["console", "get", "console.get"],
@@ -279,7 +290,7 @@ test("all new tools have contract entries with present C# handler", () => {
   const newTools = [
     "scene.unload", "scene.set-active", "scene.list-opened", "scene.data", "scene.view-frame",
     "go.set-parent", "prefab.instantiate", "prefab.unpack",
-    "asset.search-built-in", "asset.get-data", "asset.preview",
+    "asset.search-built-in", "asset.get-data", "asset.get-components", "asset.preview", "asset.refresh",
     "shader.list", "shader.get-data", "texture.generate",
     "console.get", "console.clear", "editor.selection.set", "editor.active-tool.set", "package.embed",
     "build.scenes", "build.platform", "build.profiles", "build.settings",

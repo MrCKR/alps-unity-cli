@@ -582,7 +582,7 @@ function validateRequiredInputFields(
     const positionalSatisfiesField = positionalTarget !== undefined && (required.length === 1 || ["target", "name", "keyword", "group", "query", "searchTerm", "path", "assetPath", "scenePath", "packageId", "id", "action"].includes(field));
     const fieldPresent = input[field] !== undefined || input[kebab] !== undefined || input[snake] !== undefined || flags[field] !== undefined || flags[kebab] !== undefined || flags[snake] !== undefined;
     const assetSourceAliasPresent = (tool.name === "asset.duplicate" || tool.name === "asset.move") && field === "source" && (input.path !== undefined || flags.path !== undefined || positionalTarget !== undefined);
-    const assetPathAliasPresent = (tool.name === "asset.get-data" || tool.name === "asset.preview") && field === "assetPath" && (input.path !== undefined || flags.path !== undefined || positionalTarget !== undefined);
+    const assetPathAliasPresent = (tool.name === "asset.get-data" || tool.name === "asset.get-components" || tool.name === "asset.preview") && field === "assetPath" && (input.path !== undefined || flags.path !== undefined || positionalTarget !== undefined);
     if (!positionalSatisfiesField && !fieldPresent && !assetSourceAliasPresent && !assetPathAliasPresent) {
       missing.push(field);
     }

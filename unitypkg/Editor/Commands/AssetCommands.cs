@@ -41,7 +41,9 @@ namespace UnityCli
             RegisterCommand(registry, "asset.rename", "asset", false, AssetRename);
             RegisterCommand(registry, "asset.search-built-in", "asset", false, AssetSearchBuiltIn);
             RegisterCommand(registry, "asset.get-data", "asset", false, AssetGetData);
+            RegisterCommand(registry, "asset.get-components", "asset", false, AssetGetComponents);
             RegisterCommand(registry, "asset.preview", "asset", false, AssetPreview);
+            RegisterCommand(registry, "asset.refresh", "asset", false, AssetRefresh);
         }
 
         private static bool AssetExists(string assetPath)
@@ -212,6 +214,99 @@ namespace UnityCli
             }
             w.Prop("logPath", LogPath());
             return SuccessJson(w.EndObject().ToString());
+        }
+
+        /// <summary>读取资产主对象、Importer 与 Prefab/GameObject 组件摘要，避免深读整个对象图。</summary>
+        private static string AssetGetComponents(BridgeRequest request)
+        {
+            var path = RequireExistingAssetPath(request.StringArg("assetPath") ?? request.StringArg("path") ?? request.StringArg("target"));
+            var includeInactive = request.BoolArg("includeInactive", true);
+            var pageSize = Math.Max(1, Math.Min(request.IntArg("pageSize", 200), 1000));
+            var cursor = Math.Max(0, request.IntArg("cursor", 0));
+            var asset = AssetDatabase.LoadMainAssetAtPath(path);
+            var importer = AssetImporter.GetAtPath(path);
+            var root = AssetDatabase.LoadAssetAtPath<GameObject>(path);
+            var rows = new List<string>();
+            if (root != null)
+            {
+                foreach (var transform in root.GetComponentsInChildren<Transform>(includeInactive))
+                {
+                    var components = transform.GetComponents<Component>();
+                    for (var index = 0; index < components.Length; index++)
+                    {
+                        rows.Add(AssetComponentJson(root, transform.gameObject, components[index], index));
+                    }
+                }
+            }
+            var page = rows.Skip(cursor).Take(pageSize).ToList();
+            var nextCursor = cursor + page.Count < rows.Count ? (cursor + page.Count).ToString(CultureInfo.InvariantCulture) : null;
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("command", "asset.get-components")
+                .Prop("assetPath", path)
+                .Prop("guid", AssetDatabase.AssetPathToGUID(path))
+                .Prop("mainObjectType", asset == null ? null : asset.GetType().FullName)
+                .PropObject("importer", imp => imp
+                    .Prop("type", importer == null ? null : importer.GetType().FullName)
+                    .Prop("assetBundleName", importer == null ? null : importer.assetBundleName)
+                    .Prop("userData", importer == null ? null : importer.userData))
+                .Prop("isGameObjectAsset", root != null)
+                .Prop("includeInactive", includeInactive)
+                .Prop("componentCount", (long)rows.Count)
+                .PropArray("components", arr => { foreach (var item in page) arr.RawValue(item); })
+                .PropObject("pageInfo", p => p.Prop("pageSize", (long)pageSize).Prop("cursor", (long)cursor).Prop("nextCursor", nextCursor).Prop("total", (long)rows.Count))
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        /// <summary>Live Editor 资产刷新入口，避免 AI 只能通过 batch job 触发 refresh。</summary>
+        private static string AssetRefresh(BridgeRequest request)
+        {
+            var path = request.StringArg("path") ?? request.StringArg("assetPath") ?? request.StringArg("target");
+            var options = ImportAssetOptions.Default;
+            if (request.BoolArg("forceUpdate", false)) options |= ImportAssetOptions.ForceUpdate;
+            if (request.BoolArg("importRecursive", false)) options |= ImportAssetOptions.ImportRecursive;
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "asset.refresh").Prop("dryRun", true).Prop("path", path).Prop("options", options.ToString())
+                    .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", string.IsNullOrEmpty(path) ? "asset.refresh" : "asset.import").Prop("path", path).Prop("options", options.ToString()).EndObject())
+                    .Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            if (string.IsNullOrEmpty(path))
+            {
+                AssetDatabase.Refresh(options);
+            }
+            else
+            {
+                AssetDatabase.ImportAsset(RequireAssetPath(path), options);
+            }
+            return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "asset.refresh").Prop("path", path).Prop("options", options.ToString()).Prop("refreshed", true).Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        private static string AssetComponentJson(GameObject root, GameObject gameObject, Component component, int componentIndex)
+        {
+            var relativePath = PrefabRelativePath(root.transform, gameObject.transform);
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("gameObject", gameObject.name)
+                .Prop("path", relativePath)
+                .Prop("active", gameObject.activeSelf)
+                .Prop("componentIndex", (long)componentIndex)
+                .Prop("type", component == null ? "MissingScript" : component.GetType().Name)
+                .Prop("fullName", component == null ? null : component.GetType().FullName)
+                .Prop("enabled", component != null && ComponentEnabled(component))
+                .EndObject().ToString();
+        }
+
+        private static string PrefabRelativePath(Transform root, Transform transform)
+        {
+            var stack = new Stack<string>();
+            var current = transform;
+            while (current != null)
+            {
+                stack.Push(current.name);
+                if (current == root) break;
+                current = current.parent;
+            }
+            return string.Join("/", stack.ToArray());
         }
 
         private static string AssetInfo(BridgeRequest request)

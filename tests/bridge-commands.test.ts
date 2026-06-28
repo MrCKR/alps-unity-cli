@@ -720,6 +720,8 @@ test("destructive bridge commands pass dryRun and security proof when explicitly
 
   const search = await execute(["tools", "run", "asset.search", "Player", "--type", "Prefab", "--page-size", "10"], { ...runtime, bridgeExecute });
   const info = await execute(["tools", "run", "asset.info", "Assets/Prefabs/Player.prefab"], { ...runtime, bridgeExecute });
+  const components = await execute(["tools", "run", "asset.get-components", "Assets/Prefabs/Player.prefab", "--page-size", "25"], { ...runtime, bridgeExecute });
+  const refresh = await execute(["tools", "run", "asset.refresh", "Assets/Generated", "--force-update", "--dry-run"], { ...runtime, bridgeExecute });
   const create = await execute(["tools", "run", "asset.create", "Assets/Generated/config.json", "--content", "{}", "--overwrite"], { ...runtime, bridgeExecute });
   const mkdir = await execute(["tools", "run", "asset.create", "Assets/Generated"], { ...runtime, bridgeExecute });
   const imported = await execute(["tools", "run", "asset.import", "Assets/Generated/asset.txt", "--source", contentFile, "--overwrite"], { ...runtime, bridgeExecute });
@@ -729,20 +731,23 @@ test("destructive bridge commands pass dryRun and security proof when explicitly
   const rename = await execute(["tools", "run", "asset.rename", "Assets/Generated/config-moved.json", "--name", "config-renamed.json"], { ...runtime, bridgeExecute });
   const deleted = await execute(["tools", "run", "asset.delete", "Assets/Generated/config-renamed.json", "--yes"], { ...runtime, bridgeExecute });
 
-  for (const result of [search, info, create, mkdir, imported, modify, duplicate, move, rename, deleted]) {
+  for (const result of [search, info, components, refresh, create, mkdir, imported, modify, duplicate, move, rename, deleted]) {
     assert.equal(result.ok, true);
   }
-  assert.deepEqual(requests.map((request) => request.command), ["asset.search", "asset.info", "asset.create", "asset.create", "asset.import", "asset.modify", "asset.duplicate", "asset.move", "asset.rename", "asset.delete"]);
+  assert.deepEqual(requests.map((request) => request.command), ["asset.search", "asset.info", "asset.get-components", "asset.refresh", "asset.create", "asset.create", "asset.import", "asset.modify", "asset.duplicate", "asset.move", "asset.rename", "asset.delete"]);
   assert.deepEqual(requests[0].args, { pageSize: 10, target: "Player", query: "Player", type: "Prefab" });
-  assert.deepEqual(requests[2].args, { path: "Assets/Generated/config.json", content: "{}", overwrite: true });
-  assert.deepEqual(requests[3].args, { path: "Assets/Generated" });
-  assert.deepEqual(requests[4].args, { path: "Assets/Generated/asset.txt", source: contentFile, overwrite: true });
-  assert.deepEqual(requests[5].args, { path: "Assets/Generated/config.json", content: "hello" });
-  assert.deepEqual(requests[6].args, { path: "Assets/Generated/config.json", destination: "Assets/Generated/config-copy.json" });
-  assert.deepEqual(requests[7].args, { path: "Assets/Generated/config-copy.json", destination: "Assets/Generated/config-moved.json" });
-  assert.deepEqual(requests[8].args, { path: "Assets/Generated/config-moved.json", name: "config-renamed.json" });
-  assert.deepEqual(requests[9].args, { path: "Assets/Generated/config-renamed.json" });
-  assert.equal(requests[9].security?.destructiveFingerprint, "destructive-safety-v1");
+  assert.deepEqual(requests[2].args, { assetPath: "Assets/Prefabs/Player.prefab", pageSize: 25 });
+  assert.deepEqual(requests[3].args, { path: "Assets/Generated", forceUpdate: true, dryRun: true });
+  assert.equal(requests[3].dryRun, true);
+  assert.deepEqual(requests[4].args, { path: "Assets/Generated/config.json", content: "{}", overwrite: true });
+  assert.deepEqual(requests[5].args, { path: "Assets/Generated" });
+  assert.deepEqual(requests[6].args, { path: "Assets/Generated/asset.txt", source: contentFile, overwrite: true });
+  assert.deepEqual(requests[7].args, { path: "Assets/Generated/config.json", content: "hello" });
+  assert.deepEqual(requests[8].args, { path: "Assets/Generated/config.json", destination: "Assets/Generated/config-copy.json" });
+  assert.deepEqual(requests[9].args, { path: "Assets/Generated/config-copy.json", destination: "Assets/Generated/config-moved.json" });
+  assert.deepEqual(requests[10].args, { path: "Assets/Generated/config-moved.json", name: "config-renamed.json" });
+  assert.deepEqual(requests[11].args, { path: "Assets/Generated/config-renamed.json" });
+  assert.equal(requests[11].security?.destructiveFingerprint, "destructive-safety-v1");
 });
 
 test("asset mutation tools forward structured --input fields", async () => {

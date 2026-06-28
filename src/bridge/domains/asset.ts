@@ -14,7 +14,9 @@ export const assetBridgeSpecs: BridgeCommandSpec[] = [
   { group: "asset", command: "rename", bridgeCommand: "asset.rename", buildArgs: assetMutationArgs },
   { group: "asset", command: "search-built-in", bridgeCommand: "asset.search-built-in", buildArgs: assetSearchBuiltInArgs },
   { group: "asset", command: "get-data", bridgeCommand: "asset.get-data", buildArgs: assetGetDataArgs },
-  { group: "asset", command: "preview", bridgeCommand: "asset.preview", buildArgs: assetPreviewArgs }
+  { group: "asset", command: "get-components", bridgeCommand: "asset.get-components", buildArgs: assetGetComponentsArgs },
+  { group: "asset", command: "preview", bridgeCommand: "asset.preview", buildArgs: assetPreviewArgs },
+  { group: "asset", command: "refresh", bridgeCommand: "asset.refresh", buildArgs: assetRefreshArgs, supportsDryRun: true }
 ];
 
 /** 读取 tools run --input 中无法映射为简单 flag 的结构化字段。 */
@@ -69,6 +71,26 @@ function assetGetDataArgs({ flags, positionalTarget }: Parameters<BridgeCommandS
   });
 }
 
+function assetGetComponentsArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  const structured = structuredInput(flags);
+  return compactArgs({
+    assetPath: positionalTarget ?? stringFlag(flags, "asset-path") ?? stringFlag(flags, "path") ?? stringFlag(flags, "target") ?? structured.assetPath ?? structured.path,
+    includeInactive: boolFlag(flags, "include-inactive") ?? structured.includeInactive,
+    pageSize: numberFlag(flags, "page-size") ?? structured.pageSize,
+    cursor: numberFlag(flags, "cursor") ?? structured.cursor
+  });
+}
+
 function assetPreviewArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({ assetPath: positionalTarget ?? stringFlag(flags, "asset-path") ?? stringFlag(flags, "path") });
+}
+
+function assetRefreshArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  const structured = structuredInput(flags);
+  return compactArgs({
+    path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "asset-path") ?? structured.path ?? structured.assetPath,
+    forceUpdate: boolFlag(flags, "force-update") ?? structured.forceUpdate,
+    importRecursive: boolFlag(flags, "import-recursive") ?? structured.importRecursive,
+    dryRun: boolFlag(flags, "dry-run") ?? structured.dryRun
+  });
 }

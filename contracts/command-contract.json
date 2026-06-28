@@ -120,6 +120,15 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "asset.get-components",
+      "group": "asset",
+      "command": "get-components",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "asset.get-data",
       "group": "asset",
       "command": "get-data",
@@ -168,6 +177,15 @@
       "bridgeCommand": "asset.preview",
       "group": "asset",
       "command": "preview",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "asset.refresh",
+      "group": "asset",
+      "command": "refresh",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
