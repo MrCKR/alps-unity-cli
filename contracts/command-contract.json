@@ -201,6 +201,15 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "build.cancel",
+      "group": "build",
+      "command": "cancel",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "build.platform",
       "group": "build",
       "command": "platform",
@@ -233,6 +242,15 @@
       "command": "settings",
       "handler_type": "bridge",
       "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "build.status",
+      "group": "build",
+      "command": "status",
+      "handler_type": "offline",
+      "csharp_handler": "none",
       "destructive": false,
       "timeout": 30000
     },

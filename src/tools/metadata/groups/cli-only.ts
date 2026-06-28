@@ -342,7 +342,8 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     group: "build",
     inputSchema: objSchema({
       target: { type: "string", enum: ["StandaloneWindows64", "StandaloneWindows", "StandaloneOSX", "StandaloneLinux64", "WebGL", "iOS", "Android"], default: "StandaloneWindows64", description: "BuildTarget enum name for the batchmode build." },
-      output: { type: "string", description: "Filesystem output path for the built player." },
+      output: { type: "string", description: "Filesystem output path for the built player. With targets, use {target} placeholder or a directory prefix." },
+      targets: { type: "string", description: "Comma-separated BuildTarget names for multi-platform batch builds, e.g. StandaloneWindows64,WebGL." },
       project: { type: "string", description: "Unity project path." },
       unity: { type: "string", description: "Unity executable path when not discoverable from defaults." },
       wait: { type: "boolean", description: "Wait for job completion instead of returning immediately." },
@@ -355,8 +356,45 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     handler: "job",
     cliCommand: "tools run build.run",
     docsTopic: "build",
-    examples: [{ description: "Start a Windows build job", argv: ["tools", "run", "build.run", "--input", "{\"project\":\".\",\"target\":\"StandaloneWindows64\",\"output\":\"Builds/App.exe\"}"] }],
+    examples: [
+      { description: "Start a Windows build job", argv: ["tools", "run", "build.run", "--input", "{\"project\":\".\",\"target\":\"StandaloneWindows64\",\"output\":\"Builds/App.exe\"}"] },
+      { description: "Start multi-platform build jobs", argv: ["tools", "run", "build.run", "--input", "{\"project\":\".\",\"targets\":\"StandaloneWindows64,WebGL\",\"output\":\"Builds/{target}/Player\"}"] }
+    ],
     cancellationSemantics: "Immediate process cancellation when a Unity batchmode pid is known; if Unity is already inside build cleanup, the job is marked cancelled and callers should inspect job logs for final filesystem state.",
     equivalentUnityMcp: "manage_build.build"
+  },
+  {
+    name: "build.status",
+    summary: "Read build job status using build-domain language.",
+    description: "Read build job status using build-domain language. This wraps the generic job store but only accepts jobs created by build.run, returning target/outputPath/logPath/result fields without requiring AI to switch to top-level jobs status.",
+    group: "build",
+    inputSchema: objSchema({ jobId: { type: "string", description: "Build jobId returned by build.run." }, id: { type: "string", description: "Alias of jobId." } }, ["jobId"]),
+    destructiveHint: false,
+    sideEffects: [],
+    playModeSupport: "supported",
+    handler: "offline",
+    supportStatus: "cli-only",
+    cliCommand: "tools run build.status",
+    docsTopic: "build",
+    examples: [{ description: "Check a build job", argv: ["tools", "run", "build.status", "--input", "{\"jobId\":\"job_xxx\"}"] }],
+    equivalentUnityMcp: "manage_build.status"
+  },
+  {
+    name: "build.cancel",
+    summary: "Cancel a build job by build jobId.",
+    description: "Cancel a build job by build jobId. This is the build-domain equivalent of jobs cancel and only accepts jobs created by build.run; it attempts immediate process termination when a pid is known and returns cancellation semantics.",
+    group: "build",
+    inputSchema: objSchema({ jobId: { type: "string", description: "Build jobId returned by build.run." }, id: { type: "string", description: "Alias of jobId." } }, ["jobId"]),
+    destructiveHint: false,
+    sideEffects: ["job-cancel"],
+    riskLevel: "medium",
+    playModeSupport: "session-affecting",
+    handler: "offline",
+    supportStatus: "cli-only",
+    cliCommand: "tools run build.cancel",
+    docsTopic: "build",
+    examples: [{ description: "Cancel a build job", argv: ["tools", "run", "build.cancel", "--input", "{\"jobId\":\"job_xxx\"}"] }],
+    cancellationSemantics: "Attempts immediate process-tree termination when the Unity batchmode pid is known; queued or pid-less jobs are marked cancelled.",
+    equivalentUnityMcp: "manage_build.cancel"
   },
       ];

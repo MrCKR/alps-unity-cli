@@ -451,10 +451,20 @@ test("build bridge tools expose Play Mode and dry-run semantics", () => {
   assert.ok(settings.examples?.some((example) => example.argv.includes("--input")));
 });
 
-test("job control-plane tools are not exposed through tools metadata", () => {
-  for (const name of ["job.status", "job.logs", "job.describe", "job.cancel", "test.poll", "test.logs", "test.cancel", "build.status", "build.logs", "build.cancel"]) {
+test("generic job control-plane tools are not exposed through tools metadata", () => {
+  for (const name of ["job.status", "job.logs", "job.describe", "job.cancel", "test.poll", "test.logs", "test.cancel", "build.logs"]) {
     assert.equal(findToolByName(name), undefined, `${name} should be top-level jobs control-plane only`);
   }
+});
+
+test("build.status and build.cancel expose build-domain job controls", () => {
+  const status = findToolByName("build.status")!;
+  const cancel = findToolByName("build.cancel")!;
+  assert.equal(status.handler, "offline");
+  assert.equal(status.destructiveHint, false);
+  assert.equal(cancel.handler, "offline");
+  assert.equal(cancel.destructiveHint, false);
+  assert.deepEqual(cancel.sideEffects, ["job-cancel"]);
 });
 
 test("S2.3 editor group has all required tools", () => {
@@ -476,7 +486,7 @@ test("S2.3 test group exposes only test execution tool", () => {
 
 test("S2.3 build group exposes run plus Editor build settings tools", () => {
   const names = filterToolsByGroup("build").map((t) => t.name);
-  assert.deepEqual(names, ["build.scenes", "build.platform", "build.settings", "build.run"]);
+  assert.deepEqual(names, ["build.scenes", "build.platform", "build.settings", "build.run", "build.status", "build.cancel"]);
 });
 
 test("S3.1 creation domains have frozen metadata coverage", () => {

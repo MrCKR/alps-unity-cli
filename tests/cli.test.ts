@@ -281,6 +281,39 @@ test("build run forwards output path to batch method", async () => {
   assert.equal(command[command.indexOf("-unityCliBuildOutput") + 1].replace(/\\/g, "/").endsWith("Builds/App.exe"), true);
 });
 
+test("build run accepts multiple targets and returns build job batch", async () => {
+  const runtime = await makeRuntime();
+  const unity = await makeFakeUnity(`process.exit(0);`);
+
+  const created = await execute(["tools", "run", "build.run", "--unity", unity, "--project", runtime.dataDir, "--targets", "StandaloneWindows64,WebGL", "--output", "Builds/{target}/Player"], runtime);
+
+  assert.equal(created.ok, true);
+  const data = created.data as { command: string; mode: string; targetCount: number; jobs: Array<{ jobId: string; result: { target: string; outputPath: string } }> };
+  assert.equal(data.command, "build.run");
+  assert.equal(data.mode, "batch");
+  assert.equal(data.targetCount, 2);
+  assert.deepEqual(data.jobs.map((job) => job.result.target), ["StandaloneWindows64", "WebGL"]);
+  assert.ok(data.jobs[0].result.outputPath.replace(/\\/g, "/").includes("Builds/StandaloneWindows64/Player"));
+  assert.ok(data.jobs[1].result.outputPath.replace(/\\/g, "/").includes("Builds/WebGL/Player"));
+});
+
+test("build status and cancel wrap build jobs only", async () => {
+  const runtime = await makeRuntime();
+  const unity = await makeFakeUnity(`setTimeout(() => process.exit(0), 5000);`);
+
+  const created = await execute(["tools", "run", "build.run", "--unity", unity, "--project", runtime.dataDir], runtime);
+  const jobId = (created.data as { jobId: string }).jobId;
+  const status = await execute(["tools", "run", "build.status", "--input", JSON.stringify({ jobId })], runtime);
+  const cancelled = await execute(["tools", "run", "build.cancel", "--input", JSON.stringify({ jobId })], runtime);
+
+  assert.equal(status.ok, true);
+  assert.equal((status.data as { command: string; jobId: string; kind: string }).command, "build.status");
+  assert.equal((status.data as { command: string; jobId: string; kind: string }).kind, "build");
+  assert.equal(cancelled.ok, true);
+  assert.equal((cancelled.data as { command: string; status: string }).command, "build.cancel");
+  assert.equal((cancelled.data as { command: string; status: string }).status, "cancelled");
+});
+
 test("non-wait CLI exits quickly and worker persists terminal status", async () => {
   const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-process-"));
   assert.equal(defaultDataDir({ UNITY_CLI_DATA_DIR: dataDir, LOCALAPPDATA: join("C:\\", "Users", "tester", "AppData", "Local") }, "win32"), dataDir);

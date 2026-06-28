@@ -315,6 +315,8 @@ const commandRegistry = new Map<string, { parallelSafe: boolean }>([
   ["diagnose.capabilities", { parallelSafe: true }],
   ["test.run", { parallelSafe: false }],
   ["build.run", { parallelSafe: false }],
+  ["build.status", { parallelSafe: true }],
+  ["build.cancel", { parallelSafe: false }],
 
 ]);
 
