@@ -797,17 +797,20 @@ test("material commands forward asset paths, target, values and planned effects"
   const info = await execute(["tools", "run", "material.info", "Assets/Materials/Player.mat"], { ...runtime, bridgeExecute });
   const create = await execute(["tools", "run", "material.create", "Assets/Materials/Player.mat", "--shader", "Standard", "--overwrite"], { ...runtime, bridgeExecute });
   const assign = await execute(["tools", "run", "material.assign", "--target", "Canvas/Button", "--material", "Assets/Materials/Player.mat", "--slot", "1"], { ...runtime, bridgeExecute });
-  const set = await execute(["tools", "run", "material.set", "Assets/Materials/Player.mat", "--property", "_Color", "--value", "#ff00ffff", "--type", "color"], { ...runtime, bridgeExecute });
+  const set = await execute(["tools", "run", "material.set", "Assets/Materials/Player.mat", "--property", "_Metallic", "--input", "{\"floatValue\":0.8,\"type\":\"float\"}"], { ...runtime, bridgeExecute });
+  const rendererColor = await execute(["tools", "run", "material.set-renderer-color", "Player", "--color", "#ff00ffff", "--slot", "0", "--dry-run"], { ...runtime, bridgeExecute });
 
   assert.equal(info.ok, true);
   assert.equal(create.ok, true);
   assert.equal(assign.ok, true);
   assert.equal(set.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["material.info", "material.create", "material.assign", "material.set"]);
+  assert.equal(rendererColor.ok, true);
+  assert.deepEqual(requests.map((request) => request.command), ["material.info", "material.create", "material.assign", "material.set", "material.set-renderer-color"]);
   assert.deepEqual(requests[0].args, { path: "Assets/Materials/Player.mat" });
   assert.deepEqual(requests[1].args, { path: "Assets/Materials/Player.mat", shader: "Standard", overwrite: true });
   assert.deepEqual(requests[2].args, { target: "Canvas/Button", material: "Assets/Materials/Player.mat", slot: 1 });
-  assert.deepEqual(requests[3].args, { path: "Assets/Materials/Player.mat", property: "_Color", value: "#ff00ffff", type: "color" });
+  assert.deepEqual(requests[3].args, { path: "Assets/Materials/Player.mat", property: "_Metallic", floatValue: "0.8", type: "float" });
+  assert.deepEqual(requests[4].args, { target: "Player", color: "#ff00ffff", slot: 0, dryRun: true });
   assert.deepEqual((set.data as { plannedEffects: unknown[] }).plannedEffects, [{ type: "material.set", path: "Assets/Materials/Player.mat" }]);
 });
 

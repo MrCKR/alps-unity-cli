@@ -151,6 +151,7 @@ const commandRegistry = new Map<string, { parallelSafe: boolean }>([
   ["material.create", { parallelSafe: false }],
   ["material.assign", { parallelSafe: false }],
   ["material.set", { parallelSafe: false }],
+  ["material.set-renderer-color", { parallelSafe: false }],
   ["graphics.quality", { parallelSafe: false }],
   ["graphics.settings", { parallelSafe: false }],
   ["graphics.pipeline", { parallelSafe: true }],

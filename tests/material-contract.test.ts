@@ -26,7 +26,7 @@ async function listCsFiles(directory: URL): Promise<URL[]> {
 
 test("material group tools exist with correct safety hints", () => {
   const tools = filterToolsByGroup("material").map((t) => t.name).sort();
-  assert.deepEqual(tools, ["material.assign", "material.create", "material.info", "material.set"]);
+  assert.deepEqual(tools, ["material.assign", "material.create", "material.info", "material.set", "material.set-renderer-color"]);
 
   const info = findToolByName("material.info")!;
   assert.equal(info.destructiveHint, false);
@@ -46,6 +46,12 @@ test("material group tools exist with correct safety hints", () => {
   const set = findToolByName("material.set")!;
   assert.equal(set.playModeSupport, "session-affecting");
   assert.ok(set.sideEffects?.includes("asset-write"));
+
+  const rendererColor = findToolByName("material.set-renderer-color")!;
+  assert.equal(rendererColor.playModeSupport, "session-affecting");
+  assert.equal(rendererColor.destructiveHint, false);
+  assert.ok(rendererColor.supportsDryRun);
+  assert.deepEqual(rendererColor.sideEffects, ["scene-modify", "renderer-property-block"]);
 });
 
 test("material.info supports token-safe namePattern and output schema", () => {
@@ -58,14 +64,14 @@ test("material.info supports token-safe namePattern and output schema", () => {
 });
 
 test("bridge specs resolve for material tools", () => {
-  for (const command of ["info", "create", "assign", "set"]) {
+  for (const command of ["info", "create", "assign", "set", "set-renderer-color"]) {
     const spec = bridgeCommandRegistry.lookup("material", command);
     assert.equal(spec?.bridgeCommand, `material.${command}`);
   }
 });
 
 test("contract entries exist for material tools with present C# handler", () => {
-  for (const name of ["material.info", "material.create", "material.assign", "material.set"]) {
+  for (const name of ["material.info", "material.create", "material.assign", "material.set", "material.set-renderer-color"]) {
     const contract = findCommandContract(name);
     assert.ok(contract, `${name} should be in command contract`);
     assert.equal(contract.csharp_handler, "present", `${name} should have present C# handler`);
@@ -79,7 +85,7 @@ test("C# RegisterCommand calls exist for material commands", async () => {
       csFiles.filter((f) => !f.pathname.includes("/Samples/")).map((f) => readFile(f, "utf8"))
     )
   ).join("\n");
-  for (const command of ["material.info", "material.create", "material.assign", "material.set"]) {
+  for (const command of ["material.info", "material.create", "material.assign", "material.set", "material.set-renderer-color"]) {
     assert.ok(
       allSource.includes(`RegisterCommand(registry, "${command}"`),
       `${command} should be registered via RegisterCommand in C#`
@@ -101,4 +107,14 @@ test("material.info C# implements namePattern filtering", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Commands/MaterialCommands.cs", import.meta.url), "utf8");
   assert.match(source, /ParseNameFilter[\s\S]*namePattern/, "C# should parse namePattern into a filter set");
   assert.match(source, /nameFilterApplied/, "C# should report whether a name filter was applied");
+});
+
+test("material.set exposes typed aliases and renderer color uses MaterialPropertyBlock", async () => {
+  const setProps = findToolByName("material.set")!.inputSchema.properties as Record<string, unknown>;
+  assert.ok(setProps.color, "material.set should expose color alias");
+  assert.ok(setProps.floatValue, "material.set should expose floatValue alias");
+  assert.ok(setProps.vector, "material.set should expose vector alias");
+  assert.ok(setProps.texture, "material.set should expose texture alias");
+  const source = await readFile(new URL("../unitypkg/Editor/Commands/MaterialCommands.cs", import.meta.url), "utf8");
+  assert.match(source, /MaterialSetRendererColor[\s\S]*MaterialPropertyBlock[\s\S]*SetColor/, "renderer color should use MaterialPropertyBlock");
 });

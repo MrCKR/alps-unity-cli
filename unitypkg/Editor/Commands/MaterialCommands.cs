@@ -34,6 +34,7 @@ namespace UnityCli
             RegisterCommand(registry, "material.create", "material", true, MaterialCreate);
             RegisterCommand(registry, "material.assign", "material", true, MaterialAssign);
             RegisterCommand(registry, "material.set", "material", true, MaterialSet);
+            RegisterCommand(registry, "material.set-renderer-color", "material", false, MaterialSetRendererColor);
         }
 
         private static string MaterialInfo(BridgeRequest request)
@@ -133,7 +134,7 @@ namespace UnityCli
         {
             var path = RequireMaterialPath(request.StringArg("path"));
             var propertyName = request.StringArg("property");
-            var value = request.StringArg("value");
+            var value = request.StringArg("value") ?? request.StringArg("color") ?? request.StringArg("floatValue") ?? request.StringArg("vector") ?? request.StringArg("texture");
             var requestedType = request.StringArg("type");
             var material = LoadMaterialAsset(path);
             if (string.IsNullOrEmpty(propertyName))
@@ -174,6 +175,47 @@ namespace UnityCli
                 .Prop("logPath", LogPath())
                 .EndObject()
                 .ToString());
+        }
+
+        /// <summary>通过 MaterialPropertyBlock 设置 Renderer 实例颜色，不修改共享 Material asset。</summary>
+        private static string MaterialSetRendererColor(BridgeRequest request)
+        {
+            var target = request.StringArg("target");
+            var propertyName = request.StringArg("property") ?? "_Color";
+            var colorValue = request.StringArg("color") ?? request.StringArg("value");
+            var gameObject = ResolveUniqueGameObject(target);
+            if (gameObject == null)
+            {
+                return ErrorJson("E_TARGET_NOT_FOUND", "Material renderer color target not found: " + target, "Pass a GameObject name, hierarchy path or instance id.");
+            }
+            var renderer = gameObject.GetComponent<Renderer>();
+            if (renderer == null)
+            {
+                return ErrorJson("E_RENDERER_NOT_FOUND", "Target has no Renderer component: " + target, "Choose a GameObject with a Renderer or use material.assign for UI Graphic materials.");
+            }
+            var color = ParseColor(colorValue);
+            var slot = request.OptionalIntArg("slot");
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "material.set-renderer-color").Prop("dryRun", true).Prop("target", target).Prop("property", propertyName).PropRaw("color", ColorJson(color))
+                    .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "material.set-renderer-color").Prop("target", HierarchyPath(gameObject)).Prop("property", propertyName).EndObject())
+                    .Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            var block = new MaterialPropertyBlock();
+            if (slot.HasValue) renderer.GetPropertyBlock(block, slot.Value); else renderer.GetPropertyBlock(block);
+            block.SetColor(propertyName, color);
+            if (slot.HasValue) renderer.SetPropertyBlock(block, slot.Value); else renderer.SetPropertyBlock(block);
+            EditorUtility.SetDirty(renderer);
+            EditorSceneManager.MarkSceneDirty(gameObject.scene);
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("command", "material.set-renderer-color")
+                .PropRaw("target", GameObjectTargetJson(gameObject))
+                .Prop("property", propertyName)
+                .PropRaw("slot", slot.HasValue ? slot.Value.ToString(CultureInfo.InvariantCulture) : "null")
+                .PropRaw("color", ColorJson(color))
+                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "material.set-renderer-color").Prop("target", HierarchyPath(gameObject)).Prop("property", propertyName).EndObject())
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         private static string RequireMaterialPath(string rawPath)

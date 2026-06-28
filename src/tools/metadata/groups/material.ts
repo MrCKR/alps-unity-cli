@@ -96,8 +96,12 @@ export const MATERIAL_TOOLS: ToolMetadata[] = [
       path: { type: "string", description: "Existing Assets/*.mat path." },
       property: { type: "string", description: "Shader property name, e.g. _Color or _MainTex." },
       value: { type: "string", description: "Property value: #hex / r,g,b[,a] for color, number for float, x,y,z,w for vector, Assets/* texture path or null." },
+      color: { type: "string", description: "Typed color value alias for value when type=color." },
+      floatValue: { type: "number", description: "Typed numeric value alias for value when type=float." },
+      vector: { type: "string", description: "Typed vector value alias for value when type=vector, formatted x,y,z,w." },
+      texture: { type: "string", description: "Typed texture path alias for value when type=texture; use null to clear." },
       type: { type: "string", enum: ["color", "float", "vector", "texture"], description: "Force the value type. When omitted it is inferred from the shader property." }
-    }, ["path", "property", "value"]),
+    }, ["path", "property"]),
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],
     riskLevel: "low",
@@ -108,7 +112,28 @@ export const MATERIAL_TOOLS: ToolMetadata[] = [
     equivalentUnityMcp: "manage_material.set_material_shader_property",
     examples: [
       { description: "Set a color property", argv: ["tools", "run", "material.set", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeMaterial.mat\",\"property\":\"_Color\",\"value\":\"#FF0000\",\"type\":\"color\"}"] },
-      { description: "Set a float property", argv: ["tools", "run", "material.set", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeMaterial.mat\",\"property\":\"_Metallic\",\"value\":\"0.8\"}"] }
+      { description: "Set a float property", argv: ["tools", "run", "material.set", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeMaterial.mat\",\"property\":\"_Metallic\",\"floatValue\":0.8,\"type\":\"float\"}"] }
+    ]
+  },
+  {
+    name: "material.set-renderer-color",
+    summary: "Set a Renderer instance color with MaterialPropertyBlock without modifying the shared Material asset.",
+    description: "Set a Renderer instance color with MaterialPropertyBlock without modifying the shared Material asset. Use this for scene/session color changes on one GameObject; use material.set when you intend to edit the Material asset shared by all users.",
+    group: "material",
+    inputSchema: objSchema({ target: { type: "string", description: "Target GameObject with a Renderer: name, hierarchy path, or instance id." }, property: { type: "string", default: "_Color", description: "Shader color property name to set on the property block." }, color: { type: "string", description: "#RRGGBB, #RRGGBBAA, or comma-separated r,g,b[,a]." }, value: { type: "string", description: "Alias of color." }, slot: { type: "integer", description: "Optional material slot index for per-slot property block." } }, ["target", "color"]),
+    outputSchema: objSchema({ target: { type: "object" }, property: { type: "string" }, color: { type: "object" }, slot: { type: ["integer", "null"] }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
+    destructiveHint: false,
+    sideEffects: ["scene-modify", "renderer-property-block"],
+    riskLevel: "low",
+    playModeSupport: "session-affecting",
+    supportsDryRun: true,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run material.set-renderer-color",
+    docsTopic: "material",
+    equivalentUnityMcp: "manage_material.set_renderer_color",
+    examples: [
+      { description: "Set one renderer color without editing the material asset", argv: ["tools", "run", "material.set-renderer-color", "--input", "{\"target\":\"Player\",\"color\":\"#ff0000\"}"] }
     ]
   }
 ];

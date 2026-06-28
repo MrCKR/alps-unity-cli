@@ -67,9 +67,9 @@ test("command contract marks C# handler gaps as present", async () => {
     assert.ok(allCsharpCommands.has(command), `${command} should be registered in C# BridgeCommandRegistry or an extension bundle`);
   }
 
-  assert.equal(csharpCommands.size, 215);
+  assert.equal(csharpCommands.size, 216);
   assert.equal(extensionCsharpCommands.size, 31);
-  assert.equal(allCsharpCommands.size, 246);
+  assert.equal(allCsharpCommands.size, 247);
 });
 
 async function registeredCsharpCommands(directory: URL): Promise<Set<string>> {

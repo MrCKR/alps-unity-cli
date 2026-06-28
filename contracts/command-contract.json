@@ -1245,6 +1245,15 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "material.set-renderer-color",
+      "group": "material",
+      "command": "set-renderer-color",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "object.get-data",
       "group": "object",
       "command": "get-data",

@@ -5,7 +5,8 @@ export const materialBridgeSpecs: BridgeCommandSpec[] = [
   { group: "material", command: "info", bridgeCommand: "material.info", buildArgs: materialArgs },
   { group: "material", command: "create", bridgeCommand: "material.create", buildArgs: materialArgs },
   { group: "material", command: "assign", bridgeCommand: "material.assign", buildArgs: materialArgs },
-  { group: "material", command: "set", bridgeCommand: "material.set", buildArgs: materialArgs }
+  { group: "material", command: "set", bridgeCommand: "material.set", buildArgs: materialArgs },
+  { group: "material", command: "set-renderer-color", bridgeCommand: "material.set-renderer-color", buildArgs: materialArgs, supportsDryRun: true }
 ];
 
 // 读取 tools run --input 中无法映射为简单 flag 的结构化字段（如 namePattern）
@@ -23,6 +24,10 @@ function structuredInput(flags: BridgeFlags): Record<string, unknown> {
 function stringField(flags: BridgeFlags, key: string): string | undefined {
   const value = structuredInput(flags)[key];
   return typeof value === "string" ? value : undefined;
+}
+
+function valueString(value: unknown): string | undefined {
+  return typeof value === "string" || typeof value === "number" || typeof value === "boolean" ? String(value) : undefined;
 }
 
 function materialArgs({ command, flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
@@ -46,8 +51,22 @@ function materialArgs({ command, flags, positionalTarget }: Parameters<BridgeCom
     return compactArgs({
       path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "material") ?? structured.path,
       property: stringFlag(flags, "property") ?? structured.property,
-      value: stringFlag(flags, "value") ?? structured.value,
+      value: stringFlag(flags, "value") ?? valueString(structured.value),
+      color: stringFlag(flags, "color") ?? valueString(structured.color),
+      floatValue: stringFlag(flags, "float-value") ?? valueString(structured.floatValue),
+      vector: stringFlag(flags, "vector") ?? valueString(structured.vector),
+      texture: stringFlag(flags, "texture") ?? valueString(structured.texture),
       type: stringFlag(flags, "type") ?? structured.type
+    });
+  }
+  if (command === "material.set-renderer-color") {
+    const structured = structuredInput(flags);
+    return compactArgs({
+      target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") ?? structured.target,
+      property: stringFlag(flags, "property") ?? structured.property,
+      color: stringFlag(flags, "color") ?? stringFlag(flags, "value") ?? valueString(structured.color) ?? valueString(structured.value),
+      slot: numberFlag(flags, "slot") ?? structured.slot,
+      dryRun: boolFlag(flags, "dry-run") ?? structured.dryRun
     });
   }
   // material.info：支持 namePattern 结构化字段透传，用于 token 安全的轻量属性读取
