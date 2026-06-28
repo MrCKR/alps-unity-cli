@@ -585,7 +585,12 @@ function validateRequiredInputFields(
     const assetPathAliasPresent = (tool.name === "asset.get-data" || tool.name === "asset.get-components" || tool.name === "asset.preview") && field === "assetPath" && (input.path !== undefined || flags.path !== undefined || positionalTarget !== undefined);
     const materialColorAliasPresent = tool.name === "material.set-renderer-color" && field === "color" && (input.value !== undefined || flags.value !== undefined);
     const textureColorAliasPresent = tool.name === "texture.modify" && field === "color" && (input.fillColor !== undefined || flags["fill-color"] !== undefined || flags.fillColor !== undefined);
-    if (!positionalSatisfiesField && !fieldPresent && !assetSourceAliasPresent && !assetPathAliasPresent && !materialColorAliasPresent && !textureColorAliasPresent) {
+    const uiUxmlAliasPresent = tool.name.startsWith("ui.document.") && field === "uxml" && (input.path !== undefined || flags.path !== undefined || positionalTarget !== undefined);
+    const uiPathAliasPresent = tool.name === "ui.document.delete" && field === "path" && (input.uxml !== undefined || flags.uxml !== undefined || positionalTarget !== undefined);
+    const uiContentAliasPresent = tool.name === "ui.document.update" && field === "content" && (flags["content-file"] !== undefined || flags.contentFile !== undefined);
+    const uiStylesheetAliasPresent = tool.name === "ui.link-stylesheet" && field === "uss" && (input.styleSheet !== undefined || flags["style-sheet"] !== undefined || flags.styleSheet !== undefined);
+    const uiRenderTargetAliasPresent = tool.name === "ui.render-preview" && field === "target" && (input.uxml !== undefined || input.path !== undefined || flags.uxml !== undefined || flags.path !== undefined || positionalTarget !== undefined);
+    if (!positionalSatisfiesField && !fieldPresent && !assetSourceAliasPresent && !assetPathAliasPresent && !materialColorAliasPresent && !textureColorAliasPresent && !uiUxmlAliasPresent && !uiPathAliasPresent && !uiContentAliasPresent && !uiStylesheetAliasPresent && !uiRenderTargetAliasPresent) {
       missing.push(field);
     }
   }

@@ -2748,6 +2748,15 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "ui.detach-document",
+      "group": "ui",
+      "command": "detach-document",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "ui.document.create",
       "group": "ui",
       "command": "document.create",
@@ -2757,12 +2766,30 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "ui.document.delete",
+      "group": "ui",
+      "command": "document.delete",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "ui.document.info",
       "group": "ui",
       "command": "document.info",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "ui.document.update",
+      "group": "ui",
+      "command": "document.update",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2793,12 +2820,57 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "ui.link-stylesheet",
+      "group": "ui",
+      "command": "link-stylesheet",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "ui.list-documents",
+      "group": "ui",
+      "command": "list-documents",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "ui.modify-visual-element",
+      "group": "ui",
+      "command": "modify-visual-element",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "ui.render-preview",
+      "group": "ui",
+      "command": "render-preview",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "ui.text.create",
       "group": "ui",
       "command": "text.create",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "ui.update-panel-settings",
+      "group": "ui",
+      "command": "update-panel-settings",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
       "timeout": 30000
     },
     {

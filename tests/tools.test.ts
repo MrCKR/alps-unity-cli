@@ -501,7 +501,7 @@ test("S3.1 creation domains have frozen metadata coverage", () => {
     ["material", ["material.info", "material.create", "material.assign", "material.set", "material.set-renderer-color"]],
     ["shader", ["shader.info", "shader.read", "shader.create", "shader.update", "shader.delete", "shader.list", "shader.get-data"]],
     ["texture", ["texture.info", "texture.create", "texture.sprite", "texture.modify", "texture.delete", "texture.import-settings", "texture.generate"]],
-    ["ui", ["ui.canvas.create", "ui.text.create", "ui.button.create", "ui.image.create", "ui.document.info", "ui.document.create", "ui.hierarchy", "ui.attach-document", "ui.create-panel-settings", "ui.get-visual-tree"]]
+    ["ui", ["ui.canvas.create", "ui.text.create", "ui.button.create", "ui.image.create", "ui.document.info", "ui.document.create", "ui.document.update", "ui.document.delete", "ui.hierarchy", "ui.attach-document", "ui.detach-document", "ui.create-panel-settings", "ui.update-panel-settings", "ui.get-visual-tree", "ui.modify-visual-element", "ui.link-stylesheet", "ui.list-documents", "ui.render-preview"]]
   ]);
 
   for (const [group, expectedNames] of expectedByGroup) {

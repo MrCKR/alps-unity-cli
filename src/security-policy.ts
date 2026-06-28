@@ -33,7 +33,12 @@ const SECURITY_POLICY: SecurityPolicyEntry[] = [
   { command: "graphics.bake-clear", summary: "Clear Baked Lighting Data", destructiveHint: true },
   { command: "graphics.bake-reflection-probe", summary: "Bake Reflection Probe", destructiveHint: true },
   { command: "package.embed", summary: "Embed Package", destructiveHint: true, supportsDryRun: true },
-  { command: "ui.create-panel-settings", summary: "Create PanelSettings", destructiveHint: true }
+  { command: "ui.create-panel-settings", summary: "Create PanelSettings", destructiveHint: true },
+  { command: "ui.document.update", summary: "Update UI Document", destructiveHint: true, supportsDryRun: true },
+  { command: "ui.document.delete", summary: "Delete UI Document", destructiveHint: true, supportsDryRun: true },
+  { command: "ui.update-panel-settings", summary: "Update PanelSettings", destructiveHint: true, supportsDryRun: true },
+  { command: "ui.link-stylesheet", summary: "Link Stylesheet", destructiveHint: true, supportsDryRun: true },
+  { command: "ui.render-preview", summary: "Render UI Preview", destructiveHint: true, supportsDryRun: true }
 ];
 
 const BY_COMMAND = new Map(SECURITY_POLICY.map((entry) => [entry.command, entry]));

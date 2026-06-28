@@ -1058,6 +1058,8 @@ test("shader and texture bridge errors preserve structured diagnostics", async (
 
 test("ui commands forward creation, document and hierarchy arguments", async () => {
   const runtime = await makeRuntime();
+  const contentFile = join(runtime.dataDir, "Main.uxml");
+  await writeFile(contentFile, "<ui:UXML xmlns:ui=\"UnityEngine.UIElements\" />\n", "utf8");
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
     requests.push(payload);
@@ -1070,7 +1072,18 @@ test("ui commands forward creation, document and hierarchy arguments", async () 
   const image = await execute(["tools", "run", "ui.image.create", "Logo", "--parent", "HUD", "--sprite", "Assets/UI/logo.png", "--color", "#ffffff"], { ...runtime, bridgeExecute });
   const documentCreate = await execute(["tools", "run", "ui.document.create", "--name", "MainUIDocument", "--uxml", "Assets/UI/Main.uxml", "--uss", "Assets/UI/Main.uss", "--panel-settings", "Assets/UI/Panel.asset", "--overwrite"], { ...runtime, bridgeExecute });
   const documentInfo = await execute(["tools", "run", "ui.document.info", "MainUIDocument", "--uss", "Assets/UI/Main.uss"], { ...runtime, bridgeExecute });
+  const documentUpdate = await execute(["tools", "run", "ui.document.update", "Assets/UI/Main.uxml", "--content-file", contentFile, "--dry-run"], { ...runtime, bridgeExecute });
+  const documentDelete = await execute(["tools", "run", "ui.document.delete", "Assets/UI/Main.uxml", "--dry-run"], { ...runtime, bridgeExecute });
   const hierarchy = await execute(["tools", "run", "ui.hierarchy", "HUD", "--page-size", "25", "--cursor", "50"], { ...runtime, bridgeExecute });
+  const attach = await execute(["tools", "run", "ui.attach-document", "UIDoc", "--source-asset", "Assets/UI/Main.uxml", "--panel-settings", "Assets/UI/Panel.asset", "--sort-order", "5"], { ...runtime, bridgeExecute });
+  const detach = await execute(["tools", "run", "ui.detach-document", "UIDoc", "--dry-run"], { ...runtime, bridgeExecute });
+  const panelCreate = await execute(["tools", "run", "ui.create-panel-settings", "Assets/UI/Panel.asset", "--reference-width", "1920", "--reference-height", "1080", "--sorting-order", "3", "--target-texture", "Assets/UI/Target.renderTexture", "--yes"], { ...runtime, bridgeExecute });
+  const panelUpdate = await execute(["tools", "run", "ui.update-panel-settings", "Assets/UI/Panel.asset", "--scale-mode", "ScaleWithScreenSize", "--reference-width", "1280", "--reference-height", "720", "--sorting-layer-name", "UI", "--match", "0.5", "--dry-run"], { ...runtime, bridgeExecute });
+  const visualTree = await execute(["tools", "run", "ui.get-visual-tree", "UIDoc", "--max-depth", "4"], { ...runtime, bridgeExecute });
+  const modifyVisual = await execute(["tools", "run", "ui.modify-visual-element", "UIDoc", "--element-name", "Root", "--add-class", "selected", "--background-color", "#ff0000", "--dry-run"], { ...runtime, bridgeExecute });
+  const linkStylesheet = await execute(["tools", "run", "ui.link-stylesheet", "Assets/UI/Main.uxml", "--uss", "Assets/UI/Main.uss", "--dry-run"], { ...runtime, bridgeExecute });
+  const listDocuments = await execute(["tools", "run", "ui.list-documents", "uxml", "--page-size", "20"], { ...runtime, bridgeExecute });
+  const renderPreview = await execute(["tools", "run", "ui.render-preview", "Assets/UI/Main.uxml", "--output", "Assets/UI/preview.png", "--dry-run"], { ...runtime, bridgeExecute });
 
   assert.equal(canvas.ok, true);
   assert.equal(text.ok, true);
@@ -1078,15 +1091,38 @@ test("ui commands forward creation, document and hierarchy arguments", async () 
   assert.equal(image.ok, true);
   assert.equal(documentCreate.ok, true);
   assert.equal(documentInfo.ok, true);
+  assert.equal(documentUpdate.ok, true);
+  assert.equal(documentDelete.ok, true);
   assert.equal(hierarchy.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["ui.canvas.create", "ui.text.create", "ui.button.create", "ui.image.create", "ui.document.create", "ui.document.info", "ui.hierarchy"]);
+  assert.equal(attach.ok, true);
+  assert.equal(detach.ok, true);
+  assert.equal(panelCreate.ok, true);
+  assert.equal(panelUpdate.ok, true);
+  assert.equal(visualTree.ok, true);
+  assert.equal(modifyVisual.ok, true);
+  assert.equal(linkStylesheet.ok, true);
+  assert.equal(listDocuments.ok, true);
+  assert.equal(renderPreview.ok, true);
+  assert.deepEqual(requests.map((request) => request.command), ["ui.canvas.create", "ui.text.create", "ui.button.create", "ui.image.create", "ui.document.create", "ui.document.info", "ui.document.update", "ui.document.delete", "ui.hierarchy", "ui.attach-document", "ui.detach-document", "ui.create-panel-settings", "ui.update-panel-settings", "ui.get-visual-tree", "ui.modify-visual-element", "ui.link-stylesheet", "ui.list-documents", "ui.render-preview"]);
   assert.deepEqual(requests[0].args, { name: "HUD" });
   assert.deepEqual(requests[1].args, { name: "Title", parent: "HUD", text: "Start", width: 320, height: 80, x: 10, y: 20, fontSize: 32 });
   assert.deepEqual(requests[2].args, { name: "PlayButton", parent: "HUD", text: "Play" });
   assert.deepEqual(requests[3].args, { name: "Logo", parent: "HUD", sprite: "Assets/UI/logo.png", color: "#ffffff" });
-  assert.deepEqual(requests[4].args, { name: "MainUIDocument", uxml: "Assets/UI/Main.uxml", uss: "Assets/UI/Main.uss", panelSettings: "Assets/UI/Panel.asset", overwrite: true });
+  assert.deepEqual(requests[4].args, { name: "MainUIDocument", path: "Assets/UI/Main.uxml", uxml: "Assets/UI/Main.uxml", uss: "Assets/UI/Main.uss", panelSettings: "Assets/UI/Panel.asset", overwrite: true });
   assert.deepEqual(requests[5].args, { target: "MainUIDocument", uss: "Assets/UI/Main.uss" });
-  assert.deepEqual(requests[6].args, { pageSize: 25, cursor: "50", target: "HUD" });
+  assert.equal(requests[6].args.content, "<ui:UXML xmlns:ui=\"UnityEngine.UIElements\" />\n");
+  assert.equal(requests[6].args.dryRun, true);
+  assert.equal(requests[7].dryRun, true);
+  assert.deepEqual(requests[8].args, { pageSize: 25, cursor: "50", target: "HUD" });
+  assert.deepEqual(requests[9].args, { target: "UIDoc", sourceAsset: "Assets/UI/Main.uxml", panelSettings: "Assets/UI/Panel.asset", sortOrder: 5 });
+  assert.deepEqual(requests[10].args, { target: "UIDoc", dryRun: true });
+  assert.deepEqual(requests[11].args, { path: "Assets/UI/Panel.asset", referenceWidth: 1920, referenceHeight: 1080, sortingOrder: 3, targetTexture: "Assets/UI/Target.renderTexture" });
+  assert.deepEqual(requests[12].args, { path: "Assets/UI/Panel.asset", scaleMode: "ScaleWithScreenSize", referenceWidth: 1280, referenceHeight: 720, sortingLayerName: "UI", match: 0.5, dryRun: true });
+  assert.deepEqual(requests[13].args, { target: "UIDoc", maxDepth: 4 });
+  assert.deepEqual(requests[14].args, { target: "UIDoc", elementName: "Root", addClass: "selected", backgroundColor: "#ff0000", dryRun: true });
+  assert.deepEqual(requests[15].args, { target: "Assets/UI/Main.uxml", path: "Assets/UI/Main.uxml", uxml: "Assets/UI/Main.uxml", uss: "Assets/UI/Main.uss", dryRun: true });
+  assert.deepEqual(requests[16].args, { kind: "uxml", pageSize: 20 });
+  assert.deepEqual(requests[17].args, { target: "Assets/UI/Main.uxml", path: "Assets/UI/Main.uxml", uxml: "Assets/UI/Main.uxml", output: "Assets/UI/preview.png", dryRun: true });
 });
 
 test("ui document info reads UXML offline when bridge endpoint is absent", async () => {

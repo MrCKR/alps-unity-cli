@@ -36,10 +36,18 @@ namespace UnityCli
             RegisterCommand(registry, "ui.image.create", "ui", true, delegate(BridgeRequest request) { return UiElementCreate(request, "Image"); });
             RegisterCommand(registry, "ui.document.info", "ui", false, UiDocumentInfo);
             RegisterCommand(registry, "ui.document.create", "ui", true, UiDocumentCreate);
+            RegisterCommand(registry, "ui.document.update", "ui", true, UiDocumentUpdate);
+            RegisterCommand(registry, "ui.document.delete", "ui", true, UiDocumentDelete);
             RegisterCommand(registry, "ui.hierarchy", "ui", false, UiHierarchy);
             RegisterCommand(registry, "ui.attach-document", "ui", false, UiAttachDocument);
+            RegisterCommand(registry, "ui.detach-document", "ui", false, UiDetachDocument);
             RegisterCommand(registry, "ui.create-panel-settings", "ui", true, UiCreatePanelSettings);
+            RegisterCommand(registry, "ui.update-panel-settings", "ui", true, UiUpdatePanelSettings);
             RegisterCommand(registry, "ui.get-visual-tree", "ui", false, UiGetVisualTree);
+            RegisterCommand(registry, "ui.modify-visual-element", "ui", false, UiModifyVisualElement);
+            RegisterCommand(registry, "ui.link-stylesheet", "ui", true, UiLinkStylesheet);
+            RegisterCommand(registry, "ui.list-documents", "ui", false, UiListDocuments);
+            RegisterCommand(registry, "ui.render-preview", "ui", true, UiRenderPreview);
         }
 
         private static string UiCanvasCreate(BridgeRequest request)
@@ -198,6 +206,55 @@ namespace UnityCli
                 .EndObject().ToString());
         }
 
+        /// <summary>更新已有 UXML 文本资产，并触发 Unity reimport。</summary>
+        private static string UiDocumentUpdate(BridgeRequest request)
+        {
+            var uxmlPath = RequireExistingUxmlPath(request.StringArg("uxml") ?? request.StringArg("path"));
+            var content = request.StringArg("content");
+            if (content == null)
+            {
+                throw new BridgeCommandException("E_UI_DOCUMENT_CONTENT_REQUIRED", "ui.document.update requires content.", "Pass --content/--content-file or structured input content.");
+            }
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("command", "ui.document.update").Prop("dryRun", true).Prop("uxml", uxmlPath).Prop("sizeBytes", (long)Encoding.UTF8.GetByteCount(content))
+                    .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "ui.document.update").Prop("uxml", uxmlPath).EndObject())
+                    .Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            File.WriteAllText(AssetFullPath(uxmlPath), content, Encoding.UTF8);
+            AssetDatabase.ImportAsset(uxmlPath, ImportAssetOptions.ForceUpdate);
+            AssetDatabase.SaveAssets();
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("document", UiAssetFieldsJson(uxmlPath, LoadVisualTreeAsset(uxmlPath)))
+                .Prop("sizeBytes", (long)Encoding.UTF8.GetByteCount(content))
+                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "ui.document.update").Prop("uxml", uxmlPath).Prop("refresh", true).EndObject())
+                .Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        /// <summary>删除 UXML/USS UI Toolkit 文档资产。</summary>
+        private static string UiDocumentDelete(BridgeRequest request)
+        {
+            var rawPath = request.StringArg("uxml") ?? request.StringArg("path");
+            var path = RequireExistingUiDocumentPath(rawPath);
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("command", "ui.document.delete").Prop("dryRun", true).PropRaw("document", UiAssetFieldsJson(path, AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path)))
+                    .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "ui.document.delete").Prop("path", path).EndObject())
+                    .Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            if (!AssetDatabase.DeleteAsset(path))
+            {
+                throw new BridgeCommandException("E_UI_DOCUMENT_DELETE_FAILED", "Failed to delete UI document asset: " + path, "Check Unity Console and file permissions.");
+            }
+            AssetDatabase.Refresh();
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropObject("document", doc => doc.Prop("path", path).Prop("exists", false))
+                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "ui.document.delete").Prop("path", path).EndObject())
+                .Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
         /// <summary>将 UIDocument 挂载到 GameObject。对齐 CoplayDev manage_ui.attach_ui_document。</summary>
         private static string UiAttachDocument(BridgeRequest request)
         {
@@ -238,6 +295,34 @@ namespace UnityCli
                 .Prop("logPath", LogPath()).EndObject().ToString());
         }
 
+        /// <summary>从 GameObject 移除 UIDocument 组件，只影响当前场景会话。</summary>
+        private static string UiDetachDocument(BridgeRequest request)
+        {
+            EnsureEditorNotBusy("ui.detach-document");
+            var target = request.StringArg("target");
+            var resolution = ResolveGameObjectTarget(target);
+            if (resolution.Ambiguous)
+            {
+                return TargetAmbiguousErrorJson("UIDocument", target, resolution, "Pass a hierarchy path or instance id for the intended UIDocument GameObject.");
+            }
+            var go = resolution.Target;
+            if (go == null) throw new BridgeCommandException("E_TARGET_NOT_FOUND", "ui.detach-document requires a target GameObject.", "Pass --target <path>.");
+            var uiDoc = go.GetComponent<UIDocument>();
+            if (uiDoc == null) throw new BridgeCommandException("E_UI_DOCUMENT_NOT_FOUND", "No UIDocument component found on: " + target, "Choose a GameObject with UIDocument or call ui.attach-document first.");
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "ui.detach-document").Prop("dryRun", true).PropRaw("target", GameObjectTargetJson(go)).PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "ui.detach-document").Prop("target", HierarchyPath(go)).EndObject()).Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            Undo.DestroyObjectImmediate(uiDoc);
+            EditorSceneManager.MarkSceneDirty(go.scene);
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("command", "ui.detach-document")
+                .PropRaw("target", GameObjectTargetJson(go))
+                .Prop("removed", true)
+                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "ui.detach-document").Prop("target", HierarchyPath(go)).EndObject())
+                .Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
         /// <summary>创建 PanelSettings 资产。对齐 CoplayDev manage_ui.create_panel_settings。</summary>
         private static string UiCreatePanelSettings(BridgeRequest request)
         {
@@ -251,6 +336,7 @@ namespace UnityCli
             var panel = ScriptableObject.CreateInstance<PanelSettings>();
             panel.scaleMode = (PanelScaleMode)Enum.Parse(typeof(PanelScaleMode), scaleMode, true);
             panel.referenceResolution = new Vector2Int(refW, refH);
+            ApplyOptionalPanelSettings(panel, request);
             CreateAssetDirectory(path);
             AssetDatabase.CreateAsset(panel, path);
             AssetDatabase.Refresh();
@@ -258,6 +344,78 @@ namespace UnityCli
                 .Prop("command", "ui.create-panel-settings")
                 .Prop("path", path).Prop("scaleMode", scaleMode)
                 .Prop("referenceResolution", refW + "x" + refH)
+                .PropRaw("panelSettings", PanelSettingsJson(path, panel))
+                .Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        /// <summary>更新已有 PanelSettings 资产的缩放配置。</summary>
+        private static string UiUpdatePanelSettings(BridgeRequest request)
+        {
+            EnsureEditorNotBusy("ui.update-panel-settings");
+            var path = RequirePanelSettingsPath(request.StringArg("path"));
+            var panel = AssetDatabase.LoadAssetAtPath<PanelSettings>(path);
+            if (panel == null) throw new BridgeCommandException("E_UI_PANEL_SETTINGS_NOT_FOUND", "PanelSettings asset not found: " + path, "Create it with ui.create-panel-settings or pass an existing PanelSettings asset path.");
+            var scaleMode = request.StringArg("scaleMode");
+            var refW = request.IntArg("referenceWidth", panel.referenceResolution.x);
+            var refH = request.IntArg("referenceHeight", panel.referenceResolution.y);
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "ui.update-panel-settings").Prop("dryRun", true).Prop("path", path).Prop("scaleMode", string.IsNullOrEmpty(scaleMode) ? panel.scaleMode.ToString() : scaleMode).Prop("referenceResolution", refW + "x" + refH).PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "ui.update-panel-settings").Prop("path", path).EndObject()).Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            if (!string.IsNullOrEmpty(scaleMode)) panel.scaleMode = (PanelScaleMode)Enum.Parse(typeof(PanelScaleMode), scaleMode, true);
+            panel.referenceResolution = new Vector2Int(refW, refH);
+            ApplyOptionalPanelSettings(panel, request);
+            EditorUtility.SetDirty(panel);
+            AssetDatabase.SaveAssets();
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("command", "ui.update-panel-settings")
+                .Prop("path", path).Prop("scaleMode", panel.scaleMode.ToString()).Prop("referenceResolution", panel.referenceResolution.x + "x" + panel.referenceResolution.y)
+                .PropRaw("panelSettings", PanelSettingsJson(path, panel))
+                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "ui.update-panel-settings").Prop("path", path).EndObject())
+                .Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        /// <summary>修改 UIDocument 当前 visual tree 中的元素属性/classes/styles，不写回 UXML asset。</summary>
+        private static string UiModifyVisualElement(BridgeRequest request)
+        {
+            var target = request.StringArg("target");
+            var elementName = request.StringArg("elementName") ?? request.StringArg("name");
+            if (string.IsNullOrEmpty(elementName)) throw new BridgeCommandException("E_UI_ELEMENT_NAME_REQUIRED", "ui.modify-visual-element requires an elementName.", "Pass the VisualElement name from ui.get-visual-tree.");
+            var go = string.IsNullOrEmpty(target) ? null : ObjectRefResolver.FindGameObjectByPath(target);
+            if (go == null) throw new BridgeCommandException("E_TARGET_NOT_FOUND", "ui.modify-visual-element requires a UIDocument GameObject target.", "Pass --target <UIDocument GameObject>.");
+            var uiDoc = go.GetComponent<UIDocument>();
+            if (uiDoc == null || uiDoc.rootVisualElement == null) throw new BridgeCommandException("E_UI_DOCUMENT_NOT_FOUND", "No UIDocument with rootVisualElement on target: " + target, "Attach a UIDocument first or wait until its panel is initialized.");
+            var element = FindVisualElementByName(uiDoc.rootVisualElement, elementName);
+            if (element == null) throw new BridgeCommandException("E_UI_ELEMENT_NOT_FOUND", "VisualElement not found: " + elementName, "Run ui.get-visual-tree and pass an existing element name.");
+            var addClass = request.StringArg("addClass");
+            var removeClass = request.StringArg("removeClass");
+            var text = request.StringArg("text");
+            var display = request.StringArg("display");
+            var width = request.OptionalFloatArg("width");
+            var height = request.OptionalFloatArg("height");
+            var backgroundColor = request.StringArg("backgroundColor") ?? request.StringArg("color");
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "ui.modify-visual-element").Prop("dryRun", true).PropRaw("target", GameObjectTargetJson(go)).PropRaw("element", VisualElementSummaryJson(element)).PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "ui.modify-visual-element").Prop("target", HierarchyPath(go)).Prop("elementName", elementName).EndObject()).Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            if (!string.IsNullOrEmpty(addClass)) element.AddToClassList(addClass);
+            if (!string.IsNullOrEmpty(removeClass)) element.RemoveFromClassList(removeClass);
+            if (text != null)
+            {
+                var textElement = element as TextElement;
+                if (textElement == null) throw new BridgeCommandException("E_UI_ELEMENT_TEXT_UNSUPPORTED", "Target VisualElement does not support text: " + elementName, "Choose a Label/TextElement or omit text.");
+                textElement.text = text;
+            }
+            if (!string.IsNullOrEmpty(display)) element.style.display = string.Equals(display, "none", StringComparison.OrdinalIgnoreCase) ? DisplayStyle.None : DisplayStyle.Flex;
+            if (width.HasValue) element.style.width = width.Value;
+            if (height.HasValue) element.style.height = height.Value;
+            if (!string.IsNullOrEmpty(backgroundColor)) element.style.backgroundColor = ParseColor(backgroundColor, Color.clear);
+            element.MarkDirtyRepaint();
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("command", "ui.modify-visual-element")
+                .PropRaw("target", GameObjectTargetJson(go))
+                .PropRaw("element", VisualElementSummaryJson(element))
+                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "ui.modify-visual-element").Prop("target", HierarchyPath(go)).Prop("elementName", elementName).EndObject())
                 .Prop("logPath", LogPath()).EndObject().ToString());
         }
 
@@ -429,6 +587,218 @@ namespace UnityCli
                 .EndObject().ToString();
         }
 
+        /// <summary>把 USS 链接写入 UXML 文件，避免 AI 手写 project://database 路径格式。</summary>
+        private static string UiLinkStylesheet(BridgeRequest request)
+        {
+            var uxmlPath = RequireExistingUxmlPath(request.StringArg("uxml") ?? request.StringArg("path"));
+            var ussPath = NormalizeOptionalUssPath(request.StringArg("uss") ?? request.StringArg("styleSheet"));
+            if (string.IsNullOrEmpty(ussPath)) throw new BridgeCommandException("E_UI_USS_PATH_REQUIRED", "ui.link-stylesheet requires a USS path.", "Pass --uss Assets/UI/Styles.uss.");
+            LoadStyleSheet(ussPath);
+            var fullPath = AssetFullPath(uxmlPath);
+            var content = File.ReadAllText(fullPath, Encoding.UTF8);
+            var styleLine = "  <Style src=\"project://database/" + ussPath + "\" />";
+            var changed = !content.Contains(ussPath);
+            if (changed)
+            {
+                var insertAt = content.IndexOf('>');
+                content = insertAt >= 0 ? content.Insert(insertAt + 1, "\n" + styleLine) : styleLine + "\n" + content;
+            }
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "ui.link-stylesheet").Prop("dryRun", true).Prop("uxml", uxmlPath).Prop("uss", ussPath).Prop("changed", changed).PropArray("plannedEffects", arr => { if (changed) arr.BeginObject().Prop("type", "ui.link-stylesheet").Prop("uxml", uxmlPath).Prop("uss", ussPath).EndObject(); }).Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            if (changed)
+            {
+                File.WriteAllText(fullPath, content, Encoding.UTF8);
+                AssetDatabase.ImportAsset(uxmlPath, ImportAssetOptions.ForceUpdate);
+                AssetDatabase.SaveAssets();
+            }
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("document", UiAssetFieldsJson(uxmlPath, LoadVisualTreeAsset(uxmlPath)))
+                .PropRaw("styleSheet", UiStyleSheetJson(ussPath, LoadStyleSheet(ussPath)))
+                .Prop("changed", changed)
+                .PropArray("plannedEffects", arr => { if (changed) arr.BeginObject().Prop("type", "ui.link-stylesheet").Prop("uxml", uxmlPath).Prop("uss", ussPath).EndObject(); })
+                .Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        /// <summary>列出 UI Toolkit 相关资产，供 AI 发现 UXML/USS/PanelSettings。</summary>
+        private static string UiListDocuments(BridgeRequest request)
+        {
+            var kind = request.StringArg("kind") ?? "all";
+            var pageSize = Math.Max(1, Math.Min(request.IntArg("pageSize", 100), 500));
+            var items = new List<string>();
+            if (string.Equals(kind, "all", StringComparison.OrdinalIgnoreCase) || string.Equals(kind, "uxml", StringComparison.OrdinalIgnoreCase)) CollectUiAssets("t:VisualTreeAsset", "uxml", pageSize, items);
+            if (items.Count < pageSize && (string.Equals(kind, "all", StringComparison.OrdinalIgnoreCase) || string.Equals(kind, "uss", StringComparison.OrdinalIgnoreCase))) CollectUiAssets("t:StyleSheet", "uss", pageSize, items);
+            if (items.Count < pageSize && (string.Equals(kind, "all", StringComparison.OrdinalIgnoreCase) || string.Equals(kind, "panelSettings", StringComparison.OrdinalIgnoreCase))) CollectUiAssets("t:PanelSettings", "panelSettings", pageSize, items);
+            return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "ui.list-documents").Prop("kind", kind).Prop("count", (long)items.Count).PropArray("items", arr => { foreach (var item in items) arr.RawValue(item); }).Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        /// <summary>为 UI Toolkit asset 生成 AssetPreview PNG；无法生成时返回稳定错误。</summary>
+        private static string UiRenderPreview(BridgeRequest request)
+        {
+            var target = request.StringArg("target") ?? request.StringArg("uxml") ?? request.StringArg("path");
+            var output = NormalizeAssetPath(request.StringArg("output"));
+            if (string.IsNullOrEmpty(output)) output = "Assets/UnityCliArtifacts/UI/ui-preview.png";
+            if (!output.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || !output.EndsWith(".png", StringComparison.OrdinalIgnoreCase)) throw new BridgeCommandException("E_UI_PREVIEW_OUTPUT_INVALID", "ui.render-preview output must be an Assets/*.png path.", "Pass --output Assets/UnityCliArtifacts/UI/preview.png.");
+            var assetPath = NormalizeAssetPath(target);
+            UnityEngine.Object previewTarget = null;
+            if (!string.IsNullOrEmpty(assetPath)) previewTarget = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(assetPath);
+            if (previewTarget == null && !string.IsNullOrEmpty(target))
+            {
+                var go = ObjectRefResolver.FindGameObjectByPath(target);
+                var doc = go == null ? null : go.GetComponent<UIDocument>();
+                previewTarget = doc == null ? null : doc.visualTreeAsset;
+                assetPath = previewTarget == null ? null : NormalizeAssetPath(AssetDatabase.GetAssetPath(previewTarget));
+            }
+            if (previewTarget == null) throw new BridgeCommandException("E_UI_PREVIEW_TARGET_NOT_FOUND", "UI preview target not found: " + target, "Pass an Assets/*.uxml path or a UIDocument GameObject.");
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "ui.render-preview").Prop("dryRun", true).Prop("target", target).Prop("output", output).PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "ui.render-preview").Prop("output", output).EndObject()).Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            var texture = AssetPreview.GetAssetPreview(previewTarget) ?? AssetPreview.GetMiniThumbnail(previewTarget);
+            if (texture == null) throw new BridgeCommandException("E_UI_PREVIEW_UNAVAILABLE", "Unity did not provide an AssetPreview for: " + target, "Open/import the UI asset in Unity or retry after editor is idle.", true, 1000);
+            CreateAssetDirectory(output);
+            var temp = new Texture2D(texture.width, texture.height, TextureFormat.RGBA32, false);
+            try
+            {
+                temp.SetPixels(texture.GetPixels());
+                temp.Apply();
+                var bytes = temp.EncodeToPNG();
+                File.WriteAllBytes(AssetFullPath(output), bytes);
+                AssetDatabase.ImportAsset(output, ImportAssetOptions.ForceUpdate);
+                return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "ui.render-preview").Prop("target", target).Prop("sourceAsset", assetPath).Prop("output", output).Prop("width", (long)temp.width).Prop("height", (long)temp.height).Prop("sizeBytes", (long)bytes.Length).PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "ui.render-preview").Prop("output", output).EndObject()).Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(temp);
+            }
+        }
+
+        private static void CollectUiAssets(string filter, string kind, int pageSize, List<string> items)
+        {
+            foreach (var guid in AssetDatabase.FindAssets(filter))
+            {
+                if (items.Count >= pageSize) return;
+                var path = NormalizeAssetPath(AssetDatabase.GUIDToAssetPath(guid));
+                var asset = AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path);
+                items.Add(new UnityCliJsonWriter().BeginObject().Prop("kind", kind).Prop("path", path).Prop("guid", guid).Prop("type", asset == null ? null : asset.GetType().Name).EndObject().ToString());
+            }
+        }
+
+        private static void ApplyOptionalPanelSettings(PanelSettings panel, BridgeRequest request)
+        {
+            SetOptionalIntProperty(panel, "sortingOrder", request.OptionalIntArg("sortingOrder") ?? request.OptionalIntArg("sortOrder"));
+            SetOptionalStringProperty(panel, "sortingLayerName", request.StringArg("sortingLayerName"));
+            SetOptionalFloatProperty(panel, "match", request.OptionalFloatArg("match"));
+            SetOptionalEnumProperty(panel, "screenMatchMode", request.StringArg("screenMatchMode"));
+            SetOptionalColorProperty(panel, "clearColor", request.StringArg("clearColor"));
+            var targetTexturePath = NormalizeAssetPath(request.StringArg("targetTexture"));
+            if (!string.IsNullOrEmpty(targetTexturePath))
+            {
+                var renderTexture = AssetDatabase.LoadAssetAtPath<RenderTexture>(targetTexturePath);
+                if (renderTexture == null) throw new BridgeCommandException("E_UI_TARGET_TEXTURE_NOT_FOUND", "RenderTexture asset not found: " + targetTexturePath, "Pass an existing RenderTexture asset path or omit targetTexture.");
+                SetOptionalObjectProperty(panel, "targetTexture", renderTexture);
+            }
+        }
+
+        private static string PanelSettingsJson(string path, PanelSettings panel)
+        {
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("path", path)
+                .Prop("scaleMode", panel.scaleMode.ToString())
+                .Prop("referenceResolution", panel.referenceResolution.x + "x" + panel.referenceResolution.y)
+                .PropRaw("optional", new UnityCliJsonWriter().BeginObject()
+                    .Prop("sortingOrder", ReflectionPropertyString(panel, "sortingOrder") ?? ReflectionPropertyString(panel, "sortOrder"))
+                    .Prop("sortingLayerName", ReflectionPropertyString(panel, "sortingLayerName"))
+                    .Prop("screenMatchMode", ReflectionPropertyString(panel, "screenMatchMode"))
+                    .Prop("match", ReflectionPropertyString(panel, "match"))
+                    .Prop("targetTexture", ReflectionObjectAssetPath(panel, "targetTexture"))
+                    .EndObject().ToString())
+                .EndObject().ToString();
+        }
+
+        private static void SetOptionalIntProperty(object target, string name, int? value)
+        {
+            if (!value.HasValue) return;
+            var property = target.GetType().GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (property != null && property.CanWrite && property.PropertyType == typeof(int)) property.SetValue(target, value.Value, null);
+        }
+
+        private static void SetOptionalFloatProperty(object target, string name, float? value)
+        {
+            if (!value.HasValue) return;
+            var property = target.GetType().GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (property != null && property.CanWrite && property.PropertyType == typeof(float)) property.SetValue(target, value.Value, null);
+        }
+
+        private static void SetOptionalStringProperty(object target, string name, string value)
+        {
+            if (string.IsNullOrEmpty(value)) return;
+            var property = target.GetType().GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (property != null && property.CanWrite && property.PropertyType == typeof(string)) property.SetValue(target, value, null);
+        }
+
+        private static void SetOptionalObjectProperty(object target, string name, UnityEngine.Object value)
+        {
+            if (value == null) return;
+            var property = target.GetType().GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (property != null && property.CanWrite && property.PropertyType.IsAssignableFrom(value.GetType())) property.SetValue(target, value, null);
+        }
+
+        private static void SetOptionalEnumProperty(object target, string name, string value)
+        {
+            if (string.IsNullOrEmpty(value)) return;
+            var property = target.GetType().GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (property != null && property.CanWrite && property.PropertyType.IsEnum) property.SetValue(target, Enum.Parse(property.PropertyType, value, true), null);
+        }
+
+        private static void SetOptionalColorProperty(object target, string name, string value)
+        {
+            if (string.IsNullOrEmpty(value)) return;
+            var property = target.GetType().GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (property != null && property.CanWrite && property.PropertyType == typeof(Color)) property.SetValue(target, ParseColor(value, Color.clear), null);
+        }
+
+        private static string ReflectionPropertyString(object target, string name)
+        {
+            if (target == null) return null;
+            var property = target.GetType().GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (property == null || !property.CanRead) return null;
+            var value = property.GetValue(target, null);
+            return value == null ? null : value.ToString();
+        }
+
+        private static string ReflectionObjectAssetPath(object target, string name)
+        {
+            if (target == null) return null;
+            var property = target.GetType().GetProperty(name, BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            if (property == null || !property.CanRead) return null;
+            var value = property.GetValue(target, null) as UnityEngine.Object;
+            return value == null ? null : NormalizeAssetPath(AssetDatabase.GetAssetPath(value));
+        }
+
+        private static VisualElement FindVisualElementByName(VisualElement root, string name)
+        {
+            if (root == null) return null;
+            if (root.name == name) return root;
+            for (var i = 0; i < root.childCount; i++)
+            {
+                var found = FindVisualElementByName(root[i], name);
+                if (found != null) return found;
+            }
+            return null;
+        }
+
+        private static string VisualElementSummaryJson(VisualElement element)
+        {
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("name", element.name)
+                .Prop("type", element.GetType().Name)
+                .PropArray("classes", arr => { foreach (var c in element.GetClasses()) arr.Value(c); })
+                .Prop("childCount", (long)element.childCount)
+                .EndObject().ToString();
+        }
+
         private static string ComponentNamesJson(GameObject gameObject)
         {
             var w = new UnityCliJsonWriter().BeginArray();
@@ -531,6 +901,41 @@ namespace UnityCli
                 throw new BridgeCommandException("E_UI_USS_NOT_FOUND", "USS asset not found: " + path, "Pass an existing Assets/*.uss path or create it with ui document/create.");
             }
             return asset;
+        }
+
+        private static string RequireExistingUxmlPath(string rawPath)
+        {
+            var path = RequireUxmlPath(rawPath);
+            if (AssetDatabase.LoadAssetAtPath<VisualTreeAsset>(path) == null)
+            {
+                throw new BridgeCommandException("E_UI_UXML_NOT_FOUND", "UXML asset not found: " + path, "Pass an existing Assets/*.uxml path or create it with ui.document.create.");
+            }
+            return path;
+        }
+
+        private static string RequireExistingUiDocumentPath(string rawPath)
+        {
+            var path = NormalizeAssetPath(rawPath);
+            if (string.IsNullOrEmpty(path)) throw new BridgeCommandException("E_UI_DOCUMENT_PATH_REQUIRED", "Pass an Assets/*.uxml or Assets/*.uss path.", "Use --uxml/--path with an existing UI Toolkit asset.");
+            if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || (!path.EndsWith(".uxml", StringComparison.OrdinalIgnoreCase) && !path.EndsWith(".uss", StringComparison.OrdinalIgnoreCase)))
+            {
+                throw new BridgeCommandException("E_UI_DOCUMENT_PATH_INVALID", "UI document path must end with .uxml or .uss: " + path, "Pass a Unity asset path such as Assets/UI/Layout.uxml.");
+            }
+            if (AssetDatabase.LoadAssetAtPath<UnityEngine.Object>(path) == null)
+            {
+                throw new BridgeCommandException("E_UI_DOCUMENT_NOT_FOUND", "UI document asset not found: " + path, "Pass an existing UXML/USS path or create it first.");
+            }
+            return path;
+        }
+
+        private static string RequirePanelSettingsPath(string rawPath)
+        {
+            var path = NormalizeAssetPath(rawPath);
+            if (string.IsNullOrEmpty(path) || !path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || !path.EndsWith(".asset", StringComparison.OrdinalIgnoreCase))
+            {
+                throw new BridgeCommandException("E_PANEL_PATH_REQUIRED", "PanelSettings path must be an Assets/*.asset path.", "Pass Assets/UI/Panel.asset.");
+            }
+            return path;
         }
 
         private static string RequireUxmlPath(string rawPath)
