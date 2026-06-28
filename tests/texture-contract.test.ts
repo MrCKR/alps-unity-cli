@@ -27,7 +27,7 @@ async function listCsFiles(directory: URL): Promise<URL[]> {
 
 test("texture group tools exist with correct safety hints", () => {
   const tools = filterToolsByGroup("texture").map((t) => t.name).sort();
-  assert.deepEqual(tools, ["texture.create", "texture.generate", "texture.import-settings", "texture.info", "texture.sprite"]);
+  assert.deepEqual(tools, ["texture.create", "texture.delete", "texture.generate", "texture.import-settings", "texture.info", "texture.modify", "texture.sprite"]);
 
   const info = findToolByName("texture.info")!;
   assert.equal(info.destructiveHint, false);
@@ -43,6 +43,16 @@ test("texture group tools exist with correct safety hints", () => {
   assert.equal(generate.destructiveHint, true);
   assert.equal(generate.supportsDryRun, true);
   assert.equal(generate.playModeSupport, "session-affecting");
+
+  const modify = findToolByName("texture.modify")!;
+  assert.equal(modify.destructiveHint, true);
+  assert.equal(modify.supportsDryRun, true);
+  assert.ok(modify.sideEffects?.includes("asset-write"));
+
+  const del = findToolByName("texture.delete")!;
+  assert.equal(del.destructiveHint, true);
+  assert.equal(del.supportsDryRun, true);
+  assert.ok(del.sideEffects?.includes("asset-delete"));
 
   const importSettings = findToolByName("texture.import-settings")!;
   assert.equal(importSettings.playModeSupport, "session-affecting");
@@ -66,15 +76,23 @@ test("texture.info and import-settings expose output schemas", () => {
   assert.ok(out.importSettings, "info output should expose importSettings object");
 });
 
+test("texture.sprite and texture.modify expose structured mutation inputs", () => {
+  const spriteProps = findToolByName("texture.sprite")!.inputSchema.properties as Record<string, unknown>;
+  assert.ok(spriteProps.slices, "texture.sprite should accept sprite sheet slices");
+  const modifyProps = findToolByName("texture.modify")!.inputSchema.properties as Record<string, unknown>;
+  assert.ok(modifyProps.fillColor, "texture.modify should expose fillColor alias");
+  assert.ok(modifyProps.x, "texture.modify should expose region x");
+});
+
 test("bridge specs resolve for texture tools", () => {
-  for (const command of ["info", "create", "sprite", "import-settings", "generate"]) {
+  for (const command of ["info", "create", "sprite", "modify", "delete", "import-settings", "generate"]) {
     const spec = bridgeCommandRegistry.lookup("texture", command);
     assert.equal(spec?.bridgeCommand, `texture.${command}`);
   }
 });
 
 test("contract entries exist for texture tools with present C# handler", () => {
-  for (const name of ["texture.info", "texture.create", "texture.sprite", "texture.import-settings", "texture.generate"]) {
+  for (const name of ["texture.info", "texture.create", "texture.sprite", "texture.modify", "texture.delete", "texture.import-settings", "texture.generate"]) {
     const contract = findCommandContract(name);
     assert.ok(contract, `${name} should be in command contract`);
     assert.equal(contract.csharp_handler, "present", `${name} should have present C# handler`);
@@ -88,7 +106,7 @@ test("C# RegisterCommand calls exist for texture commands", async () => {
       csFiles.filter((f) => !f.pathname.includes("/Samples/")).map((f) => readFile(f, "utf8"))
     )
   ).join("\n");
-  for (const command of ["texture.info", "texture.create", "texture.sprite", "texture.import-settings", "texture.generate"]) {
+  for (const command of ["texture.info", "texture.create", "texture.sprite", "texture.modify", "texture.delete", "texture.import-settings", "texture.generate"]) {
     assert.ok(
       allSource.includes(`RegisterCommand(registry, "${command}"`),
       `${command} should be registered via RegisterCommand in C#`
@@ -109,4 +127,13 @@ test("texture bridge spec forwards structured --input fields (width/enum/bool), 
   assert.match(spec, /numberField\(flags, "width"\)/, "bridge should forward structured width");
   assert.match(spec, /boolField\(flags, "readable"\)/, "bridge should forward structured readable bool");
   assert.match(spec, /stringField\(flags, "spriteMode"\)/, "bridge should forward structured spriteMode");
+  assert.match(spec, /structured\.slices/, "bridge should forward structured sprite slices");
+  assert.match(spec, /stringField\(flags, "fillColor"\)/, "bridge should forward structured fillColor");
+});
+
+test("texture C# implements sprite slices and texture-specific delete", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Commands/TextureCommands.cs", import.meta.url), "utf8");
+  assert.match(source, /ParseSpriteSlices[\s\S]*SpriteMetaData/, "C# should parse sprite slice metadata");
+  assert.match(source, /TextureDelete[\s\S]*AssetDatabase\.DeleteAsset/, "texture.delete should delete through AssetDatabase");
+  assert.match(source, /TextureModify[\s\S]*ImageConversion\.LoadImage[\s\S]*SetPixel/, "texture.modify should edit decoded texture pixels");
 });

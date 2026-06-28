@@ -584,7 +584,8 @@ function validateRequiredInputFields(
     const assetSourceAliasPresent = (tool.name === "asset.duplicate" || tool.name === "asset.move") && field === "source" && (input.path !== undefined || flags.path !== undefined || positionalTarget !== undefined);
     const assetPathAliasPresent = (tool.name === "asset.get-data" || tool.name === "asset.get-components" || tool.name === "asset.preview") && field === "assetPath" && (input.path !== undefined || flags.path !== undefined || positionalTarget !== undefined);
     const materialColorAliasPresent = tool.name === "material.set-renderer-color" && field === "color" && (input.value !== undefined || flags.value !== undefined);
-    if (!positionalSatisfiesField && !fieldPresent && !assetSourceAliasPresent && !assetPathAliasPresent && !materialColorAliasPresent) {
+    const textureColorAliasPresent = tool.name === "texture.modify" && field === "color" && (input.fillColor !== undefined || flags["fill-color"] !== undefined || flags.fillColor !== undefined);
+    if (!positionalSatisfiesField && !fieldPresent && !assetSourceAliasPresent && !assetPathAliasPresent && !materialColorAliasPresent && !textureColorAliasPresent) {
       missing.push(field);
     }
   }

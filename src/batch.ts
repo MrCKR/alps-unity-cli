@@ -220,6 +220,8 @@ const commandRegistry = new Map<string, { parallelSafe: boolean }>([
   ["texture.create", { parallelSafe: false }],
   ["texture.sprite", { parallelSafe: false }],
   ["texture.import-settings", { parallelSafe: false }],
+  ["texture.modify", { parallelSafe: false }],
+  ["texture.delete", { parallelSafe: false }],
   ["texture.generate", { parallelSafe: false }],
   ["animation.clip", { parallelSafe: false }],
   ["animation.state", { parallelSafe: true }],

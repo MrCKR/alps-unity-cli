@@ -82,7 +82,8 @@ export const TEXTURE_TOOLS: ToolMetadata[] = [
       spriteMode: { type: "string", enum: ["Single", "Multiple"], description: "Sprite import mode. Omit to keep the importer default." },
       pixelsPerUnit: { type: "integer", description: "Sprite pixels-per-unit. Must be > 0." },
       pivotX: { type: "string", description: "Sprite pivot X (0..1 normalized)." },
-      pivotY: { type: "string", description: "Sprite pivot Y (0..1 normalized)." }
+      pivotY: { type: "string", description: "Sprite pivot Y (0..1 normalized)." },
+      slices: { type: "array", items: objSchema({ name: { type: "string" }, x: { type: "number" }, y: { type: "number" }, width: { type: "number" }, height: { type: "number" }, pivotX: { type: "number" }, pivotY: { type: "number" } }), description: "Optional sprite sheet rectangles for Multiple mode. Coordinates are pixel-space x/y/width/height with optional normalized pivotX/pivotY." }
     }, ["path"]),
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],
@@ -93,7 +94,52 @@ export const TEXTURE_TOOLS: ToolMetadata[] = [
     docsTopic: "texture",
     equivalentUnityMcp: "manage_texture.create_sprite",
     examples: [
-      { description: "Convert a texture to a Single sprite", argv: ["tools", "run", "texture.sprite", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeTexture.png\",\"spriteMode\":\"Single\",\"pixelsPerUnit\":100}"] }
+      { description: "Convert a texture to a Single sprite", argv: ["tools", "run", "texture.sprite", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeTexture.png\",\"spriteMode\":\"Single\",\"pixelsPerUnit\":100}"] },
+      { description: "Slice a 64x32 spritesheet into two sprites", argv: ["tools", "run", "texture.sprite", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/Sheet.png\",\"spriteMode\":\"Multiple\",\"slices\":[{\"name\":\"left\",\"x\":0,\"y\":0,\"width\":32,\"height\":32},{\"name\":\"right\",\"x\":32,\"y\":0,\"width\":32,\"height\":32}]}"] }
+    ]
+  },
+  {
+    name: "texture.modify",
+    summary: "Modify an existing PNG/JPG texture asset by filling a pixel region with one color.",
+    description: "Modify an existing PNG/JPG texture asset by filling a pixel region with one color, then reimport it. Use this for Unity-side texture mutations; for arbitrary image editing, write the file directly and call asset.refresh. Supports --dry-run to preview the affected region.",
+    group: "texture",
+    inputSchema: objSchema({ path: { type: "string", description: "Existing Assets/*.png/.jpg/.jpeg texture path." }, color: { type: "string", description: "Fill color as #RRGGBB, #RRGGBBAA, or hex without #." }, fillColor: { type: "string", description: "Alias of color." }, x: { type: "integer", default: 0, description: "Region origin X in pixels." }, y: { type: "integer", default: 0, description: "Region origin Y in pixels." }, width: { type: "integer", description: "Region width in pixels. Defaults to remaining texture width." }, height: { type: "integer", description: "Region height in pixels. Defaults to remaining texture height." } }, ["path", "color"]),
+    outputSchema: objSchema({ texture: { type: "object" }, importSettings: { type: "object" }, changedPixels: { type: "integer" }, region: { type: "object" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
+    destructiveHint: true,
+    sideEffects: ["asset-write", "asset-import"],
+    riskLevel: "medium",
+    supportsDryRun: true,
+    playModeSupport: "session-affecting",
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run texture.modify",
+    docsTopic: "texture",
+    equivalentUnityMcp: "manage_texture.modify",
+    examples: [
+      { description: "Preview filling the full texture", argv: ["tools", "run", "texture.modify", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeTexture.png\",\"color\":\"#ff0000\"}", "--dry-run"] },
+      { description: "Fill a 16x16 region after confirmation", argv: ["tools", "run", "texture.modify", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeTexture.png\",\"color\":\"#00ff00\",\"x\":0,\"y\":0,\"width\":16,\"height\":16}", "--yes"] }
+    ]
+  },
+  {
+    name: "texture.delete",
+    summary: "Delete an existing texture asset through a texture-specific destructive tool.",
+    description: "Delete an existing texture asset through a texture-specific destructive tool. This is equivalent in effect to asset.delete for texture files, but is discoverable from the texture group. Use --dry-run before --yes when the path was discovered programmatically.",
+    group: "texture",
+    inputSchema: objSchema({ path: { type: "string", description: "Existing Assets/* texture path to delete." } }, ["path"]),
+    outputSchema: objSchema({ texture: { type: "object" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
+    destructiveHint: true,
+    sideEffects: ["asset-delete", "asset-import"],
+    riskLevel: "high",
+    supportsDryRun: true,
+    playModeSupport: "session-affecting",
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run texture.delete",
+    docsTopic: "texture",
+    equivalentUnityMcp: "manage_texture.delete",
+    examples: [
+      { description: "Preview deleting a generated texture", argv: ["tools", "run", "texture.delete", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/GeneratedSolid.png\"}", "--dry-run"] },
+      { description: "Delete a generated texture after confirmation", argv: ["tools", "run", "texture.delete", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/GeneratedSolid.png\"}", "--yes"] }
     ]
   },
   {

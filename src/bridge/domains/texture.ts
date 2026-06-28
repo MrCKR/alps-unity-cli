@@ -1,10 +1,12 @@
-import { boolFlag, compactArgs, contentFlag, numberFlag, stringFlag } from "../args.js";
+import { boolFlag, compactArgs, numberFlag, stringFlag } from "../args.js";
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const textureBridgeSpecs: BridgeCommandSpec[] = [
   { group: "texture", command: "info", bridgeCommand: "texture.info", buildArgs: textureArgs },
   { group: "texture", command: "create", bridgeCommand: "texture.create", buildArgs: textureArgs },
   { group: "texture", command: "sprite", bridgeCommand: "texture.sprite", buildArgs: textureArgs },
+  { group: "texture", command: "modify", bridgeCommand: "texture.modify", buildArgs: textureArgs, supportsDryRun: true },
+  { group: "texture", command: "delete", bridgeCommand: "texture.delete", buildArgs: textureArgs, supportsDryRun: true },
   { group: "texture", command: "import-settings", bridgeCommand: "texture.import-settings", buildArgs: textureArgs },
   { group: "texture", command: "generate", bridgeCommand: "texture.generate", buildArgs: textureGenerateArgs, supportsDryRun: true }
 ];
@@ -45,12 +47,16 @@ function textureArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["
     overwrite: boolFlag(flags, "overwrite") ?? boolField(flags, "overwrite"),
     width: numberFlag(flags, "width") ?? numberField(flags, "width"),
     height: numberFlag(flags, "height") ?? numberField(flags, "height"),
-    color: stringFlag(flags, "color") ?? stringField(flags, "color"),
+    color: stringFlag(flags, "color") ?? stringField(flags, "color") ?? stringField(flags, "fillColor"),
+    fillColor: stringFlag(flags, "fill-color") ?? stringField(flags, "fillColor"),
+    x: numberFlag(flags, "x") ?? numberField(flags, "x"),
+    y: numberFlag(flags, "y") ?? numberField(flags, "y"),
     textureType: stringFlag(flags, "texture-type") ?? stringFlag(flags, "type") ?? stringField(flags, "textureType") ?? stringField(flags, "type"),
     spriteMode: stringFlag(flags, "sprite-mode") ?? stringFlag(flags, "mode") ?? stringField(flags, "spriteMode") ?? stringField(flags, "mode"),
     pixelsPerUnit: numberFlag(flags, "pixels-per-unit") ?? numberFlag(flags, "ppu") ?? numberField(flags, "pixelsPerUnit"),
     pivotX: stringFlag(flags, "pivot-x") ?? stringField(flags, "pivotX"),
     pivotY: stringFlag(flags, "pivot-y") ?? stringField(flags, "pivotY"),
+    slices: structured.slices,
     readable: boolFlag(flags, "readable") ?? boolField(flags, "readable"),
     mipmap: boolFlag(flags, "mipmap") ?? boolField(flags, "mipmap"),
     sRGB: boolFlag(flags, "srgb") ?? boolField(flags, "sRGB"),
@@ -58,7 +64,8 @@ function textureArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["
     wrapMode: stringFlag(flags, "wrap-mode") ?? stringField(flags, "wrapMode"),
     filterMode: stringFlag(flags, "filter-mode") ?? stringField(flags, "filterMode"),
     maxTextureSize: numberFlag(flags, "max-texture-size") ?? numberField(flags, "maxTextureSize"),
-    compression: stringFlag(flags, "compression") ?? stringField(flags, "compression")
+    compression: stringFlag(flags, "compression") ?? stringField(flags, "compression"),
+    dryRun: boolFlag(flags, "dry-run") ?? boolField(flags, "dryRun")
   });
 }
 

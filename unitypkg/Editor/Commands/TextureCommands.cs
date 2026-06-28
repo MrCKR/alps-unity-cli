@@ -33,6 +33,8 @@ namespace UnityCli
             RegisterCommand(registry, "texture.info", "texture", false, TextureInfo);
             RegisterCommand(registry, "texture.create", "texture", true, TextureCreate);
             RegisterCommand(registry, "texture.sprite", "texture", true, TextureSprite);
+            RegisterCommand(registry, "texture.modify", "texture", true, TextureModify);
+            RegisterCommand(registry, "texture.delete", "texture", true, TextureDelete);
             RegisterCommand(registry, "texture.import-settings", "texture", true, TextureImportSettings);
             RegisterCommand(registry, "texture.generate", "texture", true, TextureGenerate);
         }
@@ -210,6 +212,14 @@ namespace UnityCli
                 importer.spritePixelsPerUnit = pixelsPerUnit;
             }
             importer.spritePivot = SpritePivot(request, importer.spritePivot);
+            var slices = ParseSpriteSlices(request.RawJsonArg("slices"));
+            if (slices.Length > 0)
+            {
+                importer.spriteImportMode = SpriteImportMode.Multiple;
+#pragma warning disable 618
+                importer.spritesheet = slices;
+#pragma warning restore 618
+            }
             try
             {
                 importer.SaveAndReimport();
@@ -220,7 +230,97 @@ namespace UnityCli
                 return ErrorJson("E_IMPORT_FAILED", "Failed to reimport texture as Sprite: " + path + " (" + exception.Message + ")", "Check TextureImporter settings and Unity Console diagnostics.");
             }
             WriteLog("texture_sprite path=" + path);
-            return SuccessJson(TextureMutationJson("texture.sprite", path, LoadTextureAsset(path)));
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("texture", TextureAssetJson(path, LoadTextureAsset(path)))
+                .PropRaw("importSettings", TextureImporterJson(RequireTextureImporter(path)))
+                .Prop("sliceCount", (long)slices.Length)
+                .PropArray("slices", arr => { foreach (var slice in slices) arr.BeginObject().Prop("name", slice.name).Prop("x", slice.rect.x).Prop("y", slice.rect.y).Prop("width", slice.rect.width).Prop("height", slice.rect.height).EndObject(); })
+                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "texture.sprite").Prop("path", path).Prop("refresh", true).EndObject())
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        /// <summary>修改已有 PNG/JPG texture 的像素区域，并保持 Unity import 流程可追踪。</summary>
+        private static string TextureModify(BridgeRequest request)
+        {
+            var path = ResolveTexturePath(request.StringArg("path") ?? request.StringArg("target"));
+            var extension = Path.GetExtension(path).ToLowerInvariant();
+            if (extension != ".png" && extension != ".jpg" && extension != ".jpeg")
+            {
+                throw new BridgeCommandException("E_TEXTURE_FORMAT_UNSUPPORTED", "texture.modify can write PNG/JPG assets only: " + path, "Use texture.create with --source for other texture formats, or modify the source file directly.");
+            }
+            var color = ParseTextureColor(request.StringArg("color") ?? request.StringArg("fillColor"));
+            var texture = LoadTextureAsset(path);
+            var x = Math.Max(0, request.IntArg("x", 0));
+            var y = Math.Max(0, request.IntArg("y", 0));
+            var width = request.IntArg("width", texture.width - x);
+            var height = request.IntArg("height", texture.height - y);
+            if (width <= 0 || height <= 0 || x >= texture.width || y >= texture.height)
+            {
+                throw new BridgeCommandException("E_TEXTURE_REGION_INVALID", "Texture modify region is outside texture bounds.", "Pass x/y/width/height within the existing texture dimensions.");
+            }
+            width = Math.Min(width, texture.width - x);
+            height = Math.Min(height, texture.height - y);
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("command", "texture.modify").Prop("dryRun", true).Prop("path", path).Prop("x", (long)x).Prop("y", (long)y).Prop("width", (long)width).Prop("height", (long)height).PropRaw("color", TextureColorJson(color))
+                    .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "texture.modify").Prop("path", path).EndObject())
+                    .Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            var working = new Texture2D(2, 2, TextureFormat.RGBA32, false);
+            try
+            {
+                if (!ImageConversion.LoadImage(working, File.ReadAllBytes(AssetFullPath(path))))
+                {
+                    throw new BridgeCommandException("E_TEXTURE_DECODE_FAILED", "Failed to decode texture bytes: " + path, "Reimport the asset or verify the image file is valid.");
+                }
+                for (var row = y; row < y + height; row++)
+                {
+                    for (var col = x; col < x + width; col++)
+                    {
+                        working.SetPixel(col, row, color);
+                    }
+                }
+                working.Apply();
+                var bytes = extension == ".png" ? working.EncodeToPNG() : working.EncodeToJPG(95);
+                File.WriteAllBytes(AssetFullPath(path), bytes);
+                AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
+                AssetDatabase.Refresh();
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .PropRaw("texture", TextureAssetJson(path, LoadTextureAsset(path)))
+                    .PropRaw("importSettings", TextureImporterJson(RequireTextureImporter(path)))
+                    .Prop("changedPixels", (long)(width * height))
+                    .PropRaw("region", new UnityCliJsonWriter().BeginObject().Prop("x", (long)x).Prop("y", (long)y).Prop("width", (long)width).Prop("height", (long)height).EndObject().ToString())
+                    .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "texture.modify").Prop("path", path).Prop("refresh", true).EndObject())
+                    .Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            finally
+            {
+                UnityEngine.Object.DestroyImmediate(working);
+            }
+        }
+
+        /// <summary>删除 texture asset；这是 asset.delete 的 texture 专用入口，便于 AI 从 texture 组发现。</summary>
+        private static string TextureDelete(BridgeRequest request)
+        {
+            var path = ResolveTexturePath(request.StringArg("path") ?? request.StringArg("target"));
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("command", "texture.delete").Prop("dryRun", true).PropRaw("texture", TextureAssetJson(path, LoadTextureAsset(path)))
+                    .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "texture.delete").Prop("path", path).EndObject())
+                    .Prop("logPath", LogPath()).EndObject().ToString());
+            }
+            if (!AssetDatabase.DeleteAsset(path))
+            {
+                throw new BridgeCommandException("E_TEXTURE_DELETE_FAILED", "Failed to delete texture asset: " + path, "Check Unity Console and file permissions.");
+            }
+            AssetDatabase.Refresh();
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropObject("texture", t => t.Prop("path", path).Prop("exists", false))
+                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "texture.delete").Prop("path", path).EndObject())
+                .Prop("logPath", LogPath()).EndObject().ToString());
         }
 
         private static string TextureImportSettings(BridgeRequest request)
@@ -433,6 +533,49 @@ namespace UnityCli
             return true;
         }
 
+        [Serializable]
+        private sealed class TextureSpriteSliceList
+        {
+            public TextureSpriteSliceDefinition[] items;
+        }
+
+        [Serializable]
+        private sealed class TextureSpriteSliceDefinition
+        {
+            public string name;
+            public float x;
+            public float y;
+            public float width;
+            public float height;
+            public float pivotX = 0.5f;
+            public float pivotY = 0.5f;
+        }
+
+        /// <summary>解析 sprite sheet 切片定义；数组由 TS bridge 从 slices 结构化输入透传。</summary>
+        private static SpriteMetaData[] ParseSpriteSlices(string rawJson)
+        {
+            if (string.IsNullOrEmpty(rawJson)) return new SpriteMetaData[0];
+            var list = JsonUtility.FromJson<TextureSpriteSliceList>("{\"items\":" + rawJson + "}");
+            if (list == null || list.items == null || list.items.Length == 0) return new SpriteMetaData[0];
+            var slices = new List<SpriteMetaData>();
+            for (var i = 0; i < list.items.Length; i++)
+            {
+                var item = list.items[i];
+                if (item == null || item.width <= 0 || item.height <= 0)
+                {
+                    throw new BridgeCommandException("E_TEXTURE_SPRITE_SLICE_INVALID", "Sprite slice width and height must be positive.", "Pass slices with name,x,y,width,height and optional pivotX/pivotY.");
+                }
+                slices.Add(new SpriteMetaData
+                {
+                    name = string.IsNullOrEmpty(item.name) ? "slice_" + i.ToString(CultureInfo.InvariantCulture) : item.name,
+                    rect = new Rect(item.x, item.y, item.width, item.height),
+                    pivot = new Vector2(Mathf.Clamp01(item.pivotX), Mathf.Clamp01(item.pivotY)),
+                    alignment = (int)SpriteAlignment.Custom
+                });
+            }
+            return slices.ToArray();
+        }
+
         private static Vector2 SpritePivot(BridgeRequest request, Vector2 fallback)
         {
             var x = ParseFloat(request.StringArg("pivotX"), fallback.x);
@@ -444,6 +587,13 @@ namespace UnityCli
         {
             float parsed;
             return !string.IsNullOrEmpty(rawValue) && float.TryParse(rawValue, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed) ? parsed : fallback;
+        }
+
+        private static string TextureColorJson(Color color)
+        {
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("r", color.r).Prop("g", color.g).Prop("b", color.b).Prop("a", color.a)
+                .EndObject().ToString();
         }
 
         private static string TextureMutationJson(string type, string path, Texture2D texture)

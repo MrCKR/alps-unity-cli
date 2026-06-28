@@ -1008,21 +1008,27 @@ test("texture commands forward importer, sprite and creation options", async () 
 
   const info = await execute(["tools", "run", "texture.info", "Assets/Textures/Icon.png"], { ...runtime, bridgeExecute });
   const create = await execute(["tools", "run", "texture.create", "Assets/Textures/Icon.png", "--source", "C:/tmp/icon.png", "--overwrite", "--texture-type", "Sprite"], { ...runtime, bridgeExecute });
-  const sprite = await execute(["tools", "run", "texture.sprite", "Assets/Textures/Icon.png", "--pixels-per-unit", "128", "--pivot-x", "0.25", "--pivot-y", "0.75", "--sprite-mode", "single"], { ...runtime, bridgeExecute });
+  const sprite = await execute(["tools", "run", "texture.sprite", "Assets/Textures/Icon.png", "--input", "{\"pixelsPerUnit\":128,\"pivotX\":\"0.25\",\"pivotY\":\"0.75\",\"spriteMode\":\"Multiple\",\"slices\":[{\"name\":\"left\",\"x\":0,\"y\":0,\"width\":16,\"height\":16}]}"], { ...runtime, bridgeExecute });
+  const modify = await execute(["tools", "run", "texture.modify", "Assets/Textures/Icon.png", "--fill-color", "#ff0000", "--x", "1", "--y", "2", "--width", "3", "--height", "4", "--dry-run"], { ...runtime, bridgeExecute });
+  const del = await execute(["tools", "run", "texture.delete", "Assets/Textures/Icon.png", "--dry-run"], { ...runtime, bridgeExecute });
   const importSettings = await execute(["tools", "run", "texture.import-settings", "Assets/Textures/Icon.png", "--readable", "false", "--mipmap", "false", "--srgb", "true", "--alpha-is-transparency", "--wrap-mode", "Clamp", "--filter-mode", "Point", "--max-texture-size", "512", "--compression", "Uncompressed"], { ...runtime, bridgeExecute });
 
   assert.equal(info.ok, true);
   assert.equal(create.ok, true);
   assert.equal(sprite.ok, true);
+  assert.equal(modify.ok, true);
+  assert.equal(del.ok, true);
   assert.equal(importSettings.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["texture.info", "texture.create", "texture.sprite", "texture.import-settings"]);
+  assert.deepEqual(requests.map((request) => request.command), ["texture.info", "texture.create", "texture.sprite", "texture.modify", "texture.delete", "texture.import-settings"]);
   assert.deepEqual(requests[1].args, { path: "Assets/Textures/Icon.png", target: "Assets/Textures/Icon.png", source: "C:/tmp/icon.png", overwrite: true, textureType: "Sprite" });
-  assert.deepEqual(requests[2].args, { path: "Assets/Textures/Icon.png", target: "Assets/Textures/Icon.png", spriteMode: "single", pixelsPerUnit: 128, pivotX: "0.25", pivotY: "0.75" });
-  assert.equal(requests[3].args.readable, false);
-  assert.equal(requests[3].args.mipmap, false);
-  assert.equal(requests[3].args.sRGB, true);
-  assert.equal(requests[3].args.alphaIsTransparency, true);
-  assert.equal(requests[3].args.maxTextureSize, 512);
+  assert.deepEqual(requests[2].args, { path: "Assets/Textures/Icon.png", target: "Assets/Textures/Icon.png", spriteMode: "Multiple", pixelsPerUnit: 128, pivotX: "0.25", pivotY: "0.75", slices: [{ name: "left", x: 0, y: 0, width: 16, height: 16 }] });
+  assert.deepEqual(requests[3].args, { path: "Assets/Textures/Icon.png", target: "Assets/Textures/Icon.png", width: 3, height: 4, fillColor: "#ff0000", x: 1, y: 2, dryRun: true });
+  assert.equal(requests[4].dryRun, true);
+  assert.equal(requests[5].args.readable, false);
+  assert.equal(requests[5].args.mipmap, false);
+  assert.equal(requests[5].args.sRGB, true);
+  assert.equal(requests[5].args.alphaIsTransparency, true);
+  assert.equal(requests[5].args.maxTextureSize, 512);
 });
 
 test("shader and texture bridge errors preserve structured diagnostics", async () => {

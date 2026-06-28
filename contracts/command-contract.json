@@ -2595,6 +2595,15 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "texture.delete",
+      "group": "texture",
+      "command": "delete",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "texture.generate",
       "group": "texture",
       "command": "generate",
@@ -2619,6 +2628,15 @@
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "texture.modify",
+      "group": "texture",
+      "command": "modify",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
       "timeout": 30000
     },
     {
