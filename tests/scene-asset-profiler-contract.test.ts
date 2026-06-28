@@ -276,7 +276,8 @@ test("bridge specs resolve for all new domain 4-8 tools", () => {
     ["editor", "selection-set", "editor.selection.set"],
     ["build", "scenes", "build.scenes"],
     ["build", "profiles", "build.profiles"],
-    ["physics", "validate", "physics.validate"]
+    ["physics", "validate", "physics.validate"],
+    ["physics", "assign-material", "physics.assign-material"]
   ] as const;
   for (const [group, command, bridgeCommand] of checks) {
     const spec = bridgeCommandRegistry.lookup(group, command);
@@ -294,7 +295,7 @@ test("all new tools have contract entries with present C# handler", () => {
     "shader.list", "shader.get-data", "texture.generate",
     "console.get", "console.clear", "editor.selection.set", "editor.active-tool.set", "package.embed",
     "build.scenes", "build.platform", "build.profiles", "build.settings",
-    "physics.raycast-all", "physics.linecast", "physics.shapecast", "physics.validate"
+    "physics.raycast-all", "physics.linecast", "physics.shapecast", "physics.validate", "physics.assign-material"
   ];
   for (const name of newTools) {
     const contract = findCommandContract(name);

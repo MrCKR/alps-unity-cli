@@ -33,6 +33,7 @@ namespace UnityCli
             RegisterCommand(registry, "physics.settings", "physics", true, PhysicsSettingsCommand);
             RegisterCommand(registry, "physics.collision-matrix", "physics", true, PhysicsCollisionMatrix);
             RegisterCommand(registry, "physics.material", "physics", true, PhysicsMaterialCommand);
+            RegisterCommand(registry, "physics.assign-material", "physics", false, PhysicsAssignMaterial);
             RegisterCommand(registry, "physics.joint", "physics", true, PhysicsJointCommand);
             RegisterCommand(registry, "physics.force", "physics", true, PhysicsForceCommand);
             RegisterCommand(registry, "physics.overlap", "physics", false, PhysicsOverlap);
@@ -76,8 +77,24 @@ namespace UnityCli
 
         private static string PhysicsCollisionMatrix(BridgeRequest request)
         {
-            var layerA = ParseLayer(request.StringArg("layerA"));
-            var layerB = ParseLayer(request.StringArg("layerB"));
+            if (!request.HasArg("layerA") && !request.HasArg("layerB"))
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("mode", "3d")
+                    .Prop("layerCount", 32L)
+                    .PropRaw("layers", PhysicsCollisionLayersJson())
+                    .PropRaw("matrix", PhysicsCollisionMatrixJson())
+                    .Prop("logPath", LogPath())
+                    .EndObject().ToString());
+            }
+            var layerAName = request.StringArg("layerA");
+            var layerBName = request.StringArg("layerB");
+            if (string.IsNullOrEmpty(layerAName) || string.IsNullOrEmpty(layerBName))
+            {
+                throw new BridgeCommandException("E_PHYSICS_COLLISION_PAIR_REQUIRED", "Reading or writing a single collision pair requires both layerA and layerB.", "Pass both layerA and layerB, or omit both to read the full 32-layer matrix.");
+            }
+            var layerA = ParseLayer(layerAName);
+            var layerB = ParseLayer(layerBName);
             var ignore = request.OptionalBoolArg("ignore");
             if (ignore.HasValue)
             {
@@ -116,13 +133,95 @@ namespace UnityCli
                 .EndObject().ToString());
         }
 
+        private static string PhysicsAssignMaterial(BridgeRequest request)
+        {
+            var target = ResolveUniqueTarget(request.StringArg("target"), "physics.assign-material requires --target.");
+            var path = NormalizeAssetPath(request.StringArg("materialPath") ?? request.StringArg("path"));
+            if (string.IsNullOrEmpty(path))
+            {
+                throw new BridgeCommandException("E_PHYSICS_MATERIAL_PATH_REQUIRED", "physics.assign-material requires a PhysicMaterial asset path.", "Pass materialPath like Assets/Physics/Bouncy.physicMaterial.");
+            }
+            var material = AssetDatabase.LoadAssetAtPath<PhysicMaterial>(path);
+            if (material == null)
+            {
+                throw new BridgeCommandException("E_PHYSICS_MATERIAL_NOT_FOUND", "PhysicMaterial asset not found: " + path, "Create it with physics.material first, then rerun physics.assign-material.");
+            }
+            var collider = ResolveCollider(target, request.StringArg("collider"), request.IntArg("colliderIndex", 0));
+            var previous = collider.sharedMaterial;
+            if (!request.DryRun)
+            {
+                Undo.RecordObject(collider, "Assign PhysicMaterial");
+                collider.sharedMaterial = material;
+                EditorUtility.SetDirty(collider);
+                EditorSceneManager.MarkSceneDirty(target.scene);
+            }
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("dryRun", request.DryRun)
+                .PropRaw("target", GameObjectTargetJson(target))
+                .PropRaw("collider", PhysicsColliderAssignmentJson(collider, previous, material, path))
+                .PropArray("plannedEffects", arr => arr.RawValue(EffectJson("physics.assign-material", "target", HierarchyPath(target))))
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
         private static string PhysicsJointCommand(BridgeRequest request)
         {
             var target = ResolveUniqueTarget(request.StringArg("target"), "physics.joint requires --target.");
             var typeName = request.StringArg("type") ?? "FixedJoint";
             var type = ResolveComponentType(typeName.EndsWith("Joint", StringComparison.OrdinalIgnoreCase) ? typeName : typeName + "Joint");
             if (!typeof(Joint).IsAssignableFrom(type)) throw new BridgeCommandException("E_PHYSICS_JOINT_TYPE_INVALID", "Joint type must derive from UnityEngine.Joint: " + typeName, "Use FixedJoint, HingeJoint, SpringJoint, or CharacterJoint.");
-            var joint = target.GetComponent(type) as Joint ?? Undo.AddComponent(target, type) as Joint;
+            var action = request.StringArg("action") ?? "add";
+            if (string.Equals(action, "remove", StringComparison.OrdinalIgnoreCase))
+            {
+                var joints = target.GetComponents(type).Cast<Joint>().ToArray();
+                if (joints.Length == 0)
+                {
+                    throw new BridgeCommandException("E_PHYSICS_JOINT_NOT_FOUND", "No matching Joint component found on target: " + type.Name, "Check the target and joint type, or run physics.joint with action add first.");
+                }
+                var componentIndex = request.IntArg("componentIndex", -1);
+                var removed = 0;
+                if (componentIndex >= 0)
+                {
+                    if (componentIndex >= joints.Length)
+                    {
+                        throw new BridgeCommandException("E_PHYSICS_JOINT_INDEX_INVALID", "componentIndex is outside the matching Joint component range.", "Use a componentIndex from 0 to " + (joints.Length - 1).ToString(CultureInfo.InvariantCulture) + ".");
+                    }
+                    removed = 1;
+                    if (!request.DryRun) Undo.DestroyObjectImmediate(joints[componentIndex]);
+                }
+                else
+                {
+                    removed = joints.Length;
+                    if (!request.DryRun)
+                    {
+                        foreach (var existing in joints) Undo.DestroyObjectImmediate(existing);
+                    }
+                }
+                if (!request.DryRun) EditorSceneManager.MarkSceneDirty(target.scene);
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("action", "remove")
+                    .Prop("dryRun", request.DryRun)
+                    .PropRaw("target", GameObjectTargetJson(target))
+                    .Prop("type", type.Name)
+                    .Prop("removed", (long)removed)
+                    .PropArray("plannedEffects", arr => arr.RawValue(EffectJson("physics.joint", "remove", type.Name)))
+                    .Prop("logPath", LogPath())
+                    .EndObject().ToString());
+            }
+            var existingJoint = target.GetComponent(type) as Joint;
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("action", existingJoint == null ? "add" : "configure")
+                    .Prop("dryRun", true)
+                    .PropRaw("target", GameObjectTargetJson(target))
+                    .Prop("type", type.Name)
+                    .Prop("exists", existingJoint != null)
+                    .PropArray("plannedEffects", arr => arr.RawValue(EffectJson("physics.joint", existingJoint == null ? "add" : "configure", type.Name)))
+                    .Prop("logPath", LogPath())
+                    .EndObject().ToString());
+            }
+            var joint = existingJoint ?? Undo.AddComponent(target, type) as Joint;
             var connected = request.StringArg("connectedBody");
             if (!string.IsNullOrEmpty(connected))
             {
@@ -173,8 +272,36 @@ namespace UnityCli
 
         private static string PhysicsOverlap(BridgeRequest request)
         {
+            var mode = NormalizeMode(request.StringArg("mode"));
             var origin = new Vector3(request.FloatArg("originX", 0f), request.FloatArg("originY", 0f), request.FloatArg("originZ", 0f));
             var layerMask = request.IntArg("layerMask", Physics.DefaultRaycastLayers);
+            if (mode == "2d")
+            {
+                var shape2d = request.StringArg("shape") ?? "circle";
+                var origin2d = new Vector2(origin.x, origin.y);
+                Collider2D[] colliders2d;
+                if (string.Equals(shape2d, "box", StringComparison.OrdinalIgnoreCase))
+                {
+                    var size = new Vector2(request.FloatArg("sizeX", 1f), request.FloatArg("sizeY", 1f));
+                    colliders2d = Physics2D.OverlapBoxAll(origin2d, size, request.FloatArg("angle", 0f), layerMask);
+                }
+                else if (string.Equals(shape2d, "capsule", StringComparison.OrdinalIgnoreCase))
+                {
+                    var size = new Vector2(request.FloatArg("sizeX", request.FloatArg("radius", 0.5f) * 2f), request.FloatArg("sizeY", request.FloatArg("height", 1f)));
+                    colliders2d = Physics2D.OverlapCapsuleAll(origin2d, size, ParseCapsuleDirection2D(request), request.FloatArg("angle", 0f), layerMask);
+                }
+                else
+                {
+                    colliders2d = Physics2D.OverlapCircleAll(origin2d, Math.Max(0.0001f, request.FloatArg("radius", 1f)), layerMask);
+                }
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("mode", "2d")
+                    .PropRaw("origin", Vector2Json(origin2d))
+                    .Prop("hitCount", (long)colliders2d.Length)
+                    .PropArray("hits", arr => { foreach (var collider in colliders2d) arr.RawValue(ColliderJson(collider.gameObject, collider.GetType().Name)); })
+                    .Prop("logPath", LogPath())
+                    .EndObject().ToString());
+            }
             Collider[] colliders;
             if (string.Equals(request.StringArg("shape"), "box", StringComparison.OrdinalIgnoreCase))
             {
@@ -186,6 +313,7 @@ namespace UnityCli
                 colliders = Physics.OverlapSphere(origin, Math.Max(0.0001f, request.FloatArg("radius", 1f)), layerMask);
             }
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("mode", "3d")
                 .PropRaw("origin", Vector3Json(origin))
                 .Prop("hitCount", (long)colliders.Length)
                 .PropArray("hits", arr => { foreach (var collider in colliders) arr.RawValue(ColliderJson(collider.gameObject, collider.GetType().Name)); })
@@ -197,6 +325,19 @@ namespace UnityCli
         {
             var target = ResolveUniqueTarget(request.StringArg("target"), "physics.rigidbody requires --target.");
             var rigidbody = target.GetComponent<Rigidbody>();
+            if (request.BoolArg("validate", false))
+            {
+                var rigidbody2D = target.GetComponent<Rigidbody2D>();
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("validate", true)
+                    .PropRaw("target", GameObjectTargetJson(target))
+                    .Prop("hasRigidbody", rigidbody != null)
+                    .PropRaw("rigidbody", rigidbody == null ? "null" : RigidbodyJson(rigidbody))
+                    .PropRaw("rigidbody2D", rigidbody2D == null ? "null" : Rigidbody2DJson(rigidbody2D))
+                    .PropRaw("nextActions", RigidbodyNextActionsJson(rigidbody != null))
+                    .Prop("logPath", LogPath())
+                    .EndObject().ToString());
+            }
             if (rigidbody == null)
             {
                 rigidbody = Undo.AddComponent<Rigidbody>(target);
@@ -257,12 +398,36 @@ namespace UnityCli
         private static string PhysicsShapecast(BridgeRequest request)
         {
             var shape = request.StringArg("shape") ?? "sphere";
+            var mode = NormalizeMode(request.StringArg("mode"));
             var distance = Math.Max(0f, request.FloatArg("distance", 100f));
             var layerMask = request.IntArg("layerMask", Physics.DefaultRaycastLayers);
             var origin = new Vector3(request.FloatArg("originX", 0f), request.FloatArg("originY", 0f), request.FloatArg("originZ", 0f));
             var direction = NormalizeVector3(new Vector3(request.FloatArg("directionX", 0f), request.FloatArg("directionY", 0f), request.FloatArg("directionZ", 1f)));
             var radius = request.FloatArg("radius", 0.5f);
             var halfExtents = new Vector3(request.FloatArg("halfExtentX", 0.5f), request.FloatArg("halfExtentY", 0.5f), request.FloatArg("halfExtentZ", 0.5f));
+            if (mode == "2d")
+            {
+                var origin2d = new Vector2(origin.x, origin.y);
+                var direction2d = NormalizeVector2(new Vector2(direction.x, direction.y));
+                RaycastHit2D[] hits2d;
+                if (shape == "box")
+                {
+                    var size = new Vector2(request.FloatArg("sizeX", halfExtents.x * 2f), request.FloatArg("sizeY", halfExtents.y * 2f));
+                    hits2d = Physics2D.BoxCastAll(origin2d, size, request.FloatArg("angle", 0f), direction2d, distance, layerMask);
+                }
+                else if (shape == "capsule")
+                {
+                    var size = new Vector2(request.FloatArg("sizeX", radius * 2f), request.FloatArg("sizeY", request.FloatArg("height", 1f)));
+                    hits2d = Physics2D.CapsuleCastAll(origin2d, size, ParseCapsuleDirection2D(request), request.FloatArg("angle", 0f), direction2d, distance, layerMask);
+                }
+                else
+                {
+                    hits2d = Physics2D.CircleCastAll(origin2d, radius, direction2d, distance, layerMask);
+                }
+                return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "physics.shapecast").Prop("mode", "2d").Prop("shape", shape)
+                    .PropRaw("query", Raycast2DQueryJson(origin2d, direction2d, distance, layerMask))
+                    .Prop("hitCount", (long)hits2d.Length).PropRaw("hits", Raycast2DHitsJson(hits2d)).Prop("logPath", LogPath()).EndObject().ToString());
+            }
             RaycastHit[] hits;
             if (shape == "box")
             {
@@ -294,7 +459,8 @@ namespace UnityCli
             {
                 hits = Physics.SphereCastAll(origin, radius, direction, distance, layerMask);
             }
-            return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "physics.shapecast").Prop("shape", shape)
+            return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "physics.shapecast").Prop("mode", "3d").Prop("shape", shape)
+                .PropRaw("query", Raycast3DQueryJson(origin, direction, distance, layerMask))
                 .Prop("hitCount", (long)hits.Length).PropRaw("hits", Raycast3DHitsJson(hits)).Prop("logPath", LogPath()).EndObject().ToString());
         }
 
@@ -422,6 +588,99 @@ namespace UnityCli
                 .PropArray("plannedEffects", arr => { foreach (var e in effects) arr.RawValue(e); })
                 .Prop("logPath", LogPath())
                 .EndObject().ToString());
+        }
+
+        private static string PhysicsCollisionLayersJson()
+        {
+            var w = new UnityCliJsonWriter().BeginArray();
+            for (var i = 0; i < 32; i++)
+            {
+                w.BeginObject()
+                    .Prop("index", (long)i)
+                    .Prop("name", LayerMask.LayerToName(i))
+                    .EndObject();
+            }
+            return w.EndArray().ToString();
+        }
+
+        private static string PhysicsCollisionMatrixJson()
+        {
+            var w = new UnityCliJsonWriter().BeginArray();
+            for (var a = 0; a < 32; a++)
+            {
+                var layerA = a;
+                w.BeginObject()
+                    .Prop("layer", (long)layerA)
+                    .Prop("name", LayerMask.LayerToName(layerA))
+                    .PropArray("pairs", pairs =>
+                    {
+                        for (var b = 0; b < 32; b++)
+                        {
+                            pairs.BeginObject()
+                                .Prop("layer", (long)b)
+                                .Prop("name", LayerMask.LayerToName(b))
+                                .Prop("ignored", Physics.GetIgnoreLayerCollision(layerA, b))
+                                .EndObject();
+                        }
+                    })
+                    .EndObject();
+            }
+            return w.EndArray().ToString();
+        }
+
+        private static Collider ResolveCollider(GameObject target, string colliderType, int colliderIndex)
+        {
+            var colliders = target.GetComponents<Collider>();
+            if (!string.IsNullOrEmpty(colliderType))
+            {
+                colliders = colliders.Where(c => string.Equals(c.GetType().Name, colliderType, StringComparison.OrdinalIgnoreCase) || string.Equals(c.GetType().FullName, colliderType, StringComparison.OrdinalIgnoreCase)).ToArray();
+            }
+            if (colliders.Length == 0)
+            {
+                throw new BridgeCommandException("E_COLLIDER_NOT_FOUND", "No 3D Collider found on target: " + target.name, "Add a Collider component before assigning a PhysicMaterial.");
+            }
+            if (colliderIndex < 0 || colliderIndex >= colliders.Length)
+            {
+                throw new BridgeCommandException("E_COLLIDER_INDEX_INVALID", "colliderIndex is outside the matching Collider component range.", "Use a colliderIndex from 0 to " + (colliders.Length - 1).ToString(CultureInfo.InvariantCulture) + ".");
+            }
+            return colliders[colliderIndex];
+        }
+
+        private static string PhysicsColliderAssignmentJson(Collider collider, PhysicMaterial previous, PhysicMaterial next, string nextPath)
+        {
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("type", collider.GetType().Name)
+                .Prop("instanceId", (long)collider.GetInstanceID())
+                .PropRaw("previousMaterial", PhysicsMaterialRefJson(previous))
+                .PropRaw("material", PhysicsMaterialRefJson(next, nextPath))
+                .EndObject().ToString();
+        }
+
+        private static string PhysicsMaterialRefJson(PhysicMaterial material, string fallbackPath = null)
+        {
+            if (material == null) return "null";
+            var path = string.IsNullOrEmpty(fallbackPath) ? AssetDatabase.GetAssetPath(material) : fallbackPath;
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("name", material.name)
+                .Prop("path", path)
+                .EndObject().ToString();
+        }
+
+        private static string RigidbodyNextActionsJson(bool hasRigidbody)
+        {
+            if (hasRigidbody) return "[]";
+            return new UnityCliJsonWriter().BeginArray()
+                .Value("No Rigidbody is attached; run physics.rigidbody without validate=true to add and configure one.")
+                .EndArray().ToString();
+        }
+
+        private static CapsuleDirection2D ParseCapsuleDirection2D(BridgeRequest request)
+        {
+            var value = request.StringArg("capsuleDirection");
+            var numeric = request.OptionalIntArg("capsuleDirection");
+            if (numeric.HasValue && numeric.Value == 0) return CapsuleDirection2D.Horizontal;
+            if (string.Equals(value, "horizontal", StringComparison.OrdinalIgnoreCase) || string.Equals(value, "0", StringComparison.OrdinalIgnoreCase)) return CapsuleDirection2D.Horizontal;
+            return CapsuleDirection2D.Vertical;
         }
 
         private static void ApplyPhysicsInt(BridgeRequest request, string arg, string property, Action<int> setter, List<string> effects)
@@ -571,6 +830,30 @@ namespace UnityCli
                 .Prop("angularDrag", rigidbody.angularDrag)
                 .Prop("useGravity", rigidbody.useGravity)
                 .Prop("isKinematic", rigidbody.isKinematic)
+                .PropRaw("velocity", Vector3Json(rigidbody.velocity))
+                .PropRaw("angularVelocity", Vector3Json(rigidbody.angularVelocity))
+                .PropRaw("centerOfMass", Vector3Json(rigidbody.centerOfMass))
+                .Prop("collisionDetectionMode", rigidbody.collisionDetectionMode.ToString())
+                .Prop("interpolation", rigidbody.interpolation.ToString())
+                .Prop("constraints", rigidbody.constraints.ToString())
+                .Prop("sleeping", rigidbody.IsSleeping())
+                .EndObject().ToString();
+        }
+
+        private static string Rigidbody2DJson(Rigidbody2D rigidbody)
+        {
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("mass", rigidbody.mass)
+                .Prop("drag", rigidbody.drag)
+                .Prop("angularDrag", rigidbody.angularDrag)
+                .Prop("gravityScale", rigidbody.gravityScale)
+                .Prop("bodyType", rigidbody.bodyType.ToString())
+                .PropRaw("velocity", Vector2Json(rigidbody.velocity))
+                .Prop("angularVelocity", rigidbody.angularVelocity)
+                .Prop("collisionDetectionMode", rigidbody.collisionDetectionMode.ToString())
+                .Prop("interpolation", rigidbody.interpolation.ToString())
+                .Prop("constraints", rigidbody.constraints.ToString())
+                .Prop("sleeping", rigidbody.IsSleeping())
                 .EndObject().ToString();
         }
 

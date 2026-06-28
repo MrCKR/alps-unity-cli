@@ -31,10 +31,10 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "physics.collision-matrix",
-    summary: "Read or update the layer collision ignore matrix between two layers (layerA/layerB by name).",
-    description: "Read or update the layer collision ignore matrix between two layers (layerA/layerB by name). Setting ignore=true disables collision between them. Writes ProjectSettings/TagManager.",
+    summary: "Read the full 32-layer collision matrix or read/update one layer pair by layerA/layerB.",
+    description: "Read the full 32-layer collision matrix when layerA/layerB are omitted, or read/update one layer pair by layerA/layerB. Setting ignore=true disables collision between the two layers. Pair updates write ProjectSettings/TagManager.",
     group: "physics",
-    inputSchema: objSchema({ layerA: { type: "string", description: "First layer name." }, layerB: { type: "string", description: "Second layer name." }, ignore: { type: "boolean", description: "True to ignore (disable) collision between the layers." } }, ["layerA", "layerB"]),
+    inputSchema: objSchema({ layerA: { type: "string", description: "First layer name or numeric index. Omit with layerB to read the full matrix." }, layerB: { type: "string", description: "Second layer name or numeric index. Omit with layerA to read the full matrix." }, ignore: { type: "boolean", description: "True to ignore/disable collision between layerA and layerB; false enables collision." } }),
     destructiveHint: false,
     sideEffects: ["project-settings-write"],
     riskLevel: "low",
@@ -45,6 +45,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     docsTopic: "physics",
     equivalentUnityMcp: "manage_physics.collision_matrix",
     examples: [
+      { description: "Read the full layer collision matrix", argv: ["tools", "run", "physics.collision-matrix", "--input", "{}"] },
       { description: "Read collision state between two layers", argv: ["tools", "run", "physics.collision-matrix", "--input", "{\"layerA\":\"Default\",\"layerB\":\"Ignore Raycast\"}"] }
     ]
   },
@@ -68,11 +69,31 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     ]
   },
   {
-    name: "physics.joint",
-    summary: "Add or configure a Joint component (Fixed/Hinge/Spring/Configurable) on a GameObject. target resolves by name, hierarchy path or instance id.",
-    description: "Add or configure a Joint component (Fixed/Hinge/Spring/Configurable) on a GameObject. target resolves by name, hierarchy path or instance id.",
+    name: "physics.assign-material",
+    summary: "Assign an existing PhysicMaterial asset to a 3D Collider on a GameObject without modifying the material asset.",
+    description: "Assign an existing PhysicMaterial asset to a 3D Collider on a GameObject without modifying the material asset. target resolves by name, hierarchy path or instance id. materialPath points to an existing Assets/*.physicMaterial or .asset PhysicMaterial. collider/colliderIndex select among multiple Collider components.",
     group: "physics",
-    inputSchema: objSchema({ target: { type: "string", description: "Target GameObject with Rigidbody." }, type: { type: "string", description: "Joint type: Fixed, HingeJoint, SpringJoint, ConfigurableJoint." }, connectedBody: { type: "string", description: "Connected Rigidbody target." }, anchor: { type: "string", description: "Anchor reference." } }, ["target", "type"]),
+    inputSchema: objSchema({ target: { type: "string", description: "Target GameObject with a 3D Collider." }, materialPath: { type: "string", description: "Existing PhysicMaterial asset path under Assets/." }, path: { type: "string", description: "Alias of materialPath." }, collider: { type: "string", description: "Optional Collider type name, for example BoxCollider." }, colliderIndex: { type: "integer", description: "Index among matching Collider components. Defaults to 0." } }, ["target", "materialPath"]),
+    destructiveHint: false,
+    supportsDryRun: true,
+    sideEffects: ["scene-modify"],
+    riskLevel: "low",
+    playModeSupport: "session-affecting",
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run physics.assign-material",
+    docsTopic: "physics",
+    equivalentUnityMcp: "manage_physics.assign_physics_material",
+    examples: [
+      { description: "Assign a PhysicMaterial to the first Collider on a target", argv: ["tools", "run", "physics.assign-material", "--input", "{\"target\":\"Ball\",\"materialPath\":\"Assets/Physics/Bouncy.physicMaterial\"}"] }
+    ]
+  },
+  {
+    name: "physics.joint",
+    summary: "Add, configure or remove a Joint component (Fixed/Hinge/Spring/Configurable) on a GameObject.",
+    description: "Add, configure or remove a Joint component (Fixed/Hinge/Spring/Configurable) on a GameObject. target resolves by name, hierarchy path or instance id. action defaults to add/configure; action=remove removes matching joints, or a single matching joint when componentIndex is provided.",
+    group: "physics",
+    inputSchema: objSchema({ target: { type: "string", description: "Target GameObject with Rigidbody." }, type: { type: "string", description: "Joint type: Fixed, HingeJoint, SpringJoint, ConfigurableJoint." }, action: { type: "string", enum: ["add", "configure", "remove"], description: "Operation to perform. Defaults to add/configure." }, connectedBody: { type: "string", description: "Connected Rigidbody target for add/configure." }, componentIndex: { type: "integer", description: "For action=remove, remove this matching joint index; omit to remove all matching joints." }, anchor: { type: "string", description: "Anchor reference." } }, ["target", "type"]),
     destructiveHint: false,
     sideEffects: ["scene-modify"],
     riskLevel: "low",
@@ -83,7 +104,8 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     docsTopic: "physics",
     equivalentUnityMcp: "manage_physics.joints",
     examples: [
-      { description: "Add a FixedJoint to a Rigidbody", argv: ["tools", "run", "physics.joint", "--input", "{\"target\":\"PhysicsProbe\",\"type\":\"FixedJoint\"}"] }
+      { description: "Add a FixedJoint to a Rigidbody", argv: ["tools", "run", "physics.joint", "--input", "{\"target\":\"PhysicsProbe\",\"type\":\"FixedJoint\"}"] },
+      { description: "Remove all FixedJoint components from a target", argv: ["tools", "run", "physics.joint", "--input", "{\"target\":\"PhysicsProbe\",\"type\":\"FixedJoint\",\"action\":\"remove\"}"] }
     ]
   },
   {
@@ -107,10 +129,10 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "physics.overlap",
-    summary: "Run a sphere or box overlap query at a position and return matching colliders.",
-    description: "Run a sphere or box overlap query at a position and return matching colliders. Read-only query. Use shape sphere with radius, or box with size.",
+    summary: "Run a 3D sphere/box or 2D circle/box/capsule overlap query and return matching colliders.",
+    description: "Run a 3D sphere/box or 2D circle/box/capsule overlap query at a position and return matching colliders. Read-only query. Use mode 2d for Physics2D; 2D ignores originZ.",
     group: "physics",
-    inputSchema: objSchema({ shape: { type: "string", enum: ["sphere", "box"] }, originX: { type: "number" }, originY: { type: "number" }, originZ: { type: "number" }, radius: { type: "number" }, sizeX: { type: "number" }, sizeY: { type: "number" }, sizeZ: { type: "number" }, layerMask: { type: "integer" } }),
+    inputSchema: objSchema({ mode: { type: "string", enum: ["3d", "2d"] }, shape: { type: "string", enum: ["sphere", "circle", "box", "capsule"] }, originX: { type: "number" }, originY: { type: "number" }, originZ: { type: "number" }, radius: { type: "number" }, sizeX: { type: "number" }, sizeY: { type: "number" }, sizeZ: { type: "number" }, height: { type: "number" }, angle: { type: "number" }, capsuleDirection: { type: "string", enum: ["vertical", "horizontal"] }, layerMask: { type: "integer" } }),
     destructiveHint: false,
     playModeSupport: "supported",
     handler: "bridge",
@@ -124,8 +146,8 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "physics.rigidbody",
-    summary: "Validate or configure a Rigidbody's mass, drag, angularDrag, useGravity and isKinematic flags. target resolves by name, hierarchy path or instance id.",
-    description: "Validate or configure a Rigidbody's mass, drag, angularDrag, useGravity and isKinematic flags. target resolves by name, hierarchy path or instance id. Pass validate=true to only check configuration.",
+    summary: "Read, validate or configure a Rigidbody's mass, drag, angularDrag, useGravity and isKinematic flags.",
+    description: "Read, validate or configure a Rigidbody's mass, drag, angularDrag, useGravity and isKinematic flags. target resolves by name, hierarchy path or instance id. Pass validate=true to read current Rigidbody/Rigidbody2D state without adding or modifying components.",
     group: "physics",
     inputSchema: objSchema({ target: { type: "string", description: "Target GameObject with Rigidbody." }, mass: { type: "number" }, drag: { type: "number" }, angularDrag: { type: "number" }, useGravity: { type: "boolean" }, isKinematic: { type: "boolean" }, validate: { type: "boolean", description: "Only validate, do not change." } }, ["target"]),
     destructiveHint: false,
@@ -138,6 +160,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     docsTopic: "physics",
     equivalentUnityMcp: "manage_physics.rigidbody",
     examples: [
+      { description: "Read current Rigidbody state without modifying the target", argv: ["tools", "run", "physics.rigidbody", "--input", "{\"target\":\"PhysicsProbe\",\"validate\":true}"] },
       { description: "Configure a Rigidbody", argv: ["tools", "run", "physics.rigidbody", "--input", "{\"target\":\"PhysicsProbe\",\"mass\":2.0,\"useGravity\":true}"] }
     ]
   },
@@ -213,10 +236,10 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "physics.shapecast",
-    summary: "Cast a sphere, box or capsule shape along a direction and return all hits.",
-    description: "Cast a sphere, box or capsule shape along a direction and return all hits. Read-only query. shape sphere uses radius; box uses halfExtent; capsule uses points/height/capsuleDirection.",
+    summary: "Cast a 3D sphere/box/capsule or 2D circle/box/capsule shape along a direction and return all hits.",
+    description: "Cast a 3D sphere/box/capsule or 2D circle/box/capsule shape along a direction and return all hits. Read-only query. Use mode 2d for Physics2D CircleCast/BoxCast/CapsuleCast; 2D ignores originZ and directionZ.",
     group: "physics",
-    inputSchema: objSchema({ shape: { type: "string", enum: ["sphere", "box", "capsule"] }, originX: { type: "number" }, originY: { type: "number" }, originZ: { type: "number" }, directionX: { type: "number" }, directionY: { type: "number" }, directionZ: { type: "number" }, distance: { type: "number" }, radius: { type: "number" }, halfExtentX: { type: "number" }, halfExtentY: { type: "number" }, halfExtentZ: { type: "number" }, height: { type: "number" }, capsuleDirection: { type: "integer" }, point1X: { type: "number" }, point1Y: { type: "number" }, point1Z: { type: "number" }, point2X: { type: "number" }, point2Y: { type: "number" }, point2Z: { type: "number" }, layerMask: { type: "integer" } }),
+    inputSchema: objSchema({ mode: { type: "string", enum: ["3d", "2d"] }, shape: { type: "string", enum: ["sphere", "circle", "box", "capsule"] }, originX: { type: "number" }, originY: { type: "number" }, originZ: { type: "number" }, directionX: { type: "number" }, directionY: { type: "number" }, directionZ: { type: "number" }, distance: { type: "number" }, radius: { type: "number" }, sizeX: { type: "number" }, sizeY: { type: "number" }, angle: { type: "number" }, halfExtentX: { type: "number" }, halfExtentY: { type: "number" }, halfExtentZ: { type: "number" }, height: { type: "number" }, capsuleDirection: { type: "string", enum: ["vertical", "horizontal"] }, point1X: { type: "number" }, point1Y: { type: "number" }, point1Z: { type: "number" }, point2X: { type: "number" }, point2Y: { type: "number" }, point2Z: { type: "number" }, layerMask: { type: "integer" } }),
     destructiveHint: false,
     playModeSupport: "supported",
     handler: "bridge",
@@ -225,7 +248,8 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     docsTopic: "physics",
     equivalentUnityMcp: "physics.shapecast",
     examples: [
-      { description: "Sphere cast forward", argv: ["tools", "run", "physics.shapecast", "--input", "{\"shape\":\"sphere\",\"originX\":0,\"originY\":0,\"originZ\":0,\"directionX\":0,\"directionY\":0,\"directionZ\":1,\"distance\":50,\"radius\":1}"] }
+      { description: "Sphere cast forward", argv: ["tools", "run", "physics.shapecast", "--input", "{\"shape\":\"sphere\",\"originX\":0,\"originY\":0,\"originZ\":0,\"directionX\":0,\"directionY\":0,\"directionZ\":1,\"distance\":50,\"radius\":1}"] },
+      { description: "2D circle cast to the right", argv: ["tools", "run", "physics.shapecast", "--input", "{\"mode\":\"2d\",\"shape\":\"circle\",\"originX\":0,\"originY\":0,\"directionX\":1,\"directionY\":0,\"distance\":10,\"radius\":0.5}"] }
     ]
   },
   {

@@ -5,6 +5,7 @@ export const physicsBridgeSpecs: BridgeCommandSpec[] = [
   { group: "physics", command: "settings", bridgeCommand: "physics.settings", buildArgs: physicsArgs },
   { group: "physics", command: "collision-matrix", bridgeCommand: "physics.collision-matrix", buildArgs: physicsArgs },
   { group: "physics", command: "material", bridgeCommand: "physics.material", buildArgs: physicsArgs },
+  { group: "physics", command: "assign-material", bridgeCommand: "physics.assign-material", buildArgs: physicsArgs },
   { group: "physics", command: "joint", bridgeCommand: "physics.joint", buildArgs: physicsArgs },
   { group: "physics", command: "force", bridgeCommand: "physics.force", buildArgs: physicsArgs },
   { group: "physics", command: "overlap", bridgeCommand: "physics.overlap", buildArgs: physicsArgs },
@@ -57,7 +58,8 @@ function physicsArgs({ command, flags }: Parameters<BridgeCommandSpec["buildArgs
       halfExtentY: floatFlag(flags, "half-extent-y") ?? numberField(flags, "halfExtentY"),
       halfExtentZ: floatFlag(flags, "half-extent-z") ?? numberField(flags, "halfExtentZ"),
       height: floatFlag(flags, "height") ?? numberField(flags, "height"),
-      capsuleDirection: numberFlag(flags, "capsule-direction") ?? numberField(flags, "capsuleDirection"),
+      capsuleDirection: stringFlag(flags, "capsule-direction") ?? numberFlag(flags, "capsule-direction") ?? stringField(flags, "capsuleDirection") ?? numberField(flags, "capsuleDirection"),
+      angle: floatFlag(flags, "angle") ?? numberField(flags, "angle"),
       point1X: floatFlag(flags, "point1-x") ?? numberField(flags, "point1X"),
       point1Y: floatFlag(flags, "point1-y") ?? numberField(flags, "point1Y"),
       point1Z: floatFlag(flags, "point1-z") ?? numberField(flags, "point1Z"),
@@ -97,8 +99,11 @@ function physicsArgs({ command, flags }: Parameters<BridgeCommandSpec["buildArgs
   if (command === "physics.material") {
     return compactArgs({ path: stringFlag(flags, "path") ?? stringField(flags, "path"), dynamicFriction: floatFlag(flags, "dynamic-friction") ?? numberField(flags, "dynamicFriction"), staticFriction: floatFlag(flags, "static-friction") ?? numberField(flags, "staticFriction"), bounciness: floatFlag(flags, "bounciness") ?? numberField(flags, "bounciness"), overwrite: boolFlag(flags, "overwrite") ?? boolField(flags, "overwrite") });
   }
+  if (command === "physics.assign-material") {
+    return compactArgs({ target: stringFlag(flags, "target") ?? stringField(flags, "target"), materialPath: stringFlag(flags, "material-path") ?? stringFlag(flags, "path") ?? stringField(flags, "materialPath") ?? stringField(flags, "path"), path: stringFlag(flags, "path") ?? stringField(flags, "path"), collider: stringFlag(flags, "collider") ?? stringField(flags, "collider"), colliderIndex: numberFlag(flags, "collider-index") ?? numberField(flags, "colliderIndex") });
+  }
   if (command === "physics.joint") {
-    return compactArgs({ target: stringFlag(flags, "target") ?? stringField(flags, "target"), type: stringFlag(flags, "type") ?? stringField(flags, "type"), connectedBody: stringFlag(flags, "connected-body") ?? stringField(flags, "connectedBody"), anchor: stringFlag(flags, "anchor") ?? stringField(flags, "anchor") });
+    return compactArgs({ target: stringFlag(flags, "target") ?? stringField(flags, "target"), type: stringFlag(flags, "type") ?? stringField(flags, "type"), action: stringFlag(flags, "action") ?? stringField(flags, "action"), connectedBody: stringFlag(flags, "connected-body") ?? stringField(flags, "connectedBody"), anchor: stringFlag(flags, "anchor") ?? stringField(flags, "anchor"), componentIndex: numberFlag(flags, "component-index") ?? numberField(flags, "componentIndex") });
   }
   if (command === "physics.force") {
     return compactArgs({ target: stringFlag(flags, "target") ?? stringField(flags, "target"), x: floatFlag(flags, "x") ?? numberField(flags, "x"), y: floatFlag(flags, "y") ?? numberField(flags, "y"), z: floatFlag(flags, "z") ?? numberField(flags, "z"), mode: stringFlag(flags, "mode") ?? stringField(flags, "mode"), forceType: stringFlag(flags, "force-type") ?? stringFlag(flags, "forceType") ?? stringField(flags, "forceType"), torqueX: floatFlag(flags, "torque-x") ?? numberField(flags, "torqueX"), torqueY: floatFlag(flags, "torque-y") ?? numberField(flags, "torqueY"), torqueZ: floatFlag(flags, "torque-z") ?? numberField(flags, "torqueZ"), explosionX: floatFlag(flags, "explosion-x") ?? numberField(flags, "explosionX"), explosionY: floatFlag(flags, "explosion-y") ?? numberField(flags, "explosionY"), explosionZ: floatFlag(flags, "explosion-z") ?? numberField(flags, "explosionZ"), explosionRadius: floatFlag(flags, "explosion-radius") ?? numberField(flags, "explosionRadius"), explosionForce: floatFlag(flags, "explosion-force") ?? numberField(flags, "explosionForce"), upwardsModifier: floatFlag(flags, "upwards-modifier") ?? numberField(flags, "upwardsModifier") });

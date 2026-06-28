@@ -18,17 +18,17 @@ async function listCsFiles(directory: URL): Promise<URL[]> {
   return urls.flat().sort((left, right) => left.pathname.localeCompare(right.pathname));
 }
 
-const PHYSICS_COMMANDS = ["physics.settings", "physics.collision-matrix", "physics.material", "physics.joint", "physics.force", "physics.overlap", "physics.rigidbody", "physics.raycast", "physics.simulation", "physics.raycast-all", "physics.linecast", "physics.shapecast", "physics.validate"];
+const PHYSICS_COMMANDS = ["physics.settings", "physics.collision-matrix", "physics.material", "physics.assign-material", "physics.joint", "physics.force", "physics.overlap", "physics.rigidbody", "physics.raycast", "physics.simulation", "physics.raycast-all", "physics.linecast", "physics.shapecast", "physics.validate"];
 
 /**
- * Physics 域契约测试（13 工具）。
+ * Physics 域契约测试（14 工具）。
  * 对齐 CoplayDev manage_physics，验证 metadata/bridge/contract/C# 一致，
  * physics.validate 业务字段不被 envelope 吞掉，query/force/simulation 的 Play Mode 语义。
  */
 
-test("physics group exposes the 13 tools", () => {
+test("physics group exposes the 14 tools", () => {
   const tools = filterToolsByGroup("physics").map((t) => t.name).sort();
-  assert.equal(tools.length, 13);
+  assert.equal(tools.length, 14);
   for (const name of PHYSICS_COMMANDS) {
     assert.ok(tools.includes(name), `${name} should exist`);
   }
@@ -52,7 +52,7 @@ test("physics runtime tools (force/simulation) are runtime-only", () => {
 });
 
 test("physics write tools are session-affecting", () => {
-  for (const name of ["physics.settings", "physics.collision-matrix", "physics.material", "physics.joint", "physics.rigidbody"]) {
+  for (const name of ["physics.settings", "physics.collision-matrix", "physics.material", "physics.assign-material", "physics.joint", "physics.rigidbody"]) {
     const tool = findToolByName(name)!;
     assert.equal(tool.playModeSupport, "session-affecting", `${name} session-affecting`);
     assert.ok(tool.sideEffects?.length, `${name} side effects`);
@@ -60,7 +60,7 @@ test("physics write tools are session-affecting", () => {
 });
 
 test("bridge specs resolve for physics tools", () => {
-  for (const [cmd, expected] of [["settings", "physics.settings"], ["collision-matrix", "physics.collision-matrix"], ["material", "physics.material"], ["joint", "physics.joint"], ["force", "physics.force"], ["overlap", "physics.overlap"], ["rigidbody", "physics.rigidbody"], ["raycast", "physics.raycast"], ["simulation", "physics.simulation"], ["raycast-all", "physics.raycast-all"], ["linecast", "physics.linecast"], ["shapecast", "physics.shapecast"], ["validate", "physics.validate"]] as const) {
+  for (const [cmd, expected] of [["settings", "physics.settings"], ["collision-matrix", "physics.collision-matrix"], ["material", "physics.material"], ["assign-material", "physics.assign-material"], ["joint", "physics.joint"], ["force", "physics.force"], ["overlap", "physics.overlap"], ["rigidbody", "physics.rigidbody"], ["raycast", "physics.raycast"], ["simulation", "physics.simulation"], ["raycast-all", "physics.raycast-all"], ["linecast", "physics.linecast"], ["shapecast", "physics.shapecast"], ["validate", "physics.validate"]] as const) {
     const spec = bridgeCommandRegistry.lookup("physics", cmd);
     assert.equal(spec?.bridgeCommand, expected, `physics ${cmd} should resolve`);
   }
@@ -103,4 +103,30 @@ test("physics bridge spec forwards structured --input fields", async () => {
   assert.match(spec, /numberField\(flags, "gravityX"\)/, "bridge should forward structured gravityX");
   assert.match(spec, /boolField\(flags, "useGravity"\)/, "bridge should forward structured useGravity");
   assert.match(spec, /stringField\(flags, "shape"\)/, "bridge should forward structured shape");
+  assert.match(spec, /stringField\(flags, "materialPath"\)/, "bridge should forward structured materialPath");
+  assert.match(spec, /stringField\(flags, "action"\)/, "bridge should forward structured joint action");
+});
+
+test("M absorption fields are described for AI self-discovery", async () => {
+  const collision = findToolByName("physics.collision-matrix")!;
+  assert.equal(Array.isArray(collision.inputSchema.required), false, "full matrix read must not require layerA/layerB");
+  assert.match(collision.description, /full 32-layer collision matrix/i);
+
+  const assign = findToolByName("physics.assign-material")!;
+  assert.equal(assign.destructiveHint, false);
+  assert.equal(assign.supportsDryRun, true);
+  assert.ok(assign.sideEffects?.includes("scene-modify"));
+  assert.deepEqual(assign.inputSchema.required, ["target", "materialPath"]);
+
+  const joint = findToolByName("physics.joint")!;
+  assert.ok((joint.inputSchema.properties as Record<string, unknown>).action, "joint action should be documented");
+  assert.match(joint.description, /action=remove/);
+
+  const overlap = findToolByName("physics.overlap")!;
+  assert.match(overlap.description, /mode 2d/i);
+  const shapecast = findToolByName("physics.shapecast")!;
+  assert.match(shapecast.description, /CircleCast\/BoxCast\/CapsuleCast/);
+
+  const rigidbody = findToolByName("physics.rigidbody")!;
+  assert.match(rigidbody.description, /without adding or modifying components/);
 });

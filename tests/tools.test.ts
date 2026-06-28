@@ -757,7 +757,7 @@ test("hybrid tools expose bridge plus job support status", () => {
 
 test("S3.2 physics group has settings, queries and mutation tools", () => {
   const names = filterToolsByGroup("physics").map((t) => t.name);
-  assert.deepEqual(names, ["physics.settings", "physics.collision-matrix", "physics.material", "physics.joint", "physics.force", "physics.overlap", "physics.rigidbody", "physics.raycast", "physics.simulation", "physics.raycast-all", "physics.linecast", "physics.shapecast", "physics.validate"]);
+  assert.deepEqual(names, ["physics.settings", "physics.collision-matrix", "physics.material", "physics.assign-material", "physics.joint", "physics.force", "physics.overlap", "physics.rigidbody", "physics.raycast", "physics.simulation", "physics.raycast-all", "physics.linecast", "physics.shapecast", "physics.validate"]);
   assert.equal(findToolByName("physics.simulation")?.handler, "bridge");
 });
 

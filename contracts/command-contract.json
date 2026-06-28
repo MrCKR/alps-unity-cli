@@ -1362,6 +1362,15 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "physics.assign-material",
+      "group": "physics",
+      "command": "assign-material",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "physics.collision-matrix",
       "group": "physics",
       "command": "collision-matrix",

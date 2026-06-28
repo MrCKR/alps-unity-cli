@@ -858,7 +858,7 @@ test("graphics commands forward settings and screenshot diagnostics", async () =
   assert.deepEqual(requests[7].args, { path: "Artifacts/graphics.png", width: 1024, height: 768, overwrite: true, includeDiagnostics: true });
 });
 
-test("physics commands forward settings, raycast and simulation inputs", async () => {
+test("physics commands forward settings, queries, joint and material assignment inputs", async () => {
   const runtime = await makeRuntime();
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
@@ -868,15 +868,25 @@ test("physics commands forward settings, raycast and simulation inputs", async (
 
   const settings = await execute(["tools", "run", "physics.settings", "--gravity-y", "-9.81", "--gravity2d-y", "-12.5", "--queries-hit-triggers", "false", "--default-solver-iterations", "8"], { ...runtime, bridgeExecute });
   const raycast = await execute(["tools", "run", "physics.raycast", "--mode", "2d", "--origin-x", "1", "--origin-y", "2", "--direction-x", "0", "--direction-y", "-1", "--distance", "50", "--layer-mask", "5", "--all"], { ...runtime, bridgeExecute });
+  const shapecast = await execute(["tools", "run", "physics.shapecast", "--mode", "2d", "--shape", "capsule", "--origin-x", "1", "--origin-y", "2", "--direction-x", "1", "--direction-y", "0", "--distance", "3.5", "--radius", "0.5", "--height", "2", "--capsule-direction", "horizontal", "--angle", "15"], { ...runtime, bridgeExecute });
+  const assign = await execute(["tools", "run", "physics.assign-material", "--target", "Ball", "--path", "Assets/Physics/Bouncy.physicMaterial", "--collider", "BoxCollider", "--collider-index", "1", "--dry-run"], { ...runtime, bridgeExecute });
+  const joint = await execute(["tools", "run", "physics.joint", "--input", "{\"target\":\"Ball\",\"type\":\"FixedJoint\",\"action\":\"remove\",\"componentIndex\":0}"], { ...runtime, bridgeExecute });
   const simulation = await execute(["tools", "run", "physics.simulation", "--steps", "3", "--delta-time", "0.016", "--simulate"], { ...runtime, bridgeExecute });
 
   assert.equal(settings.ok, true);
   assert.equal(raycast.ok, true);
+  assert.equal(shapecast.ok, true);
+  assert.equal(assign.ok, true);
+  assert.equal(joint.ok, true);
   assert.equal(simulation.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["physics.settings", "physics.raycast", "physics.simulation"]);
+  assert.deepEqual(requests.map((request) => request.command), ["physics.settings", "physics.raycast", "physics.shapecast", "physics.assign-material", "physics.joint", "physics.simulation"]);
   assert.deepEqual(requests[0].args, { gravityY: -9.81, gravity2dY: -12.5, defaultSolverIterations: 8, queriesHitTriggers: false });
   assert.deepEqual(requests[1].args, { mode: "2d", originX: 1, originY: 2, directionX: 0, directionY: -1, distance: 50, layerMask: 5, all: true });
-  assert.deepEqual(requests[2].args, { steps: 3, deltaTime: 0.016, simulate: true });
+  assert.deepEqual(requests[2].args, { shape: "capsule", radius: 0.5, height: 2, capsuleDirection: "horizontal", angle: 15, mode: "2d", originX: 1, originY: 2, directionX: 1, directionY: 0, distance: 3.5 });
+  assert.deepEqual(requests[3].args, { target: "Ball", materialPath: "Assets/Physics/Bouncy.physicMaterial", path: "Assets/Physics/Bouncy.physicMaterial", collider: "BoxCollider", colliderIndex: 1 });
+  assert.equal(requests[3].dryRun, true);
+  assert.deepEqual(requests[4].args, { target: "Ball", type: "FixedJoint", action: "remove", componentIndex: 0 });
+  assert.deepEqual(requests[5].args, { steps: 3, deltaTime: 0.016, simulate: true });
 });
 
 test("profiler commands forward session, counter, memory, frame and export args", async () => {

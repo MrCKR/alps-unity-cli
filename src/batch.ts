@@ -183,6 +183,7 @@ const commandRegistry = new Map<string, { parallelSafe: boolean }>([
   ["physics.settings", { parallelSafe: false }],
   ["physics.collision-matrix", { parallelSafe: false }],
   ["physics.material", { parallelSafe: false }],
+  ["physics.assign-material", { parallelSafe: false }],
   ["physics.joint", { parallelSafe: false }],
   ["physics.force", { parallelSafe: false }],
   ["physics.overlap", { parallelSafe: true }],
