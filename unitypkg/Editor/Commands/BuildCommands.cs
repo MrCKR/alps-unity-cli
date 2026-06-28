@@ -18,6 +18,7 @@ namespace UnityCli
             RegisterCommand(registry, "build.scenes", "build", false, BuildScenes);
             RegisterCommand(registry, "build.platform", "build", false, BuildPlatform);
             RegisterCommand(registry, "build.settings", "build", false, BuildSettings);
+            RegisterCommand(registry, "build.profiles", "build", false, BuildProfiles);
         }
 
         /// <summary>读取/修改 Build Settings scenes 列表。</summary>
@@ -103,6 +104,135 @@ namespace UnityCli
                     .Prop("logPath", LogPath()).EndObject().ToString());
             }
             return ErrorJson("E_BUILD_PLATFORM_ACTION", "Unknown action: " + action, "Use get or set.");
+        }
+
+        /// <summary>通过反射读取/创建/切换 Unity Build Profile，避免对不同 Unity 版本建立编译期依赖。</summary>
+        private static string BuildProfiles(BridgeRequest request)
+        {
+            var action = request.StringArg("action") ?? "list";
+            var profileType = FindUnityType("UnityEditor.Build.Profile.BuildProfile") ?? FindUnityType("UnityEditor.BuildProfile");
+            if (profileType == null)
+            {
+                if (action == "list" || action == "get")
+                {
+                    return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                        .Prop("command", "build.profiles")
+                        .Prop("available", false)
+                        .Prop("action", action)
+                        .PropArray("profiles", arr => { })
+                        .PropArray("diagnostics", arr => arr.BeginObject().Prop("code", "BUILD_PROFILE_API_UNAVAILABLE").Prop("message", "Unity Build Profile API is not available in this Editor version.").EndObject())
+                        .PropArray("next_actions", arr => arr.Value("Use build.settings/build.scenes/build.platform, or upgrade to a Unity version that exposes Build Profiles."))
+                        .Prop("logPath", LogPath()).EndObject().ToString());
+                }
+                throw new BridgeCommandException("E_BUILD_PROFILE_API_UNAVAILABLE", "Unity Build Profile API is not available in this Editor version.", "Use build.settings/build.scenes/build.platform, or upgrade Unity.");
+            }
+
+            if (action == "list" || action == "get")
+            {
+                var active = ActiveBuildProfile(profileType);
+                var guids = AssetDatabase.FindAssets("t:" + profileType.Name);
+                var w = new UnityCliJsonWriter().BeginObject();
+                w.Prop("command", "build.profiles").Prop("available", true).Prop("action", action);
+                w.Prop("activePath", active != null ? AssetDatabase.GetAssetPath(active) : null);
+                w.PropArray("profiles", arr =>
+                {
+                    foreach (var guid in guids)
+                    {
+                        var path = AssetDatabase.GUIDToAssetPath(guid);
+                        var profile = AssetDatabase.LoadAssetAtPath(path, profileType);
+                        arr.BeginObject()
+                            .Prop("path", path)
+                            .Prop("name", profile != null ? profile.name : Path.GetFileNameWithoutExtension(path))
+                            .Prop("active", active != null && profile == active)
+                            .EndObject();
+                    }
+                });
+                w.Prop("logPath", LogPath());
+                return SuccessJson(w.EndObject().ToString());
+            }
+
+            if (action == "create")
+            {
+                var path = request.StringArg("path");
+                if (string.IsNullOrEmpty(path)) throw new BridgeCommandException("E_BUILD_PROFILE_PATH_REQUIRED", "build.profiles create requires path.", "Pass an Assets/*.asset path for the new Build Profile.");
+                if (request.DryRun)
+                {
+                    return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "build.profiles").Prop("dryRun", true).Prop("action", "create").Prop("path", path)
+                        .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "build.profiles.create").Prop("path", path).EndObject())
+                        .Prop("logPath", LogPath()).EndObject().ToString());
+                }
+                var profile = ScriptableObject.CreateInstance(profileType);
+                var name = request.StringArg("name");
+                if (!string.IsNullOrEmpty(name)) profile.name = name;
+                AssetDatabase.CreateAsset(profile, path);
+                AssetDatabase.SaveAssets();
+                return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "build.profiles").Prop("action", "create").Prop("path", path).Prop("name", profile.name).Prop("logPath", LogPath()).EndObject().ToString());
+            }
+
+            if (action == "switch")
+            {
+                var path = request.StringArg("path");
+                if (string.IsNullOrEmpty(path)) throw new BridgeCommandException("E_BUILD_PROFILE_PATH_REQUIRED", "build.profiles switch requires path.", "Pass an existing Build Profile asset path.");
+                var profile = AssetDatabase.LoadAssetAtPath(path, profileType);
+                if (profile == null) throw new BridgeCommandException("E_BUILD_PROFILE_NOT_FOUND", "Build Profile was not found: " + path, "Run build.profiles action=list and pass an existing path.");
+                if (request.DryRun)
+                {
+                    return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "build.profiles").Prop("dryRun", true).Prop("action", "switch").Prop("path", path)
+                        .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "build.profiles.switch").Prop("path", path).EndObject())
+                        .Prop("logPath", LogPath()).EndObject().ToString());
+                }
+                SetActiveBuildProfile(profileType, profile);
+                return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "build.profiles").Prop("action", "switch").Prop("path", path).Prop("activePath", path).Prop("logPath", LogPath()).EndObject().ToString());
+            }
+
+            if (action == "modify")
+            {
+                var path = request.StringArg("path");
+                if (string.IsNullOrEmpty(path)) throw new BridgeCommandException("E_BUILD_PROFILE_PATH_REQUIRED", "build.profiles modify requires path.", "Pass an existing Build Profile asset path.");
+                var profile = AssetDatabase.LoadAssetAtPath(path, profileType);
+                if (profile == null) throw new BridgeCommandException("E_BUILD_PROFILE_NOT_FOUND", "Build Profile was not found: " + path, "Run build.profiles action=list and pass an existing path.");
+                var newName = request.StringArg("name");
+                if (request.DryRun)
+                {
+                    return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "build.profiles").Prop("dryRun", true).Prop("action", "modify").Prop("path", path)
+                        .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "build.profiles.modify").Prop("path", path).Prop("name", newName).EndObject())
+                        .Prop("logPath", LogPath()).EndObject().ToString());
+                }
+                if (!string.IsNullOrEmpty(newName)) { profile.name = newName; EditorUtility.SetDirty(profile); AssetDatabase.SaveAssets(); }
+                return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "build.profiles").Prop("action", "modify").Prop("path", path).Prop("name", profile.name).Prop("logPath", LogPath()).EndObject().ToString());
+            }
+
+            return ErrorJson("E_BUILD_PROFILE_ACTION", "Unknown action: " + action, "Use list, get, create, switch, or modify.");
+        }
+
+        /// <summary>在已加载程序集中查找 Unity 类型，兼容不同 Editor 版本的命名空间变化。</summary>
+        private static Type FindUnityType(string fullName)
+        {
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                Type type = null;
+                try { type = assembly.GetType(fullName, false); } catch { }
+                if (type != null) return type;
+            }
+            return null;
+        }
+
+        /// <summary>通过反射读取当前激活 Build Profile；旧 Unity 没有该属性时返回 null。</summary>
+        private static UnityEngine.Object ActiveBuildProfile(Type profileType)
+        {
+            var prop = typeof(EditorUserBuildSettings).GetProperty("activeBuildProfile", BindingFlags.Public | BindingFlags.Static);
+            return prop != null && profileType.IsAssignableFrom(prop.PropertyType) ? prop.GetValue(null, null) as UnityEngine.Object : null;
+        }
+
+        /// <summary>通过反射设置当前 Build Profile；API 不存在时返回稳定错误。</summary>
+        private static void SetActiveBuildProfile(Type profileType, UnityEngine.Object profile)
+        {
+            var prop = typeof(EditorUserBuildSettings).GetProperty("activeBuildProfile", BindingFlags.Public | BindingFlags.Static);
+            if (prop == null || !prop.CanWrite || !profileType.IsAssignableFrom(prop.PropertyType))
+            {
+                throw new BridgeCommandException("E_BUILD_PROFILE_SWITCH_UNSUPPORTED", "This Unity version does not expose EditorUserBuildSettings.activeBuildProfile.", "Use build.platform/build.settings or upgrade Unity.");
+            }
+            prop.SetValue(null, profile, null);
         }
 
         /// <summary>读取/修改 PlayerSettings 关键构建配置。对齐 CoplayDev manage_build settings。</summary>

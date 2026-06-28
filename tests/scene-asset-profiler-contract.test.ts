@@ -206,12 +206,15 @@ test("package domain exposes embed", () => {
   assert.equal(embed.riskLevel, "high");
 });
 
-test("build domain exposes scenes/platform/settings alongside run/status/logs/cancel", () => {
+test("build domain exposes scenes/platform/profiles/settings alongside run/status/cancel", () => {
   const buildTools = filterToolsByGroup("build").map((t) => t.name);
   assert.ok(buildTools.includes("build.scenes"));
   assert.ok(buildTools.includes("build.platform"));
+  assert.ok(buildTools.includes("build.profiles"));
   assert.ok(buildTools.includes("build.settings"));
   assert.ok(buildTools.includes("build.run"));
+  assert.ok(buildTools.includes("build.status"));
+  assert.ok(buildTools.includes("build.cancel"));
 });
 
 test("graphics tools expose complete metadata and current CLI guidance", async () => {
@@ -261,6 +264,7 @@ test("bridge specs resolve for all new domain 4-8 tools", () => {
     ["package", "embed", "package.embed"],
     ["editor", "selection-set", "editor.selection.set"],
     ["build", "scenes", "build.scenes"],
+    ["build", "profiles", "build.profiles"],
     ["physics", "validate", "physics.validate"]
   ] as const;
   for (const [group, command, bridgeCommand] of checks) {
@@ -278,7 +282,7 @@ test("all new tools have contract entries with present C# handler", () => {
     "asset.search-built-in", "asset.get-data", "asset.preview",
     "shader.list", "shader.get-data", "texture.generate",
     "console.get", "console.clear", "editor.selection.set", "editor.active-tool.set", "package.embed",
-    "build.scenes", "build.platform", "build.settings",
+    "build.scenes", "build.platform", "build.profiles", "build.settings",
     "physics.raycast-all", "physics.linecast", "physics.shapecast", "physics.validate"
   ];
   for (const name of newTools) {

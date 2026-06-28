@@ -23,8 +23,20 @@ function boolValue(value: unknown): boolean | undefined {
 export const buildBridgeSpecs: BridgeCommandSpec[] = [
   { group: "build", command: "scenes", bridgeCommand: "build.scenes", buildArgs: buildScenesArgs },
   { group: "build", command: "platform", bridgeCommand: "build.platform", buildArgs: buildPlatformArgs },
-  { group: "build", command: "settings", bridgeCommand: "build.settings", buildArgs: buildSettingsArgs }
+  { group: "build", command: "settings", bridgeCommand: "build.settings", buildArgs: buildSettingsArgs },
+  { group: "build", command: "profiles", bridgeCommand: "build.profiles", buildArgs: buildProfilesArgs, supportsDryRun: true }
 ];
+
+function buildProfilesArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  const s = structuredInput(flags);
+  return compactArgs({
+    action: stringFlag(flags, "action") ?? stringValue(s.action),
+    path: positionalTarget ?? stringFlag(flags, "path") ?? stringValue(s.path),
+    name: stringFlag(flags, "name") ?? stringValue(s.name),
+    target: stringFlag(flags, "target") ?? stringValue(s.target),
+    dryRun: boolFlag(flags, "dry-run") ?? boolValue(s.dryRun)
+  });
+}
 
 function buildSettingsArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   const s = structuredInput(flags);

@@ -219,6 +219,15 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "build.profiles",
+      "group": "build",
+      "command": "profiles",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "build.run",
       "group": "build",
       "command": "run",

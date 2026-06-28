@@ -444,6 +444,12 @@ test("build bridge tools expose Play Mode and dry-run semantics", () => {
   assert.deepEqual(platform.sideEffects, ["build-target-switch", "asset-import", "domain-reload"]);
   assert.ok(platform.examples?.some((example) => example.argv.includes("--dry-run")));
 
+  const profiles = findToolByName("build.profiles")!;
+  assert.equal(profiles.playModeSupport, "session-affecting");
+  assert.equal(profiles.supportsDryRun, true);
+  assert.equal(profiles.equivalentUnityMcp, "manage_build.profiles");
+  assert.ok(profiles.examples?.some((example) => example.argv.includes("--dry-run")));
+
   const settings = findToolByName("build.settings")!;
   assert.equal(settings.playModeSupport, "supported");
   assert.equal(settings.destructiveHint, false);
@@ -486,7 +492,7 @@ test("S2.3 test group exposes only test execution tool", () => {
 
 test("S2.3 build group exposes run plus Editor build settings tools", () => {
   const names = filterToolsByGroup("build").map((t) => t.name);
-  assert.deepEqual(names, ["build.scenes", "build.platform", "build.settings", "build.run", "build.status", "build.cancel"]);
+  assert.deepEqual(names, ["build.scenes", "build.platform", "build.profiles", "build.settings", "build.run", "build.status", "build.cancel"]);
 });
 
 test("S3.1 creation domains have frozen metadata coverage", () => {

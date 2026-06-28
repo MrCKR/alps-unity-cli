@@ -538,17 +538,21 @@ test("build commands forward settings and dry-run arguments", async () => {
 
   const scenes = await execute(["tools", "run", "build.scenes", "--input", "{\"action\":\"add\",\"path\":\"Assets/Scenes/Main.unity\"}", "--dry-run"], { ...runtime, bridgeExecute });
   const platform = await execute(["tools", "run", "build.platform", "--input", "{\"action\":\"set\",\"target\":\"StandaloneWindows64\"}", "--dry-run"], { ...runtime, bridgeExecute });
+  const profiles = await execute(["tools", "run", "build.profiles", "--input", "{\"action\":\"create\",\"path\":\"Assets/BuildProfiles/Windows.asset\",\"name\":\"Windows\"}", "--dry-run"], { ...runtime, bridgeExecute });
   const settings = await execute(["tools", "run", "build.settings", "--input", "{}"], { ...runtime, bridgeExecute });
 
   assert.equal(scenes.ok, true);
   assert.equal(platform.ok, true);
+  assert.equal(profiles.ok, true);
   assert.equal(settings.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["build.scenes", "build.platform", "build.settings"]);
+  assert.deepEqual(requests.map((request) => request.command), ["build.scenes", "build.platform", "build.profiles", "build.settings"]);
   assert.deepEqual(requests[0].args, { action: "add", path: "Assets/Scenes/Main.unity", dryRun: true });
   assert.equal(requests[0].dryRun, true);
   assert.deepEqual(requests[1].args, { action: "set", target: "StandaloneWindows64", dryRun: true });
   assert.equal(requests[1].dryRun, true);
-  assert.deepEqual(requests[2].args, {});
+  assert.deepEqual(requests[2].args, { action: "create", path: "Assets/BuildProfiles/Windows.asset", name: "Windows", dryRun: true });
+  assert.equal(requests[2].dryRun, true);
+  assert.deepEqual(requests[3].args, {});
 });
 
 test("camera commands forward target and screenshot options", async () => {

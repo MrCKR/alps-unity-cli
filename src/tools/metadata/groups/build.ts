@@ -47,6 +47,27 @@ export const BUILD_TOOLS: ToolMetadata[] = [
     ]
   },
   {
+    name: "build.profiles",
+    summary: "List, create, switch, or rename Unity Build Profile assets when the Editor version exposes Build Profile APIs.",
+    description: "List, create, switch, or rename Unity Build Profile assets when the Editor version exposes Build Profile APIs. action=list/get is safe and returns available=false with diagnostics on Unity versions without Build Profiles; create/switch/modify support dry-run and return stable errors when the API is unavailable.",
+    group: "build",
+    inputSchema: objSchema({ action: { type: "string", enum: ["list", "get", "create", "switch", "modify"], default: "list", description: "list/get reads profiles; create writes a new profile asset; switch activates an existing profile; modify currently supports renaming." }, path: { type: "string", description: "Build Profile asset path. Required for create/switch/modify." }, name: { type: "string", description: "Profile name for create/modify." }, target: { type: "string", description: "Reserved BuildTarget hint for future profile field mapping." } }),
+    outputSchema: objSchema({ command: { type: "string" }, available: { type: "boolean" }, action: { type: "string" }, activePath: { type: "string" }, profiles: { type: "array", items: { type: "object" } }, diagnostics: { type: "array", items: { type: "object" } }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
+    destructiveHint: false,
+    sideEffects: ["build-profile-asset-write", "build-profile-switch"],
+    playModeSupport: "session-affecting",
+    supportsDryRun: true,
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run build.profiles",
+    docsTopic: "build",
+    equivalentUnityMcp: "manage_build.profiles",
+    examples: [
+      { description: "List Build Profiles or report API availability", argv: ["tools", "run", "build.profiles", "--input", "{\"action\":\"list\"}"] },
+      { description: "Preview creating a Build Profile", argv: ["tools", "run", "build.profiles", "--input", "{\"action\":\"create\",\"path\":\"Assets/BuildProfiles/Windows.asset\",\"name\":\"Windows\"}", "--dry-run"] }
+    ]
+  },
+  {
     name: "build.settings",
     summary: "Read or modify key PlayerSettings build configuration (productName, bundleVersion, applicationIdentifier, scriptingBackend, API compatibility level).",
     description: "Read or modify key PlayerSettings build configuration. action=get (default) returns productName, bundleVersion, companyId, applicationIdentifier, scriptingBackend, and API compatibility level. action=set writes provided fields to PlayerSettings (persisted to ProjectSettings/ProjectSettings.asset); pass only the fields you want to change. Use --dry-run to preview a set without writing.",
