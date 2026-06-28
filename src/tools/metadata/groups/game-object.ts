@@ -83,12 +83,13 @@ export const GO_TOOLS: ToolMetadata[] = [
   },
   {
     name: "go.modify",
-    summary: "Modify one GameObject's name, active state, tag, layer, absolute transform values, or parent.",
-    description: "Modify one GameObject's name, active state, tag, layer, absolute transform values, or parent. Prefer hierarchy paths or instance ids for target and parent after create or duplicate operations. For component fields use component.set/modify; for deep object data use object.modify.",
+    summary: "Modify one or more GameObjects' name, active state, tag, layer, absolute transform values, or parent.",
+    description: "Modify one or more GameObjects' name, active state, tag, layer, absolute transform values, or parent. Pass target for one object or targets[] to apply the same mutation to multiple objects in one all-or-none call; every target must resolve uniquely before any scene object is changed. Prefer hierarchy paths or instance ids for target, targets and parent after create or duplicate operations. For component fields use component.set/modify; for deep object data use object.modify.",
     group: "go",
     inputSchema: objSchema({
-      target: { type: "string", description: "GameObject hierarchy path or instance id; a plain name is allowed only when unique." },
-      newName: { type: "string", description: "Rename target GameObject." },
+      target: { type: "string", description: "Single GameObject hierarchy path or instance id; a plain name is allowed only when unique. Use either target or targets." },
+      targets: { type: "array", items: { type: "string" }, description: "Multiple GameObject hierarchy paths or instance ids. The same mutation is applied to each target after all targets resolve uniquely." },
+      newName: { type: "string", description: "Rename target GameObject. Avoid using newName with targets[] unless duplicate names are intentional." },
       parent: { type: "string", description: "Optional parent hierarchy path or instance id; a plain name is allowed only when unique." },
       active: { type: "boolean" },
       tagValue: { type: "string" },
@@ -99,8 +100,8 @@ export const GO_TOOLS: ToolMetadata[] = [
       x: { type: "number" }, y: { type: "number" }, z: { type: "number" },
       rotationX: { type: "number" }, rotationY: { type: "number" }, rotationZ: { type: "number" },
       scaleX: { type: "number" }, scaleY: { type: "number" }, scaleZ: { type: "number" }
-    }, ["target"]),
-    outputSchema: objSchema({ gameObject: { type: "object" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
+    }),
+    outputSchema: objSchema({ gameObject: { type: "object", description: "Present for single target calls." }, gameObjects: { type: "array", items: { type: "object" }, description: "Present for targets[] batch calls." }, modifiedCount: { type: "integer" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["scene-modify", "undo-stack"],
@@ -110,7 +111,8 @@ export const GO_TOOLS: ToolMetadata[] = [
     docsTopic: "go",
     equivalentUnityMcp: "manage_gameobject.modify / gameobject-modify",
     examples: [
-      { description: "Move and deactivate by hierarchy path", argv: ["tools", "run", "go.modify", "--input", "{\"target\":\"Player/Avatar\",\"position\":{\"x\":1,\"y\":2,\"z\":3},\"active\":false}"] }
+      { description: "Move and deactivate by hierarchy path", argv: ["tools", "run", "go.modify", "--input", "{\"target\":\"Player/Avatar\",\"position\":{\"x\":1,\"y\":2,\"z\":3},\"active\":false}"] },
+      { description: "Apply the same transform to multiple objects", argv: ["tools", "run", "go.modify", "--input", "{\"targets\":[\"Generated/A\",\"Generated/B\"],\"position\":{\"x\":0,\"y\":1,\"z\":0}}"] }
     ]
   },
   {
@@ -173,7 +175,7 @@ export const GO_TOOLS: ToolMetadata[] = [
   {
     name: "go.delete",
     summary: "Delete one GameObject from the scene.",
-    description: "Delete one GameObject from the scene. This recursively removes its children and requires --yes unless --dry-run is used. Prefer hierarchy paths or instance ids, especially after create/duplicate operations where plain names may be ambiguous.",
+    description: "Delete one GameObject from the scene. This recursively removes its children in the current scene/session. Prefer hierarchy paths or instance ids, especially after create/duplicate operations where plain names may be ambiguous.",
     group: "go",
     inputSchema: objSchema({ target: { type: "string", description: "GameObject hierarchy path or instance id; a plain name is allowed only when unique." } }, ["target"]),
     outputSchema: objSchema({ deleted: { type: "object" }, target: { type: "object", description: "Present for dry-run previews before deletion." }, dryRun: { type: "boolean" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
@@ -187,7 +189,7 @@ export const GO_TOOLS: ToolMetadata[] = [
     equivalentUnityMcp: "manage_gameobject.delete / gameobject-destroy",
     examples: [
       { description: "Dry-run deletion by hierarchy path", argv: ["tools", "run", "go.delete", "--dry-run", "--input", "{\"target\":\"TempRoot/GeneratedChild\"}"] },
-      { description: "Confirmed deletion by instance id", argv: ["tools", "run", "go.delete", "--yes", "--input", "{\"target\":\"12345\"}"] }
+      { description: "Delete by instance id", argv: ["tools", "run", "go.delete", "--input", "{\"target\":\"12345\"}"] }
     ]
   },
   {
@@ -207,7 +209,7 @@ export const GO_TOOLS: ToolMetadata[] = [
     equivalentUnityMcp: "manage_gameobject.modify parent / gameobject-set-parent",
     examples: [
       { description: "Dry-run reparent by hierarchy path", argv: ["tools", "run", "go.set-parent", "--dry-run", "--input", "{\"target\":\"Player/Sword\",\"parent\":\"Player/RightHand\",\"worldPositionStays\":true}"] },
-      { description: "Detach to root by hierarchy path", argv: ["tools", "run", "go.set-parent", "--yes", "--input", "{\"target\":\"Player/Sword\"}"] }
+      { description: "Detach to root by hierarchy path", argv: ["tools", "run", "go.set-parent", "--input", "{\"target\":\"Player/Sword\"}"] }
     ]
   }
 ];
@@ -239,7 +241,7 @@ export const COMPONENT_TOOLS: ToolMetadata[] = [
   {
     name: "component.remove",
     summary: "Remove one or more non-Transform Components from a GameObject.",
-    description: "Remove one or more non-Transform Components from a GameObject. Use component for one type and componentIndex when multiple components of the same type exist; use components as a string array to remove multiple different component types in one call. This is irreversible; inspect components first with context read scene.gameobject.components or component.get.",
+    description: "Remove one or more non-Transform Components from a GameObject in the current scene/session. Use component for one type and componentIndex when multiple components of the same type exist; use components as a string array to remove multiple different component types in one call. Inspect components first with context read scene.gameobject.components or component.get.",
     group: "component",
     inputSchema: objSchema({
       target: { type: "string", description: "GameObject name, hierarchy path, or instance id." },
@@ -257,7 +259,7 @@ export const COMPONENT_TOOLS: ToolMetadata[] = [
     docsTopic: "component",
     equivalentUnityMcp: "manage_components.remove / gameobject-component-destroy",
     examples: [
-      { description: "Remove first BoxCollider", argv: ["tools", "run", "component.remove", "--yes", "--input", "{\"target\":\"Player\",\"component\":\"BoxCollider\",\"componentIndex\":0}"] },
+      { description: "Remove first BoxCollider", argv: ["tools", "run", "component.remove", "--input", "{\"target\":\"Player\",\"component\":\"BoxCollider\",\"componentIndex\":0}"] },
       { description: "Remove multiple component types", argv: ["tools", "run", "component.remove", "--input", "{\"target\":\"Player\",\"components\":[\"BoxCollider\",\"Rigidbody\"]}"] }
     ]
   },

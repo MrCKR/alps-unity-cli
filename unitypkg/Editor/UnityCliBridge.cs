@@ -255,10 +255,8 @@ namespace UnityCli
         private static bool RequiresDestructiveSecurityProof(string command)
         {
             return command == "asset.delete"
-                || command == "go.delete"
                 || command == "scene.save"
                 || command == "code.exec"
-                || command == "component.remove"
                 || command == "editor.menu"
                 || command == "reflection.method.call"
                 || command == "screenshot.surround";

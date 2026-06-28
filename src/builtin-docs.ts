@@ -59,12 +59,12 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   go: {
     title: "GameObject Commands",
-    summary: "Find, inspect, create, modify and delete GameObjects. Handler: bridge. Target: editor. `go.delete` is destructive (requires --yes).",
+    summary: "Find, inspect, create, modify and delete GameObjects in the current scene/session. Handler: bridge. Target: editor.",
     guide: "Use `go find --name <name>` to locate objects in the active scene hierarchy."
   },
   component: {
     title: "Component Commands",
-    summary: "Add, remove and set properties on Unity components. Handler: bridge. Target: editor. `component.remove` is destructive (requires --yes)."
+    summary: "Add, remove and set properties on Unity components in the current scene/session. Handler: bridge. Target: editor."
   },
   asset: {
     title: "Asset Commands",

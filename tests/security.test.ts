@@ -4,7 +4,7 @@ import { execute } from "../src/cli.js";
 import { JobRunner } from "../src/job-runner.js";
 import { JobStore } from "../src/job-store.js";
 import { bridgeCommandRegistry, type BridgeRequest } from "../src/bridge/index.js";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -50,6 +50,19 @@ test("security policy covers all destructive commands including CLI-only", async
   ];
   assert.deepEqual(policyCommands.sort(), expected.sort());
   assert.equal(destructiveCommands().length, 36);
+});
+
+test("Unity bridge destructive proof list matches persistent-risk policy", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/UnityCliBridge.cs", import.meta.url), "utf8");
+  const match = source.match(/private static bool RequiresDestructiveSecurityProof[\s\S]*?\n        }/);
+  assert.ok(match, "RequiresDestructiveSecurityProof should exist");
+  const body = match[0];
+  for (const command of ["asset.delete", "scene.save", "code.exec", "editor.menu", "reflection.method.call", "screenshot.surround"]) {
+    assert.match(body, new RegExp(`command == "${command.replace(/\./g, "\\.")}"`), `${command} should require bridge security proof`);
+  }
+  for (const command of ["go.delete", "component.remove", "go.modify", "component.modify"]) {
+    assert.doesNotMatch(body, new RegExp(`command == "${command.replace(/\./g, "\\.")}"`), `${command} only mutates scene/session state and must not require bridge security proof`);
+  }
 });
 
 test("destructive dry-run forwards envelope preview without --yes", async () => {

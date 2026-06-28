@@ -454,7 +454,7 @@ test("component lifecycle tools forward structured --input fields", async () => 
   assert.deepEqual(requests[2].args, singleInput);
 
   const removeInput = { target: "UnityCliAlignmentProbe", component: "BoxCollider", componentIndex: 0 };
-  const removeResult = await execute(["tools", "run", "component.remove", "--yes", "--input", JSON.stringify(removeInput)], {
+  const removeResult = await execute(["tools", "run", "component.remove", "--input", JSON.stringify(removeInput)], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
@@ -1234,19 +1234,21 @@ test("go commands forward structured search and transform inputs", async () => {
   const find = await execute(["tools", "run", "go.find", "--input", JSON.stringify({ searchTerm: "Camera", searchMethod: "by_component", includeInactive: true, pageSize: 10, cursor: 20 })], { ...runtime, bridgeExecute });
   const create = await execute(["tools", "run", "go.create", "--input", JSON.stringify({ name: "AlignmentCube", primitive: "cube", position: { x: 1, y: 2, z: 3 }, rotation: { x: 0, y: 45, z: 0 }, scale: { x: 2, y: 2, z: 2 }, active: false })], { ...runtime, bridgeExecute });
   const modify = await execute(["tools", "run", "go.modify", "--input", JSON.stringify({ target: "AlignmentCube", newName: "AlignmentCubeRenamed", tagValue: "Untagged", layerValue: "Default", active: false })], { ...runtime, bridgeExecute });
+  const batchModify = await execute(["tools", "run", "go.modify", "--input", JSON.stringify({ targets: ["Batch/A", "Batch/B"], position: { x: 4, y: 5, z: 6 }, active: true })], { ...runtime, bridgeExecute });
   const move = await execute(["tools", "run", "go.move-relative", "--input", JSON.stringify({ target: "AlignmentCubeRenamed", offset: { x: 0, y: 1, z: -2 } })], { ...runtime, bridgeExecute });
   const parent = await execute(["tools", "run", "go.set-parent", "--dry-run", "--input", JSON.stringify({ target: "AlignmentCubeRenamed", parent: "Parent", worldPositionStays: false })], { ...runtime, bridgeExecute });
 
-  for (const result of [find, create, modify, move, parent]) {
+  for (const result of [find, create, modify, batchModify, move, parent]) {
     assert.equal(result.ok, true);
   }
-  assert.deepEqual(requests.map((request) => request.command), ["go.find", "go.create", "go.modify", "go.move-relative", "go.set-parent"]);
+  assert.deepEqual(requests.map((request) => request.command), ["go.find", "go.create", "go.modify", "go.modify", "go.move-relative", "go.set-parent"]);
   assert.deepEqual(requests[0].args, { pageSize: 10, cursor: 20, searchTerm: "Camera", searchMethod: "by_component", includeInactive: true });
   assert.deepEqual(requests[1].args, { name: "AlignmentCube", active: false, primitive: "cube", x: 1, y: 2, z: 3, rotationX: 0, rotationY: 45, rotationZ: 0, scaleX: 2, scaleY: 2, scaleZ: 2 });
   assert.deepEqual(requests[2].args, { target: "AlignmentCube", newName: "AlignmentCubeRenamed", active: false, layerValue: "Default", tagValue: "Untagged" });
-  assert.deepEqual(requests[3].args, { target: "AlignmentCubeRenamed", offsetX: 0, offsetY: 1, offsetZ: -2 });
-  assert.deepEqual(requests[4].args, { target: "AlignmentCubeRenamed", parent: "Parent", worldPositionStays: false, dryRun: true });
-  assert.equal(requests[4].dryRun, true);
+  assert.deepEqual(requests[3].args, { targets: ["Batch/A", "Batch/B"], active: true, x: 4, y: 5, z: 6 });
+  assert.deepEqual(requests[4].args, { target: "AlignmentCubeRenamed", offsetX: 0, offsetY: 1, offsetZ: -2 });
+  assert.deepEqual(requests[5].args, { target: "AlignmentCubeRenamed", parent: "Parent", worldPositionStays: false, dryRun: true });
+  assert.equal(requests[5].dryRun, true);
 });
 
 test("bridge errors return CLI failure envelope", async () => {

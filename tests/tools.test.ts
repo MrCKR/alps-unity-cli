@@ -336,6 +336,12 @@ test("go tools expose search paging and scene mutation metadata", () => {
   assert.match(create.description, /returned hierarchy path or instance id/);
   assert.match(JSON.stringify(create.inputSchema), /returned path\/id/);
 
+  const modify = findToolByName("go.modify")!;
+  const modifyProps = modify.inputSchema.properties as Record<string, unknown>;
+  assert.ok(modifyProps.targets, "go.modify should expose targets[] for batch edits");
+  assert.equal(Array.isArray(modify.inputSchema.required), false, "go.modify should allow either target or targets[] instead of requiring target only");
+  assert.match(modify.description, /all-or-none/, "go.modify should document batch all-or-none behavior");
+
   const deleteTool = findToolByName("go.delete")!;
   assert.match(deleteTool.description, /Prefer hierarchy paths or instance ids/);
   assert.ok(deleteTool.examples?.some((example) => example.argv.join(" ").includes("TempRoot/GeneratedChild")), "go.delete should show hierarchy path deletion");
@@ -1238,7 +1244,7 @@ test("tools run validates required input fields before bridge execution", async 
     }
   };
 
-  const result = await handleToolsCommand("run", ["go.modify"], {}, runtime, requestId);
+  const result = await handleToolsCommand("run", ["go.inspect"], {}, runtime, requestId);
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "E_SCHEMA_INVALID");
   assert.equal(requests.length, 0);

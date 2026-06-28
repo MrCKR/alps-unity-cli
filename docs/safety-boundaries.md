@@ -30,13 +30,17 @@ alps-unity-cli 的安全模型围绕三个核心原则：Tool 可有副作用但
 |------|------|
 | `tools run scene.save` | 保存场景 |
 | `tools run asset.delete` | 删除资产 |
-| `tools run go.delete` | 删除 GameObject |
-| `tools run component.remove` | 移除组件 |
+| `tools run scriptable-object.create` | 创建 ScriptableObject 资产 |
+| `tools run scriptable-object.modify` | 修改 ScriptableObject 资产 |
+| `tools run texture.modify` | 修改 Texture 资产 |
+| `tools run texture.delete` | 删除 Texture 资产 |
+| `tools run shader.delete` | 删除 Shader 资产 |
+| `tools run object.modify` | 深度修改对象/资产数据 |
 | `tools run probuilder.delete-faces` | ProBuilder Delete Faces |
 | `tools run probuilder.combine-meshes` | ProBuilder Combine Meshes |
 | `tools run probuilder.merge-objects` | ProBuilder Merge Objects |
 | `tools run editor.menu` | 执行编辑器菜单项 |
-| `tools run script.edit` | 编辑脚本文件 |
+| `tools run package.install` | 安装包 |
 | `tools run package.remove` | 移除包 |
 | `tools run code.exec` | 执行代码 |
 | `jobs cancel` | 取消测试/构建/刷新等后台任务 |

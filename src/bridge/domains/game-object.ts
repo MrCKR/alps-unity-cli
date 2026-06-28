@@ -57,6 +57,7 @@ function gameObjectArgs({ command, flags, positionalTarget }: Parameters<BridgeC
 
   return compactArgs({
     ...baseTargetArgs,
+    targets: structured.targets,
     searchTerm: stringFlag(flags, "search-term") ?? stringFlag(flags, "query") ?? stringValue(structured.searchTerm) ?? stringValue(structured.query),
     searchMethod: stringFlag(flags, "search-method") ?? stringValue(structured.searchMethod),
     includeInactive: boolFlag(flags, "include-inactive") ?? boolValue(structured.includeInactive),

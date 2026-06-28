@@ -120,7 +120,9 @@ test("go domain exposes paged find and prevalidated mutations", async () => {
   assert.match(source, /private static List<GameObject> SearchGameObjects[\s\S]*by_component[\s\S]*ResolveComponentType/, "go.find should support component search");
   assert.match(source, /ResolveUniqueTarget[\s\S]*FindObjectsOfType<GameObject>\(true\)/, "go tools should resolve inactive targets after active=false changes");
   assert.match(source, /GameObjectCreate[\s\S]*var parentTransform[\s\S]*ParsePrimitiveType\(primitive\)[\s\S]*ValidateGameObjectMutationInputs\(request\)[\s\S]*new GameObject/, "go.create should validate parent/primitive/tag/layer before mutating");
-  assert.match(source, /GameObjectModify[\s\S]*ValidateGameObjectMutationInputs\(request\)[\s\S]*Undo\.RecordObject/, "go.modify should validate tag/layer before recording changes");
+  assert.match(source, /GameObjectModify[\s\S]*ValidateGameObjectMutationInputs\(request\)[\s\S]*ResolveModifyTargets\(request\)[\s\S]*Undo\.RecordObject/, "go.modify should validate tag/layer and resolve all targets before recording changes");
+  assert.match(source, /ResolveModifyTargets[\s\S]*RawJsonArg\("targets"\)[\s\S]*JsonStringArray[\s\S]*ResolveUniqueTarget/, "go.modify should support targets[] batch resolution");
+  assert.match(source, /GameObjectBatchMutationJson[\s\S]*modifiedCount[\s\S]*gameObjects/, "go.modify batch output should expose modifiedCount and gameObjects");
   assert.match(source, /ParsePrimitiveType[\s\S]*E_PRIMITIVE_TYPE_INVALID/, "invalid primitive types should be recoverable errors");
   assert.doesNotMatch(source, /unity_cli scene hierarchy/, "go errors must not use removed top-level scene commands");
   assert.match(source, /GameObject look-at requires a lookAt target[\s\S]*tools run/, "go.look-at missing target guidance should use current tools run input shape");

@@ -150,13 +150,29 @@ namespace UnityCli
         private static string GameObjectModify(BridgeRequest request)
         {
             EnsureEditorNotBusy("go.modify");
-            var gameObject = ResolveUniqueTarget(RequiredTarget(request, "GameObject modify requires a target."), "GameObject modify requires a target.");
             ValidateGameObjectMutationInputs(request);
-            Undo.RecordObject(gameObject.transform, "unity_cli go.modify");
-            Undo.RecordObject(gameObject, "unity_cli go.modify");
-            ApplyGameObjectMutations(gameObject, request);
-            EditorSceneManager.MarkSceneDirty(gameObject.scene);
-            return SuccessJson(GameObjectMutationJson("go.modify", gameObject));
+            var targets = ResolveModifyTargets(request);
+            if (targets.Count == 1)
+            {
+                var gameObject = targets[0];
+                Undo.RecordObject(gameObject.transform, "unity_cli go.modify");
+                Undo.RecordObject(gameObject, "unity_cli go.modify");
+                ApplyGameObjectMutations(gameObject, request);
+                EditorSceneManager.MarkSceneDirty(gameObject.scene);
+                return SuccessJson(GameObjectMutationJson("go.modify", gameObject));
+            }
+
+            foreach (var gameObject in targets)
+            {
+                Undo.RecordObject(gameObject.transform, "unity_cli go.modify batch");
+                Undo.RecordObject(gameObject, "unity_cli go.modify batch");
+            }
+            foreach (var gameObject in targets)
+            {
+                ApplyGameObjectMutations(gameObject, request);
+                EditorSceneManager.MarkSceneDirty(gameObject.scene);
+            }
+            return SuccessJson(GameObjectBatchMutationJson("go.modify", targets));
         }
 
         private static string GameObjectDuplicate(BridgeRequest request)
@@ -692,6 +708,29 @@ namespace UnityCli
             return target;
         }
 
+        // go.modify 支持 targets[] 批量修改；先完整解析，避免前半成功后半失败的部分写入。
+        private static List<GameObject> ResolveModifyTargets(BridgeRequest request)
+        {
+            var rawTargets = request.RawJsonArg("targets");
+            var targetNames = JsonStringArray(rawTargets);
+            if (targetNames.Length == 0)
+            {
+                return new List<GameObject> { ResolveUniqueTarget(RequiredTarget(request, "GameObject modify requires target or targets[]."), "GameObject modify requires target or targets[].") };
+            }
+            var targets = new List<GameObject>();
+            var seen = new HashSet<int>();
+            foreach (var targetName in targetNames)
+            {
+                var gameObject = ResolveUniqueTarget(targetName, "GameObject modify targets[] contains an empty target.");
+                if (seen.Add(gameObject.GetInstanceID())) targets.Add(gameObject);
+            }
+            if (targets.Count == 0)
+            {
+                throw new BridgeCommandException("E_TARGET_NOT_FOUND", "GameObject modify targets[] must contain at least one target.", "Pass target for one object or targets as a non-empty string array.");
+            }
+            return targets;
+        }
+
         private static void ValidateGameObjectMutationInputs(BridgeRequest request)
         {
             var tagValue = request.StringArg("tagValue");
@@ -773,6 +812,27 @@ namespace UnityCli
                         .Prop("type", type)
                         .Prop("target", HierarchyPath(gameObject))
                         .EndObject().ToString()))
+                .Prop("logPath", LogPath())
+                .EndObject()
+                .ToString();
+        }
+
+        // 生成批量 go.modify 返回：保留每个目标详情与对应 plannedEffects，便于 AI 审计结果。
+        private static string GameObjectBatchMutationJson(string type, List<GameObject> gameObjects)
+        {
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("modifiedCount", (long)gameObjects.Count)
+                .PropArray("gameObjects", arr => { foreach (var gameObject in gameObjects) arr.RawValue(GameObjectDetailJson(gameObject)); })
+                .PropArray("plannedEffects", arr =>
+                {
+                    foreach (var gameObject in gameObjects)
+                    {
+                        arr.RawValue(new UnityCliJsonWriter().BeginObject()
+                            .Prop("type", type)
+                            .Prop("target", HierarchyPath(gameObject))
+                            .EndObject().ToString());
+                    }
+                })
                 .Prop("logPath", LogPath())
                 .EndObject()
                 .ToString();

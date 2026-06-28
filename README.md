@@ -439,10 +439,10 @@ unity_cli tools run go.find <keyword>
 unity_cli tools run go.inspect <target>
 unity_cli tools run go.create <name>
 unity_cli tools run go.modify <target>
-unity_cli tools run go.delete <target> --yes
+unity_cli tools run go.delete <target>
 
 unity_cli tools run component.add --target <go> --type <component>
-unity_cli tools run component.remove --target <go> --type <component> --yes
+unity_cli tools run component.remove --target <go> --type <component>
 unity_cli tools run component.set --target <go> --type <component> --property <name> --value <value>
 ```
 
@@ -756,7 +756,7 @@ unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --dry-run
 unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --yes
 ```
 
-支持 `--dry-run` 的破坏性工具：`asset.delete`、`prefab.save`、`go.delete`、`component.remove`、`probuilder.delete-faces` 等。
+支持 `--dry-run` 的破坏性工具包括 `asset.delete`、`scene.save`、`scriptable-object.modify`、`texture.modify`、`texture.delete`、`shader.delete`、`object.modify`、`package.embed` 等；`go.delete` 和 `component.remove` 只修改当前场景/会话，不属于破坏性工具。
 
 ## 扩展能力概览
 

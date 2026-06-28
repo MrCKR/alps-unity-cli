@@ -21,30 +21,24 @@ The CLI enforces a confirmation gate for all tools with `destructiveHint: true`.
 | Command | Title | Supports `--dry-run`? |
 |---------|-------|----------------------|
 | `tools run asset.delete` | Delete Asset | ✅ |
-| `tools run go.delete` | Delete GameObject | ✅ |
-| `tools run go.set-parent` | Set GameObject Parent | ✅ |
 | `tools run scene.save` | Save Scene | ✅ |
-| `tools run scene.unload` | Unload Scene | ✅ |
 | `tools run code.exec` | Execute Live Code | ✅ |
-| `batch run` | Batch Run | ✅ (preflight) |
-| `tools run component.remove` | Remove Component | ❌ |
-| `tools run component.modify` | Modify Component (deep patch) | ✅ |
+| `tools run scriptable-object.create` | Create ScriptableObject Asset | ✅ |
+| `tools run scriptable-object.modify` | Modify ScriptableObject Asset | ✅ |
+| `tools run texture.modify` | Modify Texture Asset | ✅ |
+| `tools run texture.delete` | Delete Texture Asset | ✅ |
+| `tools run shader.delete` | Delete Shader Asset | ✅ |
 | `tools run object.modify` | Modify Object (deep patch) | ✅ |
 | `tools run reflection.method.call` | Call Method via Reflection | security fingerprint |
 | `tools run graphics.bake-clear` | Clear Baked Lighting | ❌ |
+| `tools run graphics.bake-start` | Start Light Bake | ❌ |
+| `tools run graphics.bake-reflection-probe` | Bake Reflection Probe | ❌ |
 | `tools run controller.remove-layer` | Remove Animator Controller Layer | ❌ |
 | `tools run editor.menu` | Execute Editor Menu | ❌ |
-| `tools run script.edit` | Edit Script | ❌ |
-| `tools run script.apply-edits` | Apply Structured Script Edits | ❌ |
-| `tools run script.update-or-create` | Update or Create Script | ✅ |
-| `tools run texture.generate` | Generate Texture | ✅ |
-| `tools run prefab.unpack` | Unpack Prefab Instance | ✅ |
 | `tools run package.embed` | Embed Package | ✅ |
-| `tools run console.clear` | Clear Console | ✅ |
-| `tools run profiler.clear` | Clear Profiler Data | ✅ |
-| `tools run editor.selection.set` | Set Editor Selection | ✅ |
-| `tools run editor.active-tool.set` | Set Active Editor Tool | ❌ |
+| `tools run package.install` | Package Install | ❌ |
 | `tools run package.remove` | Package Remove | ❌ |
+| `batch run` | Batch Run | ✅ (preflight) |
 | `jobs cancel` | Cancel Job | ❌ |
 
 The `reflection.method.call` tool is classified `riskLevel: critical`. It performs no scope restriction on the invoked method (public/private/static/instance, any namespace/assembly, Editor/Runtime). It requires a `security` confirmation object with `confirmed: true` and a `destructiveFingerprint`, and returns a structured audit including target method preview, parameters, result serialization, and any exception.
