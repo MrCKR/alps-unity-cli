@@ -4,8 +4,8 @@ import { objSchema, pageSchema } from "../schemas.js";
 export const GO_TOOLS: ToolMetadata[] = [
   {
     name: "go.find",
-    summary: "Search active scene GameObjects by name, tag, layer, component, hierarchy path, or instance id.",
-    description: "Search active scene GameObjects by name, tag, layer, component, hierarchy path, or instance id. Results are lightweight and paged; use go.inspect, object.get-data, component.get, or context read scene.gameobject.components for deep data after selecting a stable path/id.",
+    summary: "Search GameObjects by name, tag, layer, component, hierarchy path, or instance id; optionally prefer an open Prefab Stage.",
+    description: "Search GameObjects by name, tag, layer, component, hierarchy path, or instance id. Results are lightweight and paged. Pass preferPrefabStage=true to first match inside an open Prefab Stage (prefabContentsRoot), then merge scene matches — useful while editing a prefab so its contents resolve before scene objects.",
     group: "go",
     inputSchema: objSchema({
       target: { type: "string", description: "Search term. Alias of name/searchTerm/query." },
@@ -14,6 +14,7 @@ export const GO_TOOLS: ToolMetadata[] = [
       query: { type: "string", description: "Alias for searchTerm." },
       searchMethod: { type: "string", enum: ["by_name", "by_tag", "by_layer", "by_component", "by_path", "by_id"], default: "by_name", description: "How the search term is matched. Defaults to by_name; by_path accepts hierarchy paths." },
       includeInactive: { type: "boolean", default: false, description: "Include inactive scene objects in the search." },
+      preferPrefabStage: { type: "boolean", default: false, description: "If true and a Prefab Stage is open, first match inside the prefab contents, then merge scene matches." },
       pageSize: { type: "integer", default: 50, maximum: 500, description: "Maximum matches returned in this page." },
       cursor: { type: "integer", default: 0, description: "0-based result offset for pagination." }
     }),

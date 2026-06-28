@@ -487,9 +487,23 @@ namespace UnityCli
             }
             var searchMethod = request.StringArg("searchMethod") ?? InferGameObjectSearchMethod(request);
             var includeInactive = request.BoolArg("includeInactive", false);
+            var preferPrefabStage = request.BoolArg("preferPrefabStage", false);
             var pageSize = Math.Max(1, Math.Min(request.IntArg("pageSize", 50), 500));
             var cursor = Math.Max(0, request.IntArg("cursor", 0));
-            var matches = SearchGameObjects(searchMethod, searchTerm, includeInactive);
+            // Prefab Stage 优先：preferPrefabStage=true 且有打开的 Prefab Stage 时，先在 prefab 内容里匹配，
+            // 再合并场景匹配，让 Prefab 编辑时的对象解析优先命中 prefab 内容（对齐 IvanMurzak 语义）。
+            var prefabStage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
+            var prefabStageMatches = new List<GameObject>();
+            var prefabStageOpen = preferPrefabStage && prefabStage != null && prefabStage.prefabContentsRoot != null;
+            if (prefabStageOpen)
+            {
+                foreach (var t in prefabStage.prefabContentsRoot.GetComponentsInChildren<Transform>(includeInactive))
+                {
+                    if (MatchesGameObject(t.gameObject, searchMethod, searchTerm)) prefabStageMatches.Add(t.gameObject);
+                }
+            }
+            var sceneMatches = SearchGameObjects(searchMethod, searchTerm, includeInactive);
+            var matches = prefabStageOpen ? prefabStageMatches.Concat(sceneMatches).ToList() : sceneMatches;
             var total = matches.Count;
             var page = matches.Skip(cursor).Take(pageSize).ToList();
             var nextCursor = cursor + page.Count < total ? (cursor + page.Count).ToString(CultureInfo.InvariantCulture) : null;
@@ -498,6 +512,8 @@ namespace UnityCli
                 .Prop("query", searchTerm)
                 .Prop("searchMethod", searchMethod)
                 .Prop("includeInactive", includeInactive)
+                .Prop("preferPrefabStage", preferPrefabStage)
+                .Prop("prefabStageOpen", prefabStageOpen)
                 .Prop("matchCount", (long)total)
                 .PropArray("items", arr => { foreach (var gameObject in page) { arr.RawValue(HierarchyItemJson(gameObject.transform)); } })
                 .PropObject("pageInfo", p => p.Prop("pageSize", (long)pageSize).Prop("cursor", (long)cursor).Prop("nextCursor", nextCursor).Prop("total", (long)total))
@@ -518,35 +534,21 @@ namespace UnityCli
 
         private static List<GameObject> SearchGameObjects(string searchMethod, string searchTerm, bool includeInactive)
         {
-            var normalized = (searchMethod ?? "by_name").Trim().ToLowerInvariant();
             var allObjects = UnityEngine.Object.FindObjectsOfType<GameObject>(includeInactive).OrderBy(HierarchyPath, StringComparer.Ordinal).ToList();
-            if (normalized == "by_id")
-            {
-                return allObjects.Where(gameObject => gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) == searchTerm).ToList();
-            }
-            if (normalized == "by_path")
-            {
-                return allObjects.Where(gameObject => string.Equals(HierarchyPath(gameObject), searchTerm, StringComparison.Ordinal)).ToList();
-            }
-            if (normalized == "by_tag")
-            {
-                return allObjects.Where(gameObject => string.Equals(gameObject.tag, searchTerm, StringComparison.Ordinal)).ToList();
-            }
-            if (normalized == "by_layer")
-            {
-                var layer = ParseLayer(searchTerm);
-                return allObjects.Where(gameObject => gameObject.layer == layer).ToList();
-            }
-            if (normalized == "by_component")
-            {
-                var type = ResolveComponentType(searchTerm);
-                return allObjects.Where(gameObject => gameObject.GetComponent(type) != null).ToList();
-            }
-            if (normalized != "by_name")
-            {
-                throw new BridgeCommandException("E_SEARCH_METHOD_INVALID", "Unsupported GameObject searchMethod: " + searchMethod, "Use by_name, by_tag, by_layer, by_component, by_path, or by_id.");
-            }
-            return allObjects.Where(gameObject => string.Equals(gameObject.name, searchTerm, StringComparison.Ordinal)).ToList();
+            return allObjects.Where(gameObject => MatchesGameObject(gameObject, searchMethod, searchTerm)).ToList();
+        }
+
+        // 提取单个 GameObject 的搜索匹配判定，供场景搜索与 Prefab Stage 优先搜索复用。
+        private static bool MatchesGameObject(GameObject gameObject, string searchMethod, string searchTerm)
+        {
+            var normalized = (searchMethod ?? "by_name").Trim().ToLowerInvariant();
+            if (normalized == "by_id") return gameObject.GetInstanceID().ToString(CultureInfo.InvariantCulture) == searchTerm;
+            if (normalized == "by_path") return string.Equals(HierarchyPath(gameObject), searchTerm, StringComparison.Ordinal);
+            if (normalized == "by_tag") return string.Equals(gameObject.tag, searchTerm, StringComparison.Ordinal);
+            if (normalized == "by_layer") return gameObject.layer == ParseLayer(searchTerm);
+            if (normalized == "by_component") { var type = ResolveComponentType(searchTerm); return type != null && gameObject.GetComponent(type) != null; }
+            if (normalized != "by_name") throw new BridgeCommandException("E_SEARCH_METHOD_INVALID", "Unsupported GameObject searchMethod: " + searchMethod, "Use by_name, by_tag, by_layer, by_component, by_path, or by_id.");
+            return string.Equals(gameObject.name, searchTerm, StringComparison.Ordinal);
         }
 
         private static string HierarchyItemJson(Transform transform)
