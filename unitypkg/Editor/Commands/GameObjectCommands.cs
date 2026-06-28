@@ -296,23 +296,63 @@ namespace UnityCli
         {
             EnsureEditorNotBusy("component.remove");
             var gameObject = ResolveUniqueTarget(RequiredTarget(request, "Component remove requires a target."), "Component remove requires a target.");
+            var componentNames = JsonStringArray(request.RawJsonArg("components"));
+            if (componentNames.Length > 0)
+            {
+                var targets = new List<Tuple<string, Component>>();
+                foreach (var name in componentNames)
+                {
+                    var component = ResolveComponent(gameObject, name, null);
+                    if (component == null)
+                    {
+                        throw new BridgeCommandException("E_COMPONENT_NOT_FOUND", "Component not found on target: " + name, "Run unity_cli tools run component.get or context read scene.gameobject.components to list components.");
+                    }
+                    if (component is Transform)
+                    {
+                        throw new BridgeCommandException("E_COMPONENT_REMOVE_UNSUPPORTED", "Transform cannot be removed from a GameObject.", "Remove a non-Transform component.");
+                    }
+                    targets.Add(Tuple.Create(name, component));
+                }
+                var removed = new List<string>();
+                foreach (var item in targets)
+                {
+                    removed.Add(ComponentSummaryJson(item.Item2));
+                    Undo.DestroyObjectImmediate(item.Item2);
+                }
+                EditorSceneManager.MarkSceneDirty(gameObject.scene);
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .PropRaw("target", GameObjectTargetJson(gameObject))
+                    .Prop("removedCount", (long)removed.Count)
+                    .PropArray("components", arr => { foreach (var item in removed) arr.RawValue(item); })
+                    .PropArray("plannedEffects", arr =>
+                    {
+                        foreach (var item in targets)
+                        {
+                            arr.BeginObject().Prop("type", "component.remove").Prop("target", HierarchyPath(gameObject)).Prop("component", item.Item1).EndObject();
+                        }
+                    })
+                    .Prop("logPath", LogPath())
+                    .EndObject()
+                    .ToString());
+            }
+
             var componentName = RequiredComponentName(request);
             var componentIndex = request.OptionalIntArg("componentIndex");
-            var component = ResolveComponent(gameObject, componentName, componentIndex);
-            if (component == null)
+            var singleComponent = ResolveComponent(gameObject, componentName, componentIndex);
+            if (singleComponent == null)
             {
                 throw new BridgeCommandException("E_COMPONENT_NOT_FOUND", "Component not found on target: " + componentName, "Run unity_cli tools run component.get or context read scene.gameobject.components to list components.");
             }
-            if (component is Transform)
+            if (singleComponent is Transform)
             {
                 throw new BridgeCommandException("E_COMPONENT_REMOVE_UNSUPPORTED", "Transform cannot be removed from a GameObject.", "Remove a non-Transform component.");
             }
-            var removed = ComponentSummaryJson(component);
-            Undo.DestroyObjectImmediate(component);
+            var singleRemoved = ComponentSummaryJson(singleComponent);
+            Undo.DestroyObjectImmediate(singleComponent);
             EditorSceneManager.MarkSceneDirty(gameObject.scene);
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropRaw("target", GameObjectTargetJson(gameObject))
-                .PropRaw("component", removed)
+                .PropRaw("component", singleRemoved)
                 .Prop("componentIndex", componentIndex.HasValue ? componentIndex.Value.ToString(CultureInfo.InvariantCulture) : null)
                 .PropArray("plannedEffects", arr => arr
                     .RawValue(new UnityCliJsonWriter().BeginObject()

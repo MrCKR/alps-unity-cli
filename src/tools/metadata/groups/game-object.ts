@@ -238,15 +238,16 @@ export const COMPONENT_TOOLS: ToolMetadata[] = [
   },
   {
     name: "component.remove",
-    summary: "Remove a non-Transform Component from a GameObject.",
-    description: "Remove a non-Transform Component from a GameObject. Pass componentIndex when multiple components of the same type exist. This is irreversible; inspect components first with context read scene.gameobject.components or component.get.",
+    summary: "Remove one or more non-Transform Components from a GameObject.",
+    description: "Remove one or more non-Transform Components from a GameObject. Use component for one type and componentIndex when multiple components of the same type exist; use components as a string array to remove multiple different component types in one call. This is irreversible; inspect components first with context read scene.gameobject.components or component.get.",
     group: "component",
     inputSchema: objSchema({
       target: { type: "string", description: "GameObject name, hierarchy path, or instance id." },
-      component: { type: "string", description: "Component type name to remove." },
-      componentIndex: { type: "integer", description: "Optional zero-based index among components of the requested type." }
-    }, ["target", "component"]),
-    outputSchema: objSchema({ target: { type: "object" }, component: { type: "object" }, componentIndex: { type: ["integer", "null"] }, plannedEffects: { type: "array", items: { type: "object" } } }),
+      component: { type: "string", description: "Component type name to remove for single-component mode." },
+      components: { type: "array", items: { type: "string" }, description: "Multiple component type names to remove from the same target. Does not support per-type componentIndex; use single mode for duplicate components." },
+      componentIndex: { type: "integer", description: "Optional zero-based index among components of the requested type in single-component mode." }
+    }, ["target"]),
+    outputSchema: objSchema({ target: { type: "object" }, component: { type: "object" }, components: { type: "array", items: { type: "object" } }, removedCount: { type: "integer" }, componentIndex: { type: ["integer", "null"] }, plannedEffects: { type: "array", items: { type: "object" } } }),
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["component-remove", "scene-modify"],
@@ -256,7 +257,8 @@ export const COMPONENT_TOOLS: ToolMetadata[] = [
     docsTopic: "component",
     equivalentUnityMcp: "manage_components.remove / gameobject-component-destroy",
     examples: [
-      { description: "Remove first BoxCollider", argv: ["tools", "run", "component.remove", "--yes", "--input", "{\"target\":\"Player\",\"component\":\"BoxCollider\",\"componentIndex\":0}"] }
+      { description: "Remove first BoxCollider", argv: ["tools", "run", "component.remove", "--yes", "--input", "{\"target\":\"Player\",\"component\":\"BoxCollider\",\"componentIndex\":0}"] },
+      { description: "Remove multiple component types", argv: ["tools", "run", "component.remove", "--input", "{\"target\":\"Player\",\"components\":[\"BoxCollider\",\"Rigidbody\"]}"] }
     ]
   },
   {

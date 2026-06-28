@@ -80,6 +80,7 @@ test("component lifecycle schemas support properties and componentIndex", () => 
 
   const removeProps = findToolByName("component.remove")!.inputSchema.properties as Record<string, unknown>;
   assert.ok(removeProps.componentIndex, "component.remove should select duplicate components by index");
+  assert.ok(removeProps.components, "component.remove should accept a components array for batch removal");
 });
 
 test("component.modify input schema supports pathPatches, jsonPatch and componentDiff", () => {

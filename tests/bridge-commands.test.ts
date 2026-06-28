@@ -464,6 +464,18 @@ test("component lifecycle tools forward structured --input fields", async () => 
   assert.equal(removeResult.ok, true);
   assert.equal(requests[3].command, "component.remove");
   assert.deepEqual(requests[3].args, removeInput);
+
+  const batchRemoveInput = { target: "UnityCliAlignmentProbe", components: ["BoxCollider", "Rigidbody"] };
+  const batchRemoveResult = await execute(["tools", "run", "component.remove", "--input", JSON.stringify(batchRemoveInput)], {
+    ...runtime,
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { command: payload.command } };
+    }
+  });
+  assert.equal(batchRemoveResult.ok, true);
+  assert.equal(requests[4].command, "component.remove");
+  assert.deepEqual(requests[4].args, batchRemoveInput);
 });
 
 test("tools run forwards structured --input fields with pwsh escaping", async () => {

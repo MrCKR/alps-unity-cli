@@ -109,6 +109,7 @@ function componentArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec
   return compactArgs({
     ...targetArgs(flags, positionalTarget),
     component,
+    components: structured.components,
     property: stringFlag(flags, "property") ?? stringValue(structured.property),
     value: flags.value !== undefined ? flags.value : structured.value,
     properties: structured.properties ?? stringFlag(flags, "properties"),
