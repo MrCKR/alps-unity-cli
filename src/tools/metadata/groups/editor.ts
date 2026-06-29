@@ -249,6 +249,53 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     equivalentUnityMcp: "refresh_unity"
   },
   {
+    name: "editor.compile-diagnostics",
+    summary: "Refresh the live Editor, wait for compile/import to settle, then return Console compile diagnostics.",
+    description: "Refresh the live Unity Editor AssetDatabase, wait for the Editor to become idle, and read recent Console errors in one call. This is the live-bridge compile diagnostics loop for AI workflows after editing C# files: it does not clear Console entries, does not save project files, and does not start a batchmode Editor. The CLI orchestrates existing live Bridge calls (asset.refresh, context read editor.state, console.get), retrying transient compile/import/domain-reload states within waitTimeoutMs. Use refresh=false to only wait/read Console, or pass path/assetPath to import a specific Assets/* path before collecting diagnostics.",
+    group: "editor",
+    inputSchema: objSchema({
+      refresh: { type: "boolean", default: true, description: "Whether to trigger a live asset.refresh before waiting and reading Console." },
+      path: { type: "string", description: "Optional Assets/* path to import instead of refreshing the whole AssetDatabase." },
+      assetPath: { type: "string", description: "Alias of path." },
+      forceUpdate: { type: "boolean", default: false, description: "Forward ImportAssetOptions.ForceUpdate to asset.refresh when refreshing." },
+      importRecursive: { type: "boolean", default: false, description: "Forward ImportAssetOptions.ImportRecursive for folder imports." },
+      waitReady: { type: "boolean", default: true, description: "Wait for Unity compile/import/domain reload busy state to settle before reading Console." },
+      waitTimeoutMs: { type: "integer", default: 45000, maximum: 55000, description: "Maximum milliseconds for CLI-side transient retry and editor.state wait-ready." },
+      pollIntervalMs: { type: "integer", default: 1000, maximum: 5000, description: "Retry interval while Unity reports compile/import/domain reload transient states." },
+      type: { type: "string", enum: ["error", "warning", "log", "assert", "all"], default: "error", description: "Console entry type to read after compile settles." },
+      filter: { type: "string", description: "Optional message/path substring filter forwarded to console.get." },
+      search: { type: "string", description: "Alias of filter." },
+      count: { type: "integer", default: 100, maximum: 500, description: "Maximum Console entries returned newest-first." }
+    }),
+    outputSchema: objSchema({
+      command: { type: "string" },
+      status: { type: "string", enum: ["clean", "compile_errors", "console_errors", "wait_timeout", "dry_run"] },
+      refresh: { type: "object" },
+      wait: { type: "object" },
+      console: { type: "object" },
+      compile: { type: "object", properties: { ok: { type: "boolean" }, hasErrors: { type: "boolean" }, errorCount: { type: "integer" }, consoleErrorCount: { type: "integer" }, diagnostics: { type: "array", items: { type: "object" } } } },
+      attempts: { type: "object" },
+      plannedEffects: { type: "array", items: { type: "object" } },
+      nextActions: { type: "array", items: { type: "string" } }
+    }),
+    destructiveHint: false,
+    supportsDryRun: true,
+    longRunning: true,
+    playModeSupport: "session-affecting",
+    sideEffects: ["asset-refresh", "script-compile", "domain-reload", "console-read"],
+    riskLevel: "low",
+    handler: "hybrid",
+    supportStatus: "live-bridge",
+    cliCommand: "tools run editor.compile-diagnostics",
+    docsTopic: "editor",
+    examples: [
+      { description: "Refresh, wait, and read recent compiler diagnostics", argv: ["tools", "run", "editor.compile-diagnostics", "--input", "{\"waitTimeoutMs\":45000,\"count\":100}"] },
+      { description: "Import one changed script before reading diagnostics", argv: ["tools", "run", "editor.compile-diagnostics", "--input", "{\"path\":\"Assets/Scripts/Player.cs\",\"forceUpdate\":true}"] },
+      { description: "Only wait and read Console without triggering refresh", argv: ["tools", "run", "editor.compile-diagnostics", "--input", "{\"refresh\":false,\"count\":50}"] }
+    ],
+    equivalentUnityMcp: "refresh_unity + read_console / compile diagnostics loop"
+  },
+  {
     name: "editor.launch-dialog.dismiss",
     summary: "Dismiss a visible Unity launch-errors or Safe Mode desktop dialog by clicking Ignore.",
     description: "Dismiss a visible Unity launch-errors or Safe Mode desktop dialog by clicking the Ignore button. This is a Windows desktop helper for Unity startup blocks such as Enter Safe Mode? or compiler-errors-at-launch dialogs; it does not open Unity and does not modify project files. Pass processId/pid when multiple Unity Editors are running so only that Unity.exe process is scanned. If no matching dialog is visible before timeoutMs, the tool still succeeds with dismissed=false and status=not_found. Use --dry-run to preview the planned desktop click without scanning or clicking.",

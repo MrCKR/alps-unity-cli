@@ -313,6 +313,23 @@ test("editor.refresh metadata exists with job handler and longRunning", () => {
   assert.ok(tool.examples && tool.examples.length > 0);
 });
 
+test("editor.compile-diagnostics metadata documents the live compile loop", () => {
+  const tool = findToolByName("editor.compile-diagnostics");
+  assert.ok(tool, "editor.compile-diagnostics should exist");
+  assert.equal(tool.group, "editor");
+  assert.equal(tool.handler, "hybrid");
+  assert.equal(tool.supportStatus, "live-bridge");
+  assert.equal(tool.longRunning, true);
+  assert.equal(tool.supportsDryRun, true);
+  assert.equal(tool.destructiveHint, false);
+  assert.equal(tool.playModeSupport, "session-affecting");
+  assert.deepEqual(tool.sideEffects, ["asset-refresh", "script-compile", "domain-reload", "console-read"]);
+  assert.match(tool.description, /asset\.refresh/);
+  assert.match(tool.description, /console\.get/);
+  assert.match(JSON.stringify(tool.inputSchema), /waitTimeoutMs/);
+  assert.match(JSON.stringify(tool.outputSchema), /diagnostics/);
+});
+
 test("batch control-plane tools are not exposed through tools metadata", () => {
   assert.equal(findToolByName("batch.schema"), undefined, "batch.schema should be top-level batch control-plane only");
   assert.equal(findToolByName("batch.run"), undefined, "batch.run should be top-level batch control-plane only");
@@ -518,6 +535,7 @@ test("S2.3 editor group has all required tools", () => {
   assert.ok(names.includes("editor.menu"));
   assert.ok(names.includes("editor.console"));
   assert.ok(names.includes("editor.refresh"));
+  assert.ok(names.includes("editor.compile-diagnostics"));
   assert.ok(names.includes("editor.launch-dialog.dismiss"));
 });
 
@@ -641,6 +659,14 @@ test("editor operation tools expose side-effect and recovery metadata", () => {
   assert.equal(refresh.equivalentUnityMcp, "refresh_unity");
   assert.ok(refresh.longRunning);
 
+  const compileDiagnostics = findToolByName("editor.compile-diagnostics")!;
+  assert.equal(compileDiagnostics.handler, "hybrid");
+  assert.equal(compileDiagnostics.supportStatus, "live-bridge");
+  assert.equal(compileDiagnostics.destructiveHint, false);
+  assert.equal(compileDiagnostics.supportsDryRun, true);
+  assert.deepEqual(compileDiagnostics.sideEffects, ["asset-refresh", "script-compile", "domain-reload", "console-read"]);
+  assert.match(compileDiagnostics.description, /single call|one call|in one call/);
+
   const launchDialog = findToolByName("editor.launch-dialog.dismiss")!;
   assert.equal(launchDialog.handler, "offline");
   assert.equal(launchDialog.supportStatus, "cli-only");
@@ -739,6 +765,19 @@ test("tools describe editor.refresh returns job metadata", async () => {
   assert.equal(data.name, "editor.refresh");
   assert.equal("handler" in data, false);
   assert.equal("longRunning" in data, false);
+});
+
+test("tools describe editor.compile-diagnostics returns live bridge metadata", async () => {
+  const result = await handleToolsCommand("describe", ["editor.compile-diagnostics"], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.name, "editor.compile-diagnostics");
+  assert.equal(data.supportStatus, "live-bridge");
+  assert.equal(data.supportsDryRun, true);
+  assert.equal("handler" in data, false);
+  assert.equal("longRunning" in data, false);
+  assert.match(JSON.stringify(data.inputSchema), /waitTimeoutMs/);
+  assert.match(JSON.stringify(data.outputSchema), /diagnostics/);
 });
 
 test("tools describe editor.launch-dialog.dismiss returns CLI-only metadata", async () => {
@@ -1388,6 +1427,56 @@ test("tools run built-in job-handler tool with empty runtime returns E_TOOL_HAND
   const result = await handleToolsCommand("run", ["editor.refresh"], {}, emptyRuntime, requestId);
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "E_TOOL_HANDLER_UNSUPPORTED");
+});
+
+test("tools run editor.compile-diagnostics orchestrates refresh wait and console", async () => {
+  const requests: BridgeRequest[] = [];
+  const runtime: ToolsRuntime = {
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      if (payload.command === "asset.refresh") {
+        return { ok: true, data: { command: "asset.refresh", refreshed: true, path: payload.args.path } };
+      }
+      if (payload.command === "context.read") {
+        return { ok: true, data: { schemaVersion: "1.0", state: { busy: { isBusy: false } } } };
+      }
+      if (payload.command === "console.get") {
+        return { ok: true, data: { command: "console.get", total: 1, items: [{ index: 4, type: "error", message: "Assets/Scripts/Broken.cs(3,9): error CS0103: The name 'missing' does not exist", file: "Assets/Scripts/Broken.cs", line: 3 }], pageInfo: { total: 1 } } };
+      }
+      return { ok: false, error: { code: "UNEXPECTED", message: String(payload.command) } };
+    }
+  };
+
+  const result = await handleToolsCommand("run", ["editor.compile-diagnostics"], { input: '{"path":"Assets/Scripts/Broken.cs","waitTimeoutMs":100,"pollIntervalMs":1}' }, runtime, requestId);
+  assert.equal(result.ok, true);
+  assert.deepEqual(requests.map((request) => request.command), ["asset.refresh", "context.read", "console.get"]);
+  assert.deepEqual(requests[0].args, { path: "Assets/Scripts/Broken.cs" });
+  assert.equal((requests[1].args.input as Record<string, unknown>).waitReady, true);
+  assert.deepEqual(requests[2].args, { type: "error", count: 100, cursor: 0 });
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.status, "compile_errors");
+  const compile = data.compile as { hasErrors: boolean; errorCount: number; diagnostics: Array<{ id?: string }> };
+  assert.equal(compile.hasErrors, true);
+  assert.equal(compile.errorCount, 1);
+  assert.equal(compile.diagnostics[0].id, "CS0103");
+});
+
+test("tools run editor.compile-diagnostics dry-run does not call bridge", async () => {
+  const requests: BridgeRequest[] = [];
+  const runtime: ToolsRuntime = { bridgeExecute: async (payload: BridgeRequest) => { requests.push(payload); return { ok: true, data: {} }; } };
+  const result = await handleToolsCommand("run", ["editor.compile-diagnostics"], { "dry-run": true, input: '{"refresh":false,"count":20}' }, runtime, requestId);
+  assert.equal(result.ok, true);
+  assert.equal(requests.length, 0);
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.status, "dry_run");
+  assert.equal(data.dryRun, true);
+  assert.match(JSON.stringify(data.plannedEffects), /console\.get/);
+});
+
+test("tools run editor.compile-diagnostics rejects job mode", async () => {
+  const result = await handleToolsCommand("run", ["editor.compile-diagnostics"], { job: true }, emptyRuntime, requestId);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_TOOL_JOB_UNSUPPORTED");
 });
 
 test("tools run editor.launch-dialog.dismiss supports no-op probe through --input", async () => {

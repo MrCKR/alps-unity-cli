@@ -458,6 +458,7 @@ unity_cli tools run editor.stop --timeout-ms 7000
 unity_cli tools run editor.menu <menu-path>
 unity_cli tools run editor.console --count 50
 unity_cli tools run editor.refresh --compile --wait
+unity_cli tools run editor.compile-diagnostics --input '{"waitTimeoutMs":45000,"count":100}'
 unity_cli tools run editor.launch-dialog.dismiss --input '{"pid":<unity-pid>,"timeoutMs":5000}'
 ```
 

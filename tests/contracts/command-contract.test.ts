@@ -59,6 +59,14 @@ test("command contract includes Profiler bridge commands", () => {
   assert.deepEqual(contracts.map((entry) => entry.bridgeCommand), ["profiler.areas", "profiler.capture", "profiler.clear", "profiler.counter", "profiler.deep", "profiler.export", "profiler.frame", "profiler.frame-debugger.disable", "profiler.frame-debugger.enable", "profiler.frame-debugger.events", "profiler.hierarchy", "profiler.load", "profiler.memory", "profiler.memory-snapshot.compare", "profiler.memory-snapshot.list", "profiler.memory-snapshot.take", "profiler.module-enable", "profiler.modules", "profiler.object-memory", "profiler.pause", "profiler.rendering-stats", "profiler.script-stats", "profiler.start", "profiler.status", "profiler.stop"]);
 });
 
+test("command contract marks editor.compile-diagnostics as CLI orchestration", () => {
+  const contract = commandContracts().find((entry) => entry.bridgeCommand === "editor.compile-diagnostics");
+  assert.ok(contract, "editor.compile-diagnostics should be in command contract");
+  assert.equal(contract.handler_type, "hybrid");
+  assert.equal(contract.csharp_handler, "none");
+  assert.equal(contract.destructive, false);
+});
+
 test("command contract marks C# handler gaps as present", async () => {
   const contracts = new Map(commandContracts().map((entry) => [entry.bridgeCommand, entry]));
   const csharpCommands = await registeredCsharpCommands(editorUrl);
