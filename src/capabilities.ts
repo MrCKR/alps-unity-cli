@@ -190,7 +190,7 @@ function buildStaticCapabilities(projectTools: ToolMetadata[] = [], projectConte
     groupCounts[group] = tools.filter((t) => t.group === group).length;
   }
 
-  // Extension group counts (e.g. probuilder=36, cinemachine=10) are surfaced separately
+  // Extension group counts (e.g. probuilder=36, cinemachine=13) are surfaced separately
   // so that capabilities consumers can distinguish core from extension.
   const extensionGroupCounts: Record<string, number> = {};
   if (activeExtensionTools.length > 0) {

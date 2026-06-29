@@ -435,6 +435,18 @@
       ]
     },
     {
+      "bridgeCommand": "cinemachine.force-camera",
+      "group": "cinemachine",
+      "command": "force-camera",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.cinemachine"
+      ]
+    },
+    {
       "bridgeCommand": "cinemachine.lens",
       "group": "cinemachine",
       "command": "lens",
@@ -459,9 +471,33 @@
       ]
     },
     {
+      "bridgeCommand": "cinemachine.ping",
+      "group": "cinemachine",
+      "command": "ping",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.cinemachine"
+      ]
+    },
+    {
       "bridgeCommand": "cinemachine.priority",
       "group": "cinemachine",
       "command": "priority",
+      "handler_type": "hybrid",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000,
+      "requires_packages": [
+        "com.unity.cinemachine"
+      ]
+    },
+    {
+      "bridgeCommand": "cinemachine.release-override",
+      "group": "cinemachine",
+      "command": "release-override",
       "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,

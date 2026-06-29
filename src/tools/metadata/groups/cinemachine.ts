@@ -9,7 +9,7 @@ import { objSchema } from "../schemas.js";
  *   CameraConfigure + CameraControl for the action decomposition and Unity API paths.
  * - Discarded: unity-mcp's single-tool multi-action (manage_camera with action=...) routing is NOT
  *   adopted; alps-unity-cli keeps its "multi-tool single-action" model, so each Cinemachine
- *   capability (create/target/lens/priority/blend/body/aim/noise/brain/extension) is its own tool.
+ *   capability (ping/create/target/lens/priority/blend/body/aim/noise/brain/force-camera/release-override/extension) is its own tool.
  * - Discarded: unity-mcp resolves Body/Aim components via a preset map keyed by CinemachineCamera
  *   component stage reflection. We keep the preset→component mapping but expose it through the
  *   create tool's --preset flag, not a hidden action router.
@@ -35,6 +35,32 @@ const CM_COMMON = {
 };
 
 export const CINEMACHINE_TOOLS: ToolMetadata[] = [
+  {
+    ...CM_COMMON,
+    name: "cinemachine.ping",
+    summary: "Check Cinemachine package availability and reflected camera/brain API status.",
+    description: "Check Cinemachine package availability and reflected camera/brain API status without changing the scene. Returns whether CinemachineCamera/CinemachineVirtualCamera, CinemachineBrain, CinemachineExtension, and the Brain override methods are available in the current Unity session.",
+    inputSchema: objSchema({}),
+    outputSchema: objSchema({
+      cinemachine: {
+        type: "object",
+        properties: {
+          installed: { type: "boolean" },
+          cmCameraTypeAvailable: { type: "boolean" },
+          cmBrainTypeAvailable: { type: "boolean" },
+          cmExtensionTypeAvailable: { type: "boolean" },
+          forceOverrideAvailable: { type: "boolean" }
+        }
+      }
+    }),
+    destructiveHint: false,
+    riskLevel: "safe",
+    playModeSupport: "supported",
+    cliCommand: "tools run cinemachine.ping",
+    examples: [
+      { description: "Check Cinemachine availability", argv: ["tools", "run", "cinemachine.ping"] }
+    ]
+  },
   {
     ...CM_COMMON,
     name: "cinemachine.create",
@@ -161,6 +187,58 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     cliCommand: "tools run cinemachine.brain",
     examples: [
       { description: "Report brain blending status", argv: ["tools", "run", "cinemachine.brain", "Main Camera", "--action", "status"] }
+    ]
+  },
+  {
+    ...CM_COMMON,
+    name: "cinemachine.force-camera",
+    summary: "Force a CinemachineBrain override to a target virtual camera and return the overrideId to release later.",
+    description: "Force a CinemachineBrain override to a target Cinemachine virtual camera using CinemachineBrain.SetCameraOverride. This changes only the current Editor or PlayMode session; it does not save scenes or assets. Store the returned overrideId and pass it to cinemachine.release-override when the forced camera should be released.",
+    inputSchema: objSchema({
+      target: { type: "string", description: "Cinemachine virtual camera GameObject name, hierarchy path, or instance id to force as camB." },
+      brain: { type: "string", description: "Optional GameObject name, path, or instance id that owns the CinemachineBrain. Defaults to the first scene Brain." },
+      source: { type: "string", description: "Optional Cinemachine virtual camera used as camA. If omitted, the current active virtual camera is used when available." },
+      overrideId: { type: "integer", description: "Existing override id to update. Omit or pass -1 to allocate a new id." },
+      weight: { type: "number", description: "Blend weight for the forced target camera. Defaults to 1." },
+      deltaTime: { type: "number", description: "Delta time override passed to Cinemachine. Defaults to -1." }
+    }, ["target"]),
+    outputSchema: objSchema({
+      overrideId: { type: "integer" },
+      brain: { type: "object" },
+      forcedCamera: { type: "object" },
+      sourceCamera: { type: ["object", "null"] }
+    }),
+    destructiveHint: false,
+    sideEffects: ["editor-session-state"],
+    riskLevel: "low",
+    playModeSupport: "supported",
+    cliCommand: "tools run cinemachine.force-camera",
+    examples: [
+      { description: "Force a virtual camera and capture the override id", argv: ["tools", "run", "cinemachine.force-camera", "CloseupCam", "--brain", "Main Camera"] },
+      { description: "Force with structured input", argv: ["tools", "run", "cinemachine.force-camera", "--input", "{\"target\":\"CloseupCam\",\"brain\":\"Main Camera\",\"weight\":1}"] }
+    ]
+  },
+  {
+    ...CM_COMMON,
+    name: "cinemachine.release-override",
+    summary: "Release a CinemachineBrain camera override by overrideId.",
+    description: "Release a camera override previously returned by cinemachine.force-camera using CinemachineBrain.ReleaseCameraOverride. This changes only the current Editor or PlayMode session; it does not save scenes or assets.",
+    inputSchema: objSchema({
+      overrideId: { type: "integer", description: "Override id returned by cinemachine.force-camera." },
+      brain: { type: "string", description: "Optional GameObject name, path, or instance id that owns the CinemachineBrain. Defaults to the first scene Brain." }
+    }, ["overrideId"]),
+    outputSchema: objSchema({
+      overrideId: { type: "integer" },
+      brain: { type: "object" },
+      released: { type: "boolean" }
+    }),
+    destructiveHint: false,
+    sideEffects: ["editor-session-state"],
+    riskLevel: "low",
+    playModeSupport: "supported",
+    cliCommand: "tools run cinemachine.release-override",
+    examples: [
+      { description: "Release a forced camera override", argv: ["tools", "run", "cinemachine.release-override", "--input", "{\"overrideId\":12,\"brain\":\"Main Camera\"}"] }
     ]
   },
   {

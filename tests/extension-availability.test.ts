@@ -603,7 +603,7 @@ test("Cinemachine tools are in extensionToolMetadata, not builtinToolMetadata", 
   const builtin = builtinToolMetadata();
   const ext = extensionToolMetadata();
   assert.equal(builtin.filter((t) => t.group === "cinemachine").length, 0, "Cinemachine tools should NOT be in core builtin metadata");
-  assert.equal(ext.filter((t) => t.group === "cinemachine").length, 10, "Cinemachine should have 10 extension tools");
+  assert.equal(ext.filter((t) => t.group === "cinemachine").length, 13, "Cinemachine should have 13 extension tools");
 });
 
 test("URP tools are in extensionToolMetadata, not builtinToolMetadata", () => {
@@ -628,6 +628,18 @@ test("Cinemachine tools are discoverable via findToolByName after registration",
   const brain = findToolByName("cinemachine.brain");
   assert.ok(brain, "cinemachine.brain should be findable");
   assert.equal(brain?.group, "cinemachine");
+
+  const ping = findToolByName("cinemachine.ping");
+  assert.ok(ping, "cinemachine.ping should be findable");
+  assert.equal(ping?.group, "cinemachine");
+
+  const force = findToolByName("cinemachine.force-camera");
+  assert.ok(force, "cinemachine.force-camera should be findable");
+  assert.equal(force?.group, "cinemachine");
+
+  const release = findToolByName("cinemachine.release-override");
+  assert.ok(release, "cinemachine.release-override should be findable");
+  assert.equal(release?.group, "cinemachine");
 });
 
 test("URP and HDRP tools are discoverable via findToolByName after registration", () => {
@@ -653,7 +665,7 @@ test("EXTENSION_GROUPS includes cinemachine, urp, hdrp", () => {
 test("all Cinemachine tools have source: extension", () => {
   const ext = extensionToolMetadata();
   const cinemachineTools = ext.filter((t) => t.group === "cinemachine");
-  assert.equal(cinemachineTools.length, 10, "Should have 10 Cinemachine extension tools");
+  assert.equal(cinemachineTools.length, 13, "Should have 13 Cinemachine extension tools");
   for (const tool of cinemachineTools) {
     assert.equal(tool.source, "extension", `${tool.name} should have source: "extension"`);
   }

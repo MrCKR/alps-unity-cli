@@ -59,16 +59,32 @@ namespace UnityCli
 
         private static void RegisterCinemachineCommands(BridgeCommandRegistry registry)
         {
-            RegisterCommand(registry, "cinemachine.create",    "cinemachine", false, CinemachineCreate);
-            RegisterCommand(registry, "cinemachine.target",    "cinemachine", false, CinemachineTarget);
-            RegisterCommand(registry, "cinemachine.lens",      "cinemachine", false, CinemachineLens);
-            RegisterCommand(registry, "cinemachine.priority",  "cinemachine", false, CinemachinePriority);
-            RegisterCommand(registry, "cinemachine.blend",     "cinemachine", false, CinemachineBlend);
-            RegisterCommand(registry, "cinemachine.body",      "cinemachine", false, CinemachineBody);
-            RegisterCommand(registry, "cinemachine.aim",       "cinemachine", false, CinemachineAim);
-            RegisterCommand(registry, "cinemachine.noise",     "cinemachine", false, CinemachineNoise);
-            RegisterCommand(registry, "cinemachine.brain",     "cinemachine", false, CinemachineBrain);
-            RegisterCommand(registry, "cinemachine.extension", "cinemachine", true,  CinemachineExtension);
+            RegisterCommand(registry, "cinemachine.ping",             "cinemachine", false, CinemachinePing);
+            RegisterCommand(registry, "cinemachine.create",           "cinemachine", false, CinemachineCreate);
+            RegisterCommand(registry, "cinemachine.target",           "cinemachine", false, CinemachineTarget);
+            RegisterCommand(registry, "cinemachine.lens",             "cinemachine", false, CinemachineLens);
+            RegisterCommand(registry, "cinemachine.priority",         "cinemachine", false, CinemachinePriority);
+            RegisterCommand(registry, "cinemachine.blend",            "cinemachine", false, CinemachineBlend);
+            RegisterCommand(registry, "cinemachine.body",             "cinemachine", false, CinemachineBody);
+            RegisterCommand(registry, "cinemachine.aim",              "cinemachine", false, CinemachineAim);
+            RegisterCommand(registry, "cinemachine.noise",            "cinemachine", false, CinemachineNoise);
+            RegisterCommand(registry, "cinemachine.brain",            "cinemachine", false, CinemachineBrain);
+            RegisterCommand(registry, "cinemachine.force-camera",     "cinemachine", false, CinemachineForceCamera);
+            RegisterCommand(registry, "cinemachine.release-override", "cinemachine", false, CinemachineReleaseOverride);
+            RegisterCommand(registry, "cinemachine.extension",        "cinemachine", true,  CinemachineExtension);
+        }
+
+        // ── CinemachinePing ────────────────────────────────────────────────
+
+        // 只读探测当前会话中的 Cinemachine 类型和 Brain override API，不修改场景。
+        private static string CinemachinePing(BridgeRequest request)
+        {
+            IsCinemachineInstalled();
+            WriteLog("cinemachine_ping installed=" + _hasCinemachine.GetValueOrDefault(false));
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("cinemachine", CinemachinePackageJson())
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
         }
 
         // ── Preset → Body / Aim component mapping ──────────────────────────
@@ -595,6 +611,112 @@ namespace UnityCli
                 .EndObject().ToString());
         }
 
+        // ── CinemachineForceCamera / ReleaseOverride ───────────────────────
+
+        // 通过 CinemachineBrain.SetCameraOverride 临时强制输出目标虚拟相机；返回 overrideId 供释放。
+        private static string CinemachineForceCamera(BridgeRequest request)
+        {
+            RequireCinemachinePackage();
+            var brainGo = ResolveCinemachineBrainOwner(request.StringArg("brain"));
+            var brain = brainGo.GetComponent(_cmBrainType);
+            if (brain == null)
+                return ErrorJson("E_CINEMACHINE_BRAIN_NOT_FOUND",
+                    "GameObject does not have CinemachineBrain: " + HierarchyPath(brainGo),
+                    "Use cinemachine.brain with action=ensure to add one, or pass --brain <GameObject> that already owns a CinemachineBrain.");
+
+            var forcedGo = ResolveUniqueCinemachineTarget(request.StringArg("target"));
+            var forcedCamera = forcedGo.GetComponent(_cmCameraType);
+            if (forcedCamera == null)
+                return ErrorJson("E_CINEMACHINE_COMPONENT_NOT_FOUND",
+                    "Forced target does not have a Cinemachine camera component: " + HierarchyPath(forcedGo),
+                    "Pass a GameObject with CinemachineCamera/CinemachineVirtualCamera or create one with cinemachine.create.");
+
+            Component sourceCamera = null;
+            var sourceName = request.StringArg("source");
+            if (!string.IsNullOrEmpty(sourceName))
+            {
+                var sourceGo = ResolveUniqueCinemachineTarget(sourceName);
+                sourceCamera = sourceGo.GetComponent(_cmCameraType);
+                if (sourceCamera == null)
+                    return ErrorJson("E_CINEMACHINE_COMPONENT_NOT_FOUND",
+                        "Source target does not have a Cinemachine camera component: " + HierarchyPath(sourceGo),
+                        "Pass a source GameObject with CinemachineCamera/CinemachineVirtualCamera or omit source to use the active virtual camera.");
+            }
+            if (sourceCamera == null)
+            {
+                sourceCamera = ActiveVirtualCameraComponent(brain);
+            }
+
+            var setOverride = FindSetCameraOverrideMethod(brain.GetType());
+            if (setOverride == null)
+                return ErrorJson("E_CINEMACHINE_OVERRIDE_UNSUPPORTED",
+                    "CinemachineBrain.SetCameraOverride is not available in this Cinemachine package version.",
+                    "Use cinemachine.ping to inspect reflected Brain API availability, or use priority/blend controls instead.");
+
+            var overrideId = request.OptionalIntArg("overrideId") ?? -1;
+            var weight = request.OptionalFloatArg("weight") ?? 1f;
+            var deltaTime = request.OptionalFloatArg("deltaTime") ?? -1f;
+            var newOverrideId = Convert.ToInt32(setOverride.Invoke(brain, new object[] { overrideId, sourceCamera, forcedCamera, weight, deltaTime }), CultureInfo.InvariantCulture);
+            WriteLog("cinemachine_force_camera brain=" + HierarchyPath(brainGo) + " target=" + HierarchyPath(forcedGo) + " overrideId=" + newOverrideId.ToString(CultureInfo.InvariantCulture));
+
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("cinemachine", CinemachinePackageJson())
+                .Prop("overrideId", (long)newOverrideId)
+                .Prop("previousOverrideId", (long)overrideId)
+                .Prop("weight", weight)
+                .Prop("deltaTime", deltaTime)
+                .PropRaw("brain", CinemachineBrainJson(brain))
+                .PropRaw("forcedCamera", CinemachineObjectJson(forcedGo, null))
+                .PropRaw("sourceCamera", sourceCamera != null ? CinemachineObjectJson(sourceCamera.gameObject, null) : "null")
+                .PropArray("plannedEffects", arr => arr.BeginObject()
+                    .Prop("type", "cinemachine.force-camera")
+                    .Prop("overrideId", (long)newOverrideId)
+                    .Prop("brain", HierarchyPath(brainGo))
+                    .Prop("target", HierarchyPath(forcedGo))
+                    .EndObject())
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        // 释放 force-camera 返回的 overrideId；只影响当前 Editor/PlayMode 会话。
+        private static string CinemachineReleaseOverride(BridgeRequest request)
+        {
+            RequireCinemachinePackage();
+            var overrideId = request.OptionalIntArg("overrideId");
+            if (!overrideId.HasValue)
+                return ErrorJson("E_CINEMACHINE_OVERRIDE_ID_REQUIRED",
+                    "cinemachine.release-override requires overrideId returned by cinemachine.force-camera.",
+                    "Pass --input {\"overrideId\":<id>} or --override-id <id>.");
+
+            var brainGo = ResolveCinemachineBrainOwner(request.StringArg("brain"));
+            var brain = brainGo.GetComponent(_cmBrainType);
+            if (brain == null)
+                return ErrorJson("E_CINEMACHINE_BRAIN_NOT_FOUND",
+                    "GameObject does not have CinemachineBrain: " + HierarchyPath(brainGo),
+                    "Pass --brain <GameObject> that owns a CinemachineBrain.");
+
+            var releaseOverride = FindReleaseCameraOverrideMethod(brain.GetType());
+            if (releaseOverride == null)
+                return ErrorJson("E_CINEMACHINE_OVERRIDE_UNSUPPORTED",
+                    "CinemachineBrain.ReleaseCameraOverride is not available in this Cinemachine package version.",
+                    "Use cinemachine.ping to inspect reflected Brain API availability.");
+
+            releaseOverride.Invoke(brain, new object[] { overrideId.Value });
+            WriteLog("cinemachine_release_override brain=" + HierarchyPath(brainGo) + " overrideId=" + overrideId.Value.ToString(CultureInfo.InvariantCulture));
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("cinemachine", CinemachinePackageJson())
+                .Prop("overrideId", (long)overrideId.Value)
+                .Prop("released", true)
+                .PropRaw("brain", CinemachineBrainJson(brain))
+                .PropArray("plannedEffects", arr => arr.BeginObject()
+                    .Prop("type", "cinemachine.release-override")
+                    .Prop("overrideId", (long)overrideId.Value)
+                    .Prop("brain", HierarchyPath(brainGo))
+                    .EndObject())
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
         // ── CinemachineExtension ────────────────────────────────────────────
         // Critically references unity-mcp CameraConfigure add_extension / remove_extension:
         //   Resolves type via UnityTypeResolver.ResolveComponent()
@@ -699,6 +821,16 @@ namespace UnityCli
 
         // ── Helpers ──────────────────────────────────────────────────────────
 
+        private static GameObject ResolveCinemachineBrainOwner(string target)
+        {
+            var brainGo = !string.IsNullOrEmpty(target) ? ResolveGameObject(target) : FindCinemachineBrainOwner();
+            if (brainGo == null)
+                throw new BridgeCommandException("E_CINEMACHINE_BRAIN_NOT_FOUND",
+                    string.IsNullOrEmpty(target) ? "No CinemachineBrain found in the scene." : "CinemachineBrain owner not found: " + target,
+                    "Use cinemachine.brain with action=ensure to add one, or pass --brain <GameObject> that owns a CinemachineBrain.");
+            return brainGo;
+        }
+
         private static GameObject ResolveUniqueCinemachineTarget(string target)
         {
             if (string.IsNullOrEmpty(target))
@@ -798,9 +930,45 @@ namespace UnityCli
             var stageEnumType = _cmCoreType.GetNestedType("Stage");
             if (stageEnumType == null) return null;
             var stageValue = Enum.Parse(stageEnumType, stage == "Body" ? "Body" : "Aim");
-            var getMethod = _cmCameraType.GetMethod("GetCinemachineComponent", BindingFlags.Instance | BindingFlags.Public);
+            var getMethod = FindPublicInstanceMethod(_cmCameraType, "GetCinemachineComponent", stageEnumType);
             if (getMethod == null) return null;
             return getMethod.Invoke(cmCamera, new object[] { stageValue }) as Component;
+        }
+
+        // 按方法签名筛选公开实例方法，避免 Cinemachine 的泛型/非泛型重载触发 AmbiguousMatchException。
+        private static MethodInfo FindPublicInstanceMethod(Type ownerType, string methodName, params Type[] parameterTypes)
+        {
+            if (ownerType == null || string.IsNullOrEmpty(methodName)) return null;
+            foreach (var method in ownerType.GetMethods(BindingFlags.Instance | BindingFlags.Public))
+            {
+                if (!string.Equals(method.Name, methodName, StringComparison.Ordinal) || method.IsGenericMethodDefinition) continue;
+                var parameters = method.GetParameters();
+                if (parameters.Length != parameterTypes.Length) continue;
+                var matched = true;
+                for (var index = 0; index < parameters.Length; index++)
+                {
+                    var expectedType = parameterTypes[index];
+                    if (expectedType != null && parameters[index].ParameterType != expectedType)
+                    {
+                        matched = false;
+                        break;
+                    }
+                }
+                if (matched) return method;
+            }
+            return null;
+        }
+
+        // 获取 Brain override 入口；相机参数类型在 CM2/CM3 命名空间不同，使用 null 通配但固定参数形态。
+        private static MethodInfo FindSetCameraOverrideMethod(Type brainType)
+        {
+            return FindPublicInstanceMethod(brainType, "SetCameraOverride", typeof(int), null, null, typeof(float), typeof(float));
+        }
+
+        // 获取 Brain override 释放入口，按 int overrideId 精确匹配。
+        private static MethodInfo FindReleaseCameraOverrideMethod(Type brainType)
+        {
+            return FindPublicInstanceMethod(brainType, "ReleaseCameraOverride", typeof(int));
         }
 
         private static UnityEngine.Object FindNoiseProfile(string profileName)
@@ -837,6 +1005,23 @@ namespace UnityCli
             return null;
         }
 
+        // 从 Brain.ActiveVirtualCamera 解析当前输出虚拟相机，供 force-camera 作为默认 camA。
+        private static Component ActiveVirtualCameraComponent(Component brain)
+        {
+            if (brain == null) return null;
+            var activeVcamProp = brain.GetType().GetProperty("ActiveVirtualCamera", BindingFlags.Instance | BindingFlags.Public);
+            var activeVcam = activeVcamProp != null ? activeVcamProp.GetValue(brain, null) : null;
+            if (activeVcam == null) return null;
+            var component = activeVcam as Component;
+            if (component != null) return component;
+            var virtualCameraGameObject = activeVcam.GetType().GetProperty("VirtualCameraGameObject", BindingFlags.Instance | BindingFlags.Public);
+            var gameObject = virtualCameraGameObject != null ? virtualCameraGameObject.GetValue(activeVcam, null) as GameObject : null;
+            if (gameObject != null) return gameObject.GetComponent(_cmCameraType);
+            var nameProp = activeVcam.GetType().GetProperty("Name", BindingFlags.Instance | BindingFlags.Public);
+            var name = nameProp != null ? nameProp.GetValue(activeVcam, null) as string : null;
+            return string.IsNullOrEmpty(name) ? null : (ResolveGameObject(name) != null ? ResolveGameObject(name).GetComponent(_cmCameraType) : null);
+        }
+
         private static int? BlendStyleToEnumIndex(string styleName)
         {
             // Cinemachine blend style enum values
@@ -869,7 +1054,16 @@ namespace UnityCli
                 .Prop("installed", IsCinemachineInstalled())
                 .Prop("cmCameraTypeAvailable", _cmCameraType != null)
                 .Prop("cmBrainTypeAvailable", _cmBrainType != null)
+                .Prop("cmExtensionTypeAvailable", _cmExtensionBaseType != null)
+                .Prop("forceOverrideAvailable", HasCinemachineOverrideApi())
                 .EndObject().ToString();
+        }
+
+        private static bool HasCinemachineOverrideApi()
+        {
+            return _cmBrainType != null
+                && FindSetCameraOverrideMethod(_cmBrainType) != null
+                && FindReleaseCameraOverrideMethod(_cmBrainType) != null;
         }
 
         private static string CinemachineObjectJson(GameObject go, string preset)

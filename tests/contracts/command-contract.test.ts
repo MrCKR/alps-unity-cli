@@ -71,8 +71,8 @@ test("command contract marks C# handler gaps as present", async () => {
   }
 
   assert.equal(csharpCommands.size, 232);
-  assert.equal(extensionCsharpCommands.size, 31);
-  assert.equal(allCsharpCommands.size, 263);
+  assert.equal(extensionCsharpCommands.size, 34);
+  assert.equal(allCsharpCommands.size, 266);
 });
 
 async function registeredCsharpCommands(directory: URL): Promise<Set<string>> {

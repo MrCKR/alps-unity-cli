@@ -2,7 +2,7 @@
  * Initial registry data for the five built-in CLI extensions.
  *
  * ProBuilder has 36 fine-grained tool contributions.
- * Cinemachine has 10 camera tools.
+ * Cinemachine has 13 camera tools.
  * VFX Graph has 16 tools (graph, effect, parameter, control, event, template,
  *   particle system, line renderer, trail renderer).
  * URP has 3 tools (feature, volume, settings).
@@ -146,6 +146,7 @@ export const CINEMACHINE_MANIFEST: ExtensionManifest = {
   },
   contributions: {
     tools: [
+      { name: "cinemachine.ping", summary: "Cinemachine Ping", description: "Check Cinemachine package availability and reflected camera/brain API status without changing the scene.", group: "cinemachine", bridgeCommand: "cinemachine.ping", cliCommand: "tools run cinemachine.ping" },
       { name: "cinemachine.create", summary: "Cinemachine Create", description: "Create a Cinemachine virtual camera with an optional preset (follow, third_person, freelook, dolly, static, top_down, side_scroller).", group: "cinemachine", bridgeCommand: "cinemachine.create", cliCommand: "tools run cinemachine.create" },
       { name: "cinemachine.target", summary: "Cinemachine Target", description: "Set the Follow and/or LookAt targets on a Cinemachine virtual camera.", group: "cinemachine", bridgeCommand: "cinemachine.target", cliCommand: "tools run cinemachine.target" },
       { name: "cinemachine.lens", summary: "Cinemachine Lens", description: "Get or set lens properties (fieldOfView, nearClipPlane, farClipPlane, orthographicSize, dutch) on a Cinemachine virtual camera.", group: "cinemachine", bridgeCommand: "cinemachine.lens", cliCommand: "tools run cinemachine.lens" },
@@ -155,19 +156,21 @@ export const CINEMACHINE_MANIFEST: ExtensionManifest = {
       { name: "cinemachine.aim", summary: "Cinemachine Aim", description: "Swap or configure the Cinemachine Aim pipeline component on a virtual camera.", group: "cinemachine", bridgeCommand: "cinemachine.aim", cliCommand: "tools run cinemachine.aim" },
       { name: "cinemachine.noise", summary: "Cinemachine Noise", description: "Add, configure or remove a CinemachineBasicMultiChannelPerlin noise component on a virtual camera.", group: "cinemachine", bridgeCommand: "cinemachine.noise", cliCommand: "tools run cinemachine.noise" },
       { name: "cinemachine.brain", summary: "Cinemachine Brain", description: "Ensure a CinemachineBrain is attached to the target camera owner, or report the brain's active virtual camera and blending state.", group: "cinemachine", bridgeCommand: "cinemachine.brain", cliCommand: "tools run cinemachine.brain" },
+      { name: "cinemachine.force-camera", summary: "Cinemachine Force Camera", description: "Force a CinemachineBrain override to a target virtual camera and return the overrideId to release later.", group: "cinemachine", bridgeCommand: "cinemachine.force-camera", cliCommand: "tools run cinemachine.force-camera" },
+      { name: "cinemachine.release-override", summary: "Cinemachine Release Override", description: "Release a CinemachineBrain camera override by overrideId.", group: "cinemachine", bridgeCommand: "cinemachine.release-override", cliCommand: "tools run cinemachine.release-override" },
       { name: "cinemachine.extension", summary: "Cinemachine Extension", description: "List, add or remove CinemachineExtension-derived components on a virtual camera.", group: "cinemachine", bridgeCommand: "cinemachine.extension", cliCommand: "tools run cinemachine.extension" }
     ],
     contexts: [
       { key: "cinemachine.cameras", description: "Cinemachine virtual cameras and composition in the current scene." }
     ],
     bridgeCommands: [
-      { group: "cinemachine", commands: ["create", "target", "lens", "priority", "blend", "body", "aim", "noise", "brain", "extension"] }
+      { group: "cinemachine", commands: ["ping", "create", "target", "lens", "priority", "blend", "body", "aim", "noise", "brain", "force-camera", "release-override", "extension"] }
     ],
     csharpEntries: [
-      { type: "UnityCli.Cinemachine.CinemachineCameraTools", description: "Bridge handlers for Cinemachine create, target, lens, priority, blend, body, aim, noise, brain, and extension operations." }
+      { type: "UnityCli.Cinemachine.CinemachineCameraTools", description: "Bridge handlers for Cinemachine ping, create, target, lens, priority, blend, body, aim, noise, brain, force-camera, release-override, and extension operations." }
     ],
     docs: [
-      { topic: "cinemachine", description: "Cinemachine smart camera system: virtual cameras, composition, blending, noise, and extensions." }
+      { topic: "cinemachine", description: "Cinemachine smart camera system: virtual cameras, composition, blending, Brain overrides, noise, and extensions." }
     ]
   },
   tags: ["camera", "cinematography", "animation"]

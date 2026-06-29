@@ -2,6 +2,7 @@ import { boolFlag, compactArgs, floatFlag, numberFlag, queryArgs, stringFlag, ta
 import type { BridgeCommandSpec } from "../types.js";
 
 export const cinemachineBridgeSpecs: BridgeCommandSpec[] = markToolsOnly([
+  { group: "cinemachine", command: "ping", bridgeCommand: "cinemachine.ping", buildArgs: cinemachinePingArgs },
   { group: "cinemachine", command: "create", bridgeCommand: "cinemachine.create", buildArgs: cinemachineCreateArgs, supportsJob: true },
   { group: "cinemachine", command: "target", bridgeCommand: "cinemachine.target", buildArgs: cinemachineTargetArgs },
   { group: "cinemachine", command: "lens", bridgeCommand: "cinemachine.lens", buildArgs: cinemachineLensArgs },
@@ -11,11 +12,17 @@ export const cinemachineBridgeSpecs: BridgeCommandSpec[] = markToolsOnly([
   { group: "cinemachine", command: "aim", bridgeCommand: "cinemachine.aim", buildArgs: cinemachineAimArgs },
   { group: "cinemachine", command: "noise", bridgeCommand: "cinemachine.noise", buildArgs: cinemachineNoiseArgs },
   { group: "cinemachine", command: "brain", bridgeCommand: "cinemachine.brain", buildArgs: cinemachineBrainArgs },
+  { group: "cinemachine", command: "force-camera", bridgeCommand: "cinemachine.force-camera", buildArgs: cinemachineForceCameraArgs },
+  { group: "cinemachine", command: "release-override", bridgeCommand: "cinemachine.release-override", buildArgs: cinemachineReleaseOverrideArgs },
   { group: "cinemachine", command: "extension", bridgeCommand: "cinemachine.extension", buildArgs: cinemachineExtensionArgs }
 ]);
 
 function markToolsOnly(specs: BridgeCommandSpec[]): BridgeCommandSpec[] {
   return specs.map((spec) => ({ ...spec, toolsOnly: true }));
+}
+
+function cinemachinePingArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({});
 }
 
 function cinemachineCreateArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
@@ -102,11 +109,35 @@ function cinemachineBrainArgs({ flags, positionalTarget }: Parameters<BridgeComm
   });
 }
 
+function cinemachineForceCameraArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "camera") ?? stringFlag(flags, "vcam"),
+    brain: stringFlag(flags, "brain"),
+    source: stringFlag(flags, "source") ?? stringFlag(flags, "from"),
+    overrideId: numberFlag(flags, "override-id") ?? numberFlag(flags, "id"),
+    weight: floatFlag(flags, "weight") ?? floatFlag(flags, "weight-b"),
+    deltaTime: floatFlag(flags, "delta-time")
+  });
+}
+
+function cinemachineReleaseOverrideArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({
+    overrideId: numericPositional(positionalTarget) ?? numberFlag(flags, "override-id") ?? numberFlag(flags, "id"),
+    brain: stringFlag(flags, "brain")
+  });
+}
+
 function cinemachineExtensionArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
     ...targetArgs(flags, positionalTarget),
     action: stringFlag(flags, "action") ?? stringFlag(flags, "op") ?? "list",
     extensionType: stringFlag(flags, "extension-type") ?? stringFlag(flags, "type")
   });
+}
+
+function numericPositional(value: string | undefined): number | undefined {
+  if (!value) return undefined;
+  const parsed = Number.parseInt(value, 10);
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 

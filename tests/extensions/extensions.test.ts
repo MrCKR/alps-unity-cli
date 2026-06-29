@@ -413,9 +413,9 @@ test("collectAllTools includes unavailable extension tools with availability fla
   assert.equal(probuilderTools.length, 36);
   assert.ok(probuilderTools.every((t) => t.available));
 
-  // Cinemachine has 10 tools in its manifest.
+  // Cinemachine has 13 tools in its manifest.
   const cinemachineTools = tools.filter((t) => t.extensionId === "cinemachine");
-  assert.equal(cinemachineTools.length, 10);
+  assert.equal(cinemachineTools.length, 13);
   assert.ok(cinemachineTools.every((t) => !t.available)); // Not installed
 });
 
@@ -618,8 +618,12 @@ test("VFX Graph manifest has correct tool contributions", () => {
   assert.deepEqual(graphOnly.map((t) => t.name), ["vfx.graph", "vfx.effect", "vfx.parameter", "vfx.control", "vfx.event", "vfx.template"]);
 });
 
-test("Cinemachine manifest has 10 tools", () => {
-  assert.equal(CINEMACHINE_MANIFEST.contributions.tools!.length, 10);
+test("Cinemachine manifest has 13 tools", () => {
+  assert.equal(CINEMACHINE_MANIFEST.contributions.tools!.length, 13);
+  const toolNames = CINEMACHINE_MANIFEST.contributions.tools!.map((t) => t.name);
+  assert.ok(toolNames.includes("cinemachine.ping"));
+  assert.ok(toolNames.includes("cinemachine.force-camera"));
+  assert.ok(toolNames.includes("cinemachine.release-override"));
 });
 
 test("URP manifest has 3 tools", () => {
