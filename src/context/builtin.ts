@@ -128,21 +128,26 @@ const EDITOR_STATE: ContextDescriptor = {
 
 const EDITOR_SELECTION: ContextDescriptor = {
   name: "editor.selection",
-  description: "Read the current Unity Editor selection in Hierarchy or Project Browser. Returns object/GameObject names and asset GUIDs only; it does not select, focus, ping, or modify anything.",
+  description: "Read the current Unity Editor selection in Hierarchy or Project Browser. Returns legacy name arrays plus reusable object details: instanceId, type, asset path/GUID, hierarchy path, GameObject reference, transform, and component summaries. It does not select, focus, ping, or modify anything.",
   category: "editor",
   cliCommand: "context read editor.selection",
   inputSchema: { type: "object", properties: {} },
   outputSchema: {
     type: "object",
     properties: {
-      activeObject: { type: "string", description: "Name of the actively selected object." },
-      activeGameObject: { type: "string", description: "Name of the active GameObject." },
-      activeTransform: { type: "string", description: "Name of the active Transform, if any." },
-      objects: { type: "array", items: { type: "string" }, description: "Names of all selected objects." },
-      gameObjects: { type: "array", items: { type: "string" }, description: "Names of selected GameObjects." },
-      assetGUIDs: { type: "array", items: { type: "string" }, description: "Asset GUIDs for selected project assets." }
+      activeObject: { type: ["string", "null"], description: "Name of the actively selected object." },
+      activeGameObject: { type: ["string", "null"], description: "Name of the active GameObject." },
+      activeTransform: { type: ["string", "null"], description: "Name of the active Transform, if any." },
+      activeObjectDetail: { type: ["object", "null"], description: "Reusable detail for the active object: instanceId, type, asset path/GUID, hierarchy path, GameObject reference, transform, and component summaries when applicable." },
+      activeGameObjectDetail: { type: ["object", "null"], description: "Reusable detail for the active GameObject." },
+      activeTransformDetail: { type: ["object", "null"], description: "Reusable detail for the active Transform." },
+      objects: { type: "array", items: { type: ["string", "null"] }, description: "Names of all selected objects, preserved for compatibility." },
+      objectDetails: { type: "array", items: { type: ["object", "null"] }, description: "Detail records for all selected objects." },
+      gameObjects: { type: "array", items: { type: "string" }, description: "Names of selected GameObjects, preserved for compatibility." },
+      gameObjectDetails: { type: "array", items: { type: "object" }, description: "Detail records for selected GameObjects." },
+      assetGUIDs: { type: "array", items: { type: ["string", "null"] }, description: "Asset GUIDs for selected project assets; scene objects return null." }
     },
-    required: ["objects", "gameObjects", "assetGUIDs"]
+    required: ["objects", "objectDetails", "gameObjects", "gameObjectDetails", "assetGUIDs"]
   },
   ...CONTEXT_COMMON,
 };

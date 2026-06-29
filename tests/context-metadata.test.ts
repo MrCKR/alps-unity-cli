@@ -109,6 +109,18 @@ test("editor.tool-states describes Unity Editor tool settings", () => {
   assert.ok(schema.properties.gridAvailable, "editor.tool-states must expose grid availability");
 });
 
+test("editor.selection exposes reusable selection detail fields", () => {
+  const selection = findContextByName("editor.selection");
+  assert.ok(selection, "editor.selection must exist");
+  assert.match(selection.description, /reusable object details/i);
+  const schema = selection.outputSchema as { properties: Record<string, unknown> };
+  assert.ok(schema.properties.activeObjectDetail, "editor.selection must expose activeObjectDetail");
+  assert.ok(schema.properties.activeGameObjectDetail, "editor.selection must expose activeGameObjectDetail");
+  assert.ok(schema.properties.activeTransformDetail, "editor.selection must expose activeTransformDetail");
+  assert.ok(schema.properties.objectDetails, "editor.selection must expose objectDetails");
+  assert.ok(schema.properties.gameObjectDetails, "editor.selection must expose gameObjectDetails");
+});
+
 test("editor contexts describe read-only runtime-safe observations", () => {
   const expected = ["editor.state", "editor.selection", "editor.active-tool", "editor.windows", "editor.tool-states", "editor.menu-items"];
   for (const name of expected) {

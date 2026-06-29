@@ -112,6 +112,20 @@ test("editor context C# descriptors document read-only boundaries", async () => 
   assert.match(source, /destructive Tool editor\.menu/, "editor.menu-items must distinguish execution tool");
 });
 
+test("editor.selection C# context returns reusable detail fields without mutation", async () => {
+  const source = await readContextCommandsSource();
+  assert.match(source, /PropRaw\("activeObjectDetail", SelectionObjectJson\(activeObject\)\)/, "selection context must return activeObjectDetail");
+  assert.match(source, /PropArray\("objectDetails"/, "selection context must return objectDetails");
+  assert.match(source, /PropArray\("gameObjectDetails"/, "selection context must return gameObjectDetails");
+  assert.match(source, /SelectionObjectJson[\s\S]*Prop\("instanceId"[\s\S]*Prop\("assetPath"[\s\S]*Prop\("assetGUID"[\s\S]*Prop\("hierarchyPath"/, "selection detail must expose reusable object references");
+  assert.match(source, /SelectionObjectJson[\s\S]*PropRaw\("components", ComponentsJson\(gameObject\)\)/, "selection detail must expose component summaries for GameObjects");
+  const readSelectionStart = source.indexOf("private static string ReadEditorSelection");
+  const readSelectionEnd = source.indexOf("private static string ReadEditorActiveTool", readSelectionStart);
+  const block = source.slice(readSelectionStart, readSelectionEnd);
+  assert.doesNotMatch(block, /Selection\.activeObject\s*=/, "selection context must not change activeObject");
+  assert.doesNotMatch(block, /AssetDatabase\.Refresh/, "selection context must not refresh assets");
+});
+
 test("Context availability-sensitive handlers return available=false with diagnostics", async () => {
   const source = await readContextCommandsSource();
   // renderer-features, rendering-stats, tests.list should have available=false fallback

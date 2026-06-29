@@ -100,12 +100,13 @@ namespace UnityCli
                 },
                 new BuiltInContextDefinition
                 {
-                    Name = "editor.selection", Description = "Read the current Unity Editor selection in Hierarchy or Project Browser. Returns object/GameObject names and asset GUIDs only; it does not select, focus, ping, or modify anything.",
+                    Name = "editor.selection", Description = "Read the current Unity Editor selection in Hierarchy or Project Browser. Returns legacy name arrays plus reusable object details: instanceId, type, asset path/GUID, hierarchy path, GameObject reference, transform, and component summaries. It does not select, focus, ping, or modify anything.",
                     Category = "editor", Source = "built-in", RefreshBehavior = "live", Target = "editor", AvailabilityScope = "editorSession", Handler = "bridge",
                     InputSchema = "{}",
-                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"activeObject\":{\"type\":\"string\"},\"activeGameObject\":{\"type\":\"string\"},\"activeTransform\":{\"type\":\"string\"},\"objects\":{\"type\":\"array\"},\"gameObjects\":{\"type\":\"array\"},\"assetGUIDs\":{\"type\":\"array\"}}}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"activeObject\":{\"type\":[\"string\",\"null\"]},\"activeGameObject\":{\"type\":[\"string\",\"null\"]},\"activeTransform\":{\"type\":[\"string\",\"null\"]},\"activeObjectDetail\":{\"type\":[\"object\",\"null\"]},\"activeGameObjectDetail\":{\"type\":[\"object\",\"null\"]},\"activeTransformDetail\":{\"type\":[\"object\",\"null\"]},\"objects\":{\"type\":\"array\",\"items\":{\"type\":[\"string\",\"null\"]}},\"objectDetails\":{\"type\":\"array\",\"items\":{\"type\":[\"object\",\"null\"]}},\"gameObjects\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"gameObjectDetails\":{\"type\":\"array\",\"items\":{\"type\":\"object\"}},\"assetGUIDs\":{\"type\":\"array\",\"items\":{\"type\":[\"string\",\"null\"]}}}}",
                     RequiresPackages = null, ReadHandler = ReadEditorSelection
                 },
+
                 new BuiltInContextDefinition
                 {
                     Name = "editor.active-tool", Description = "Read the currently active Unity Editor transform/tool handle plus pivot mode, pivot rotation, handle position, and handle rotation. Does not change the active tool.",
@@ -411,31 +412,71 @@ namespace UnityCli
             var activeObject = Selection.activeObject;
             var activeGameObject = Selection.activeGameObject;
             var activeTransform = Selection.activeTransform;
-            var objects = Selection.objects;
-            var gameObjects = Selection.gameObjects;
+            var objects = Selection.objects ?? new UnityEngine.Object[0];
+            var gameObjects = Selection.gameObjects ?? new GameObject[0];
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .Prop("activeObject", activeObject != null ? activeObject.name : null)
                 .Prop("activeGameObject", activeGameObject != null ? activeGameObject.name : null)
                 .Prop("activeTransform", activeTransform != null ? activeTransform.name : null)
-                .PropArray("objects", arr => { if (objects != null) foreach (var obj in objects) { arr.Value(obj != null ? obj.name : null); } })
-                .PropArray("gameObjects", arr => { if (gameObjects != null) foreach (var go in gameObjects) { arr.Value(go != null ? go.name : null); } })
-                .PropArray("assetGUIDs", arr =>
-                {
-                    if (objects != null)
-                    {
-                        foreach (var obj in objects)
-                        {
-                            if (obj != null)
-                            {
-                                var assetPath = AssetDatabase.GetAssetPath(obj);
-                                var guid = AssetDatabase.AssetPathToGUID(assetPath);
-                                arr.Value(string.IsNullOrEmpty(guid) ? null : guid);
-                            }
-                        }
-                    }
-                })
+                .PropRaw("activeObjectDetail", SelectionObjectJson(activeObject))
+                .PropRaw("activeGameObjectDetail", activeGameObject != null ? SelectionObjectJson(activeGameObject) : "null")
+                .PropRaw("activeTransformDetail", activeTransform != null ? SelectionObjectJson(activeTransform) : "null")
+                .PropArray("objects", arr => { foreach (var obj in objects) { arr.Value(obj != null ? obj.name : null); } })
+                .PropArray("objectDetails", arr => { foreach (var obj in objects) { arr.RawValue(SelectionObjectJson(obj)); } })
+                .PropArray("gameObjects", arr => { foreach (var go in gameObjects) { arr.Value(go != null ? go.name : null); } })
+                .PropArray("gameObjectDetails", arr => { foreach (var go in gameObjects) { if (go != null) arr.RawValue(SelectionObjectJson(go)); } })
+                .PropArray("assetGUIDs", arr => { foreach (var obj in objects) { arr.Value(SelectionAssetGuid(obj)); } })
                 .EndObject()
                 .ToString());
+        }
+
+        // 将选中对象转成后续工具可直接复用的稳定引用摘要；只读，不修改 Selection 或资产。
+        private static string SelectionObjectJson(UnityEngine.Object obj)
+        {
+            if (obj == null) return "null";
+            var assetPath = NormalizeAssetPath(AssetDatabase.GetAssetPath(obj));
+            var assetGuid = SelectionAssetGuid(obj);
+            var gameObject = SelectionObjectGameObject(obj);
+            var writer = new UnityCliJsonWriter().BeginObject()
+                .Prop("name", obj.name)
+                .Prop("instanceId", (long)obj.GetInstanceID())
+                .Prop("type", obj.GetType().Name)
+                .Prop("fullName", obj.GetType().FullName)
+                .Prop("assetPath", assetPath)
+                .Prop("assetGUID", assetGuid);
+            if (gameObject != null)
+            {
+                writer.Prop("hierarchyPath", HierarchyPath(gameObject))
+                    .PropRaw("gameObject", GameObjectTargetJson(gameObject))
+                    .PropRaw("transform", TransformJson(gameObject.transform))
+                    .PropRaw("components", ComponentsJson(gameObject));
+            }
+            else
+            {
+                writer.Prop("hierarchyPath", null)
+                    .PropRaw("gameObject", "null")
+                    .PropRaw("transform", "null")
+                    .PropRaw("components", "[]");
+            }
+            return writer.EndObject().ToString();
+        }
+
+        // 从任意 Unity 对象解析其所属 GameObject；资产对象返回 null。
+        private static GameObject SelectionObjectGameObject(UnityEngine.Object obj)
+        {
+            if (obj is GameObject gameObject) return gameObject;
+            if (obj is Component component) return component.gameObject;
+            return null;
+        }
+
+        // 读取选中资产 GUID；场景对象或非资产对象返回 null。
+        private static string SelectionAssetGuid(UnityEngine.Object obj)
+        {
+            if (obj == null) return null;
+            var assetPath = AssetDatabase.GetAssetPath(obj);
+            if (string.IsNullOrEmpty(assetPath)) return null;
+            var guid = AssetDatabase.AssetPathToGUID(assetPath);
+            return string.IsNullOrEmpty(guid) ? null : guid;
         }
 
         private static string ReadEditorActiveTool(BridgeRequest request)

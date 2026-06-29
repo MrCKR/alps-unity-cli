@@ -55,7 +55,7 @@
       },
       {
         "name": "editor.selection",
-        "description": "Read the current Unity Editor selection in Hierarchy or Project Browser. Returns object/GameObject names and asset GUIDs only; it does not select, focus, ping, or modify anything.",
+        "description": "Read the current Unity Editor selection in Hierarchy or Project Browser. Returns legacy name arrays plus reusable object details: instanceId, type, asset path/GUID, hierarchy path, GameObject reference, transform, and component summaries. It does not select, focus, ping, or modify anything.",
         "category": "editor",
         "source": "built-in",
         "target": "editor",

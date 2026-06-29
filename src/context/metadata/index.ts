@@ -73,14 +73,29 @@ const EDITOR_STATE: ContextMetadata = {
 
 const EDITOR_SELECTION: ContextMetadata = {
   name: "editor.selection",
-  description: "Read the current Unity Editor selection in Hierarchy or Project Browser. Returns object/GameObject names and asset GUIDs only; it does not select, focus, ping, or modify anything.",
+  description: "Read the current Unity Editor selection in Hierarchy or Project Browser. Returns legacy name arrays plus reusable object details: instanceId, type, asset path/GUID, hierarchy path, GameObject reference, transform, and component summaries. It does not select, focus, ping, or modify anything.",
   source: "built-in",
   category: "editor",
   inputSchema: {},
   refreshBehavior: "live",
   target: "editor",
   availabilityScope: "editorSession",
-  outputSchema: { type: "object", properties: { activeObject: { type: ["string", "null"] }, activeGameObject: { type: ["string", "null"] }, activeTransform: { type: ["string", "null"] }, objects: { type: "array", items: { type: "string" } }, gameObjects: { type: "array", items: { type: "string" } }, assetGUIDs: { type: "array", items: { type: "string" } } } },
+  outputSchema: {
+    type: "object",
+    properties: {
+      activeObject: { type: ["string", "null"] },
+      activeGameObject: { type: ["string", "null"] },
+      activeTransform: { type: ["string", "null"] },
+      activeObjectDetail: { type: ["object", "null"] },
+      activeGameObjectDetail: { type: ["object", "null"] },
+      activeTransformDetail: { type: ["object", "null"] },
+      objects: { type: "array", items: { type: ["string", "null"] } },
+      objectDetails: { type: "array", items: { type: ["object", "null"] } },
+      gameObjects: { type: "array", items: { type: "string" } },
+      gameObjectDetails: { type: "array", items: { type: "object" } },
+      assetGUIDs: { type: "array", items: { type: ["string", "null"] } }
+    }
+  },
   handler: "bridge",
   cliCommand: "context read editor.selection"
 };

@@ -168,6 +168,18 @@ test("context describe without name returns error", async () => {
   assert.equal(result.error?.code, "CONTEXT_DESCRIBE_NAME_REQUIRED");
 });
 
+test("context describe editor.selection documents detail fields", async () => {
+  const runtime = makeRuntime();
+  const result = await handleContextCommand("describe", ["editor.selection"], {}, runtime, requestId);
+  assert.equal(result.ok, true);
+
+  const data = result.data as { outputSchema: { properties: Record<string, unknown> }; description: string };
+  assert.match(data.description, /reusable object details/i);
+  assert.ok(data.outputSchema.properties.activeObjectDetail);
+  assert.ok(data.outputSchema.properties.objectDetails);
+  assert.ok(data.outputSchema.properties.gameObjectDetails);
+});
+
 test("context describe for unknown context returns error", async () => {
   const runtime = makeRuntime();
   const result = await handleContextCommand("describe", ["nonexistent.xyz"], {}, runtime, requestId);
