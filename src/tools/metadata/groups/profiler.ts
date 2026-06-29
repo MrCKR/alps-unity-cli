@@ -104,7 +104,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     docsTopic: "profiler",
     examples: [
       { description: "Capture 1 second of profiler data", argv: ["tools", "run", "profiler.capture", "profile.json", "--duration-ms", "1000"] },
-      { description: "Capture as job with wait", argv: ["tools", "run", "profiler.capture", "profile.json", "--job", "--wait"] },
+      { description: "Capture as batchmode job with wait", argv: ["tools", "run", "profiler.capture", "--input", "{\"path\":\"profile.json\",\"format\":\"json\",\"overwrite\":true}", "--job", "--wait", "--project", "<closed-project-path>", "--unity", "<Unity.exe>"] },
       { description: "Capture raw with a correlation tag and frame range sidecar", argv: ["tools", "run", "profiler.capture", "--input", "{\"path\":\"baseline.raw\",\"format\":\"raw\",\"frames\":30,\"captureTag\":\"baseline-before-opt\"}"] }
     ],
   },

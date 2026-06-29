@@ -15,7 +15,7 @@ import { resolve } from "node:path";
 import { discoverProjectTools, discoverRuntimeTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
 import { selectInstanceForFlags } from "./instances.js";
 import { defaultDataDir } from "./platform.js";
-import { bridgeCommandRegistry, executeBridgeCommand, executeBridgePayload } from "./bridge/index.js";
+import { bridgeCommandRegistry, executeBridgeCommand, executeBridgePayload, startBridgeCommandJob } from "./bridge/index.js";
 import { checkToolExtensionAvailability, collectExtensionToolDescriptors } from "./extension-availability.js";
 import { readInstalledUnityPackages } from "./extensions/index.js";
 import {
@@ -472,6 +472,9 @@ async function handleToolsRun(
     let args = await spec.buildArgs({ command: toolName, flags: mergedFlags, positionalTarget: positional[1] });
     const validationError = validateRequiredInputFields(tool, args as Record<string, unknown>, mergedFlags, positional[1], requestId);
     if (validationError) return validationError;
+    if (getBoolean(mergedFlags, "job") && spec.supportsJob !== true) {
+      return unsupportedBridgeJob(requestId, toolName);
+    }
     // 破坏性工具确认(对齐旧 cli.ts bridge 路径)。
     if (spec.destructiveHint || tool.destructiveHint) {
       const confirmation = await confirmDestructiveExecution(mergedFlags, {
@@ -483,9 +486,18 @@ async function handleToolsRun(
       });
       if (confirmation) return confirmation;
     }
-    let bridgeCommand = spec.bridgeCommand;
+    const bridgeCommand = spec.bridgeCommand;
     if (spec.toolName) {
       args = { name: spec.toolName, input: args };
+    }
+    if (getBoolean(mergedFlags, "job")) {
+      const jobRuntime = bridgeJobRuntime(runtime);
+      if (!jobRuntime) {
+        return failure(requestId, "E_TOOL_HANDLER_UNSUPPORTED", `Tool "${toolName}" requires a job runner runtime for --job.`, [
+          "Run from the unity_cli entrypoint, or provide runtime.dataDir, runtime.store and runtime.runner in tests."
+        ]);
+      }
+      return startBridgeCommandJob(requestId, toolName, bridgeCommand, args as Record<string, unknown>, mergedFlags, jobRuntime, spec);
     }
     return executeBridgePayload(requestId, bridgeCommand, args, mergedFlags, runtime);
   }
@@ -510,6 +522,23 @@ async function handleToolsRun(
 
   // ── Custom project tools (editor domain): route through project-tool.run ──
   return executeBridgeCommand(requestId, "project-tool.run", flags, toolName, runtime);
+}
+
+/** 返回 bridge/hybrid 工具未声明 job 支持时的结构化错误。 */
+function unsupportedBridgeJob(requestId: string, toolName: string): CliResult {
+  return failure(requestId, "E_TOOL_JOB_UNSUPPORTED", `Tool does not support --job: ${toolName}.`, [
+    `Run unity_cli tools describe ${toolName} and check supportStatus/cancellationSemantics.`,
+    "Remove --job to run through the live Bridge, or choose a tool whose descriptor documents bridge-job support."
+  ], {
+    tool: toolName,
+    flag: "--job"
+  });
+}
+
+/** 提取 batchmode job 需要的运行时依赖，测试 runtime 缺项时显式失败。 */
+function bridgeJobRuntime(runtime: ToolsRuntime): (Runtime & { dataDir: string }) | undefined {
+  const candidate = runtime as Partial<Runtime>;
+  return candidate.dataDir && candidate.store && candidate.runner ? candidate as Runtime & { dataDir: string } : undefined;
 }
 
 export function findBridgeSpecForTool(toolName: string) {

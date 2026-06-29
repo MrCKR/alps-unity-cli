@@ -33,6 +33,8 @@ interface BatchStepDefinition {
   id: string;
   command: string[];
   args?: string[];
+  input?: unknown;
+  job?: boolean;
   dependsOn?: string[];
   timeoutMs?: number;
   waitTimeoutMs?: number;
@@ -388,6 +390,8 @@ export function batchJsonSchema(): Record<string, unknown> {
             id: { type: "string", pattern: "^[A-Za-z0-9_.-]+$" },
             command: { type: "array", minItems: 2, items: { type: "string" } },
             args: { type: "array", items: { type: "string" } },
+            input: { description: "Structured JSON value appended as --input <json> when args does not already include --input, --input-file, or --stdin." },
+            job: { type: "boolean", description: "Append --job for tools run steps when the target tool descriptor supports bridge-job execution." },
             dependsOn: { type: "array", items: { type: "string" }, uniqueItems: true },
             timeoutMs: { type: "integer", minimum: 1 },
             waitTimeoutMs: { type: "integer", minimum: 1 },
@@ -504,7 +508,7 @@ function normalizeBatch(batch: BatchDefinition, batchPath: string): { steps: Nor
     // commandKey: tools run 使用点号工具名;控制面使用顶层命令形态。
     const commandKey = batchCommandKey(rawCommand);
     const registryItem = commandRegistry.get(commandKey);
-    const argv = applyDefaults([...rawCommand, ...rawArgs], defaults, step, defaultCwd);
+    const argv = applyDefaults(applyStepOptions([...rawCommand, ...rawArgs], step), defaults, step, defaultCwd);
     return {
       id: typeof step.id === "string" ? step.id : "",
       argv,
@@ -726,6 +730,26 @@ function appendFlagIfMissing(argv: string[], name: string, value?: string): void
     return;
   }
   argv.push(`--${name}`, value);
+}
+
+/** 将 batch step 的结构化选项安全转换为公开 CLI flags。 */
+function applyStepOptions(argv: string[], step: BatchStepDefinition): string[] {
+  let result = [...argv];
+  if (step.job === true && isToolsRunStep(result) && !hasFlag(result, "job")) {
+    result = [...result, "--job"];
+  }
+  if (step.input !== undefined && !hasAnyInputSource(result)) {
+    result = [...result, "--input", JSON.stringify(step.input)];
+  }
+  return result;
+}
+
+function isToolsRunStep(argv: string[]): boolean {
+  return argv[0] === "tools" && argv[1] === "run";
+}
+
+function hasAnyInputSource(argv: string[]): boolean {
+  return hasFlag(argv, "input") || hasFlag(argv, "input-file") || hasFlag(argv, "stdin");
 }
 
 function hasFlag(argv: string[], name: string): boolean {

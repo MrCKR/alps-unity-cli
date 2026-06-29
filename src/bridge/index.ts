@@ -7,10 +7,21 @@ import { instanceSelectionFailure, selectInstanceForFlags, type InstanceSelectio
 import { BridgeArgumentError } from "./args.js";
 import { bridgeCommandRegistry } from "./registry.js";
 import { confirmDestructiveExecution, destructiveSecurityProof, isDryRunRequested } from "../security.js";
-import type { BridgeError, BridgeFlags, BridgeRequest, BridgeResponse, BridgeRuntime } from "./types.js";
+import { ensurePackageBridge, PackageManagerError } from "../package-manager.js";
+import { isProjectLocked, startUnityJob } from "../cli-commands/unity-job.js";
+import { discoverUnity } from "../platform.js";
+import type { JobRunner } from "../job-runner.js";
+import type { JobStore } from "../job-store.js";
+import type { BridgeCommandSpec, BridgeError, BridgeFlags, BridgeRequest, BridgeResponse, BridgeRuntime } from "./types.js";
 
 export { BridgeCommandRegistry, bridgeCommandRegistry } from "./registry.js";
 export type { BridgeCommandSpec, BridgeRequest, BridgeResponse, BridgeRuntime } from "./types.js";
+
+export interface BridgeJobRuntime extends BridgeRuntime {
+  dataDir: string;
+  store: JobStore;
+  runner: JobRunner;
+}
 
 export async function executeBridgeCommand(
   requestId: string,
@@ -123,6 +134,66 @@ export async function executeBridgePayload(
 
   result.durationMs = durationMsFrom(startMs);
   return result;
+}
+
+/** 通过 Unity batchmode 执行任意支持 job 的 Bridge command。 */
+export async function startBridgeCommandJob(
+  requestId: string,
+  toolName: string,
+  bridgeCommand: string,
+  args: Record<string, unknown>,
+  flags: BridgeFlags,
+  runtime: BridgeJobRuntime,
+  spec?: BridgeCommandSpec
+): Promise<CliResult> {
+  const projectPath = resolve(typeof flags.project === "string" ? flags.project : process.cwd());
+  const unityPath = typeof flags.unity === "string" ? flags.unity : discoverUnity();
+  if (!unityPath) {
+    return failure(requestId, "UNITY_NOT_FOUND", "Unity.exe was not found.", ["Pass --unity <path-to-Unity.exe> or set UNITY_EXE."]);
+  }
+  if (isProjectLocked(projectPath)) {
+    return failure(requestId, "UNITY_BUSY", `Cannot start Unity batchmode: the project is currently open in the Unity Editor (${projectPath}).`, [
+      "Close the Unity Editor and retry.",
+      "If Unity is not running, delete the stale lock file: <project>/Temp/UnityLockfile",
+      "Run 'unity_cli jobs status <jobId>' to check existing jobs."
+    ], {
+      projectPath,
+      kind: "bridge",
+      lockFilePath: resolve(projectPath, "Temp", "UnityLockfile")
+    });
+  }
+  try {
+    const bridge = await ensurePackageBridge(projectPath);
+    const envelopeArgs: Record<string, unknown> = {
+      __unityCliBridgeEnvelope: true,
+      args,
+      ...(isDryRunRequested(flags) ? { dryRun: true } : {})
+    };
+    const security = bridgeSecurity(bridgeCommand, flags);
+    if (security) {
+      envelopeArgs.security = security;
+    }
+    return startUnityJob("bridge", flags, runtime, requestId, [
+      "-executeMethod", "UnityCli.UnityCliBatch.RunBridgeCommand",
+      "-unityCliBridgeCommand", bridgeCommand,
+      "-unityCliBridgeRequestId", requestId,
+      "-unityCliBridgeArgs", JSON.stringify(envelopeArgs)
+    ], {
+      command: toolName,
+      bridgeCommand,
+      mode: "bridge-job",
+      execution: { channel: "batchmode", exitState: "queued" },
+      supportsJob: spec?.supportsJob === true,
+      args,
+      dryRun: isDryRunRequested(flags),
+      bridge
+    });
+  } catch (error) {
+    if (error instanceof PackageManagerError) {
+      return failure(requestId, error.code, error.message, error.nextActions);
+    }
+    throw error;
+  }
 }
 
 function bridgeSecurity(command: string, flags: BridgeFlags): Record<string, unknown> | undefined {

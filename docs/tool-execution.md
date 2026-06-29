@@ -88,16 +88,36 @@ unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --yes
 
 不支持 `--dry-run` 的破坏性工具，使用 `--dry-run` 时返回 `E_DRY_RUN_UNSUPPORTED`。
 
+## Batch 输入
+
+`batch run` 的 step 可用 `input` 字段传结构化 JSON，CLI 会自动追加为 `--input <json>`。这比在 `args` 里手写 `--input` 字符串更适合 Windows 路径和嵌套对象；如果 step 的 `args` 已经包含 `--input`、`--input-file` 或 `--stdin`，显式输入来源优先生效。对 `tools run` step，`job:true` 会追加 `--job`，用于 descriptor 标记 `bridge-job` 的工具。
+
+```json
+{
+  "steps": [
+    {
+      "id": "capture",
+      "command": ["tools", "run", "profiler.capture"],
+      "job": true,
+      "input": { "path": "Artifacts/profile.json", "format": "json", "overwrite": true }
+    }
+  ]
+}
+```
+
 ## Job 模式
 
-handler 为 `hybrid` 的工具支持 `--job` 标志，切换为 batchmode/job 执行：
+`handler: "hybrid"` 且声明 job 支持的工具可用 `--job` 标志切换为 batchmode/job 执行。`--job` 不需要 live Bridge endpoint，但需要可用 Unity 可执行文件和未被 Editor 打开的项目；项目已打开时返回 `UNITY_BUSY`，不会先部署 Bridge 包。未声明 job 支持的 bridge/hybrid 工具会返回 `E_TOOL_JOB_UNSUPPORTED`。
 
 ```powershell
 # 实时 Bridge 执行（默认）
-unity_cli tools run probuilder.create-shape --input '{"type":"Cube"}'
+unity_cli tools run profiler.capture --input '{"path":"profile.json"}'
 
 # Job 模式
-unity_cli tools run probuilder.create-shape --input '{"type":"Cube"}' --job
+unity_cli tools run profiler.capture --input '{"path":"profile.json"}' --job --project . --unity "C:\Program Files\Unity\Unity-2022.3.61f1\Editor\Unity.exe"
+
+# 等待并取回 Bridge envelope 摘要
+unity_cli tools run profiler.capture --input '{"path":"profile.json"}' --job --wait --project . --unity "C:\Program Files\Unity\Unity-2022.3.61f1\Editor\Unity.exe"
 
 # 查看任务状态
 unity_cli jobs status <jobId>

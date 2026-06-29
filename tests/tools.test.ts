@@ -4,9 +4,11 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
+import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { bridgeCommandRegistry, type BridgeRequest } from "../src/bridge/index.js";
 import { handleToolsCommand, type ToolsRuntime } from "../src/tools.js";
 import { builtinToolMetadata, builtinToolGroups, findToolByName, filterToolsByGroup, searchTools, allRegisteredToolMetadata, extensionToolMetadata, allRegisteredToolGroups, EXTENSION_GROUPS, supportStatusForTool, normalizeToolMetadata } from "../src/tools/metadata/index.js";
@@ -14,6 +16,33 @@ import "../src/extensions/index.js";
 
 const requestId = "test_req_tools_001";
 const emptyRuntime: ToolsRuntime = {};
+
+function makeTempDir(prefix: string): string {
+  const dir = join(tmpdir(), `${prefix}-${Date.now()}-${Math.random().toString(16).slice(2)}`);
+  mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function makeUnityProject(root: string, packages: Record<string, string> = {}): string {
+  const project = join(root, "Project");
+  mkdirSync(join(project, "Packages"), { recursive: true });
+  writeFileSync(join(project, "Packages", "manifest.json"), JSON.stringify({ dependencies: packages }, null, 2), "utf8");
+  writeFileSync(join(project, "Packages", "packages-lock.json"), JSON.stringify({ dependencies: Object.fromEntries(Object.entries(packages).map(([name, version]) => [name, { version }])) }, null, 2), "utf8");
+  return project;
+}
+
+function makeFakeUnity(root: string, body: string): string {
+  if (process.platform === "win32") {
+    const script = join(root, "UnityFake.js");
+    const path = join(root, "Unity.cmd");
+    writeFileSync(script, body, "utf8");
+    writeFileSync(path, `@echo off\r\n"${process.execPath}" "%~dp0UnityFake.js" %*\r\nif errorlevel 1 exit /b %errorlevel%\r\n`, "utf8");
+    return path;
+  }
+  const path = join(root, "Unity.exe");
+  writeFileSync(path, `#!/usr/bin/env node\n${body}\n`, { mode: 0o755 });
+  return path;
+}
 
 // ── tool-metadata module ───────────────────────────────────
 
@@ -1481,6 +1510,149 @@ test("tools run built-in hybrid tool routes to native bridge command", async () 
   assert.equal(result.ok, true);
   assert.equal(requests[0].command, "profiler.start");
   assert.deepEqual((requests[0].args as Record<string, unknown>).deepProfiling, true);
+});
+
+test("tools run bridge tool returns structured error when --job is unsupported", async () => {
+  const result = await handleToolsCommand("run", ["scene.active"], { job: true }, emptyRuntime, requestId);
+
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_TOOL_JOB_UNSUPPORTED");
+  assert.equal((result.error?.details as { tool: string }).tool, "scene.active");
+});
+
+test("tools run supported bridge --job queues batchmode without live bridge endpoint", async () => {
+  const { JobStore } = await import("../src/job-store.js");
+  const { JobRunner } = await import("../src/job-runner.js");
+  const dataDir = makeTempDir("tools-bridge-job");
+  try {
+    const project = makeUnityProject(dataDir);
+    const unity = makeFakeUnity(dataDir, `process.exit(0);`);
+    const store = new JobStore(dataDir);
+    const runner = new JobRunner(store, dataDir);
+    const runtime = { dataDir, store, runner } as ToolsRuntime;
+
+    const result = await handleToolsCommand("run", ["profiler.capture", "profile.json"], { job: true, unity, project, "timeout-ms": "1234" }, runtime, requestId);
+
+    assert.equal(result.ok, true);
+    const data = result.data as { kind: string; command: string[]; result: { command: string; bridgeCommand: string; mode: string; args: { path: string }; bridge: { dependencyName: string } } };
+    assert.equal(data.kind, "bridge");
+    assert.equal(data.result.command, "profiler.capture");
+    assert.equal(data.result.bridgeCommand, "profiler.capture");
+    assert.equal(data.result.mode, "bridge-job");
+    assert.equal(data.result.args.path, "profile.json");
+    assert.equal(data.result.bridge.dependencyName, "com.unity_cli");
+    assert.ok(data.command.includes("UnityCli.UnityCliBatch.RunBridgeCommand"));
+    const argsJson = data.command[data.command.indexOf("-unityCliBridgeArgs") + 1];
+    const envelope = JSON.parse(argsJson) as { __unityCliBridgeEnvelope: boolean; args: { path: string } };
+    assert.equal(envelope.__unityCliBridgeEnvelope, true);
+    assert.deepEqual(envelope.args, { path: "profile.json" });
+
+    await runner.wait((result.data as { jobId: string }).jobId, 3000);
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("tools run bridge --job returns UNITY_BUSY before bridge package deployment", async () => {
+  const { JobStore } = await import("../src/job-store.js");
+  const { JobRunner } = await import("../src/job-runner.js");
+  const dataDir = makeTempDir("tools-bridge-job-locked");
+  try {
+    const project = makeUnityProject(dataDir);
+    mkdirSync(join(project, "Temp"), { recursive: true });
+    writeFileSync(join(project, "Temp", "UnityLockfile"), "locked", "utf8");
+    const unity = makeFakeUnity(dataDir, `process.exit(0);`);
+    const store = new JobStore(dataDir);
+    const runner = new JobRunner(store, dataDir);
+    const runtime = { dataDir, store, runner } as ToolsRuntime;
+
+    const result = await handleToolsCommand("run", ["profiler.capture"], { job: true, unity, project, input: JSON.stringify({ path: "profile.json" }) }, runtime, requestId);
+
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "UNITY_BUSY");
+    assert.equal(readFileSync(join(project, "Packages", "manifest.json"), "utf8").includes("com.unity_cli"), false);
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("tools run project-tool bridge --job wraps tool name and input", async () => {
+  const { JobStore } = await import("../src/job-store.js");
+  const { JobRunner } = await import("../src/job-runner.js");
+  const dataDir = makeTempDir("tools-project-tool-job");
+  try {
+    const project = makeUnityProject(dataDir, { "com.unity.probuilder": "5.0.7" });
+    const unity = makeFakeUnity(dataDir, `process.exit(0);`);
+    const store = new JobStore(dataDir);
+    const runner = new JobRunner(store, dataDir);
+    const runtime = { dataDir, store, runner } as ToolsRuntime;
+
+    const result = await handleToolsCommand("run", ["probuilder.create-shape"], { job: true, unity, project, input: JSON.stringify({ shapeType: "Cube", name: "JobCube" }) }, runtime, requestId);
+
+    assert.equal(result.ok, true);
+    const data = result.data as { command: string[]; result: { bridgeCommand: string; args: { name: string; input: { shapeType: string; name: string } } } };
+    assert.equal(data.result.bridgeCommand, "project-tool.run");
+    assert.deepEqual(data.result.args, { name: "probuilder.create-shape", input: { shapeType: "Cube", name: "JobCube" } });
+    const argsJson = data.command[data.command.indexOf("-unityCliBridgeArgs") + 1];
+    const envelope = JSON.parse(argsJson) as { args: { name: string; input: { shapeType: string; name: string } } };
+    assert.deepEqual(envelope.args, { name: "probuilder.create-shape", input: { shapeType: "Cube", name: "JobCube" } });
+
+    await runner.wait((result.data as { jobId: string }).jobId, 3000);
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("bridge job summary reads UNITY_CLI_BRIDGE_RESULT from logs", async () => {
+  const { JobStore } = await import("../src/job-store.js");
+  const { JobRunner } = await import("../src/job-runner.js");
+  const dataDir = makeTempDir("tools-bridge-job-log");
+  try {
+    const project = makeUnityProject(dataDir);
+    const unity = makeFakeUnity(dataDir, `
+process.stdout.write('UNITY_CLI_BRIDGE_RESULT {"ok":true,"data":{"captured":true,"path":"profile.json"}}\\n');
+process.exit(0);
+`);
+    const store = new JobStore(dataDir);
+    const runner = new JobRunner(store, dataDir);
+    const runtime = { dataDir, store, runner } as ToolsRuntime;
+
+    const created = await handleToolsCommand("run", ["profiler.capture"], { job: true, wait: true, unity, project, input: JSON.stringify({ path: "profile.json" }) }, runtime, requestId);
+
+    assert.equal(created.ok, true);
+    const data = created.data as { status: string; result: { data: { captured: boolean; path: string }; bridgeEnvelope: { ok: boolean } } };
+    assert.equal(data.status, "succeeded");
+    assert.deepEqual(data.result.data, { captured: true, path: "profile.json" });
+    assert.equal(data.result.bridgeEnvelope.ok, true);
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("bridge job failure diagnostic uses Bridge error envelope", async () => {
+  const { JobStore } = await import("../src/job-store.js");
+  const { JobRunner } = await import("../src/job-runner.js");
+  const dataDir = makeTempDir("tools-bridge-job-fail");
+  try {
+    const project = makeUnityProject(dataDir);
+    const unity = makeFakeUnity(dataDir, `
+process.stdout.write('UNITY_CLI_BRIDGE_RESULT {"ok":false,"error":{"code":"E_PROFILER_CAPTURE_FAILED","message":"capture failed"}}\\n');
+process.exit(1);
+`);
+    const store = new JobStore(dataDir);
+    const runner = new JobRunner(store, dataDir);
+    const runtime = { dataDir, store, runner } as ToolsRuntime;
+
+    const created = await handleToolsCommand("run", ["profiler.capture"], { job: true, unity, project, input: JSON.stringify({ path: "profile.json" }) }, runtime, requestId);
+    const waited = await runner.wait((created.data as { jobId: string }).jobId, 3000);
+
+    assert.equal(waited.status, "failed");
+    assert.equal(waited.error?.code, "E_PROFILER_CAPTURE_FAILED");
+    assert.equal(waited.error?.message, "capture failed");
+    assert.deepEqual(waited.result?.bridgeError, { code: "E_PROFILER_CAPTURE_FAILED", message: "capture failed" });
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+  }
 });
 
 // ── Play Mode regression: Play Mode tool discovery and --target/--runtime flags ──

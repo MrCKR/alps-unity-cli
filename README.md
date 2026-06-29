@@ -505,6 +505,21 @@ unity_cli batch run <batch-file.json>
 unity_cli batch run <file> --preflight --parallel 4 --fail-fast false
 ```
 
+Batch step 可用 `input` 字段传结构化 JSON，CLI 会安全转成 `--input <json>`；Windows 路径不需要手写转义在 `args` 字符串里。
+
+```json
+{
+  "steps": [
+    {
+      "id": "capture",
+      "command": ["tools", "run", "profiler.capture"],
+      "job": true,
+      "input": { "path": "Artifacts/profile.json", "format": "json", "overwrite": true }
+    }
+  ]
+}
+```
+
 ### 实例与目标
 
 ```powershell

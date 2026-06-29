@@ -286,6 +286,24 @@ export class JobRunner {
       }
       return result;
     }
+    if (job.kind === "bridge") {
+      const bridgeResult = await this.readBridgeResult(job.logPath);
+      if (!bridgeResult) {
+        return job.result;
+      }
+      const result: Record<string, unknown> = {
+        ...job.result,
+        execution: { ...objectRecord(job.result?.execution), exitState: bridgeResult.ok === true ? "succeeded" : "failed" },
+        bridgeEnvelope: bridgeResult
+      };
+      if (bridgeResult.ok === true && isRecord(bridgeResult.data)) {
+        result.data = bridgeResult.data;
+      }
+      if (bridgeResult.ok === false && isRecord(bridgeResult.error)) {
+        result.bridgeError = bridgeResult.error;
+      }
+      return result;
+    }
     return job.result;
   }
 
@@ -299,6 +317,15 @@ export class JobRunner {
       }
       const log = await this.readLog(job.logPath);
       return { code: codeDiagnosticCode(log), message: firstMatchingLine(log, /(E_CODE_[A-Z_]+:[^\r\n]*)/i) ?? `Unity code execution failed with exit code ${code}.` };
+    }
+    if (job.kind === "bridge") {
+      const bridgeResult = await this.readBridgeResult(job.logPath);
+      const error = isRecord(bridgeResult?.error) ? bridgeResult.error : undefined;
+      if (typeof error?.code === "string" && typeof error?.message === "string") {
+        return { code: error.code, message: error.message };
+      }
+      const log = await this.readLog(job.logPath);
+      return { code: "BRIDGE_COMMAND_FAILED", message: firstMatchingLine(log, /(UNITY_CLI_BRIDGE_RESULT\s+\{[^\r\n]*\})/i) ?? `Unity bridge job failed with exit code ${code}.` };
     }
     if (job.kind !== "package") {
       return { code: "UNITY_BATCHMODE_FAILED", message: `Unity exited with code ${code}.` };
@@ -326,6 +353,22 @@ export class JobRunner {
   private async readCodeResult(path: string): Promise<Record<string, unknown> | undefined> {
     try {
       return JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** 从 batchmode 日志提取 Bridge 命令的统一 JSON envelope。 */
+  private async readBridgeResult(path: string): Promise<Record<string, unknown> | undefined> {
+    const log = await this.readLog(path);
+    const matches = [...log.matchAll(/UNITY_CLI_BRIDGE_RESULT\s+(\{[^\r\n]*\})/g)];
+    const raw = matches.at(-1)?.[1];
+    if (!raw) {
+      return undefined;
+    }
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      return isRecord(parsed) ? parsed : undefined;
     } catch {
       return undefined;
     }
@@ -367,6 +410,14 @@ export class JobRunner {
 
 function artifactList(value: unknown): Record<string, unknown>[] {
   return Array.isArray(value) ? value.filter((item): item is Record<string, unknown> => Boolean(item) && typeof item === "object" && !Array.isArray(item)) : [];
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
+}
+
+function objectRecord(value: unknown): Record<string, unknown> {
+  return isRecord(value) ? value : {};
 }
 
 function normalizeRelativePath(path: string): string {

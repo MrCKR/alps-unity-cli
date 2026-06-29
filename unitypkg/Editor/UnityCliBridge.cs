@@ -160,14 +160,22 @@ namespace UnityCli
         public static int ExecuteBatchCommand(string requestId, string command, string argsJson)
         {
             var rawArgs = string.IsNullOrEmpty(argsJson) ? "{}" : argsJson;
+            var isEnvelope = string.Equals(JsonRawProperty(rawArgs, "__unityCliBridgeEnvelope"), "true", StringComparison.OrdinalIgnoreCase);
+            var commandArgs = isEnvelope ? JsonRawProperty(rawArgs, "args") : rawArgs;
+            if (string.IsNullOrEmpty(commandArgs)) commandArgs = "{}";
             var dryRun = JsonRawProperty(rawArgs, "dryRun");
+            var security = isEnvelope ? JsonRawProperty(rawArgs, "security") : null;
             var w = new UnityCliJsonWriter().BeginObject()
                 .Prop("requestId", requestId)
                 .Prop("command", command)
-                .PropRaw("args", rawArgs);
+                .PropRaw("args", commandArgs);
             if (!string.IsNullOrEmpty(dryRun))
             {
                 w.PropRaw("dryRun", dryRun);
+            }
+            if (!string.IsNullOrEmpty(security))
+            {
+                w.PropRaw("security", security);
             }
             w.EndObject();
             var body = w.ToString();

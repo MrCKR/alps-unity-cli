@@ -33,6 +33,9 @@ test("batch schema exposes defaults, steps and env allowlist", async () => {
   assert.ok(schema.properties.envAllowlist);
   assert.ok(schema.properties.failFast);
   assert.ok(schema.properties.fail_fast);
+  const steps = schema.properties.steps as { items?: { properties?: Record<string, unknown> } };
+  assert.ok(steps.items?.properties?.input);
+  assert.ok(steps.items?.properties?.job);
 });
 
 test("batch run accepts inline JSON input", async () => {
@@ -50,6 +53,52 @@ test("batch run accepts inline JSON input", async () => {
   assert.equal(data.steps[0].id, "groups");
   assert.equal(data.steps[0].envelope.ok, true);
 });
+
+test("batch step input is serialized as --input JSON", async () => {
+  const runtime = await makeRuntime();
+  const inputPath = "D:\\workspace\\alps-unity-cli\\Dev\\BridgeJobGateProject\\capture.raw";
+  const batch = await writeBatch(runtime.dataDir, {
+    steps: [{ id: "describe", command: ["tools", "run", "tools.describe"], input: { name: "profiler.capture", path: inputPath } }]
+  });
+
+  const result = await execute(["batch", "run", batch, "--preflight"], runtime);
+
+  assert.equal(result.ok, true);
+  const data = result.data as { steps: Array<{ command: string[] }> };
+  const argv = data.steps[0].command;
+  assert.ok(argv.includes("--input"));
+  assert.deepEqual(JSON.parse(argv[argv.indexOf("--input") + 1]) as { name: string; path: string }, { name: "profiler.capture", path: inputPath });
+});
+
+test("batch step input does not override explicit input args", async () => {
+  const runtime = await makeRuntime();
+  const batch = await writeBatch(runtime.dataDir, {
+    steps: [{ id: "describe", command: ["tools", "run", "tools.describe"], args: ["--input", JSON.stringify({ name: "scene.active" })], input: { name: "profiler.capture" } }]
+  });
+
+  const result = await execute(["batch", "run", batch, "--yes"], runtime);
+
+  assert.equal(result.ok, true);
+  const data = result.data as { steps: Array<{ envelope: { data: { name: string } } }> };
+  assert.equal(data.steps[0].envelope.data.name, "scene.active");
+});
+
+test("batch step job appends --job for tools run steps", async () => {
+  const runtime = await makeRuntime();
+  const batch = await writeBatch(runtime.dataDir, {
+    steps: [{ id: "capture", command: ["tools", "run", "profiler.capture"], job: true, input: { path: "profile.json" } }]
+  });
+
+  const result = await execute(["batch", "run", batch, "--preflight"], runtime);
+
+  assert.equal(result.ok, true);
+  const data = result.data as { steps: Array<{ command: string[] }> };
+  const argv = data.steps[0].command;
+  assert.ok(argv.includes("--job"));
+  assert.equal(argv.filter((item) => item === "--job").length, 1);
+  assert.ok(argv.includes("--input"));
+});
+
 
 test("batch run inline JSON reports parse errors", async () => {
   const runtime = await makeRuntime();

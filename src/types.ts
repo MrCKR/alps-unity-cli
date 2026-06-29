@@ -1,6 +1,6 @@
 import type { CliError } from "./output.js";
 
-export type JobKind = "refresh" | "test" | "build" | "package" | "code" | "profiler" | "probuilder";
+export type JobKind = "refresh" | "test" | "build" | "package" | "code" | "bridge" | "profiler" | "probuilder";
 
 export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled" | "timeout";
 
