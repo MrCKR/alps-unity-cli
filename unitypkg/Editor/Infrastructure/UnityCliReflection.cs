@@ -13,8 +13,7 @@ namespace UnityCli
     public static partial class UnityCliBridge
     {
         /// <summary>
-        /// 类型 JSON Schema 生成器：对齐 IvanMurzak type-get-json-schema，
-        /// 为 C# / Unity 类型 live 生成 JSON Schema。
+        /// 类型 JSON Schema 生成器：为 live C# / Unity 类型生成带 $defs 的结构化 schema。
         /// </summary>
         internal static class TypeSchemaGenerator
         {
@@ -27,87 +26,269 @@ namespace UnityCli
                         "Type not found: " + typeName,
                         "Pass a full type name such as UnityEngine.Transform or UnityEngine.Rigidbody.");
                 }
-                var visited = new HashSet<string>();
-                var schema = BuildSchema(type, maxDepth, 0, visited);
+
+                var context = new SchemaContext(type, Math.Max(0, maxDepth));
+                var schema = BuildSchema(type, context, 0, true);
                 var w = new UnityCliJsonWriter().BeginObject();
                 w.Prop("command", "type.schema");
-                w.Prop("typeName", type.FullName);
+                w.Prop("typeName", FriendlyTypeName(type));
                 w.PropRaw("schema", schema);
+                w.Prop("definitionCount", (long)context.Definitions.Count);
                 w.Prop("logPath", LogPath());
                 return w.EndObject().ToString();
             }
 
-            private static string BuildSchema(Type type, int maxDepth, int depth, HashSet<string> visited)
+            /// <summary>递归生成 schema；复杂嵌套类型通过 $defs/$ref 去重，避免循环类型无限展开。</summary>
+            private static string BuildSchema(Type type, SchemaContext context, int depth, bool isRoot)
             {
                 var w = new UnityCliJsonWriter().BeginObject();
-                if (type == null) { w.Prop("type", "null"); return w.EndObject().ToString(); }
-                if (IsSimpleType(type))
+                WriteSchemaProperties(w, type, context, depth, isRoot);
+                if (isRoot && context.Definitions.Count > 0)
                 {
-                    w.Prop("type", JsonTypeFor(type));
-                    return w.EndObject().ToString();
-                }
-                if (type.IsEnum)
-                {
-                    w.Prop("type", "string");
-                    w.PropArray("enum", arr => { foreach (var v in Enum.GetNames(type)) arr.Value(v); });
-                    return w.EndObject().ToString();
-                }
-                if (typeof(IList).IsAssignableFrom(type))
-                {
-                    w.Prop("type", "array");
-                    var elemType = type.IsArray ? type.GetElementType() : (type.GetInterfaces().Concat(new[] { type })
-                        .Select(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IList<>) ? i.GetGenericArguments()[0] : null)
-                        .FirstOrDefault(t => t != null));
-                    if (elemType != null && depth < maxDepth)
+                    w.PropObject("$defs", defs =>
                     {
-                        w.PropRaw("items", BuildSchema(elemType, maxDepth, depth + 1, visited));
-                    }
-                    return w.EndObject().ToString();
+                        foreach (var key in context.Definitions.Keys.OrderBy(k => k, StringComparer.Ordinal))
+                        {
+                            defs.PropRaw(key, context.Definitions[key]);
+                        }
+                    });
                 }
-                // 对象类型
-                w.Prop("type", "object");
-                var fullName = type.FullName;
-                if (depth >= maxDepth || visited.Contains(fullName))
-                {
-                    w.Prop("truncated", true);
-                    return w.EndObject().ToString();
-                }
-                visited.Add(fullName);
-                w.PropObject("properties", props =>
-                {
-                    foreach (var field in type.GetFields(BindingFlags.Instance | BindingFlags.Public))
-                    {
-                        props.PropRaw(field.Name, BuildSchema(field.FieldType, maxDepth, depth + 1, visited));
-                    }
-                    foreach (var prop in type.GetProperties(BindingFlags.Instance | BindingFlags.Public))
-                    {
-                        if (!prop.CanRead || prop.GetIndexParameters().Length > 0) continue;
-                        props.PropRaw(prop.Name, BuildSchema(prop.PropertyType, maxDepth, depth + 1, visited));
-                    }
-                });
                 return w.EndObject().ToString();
             }
 
+            /// <summary>按类型类别写入 JSON Schema 字段。</summary>
+            private static void WriteSchemaProperties(UnityCliJsonWriter w, Type type, SchemaContext context, int depth, bool isRoot)
+            {
+                if (type == null)
+                {
+                    w.Prop("type", "null");
+                    return;
+                }
+                if (type.IsByRef || type.IsPointer)
+                {
+                    w.Prop("type", "string").Prop("typeName", FriendlyTypeName(type));
+                    return;
+                }
+                if (type.IsGenericParameter)
+                {
+                    w.Prop("type", "object").Prop("typeName", type.Name).Prop("genericParameter", true);
+                    return;
+                }
+                if (IsNullable(type))
+                {
+                    var nullableValueType = Nullable.GetUnderlyingType(type);
+                    w.PropArray("anyOf", arr => arr.RawValue(SchemaFor(nullableValueType, context, depth + 1)).BeginObject().Prop("type", "null").EndObject());
+                    w.Prop("typeName", FriendlyTypeName(type));
+                    return;
+                }
+                if (IsPrimitiveLike(type))
+                {
+                    w.Prop("type", JsonTypeFor(type)).Prop("typeName", FriendlyTypeName(type));
+                    return;
+                }
+                if (type.IsEnum)
+                {
+                    w.Prop("type", "string").Prop("typeName", FriendlyTypeName(type));
+                    w.PropArray("enum", arr => { foreach (var v in Enum.GetNames(type)) arr.Value(v); });
+                    return;
+                }
+
+                Type keyType;
+                Type dictionaryValueType;
+                if (TryGetDictionaryTypes(type, out keyType, out dictionaryValueType))
+                {
+                    w.Prop("type", "object").Prop("typeName", FriendlyTypeName(type));
+                    WriteGenericMetadata(w, type);
+                    w.PropRaw("propertyNames", DictionaryKeySchema(keyType));
+                    w.PropRaw("additionalProperties", depth >= context.MaxDepth ? TruncatedSchema(dictionaryValueType) : SchemaFor(dictionaryValueType, context, depth + 1));
+                    return;
+                }
+
+                var elementType = GetEnumerableElementType(type);
+                if (elementType != null)
+                {
+                    w.Prop("type", "array").Prop("typeName", FriendlyTypeName(type));
+                    if (type.IsArray) w.Prop("arrayRank", (long)type.GetArrayRank());
+                    WriteGenericMetadata(w, type);
+                    w.PropRaw("items", depth >= context.MaxDepth ? TruncatedSchema(elementType) : SchemaFor(elementType, context, depth + 1));
+                    return;
+                }
+
+                w.Prop("type", "object").Prop("typeName", FriendlyTypeName(type));
+                WriteGenericMetadata(w, type);
+                if (depth >= context.MaxDepth)
+                {
+                    w.Prop("truncated", true);
+                    return;
+                }
+                w.PropObject("properties", props =>
+                {
+                    foreach (var field in type.GetFields(BindingFlags.Instance | BindingFlags.Public).OrderBy(f => f.Name, StringComparer.Ordinal))
+                    {
+                        props.PropRaw(field.Name, SchemaFor(field.FieldType, context, depth + 1));
+                    }
+                    foreach (var prop in type.GetProperties(BindingFlags.Instance | BindingFlags.Public).OrderBy(p => p.Name, StringComparer.Ordinal))
+                    {
+                        if (!prop.CanRead || prop.GetIndexParameters().Length > 0) continue;
+                        props.PropRaw(prop.Name, SchemaFor(prop.PropertyType, context, depth + 1));
+                    }
+                });
+            }
+
+            /// <summary>复杂类型使用 $ref，基础/集合类型直接内联。</summary>
+            private static string SchemaFor(Type type, SchemaContext context, int depth)
+            {
+                if (type == null || IsPrimitiveLike(type) || type.IsEnum || type.IsByRef || type.IsPointer || type.IsGenericParameter || IsNullable(type) || TryGetDictionaryTypes(type, out _, out _) || GetEnumerableElementType(type) != null)
+                {
+                    return BuildSchema(type, context, depth, false);
+                }
+                if (type == context.RootType)
+                {
+                    return new UnityCliJsonWriter().BeginObject().Prop("$ref", "#").EndObject().ToString();
+                }
+                var key = DefinitionKey(type);
+                if (!context.Definitions.ContainsKey(key) && !context.BuildingDefinitions.Contains(key))
+                {
+                    context.BuildingDefinitions.Add(key);
+                    context.Definitions[key] = BuildSchema(type, context, depth, false);
+                    context.BuildingDefinitions.Remove(key);
+                }
+                return new UnityCliJsonWriter().BeginObject().Prop("$ref", "#/$defs/" + key).EndObject().ToString();
+            }
+
+            /// <summary>为字典 key 生成 propertyNames schema；JSON object key 始终按字符串表达。</summary>
+            private static string DictionaryKeySchema(Type keyType)
+            {
+                var w = new UnityCliJsonWriter().BeginObject();
+                if (keyType != null && keyType.IsEnum)
+                {
+                    w.Prop("type", "string");
+                    w.PropArray("enum", arr => { foreach (var v in Enum.GetNames(keyType)) arr.Value(v); });
+                }
+                else
+                {
+                    w.Prop("type", "string");
+                    if (keyType != null) w.Prop("typeName", FriendlyTypeName(keyType));
+                }
+                return w.EndObject().ToString();
+            }
+
+            /// <summary>生成深度截断占位 schema，保留 typeName 便于 AI 后续调高 maxDepth。</summary>
+            private static string TruncatedSchema(Type type)
+            {
+                return new UnityCliJsonWriter().BeginObject()
+                    .Prop("type", "object")
+                    .Prop("typeName", FriendlyTypeName(type))
+                    .Prop("truncated", true)
+                    .EndObject()
+                    .ToString();
+            }
+
+            /// <summary>写入泛型定义和实参，帮助 AI 区分 List&lt;T&gt;、Dictionary&lt;K,V&gt; 等闭合类型。</summary>
+            private static void WriteGenericMetadata(UnityCliJsonWriter w, Type type)
+            {
+                if (!type.IsGenericType) return;
+                w.Prop("genericTypeDefinition", FriendlyTypeName(type.GetGenericTypeDefinition()));
+                w.PropArray("genericArguments", arr => { foreach (var arg in type.GetGenericArguments()) arr.Value(FriendlyTypeName(arg)); });
+            }
+
+            /// <summary>识别 IDictionary/IReadOnlyDictionary，并返回 key/value 类型。</summary>
+            private static bool TryGetDictionaryTypes(Type type, out Type keyType, out Type valueType)
+            {
+                keyType = null;
+                valueType = null;
+                if (type == null || type == typeof(string)) return false;
+                foreach (var candidate in type.GetInterfaces().Concat(new[] { type }))
+                {
+                    if (!candidate.IsGenericType) continue;
+                    var definition = candidate.GetGenericTypeDefinition();
+                    if (definition == typeof(IDictionary<,>) || definition == typeof(IReadOnlyDictionary<,>))
+                    {
+                        var args = candidate.GetGenericArguments();
+                        keyType = args[0];
+                        valueType = args[1];
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            /// <summary>识别数组和常见泛型集合的元素类型，string 不视为集合。</summary>
+            private static Type GetEnumerableElementType(Type type)
+            {
+                if (type == null || type == typeof(string)) return null;
+                if (type.IsArray) return type.GetElementType();
+                foreach (var candidate in type.GetInterfaces().Concat(new[] { type }))
+                {
+                    if (!candidate.IsGenericType) continue;
+                    var definition = candidate.GetGenericTypeDefinition();
+                    if (definition == typeof(IEnumerable<>) || definition == typeof(IList<>) || definition == typeof(ICollection<>))
+                    {
+                        return candidate.GetGenericArguments()[0];
+                    }
+                }
+                return typeof(IEnumerable).IsAssignableFrom(type) ? typeof(object) : null;
+            }
+
+            /// <summary>把 CLR 基础类型映射到 JSON Schema 基础类型。</summary>
             private static string JsonTypeFor(Type type)
             {
                 if (type == typeof(bool)) return "boolean";
-                if (type == typeof(string) || type == typeof(char)) return "string";
-                if (type == typeof(int) || type == typeof(long) || type == typeof(short) || type == typeof(byte)) return "integer";
+                if (type == typeof(string) || type == typeof(char) || type == typeof(DateTime)) return "string";
+                if (type == typeof(int) || type == typeof(long) || type == typeof(short) || type == typeof(byte)
+                    || type == typeof(uint) || type == typeof(ulong) || type == typeof(ushort) || type == typeof(sbyte)) return "integer";
                 if (type == typeof(float) || type == typeof(double) || type == typeof(decimal)) return "number";
-                if (type == typeof(Vector2) || type == typeof(Vector3) || type == typeof(Vector4) || type == typeof(Quaternion) || type == typeof(Color) || type == typeof(Rect) || type == typeof(Bounds)) return "object";
-                return "string";
+                return "object";
             }
 
-            private static bool IsSimpleType(Type type)
+            /// <summary>判断是否可安全内联为基础 JSON Schema，不进入 $defs。</summary>
+            private static bool IsPrimitiveLike(Type type)
             {
-                return type.IsPrimitive || type == typeof(string) || type == typeof(decimal) || type == typeof(DateTime)
-                    || type == typeof(Vector2) || type == typeof(Vector3) || type == typeof(Vector4) || type == typeof(Quaternion)
-                    || type == typeof(Color) || type == typeof(Rect) || type == typeof(Bounds);
+                return type.IsPrimitive || type == typeof(string) || type == typeof(decimal) || type == typeof(DateTime);
+            }
+
+            /// <summary>判断 Nullable&lt;T&gt;，用于输出 anyOf: [T, null]。</summary>
+            private static bool IsNullable(Type type)
+            {
+                return type != null && type.IsGenericType && type.GetGenericTypeDefinition() == typeof(Nullable<>);
+            }
+
+            /// <summary>输出稳定、可读的类型名，泛型类型展开为 Foo&lt;Bar&gt;。</summary>
+            private static string FriendlyTypeName(Type type)
+            {
+                if (type == null) return null;
+                if (type.IsArray) return FriendlyTypeName(type.GetElementType()) + "[]";
+                if (!type.IsGenericType) return type.FullName ?? type.Name;
+                var baseName = type.GetGenericTypeDefinition().FullName ?? type.GetGenericTypeDefinition().Name;
+                var tick = baseName.IndexOf('`');
+                if (tick >= 0) baseName = baseName.Substring(0, tick);
+                return baseName + "<" + string.Join(",", type.GetGenericArguments().Select(FriendlyTypeName).ToArray()) + ">";
+            }
+
+            /// <summary>把复杂类型名转换为可作为 $defs key 的稳定标识。</summary>
+            private static string DefinitionKey(Type type)
+            {
+                var name = FriendlyTypeName(type) ?? "Unknown";
+                return new string(name.Select(c => char.IsLetterOrDigit(c) ? c : '_').ToArray());
             }
 
             internal static Type ResolveType(string fullName)
             {
                 return FindType(fullName);
+            }
+
+            private sealed class SchemaContext
+            {
+                public readonly Type RootType;
+                public readonly int MaxDepth;
+                public readonly Dictionary<string, string> Definitions = new Dictionary<string, string>();
+                public readonly HashSet<string> BuildingDefinitions = new HashSet<string>();
+
+                public SchemaContext(Type rootType, int maxDepth)
+                {
+                    RootType = rootType;
+                    MaxDepth = maxDepth;
+                }
             }
         }
 

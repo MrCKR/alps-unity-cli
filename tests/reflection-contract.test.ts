@@ -46,6 +46,10 @@ test("type.schema tool exists as read-only bridge", () => {
   assert.equal(schema.destructiveHint, false);
   assert.equal(schema.handler, "bridge");
   assert.equal(schema.equivalentUnityMcp, "type-get-json-schema");
+  assert.match(schema.description, /enum/, "type.schema should advertise enum schema support");
+  assert.match(schema.description, /generic/, "type.schema should advertise generic schema support");
+  assert.match(schema.description, /\$defs/, "type.schema should advertise $defs references");
+  assert.match(JSON.stringify(schema.outputSchema), /definitionCount/, "type.schema output should include definitionCount");
 });
 
 test("reflection.method.call supports instanceRef and dry-run confirmation flow", () => {
@@ -96,6 +100,10 @@ test("C# RegisterCommand calls exist for reflection and type commands", async ()
   assert.match(allSource, /return SuccessJson\(ReflectionInvoker\.FindMethods\(/, "reflection.method.find should return a bridge success envelope");
   assert.match(allSource, /return SuccessJson\(result\);/, "reflection.method.call should wrap execution results in a bridge success envelope");
   assert.match(allSource, /return SuccessJson\(TypeSchemaGenerator\.Generate\(/, "type.schema should return a bridge success envelope");
+  assert.match(allSource, /PropObject\("\$defs"/, "type.schema should emit $defs for nested complex types");
+  assert.match(allSource, /Prop\("\$ref", "#\/\$defs\//, "type.schema should reference nested complex types via $ref");
+  assert.match(allSource, /TryGetDictionaryTypes/, "type.schema should handle dictionary-shaped generic types");
+  assert.match(allSource, /genericArguments/, "type.schema should expose generic type arguments");
   assert.match(allSource, /command == "reflection\.method\.call"/, "reflection.method.call should be covered by the bridge destructive proof guard");
   assert.match(allSource, /request\.DryRun \|\| !request\.SecurityConfirmed\(DestructiveCommandFingerprint\)/, "reflection.method.call should preview on dry-run and execute with CLI destructive proof");
 });

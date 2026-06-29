@@ -75,17 +75,18 @@ export const REFLECTION_TOOLS: ToolMetadata[] = [
   },
   {
     name: "type.schema",
-    summary: "Generate a live JSON Schema for any C# / Unity type by reflecting over its public fields and properties.",
-    description: "Generate a live JSON Schema for any C# / Unity type by reflecting over its public fields and properties. Useful before object.modify/component.modify to understand writable structure.",
+    summary: "Generate a live JSON Schema for any C# / Unity type, including enum, array, generic, dictionary and $defs references.",
+    description: "Generate a live JSON Schema for any C# / Unity type by reflecting over public fields and properties. Handles enum values, arrays/lists, generic type arguments, dictionaries via additionalProperties, and repeated complex types via $defs/$ref. Use before object.modify/component.modify to understand writable structure; keep maxDepth low for large Unity types.",
     group: "type",
     inputSchema: objSchema({
       typeName: { type: "string", description: "Full type name, e.g. UnityEngine.Rigidbody." },
-      maxDepth: { type: "integer", default: 3, description: "Max schema nesting depth." }
+      maxDepth: { type: "integer", default: 3, description: "Max inline schema nesting depth before complex children are truncated or referenced via $defs." }
     }, ["typeName"]),
     outputSchema: objSchema({
       command: { type: "string" },
       typeName: { type: "string" },
-      schema: { type: "object" }
+      definitionCount: { type: "integer", description: "Number of complex type definitions emitted under schema.$defs." },
+      schema: { type: "object", description: "JSON Schema with typeName metadata, enum/array/generic/dictionary shapes, and optional $defs/$ref references." }
     }),
     destructiveHint: false,
     playModeSupport: "supported",
