@@ -1,6 +1,6 @@
 import { realpath, readFile, writeFile, readdir, stat, mkdir, copyFile, rm } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { join, relative, resolve, win32, dirname, posix } from "node:path";
+import { join, relative, resolve, win32, dirname, posix, isAbsolute } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export interface UnityManifest {
@@ -81,6 +81,58 @@ export interface RemovePackageBridgeOptions {
   dryRun?: boolean;
 }
 
+export interface DeployPackageOptions {
+  packageName?: string;
+  dryRun?: boolean;
+}
+
+export interface RestorePackageOptions {
+  dryRun?: boolean;
+}
+
+export interface PackageDeploymentRecord {
+  packageName: string;
+  packageVersion: string;
+  sourcePath: string;
+  sourceHash: string;
+  targetPath: string;
+  backupPath?: string;
+  backupPackageVersion?: string;
+  deployedAt: string;
+}
+
+export interface PackageDeployResult {
+  projectPath: string;
+  manifestPath: string;
+  packageName: string;
+  packageVersion: string;
+  sourcePath: string;
+  sourceHash: string;
+  targetPath: string;
+  backupPath?: string;
+  backupPackageVersion?: string;
+  backupCreated: boolean;
+  repeatedDeployment: boolean;
+  copiedFileCount: number;
+  dryRun: boolean;
+  plannedEffects: Array<Record<string, unknown>>;
+  metadataPath: string;
+}
+
+export interface PackageRestoreResult {
+  projectPath: string;
+  manifestPath: string;
+  packageName: string;
+  targetPath: string;
+  backupPath?: string;
+  restoredFromBackup: boolean;
+  removedDeployedPackage: boolean;
+  copiedFileCount: number;
+  dryRun: boolean;
+  plannedEffects: Array<Record<string, unknown>>;
+  metadataPath: string;
+}
+
 export interface UnityCliPackageRemoval {
   projectPath: string;
   manifestPath: string;
@@ -100,6 +152,8 @@ const bridgePackageName = "com.unity_cli";
 const cliCompatibilityRange = ">=0.1.0 <0.2.0";
 const installMetadataFileName = "unity_cli.install.json";
 const fileManifestFileName = "unity_cli.files.json";
+const deploymentMetadataFileName = "unity_cli.package-deployments.json";
+const deploymentBackupDirName = ".unity_cli_deploy_backups";
 
 export function packagePaths(projectPath: string): PackageManagerPaths {
   const resolvedProject = resolve(projectPath);
@@ -427,6 +481,144 @@ export async function removePackageBridge(projectPath: string, options: RemovePa
   };
 }
 
+/** 将本地 Unity package 源复制到项目 Packages/<packageName>，并备份原目录以支持 package.restore。 */
+export async function deployPackageSource(projectPath: string, sourcePath: string, options: DeployPackageOptions = {}): Promise<PackageDeployResult> {
+  const paths = packagePaths(projectPath);
+  await readManifest(paths.manifestPath, false);
+  const resolvedSource = resolve(sourcePath);
+  const sourceManifest = await readAnyPackageManifest(resolvedSource);
+  const packageName = options.packageName ?? sourceManifest.name;
+  if (!packageName) {
+    throw new PackageManagerError("PACKAGE_DEPLOY_NAME_REQUIRED", "Package deploy requires a package name in source package.json or packageName input.", [
+      "Pass source as a Unity package folder containing package.json with name/version.",
+      "Or pass packageName explicitly when deploying a source folder for a known package."
+    ]);
+  }
+  if (sourceManifest.name !== packageName) {
+    throw new PackageManagerError("PACKAGE_DEPLOY_NAME_MISMATCH", `Source package.json name ${sourceManifest.name} does not match requested packageName ${packageName}.`, [
+      "Pass the matching packageName, or choose a source package folder with the expected package.json name."
+    ]);
+  }
+  assertSafePackageDirectoryName(packageName);
+  assertDeploySourceOutsideProjectPackages(resolvedSource, paths.projectPath);
+
+  const sourceHash = await hashSourcePath(resolvedSource);
+  const targetPath = join(paths.projectPath, "Packages", packageName);
+  const metadataPath = deploymentMetadataPath(paths.projectPath);
+  const existingTarget = await directoryExists(targetPath);
+  const existingManifest = existingTarget ? await readAnyPackageManifest(targetPath).catch(() => undefined) : undefined;
+  const currentRecord = (await readDeploymentMetadata(metadataPath))[packageName];
+  if (currentRecord !== undefined) {
+    assertDeploymentRecordSafe(paths.projectPath, packageName, currentRecord);
+  }
+  const backupPath = currentRecord?.backupPath ?? (existingTarget ? deploymentBackupPath(paths.projectPath, packageName, new Date()) : undefined);
+  const repeatedDeployment = currentRecord !== undefined;
+  const copiedFileCount = await countPackageFiles(resolvedSource);
+  const plannedEffects: Array<Record<string, unknown>> = [];
+  if (existingTarget && !repeatedDeployment) {
+    plannedEffects.push({ type: "package.deploy.backup", package: packageName, from: targetPath, to: backupPath, packageVersion: existingManifest?.version ?? null });
+  }
+  plannedEffects.push({ type: "package.deploy.copy", package: packageName, from: resolvedSource, to: targetPath, fileCount: copiedFileCount });
+  plannedEffects.push({ type: "asset.refresh", reason: "package.deploy" });
+
+  if (!options.dryRun) {
+    await mkdir(dirname(metadataPath), { recursive: true });
+    if (existingTarget && !repeatedDeployment && backupPath) {
+      await rm(backupPath, { recursive: true, force: true });
+      await mkdir(dirname(backupPath), { recursive: true });
+      await copyDirRecursive(targetPath, backupPath, targetPath, []);
+    }
+    await rm(targetPath, { recursive: true, force: true });
+    await copyDirRecursive(resolvedSource, targetPath, resolvedSource, []);
+    const metadata = await readDeploymentMetadata(metadataPath);
+    metadata[packageName] = {
+      packageName,
+      packageVersion: sourceManifest.version,
+      sourcePath: resolvedSource,
+      sourceHash,
+      targetPath,
+      backupPath,
+      backupPackageVersion: existingManifest?.version,
+      deployedAt: new Date().toISOString()
+    };
+    await writeDeploymentMetadata(metadataPath, metadata);
+  }
+
+  return {
+    projectPath: paths.projectPath,
+    manifestPath: paths.manifestPath,
+    packageName,
+    packageVersion: sourceManifest.version,
+    sourcePath: resolvedSource,
+    sourceHash,
+    targetPath,
+    backupPath,
+    backupPackageVersion: existingManifest?.version,
+    backupCreated: existingTarget && !repeatedDeployment,
+    repeatedDeployment,
+    copiedFileCount,
+    dryRun: options.dryRun === true,
+    plannedEffects,
+    metadataPath
+  };
+}
+
+/** 从 package.deploy 创建的备份恢复目标包；没有备份时移除本次部署的包目录。 */
+export async function restoreDeployedPackage(projectPath: string, packageName: string, options: RestorePackageOptions = {}): Promise<PackageRestoreResult> {
+  const paths = packagePaths(projectPath);
+  await readManifest(paths.manifestPath, false);
+  if (!packageName) {
+    throw new PackageManagerError("PACKAGE_NAME_REQUIRED", "Pass packageName to restore a deployed package.", [
+      "Run tools run package.restore --input '{\"packageName\":\"<package>\"}' --dry-run first to inspect planned effects."
+    ]);
+  }
+  assertSafePackageDirectoryName(packageName);
+  const metadataPath = deploymentMetadataPath(paths.projectPath);
+  const metadata = await readDeploymentMetadata(metadataPath);
+  const record = metadata[packageName];
+  if (!record) {
+    throw new PackageManagerError("PACKAGE_DEPLOYMENT_NOT_FOUND", `No package deployment metadata found for ${packageName}.`, [
+      "Run package.deploy first, or pass the packageName that was deployed.",
+      "Check Packages/.unity_cli_deploy_backups/unity_cli.package-deployments.json in the target project."
+    ]);
+  }
+  assertDeploymentRecordSafe(paths.projectPath, packageName, record);
+
+  const backupExists = record.backupPath ? await directoryExists(record.backupPath) : false;
+  const backupFileCount = backupExists && record.backupPath ? await countPackageFiles(record.backupPath) : 0;
+  const plannedEffects: Array<Record<string, unknown>> = [];
+  if (backupExists && record.backupPath) {
+    plannedEffects.push({ type: "package.restore.backup", package: packageName, from: record.backupPath, to: record.targetPath, fileCount: backupFileCount });
+  } else {
+    plannedEffects.push({ type: "package.restore.remove-deployed", package: packageName, targetPath: record.targetPath });
+  }
+  plannedEffects.push({ type: "asset.refresh", reason: "package.restore" });
+
+  if (!options.dryRun) {
+    await rm(record.targetPath, { recursive: true, force: true });
+    if (backupExists && record.backupPath) {
+      await copyDirRecursive(record.backupPath, record.targetPath, record.backupPath, []);
+      await rm(record.backupPath, { recursive: true, force: true });
+    }
+    delete metadata[packageName];
+    await writeDeploymentMetadata(metadataPath, metadata);
+  }
+
+  return {
+    projectPath: paths.projectPath,
+    manifestPath: paths.manifestPath,
+    packageName,
+    targetPath: record.targetPath,
+    backupPath: record.backupPath,
+    restoredFromBackup: backupExists,
+    removedDeployedPackage: !backupExists,
+    copiedFileCount: backupFileCount,
+    dryRun: options.dryRun === true,
+    plannedEffects,
+    metadataPath
+  };
+}
+
 export function parsePackageSpec(raw: string, explicitVersion?: string): PackageSpec {
   const atIndex = raw.lastIndexOf("@");
   if (atIndex > 0) {
@@ -522,13 +714,21 @@ async function readInstalledPackageBridge(projectPath: string, code: string, nex
 }
 
 async function readPackageManifest(packagePath: string): Promise<{ name: string; version: string }> {
+  const manifest = await readAnyPackageManifest(packagePath);
+  if (manifest.name !== bridgePackageName) {
+    throw new PackageManagerError("PACKAGE_IDENTITY_INVALID", `Unity package name must be ${bridgePackageName}.`);
+  }
+  return manifest;
+}
+
+async function readAnyPackageManifest(packagePath: string): Promise<{ name: string; version: string }> {
   try {
     const manifest = JSON.parse(stripJsonBom(await readFile(join(packagePath, "package.json"), "utf8"))) as { name?: unknown; version?: unknown };
-    if (manifest.name !== bridgePackageName) {
-      throw new PackageManagerError("PACKAGE_IDENTITY_INVALID", `Unity package name must be ${bridgePackageName}.`);
+    if (typeof manifest.name !== "string" || !manifest.name) {
+      throw new PackageManagerError("PACKAGE_IDENTITY_INVALID", `Unity package.json requires a non-empty name: ${join(packagePath, "package.json")}`);
     }
     if (typeof manifest.version !== "string" || !manifest.version) {
-      throw new PackageManagerError("PACKAGE_VERSION_INVALID", `${bridgePackageName} package.json requires a version.`);
+      throw new PackageManagerError("PACKAGE_VERSION_INVALID", `${manifest.name} package.json requires a version.`);
     }
     return { name: manifest.name, version: manifest.version };
   } catch (error) {
@@ -678,6 +878,129 @@ async function readManagedFileList(fileManifestPath: string): Promise<string[]> 
 async function writeFileManifest(path: string, files: string[]): Promise<void> {
   const manifest: FileManifest = { version: 1, files };
   await writeFile(path, `${JSON.stringify(manifest, null, 2)}\n`, "utf8");
+}
+
+interface PackageDeploymentMetadata {
+  version: number;
+  deployments: Record<string, PackageDeploymentRecord>;
+}
+
+function deploymentRootPath(projectPath: string): string {
+  return join(projectPath, "Packages", deploymentBackupDirName);
+}
+
+function deploymentMetadataPath(projectPath: string): string {
+  return join(deploymentRootPath(projectPath), deploymentMetadataFileName);
+}
+
+function deploymentBackupPath(projectPath: string, packageName: string, deployedAt: Date): string {
+  const safeName = packageName.replace(/[^a-zA-Z0-9._-]/g, "_");
+  const stamp = deployedAt.toISOString().replace(/[:.]/g, "-");
+  return join(deploymentRootPath(projectPath), `${safeName}-${stamp}`);
+}
+
+/** 校验部署 metadata 只指向当前项目内允许被 restore 修改的位置。 */
+function assertDeploymentRecordSafe(projectPath: string, packageName: string, record: PackageDeploymentRecord): void {
+  if (!record || typeof record !== "object" || record.packageName !== packageName || typeof record.targetPath !== "string" || (record.backupPath !== undefined && typeof record.backupPath !== "string")) {
+    throw new PackageManagerError("PACKAGE_DEPLOYMENT_METADATA_INVALID", `Package deployment metadata is invalid for ${packageName}.`, [
+      "Inspect or remove Packages/.unity_cli_deploy_backups/unity_cli.package-deployments.json before retrying."
+    ]);
+  }
+
+  const expectedTargetPath = join(resolve(projectPath), "Packages", packageName);
+  if (!isSameResolvedPath(record.targetPath, expectedTargetPath)) {
+    throw new PackageManagerError("PACKAGE_DEPLOYMENT_METADATA_UNSAFE", `Package deployment metadata target path is not the current project's Packages/${packageName}: ${record.targetPath}`, [
+      "Inspect or remove Packages/.unity_cli_deploy_backups/unity_cli.package-deployments.json before retrying.",
+      "Run package.deploy again from the current project if the project was moved."
+    ]);
+  }
+
+  if (record.backupPath && !isPathInside(deploymentRootPath(projectPath), record.backupPath)) {
+    throw new PackageManagerError("PACKAGE_DEPLOYMENT_METADATA_UNSAFE", `Package deployment metadata backup path is outside Packages/.unity_cli_deploy_backups: ${record.backupPath}`, [
+      "Inspect or remove Packages/.unity_cli_deploy_backups/unity_cli.package-deployments.json before retrying.",
+      "Do not edit package.deploy metadata by hand unless every path stays inside the current project."
+    ]);
+  }
+}
+
+function isSameResolvedPath(left: string, right: string): boolean {
+  return relative(resolve(left), resolve(right)) === "";
+}
+
+function isPathInside(rootPath: string, candidatePath: string): boolean {
+  const relativePath = relative(resolve(rootPath), resolve(candidatePath));
+  return relativePath === "" || (!relativePath.startsWith("..") && !isAbsolute(relativePath));
+}
+
+async function readDeploymentMetadata(path: string): Promise<Record<string, PackageDeploymentRecord>> {
+  try {
+    const data = JSON.parse(stripJsonBom(await readFile(path, "utf8"))) as Partial<PackageDeploymentMetadata>;
+    if (!data || typeof data !== "object" || typeof data.deployments !== "object" || data.deployments === null) {
+      return {};
+    }
+    return data.deployments as Record<string, PackageDeploymentRecord>;
+  } catch (error) {
+    const nodeError = error as NodeJS.ErrnoException;
+    if (nodeError.code === "ENOENT") return {};
+    if (error instanceof SyntaxError) {
+      throw new PackageManagerError("PACKAGE_DEPLOYMENT_METADATA_INVALID", `Package deployment metadata is invalid JSON: ${path}`, [
+        "Inspect or remove the metadata file before running package.restore."
+      ]);
+    }
+    throw error;
+  }
+}
+
+async function writeDeploymentMetadata(path: string, deployments: Record<string, PackageDeploymentRecord>): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  const metadata: PackageDeploymentMetadata = { version: 1, deployments };
+  await writeFile(path, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
+}
+
+async function directoryExists(path: string): Promise<boolean> {
+  try {
+    return (await stat(path)).isDirectory();
+  } catch {
+    return false;
+  }
+}
+
+async function countPackageFiles(sourcePath: string): Promise<number> {
+  return (await listFilesRecursive(sourcePath)).length;
+}
+
+async function listFilesRecursive(dir: string): Promise<string[]> {
+  const files: string[] = [];
+  const entries = await readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      files.push(...await listFilesRecursive(fullPath));
+    } else if (entry.isFile()) {
+      files.push(fullPath);
+    }
+  }
+  return files;
+}
+
+function assertSafePackageDirectoryName(packageName: string): void {
+  if (packageName.includes("/") || packageName.includes("\\") || packageName === "." || packageName === ".." || packageName === deploymentBackupDirName || packageName.split(".").includes("..")) {
+    throw new PackageManagerError("PACKAGE_NAME_INVALID", `Package name is not safe for a Packages/<name> directory: ${packageName}`, [
+      "Use a valid Unity package name such as com.example.tool."
+    ]);
+  }
+}
+
+function assertDeploySourceOutsideProjectPackages(sourcePath: string, projectPath: string): void {
+  const packagesPath = join(resolve(projectPath), "Packages");
+  const source = resolve(sourcePath);
+  const relativeToPackages = relative(packagesPath, source);
+  if (!relativeToPackages || (!relativeToPackages.startsWith("..") && !isAbsolute(relativeToPackages))) {
+    throw new PackageManagerError("PACKAGE_DEPLOY_SOURCE_INSIDE_PROJECT", "package.deploy source must be outside the target project's Packages directory.", [
+      "Choose a separate local package source directory, not the already-installed package directory.",
+      "Use package.restore to revert a previous package.deploy operation."
+    ]);
+  }
 }
 
 async function readManifest(path: string, allowMissing: boolean): Promise<UnityManifest> {

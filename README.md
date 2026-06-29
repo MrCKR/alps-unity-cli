@@ -477,6 +477,10 @@ unity_cli tools run package.info <package-name> --project <path>
 unity_cli tools run package.search <keyword>
 unity_cli tools run package.install <package@version> --project <path> --unity <unity-exe> --wait
 unity_cli tools run package.remove <package-name> --project <path> --unity <unity-exe> --wait
+unity_cli tools run package.deploy --input '{"project":"<path>","source":"<local-package-source>"}' --dry-run
+unity_cli tools run package.deploy --input '{"project":"<path>","source":"<local-package-source>"}' --yes
+unity_cli tools run package.restore --input '{"project":"<path>","packageName":"<package-name>"}' --dry-run
+unity_cli tools run package.restore --input '{"project":"<path>","packageName":"<package-name>"}' --yes
 unity_cli tools run package.resolve --project <path> --unity <unity-exe> --wait
 unity_cli tools run package.registry get --project <path>
 unity_cli tools run package.registry set --url <url> --project <path>

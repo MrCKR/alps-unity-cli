@@ -38,6 +38,9 @@ The CLI enforces a confirmation gate for all tools with `destructiveHint: true`.
 | `tools run package.embed` | Embed Package | ✅ |
 | `tools run package.install` | Package Install | ❌ |
 | `tools run package.remove` | Package Remove | ❌ |
+| `tools run package.deploy` | Package Deploy | ✅ |
+| `tools run package.restore` | Package Restore | ✅ |
+| `tools run package.bridge-remove` | Package Bridge Remove | ✅ |
 | `batch run` | Batch Run | ✅ (preflight) |
 | `jobs cancel` | Cancel Job | ❌ |
 

@@ -42,6 +42,9 @@ alps-unity-cli 的安全模型围绕三个核心原则：Tool 可有副作用但
 | `tools run editor.menu` | 执行编辑器菜单项 |
 | `tools run package.install` | 安装包 |
 | `tools run package.remove` | 移除包 |
+| `tools run package.deploy` | 复制本地 package 源到项目 Packages 目录 |
+| `tools run package.restore` | 从 package.deploy 备份恢复或移除部署目录 |
+| `tools run package.bridge-remove` | 移除 init 复制的 Bridge 包 |
 | `tools run code.exec` | 执行代码 |
 | `jobs cancel` | 取消测试/构建/刷新等后台任务 |
 

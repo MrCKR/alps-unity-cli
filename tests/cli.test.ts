@@ -541,6 +541,76 @@ test("package bridge-remove previews and removes the copy-mode Bridge package", 
   assert.equal((checked.data as { package: { status: string } }).package.status, "not_installed");
 });
 
+test("package deploy and restore copy local package sources with backup", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+  const packages = join(project, "Packages");
+  const source = await mkdtemp(join(tmpdir(), "unity-package-source-"));
+  const originalPackage = join(packages, "com.acme.local");
+  await mkdir(join(source, "Editor"), { recursive: true });
+  await writeFile(join(source, "package.json"), JSON.stringify({ name: "com.acme.local", version: "2.0.0" }, null, 2), "utf8");
+  await writeFile(join(source, "Editor", "Tool.cs"), "// deployed", "utf8");
+  await mkdir(join(originalPackage, "Editor"), { recursive: true });
+  await writeFile(join(originalPackage, "package.json"), JSON.stringify({ name: "com.acme.local", version: "1.0.0" }, null, 2), "utf8");
+  await writeFile(join(originalPackage, "Editor", "Tool.cs"), "// original", "utf8");
+
+  const dryRun = await execute(["tools", "run", "package.deploy", "--project", project, "--input", JSON.stringify({ source }), "--dry-run"], runtime);
+  assert.equal(dryRun.ok, true);
+  assert.equal((dryRun.data as { dryRun: boolean; backupCreated: boolean }).dryRun, true);
+  assert.equal((dryRun.data as { backupCreated: boolean }).backupCreated, true);
+  assert.equal(await readFile(join(originalPackage, "Editor", "Tool.cs"), "utf8"), "// original");
+
+  const blocked = await execute(["tools", "run", "package.deploy", "--project", project, "--input", JSON.stringify({ source })], runtime);
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.error?.code, "E_DESTRUCTIVE_CONFIRMATION_REQUIRED");
+
+  const deployed = await execute(["tools", "run", "package.deploy", "--project", project, "--input", JSON.stringify({ source }), "--yes"], runtime);
+  assert.equal(deployed.ok, true);
+  const deployData = deployed.data as { packageName: string; packageVersion: string; backupCreated: boolean; copiedFileCount: number; metadataPath: string; liveRefresh: { status: string } };
+  assert.equal(deployData.packageName, "com.acme.local");
+  assert.equal(deployData.packageVersion, "2.0.0");
+  assert.equal(deployData.backupCreated, true);
+  assert.equal(deployData.copiedFileCount, 2);
+  assert.equal(deployData.liveRefresh.status, "skipped");
+  assert.equal(await readFile(join(originalPackage, "Editor", "Tool.cs"), "utf8"), "// deployed");
+  const metadata = JSON.parse(await readFile(deployData.metadataPath, "utf8")) as { deployments: Record<string, { backupPath: string; sourceHash: string }> };
+  assert.equal(metadata.deployments["com.acme.local"].sourceHash.length, 64);
+  await access(metadata.deployments["com.acme.local"].backupPath);
+
+  const restorePreview = await execute(["tools", "run", "package.restore", "--project", project, "--input", JSON.stringify({ packageName: "com.acme.local" }), "--dry-run"], runtime);
+  assert.equal(restorePreview.ok, true);
+  assert.equal((restorePreview.data as { dryRun: boolean; restoredFromBackup: boolean }).dryRun, true);
+  assert.equal((restorePreview.data as { restoredFromBackup: boolean }).restoredFromBackup, true);
+  assert.equal(await readFile(join(originalPackage, "Editor", "Tool.cs"), "utf8"), "// deployed");
+
+  const restored = await execute(["tools", "run", "package.restore", "--project", project, "--input", JSON.stringify({ packageName: "com.acme.local" }), "--yes"], runtime);
+  assert.equal(restored.ok, true);
+  assert.equal((restored.data as { restoredFromBackup: boolean }).restoredFromBackup, true);
+  assert.equal(await readFile(join(originalPackage, "Editor", "Tool.cs"), "utf8"), "// original");
+  const afterRestoreMetadata = JSON.parse(await readFile(deployData.metadataPath, "utf8")) as { deployments: Record<string, unknown> };
+  assert.equal(afterRestoreMetadata.deployments["com.acme.local"], undefined);
+});
+
+test("package restore removes a newly deployed package when no backup existed", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+  const source = await mkdtemp(join(tmpdir(), "unity-package-source-new-"));
+  await writeFile(join(source, "package.json"), JSON.stringify({ name: "com.acme.newpkg", version: "1.0.0" }, null, 2), "utf8");
+  await writeFile(join(source, "Runtime.cs"), "// runtime", "utf8");
+
+  const deployed = await execute(["tools", "run", "package.deploy", "--project", project, "--input", JSON.stringify({ source }), "--yes"], runtime);
+  assert.equal(deployed.ok, true);
+  const targetPath = (deployed.data as { targetPath: string; backupCreated: boolean }).targetPath;
+  assert.equal((deployed.data as { backupCreated: boolean }).backupCreated, false);
+  await access(targetPath);
+
+  const restored = await execute(["tools", "run", "package.restore", "--project", project, "--input", JSON.stringify({ packageName: "com.acme.newpkg" }), "--yes"], runtime);
+  assert.equal(restored.ok, true);
+  assert.equal((restored.data as { restoredFromBackup: boolean; removedDeployedPackage: boolean }).restoredFromBackup, false);
+  assert.equal((restored.data as { removedDeployedPackage: boolean }).removedDeployedPackage, true);
+  await assert.rejects(access(targetPath));
+});
+
 test("init asks an already open bridge to refresh assets", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();

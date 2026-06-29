@@ -5,7 +5,7 @@ import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { findCommandContract } from "../src/contracts/command-contract.js";
 import { readFile } from "node:fs/promises";
 
-const PACKAGE_COMMANDS = ["package.list", "package.status", "package.info", "package.search", "package.install", "package.remove", "package.bridge-remove", "package.resolve", "package.registry", "package.scoped-registry", "package.embed"];
+const PACKAGE_COMMANDS = ["package.list", "package.status", "package.info", "package.search", "package.install", "package.remove", "package.bridge-remove", "package.deploy", "package.restore", "package.resolve", "package.registry", "package.scoped-registry", "package.embed"];
 
 /**
  * Package 域契约测试：list/status/info/search/install/remove/bridge-remove/resolve/registry/scoped-registry (offline/hybrid) + embed (bridge)。
@@ -13,9 +13,9 @@ const PACKAGE_COMMANDS = ["package.list", "package.status", "package.info", "pac
  * C# RegisterCommand 守卫不适用：除 embed 外的 package.* 经 offline/hybrid handlePackage 路由（非 bridge RegisterCommand）。
  */
 
-test("package group exposes the 11 package tools", () => {
+test("package group exposes the 13 package tools", () => {
   const tools = filterToolsByGroup("package").map((t) => t.name).sort();
-  assert.deepEqual(tools, ["package.bridge-remove", "package.embed", "package.info", "package.install", "package.list", "package.registry", "package.remove", "package.resolve", "package.scoped-registry", "package.search", "package.status"]);
+  assert.deepEqual(tools, ["package.bridge-remove", "package.deploy", "package.embed", "package.info", "package.install", "package.list", "package.registry", "package.remove", "package.resolve", "package.restore", "package.scoped-registry", "package.search", "package.status"]);
 });
 
 test("package read tools are offline/non-destructive/supported", () => {
@@ -55,6 +55,26 @@ test("package install/remove/resolve expose play mode + risk metadata", () => {
   assert.equal(bridgeRemove.riskLevel, "high");
   assert.equal(bridgeRemove.playModeSupport, "session-affecting");
   assert.match(bridgeRemove.description, /Packages\/com\.unity_cli/, "package.bridge-remove should explain copied package deletion");
+
+  const deploy = findToolByName("package.deploy")!;
+  assert.equal(deploy.destructiveHint, true);
+  assert.equal(deploy.supportsDryRun, true);
+  assert.equal(deploy.handler, "offline");
+  assert.equal(deploy.riskLevel, "high");
+  assert.equal(deploy.playModeSupport, "session-affecting");
+  assert.match(deploy.description, /package\.json/, "package.deploy should explain source package requirement");
+  assert.match(JSON.stringify(deploy.inputSchema), /source/, "package.deploy schema should expose source");
+  assert.match(JSON.stringify(deploy.outputSchema), /backupCreated/, "package.deploy output should report backup state");
+
+  const restore = findToolByName("package.restore")!;
+  assert.equal(restore.destructiveHint, true);
+  assert.equal(restore.supportsDryRun, true);
+  assert.equal(restore.handler, "offline");
+  assert.equal(restore.riskLevel, "high");
+  assert.equal(restore.playModeSupport, "session-affecting");
+  assert.match(restore.description, /package\.deploy/, "package.restore should explain deploy metadata dependency");
+  assert.match(JSON.stringify(restore.inputSchema), /packageName/, "package.restore schema should expose packageName");
+  assert.match(JSON.stringify(restore.outputSchema), /restoredFromBackup/, "package.restore output should report restore mode");
 
   const resolve = findToolByName("package.resolve")!;
   assert.equal(resolve.longRunning, true);

@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises"
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import test from "node:test";
-import { ensurePackageBridge, checkPackageBridge } from "../src/package-manager.js";
+import { ensurePackageBridge, checkPackageBridge, deployPackageSource, restoreDeployedPackage } from "../src/package-manager.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
@@ -206,6 +206,45 @@ test("ensurePackageBridge removes stale file: dependency from manifest", async (
   const updatedManifest = JSON.parse(await readFile(manifestPath, "utf8")) as { dependencies: Record<string, string> };
   assert.equal(updatedManifest.dependencies["com.unity_cli"], undefined);
   assert.equal(result.installMode, "copy");
+});
+
+test("deployPackageSource rejects source under target project Packages", async () => {
+  const project = await makeUnityProject();
+  const source = join(project, "Packages", "com.acme.local");
+  await mkdir(source, { recursive: true });
+  await writeFile(join(source, "package.json"), JSON.stringify({ name: "com.acme.local", version: "1.0.0" }), "utf8");
+
+  await assert.rejects(
+    () => deployPackageSource(project, source),
+    { code: "PACKAGE_DEPLOY_SOURCE_INSIDE_PROJECT" }
+  );
+});
+
+test("deployPackageSource rejects the internal deployment backup directory as package name", async () => {
+  const project = await makeUnityProject();
+  const source = await mkdtemp(join(tmpdir(), "unity-pkg-source-backup-name-"));
+  await writeFile(join(source, "package.json"), JSON.stringify({ name: ".unity_cli_deploy_backups", version: "1.0.0" }), "utf8");
+
+  await assert.rejects(
+    () => deployPackageSource(project, source),
+    { code: "PACKAGE_NAME_INVALID" }
+  );
+});
+
+test("restoreDeployedPackage rejects unsafe deployment metadata paths", async () => {
+  const project = await makeUnityProject();
+  const source = await mkdtemp(join(tmpdir(), "unity-pkg-source-"));
+  await writeFile(join(source, "package.json"), JSON.stringify({ name: "com.acme.local", version: "1.0.0" }), "utf8");
+
+  const deployed = await deployPackageSource(project, source);
+  const metadata = JSON.parse(await readFile(deployed.metadataPath, "utf8")) as { deployments: Record<string, { targetPath: string }> };
+  metadata.deployments["com.acme.local"].targetPath = join(tmpdir(), "outside-com.acme.local");
+  await writeFile(deployed.metadataPath, `${JSON.stringify(metadata, null, 2)}\n`, "utf8");
+
+  await assert.rejects(
+    () => restoreDeployedPackage(project, "com.acme.local"),
+    { code: "PACKAGE_DEPLOYMENT_METADATA_UNSAFE" }
+  );
 });
 
 test("file manifest tracks only files that were copied, not directories", async () => {

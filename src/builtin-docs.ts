@@ -143,7 +143,7 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   package: {
     title: "Package Management",
-    summary: "List, search, install and remove Unity packages from the CLI. Handlers: offline (list/info/search/registry), hybrid (install/remove/resolve). Target: editor (for resolve). `package.remove` is destructive (requires --yes)."
+    summary: "List, search, install, remove, deploy and restore Unity packages from the CLI. Handlers: offline (list/info/search/registry/deploy/restore), hybrid (install/remove/resolve). Target: editor for resolve and refresh. `package.install`, `package.remove`, `package.deploy`, `package.restore`, and `package.bridge-remove` are destructive; deploy/restore support --dry-run."
   },
   batch: {
     title: "Batch Execution",

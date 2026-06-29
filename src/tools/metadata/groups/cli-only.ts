@@ -142,6 +142,50 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     ]
   },
   {
+    name: "package.deploy",
+    summary: "Deploy a local Unity package source folder into Packages/<packageName> with an automatic restore backup.",
+    description: "Deploy a local Unity package source folder into the target project's Packages/<packageName> directory. The source folder must contain package.json with name/version and must be outside the target project's Packages directory. If a package directory already exists, package.deploy backs it up under Packages/.unity_cli_deploy_backups before copying the source. Destructive: writes project package files and can trigger Unity import/compile. Supports --dry-run to preview backup/copy effects without writing.",
+    group: "package",
+    inputSchema: objSchema({ source: { type: "string", description: "Local Unity package source folder containing package.json." }, packageName: { type: "string", description: "Optional expected package name. Defaults to source package.json name." }, project: { type: "string", description: "Unity project path." } }, ["source"]),
+    outputSchema: objSchema({ action: { type: "string" }, projectPath: { type: "string" }, manifestPath: { type: "string" }, packageName: { type: "string" }, packageVersion: { type: "string" }, sourcePath: { type: "string" }, sourceHash: { type: "string" }, targetPath: { type: "string" }, backupPath: { type: "string" }, backupCreated: { type: "boolean" }, repeatedDeployment: { type: "boolean" }, copiedFileCount: { type: "integer" }, dryRun: { type: "boolean" }, plannedEffects: { type: "array", items: { type: "object" } }, liveRefresh: { type: "object" } }),
+    destructiveHint: true,
+    supportsDryRun: true,
+    sideEffects: ["project-file-write", "project-file-delete", "session-affecting"],
+    riskLevel: "high",
+    playModeSupport: "session-affecting",
+    handler: "offline",
+    supportStatus: "cli-only",
+    cliCommand: "tools run package.deploy",
+    docsTopic: "package",
+    equivalentUnityMcp: "deploy_package",
+    examples: [
+      { description: "Preview deploying a local package", argv: ["tools", "run", "package.deploy", "--input", "{\"project\":\"D:/workspace/alps-unity-cli/Dev/UnityProject\",\"source\":\"D:/workspace/my-package\"}", "--dry-run"] },
+      { description: "Deploy and request an open Editor refresh", argv: ["tools", "run", "package.deploy", "--input", "{\"source\":\"D:/workspace/my-package\"}", "--yes"] }
+    ]
+  },
+  {
+    name: "package.restore",
+    summary: "Restore a package directory from the latest package.deploy backup.",
+    description: "Restore a package previously deployed by package.deploy. If package.deploy backed up an existing package directory, package.restore replaces Packages/<packageName> with that backup. If deploy created a new package with no previous directory, restore removes the deployed package directory. Destructive: writes/deletes project package files and can trigger Unity import/compile. Supports --dry-run to preview effects without writing.",
+    group: "package",
+    inputSchema: objSchema({ packageName: { type: "string", description: "Package name to restore, e.g. com.acme.tool." }, project: { type: "string", description: "Unity project path." } }, ["packageName"]),
+    outputSchema: objSchema({ action: { type: "string" }, projectPath: { type: "string" }, manifestPath: { type: "string" }, packageName: { type: "string" }, targetPath: { type: "string" }, backupPath: { type: "string" }, restoredFromBackup: { type: "boolean" }, removedDeployedPackage: { type: "boolean" }, copiedFileCount: { type: "integer" }, dryRun: { type: "boolean" }, plannedEffects: { type: "array", items: { type: "object" } }, liveRefresh: { type: "object" } }),
+    destructiveHint: true,
+    supportsDryRun: true,
+    sideEffects: ["project-file-write", "project-file-delete", "session-affecting"],
+    riskLevel: "high",
+    playModeSupport: "session-affecting",
+    handler: "offline",
+    supportStatus: "cli-only",
+    cliCommand: "tools run package.restore",
+    docsTopic: "package",
+    equivalentUnityMcp: "restore_package",
+    examples: [
+      { description: "Preview restoring a deployed package", argv: ["tools", "run", "package.restore", "--input", "{\"packageName\":\"com.acme.tool\"}", "--dry-run"] },
+      { description: "Restore a deployed package", argv: ["tools", "run", "package.restore", "--input", "{\"packageName\":\"com.acme.tool\"}", "--yes"] }
+    ]
+  },
+  {
     name: "package.resolve",
     summary: "Resolve all packages in the project manifest by running Unity PackageManager (batch job).",
     description: "Resolve all packages in the project manifest by running Unity PackageManager (batch job). Long-running; use after manual manifest edits or install/remove. Triggers import/domain reload in Unity.",

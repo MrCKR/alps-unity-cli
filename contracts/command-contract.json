@@ -1335,6 +1335,15 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "package.deploy",
+      "group": "package",
+      "command": "deploy",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "package.embed",
       "group": "package",
       "command": "embed",
@@ -1395,6 +1404,15 @@
       "handler_type": "hybrid",
       "csharp_handler": "none",
       "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "package.restore",
+      "group": "package",
+      "command": "restore",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "destructive": true,
       "timeout": 30000
     },
     {

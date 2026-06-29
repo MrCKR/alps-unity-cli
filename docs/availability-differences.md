@@ -44,7 +44,7 @@ Package 依赖通过 `requiresPackages` 字段声明在工具 descriptor 中：
 | 不可用（`/health` 失败） | 无 Bridge 命令；返回 `E_TARGET_UNREACHABLE` |
 
 离线/CLI-only 能力不受 Bridge 状态影响：
-- `tools run package.list` / `package.info` / `package.search` / `package.install` / `package.remove`
+- `tools run package.list` / `package.info` / `package.search` / `package.install` / `package.remove` / `package.deploy` / `package.restore` / `package.bridge-remove`
 - `batch schema` / `batch run`
 - `tools run docs.get` / `docs.search` / `reflect.type` / `reflect.member` / `reflect.search`
 - `jobs status` / `jobs logs` / `jobs cancel`

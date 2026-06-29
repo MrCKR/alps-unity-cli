@@ -188,6 +188,8 @@ export async function handlePackage(command: string | undefined, args: string[],
     removePackage,
     removePackageBridge,
     removeScopedRegistry,
+    restoreDeployedPackage,
+    deployPackageSource,
     searchRegistry,
     setRegistry,
     validatePackageName,
@@ -284,6 +286,77 @@ export async function handlePackage(command: string | undefined, args: string[],
       return confirmation;
     }
     return success(requestId, { action: "bridge-remove", ...(await removePackageBridge(projectPath, { dryRun: getBoolean(flags, "dry-run") })) });
+  }
+
+  if (command === "deploy") {
+    const confirmation = await confirmDestructiveExecution(flags, {
+      command: "package.deploy",
+      summary: "Package Deploy",
+      destructiveHint: true,
+      supportsDryRun: true,
+      requestId
+    });
+    if (confirmation) {
+      return confirmation;
+    }
+    const source = args[0] ?? getString(flags, "source") ?? getString(flags, "source-path") ?? getString(flags, "path");
+    if (!source) {
+      return failure(requestId, "PACKAGE_DEPLOY_SOURCE_REQUIRED", "package.deploy requires a source package folder.", [
+        "Pass --input {\"source\":\"<local-package-folder>\"} or --source <local-package-folder>.",
+        "The source folder must contain package.json with name/version and must be outside the target project's Packages directory."
+      ]);
+    }
+    const deployed = await deployPackageSource(projectPath, source, {
+      packageName: getString(flags, "package-name") ?? getString(flags, "packageName") ?? getString(flags, "name"),
+      dryRun: getBoolean(flags, "dry-run")
+    });
+    if (deployed.dryRun) {
+      return success(requestId, { action: "deploy", status: "dry_run", ...deployed });
+    }
+    const liveRefresh = await refreshOpenEditor(requestId, flags, runtime);
+    return success(requestId, {
+      action: "deploy",
+      status: "deployed",
+      ...deployed,
+      liveRefresh,
+      nextActions: liveRefresh.status === "triggered"
+        ? ["Wait for Unity to finish importing and compiling, then inspect editor.state or console logs."]
+        : ["Open or refresh the Unity project so it imports the deployed package, then inspect console diagnostics."]
+    });
+  }
+
+  if (command === "restore") {
+    const confirmation = await confirmDestructiveExecution(flags, {
+      command: "package.restore",
+      summary: "Package Restore",
+      destructiveHint: true,
+      supportsDryRun: true,
+      requestId
+    });
+    if (confirmation) {
+      return confirmation;
+    }
+    const packageName = args[0] ?? getString(flags, "package-name") ?? getString(flags, "packageName") ?? getString(flags, "name");
+    if (!packageName) {
+      return failure(requestId, "PACKAGE_NAME_REQUIRED", "package.restore requires packageName.", [
+        "Pass --input {\"packageName\":\"<package>\"} or --package-name <package>.",
+        "Use package.deploy output or Packages/.unity_cli_deploy_backups/unity_cli.package-deployments.json to find deployed package names."
+      ]);
+    }
+    const restored = await restoreDeployedPackage(projectPath, packageName, { dryRun: getBoolean(flags, "dry-run") });
+    if (restored.dryRun) {
+      return success(requestId, { action: "restore", status: "dry_run", ...restored });
+    }
+    const liveRefresh = await refreshOpenEditor(requestId, flags, runtime);
+    return success(requestId, {
+      action: "restore",
+      status: "restored",
+      ...restored,
+      liveRefresh,
+      nextActions: liveRefresh.status === "triggered"
+        ? ["Wait for Unity to finish importing and compiling, then inspect editor.state or console logs."]
+        : ["Open or refresh the Unity project so it imports the restored package, then inspect console diagnostics."]
+    });
   }
 
   if (command === "registry") {
