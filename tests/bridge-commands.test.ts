@@ -945,8 +945,9 @@ test("animation and vfx commands forward Windows paths, targets and effects", as
     return { ok: true, data: { plannedEffects: [{ type: payload.command }], clip: { path: payload.args.path }, graph: { path: payload.args.path }, target: { path: payload.args.target } } };
   };
 
-  const clipInfo = await execute(["tools", "run", "animation.clip", "Assets\\Animations\\Idle.anim"], { ...runtime, bridgeExecute });
-  const clipCreate = await execute(["tools", "run", "animation.clip", "Assets\\Animations\\Run.anim", "--create", "--overwrite", "--frame-rate", "30", "--legacy", "false"], { ...runtime, bridgeExecute });
+  const clipInfo = await execute(["tools", "run", "animation.clip", "Assets\\Animations\\Idle.anim", "--max-curve-keys", "2"], { ...runtime, bridgeExecute });
+  const clipCreate = await execute(["tools", "run", "animation.clip.create", "Assets\\Animations\\Run.anim", "--overwrite", "--frame-rate", "30", "--legacy", "false", "--wrap-mode", "Loop", "--loop-time", "true", "--length", "1", "--max-curve-keys", "2", "--yes"], { ...runtime, bridgeExecute });
+  const clipModify = await execute(["tools", "run", "animation.clip.modify", "Assets\\Animations\\Run.anim", "--frame-rate", "24", "--wrap-mode", "ClampForever", "--loop-time", "false", "--yes"], { ...runtime, bridgeExecute });
   const state = await execute(["tools", "run", "animation.state", "Rig/Player", "--layer", "1"], { ...runtime, bridgeExecute });
   const play = await execute(["tools", "run", "animation.play", "Rig/Player", "--state", "Base Layer.Run", "--layer", "0", "--normalized-time", "0.25"], { ...runtime, bridgeExecute });
   const stop = await execute(["tools", "run", "animation.stop", "Rig/Player"], { ...runtime, bridgeExecute });
@@ -955,26 +956,28 @@ test("animation and vfx commands forward Windows paths, targets and effects", as
 
   assert.equal(clipInfo.ok, true);
   assert.equal(clipCreate.ok, true);
+  assert.equal(clipModify.ok, true);
   assert.equal(state.ok, true);
   assert.equal(play.ok, true);
   assert.equal(stop.ok, true);
   assert.equal(graphCreate.ok, true);
   assert.equal(effect.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["animation.clip", "animation.clip", "animation.state", "animation.play", "animation.stop", "vfx.graph", "vfx.effect"]);
-  assert.deepEqual(requests[0].args, { action: "info", path: "Assets\\Animations\\Idle.anim" });
-  assert.deepEqual(requests[1].args, { action: "create", path: "Assets\\Animations\\Run.anim", overwrite: true, frameRate: 30, legacy: false });
-  assert.deepEqual(requests[2].args, { target: "Rig/Player", layer: 1 });
-  assert.deepEqual(requests[3].args, { target: "Rig/Player", state: "Base Layer.Run", layer: 0, normalizedTime: 0.25 });
-  assert.deepEqual(requests[4].args, { target: "Rig/Player" });
-  assert.deepEqual(requests[5].args, { action: "create", path: "Assets\\VFX\\Explosion.vfx", overwrite: true });
-  assert.deepEqual(requests[6].args, { target: "Effects/Emitter", graph: "Assets\\VFX\\Explosion.vfx", add: true });
+  assert.deepEqual(requests.map((request) => request.command), ["animation.clip", "animation.clip.create", "animation.clip.modify", "animation.state", "animation.play", "animation.stop", "vfx.graph", "vfx.effect"]);
+  assert.deepEqual(requests[0].args, { path: "Assets\\Animations\\Idle.anim", maxCurveKeys: 2 });
+  assert.deepEqual(requests[1].args, { path: "Assets\\Animations\\Run.anim", overwrite: true, frameRate: 30, legacy: false, wrapMode: "Loop", loopTime: true, length: 1, maxCurveKeys: 2 });
+  assert.deepEqual(requests[2].args, { path: "Assets\\Animations\\Run.anim", frameRate: 24, wrapMode: "ClampForever", loopTime: false });
+  assert.deepEqual(requests[3].args, { target: "Rig/Player", layer: 1 });
+  assert.deepEqual(requests[4].args, { target: "Rig/Player", state: "Base Layer.Run", layer: 0, normalizedTime: 0.25 });
+  assert.deepEqual(requests[5].args, { target: "Rig/Player" });
+  assert.deepEqual(requests[6].args, { action: "create", path: "Assets\\VFX\\Explosion.vfx", overwrite: true });
+  assert.deepEqual(requests[7].args, { target: "Effects/Emitter", graph: "Assets\\VFX\\Explosion.vfx", add: true });
 });
 
 test("animation and vfx bridge errors preserve diagnostics", async () => {
   const runtime = await makeRuntime();
   const cases: Array<{ argv: string[]; code: string; message: string; nextActions: string[] }> = [
     { argv: ["tools", "run", "animation.play", "Player", "--state", "Missing"], code: "E_TARGET_AMBIGUOUS", message: "Multiple GameObjects matched: Player", nextActions: ["Pass a hierarchy path or instance id."] },
-    { argv: ["tools", "run", "animation.clip", "Assets/Animations/Missing.anim"], code: "E_ANIMATION_CLIP_NOT_FOUND", message: "AnimationClip asset not found", nextActions: ["Check the path or create one with unity_cli tools run animation.clip --input '{\"path\":\"<path>\",\"create\":true}'."] },
+    { argv: ["tools", "run", "animation.clip", "Assets/Animations/Missing.anim"], code: "E_ANIMATION_CLIP_NOT_FOUND", message: "AnimationClip asset not found", nextActions: ["Check the path or create one with unity_cli tools run animation.clip.create --input '{\"path\":\"<path>\"}' --yes."] },
     { argv: ["tools", "run", "vfx.graph", "--input", JSON.stringify({ path: "Assets/VFX/Explosion.vfx" })], code: "E_VFX_PACKAGE_MISSING", message: "Visual Effect Graph package is not installed", nextActions: ["Install com.unity.visualeffectgraph manually via Unity Package Manager or Packages/manifest.json, run unity_cli tools run package.resolve, then retry."] },
     { argv: ["tools", "run", "vfx.graph", "--input", JSON.stringify({ path: "Assets/VFX/Explosion.vfx", create: true })], code: "E_VFX_GRAPH_CREATE_FAILED", message: "VFX Graph asset creation did not produce a readable VisualEffectAsset", nextActions: ["Check Unity Console and UnityCliBridge.log; the Visual Effect Graph package may have changed its internal authoring API."] },
     { argv: ["tools", "run", "animation.clip", "D:\\tmp\\Bad.anim"], code: "E_ANIMATION_CLIP_PATH_INVALID", message: "AnimationClip path must be under Assets/ and end with .anim: D:\\tmp\\Bad.anim", nextActions: ["Pass a Unity asset path such as Assets/Animations/Player.anim."] }

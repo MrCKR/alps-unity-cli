@@ -401,7 +401,9 @@ unity_cli tools run profiler.load --path Assets/profiler.raw
 ### 动画、VFX、Shader、纹理
 
 ```powershell
-unity_cli tools run animation.clip <path>
+unity_cli tools run animation.clip --input '{"path":"Assets/Walk.anim","maxCurveKeys":8}'
+unity_cli tools run animation.clip.create --input '{"path":"Assets/Walk.anim","length":1,"loopTime":true}' --yes
+unity_cli tools run animation.clip.modify --input '{"path":"Assets/Walk.anim","loopTime":false}' --yes
 unity_cli tools run animation.state <target>
 unity_cli tools run animation.play <target> --state Run
 unity_cli tools run animation.stop <target>
@@ -650,7 +652,9 @@ Bridge 生命周期：
 - `E_SHADER_NOT_FOUND`, `E_TEXTURE_NOT_FOUND`, `E_IMPORT_FAILED`
 
 **Animation & VFX:**
-- `tools run animation.clip --input '{"path":"<path>"}'` reads or creates `Assets/*.anim` AnimationClip assets
+- `tools run animation.clip --input '{"path":"<path>"}'` reads `Assets/*.anim` AnimationClip settings, events, and bounded curve summaries
+- `tools run animation.clip.create --input '{"path":"<path>","length":1}' --yes` creates or overwrites persistent `Assets/*.anim` assets
+- `tools run animation.clip.modify --input '{"path":"<path>","loopTime":true}' --yes` updates persistent clip-level settings
 - `tools run vfx.graph --input '{"path":"<path>"}'` reads or creates `Assets/*.vfx` Visual Effect Graph assets
 - Windows-style `Assets\VFX\Explosion.vfx` paths are normalized to Unity asset paths
 - `E_VFX_PACKAGE_MISSING`, `E_VFX_GRAPH_NOT_FOUND`

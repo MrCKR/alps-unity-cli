@@ -1,23 +1,104 @@
 import type { ToolMetadata } from "../types.js";
 import { objSchema, pageSchema } from "../schemas.js";
 
+const CLIP_WRAP_MODE_ENUM = ["Default", "Once", "Loop", "PingPong", "ClampForever"];
+const CLIP_SETTING_INPUT = {
+  frameRate: { type: "number", default: 60, description: "Clip frame rate. Values <= 0 are rejected." },
+  legacy: { type: "boolean", default: false, description: "Set AnimationClip.legacy." },
+  wrapMode: { type: "string", enum: CLIP_WRAP_MODE_ENUM, description: "AnimationClip wrap mode for legacy playback. Unity treats Once and Clamp as the same enum value and may report either name when read back." },
+  loopTime: { type: "boolean", description: "Set AnimationClipSettings.loopTime." },
+  startTime: { type: "number", description: "AnimationClipSettings.startTime in seconds." },
+  stopTime: { type: "number", description: "AnimationClipSettings.stopTime in seconds. Must be >= startTime." },
+  length: { type: "number", description: "Duration in seconds; when provided without stopTime, stopTime becomes startTime + length." },
+  maxCurveKeys: { type: "integer", default: 5, description: "Maximum keyframes returned per curve binding in the response." }
+};
+const ANIMATION_CLIP_OUTPUT = objSchema({
+  clip: objSchema({
+    path: { type: "string" },
+    guid: { type: "string" },
+    name: { type: "string" },
+    length: { type: "number" },
+    frameRate: { type: "number" },
+    legacy: { type: "boolean" },
+    wrapMode: { type: "string" },
+    localBounds: { type: "object" },
+    settings: { type: "object", description: "AnimationClipSettings summary, including loopTime/startTime/stopTime and loop blend flags." },
+    bindings: { type: "object", description: "Float curve bindings with bounded key summaries controlled by maxCurveKeys." },
+    objectReferenceBindings: { type: "object", description: "Object reference curve bindings with bounded key summaries controlled by maxCurveKeys." },
+    events: { type: "object", description: "AnimationEvent count and event summaries." }
+  }),
+  plannedEffects: { type: "array", items: { type: "object" } },
+  logPath: { type: "string" }
+});
+
 export const ANIMATION_TOOLS: ToolMetadata[] = [
   {
     name: "animation.clip",
-    summary: "Read an AnimationClip, or create an Assets/*.anim clip when action=create/create=true.",
-    description: "Read an AnimationClip, or create an Assets/*.anim clip when action=create/create=true. Creating or overwriting a clip writes an asset, refreshes AssetDatabase state, and may trigger import/preview updates.",
+    summary: "Read an AnimationClip asset with clip settings, events, and bounded curve key summaries.",
+    description: "Read an existing Assets/*.anim AnimationClip. Returns frameRate, legacy, wrapMode, localBounds, AnimationClipSettings, AnimationEvents, float curve bindings, object-reference curve bindings, and bounded key summaries. Use maxCurveKeys to control response size. Use animation.clip.create for persistent .anim creation or overwrite.",
     group: "animation",
-    inputSchema: objSchema({ path: { type: "string" }, action: { type: "string", enum: ["info", "create"] }, create: { type: "boolean" }, overwrite: { type: "boolean" }, frameRate: { type: "number" }, legacy: { type: "boolean" } }, ["path"]),
+    inputSchema: objSchema({
+      path: { type: "string", description: "Existing Assets/*.anim AnimationClip path." },
+      maxCurveKeys: { type: "integer", default: 5, description: "Maximum keyframes returned per curve binding. Use 0 to omit key details." }
+    }, ["path"]),
+    outputSchema: ANIMATION_CLIP_OUTPUT,
     destructiveHint: false,
-    sideEffects: ["asset-write", "asset-import"],
-    playModeSupport: "session-affecting",
-    equivalentUnityMcp: "manage_animation.clip_*",
+    playModeSupport: "supported",
+    equivalentUnityMcp: "manage_animation.clip_get_info",
     handler: "bridge",
     cliCommand: "tools run animation.clip",
     docsTopic: "animation",
     examples: [
-      { description: "Read clip info", argv: ["tools", "run", "animation.clip", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentAnimationProbe.anim\"}"] },
-      { description: "Create a clip", argv: ["tools", "run", "animation.clip", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/NewClip.anim\",\"action\":\"create\",\"frameRate\":30}"] }
+      { description: "Read clip settings and bounded curve keys", argv: ["tools", "run", "animation.clip", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentAnimationProbe.anim\",\"maxCurveKeys\":3}"] }
+    ]
+  },
+  {
+    name: "animation.clip.create",
+    summary: "Create or overwrite an Assets/*.anim AnimationClip with clip-level properties.",
+    description: "Create or overwrite an Assets/*.anim AnimationClip and set clip-level properties: frameRate, legacy, wrapMode, loopTime, startTime, stopTime, or length. This writes a persistent .anim asset and refreshes AssetDatabase state, so it requires --yes unless --dry-run is used. Curve and event editing remain separate future tools; this tool only creates the clip shell and metadata-level settings.",
+    group: "animation",
+    inputSchema: objSchema({
+      path: { type: "string", description: "Destination Assets/*.anim AnimationClip path." },
+      overwrite: { type: "boolean", description: "Allow replacing an existing clip asset." },
+      ...CLIP_SETTING_INPUT
+    }, ["path"]),
+    outputSchema: ANIMATION_CLIP_OUTPUT,
+    destructiveHint: true,
+    supportsDryRun: true,
+    sideEffects: ["asset-write", "asset-import"],
+    riskLevel: "medium",
+    playModeSupport: "session-affecting",
+    equivalentUnityMcp: "manage_animation.clip_create",
+    handler: "bridge",
+    cliCommand: "tools run animation.clip.create",
+    docsTopic: "animation",
+    examples: [
+      { description: "Preview creating a looping clip", argv: ["tools", "run", "animation.clip.create", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/NewClip.anim\",\"frameRate\":30,\"length\":1,\"loopTime\":true,\"wrapMode\":\"Loop\"}", "--dry-run"] },
+      { description: "Create a looping clip after confirmation", argv: ["tools", "run", "animation.clip.create", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/NewClip.anim\",\"frameRate\":30,\"length\":1,\"loopTime\":true,\"wrapMode\":\"Loop\"}", "--yes"] }
+    ]
+  },
+  {
+    name: "animation.clip.modify",
+    summary: "Modify clip-level properties on an existing Assets/*.anim AnimationClip.",
+    description: "Modify clip-level properties on an existing Assets/*.anim AnimationClip: frameRate, legacy, wrapMode, loopTime, startTime, stopTime, or length. This is a persistent .anim asset write and requires --yes unless --dry-run is used. It does not edit animation curves or events; use animation.clip first to inspect current bindings and events.",
+    group: "animation",
+    inputSchema: objSchema({
+      path: { type: "string", description: "Existing Assets/*.anim AnimationClip path." },
+      ...CLIP_SETTING_INPUT
+    }, ["path"]),
+    outputSchema: ANIMATION_CLIP_OUTPUT,
+    destructiveHint: true,
+    supportsDryRun: true,
+    sideEffects: ["asset-write", "asset-import"],
+    riskLevel: "medium",
+    playModeSupport: "session-affecting",
+    equivalentUnityMcp: "manage_animation.clip_set_properties",
+    handler: "bridge",
+    cliCommand: "tools run animation.clip.modify",
+    docsTopic: "animation",
+    examples: [
+      { description: "Preview changing loop settings", argv: ["tools", "run", "animation.clip.modify", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentAnimationProbe.anim\",\"loopTime\":true,\"wrapMode\":\"Loop\"}", "--dry-run"] },
+      { description: "Apply clip-level settings", argv: ["tools", "run", "animation.clip.modify", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentAnimationProbe.anim\",\"loopTime\":true,\"wrapMode\":\"Loop\"}", "--yes"] }
     ]
   },
   {

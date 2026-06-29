@@ -154,7 +154,9 @@ test("Unity Bridge exposes documented core camera, screenshot, prefab, UI, mater
   assert.match(source, /\.Prop\("handlerFingerprint",/);
   assert.match(source, /RegisterInstalledExtensionCommands\(registry\)/);
   assert.doesNotMatch(source, /RegisterCommand\(registry, "(probuilder|cinemachine|vfx|urp|hdrp)\./);
-  assert.match(source, /RegisterCommand\(registry, "animation\.clip", "animation", true/);
+  assert.match(source, /RegisterCommand\(registry, "animation\.clip", "animation", false/);
+  assert.match(source, /RegisterCommand\(registry, "animation\.clip\.create", "animation", true/);
+  assert.match(source, /RegisterCommand\(registry, "animation\.clip\.modify", "animation", true/);
   assert.match(source, /RegisterCommand\(registry, "animation\.state", "animation", false/);
   assert.match(source, /RegisterCommand\(registry, "animation\.play", "animation", true/);
   assert.match(source, /RegisterCommand\(registry, "animation\.stop", "animation", true/);
@@ -272,7 +274,9 @@ test("Unity Bridge animation and vfx commands expose assets, target resolver dia
   assert.match(source, /E_TARGET_AMBIGUOUS/);
   assert.match(source, /rawPath\.Replace\('\\\\', '\/'\)\.Trim\(\)/);
   assert.match(source, /Replace\("\\\\t", "\\t"\)/);
-  assert.match(readme, /`tools run animation\.clip --input '\{"path":"<path>"\}'` reads or creates `Assets\/\*\.anim` AnimationClip assets/);
+  assert.match(readme, /`tools run animation\.clip --input '\{"path":"<path>"\}'` reads `Assets\/\*\.anim` AnimationClip settings, events, and bounded curve summaries/);
+  assert.match(readme, /`tools run animation\.clip\.create --input '\{"path":"<path>","length":1\}' --yes` creates or overwrites persistent `Assets\/\*\.anim` assets/);
+  assert.match(readme, /`tools run animation\.clip\.modify --input '\{"path":"<path>","loopTime":true\}' --yes` updates persistent clip-level settings/);
   assert.match(readme, /`tools run vfx\.graph --input/);
   assert.match(readme, /Windows-style `Assets\\VFX\\Explosion\.vfx` paths are normalized to Unity asset paths/);
   assert.match(readme, /`E_VFX_PACKAGE_MISSING`/);

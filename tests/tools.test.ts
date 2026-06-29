@@ -768,15 +768,40 @@ test("S3.2 physics group has settings, queries and mutation tools", () => {
 });
 
 test("S3.2 animation and vfx groups have required tools", () => {
-  assert.deepEqual(filterToolsByGroup("animation").map((t) => t.name), ["animation.clip", "animation.state", "animation.play", "animation.stop"]);
+  assert.deepEqual(filterToolsByGroup("animation").map((t) => t.name), ["animation.clip", "animation.clip.create", "animation.clip.modify", "animation.state", "animation.play", "animation.stop"]);
   assert.deepEqual(filterToolsByGroup("vfx").map((t) => t.name), ["vfx.graph", "vfx.effect", "vfx.parameter", "vfx.control", "vfx.event", "vfx.template", "vfx.particle-create", "vfx.particle-info", "vfx.particle-main", "vfx.particle-emission", "vfx.particle-shape", "vfx.particle-play", "vfx.particle-module", "vfx.line-create", "vfx.line-positions", "vfx.trail"]);
 });
 
 test("animation tools expose Play Mode side-effect semantics", () => {
   const clip = findToolByName("animation.clip")!;
-  assert.equal(clip.playModeSupport, "session-affecting");
-  assert.deepEqual(clip.sideEffects, ["asset-write", "asset-import"]);
-  assert.equal(clip.equivalentUnityMcp, "manage_animation.clip_*");
+  const clipProps = clip.inputSchema.properties as Record<string, unknown>;
+  const clipOutput = clip.outputSchema?.properties as Record<string, unknown>;
+  assert.equal(clip.playModeSupport, "supported");
+  assert.equal(clip.destructiveHint, false);
+  assert.ok(clipProps.maxCurveKeys, "animation.clip should expose bounded curve key reads");
+  assert.ok(clipOutput.clip, "animation.clip should document clip output");
+  assert.equal(clip.equivalentUnityMcp, "manage_animation.clip_get_info");
+
+  const createClip = findToolByName("animation.clip.create")!;
+  const createProps = createClip.inputSchema.properties as Record<string, unknown>;
+  assert.equal(createClip.playModeSupport, "session-affecting");
+  assert.equal(createClip.destructiveHint, true);
+  assert.equal(createClip.supportsDryRun, true);
+  assert.deepEqual(createClip.sideEffects, ["asset-write", "asset-import"]);
+  assert.ok(createProps.wrapMode, "animation.clip.create should expose wrapMode");
+  assert.ok(createProps.loopTime, "animation.clip.create should expose loopTime");
+  assert.ok(createProps.length, "animation.clip.create should expose length");
+  assert.equal(createClip.equivalentUnityMcp, "manage_animation.clip_create");
+
+  const modifyClip = findToolByName("animation.clip.modify")!;
+  const modifyProps = modifyClip.inputSchema.properties as Record<string, unknown>;
+  assert.equal(modifyClip.playModeSupport, "session-affecting");
+  assert.equal(modifyClip.destructiveHint, true);
+  assert.equal(modifyClip.supportsDryRun, true);
+  assert.deepEqual(modifyClip.sideEffects, ["asset-write", "asset-import"]);
+  assert.ok(modifyProps.wrapMode, "animation.clip.modify should expose wrapMode");
+  assert.ok(modifyProps.loopTime, "animation.clip.modify should expose loopTime");
+  assert.equal(modifyClip.equivalentUnityMcp, "manage_animation.clip_set_properties");
 
   const state = findToolByName("animation.state")!;
   assert.equal(state.playModeSupport, "supported");

@@ -12,6 +12,24 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "animation.clip.create",
+      "group": "animation",
+      "command": "clip.create",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "animation.clip.modify",
+      "group": "animation",
+      "command": "clip.modify",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "animation.play",
       "group": "animation",
       "command": "play",

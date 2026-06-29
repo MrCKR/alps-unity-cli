@@ -180,6 +180,37 @@ test("build read handlers return bridge success envelopes", async () => {
   assert.match(source, /private static string BuildSettings[\s\S]*return SuccessJson\(w\.EndObject\(\)\.ToString\(\)\);/, "build.settings should return a bridge success envelope");
 });
 
+test("animation.clip exposes full clip properties and create settings", async () => {
+  const clip = findToolByName("animation.clip")!;
+  const create = findToolByName("animation.clip.create")!;
+  const modify = findToolByName("animation.clip.modify")!;
+  const clipProps = clip.inputSchema.properties as Record<string, unknown>;
+  const createProps = create.inputSchema.properties as Record<string, unknown>;
+  const modifyProps = modify.inputSchema.properties as Record<string, unknown>;
+  assert.ok(clipProps.maxCurveKeys, "animation.clip should bound curve key summaries");
+  assert.equal(clip.destructiveHint, false);
+  assert.equal(create.destructiveHint, true);
+  assert.equal(create.supportsDryRun, true);
+  assert.equal(modify.destructiveHint, true);
+  assert.equal(modify.supportsDryRun, true);
+  assert.ok(createProps.wrapMode, "animation.clip.create should expose wrapMode");
+  assert.ok(createProps.loopTime, "animation.clip.create should expose loopTime");
+  assert.ok(createProps.length, "animation.clip.create should expose length");
+  assert.ok(modifyProps.wrapMode, "animation.clip.modify should expose wrapMode");
+  assert.ok(modifyProps.loopTime, "animation.clip.modify should expose loopTime");
+  const source = await readFile(new URL("../unitypkg/Editor/Commands/AnimationCommands.cs", import.meta.url), "utf8");
+  assert.match(source, /RegisterCommand\(registry, "animation\.clip", "animation", false, AnimationClipCommand\)/, "animation.clip should be read-only at bridge registration");
+  assert.match(source, /RegisterCommand\(registry, "animation\.clip\.create", "animation", true, AnimationClipCreate\)/, "animation.clip.create should be mutating at bridge registration");
+  assert.match(source, /RegisterCommand\(registry, "animation\.clip\.modify", "animation", true, AnimationClipModify\)/, "animation.clip.modify should be mutating at bridge registration");
+  assert.match(source, /AnimationUtility\.GetAnimationEvents\(clip\)/, "clip info should expose AnimationEvents");
+  assert.match(source, /AnimationUtility\.GetObjectReferenceCurveBindings\(clip\)/, "clip info should expose object-reference curves");
+  assert.match(source, /AnimationUtility\.GetAnimationClipSettings\(clip\)/, "clip info should expose AnimationClipSettings");
+  assert.match(source, /AnimationUtility\.SetAnimationClipSettings\(clip, settings\)/, "clip create and modify should apply AnimationClipSettings");
+  assert.match(source, /AnimationClipCreate[\s\S]*ApplyAnimationClipSettings\(clip, request, true\)/, "clip create should apply documented defaults");
+  assert.match(source, /AnimationClipModify[\s\S]*ApplyAnimationClipSettings\(clip, request, false\)/, "clip modify should only write explicit fields");
+  assert.match(source, /AnimationClipModify[\s\S]*SetSerializedAnimationClipWrapMode\(clip, requestedWrapMode\.Value\)/, "clip modify should persist legacy wrapMode");
+});
+
 test("animator parameter handlers fall back to AnimatorController definitions", async () => {
   const csFiles = await listCsFiles(new URL("../unitypkg/Editor/", import.meta.url));
   const allSource = (

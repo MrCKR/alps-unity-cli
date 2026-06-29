@@ -39,7 +39,7 @@ test("security policy covers all destructive commands including CLI-only", async
   const { destructiveCommands } = await import("../src/security-policy.js");
   const policyCommands = destructiveCommands().map((e: { command: string }) => e.command);
   const expected = [
-    "asset.delete", "scriptable-object.create", "scriptable-object.modify", "scene.save", "code.exec",
+    "asset.delete", "animation.clip.create", "animation.clip.modify", "scriptable-object.create", "scriptable-object.modify", "scene.save", "code.exec",
     "probuilder.delete-faces", "probuilder.detach-faces", "probuilder.combine-meshes",
     "probuilder.merge-objects", "probuilder.flip-normals",
     "cinemachine.extension", "urp.feature", "editor.menu", "package.install", "package.remove",
@@ -49,7 +49,7 @@ test("security policy covers all destructive commands including CLI-only", async
     "object.modify", "reflection.method.call"
   ];
   assert.deepEqual(policyCommands.sort(), expected.sort());
-  assert.equal(destructiveCommands().length, 36);
+  assert.equal(destructiveCommands().length, 38);
 });
 
 test("Unity bridge destructive proof list matches persistent-risk policy", async () => {
@@ -57,7 +57,7 @@ test("Unity bridge destructive proof list matches persistent-risk policy", async
   const match = source.match(/private static bool RequiresDestructiveSecurityProof[\s\S]*?\n        }/);
   assert.ok(match, "RequiresDestructiveSecurityProof should exist");
   const body = match[0];
-  for (const command of ["asset.delete", "scene.save", "code.exec", "editor.menu", "reflection.method.call", "screenshot.surround"]) {
+  for (const command of ["asset.delete", "animation.clip.create", "animation.clip.modify", "scene.save", "code.exec", "editor.menu", "reflection.method.call", "screenshot.surround"]) {
     assert.match(body, new RegExp(`command == "${command.replace(/\./g, "\\.")}"`), `${command} should require bridge security proof`);
   }
   for (const command of ["go.delete", "component.remove", "go.modify", "component.modify"]) {

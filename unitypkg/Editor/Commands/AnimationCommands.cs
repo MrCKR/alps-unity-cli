@@ -31,7 +31,9 @@ namespace UnityCli
     {
         private static void RegisterAnimationCommands(BridgeCommandRegistry registry)
         {
-            RegisterCommand(registry, "animation.clip", "animation", true, AnimationClipCommand);
+            RegisterCommand(registry, "animation.clip", "animation", false, AnimationClipCommand);
+            RegisterCommand(registry, "animation.clip.create", "animation", true, AnimationClipCreate);
+            RegisterCommand(registry, "animation.clip.modify", "animation", true, AnimationClipModify);
             RegisterCommand(registry, "animation.state", "animation", false, AnimationState);
             RegisterCommand(registry, "animation.play", "animation", true, AnimationPlay);
             RegisterCommand(registry, "animation.stop", "animation", true, AnimationStop);
@@ -58,36 +60,87 @@ namespace UnityCli
 
         private static string AnimationClipCommand(BridgeRequest request)
         {
-            var action = string.Equals(request.StringArg("action"), "create", StringComparison.OrdinalIgnoreCase) ? "create" : "info";
             var path = RequireAnimationClipPath(request.StringArg("path"));
-            if (action == "create")
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("clip", AnimationClipJson(path, LoadAnimationClipAsset(path), request.IntArg("maxCurveKeys", 5)))
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        /// <summary>创建持久化 AnimationClip 资产，并只写入 clip 级基础设置。</summary>
+        private static string AnimationClipCreate(BridgeRequest request)
+        {
+            var path = RequireAnimationClipPath(request.StringArg("path"));
+            ValidateAnimationClipCreateRequest(request);
+            var overwrite = request.BoolArg("overwrite", false);
+            var existing = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
+            if (existing != null && !overwrite)
             {
-                var overwrite = request.BoolArg("overwrite", false);
-                if (AssetDatabase.LoadAssetAtPath<AnimationClip>(path) != null && !overwrite)
-                {
-                    return ErrorJson("E_ANIMATION_CLIP_EXISTS", "AnimationClip already exists: " + path, "Pass --overwrite or choose a different Assets/*.anim path.");
-                }
-                CreateAssetDirectory(path);
-                if (AssetDatabase.LoadAssetAtPath<AnimationClip>(path) != null)
-                {
-                    AssetDatabase.DeleteAsset(path);
-                }
-                var clip = new AnimationClip();
-                clip.name = Path.GetFileNameWithoutExtension(path);
-                clip.frameRate = Math.Max(1f, request.FloatArg("frameRate", 60f));
-                clip.legacy = request.BoolArg("legacy", false);
-                AssetDatabase.CreateAsset(clip, path);
-                AssetDatabase.SaveAssets();
-                AssetDatabase.Refresh();
-                WriteLog("animation_clip_created path=" + path);
+                return ErrorJson("E_ANIMATION_CLIP_EXISTS", "AnimationClip already exists: " + path, "Pass overwrite:true after inspecting the existing clip, or choose another Assets/*.anim path.");
+            }
+            if (request.DryRun)
+            {
                 return SuccessJson(new UnityCliJsonWriter().BeginObject()
-                    .PropRaw("clip", AnimationClipJson(path, LoadAnimationClipAsset(path)))
-                    .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "animation.clip.create").Prop("path", path).EndObject())
+                    .Prop("command", "animation.clip.create")
+                    .Prop("dryRun", true)
+                    .Prop("path", path)
+                    .Prop("wouldOverwrite", existing != null)
+                    .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "animation.clip.create").Prop("path", path).Prop("overwrite", existing != null).EndObject())
                     .Prop("logPath", LogPath())
                     .EndObject().ToString());
             }
+            CreateAssetDirectory(path);
+            if (existing != null)
+            {
+                AssetDatabase.DeleteAsset(path);
+            }
+            var clip = new AnimationClip();
+            clip.name = Path.GetFileNameWithoutExtension(path);
+            var requestedWrapMode = ApplyAnimationClipSettings(clip, request, true);
+            AssetDatabase.CreateAsset(clip, path);
+            if (requestedWrapMode.HasValue)
+            {
+                SetSerializedAnimationClipWrapMode(clip, requestedWrapMode.Value);
+            }
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            WriteLog("animation_clip_created path=" + path);
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
-                .PropRaw("clip", AnimationClipJson(path, LoadAnimationClipAsset(path)))
+                .PropRaw("clip", AnimationClipJson(path, LoadAnimationClipAsset(path), request.IntArg("maxCurveKeys", 5)))
+                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "animation.clip.create").Prop("path", path).EndObject())
+                .Prop("logPath", LogPath())
+                .EndObject().ToString());
+        }
+
+        /// <summary>修改已存在 AnimationClip 的 clip 级基础设置，不触碰曲线和事件。</summary>
+        private static string AnimationClipModify(BridgeRequest request)
+        {
+            var path = RequireAnimationClipPath(request.StringArg("path"));
+            ValidateAnimationClipCreateRequest(request);
+            var clip = LoadAnimationClipAsset(path);
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("command", "animation.clip.modify")
+                    .Prop("dryRun", true)
+                    .PropRaw("clip", AnimationClipJson(path, clip, request.IntArg("maxCurveKeys", 5)))
+                    .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "animation.clip.modify").Prop("path", path).EndObject())
+                    .Prop("logPath", LogPath())
+                    .EndObject().ToString());
+            }
+            Undo.RecordObject(clip, "Modify AnimationClip Settings");
+            var requestedWrapMode = ApplyAnimationClipSettings(clip, request, false);
+            if (requestedWrapMode.HasValue)
+            {
+                SetSerializedAnimationClipWrapMode(clip, requestedWrapMode.Value);
+            }
+            EditorUtility.SetDirty(clip);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.Refresh();
+            WriteLog("animation_clip_modified path=" + path);
+            return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .PropRaw("clip", AnimationClipJson(path, LoadAnimationClipAsset(path), request.IntArg("maxCurveKeys", 5)))
+                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "animation.clip.modify").Prop("path", path).EndObject())
                 .Prop("logPath", LogPath())
                 .EndObject().ToString());
         }
@@ -190,14 +243,88 @@ namespace UnityCli
             var clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(path);
             if (clip == null)
             {
-                throw new BridgeCommandException("E_ANIMATION_CLIP_NOT_FOUND", "AnimationClip asset not found: " + path, "Check the path or create one with tools run animation.clip --input '{\"path\":\"<Assets/...>.anim\",\"action\":\"create\"}'.");
+                throw new BridgeCommandException("E_ANIMATION_CLIP_NOT_FOUND", "AnimationClip asset not found: " + path, "Check the path or create one with tools run animation.clip.create --input '{\"path\":\"<Assets/...>.anim\"}' --yes.");
             }
             return clip;
         }
 
-        private static string AnimationClipJson(string path, AnimationClip clip)
+        /// <summary>校验 AnimationClip 创建参数，确保 dry-run 与真实执行一致失败。</summary>
+        private static void ValidateAnimationClipCreateRequest(BridgeRequest request)
         {
+            var frameRate = request.OptionalFloatArg("frameRate");
+            if (frameRate.HasValue && frameRate.Value <= 0f)
+            {
+                throw new BridgeCommandException("E_ANIMATION_CLIP_SETTING_INVALID", "frameRate must be greater than 0.", "Pass a positive frameRate, such as 30 or 60.");
+            }
+            var length = request.OptionalFloatArg("length");
+            if (length.HasValue && length.Value <= 0f)
+            {
+                throw new BridgeCommandException("E_ANIMATION_CLIP_SETTING_INVALID", "length must be greater than 0 when provided.", "Pass a positive clip length in seconds, or omit length.");
+            }
+            var startTime = request.OptionalFloatArg("startTime") ?? 0f;
+            var stopTime = request.OptionalFloatArg("stopTime") ?? (length.HasValue ? startTime + length.Value : (float?)null);
+            if (stopTime.HasValue && stopTime.Value < startTime)
+            {
+                throw new BridgeCommandException("E_ANIMATION_CLIP_SETTING_INVALID", "stopTime must be greater than or equal to startTime.", "Adjust startTime/stopTime, or pass length instead of stopTime.");
+            }
+            var wrapMode = request.StringArg("wrapMode");
+            WrapMode parsed;
+            if (!string.IsNullOrEmpty(wrapMode) && !Enum.TryParse<WrapMode>(wrapMode, true, out parsed))
+            {
+                throw new BridgeCommandException("E_ANIMATION_CLIP_WRAP_MODE_INVALID", "Invalid AnimationClip wrapMode: " + wrapMode, "Use one of Default, Once/Clamp, Loop, PingPong, or ClampForever.");
+            }
+        }
+
+        /// <summary>把请求中的 clip 级属性写入 AnimationClip；修改模式只写显式传入字段。</summary>
+        private static WrapMode? ApplyAnimationClipSettings(AnimationClip clip, BridgeRequest request, bool applyDefaults)
+        {
+            var frameRate = request.OptionalFloatArg("frameRate");
+            if (frameRate.HasValue || applyDefaults)
+            {
+                clip.frameRate = frameRate ?? 60f;
+            }
+            if (request.HasArg("legacy") || applyDefaults)
+            {
+                clip.legacy = request.BoolArg("legacy", false);
+            }
+            WrapMode parsedWrapMode;
+            WrapMode? requestedWrapMode = null;
+            if (!string.IsNullOrEmpty(request.StringArg("wrapMode")) && Enum.TryParse<WrapMode>(request.StringArg("wrapMode"), true, out parsedWrapMode))
+            {
+                clip.wrapMode = parsedWrapMode;
+                requestedWrapMode = parsedWrapMode;
+            }
+            var settings = AnimationUtility.GetAnimationClipSettings(clip);
+            var startTime = request.OptionalFloatArg("startTime");
+            var stopTime = request.OptionalFloatArg("stopTime");
+            var length = request.OptionalFloatArg("length");
+            if (startTime.HasValue) settings.startTime = startTime.Value;
+            if (stopTime.HasValue) settings.stopTime = stopTime.Value;
+            else if (length.HasValue) settings.stopTime = settings.startTime + length.Value;
+            var loopTime = request.OptionalBoolArg("loopTime");
+            if (loopTime.HasValue) settings.loopTime = loopTime.Value;
+            AnimationUtility.SetAnimationClipSettings(clip, settings);
+            return requestedWrapMode;
+        }
+
+        /// <summary>同步 legacy wrapMode 的序列化字段，避免只改运行时属性。</summary>
+        private static void SetSerializedAnimationClipWrapMode(AnimationClip clip, WrapMode wrapMode)
+        {
+            var serialized = new SerializedObject(clip);
+            var wrapProperty = serialized.FindProperty("m_WrapMode");
+            if (wrapProperty != null)
+            {
+                wrapProperty.intValue = (int)wrapMode;
+                serialized.ApplyModifiedProperties();
+            }
+        }
+
+        private static string AnimationClipJson(string path, AnimationClip clip, int maxCurveKeys)
+        {
+            var keyLimit = Mathf.Clamp(maxCurveKeys, 0, 100);
             var bindings = AnimationUtility.GetCurveBindings(clip);
+            var objectReferenceBindings = AnimationUtility.GetObjectReferenceCurveBindings(clip);
+            var events = AnimationUtility.GetAnimationEvents(clip);
             return new UnityCliJsonWriter().BeginObject()
                 .Prop("path", path)
                 .Prop("guid", AssetDatabase.AssetPathToGUID(path))
@@ -205,27 +332,150 @@ namespace UnityCli
                 .Prop("length", clip.length)
                 .Prop("frameRate", clip.frameRate)
                 .Prop("legacy", clip.legacy)
-                .PropRaw("bindings", AnimationBindingsJson(clip, bindings))
+                .Prop("wrapMode", clip.wrapMode.ToString())
+                .PropRaw("localBounds", BoundsJson(clip.localBounds))
+                .PropRaw("settings", AnimationClipSettingsJson(clip))
+                .PropRaw("bindings", AnimationBindingsJson(clip, bindings, keyLimit))
+                .PropRaw("objectReferenceBindings", AnimationObjectReferenceBindingsJson(clip, objectReferenceBindings, keyLimit))
+                .PropRaw("events", AnimationEventsJson(events))
                 .EndObject().ToString();
         }
 
-        private static string AnimationBindingsJson(AnimationClip clip, EditorCurveBinding[] bindings)
+        private static string AnimationClipSettingsJson(AnimationClip clip)
+        {
+            var settings = AnimationUtility.GetAnimationClipSettings(clip);
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("startTime", settings.startTime)
+                .Prop("stopTime", settings.stopTime)
+                .Prop("loopTime", settings.loopTime)
+                .Prop("loopBlend", settings.loopBlend)
+                .Prop("loopBlendOrientation", settings.loopBlendOrientation)
+                .Prop("loopBlendPositionY", settings.loopBlendPositionY)
+                .Prop("loopBlendPositionXZ", settings.loopBlendPositionXZ)
+                .Prop("keepOriginalOrientation", settings.keepOriginalOrientation)
+                .Prop("keepOriginalPositionY", settings.keepOriginalPositionY)
+                .Prop("keepOriginalPositionXZ", settings.keepOriginalPositionXZ)
+                .Prop("cycleOffset", settings.cycleOffset)
+                .Prop("orientationOffsetY", settings.orientationOffsetY)
+                .Prop("level", settings.level)
+                .Prop("mirror", settings.mirror)
+                .EndObject().ToString();
+        }
+
+        private static string AnimationBindingsJson(AnimationClip clip, EditorCurveBinding[] bindings, int keyLimit)
         {
             return new UnityCliJsonWriter().BeginObject()
                 .Prop("count", (long)bindings.Length)
+                .Prop("maxCurveKeys", (long)keyLimit)
                 .PropArray("items", arr =>
                 {
                     foreach (var binding in bindings)
                     {
                         var curve = AnimationUtility.GetEditorCurve(clip, binding);
+                        var keys = curve == null ? new Keyframe[0] : curve.keys;
                         arr.BeginObject()
                             .Prop("path", binding.path)
                             .Prop("property", binding.propertyName)
-                            .Prop("type", binding.type == null ? null : binding.type.Name)
-                            .Prop("keyCount", curve == null ? (long)0 : (long)curve.keys.Length)
+                            .Prop("type", binding.type == null ? null : binding.type.FullName)
+                            .Prop("keyCount", (long)keys.Length)
+                            .Prop("keysTruncated", keys.Length > keyLimit)
+                            .PropArray("keys", keyArr =>
+                            {
+                                for (var i = 0; i < Math.Min(keys.Length, keyLimit); i++)
+                                {
+                                    var key = keys[i];
+                                    keyArr.BeginObject()
+                                        .Prop("time", key.time)
+                                        .Prop("value", key.value)
+                                        .Prop("inTangent", key.inTangent)
+                                        .Prop("outTangent", key.outTangent)
+                                        .Prop("inWeight", key.inWeight)
+                                        .Prop("outWeight", key.outWeight)
+                                        .Prop("weightedMode", key.weightedMode.ToString())
+                                        .EndObject();
+                                }
+                            })
                             .EndObject();
                     }
                 })
+                .EndObject().ToString();
+        }
+
+        private static string AnimationObjectReferenceBindingsJson(AnimationClip clip, EditorCurveBinding[] bindings, int keyLimit)
+        {
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("count", (long)bindings.Length)
+                .Prop("maxCurveKeys", (long)keyLimit)
+                .PropArray("items", arr =>
+                {
+                    foreach (var binding in bindings)
+                    {
+                        var keys = AnimationUtility.GetObjectReferenceCurve(clip, binding) ?? new ObjectReferenceKeyframe[0];
+                        arr.BeginObject()
+                            .Prop("path", binding.path)
+                            .Prop("property", binding.propertyName)
+                            .Prop("type", binding.type == null ? null : binding.type.FullName)
+                            .Prop("keyCount", (long)keys.Length)
+                            .Prop("keysTruncated", keys.Length > keyLimit)
+                            .PropArray("keys", keyArr =>
+                            {
+                                for (var i = 0; i < Math.Min(keys.Length, keyLimit); i++)
+                                {
+                                    keyArr.BeginObject()
+                                        .Prop("time", keys[i].time)
+                                        .PropRaw("value", AnimationObjectReferenceJson(keys[i].value))
+                                        .EndObject();
+                                }
+                            })
+                            .EndObject();
+                    }
+                })
+                .EndObject().ToString();
+        }
+
+        private static string AnimationEventsJson(AnimationEvent[] events)
+        {
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("count", (long)events.Length)
+                .PropArray("items", arr =>
+                {
+                    foreach (var evt in events)
+                    {
+                        arr.BeginObject()
+                            .Prop("time", evt.time)
+                            .Prop("functionName", evt.functionName)
+                            .Prop("stringParameter", evt.stringParameter)
+                            .Prop("floatParameter", evt.floatParameter)
+                            .Prop("intParameter", (long)evt.intParameter)
+                            .Prop("messageOptions", evt.messageOptions.ToString())
+                            .PropRaw("objectReferenceParameter", AnimationObjectReferenceJson(evt.objectReferenceParameter))
+                            .EndObject();
+                    }
+                })
+                .EndObject().ToString();
+        }
+
+        private static string AnimationObjectReferenceJson(UnityEngine.Object value)
+        {
+            if (value == null) return "null";
+            var assetPath = AssetDatabase.GetAssetPath(value);
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("name", value.name)
+                .Prop("type", value.GetType().FullName)
+                .Prop("path", string.IsNullOrEmpty(assetPath) ? null : NormalizeAssetPath(assetPath))
+                .Prop("guid", string.IsNullOrEmpty(assetPath) ? null : AssetDatabase.AssetPathToGUID(assetPath))
+                .Prop("instanceId", (long)value.GetInstanceID())
+                .EndObject().ToString();
+        }
+
+        private static string BoundsJson(Bounds bounds)
+        {
+            return new UnityCliJsonWriter().BeginObject()
+                .PropRaw("center", Vector3Json(bounds.center))
+                .PropRaw("size", Vector3Json(bounds.size))
+                .PropRaw("extents", Vector3Json(bounds.extents))
+                .PropRaw("min", Vector3Json(bounds.min))
+                .PropRaw("max", Vector3Json(bounds.max))
                 .EndObject().ToString();
         }
 
@@ -742,7 +992,7 @@ namespace UnityCli
                 clip = AssetDatabase.LoadAssetAtPath<AnimationClip>(normalizedClipPath);
                 if (clip == null)
                 {
-                    return ErrorJson("E_CLIP_NOT_FOUND", "AnimationClip not found at: " + normalizedClipPath, "Create the clip first with tools run animation.clip using action=create, or omit clipPath to add an empty state.");
+                    return ErrorJson("E_CLIP_NOT_FOUND", "AnimationClip not found at: " + normalizedClipPath, "Create the clip first with tools run animation.clip.create --input '{\"path\":\"<Assets/...>.anim\"}' --yes, or omit clipPath to add an empty state.");
                 }
             }
             Undo.RecordObject(controller, "Add Animator State");

@@ -232,8 +232,9 @@ test("batch preflight marks read commands parallel-safe and writes serial", asyn
     parallel: 2,
     steps: [
       { id: "read-material", command: ["tools", "run", "material.info", "Assets/Materials/Player.mat"] },
-      { id: "read-animation", command: ["tools", "run", "animation.state", "Player"] },
-      { id: "write-animation", command: ["tools", "run", "animation.clip", "Assets/Animations/Run.anim"], args: ["--create"] },
+      { id: "read-animation", command: ["tools", "run", "animation.clip", "Assets/Animations/Idle.anim"] },
+      { id: "write-animation", command: ["tools", "run", "animation.clip.create", "Assets/Animations/Run.anim"], args: ["--yes"] },
+      { id: "modify-animation", command: ["tools", "run", "animation.clip.modify", "Assets/Animations/Run.anim"], args: ["--yes", "--loop-time", "true"] },
       { id: "write-vfx", command: ["tools", "run", "vfx.effect", "Effects/Emitter"], args: ["--add"] },
       { id: "write-material", command: ["tools", "run", "material.set", "Assets/Materials/Player.mat"], args: ["--property", "_Color", "--value", "#ffffffff"] }
     ]
@@ -246,6 +247,7 @@ test("batch preflight marks read commands parallel-safe and writes serial", asyn
   assert.equal(data.steps.find((step) => step.id === "read-material")?.parallelSafe, true);
   assert.equal(data.steps.find((step) => step.id === "read-animation")?.parallelSafe, true);
   assert.equal(data.steps.find((step) => step.id === "write-animation")?.parallelSafe, false);
+  assert.equal(data.steps.find((step) => step.id === "modify-animation")?.parallelSafe, false);
   assert.equal(data.steps.find((step) => step.id === "write-vfx")?.parallelSafe, false);
   assert.equal(data.steps.find((step) => step.id === "write-material")?.parallelSafe, false);
   assert.ok(data.preflight.some((item) => item.code === "BATCH_PARALLEL_CONFLICT" && item.stepId === "write-animation"));

@@ -7,6 +7,8 @@ export interface SecurityPolicyEntry {
 
 const SECURITY_POLICY: SecurityPolicyEntry[] = [
   { command: "asset.delete", summary: "Delete Asset", destructiveHint: true, supportsDryRun: true },
+  { command: "animation.clip.create", summary: "Create AnimationClip Asset", destructiveHint: true, supportsDryRun: true },
+  { command: "animation.clip.modify", summary: "Modify AnimationClip Asset", destructiveHint: true, supportsDryRun: true },
   { command: "scriptable-object.create", summary: "Create ScriptableObject Asset", destructiveHint: true, supportsDryRun: true },
   { command: "scriptable-object.modify", summary: "Modify ScriptableObject Asset", destructiveHint: true, supportsDryRun: true },
   { command: "texture.modify", summary: "Modify Texture", destructiveHint: true, supportsDryRun: true },

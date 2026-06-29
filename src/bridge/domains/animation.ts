@@ -15,6 +15,8 @@ function structuredInput(flags: BridgeFlags): Record<string, unknown> {
 
 export const animationBridgeSpecs: BridgeCommandSpec[] = [
   { group: "animation", command: "clip", bridgeCommand: "animation.clip", buildArgs: animationArgs },
+  { group: "animation", command: "clip.create", bridgeCommand: "animation.clip.create", buildArgs: animationArgs },
+  { group: "animation", command: "clip.modify", bridgeCommand: "animation.clip.modify", buildArgs: animationArgs },
   { group: "animation", command: "state", bridgeCommand: "animation.state", buildArgs: animationArgs },
   { group: "animation", command: "play", bridgeCommand: "animation.play", buildArgs: animationArgs },
   { group: "animation", command: "stop", bridgeCommand: "animation.stop", buildArgs: animationArgs },
@@ -40,13 +42,18 @@ export const animationBridgeSpecs: BridgeCommandSpec[] = [
 ];
 
 function animationArgs({ command, flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
-  if (command === "animation.clip") {
+  if (command === "animation.clip" || command === "animation.clip.create" || command === "animation.clip.modify") {
     return compactArgs({
-      action: stringFlag(flags, "action") ?? stringFlag(flags, "op") ?? (flags.create ? "create" : "info"),
       path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "clip"),
       overwrite: boolFlag(flags, "overwrite"),
       frameRate: floatFlag(flags, "frame-rate"),
-      legacy: boolFlag(flags, "legacy")
+      legacy: boolFlag(flags, "legacy"),
+      wrapMode: stringFlag(flags, "wrap-mode"),
+      loopTime: boolFlag(flags, "loop-time"),
+      startTime: floatFlag(flags, "start-time"),
+      stopTime: floatFlag(flags, "stop-time"),
+      length: floatFlag(flags, "length"),
+      maxCurveKeys: numberFlag(flags, "max-curve-keys")
     });
   }
   return compactArgs({
