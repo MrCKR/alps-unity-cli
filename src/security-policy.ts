@@ -29,6 +29,7 @@ const SECURITY_POLICY: SecurityPolicyEntry[] = [
   { command: "editor.menu", summary: "Execute Editor Menu", destructiveHint: true },
   { command: "package.install", summary: "Package Install", destructiveHint: true },
   { command: "package.remove", summary: "Package Remove", destructiveHint: true },
+  { command: "package.bridge-remove", summary: "Package Bridge Remove", destructiveHint: true, supportsDryRun: true },
   { command: "batch.run", summary: "Batch Run", destructiveHint: true, supportsDryRun: true },
   { command: "instances.prune", summary: "Prune Unity Instances", destructiveHint: true },
   { command: "jobs.cancel", summary: "Cancel Job", destructiveHint: true },

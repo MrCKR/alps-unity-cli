@@ -5,17 +5,17 @@ import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { findCommandContract } from "../src/contracts/command-contract.js";
 import { readFile } from "node:fs/promises";
 
-const PACKAGE_COMMANDS = ["package.list", "package.status", "package.info", "package.search", "package.install", "package.remove", "package.resolve", "package.registry", "package.scoped-registry", "package.embed"];
+const PACKAGE_COMMANDS = ["package.list", "package.status", "package.info", "package.search", "package.install", "package.remove", "package.bridge-remove", "package.resolve", "package.registry", "package.scoped-registry", "package.embed"];
 
 /**
- * Package 域契约测试：list/status/info/search/install/remove/resolve/registry/scoped-registry (offline/hybrid) + embed (bridge)。
+ * Package 域契约测试：list/status/info/search/install/remove/bridge-remove/resolve/registry/scoped-registry (offline/hybrid) + embed (bridge)。
  * 对齐 CoplayDev manage_packages，验证 metadata/bridge/contract 一致，错误恢复提示迁移到 `tools run` 形态。
  * C# RegisterCommand 守卫不适用：除 embed 外的 package.* 经 offline/hybrid handlePackage 路由（非 bridge RegisterCommand）。
  */
 
-test("package group exposes the 10 package tools", () => {
+test("package group exposes the 11 package tools", () => {
   const tools = filterToolsByGroup("package").map((t) => t.name).sort();
-  assert.deepEqual(tools, ["package.embed", "package.info", "package.install", "package.list", "package.registry", "package.remove", "package.resolve", "package.scoped-registry", "package.search", "package.status"]);
+  assert.deepEqual(tools, ["package.bridge-remove", "package.embed", "package.info", "package.install", "package.list", "package.registry", "package.remove", "package.resolve", "package.scoped-registry", "package.search", "package.status"]);
 });
 
 test("package read tools are offline/non-destructive/supported", () => {
@@ -35,6 +35,8 @@ test("package install/remove/resolve expose play mode + risk metadata", () => {
   assert.equal(install.riskLevel, "high");
   assert.ok(install.sideEffects?.includes("manifest-change"));
   assert.match(install.description, /explicit version/, "package.install should explain explicit version requirement");
+  assert.match(install.description, /downgrade/, "package.install should explain downgrade protection");
+  assert.match(JSON.stringify(install.outputSchema), /changed/, "package.install output should report changed");
   assert.match(JSON.stringify(install.examples), /3\.0\.7/, "package.install example should include a real SemVer version");
 
   const remove = findToolByName("package.remove")!;
@@ -42,6 +44,17 @@ test("package install/remove/resolve expose play mode + risk metadata", () => {
   assert.equal(remove.supportsDryRun, true);
   assert.equal(remove.riskLevel, "high");
   assert.equal(remove.playModeSupport, "session-affecting");
+  assert.match(remove.description, /force=true/, "package.remove should explain dependent-package force override");
+  assert.match(JSON.stringify(remove.inputSchema), /force/, "package.remove schema should expose force");
+  assert.match(JSON.stringify(remove.outputSchema), /dependents/, "package.remove output should report dependents");
+
+  const bridgeRemove = findToolByName("package.bridge-remove")!;
+  assert.equal(bridgeRemove.destructiveHint, true);
+  assert.equal(bridgeRemove.supportsDryRun, true);
+  assert.equal(bridgeRemove.handler, "offline");
+  assert.equal(bridgeRemove.riskLevel, "high");
+  assert.equal(bridgeRemove.playModeSupport, "session-affecting");
+  assert.match(bridgeRemove.description, /Packages\/com\.unity_cli/, "package.bridge-remove should explain copied package deletion");
 
   const resolve = findToolByName("package.resolve")!;
   assert.equal(resolve.longRunning, true);
@@ -67,6 +80,15 @@ test("contract entries exist for all package tools", () => {
     const contract = findCommandContract(name);
     assert.ok(contract, `${name} should be in contract`);
   }
+});
+
+test("package scoped registry metadata documents remove guard", () => {
+  const scoped = findToolByName("package.scoped-registry")!;
+  assert.equal(scoped.handler, "offline");
+  assert.match(scoped.description, /force=true/, "scoped registry remove should explain force override");
+  assert.match(scoped.description, /--dry-run/, "scoped registry remove should explain dry-run preview");
+  assert.match(JSON.stringify(scoped.inputSchema), /force/, "scoped registry schema should expose force");
+  assert.match(JSON.stringify(scoped.outputSchema), /matchedPackages/, "scoped registry output should report matched packages");
 });
 
 test("package C# error recovery hints use current tools run form, not legacy unity_cli", async () => {

@@ -82,10 +82,10 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
   {
     name: "package.install",
     summary: "Install a package into the project manifest and optionally resolve via Unity PackageManager.",
-    description: "Install a package into the project manifest and optionally resolve via Unity PackageManager. Destructive: manifest change + possible Unity resolve/domain reload. Requires an explicit version because Unity manifests do not accept 'latest'. Use package.search to confirm the name/version first.",
+    description: "Install a package into the project manifest and optionally resolve via Unity PackageManager. Destructive: manifest change + possible Unity resolve/domain reload. Requires --yes and an explicit version because Unity manifests do not accept 'latest'. Refuses numeric-version downgrades from the current manifest version; use package.info first when unsure.",
     group: "package",
     inputSchema: objSchema({ name: { type: "string", description: "Package name to install. May include @version, e.g. com.unity.textmeshpro@3.0.7." }, version: { type: "string", description: "Required unless name includes @version. Use a SemVer package version accepted by Unity." }, project: { type: "string", description: "Unity project path." }, unity: { type: "string", description: "Unity executable path for batch resolve." }, wait: { type: "boolean", description: "Wait for resolve job to finish." } }, ["name"]),
-    outputSchema: objSchema({ action: { type: "string" }, package: { type: "string" }, manifestPath: { type: "string" }, installedVersion: { type: "string" }, previousVersion: { type: "string" } }),
+    outputSchema: objSchema({ action: { type: "string" }, package: { type: "string" }, manifestPath: { type: "string" }, installedVersion: { type: "string" }, previousVersion: { type: "string" }, changed: { type: "boolean" } }),
     destructiveHint: true,
     sideEffects: ["manifest-change", "session-affecting"],
     riskLevel: "high",
@@ -102,10 +102,10 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
   {
     name: "package.remove",
     summary: "Remove a package from the project manifest and optionally resolve.",
-    description: "Remove a package from the project manifest and optionally resolve. Destructive: manifest change + possible Unity resolve/domain reload. Requires explicit confirmation; inspect with package.list first.",
+    description: "Remove a package from the project manifest and optionally resolve. Destructive: manifest change + possible Unity resolve/domain reload. Requires explicit confirmation; inspect with package.list first. By default it blocks when packages-lock.json shows other packages depending on the target; pass force=true only when you intentionally want Unity PackageManager to resolve that dependency break. Supports --dry-run to return plannedEffects without writing manifest.json.",
     group: "package",
-    inputSchema: objSchema({ name: { type: "string", description: "Package name to remove." }, project: { type: "string", description: "Unity project path." }, unity: { type: "string", description: "Unity executable path for batch resolve." }, wait: { type: "boolean", description: "Wait for resolve job to finish." } }, ["name"]),
-    outputSchema: objSchema({ action: { type: "string" }, package: { type: "string" }, manifestPath: { type: "string" }, removedVersion: { type: "string" } }),
+    inputSchema: objSchema({ name: { type: "string", description: "Package name to remove." }, force: { type: "boolean", default: false, description: "Allow removal even when packages-lock.json lists dependent packages." }, project: { type: "string", description: "Unity project path." }, unity: { type: "string", description: "Unity executable path for batch resolve." }, wait: { type: "boolean", description: "Wait for resolve job to finish." } }, ["name"]),
+    outputSchema: objSchema({ action: { type: "string" }, package: { type: "string" }, manifestPath: { type: "string" }, removedVersion: { type: "string" }, dependents: { type: "array", items: { type: "object" } }, forced: { type: "boolean" }, dryRun: { type: "boolean" }, blocked: { type: "boolean" }, plannedEffects: { type: "array", items: { type: "object" } } }),
     destructiveHint: true,
     supportsDryRun: true,
     sideEffects: ["manifest-change", "session-affecting"],
@@ -118,6 +118,27 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     equivalentUnityMcp: "manage_packages.remove_package",
     examples: [
       { description: "Preview removing a package", argv: ["tools", "run", "package.remove", "--input", "{\"name\":\"com.unity.textmeshpro\"}", "--dry-run"] }
+    ]
+  },
+  {
+    name: "package.bridge-remove",
+    summary: "Remove the copied com.unity_cli Bridge package installed by init.",
+    description: "Remove the copied com.unity_cli Bridge package installed by init. Destructive: deletes Packages/com.unity_cli and unity_cli.install.json, and removes any legacy com.unity_cli manifest dependency. Supports --dry-run to preview files and manifest effects without deleting anything. Use this only when intentionally uninstalling the Unity CLI Bridge from a project.",
+    group: "package",
+    inputSchema: objSchema({ project: { type: "string", description: "Unity project path." } }),
+    outputSchema: objSchema({ action: { type: "string" }, projectPath: { type: "string" }, manifestPath: { type: "string" }, bridgePath: { type: "string" }, dependencyName: { type: "string" }, packageVersion: { type: "string" }, installMetadataPath: { type: "string" }, managedFileCount: { type: "integer" }, removedManifestDependency: { type: "boolean" }, dryRun: { type: "boolean" }, plannedEffects: { type: "array", items: { type: "object" } } }),
+    destructiveHint: true,
+    supportsDryRun: true,
+    sideEffects: ["project-file-delete", "manifest-change", "session-affecting"],
+    riskLevel: "high",
+    playModeSupport: "session-affecting",
+    handler: "offline",
+    supportStatus: "cli-only",
+    cliCommand: "tools run package.bridge-remove",
+    docsTopic: "package",
+    equivalentUnityMcp: "restore_package",
+    examples: [
+      { description: "Preview Bridge package removal", argv: ["tools", "run", "package.bridge-remove", "--input", "{\"project\":\"D:/workspace/alps-unity-cli/Dev/UnityProject\"}", "--dry-run"] }
     ]
   },
   {
@@ -158,9 +179,10 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
   {
     name: "package.scoped-registry",
     summary: "List, add, or remove scoped registries in the project manifest. action=list reads all; add requires name/url/(scope|scopes); remove requires name.",
-    description: "List, add, or remove scoped registries in the project manifest. action=list reads all; add requires name/url/(scope|scopes); remove requires name. Offline (manifest edit).",
+    description: "List, add, or remove scoped registries in the project manifest. action=list reads all; add requires name/url/(scope|scopes); remove requires name. Write actions edit manifest.json and require --yes; remove blocks when manifest dependencies still match the registry scopes unless force=true. remove supports --dry-run to preview matched packages without writing.",
     group: "package",
-    inputSchema: objSchema({ action: { type: "string", enum: ["list", "add", "remove"], description: "Scoped registry action." }, name: { type: "string", description: "Scoped registry name (required for add/remove)." }, url: { type: "string", description: "Registry URL (required for add)." }, scope: { type: "string", description: "Single scope (add)." }, scopes: { type: "string", description: "Comma-separated scopes (add)." }, project: { type: "string", description: "Unity project path." } }, ["action"]),
+    inputSchema: objSchema({ action: { type: "string", enum: ["list", "add", "remove"], description: "Scoped registry action." }, name: { type: "string", description: "Scoped registry name (required for add/remove)." }, url: { type: "string", description: "Registry URL (required for add)." }, scope: { type: "string", description: "Single scope (add)." }, scopes: { type: "string", description: "Comma-separated scopes (add)." }, force: { type: "boolean", default: false, description: "For remove, allow deleting a registry whose scopes still match manifest packages." }, project: { type: "string", description: "Unity project path." } }, ["action"]),
+    outputSchema: objSchema({ projectPath: { type: "string" }, manifestPath: { type: "string" }, scopedRegistries: { type: "array", items: { type: "object" } }, registry: { type: "object" }, removed: { type: "object" }, matchedPackages: { type: "array", items: { type: "string" } }, forced: { type: "boolean" }, dryRun: { type: "boolean" }, blocked: { type: "boolean" }, plannedEffects: { type: "array", items: { type: "object" } } }),
     destructiveHint: false,
     sideEffects: ["manifest-change"],
     playModeSupport: "supported",
@@ -170,7 +192,8 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     docsTopic: "package",
     equivalentUnityMcp: "manage_packages.add_registry",
     examples: [
-      { description: "List scoped registries", argv: ["tools", "run", "package.scoped-registry", "--input", "{\"action\":\"list\"}"] }
+      { description: "List scoped registries", argv: ["tools", "run", "package.scoped-registry", "--input", "{\"action\":\"list\"}"] },
+      { description: "Preview removing a scoped registry", argv: ["tools", "run", "package.scoped-registry", "--input", "{\"action\":\"remove\",\"name\":\"Acme\"}", "--dry-run"] }
     ]
   },
       {

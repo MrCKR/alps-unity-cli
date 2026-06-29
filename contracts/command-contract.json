@@ -1290,6 +1290,15 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "package.bridge-remove",
+      "group": "package",
+      "command": "bridge-remove",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "package.embed",
       "group": "package",
       "command": "embed",

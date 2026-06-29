@@ -62,6 +62,40 @@ export interface PackageSpec {
   version?: string;
 }
 
+export interface PackageDependent {
+  name: string;
+  requiredVersion?: string;
+}
+
+export interface RemovePackageOptions {
+  force?: boolean;
+  dryRun?: boolean;
+}
+
+export interface RemoveScopedRegistryOptions {
+  force?: boolean;
+  dryRun?: boolean;
+}
+
+export interface RemovePackageBridgeOptions {
+  dryRun?: boolean;
+}
+
+export interface UnityCliPackageRemoval {
+  projectPath: string;
+  manifestPath: string;
+  bridgePath: string;
+  dependencyName: string;
+  packageVersion: string;
+  installMetadataPath: string;
+  fileManifestPath: string;
+  managedFileCount: number;
+  removedManifestDependency: boolean;
+  previousManifestDependency?: string;
+  dryRun: boolean;
+  plannedEffects: Array<Record<string, unknown>>;
+}
+
 const bridgePackageName = "com.unity_cli";
 const cliCompatibilityRange = ">=0.1.0 <0.2.0";
 const installMetadataFileName = "unity_cli.install.json";
@@ -97,7 +131,7 @@ export async function packageInfo(projectPath: string, name: string): Promise<Pa
   return (await readSnapshot(projectPath)).packages.find((entry) => entry.name === name);
 }
 
-export async function installPackage(projectPath: string, spec: PackageSpec): Promise<{ manifestPath: string; previousVersion?: string; installedVersion: string }> {
+export async function installPackage(projectPath: string, spec: PackageSpec): Promise<{ manifestPath: string; previousVersion?: string; installedVersion: string; changed: boolean }> {
   const paths = packagePaths(projectPath);
   const manifest = await readManifest(paths.manifestPath, false);
   if (!spec.version) {
@@ -108,21 +142,39 @@ export async function installPackage(projectPath: string, spec: PackageSpec): Pr
   }
   manifest.dependencies ??= {};
   const previousVersion = manifest.dependencies[spec.name];
+  if (previousVersion && isPackageVersionDowngrade(spec.version, previousVersion)) {
+    throw new PackageManagerError("PACKAGE_DOWNGRADE_BLOCKED", `Refusing to downgrade ${spec.name} from ${previousVersion} to ${spec.version}.`, [
+      "Choose a version greater than or equal to the currently requested manifest version.",
+      "Run tools run package.info --input '{\"name\":\"<package>\"}' to inspect the current requested and locked versions."
+    ]);
+  }
   manifest.dependencies[spec.name] = spec.version;
   await writeManifest(paths.manifestPath, manifest);
-  return { manifestPath: paths.manifestPath, previousVersion, installedVersion: spec.version };
+  return { manifestPath: paths.manifestPath, previousVersion, installedVersion: spec.version, changed: previousVersion !== spec.version };
 }
 
-export async function removePackage(projectPath: string, name: string): Promise<{ manifestPath: string; removedVersion: string }> {
+export async function removePackage(projectPath: string, name: string, options: RemovePackageOptions = {}): Promise<{ manifestPath: string; removedVersion: string; dependents: PackageDependent[]; forced: boolean; dryRun: boolean; blocked: boolean; plannedEffects: Array<Record<string, unknown>> }> {
   const paths = packagePaths(projectPath);
   const manifest = await readManifest(paths.manifestPath, false);
+  const lock = await readLock(paths.lockPath);
   const removedVersion = manifest.dependencies?.[name];
   if (!removedVersion) {
     throw new PackageManagerError("PACKAGE_NOT_FOUND", `Package is not declared in manifest: ${name}`, ["Run tools run package.list to inspect installed packages."]);
   }
-  delete manifest.dependencies?.[name];
-  await writeManifest(paths.manifestPath, manifest);
-  return { manifestPath: paths.manifestPath, removedVersion };
+  const dependents = packageDependents(lock, name);
+  const blocked = dependents.length > 0 && !options.force;
+  if (blocked && !options.dryRun) {
+    throw new PackageManagerError("PACKAGE_DEPENDENTS_BLOCKED", `Package ${name} is required by ${dependents.length} locked package(s): ${dependents.map((entry) => entry.name).join(", ")}.`, [
+      "Remove or replace dependent packages first, then retry package.remove.",
+      "Rerun with force=true only when you intentionally want Unity PackageManager to resolve the broken dependency graph."
+    ]);
+  }
+  const plannedEffects = [{ type: "package.remove", package: name, removedVersion, dependents, forced: options.force === true, blocked }];
+  if (!options.dryRun) {
+    delete manifest.dependencies?.[name];
+    await writeManifest(paths.manifestPath, manifest);
+  }
+  return { manifestPath: paths.manifestPath, removedVersion, dependents, forced: options.force === true, dryRun: options.dryRun === true, blocked, plannedEffects };
 }
 
 export async function setRegistry(projectPath: string, url: string): Promise<{ manifestPath: string; registry: string }> {
@@ -159,7 +211,7 @@ export async function addScopedRegistry(projectPath: string, registry: ScopedReg
   return { manifestPath: paths.manifestPath, registry: normalized, replaced };
 }
 
-export async function removeScopedRegistry(projectPath: string, name: string): Promise<{ manifestPath: string; removed: ScopedRegistry }> {
+export async function removeScopedRegistry(projectPath: string, name: string, options: RemoveScopedRegistryOptions = {}): Promise<{ manifestPath: string; removed: ScopedRegistry; matchedPackages: string[]; forced: boolean; dryRun: boolean; blocked: boolean; plannedEffects: Array<Record<string, unknown>> }> {
   const paths = packagePaths(projectPath);
   const manifest = await readManifest(paths.manifestPath, false);
   const registries = normalizeScopedRegistries(manifest.scopedRegistries);
@@ -167,10 +219,22 @@ export async function removeScopedRegistry(projectPath: string, name: string): P
   if (index < 0) {
     throw new PackageManagerError("SCOPED_REGISTRY_NOT_FOUND", `Scoped registry not found: ${name}`, ["Run tools run package.scoped-registry --input '{\"action\":\"list\"}' to inspect scoped registries."]);
   }
-  const [removed] = registries.splice(index, 1);
-  manifest.scopedRegistries = registries;
-  await writeManifest(paths.manifestPath, manifest);
-  return { manifestPath: paths.manifestPath, removed };
+  const removed = registries[index];
+  const matchedPackages = packagesUsingScopes(manifest, removed.scopes);
+  const blocked = matchedPackages.length > 0 && !options.force;
+  if (blocked && !options.dryRun) {
+    throw new PackageManagerError("SCOPED_REGISTRY_IN_USE", `Scoped registry ${name} still matches manifest package(s): ${matchedPackages.join(", ")}.`, [
+      "Remove or move packages using this registry scope before removing the scoped registry.",
+      "Rerun with force=true only when you intentionally want to leave those packages without their scoped registry."
+    ]);
+  }
+  const plannedEffects = [{ type: "package.scoped-registry.remove", name, scopes: removed.scopes, matchedPackages, forced: options.force === true, blocked }];
+  if (!options.dryRun) {
+    registries.splice(index, 1);
+    manifest.scopedRegistries = registries;
+    await writeManifest(paths.manifestPath, manifest);
+  }
+  return { manifestPath: paths.manifestPath, removed, matchedPackages, forced: options.force === true, dryRun: options.dryRun === true, blocked, plannedEffects };
 }
 
 export interface UnityCliInstallMetadata {
@@ -273,26 +337,7 @@ export async function checkPackageBridge(projectPath: string): Promise<UnityCliP
   const targetPath = join(paths.projectPath, "Packages", bridgePackageName);
   const installMetadataPath = join(paths.projectPath, "Packages", installMetadataFileName);
   const fileManifestPath = join(targetPath, fileManifestFileName);
-
-  // Verify the copied package exists and has correct identity
-  let packageManifest: { name: string; version: string };
-  try {
-    packageManifest = await readPackageManifest(targetPath);
-  } catch (error) {
-    if (error instanceof PackageManagerError) {
-      throw new PackageManagerError("INIT_CHECK_FAILED", `${bridgePackageName} is not installed in copy mode: ${error.message}`, ["Run unity_cli init --project <path> to install the bundled Unity package."]);
-    }
-    throw error;
-  }
-  if (packageManifest.name !== bridgePackageName) {
-    throw new PackageManagerError("INIT_CHECK_FAILED", `Installed package identity mismatch: expected ${bridgePackageName}, found ${packageManifest.name}.`, ["Run unity_cli init --project <path> to reinstall the bundled Unity package."]);
-  }
-
-  // Verify install metadata
-  const installMetadata = await readInstallMetadata(installMetadataPath);
-  if (installMetadata.packageName !== bridgePackageName) {
-    throw new PackageManagerError("INIT_CHECK_FAILED", `Install metadata package name mismatch: expected ${bridgePackageName}, found ${installMetadata.packageName}.`, ["Run unity_cli init --project <path> to reinstall the bundled Unity package."]);
-  }
+  const { packageManifest, installMetadata } = await readInstalledPackageBridge(paths.projectPath, "INIT_CHECK_FAILED", ["Run unity_cli init --project <path> to install the bundled Unity package."]);
 
   const projectHash = await hashProjectPath(paths.projectPath);
   const sourcePath = packageSourcePath();
@@ -330,6 +375,55 @@ export async function checkPackageBridge(projectPath: string): Promise<UnityCliP
     cliCompatibilityRange,
     installMetadataPath,
     fileManifestPath
+  };
+}
+
+/** 卸载 init 复制的 Bridge 包；只删除托管的 com.unity_cli copy-mode 安装。 */
+export async function removePackageBridge(projectPath: string, options: RemovePackageBridgeOptions = {}): Promise<UnityCliPackageRemoval> {
+  const paths = packagePaths(projectPath);
+  const targetPath = join(paths.projectPath, "Packages", bridgePackageName);
+  const installMetadataPath = join(paths.projectPath, "Packages", installMetadataFileName);
+  const fileManifestPath = join(targetPath, fileManifestFileName);
+  const { packageManifest } = await readInstalledPackageBridge(paths.projectPath, "BRIDGE_PACKAGE_NOT_INSTALLED", ["Run unity_cli init --project <path> before removing the bundled Unity package."]);
+  const managedFiles = await readManagedFileList(fileManifestPath);
+  const manifest = await readManifest(paths.manifestPath, false);
+  const previousManifestDependency = manifest.dependencies?.[bridgePackageName];
+  const removedManifestDependency = previousManifestDependency?.startsWith("file:") === true;
+  const plannedEffects: Array<Record<string, unknown>> = [
+    {
+      type: "package.bridge-remove",
+      package: bridgePackageName,
+      bridgePath: targetPath,
+      installMetadataPath,
+      managedFileCount: managedFiles.length
+    }
+  ];
+  if (removedManifestDependency) {
+    plannedEffects.push({ type: "manifest.dependency.remove", package: bridgePackageName, previousVersion: previousManifestDependency });
+  }
+
+  if (!options.dryRun) {
+    await rm(targetPath, { recursive: true, force: true });
+    await rm(installMetadataPath, { force: true });
+    if (removedManifestDependency) {
+      delete manifest.dependencies?.[bridgePackageName];
+      await writeManifest(paths.manifestPath, manifest);
+    }
+  }
+
+  return {
+    projectPath: paths.projectPath,
+    manifestPath: paths.manifestPath,
+    bridgePath: targetPath,
+    dependencyName: bridgePackageName,
+    packageVersion: packageManifest.version,
+    installMetadataPath,
+    fileManifestPath,
+    managedFileCount: managedFiles.length,
+    removedManifestDependency,
+    previousManifestDependency,
+    dryRun: options.dryRun === true,
+    plannedEffects
   };
 }
 
@@ -400,6 +494,31 @@ export class PackageManagerError extends Error {
 
 function packageSourcePath(): string {
   return resolve(fileURLToPath(new URL("../unitypkg", import.meta.url)));
+}
+
+/** 读取并确认项目内 Bridge 包是 init 托管的 copy-mode 安装。 */
+async function readInstalledPackageBridge(projectPath: string, code: string, nextActions: string[]): Promise<{ packageManifest: { name: string; version: string }; installMetadata: UnityCliInstallMetadata }> {
+  const targetPath = join(projectPath, "Packages", bridgePackageName);
+  const installMetadataPath = join(projectPath, "Packages", installMetadataFileName);
+  let packageManifest: { name: string; version: string };
+  try {
+    packageManifest = await readPackageManifest(targetPath);
+  } catch (error) {
+    if (error instanceof PackageManagerError) {
+      throw new PackageManagerError(code, `${bridgePackageName} is not installed in copy mode: ${error.message}`, nextActions);
+    }
+    throw error;
+  }
+  const installMetadata = await readInstallMetadata(installMetadataPath).catch((error: unknown) => {
+    if (error instanceof PackageManagerError) {
+      throw new PackageManagerError(code, `${bridgePackageName} install metadata is missing or invalid: ${error.message}`, nextActions);
+    }
+    throw error;
+  });
+  if (installMetadata.packageName !== bridgePackageName || installMetadata.installMode !== "copy") {
+    throw new PackageManagerError(code, `${bridgePackageName} is not a managed copy-mode installation.`, nextActions);
+  }
+  return { packageManifest, installMetadata };
 }
 
 async function readPackageManifest(packagePath: string): Promise<{ name: string; version: string }> {
@@ -609,6 +728,51 @@ function toPackageEntry(name: string, requestedVersion: string | undefined, lock
     hash: locked?.hash,
     dependencies: locked?.dependencies
   };
+}
+
+/** 比较 Unity registry 常见数字版本；git/file/custom spec 无法可靠比较时不拦截。 */
+function isPackageVersionDowngrade(candidate: string, current: string): boolean {
+  const candidateParts = parseComparableVersion(candidate);
+  const currentParts = parseComparableVersion(current);
+  if (!candidateParts || !currentParts) {
+    return false;
+  }
+  const length = Math.max(candidateParts.length, currentParts.length);
+  for (let index = 0; index < length; index += 1) {
+    const left = candidateParts[index] ?? 0;
+    const right = currentParts[index] ?? 0;
+    if (left < right) return true;
+    if (left > right) return false;
+  }
+  return false;
+}
+
+/** 解析可安全比较的数字版本；非 registry 版本返回 undefined 交给 Unity 处理。 */
+function parseComparableVersion(version: string): number[] | undefined {
+  const normalized = version.trim().replace(/^v/i, "");
+  if (!/^\d+(?:\.\d+)*(?:[-+].*)?$/.test(normalized)) {
+    return undefined;
+  }
+  return normalized.split(/[+-]/, 1)[0].split(".").map((part) => Number(part));
+}
+
+/** 从 packages-lock.json 中找出直接依赖目标包的 locked package。 */
+function packageDependents(lock: UnityLock, packageName: string): PackageDependent[] {
+  return Object.entries(lock.dependencies ?? {})
+    .filter(([name, entry]) => name !== packageName && entry.dependencies && Object.prototype.hasOwnProperty.call(entry.dependencies, packageName))
+    .map(([name, entry]) => ({ name, requiredVersion: entry.dependencies?.[packageName] }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** 根据 scoped registry scopes 找出仍会由该 registry 覆盖的 manifest 包。 */
+function packagesUsingScopes(manifest: UnityManifest, scopes: string[]): string[] {
+  const names = Object.keys(manifest.dependencies ?? {});
+  return names.filter((name) => scopes.some((scope) => packageMatchesScope(name, scope))).sort();
+}
+
+/** Unity scoped registry scope 按完整包名或点分前缀匹配。 */
+function packageMatchesScope(packageName: string, scope: string): boolean {
+  return packageName === scope || packageName.startsWith(`${scope}.`);
 }
 
 function normalizeScopedRegistries(scopedRegistries: unknown): ScopedRegistry[] {

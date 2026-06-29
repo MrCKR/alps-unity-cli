@@ -466,6 +466,37 @@ test("init --check verifies copy-mode install metadata", async () => {
   assert.equal(data.package.bridge.cliCompatibilityRange, ">=0.1.0 <0.2.0");
 });
 
+test("package bridge-remove previews and removes the copy-mode Bridge package", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  const initialized = await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
+  assert.equal(initialized.ok, true);
+  const bridge = (initialized.data as { package: { bridge: { bridgePath: string; installMetadataPath: string } } }).package.bridge;
+
+  const preview = await execute(["tools", "run", "package.bridge-remove", "--project", project, "--dry-run"], runtime);
+  assert.equal(preview.ok, true);
+  assert.equal((preview.data as { dryRun: boolean; managedFileCount: number }).dryRun, true);
+  assert.equal((preview.data as { managedFileCount: number }).managedFileCount > 0, true);
+  await access(bridge.bridgePath);
+  await access(bridge.installMetadataPath);
+
+  const blocked = await execute(["tools", "run", "package.bridge-remove", "--project", project], runtime);
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.error?.code, "E_DESTRUCTIVE_CONFIRMATION_REQUIRED");
+
+  const removed = await execute(["tools", "run", "package.bridge-remove", "--project", project, "--yes"], runtime);
+  assert.equal(removed.ok, true);
+  assert.equal((removed.data as { dependencyName: string; dryRun: boolean }).dependencyName, "com.unity_cli");
+  assert.equal((removed.data as { dryRun: boolean }).dryRun, false);
+  await assert.rejects(access(bridge.bridgePath));
+  await assert.rejects(access(bridge.installMetadataPath));
+
+  const checked = await execute(["init", "--check", "--project", project], runtime);
+  assert.equal(checked.ok, true);
+  assert.equal((checked.data as { package: { status: string } }).package.status, "not_installed");
+});
+
 test("init asks an already open bridge to refresh assets", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
@@ -508,6 +539,17 @@ test("package install updates manifest, deploys bridge and can start package res
   assert.equal(manifest.dependencies["com.unity_cli"], undefined);
 });
 
+test("package install requires explicit confirmation before manifest write", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  const installed = await execute(["tools", "run", "package.install", "com.acme.lib@2.0.0", "--project", project], runtime);
+  assert.equal(installed.ok, false);
+  assert.equal(installed.error?.code, "E_DESTRUCTIVE_CONFIRMATION_REQUIRED");
+  const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string> };
+  assert.equal(manifest.dependencies["com.acme.lib"], undefined);
+});
+
 test("package install requires an explicit manifest version", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
@@ -518,6 +560,17 @@ test("package install requires an explicit manifest version", async () => {
   assert.equal(installed.error?.next_actions?.[0].includes("@<version>"), true);
 });
 
+test("package install blocks numeric version downgrades", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  const installed = await execute(["tools", "run", "package.install", "com.unity.textmeshpro@3.0.5", "--project", project, "--yes"], runtime);
+  assert.equal(installed.ok, false);
+  assert.equal(installed.error?.code, "PACKAGE_DOWNGRADE_BLOCKED");
+  const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string> };
+  assert.equal(manifest.dependencies["com.unity.textmeshpro"], "3.0.6");
+});
+
 test("package remove returns structured diagnostic for missing package", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
@@ -526,6 +579,28 @@ test("package remove returns structured diagnostic for missing package", async (
   assert.equal(removed.ok, false);
   assert.equal(removed.error?.code, "PACKAGE_NOT_FOUND");
   assert.equal(removed.error?.next_actions?.[0].includes("tools run package.list"), true);
+});
+
+test("package remove blocks dependents unless forced and supports dry-run preview", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  const dryRun = await execute(["tools", "run", "package.remove", "com.unity.textmeshpro", "--project", project, "--dry-run"], runtime);
+  assert.equal(dryRun.ok, true);
+  assert.equal((dryRun.data as { dryRun: boolean; blocked: boolean }).dryRun, true);
+  assert.equal((dryRun.data as { dryRun: boolean; blocked: boolean }).blocked, true);
+  assert.deepEqual((dryRun.data as { dependents: Array<{ name: string }> }).dependents.map((entry) => entry.name), ["com.example.tool"]);
+
+  const blocked = await execute(["tools", "run", "package.remove", "com.unity.textmeshpro", "--project", project, "--yes"], runtime);
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.error?.code, "PACKAGE_DEPENDENTS_BLOCKED");
+
+  const forced = await execute(["tools", "run", "package.remove", "com.unity.textmeshpro", "--project", project, "--yes", "--force"], runtime);
+  assert.equal(forced.ok, true);
+  assert.equal((forced.data as { forced: boolean; dependents: Array<{ name: string }> }).forced, true);
+  assert.deepEqual((forced.data as { forced: boolean; dependents: Array<{ name: string }> }).dependents.map((entry) => entry.name), ["com.example.tool"]);
+  const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string> };
+  assert.equal(manifest.dependencies["com.unity.textmeshpro"], undefined);
 });
 
 test("package remove with --yes asks an open Editor to refresh via bridge instead of batchmode", async () => {
@@ -636,21 +711,54 @@ process.exit(1);
   assert.match(waited.error?.message ?? "", /CS0815/);
 });
 
-test("package registry and scoped registry commands mutate manifest", async () => {
+test("package registry and scoped registry write actions require confirmation", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
 
   const registry = await execute(["tools", "run", "package.registry", "set", "--url", "https://npm.example.com", "--project", project], runtime);
+  assert.equal(registry.ok, false);
+  assert.equal(registry.error?.code, "E_DESTRUCTIVE_CONFIRMATION_REQUIRED");
+
+  const scoped = await execute(["tools", "run", "package.scoped-registry", "add", "--name", "Acme", "--url", "https://registry.acme.test", "--scope", "com.acme", "--project", project], runtime);
+  assert.equal(scoped.ok, false);
+  assert.equal(scoped.error?.code, "E_DESTRUCTIVE_CONFIRMATION_REQUIRED");
+});
+
+test("package registry and scoped registry commands mutate manifest with confirmation", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  const registry = await execute(["tools", "run", "package.registry", "set", "--url", "https://npm.example.com", "--project", project, "--yes"], runtime);
   assert.equal(registry.ok, true);
   assert.equal((registry.data as { registry: string }).registry, "https://npm.example.com");
 
-  const scoped = await execute(["tools", "run", "package.scoped-registry", "add", "--name", "Acme", "--url", "https://registry.acme.test", "--scope", "com.acme,com.acme.tools", "--project", project], runtime);
+  const scoped = await execute(["tools", "run", "package.scoped-registry", "add", "--name", "Acme", "--url", "https://registry.acme.test", "--scope", "com.acme,com.acme.tools", "--project", project, "--yes"], runtime);
   assert.equal(scoped.ok, true);
   assert.deepEqual((scoped.data as { registry: { scopes: string[] } }).registry.scopes, ["com.acme", "com.acme.tools"]);
 
   const list = await execute(["tools", "run", "package.scoped-registry", "list", "--project", project], runtime);
   assert.equal(list.ok, true);
   assert.equal((list.data as { scopedRegistries: Array<{ name: string }> }).scopedRegistries.some((entry) => entry.name === "Acme"), true);
+});
+
+test("package scoped registry remove blocks matching package scopes unless forced", async () => {
+  const runtime = await makeRuntime();
+  const project = await makeUnityProject();
+
+  const dryRun = await execute(["tools", "run", "package.scoped-registry", "remove", "--name", "Example", "--project", project, "--dry-run"], runtime);
+  assert.equal(dryRun.ok, true);
+  assert.equal((dryRun.data as { dryRun: boolean; blocked: boolean }).dryRun, true);
+  assert.equal((dryRun.data as { dryRun: boolean; blocked: boolean }).blocked, true);
+  assert.deepEqual((dryRun.data as { matchedPackages: string[] }).matchedPackages, ["com.example.tool"]);
+
+  const blocked = await execute(["tools", "run", "package.scoped-registry", "remove", "--name", "Example", "--project", project, "--yes"], runtime);
+  assert.equal(blocked.ok, false);
+  assert.equal(blocked.error?.code, "SCOPED_REGISTRY_IN_USE");
+
+  const forced = await execute(["tools", "run", "package.scoped-registry", "remove", "--name", "Example", "--project", project, "--yes", "--force"], runtime);
+  assert.equal(forced.ok, true);
+  assert.equal((forced.data as { forced: boolean }).forced, true);
+  assert.deepEqual((forced.data as { matchedPackages: string[] }).matchedPackages, ["com.example.tool"]);
 });
 
 test("package resolve without Unity returns structured diagnostic when job requested", async () => {

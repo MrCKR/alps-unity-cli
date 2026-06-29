@@ -186,6 +186,7 @@ export async function handlePackage(command: string | undefined, args: string[],
     parseScopes,
     readSnapshot,
     removePackage,
+    removePackageBridge,
     removeScopedRegistry,
     searchRegistry,
     setRegistry,
@@ -235,6 +236,15 @@ export async function handlePackage(command: string | undefined, args: string[],
 
   if (command === "install") {
     const spec = parsePackageSpec(validatePackageName(args[0] ?? getString(flags, "name")), getString(flags, "version"));
+    const confirmation = await confirmDestructiveExecution(flags, {
+      command: "package.install",
+      summary: "Package Install",
+      destructiveHint: true,
+      requestId
+    });
+    if (confirmation) {
+      return confirmation;
+    }
     const manifest = await installPackage(projectPath, spec);
     return maybeResolvePackage(command, flags, runtime, requestId, projectPath, { action: "install", package: spec.name, ...manifest });
   }
@@ -242,20 +252,38 @@ export async function handlePackage(command: string | undefined, args: string[],
   if (command === "remove") {
     const name = validatePackageName(args[0] ?? getString(flags, "name"));
     const confirmation = await confirmDestructiveExecution(flags, {
-      command: "cli.package.remove",
+      command: "package.remove",
       summary: "Package Remove",
       destructiveHint: true,
+      supportsDryRun: true,
       requestId
     });
     if (confirmation) {
       return confirmation;
     }
-    const manifest = await removePackage(projectPath, name);
+    const manifest = await removePackage(projectPath, name, { force: getBoolean(flags, "force"), dryRun: getBoolean(flags, "dry-run") });
+    if (manifest.dryRun) {
+      return success(requestId, { action: "remove", package: name, projectPath, ...manifest, status: manifest.blocked ? "blocked" : "dry_run" });
+    }
     return maybeResolvePackage(command, flags, runtime, requestId, projectPath, { action: "remove", package: name, ...manifest });
   }
 
   if (command === "resolve") {
     return maybeResolvePackage(command, flags, runtime, requestId, projectPath, { action: "resolve" });
+  }
+
+  if (command === "bridge-remove") {
+    const confirmation = await confirmDestructiveExecution(flags, {
+      command: "package.bridge-remove",
+      summary: "Package Bridge Remove",
+      destructiveHint: true,
+      supportsDryRun: true,
+      requestId
+    });
+    if (confirmation) {
+      return confirmation;
+    }
+    return success(requestId, { action: "bridge-remove", ...(await removePackageBridge(projectPath, { dryRun: getBoolean(flags, "dry-run") })) });
   }
 
   if (command === "registry") {
@@ -265,9 +293,13 @@ export async function handlePackage(command: string | undefined, args: string[],
       return success(requestId, { projectPath, manifestPath: snapshot.manifestPath, registry: snapshot.registry });
     }
     if (action === "set") {
+      const confirmation = await confirmManifestEdit(flags, requestId, "package.registry", "Package Registry Set");
+      if (confirmation) return confirmation;
       return success(requestId, { projectPath, ...(await setRegistry(projectPath, validateRegistryUrl(getString(flags, "url") ?? args[1]))) });
     }
     if (action === "clear") {
+      const confirmation = await confirmManifestEdit(flags, requestId, "package.registry", "Package Registry Clear");
+      if (confirmation) return confirmation;
       return success(requestId, { projectPath, ...(await clearRegistry(projectPath)) });
     }
     return failure(requestId, "UNKNOWN_PACKAGE_REGISTRY_COMMAND", "Expected package registry get, set or clear.");
@@ -280,14 +312,18 @@ export async function handlePackage(command: string | undefined, args: string[],
       return success(requestId, { projectPath, manifestPath: snapshot.manifestPath, scopedRegistries: snapshot.scopedRegistries });
     }
     if (action === "add") {
+      const confirmation = await confirmManifestEdit(flags, requestId, "package.scoped-registry", "Package Scoped Registry Add");
+      if (confirmation) return confirmation;
       const name = validatePackageName(getString(flags, "name") ?? args[1]);
       const url = validateRegistryUrl(getString(flags, "url"));
       const scopes = parseScopes(getString(flags, "scope") ?? getString(flags, "scopes"));
       return success(requestId, { projectPath, ...(await addScopedRegistry(projectPath, { name, url, scopes })) });
     }
     if (action === "remove") {
+      const confirmation = await confirmManifestEdit(flags, requestId, "package.scoped-registry", "Package Scoped Registry Remove", true);
+      if (confirmation) return confirmation;
       const name = validatePackageName(getString(flags, "name") ?? args[1]);
-      return success(requestId, { projectPath, ...(await removeScopedRegistry(projectPath, name)) });
+      return success(requestId, { projectPath, ...(await removeScopedRegistry(projectPath, name, { force: getBoolean(flags, "force"), dryRun: getBoolean(flags, "dry-run") })) });
     }
     return failure(requestId, "UNKNOWN_SCOPED_REGISTRY_COMMAND", "Expected package scoped-registry list, add or remove.");
   }
@@ -301,6 +337,17 @@ export async function handlePackage(command: string | undefined, args: string[],
     }
     throw error;
   }
+}
+
+/** 对旧 action 型 package 工具的写 manifest 分支执行本地确认，避免只读 action 被 --yes 阻挡。 */
+function confirmManifestEdit(flags: Record<string, string | boolean>, requestId: string, command: string, summary: string, supportsDryRun = false): Promise<CliResult | undefined> {
+  return confirmDestructiveExecution(flags, {
+    command,
+    summary,
+    destructiveHint: true,
+    supportsDryRun,
+    requestId
+  });
 }
 
 async function refreshOpenEditor(requestId: string, flags: Record<string, string | boolean>, runtime: Runtime): Promise<Record<string, unknown>> {

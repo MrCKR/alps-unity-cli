@@ -42,14 +42,14 @@ test("security policy covers all destructive commands including CLI-only", async
     "asset.delete", "animation.clip.create", "animation.clip.modify", "scriptable-object.create", "scriptable-object.modify", "scene.save", "code.exec",
     "probuilder.delete-faces", "probuilder.detach-faces", "probuilder.combine-meshes",
     "probuilder.merge-objects", "probuilder.flip-normals",
-    "cinemachine.extension", "urp.feature", "editor.menu", "package.install", "package.remove",
+    "cinemachine.extension", "urp.feature", "editor.menu", "package.install", "package.remove", "package.bridge-remove",
     "batch.run", "instances.prune", "jobs.cancel", "controller.remove-layer", "graphics.bake-start", "graphics.bake-clear", "graphics.bake-reflection-probe",
     "package.embed", "ui.create-panel-settings", "ui.document.update", "ui.document.delete", "ui.update-panel-settings", "ui.link-stylesheet", "ui.render-preview",
     "texture.modify", "texture.delete", "texture.generate", "shader.delete", "screenshot.surround",
     "object.modify", "reflection.method.call"
   ];
   assert.deepEqual(policyCommands.sort(), expected.sort());
-  assert.equal(destructiveCommands().length, 38);
+  assert.equal(destructiveCommands().length, 39);
 });
 
 test("Unity bridge destructive proof list matches persistent-risk policy", async () => {
