@@ -953,6 +953,29 @@ test("animation and vfx commands forward Windows paths, targets and effects", as
   const stop = await execute(["tools", "run", "animation.stop", "Rig/Player"], { ...runtime, bridgeExecute });
   const graphCreate = await execute(["tools", "run", "vfx.graph", "--input", JSON.stringify({ path: "Assets\\VFX\\Explosion.vfx", create: true, overwrite: true })], { ...runtime, bridgeExecute });
   const effect = await execute(["tools", "run", "vfx.effect", "--input", JSON.stringify({ target: "Effects/Emitter", graph: "Assets\\VFX\\Explosion.vfx", add: true })], { ...runtime, bridgeExecute });
+  const particleModuleInput = { target: "Dust", module: "trails", enabled: true, ratio: 0.5, lifetime: 0.75, width: 0.08, color: "#FFAA33FF" };
+  const particleModule = await execute(["tools", "run", "vfx.particle-module", "--input", JSON.stringify(particleModuleInput)], { ...runtime, bridgeExecute });
+  const lineCreateInput = {
+    name: "AimLine",
+    material: "Assets\\Materials\\Line.mat",
+    positions: [{ x: 0, y: 0, z: 0 }, { x: 1, y: 2, z: 3 }],
+    widthCurve: [{ time: 0, value: 0.2 }, { time: 1, value: 0.05 }],
+    colorGradient: [{ time: 0, color: "#FFFFFFFF" }, { time: 1, color: "#00FFFFFF" }],
+    alignment: "View",
+    textureMode: "Tile"
+  };
+  const lineCreate = await execute(["tools", "run", "vfx.line-create", "--input", JSON.stringify(lineCreateInput)], { ...runtime, bridgeExecute });
+  const linePositionsInput = { target: "AimLine", positions: [{ x: 2, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }] };
+  const linePositions = await execute(["tools", "run", "vfx.line-positions", "--input", JSON.stringify(linePositionsInput)], { ...runtime, bridgeExecute });
+  const trailInput = {
+    name: "DashTrail",
+    create: true,
+    material: "Assets\\Materials\\Trail.mat",
+    widthCurve: [{ time: 0, value: 0.3 }, { time: 1, value: 0 }],
+    colorGradient: [{ time: 0, color: "#FFFFFFFF" }, { time: 1, color: "#00FFFFFF" }],
+    emitting: true
+  };
+  const trail = await execute(["tools", "run", "vfx.trail", "--input", JSON.stringify(trailInput)], { ...runtime, bridgeExecute });
 
   assert.equal(clipInfo.ok, true);
   assert.equal(clipCreate.ok, true);
@@ -962,7 +985,11 @@ test("animation and vfx commands forward Windows paths, targets and effects", as
   assert.equal(stop.ok, true);
   assert.equal(graphCreate.ok, true);
   assert.equal(effect.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["animation.clip", "animation.clip.create", "animation.clip.modify", "animation.state", "animation.play", "animation.stop", "vfx.graph", "vfx.effect"]);
+  assert.equal(particleModule.ok, true);
+  assert.equal(lineCreate.ok, true);
+  assert.equal(linePositions.ok, true);
+  assert.equal(trail.ok, true);
+  assert.deepEqual(requests.map((request) => request.command), ["animation.clip", "animation.clip.create", "animation.clip.modify", "animation.state", "animation.play", "animation.stop", "vfx.graph", "vfx.effect", "vfx.particle-module", "vfx.line-create", "vfx.line-positions", "vfx.trail"]);
   assert.deepEqual(requests[0].args, { path: "Assets\\Animations\\Idle.anim", maxCurveKeys: 2 });
   assert.deepEqual(requests[1].args, { path: "Assets\\Animations\\Run.anim", overwrite: true, frameRate: 30, legacy: false, wrapMode: "Loop", loopTime: true, length: 1, maxCurveKeys: 2 });
   assert.deepEqual(requests[2].args, { path: "Assets\\Animations\\Run.anim", frameRate: 24, wrapMode: "ClampForever", loopTime: false });
@@ -971,6 +998,10 @@ test("animation and vfx commands forward Windows paths, targets and effects", as
   assert.deepEqual(requests[5].args, { target: "Rig/Player" });
   assert.deepEqual(requests[6].args, { action: "create", path: "Assets\\VFX\\Explosion.vfx", overwrite: true });
   assert.deepEqual(requests[7].args, { target: "Effects/Emitter", graph: "Assets\\VFX\\Explosion.vfx", add: true });
+  assert.deepEqual(requests[8].args, particleModuleInput);
+  assert.deepEqual(requests[9].args, lineCreateInput);
+  assert.deepEqual(requests[10].args, linePositionsInput);
+  assert.deepEqual(requests[11].args, trailInput);
 });
 
 test("animation and vfx bridge errors preserve diagnostics", async () => {

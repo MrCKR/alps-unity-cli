@@ -42,6 +42,12 @@ import {
   resolveExtensionAvailabilityForProject
 } from "../../src/extensions/project-resolver.js";
 
+import {
+  checkExtensionBundles,
+  extensionInstallRoot,
+  installExtensionBundle
+} from "../../src/extensions/installer.js";
+
 // ── Registry: built-in data ────────────────────────────────────────────────
 
 test("registry lists five built-in extensions", () => {
@@ -365,19 +371,35 @@ test("loadUnavailableDescriptors filters to unavailable", () => {
 
 // ── collectAvailableTools ──────────────────────────────────────────────────
 
-test("collectAvailableTools returns tools from available extensions only", () => {
+test("collectAvailableTools returns available extension tools and built-in VFX component tools", () => {
   const registry = new ExtensionRegistry();
   const tools = collectAvailableTools(registry, {
     "com.unity.probuilder": "5.2.0"
   });
-  assert.ok(tools.every((t) => t.group === "probuilder"));
-  assert.equal(tools.length, 36);
+  const toolNames = tools.map((t) => t.name);
+  assert.equal(tools.filter((t) => t.group === "probuilder").length, 36);
+  assert.equal(tools.filter((t) => t.group === "vfx").length, 10);
+  assert.ok(toolNames.includes("vfx.particle-create"));
+  assert.ok(toolNames.includes("vfx.line-create"));
+  assert.ok(toolNames.includes("vfx.trail"));
+  assert.ok(!toolNames.includes("vfx.graph"));
 });
 
-test("collectAvailableTools returns empty when no extensions available", () => {
+test("collectAvailableTools returns built-in VFX component tools when optional packages are absent", () => {
   const registry = new ExtensionRegistry();
   const tools = collectAvailableTools(registry, {});
-  assert.equal(tools.length, 0);
+  assert.deepEqual(tools.map((t) => t.name), [
+    "vfx.particle-create",
+    "vfx.particle-info",
+    "vfx.particle-main",
+    "vfx.particle-emission",
+    "vfx.particle-shape",
+    "vfx.particle-play",
+    "vfx.particle-module",
+    "vfx.line-create",
+    "vfx.line-positions",
+    "vfx.trail"
+  ]);
 });
 
 test("collectAllTools includes unavailable extension tools with availability flag", () => {
@@ -399,15 +421,14 @@ test("collectAllTools includes unavailable extension tools with availability fla
 
 // ── collectAvailableContexts / Docs / CSharpEntries ─────────────────────────
 
-test("collectAvailableContexts returns contexts from available extensions", () => {
+test("collectAvailableContexts returns implemented contexts from available extensions", () => {
   const registry = new ExtensionRegistry();
   const contexts = collectAvailableContexts(registry, {
     "com.unity.probuilder": "5.2.0",
     "com.unity.visualeffectgraph": "14.0.0"
   });
-  assert.ok(contexts.length >= 2);
   assert.ok(contexts.some((c) => c.key === "probuilder.scene"));
-  assert.ok(contexts.some((c) => c.key === "vfx.assets"));
+  assert.ok(!contexts.some((c) => c.key === "vfx.assets"));
 });
 
 test("collectAvailableDocs returns docs from available extensions", () => {
@@ -573,9 +594,28 @@ test("ProBuilder manifest has correct tool contributions", () => {
 });
 
 test("VFX Graph manifest has correct tool contributions", () => {
-  assert.equal(VFX_GRAPH_MANIFEST.contributions.tools!.length, 2);
+  assert.equal(VFX_GRAPH_MANIFEST.contributions.tools!.length, 16);
   const toolNames = VFX_GRAPH_MANIFEST.contributions.tools!.map((t) => t.name);
-  assert.deepEqual(toolNames, ["vfx.graph", "vfx.effect"]);
+  assert.deepEqual(toolNames, [
+    "vfx.graph",
+    "vfx.effect",
+    "vfx.parameter",
+    "vfx.control",
+    "vfx.event",
+    "vfx.template",
+    "vfx.particle-create",
+    "vfx.particle-info",
+    "vfx.particle-main",
+    "vfx.particle-emission",
+    "vfx.particle-shape",
+    "vfx.particle-play",
+    "vfx.particle-module",
+    "vfx.line-create",
+    "vfx.line-positions",
+    "vfx.trail"
+  ]);
+  const graphOnly = VFX_GRAPH_MANIFEST.contributions.tools!.filter((t) => t.requiresPackages?.includes("com.unity.visualeffectgraph"));
+  assert.deepEqual(graphOnly.map((t) => t.name), ["vfx.graph", "vfx.effect", "vfx.parameter", "vfx.control", "vfx.event", "vfx.template"]);
 });
 
 test("Cinemachine manifest has 10 tools", () => {
@@ -595,9 +635,13 @@ test("all five manifests have unique IDs", () => {
   assert.equal(new Set(ids).size, ids.length);
 });
 
-test("all five manifests have at least one unityPackage", () => {
+test("extension manifests declare bundle-level Unity package gates only when required", () => {
   for (const m of BUILTIN_EXTENSION_MANIFESTS) {
-    assert.ok(m.unityPackages.length >= 1, `${m.id} should have at least one unityPackage`);
+    if (m.id === "vfx-graph") {
+      assert.equal(m.unityPackages.length, 0, "vfx-graph bundle must install built-in component tools without com.unity.visualeffectgraph");
+    } else {
+      assert.ok(m.unityPackages.length >= 1, `${m.id} should have at least one unityPackage`);
+    }
   }
 });
 
@@ -607,6 +651,23 @@ test("built-in manifests declare Unity directory install layout", () => {
     assert.equal(manifest.unityInstall?.layout, "directory", `${manifest.id} should install as a Unity extension directory`);
     assert.deepEqual(manifest.unityInstall?.include, ["extension.json", "unitypkg/", "docs/"]);
   }
+});
+
+test("extension bundle checks ignore Unity-generated .meta files", async () => {
+  const projectDir = await mkdtemp(join(tmpdir(), "unity-cli-ext-test-"));
+  await mkdir(join(projectDir, "Packages"), { recursive: true });
+  await writeFile(join(projectDir, "Packages", "manifest.json"), JSON.stringify({ dependencies: {} }));
+  await writeFile(join(projectDir, "Packages", "packages-lock.json"), JSON.stringify({ dependencies: {} }));
+
+  await installExtensionBundle(projectDir, VFX_GRAPH_MANIFEST);
+  await writeFile(join(extensionInstallRoot(projectDir, "vfx-graph"), "Editor.meta"), "fileFormatVersion: 2\n");
+
+  const checks = await checkExtensionBundles(projectDir);
+  const vfx = checks.find((check) => check.extensionId === "vfx-graph");
+  assert.ok(vfx);
+  assert.equal(vfx.status, "installed");
+  assert.equal(vfx.installed, true);
+  assert.deepEqual(vfx.unknownFiles, []);
 });
 test("all five manifests have valid contributions", () => {
   for (const m of BUILTIN_EXTENSION_MANIFESTS) {

@@ -13,9 +13,11 @@ import { getBoolean, getString } from "./args.js";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { discoverProjectTools, discoverRuntimeTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
+import { selectInstanceForFlags } from "./instances.js";
+import { defaultDataDir } from "./platform.js";
 import { bridgeCommandRegistry, executeBridgeCommand, executeBridgePayload } from "./bridge/index.js";
 import { checkToolExtensionAvailability, collectExtensionToolDescriptors } from "./extension-availability.js";
-import { ExtensionRegistry, collectAvailableTools, readInstalledUnityPackages } from "./extensions/index.js";
+import { readInstalledUnityPackages } from "./extensions/index.js";
 import {
   builtinToolMetadata,
   extensionToolMetadata,
@@ -93,9 +95,8 @@ async function handleToolsGroup(
 ): Promise<CliResult> {
   // Core groups are always present; extension groups are included only when
   // their required Unity packages are installed in the target project.
-  const availableExtensionTools = await resolveAvailableExtensionTools(flags);
+  const availableExtensionTools = await resolveAvailableExtensionTools(flags, runtime);
   const builtinGroups = builtinToolGroups();
-  const extensionGroupNames = [...new Set(availableExtensionTools.map((t) => t.group))].sort();
   const includeCustom = shouldDiscoverProjectTools(flags, runtime);
   const customDiscovery = includeCustom ? await discoverProjectTools(flags, runtime, requestId) : { ok: true as const, tools: [] as ToolMetadata[], mode: "skipped" as const };
   if (customDiscovery.ok === false) return customDiscovery;
@@ -195,7 +196,7 @@ async function handleToolsGroupList(
 
   const builtinTools = builtinToolMetadata().filter((t) => t.group === groupName);
   // Include extension tools only when they are available for the target project.
-  const availableExtensionTools = await resolveAvailableExtensionTools(flags);
+  const availableExtensionTools = await resolveAvailableExtensionTools(flags, runtime);
   const extensionTools = availableExtensionTools.filter((t) => t.group === groupName);
   const includeCustom = shouldDiscoverProjectTools(flags, runtime);
   const customDiscovery = includeCustom ? await discoverProjectTools(flags, runtime, requestId) : { ok: true as const, tools: [] as ToolMetadata[], mode: "skipped" as const };
@@ -252,7 +253,7 @@ async function handleToolsSearch(
   }
 
   const builtinResults = searchTools(keyword);
-  const availableExtensionTools = await resolveAvailableExtensionTools(flags);
+  const availableExtensionTools = await resolveAvailableExtensionTools(flags, runtime);
   const extensionResults = availableExtensionTools.filter((t: ToolMetadata) =>
     t.name.toLowerCase().includes(keyword.toLowerCase()) ||
     t.summary.toLowerCase().includes(keyword.toLowerCase()) ||
@@ -890,40 +891,51 @@ async function findProjectToolByName(
  * Resolve which extension tools are available for the target project.
  *
  * Extension tools are shown only when their required Unity packages are installed
- * in the target project. Without --project, extension tools are not included.
+ * in the target project. With no explicit --project, a selected live instance can
+ * provide the project path for discovery commands that use --instance/--target.
  */
 async function resolveAvailableExtensionTools(
-  flags: Record<string, string | boolean>
+  flags: Record<string, string | boolean>,
+  runtime: ToolsRuntime
 ): Promise<ToolMetadata[]> {
   const allExtensionTools = extensionToolMetadata();
   if (allExtensionTools.length === 0) return [];
 
-  const projectPath = getString(flags, "project");
+  const projectPath = await resolveExtensionProjectPath(flags, runtime);
   if (!projectPath) {
-    // Without a project path, we cannot determine availability.
-    // Return NO extension tools — they are not part of core.
+    // 没有项目路径时无法判断可选包状态，发现列表只展示 core 工具。
     return [];
   }
 
   try {
     const installedPackages = await readInstalledUnityPackages(projectPath);
-    const registry = new ExtensionRegistry();
-    const availableExtensionIds = new Set(
-      registry.availableExtensions(installedPackages).map((r) => r.extensionId)
-    );
-    return allExtensionTools.filter((t) => {
-      // Find which extension provides this tool's group
-      for (const extId of availableExtensionIds) {
-        const ext = registry.getExtension(extId)!;
-        if (ext.manifest.contributions.tools?.some((et) => et.group === t.group)) {
-          return true;
-        }
-      }
-      return false;
-    });
+    return allExtensionTools.filter((tool) => toolPackagesAvailable(tool.requiresPackages, installedPackages));
   } catch {
-    // Cannot read packages — return no extension tools
+    // 读不到项目包信息时不展示 extension 工具，避免误导 AI 直接调用。
     return [];
   }
+}
+
+async function resolveExtensionProjectPath(
+  flags: Record<string, string | boolean>,
+  runtime: ToolsRuntime
+): Promise<string | undefined> {
+  const explicitProject = getString(flags, "project");
+  if (explicitProject) return explicitProject;
+  if (!getString(flags, "instance") && !getString(flags, "target") && !getString(flags, "bridge-endpoint")) {
+    return undefined;
+  }
+
+  try {
+    const dataDir = runtime.dataDir ?? defaultDataDir();
+    return (await selectInstanceForFlags(flags, dataDir))?.instance.projectPath;
+  } catch {
+    // 实例选择失败时保持发现命令可用，只隐藏无法确认可用性的扩展工具。
+    return undefined;
+  }
+}
+
+function toolPackagesAvailable(requiresPackages: string[] | undefined, installedPackages: ReadonlyMap<string, string>): boolean {
+  return !requiresPackages || requiresPackages.every((packageId) => installedPackages.has(packageId));
 }
 

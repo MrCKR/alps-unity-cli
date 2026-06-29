@@ -7,9 +7,9 @@
  * unavailable result with next_actions instead of attempting execution.
  */
 
-import { ExtensionRegistry, resolveExtensionAvailability } from "./extensions/index.js";
+import { ExtensionRegistry } from "./extensions/index.js";
 import { readInstalledUnityPackages } from "./extensions/project-resolver.js";
-import { collectAvailableTools, collectAllTools, loadExtensionDescriptor } from "./extensions/descriptor-loader.js";
+import { collectAllTools } from "./extensions/descriptor-loader.js";
 import type { ExtensionAvailabilityResult, ExtensionId } from "./extensions/types.js";
 import type { ToolMetadata } from "./tools/metadata/types.js";
 import { getString } from "./args.js";
@@ -86,34 +86,12 @@ export async function checkToolExtensionAvailability(
     };
   }
 
-  // If we found the extension, resolve its availability.
-  if (extensionId && registry.hasExtension(extensionId)) {
-    const availability = registry.resolveAvailability(extensionId, installedPackages);
+  const missingPackages = tool.requiresPackages.filter((pkg) => !installedPackages.has(pkg));
+  const availability = extensionId && registry.hasExtension(extensionId)
+    ? packageAvailabilityForTool(registry, extensionId, installedPackages, missingPackages)
+    : undefined;
 
-    if (availability.status === "available") {
-      return {
-        available: true,
-        extensionId,
-        availabilityResult: availability,
-        nextActions: [],
-        errorCode: "",
-        message: ""
-      };
-    }
-
-    if (availability.status === "unavailable") {
-      const extension = registry.getExtension(extensionId)!;
-      return {
-        available: false,
-        extensionId,
-        availabilityResult: availability,
-        nextActions: buildToolUnavailableNextActions(tool, extension.manifest.name, availability.missingPackageIds),
-        errorCode: "E_EXTENSION_UNAVAILABLE",
-        message: `Tool "${tool.name}" requires the ${extension.manifest.name} extension, but required Unity package(s) are not installed: ${availability.missingPackageIds.join(", ")}.`
-      };
-    }
-
-    // "unknown" — can't determine; let execution proceed.
+  if (missingPackages.length === 0) {
     return {
       available: true,
       extensionId,
@@ -124,26 +102,15 @@ export async function checkToolExtensionAvailability(
     };
   }
 
-  // Extension not found in registry but tool declares requiresPackages.
-  // Check if the required packages are directly installed.
-  const missingPackages = tool.requiresPackages.filter(
-    (pkg) => !installedPackages.has(pkg)
-  );
-
-  if (missingPackages.length === 0) {
-    return {
-      available: true,
-      extensionId,
-      nextActions: [],
-      errorCode: "",
-      message: ""
-    };
-  }
+  const extensionName = extensionId && registry.hasExtension(extensionId)
+    ? registry.getExtension(extensionId)!.manifest.name
+    : "unknown";
 
   return {
     available: false,
     extensionId,
-    nextActions: buildToolUnavailableNextActions(tool, extensionId ?? "unknown", missingPackages),
+    availabilityResult: availability,
+    nextActions: buildToolUnavailableNextActions(tool, extensionName, missingPackages),
     errorCode: "E_EXTENSION_UNAVAILABLE",
     message: `Tool "${tool.name}" requires Unity package(s) not installed: ${missingPackages.join(", ")}.`
   };
@@ -272,13 +239,43 @@ export async function collectExtensionToolDescriptors(
     supportStatus: "live-bridge" as const,
     cliCommand: extTool.cliCommand,
     target: "editor",
-    requiresPackages: registry.getExtension(extTool.extensionId)?.manifest.unityPackages.map((p) => p.packageId),
+    requiresPackages: [],
     extensionId: extTool.extensionId,
     extensionAvailable: extTool.available
   }));
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+function packageAvailabilityForTool(
+  registry: ExtensionRegistry,
+  extensionId: ExtensionId,
+  installedPackages: ReadonlyMap<string, string>,
+  missingPackageIds: string[]
+): ExtensionAvailabilityResult {
+  const extension = registry.getExtension(extensionId)!;
+  const requiredPackages = extension.manifest.unityPackages.filter((pkg) => installedPackages.has(pkg.packageId) || missingPackageIds.includes(pkg.packageId));
+  const packages = requiredPackages.map((pkg) => ({
+    packageId: pkg.packageId,
+    displayName: pkg.displayName,
+    installed: installedPackages.has(pkg.packageId),
+    version: installedPackages.get(pkg.packageId)
+  }));
+  return {
+    extensionId,
+    status: missingPackageIds.length === 0 ? "available" : "unavailable",
+    packages,
+    missingPackageIds,
+    nextActions: missingPackageIds.length === 0 ? [] : buildToolUnavailableNextActions({
+      name: extensionId,
+      summary: extension.manifest.name,
+      description: extension.manifest.description,
+      group: extensionId,
+      inputSchema: {},
+      destructiveHint: false
+    }, extension.manifest.name, missingPackageIds)
+  };
+}
 
 function findExtensionForTool(registry: ExtensionRegistry, toolName: string): ExtensionId | undefined {
   for (const id of registry.extensionIds()) {

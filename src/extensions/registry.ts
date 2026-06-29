@@ -13,7 +13,8 @@ import type {
   ExtensionAvailability,
   ExtensionAvailabilityResult,
   PackageResolution,
-  RegistryExtension
+  RegistryExtension,
+  UnityPackageRequirement
 } from "./types.js";
 
 /**
@@ -153,7 +154,7 @@ export class ExtensionRegistry {
   public allRequiredUnityPackageIds(): string[] {
     const ids = new Set<string>();
     for (const ext of this.extensions.values()) {
-      for (const pkg of ext.manifest.unityPackages) {
+      for (const pkg of requiredUnityPackagesForManifest(ext.manifest)) {
         ids.add(pkg.packageId);
       }
     }
@@ -170,19 +171,20 @@ export function resolveExtensionAvailability(
   manifest: ExtensionManifest,
   installedPackages?: ReadonlyMap<string, string> | Readonly<Record<string, string>>
 ): ExtensionAvailabilityResult {
+  const requiredPackages = requiredUnityPackagesForManifest(manifest);
   // Only `undefined` (no project context) yields "unknown". An empty
   // collection means "we checked the project, nothing is installed" → unavailable.
   if (installedPackages === undefined) {
     return {
       extensionId: manifest.id,
       status: "unknown",
-      packages: manifest.unityPackages.map((pkg) => ({
+      packages: requiredPackages.map((pkg) => ({
         packageId: pkg.packageId,
         displayName: pkg.displayName,
         installed: false,
         version: undefined
       })),
-      missingPackageIds: manifest.unityPackages.map((pkg) => pkg.packageId),
+      missingPackageIds: requiredPackages.map((pkg) => pkg.packageId),
       nextActions: [
         `Provide a project path or installed packages map to resolve availability for ${manifest.name}.`
       ]
@@ -198,7 +200,7 @@ export function resolveExtensionAvailability(
     return { installed: version !== undefined, version };
   };
 
-  const packages = manifest.unityPackages.map((pkg) => ({
+  const packages = requiredPackages.map((pkg) => ({
     packageId: pkg.packageId,
     displayName: pkg.displayName,
     ...getPackage(pkg.packageId)
@@ -222,6 +224,21 @@ export function resolveExtensionAvailability(
     missingPackageIds,
     nextActions
   };
+}
+
+function requiredUnityPackagesForManifest(manifest: ExtensionManifest): UnityPackageRequirement[] {
+  const byId = new Map<string, UnityPackageRequirement>();
+  for (const pkg of manifest.unityPackages) {
+    byId.set(pkg.packageId, pkg);
+  }
+  for (const tool of manifest.contributions.tools ?? []) {
+    for (const packageId of tool.requiresPackages ?? []) {
+      if (!byId.has(packageId)) {
+        byId.set(packageId, { packageId, displayName: packageId });
+      }
+    }
+  }
+  return [...byId.values()];
 }
 
 /**

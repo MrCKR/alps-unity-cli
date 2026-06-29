@@ -3,16 +3,10 @@
   "name": "vfx-graph",
   "title": "VFX Graph",
   "version": "1.0.0",
-  "description": "VFX Graph extension for alps-unity-cli",
+  "description": "Visual effects extension for VFX Graph plus Unity built-in ParticleSystem, LineRenderer, and TrailRenderer tools.",
   "packageName": "unity-cli-extension-vfx-graph",
-  "requiresUnityPackages": [
-    "com.unity.visualeffectgraph"
-  ],
-  "unityPackages": [
-    {
-      "name": "com.unity.visualeffectgraph"
-    }
-  ],
+  "requiresUnityPackages": [],
+  "unityPackages": [],
   "providesTools": [
     "vfx.graph",
     "vfx.effect",
@@ -31,8 +25,16 @@
     "vfx.line-positions",
     "vfx.trail"
   ],
+  "toolPackageRequirements": {
+    "vfx.graph": ["com.unity.visualeffectgraph"],
+    "vfx.effect": ["com.unity.visualeffectgraph"],
+    "vfx.parameter": ["com.unity.visualeffectgraph"],
+    "vfx.control": ["com.unity.visualeffectgraph"],
+    "vfx.event": ["com.unity.visualeffectgraph"],
+    "vfx.template": ["com.unity.visualeffectgraph"]
+  },
   "copyRoot": "extension-directory",
-  "installMode": "copy-if-package-present",
+  "installMode": "copy",
   "toolGroups": [
     "vfx"
   ],

@@ -17,12 +17,14 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdtemp, writeFile, mkdir } from "node:fs/promises";
+import { createServer, type Server } from "node:http";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
 import { handleToolsCommand, type ToolsRuntime } from "../src/tools.js";
 import { handleDoctorCommand, type DoctorRuntime } from "../src/doctor.js";
 import { handleCapabilitiesCommand } from "../src/capabilities.js";
+import { writeInstances, type UnityInstance } from "../src/instances.js";
 import { ExtensionRegistry, resolveExtensionAvailability, validateManifest, ExtensionRegistryError } from "../src/extensions/index.js";
 import { loadExtensionDescriptor, collectAvailableTools, collectAllTools, extensionAvailabilitySummary } from "../src/extensions/descriptor-loader.js";
 import { readInstalledUnityPackages } from "../src/extensions/project-resolver.js";
@@ -34,6 +36,11 @@ import { builtinToolMetadata, extensionToolMetadata, builtinToolGroups, findTool
 
 const requestId = "test_p5t04_001";
 const emptyRuntime: ToolsRuntime = {};
+const healthServers: Server[] = [];
+
+test.after(async () => {
+  await Promise.all(healthServers.map((server) => new Promise<void>((resolve) => server.close(() => resolve()))));
+});
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -56,6 +63,44 @@ async function makeFakeProject(packages: Record<string, string> = {}): Promise<s
     JSON.stringify({ dependencies: lockDeps }, null, 2)
   );
   return dir;
+}
+
+async function startHealthServer(): Promise<string> {
+  const server = createServer((request, response) => {
+    if (request.url === "/health") {
+      response.writeHead(200, { "content-type": "application/json" });
+      response.end(JSON.stringify({ ok: true, status: "healthy" }));
+      return;
+    }
+    response.writeHead(404);
+    response.end();
+  });
+  healthServers.push(server);
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  assert.ok(address && typeof address === "object");
+  return `http://127.0.0.1:${address.port}`;
+}
+
+function fakeInstance(projectPath: string, bridgeEndpoint: string, overrides: Partial<UnityInstance> = {}): UnityInstance {
+  return {
+    instanceId: "editor-vfx",
+    projectPath,
+    projectHash: "hash-vfx",
+    unityVersion: "2022.3.61f1",
+    packageVersion: "com.unity_cli",
+    pid: 1234,
+    bridgeEndpoint,
+    capabilitiesHash: "caps",
+    status: "ready",
+    editorState: { playMode: false, compiling: false, domainReloading: false },
+    playModeState: { isPlaying: false, isPaused: false, isPlayingOrWillChangePlaymode: false },
+    runtimeSessionId: null,
+    toolCatalogFingerprint: null,
+    registeredAt: new Date().toISOString(),
+    lastHeartbeatAt: new Date().toISOString(),
+    ...overrides
+  };
 }
 
 // ── 1. tools describe: unavailable + next_actions ──────────────────────────
@@ -685,13 +730,30 @@ test("tools group list with --project includes extension tools when packages ins
   assert.ok(probuilderTools.length > 0, "ProBuilder tools should appear when package is installed");
 });
 
-test("tools group list with --project excludes extension tools when packages are not installed", async () => {
-  const projectPath = await makeFakeProject(); // no packages
+test("tools group list with --project excludes package-gated tools but keeps built-in VFX tools", async () => {
+  const projectPath = await makeFakeProject(); // no optional packages
 
-  const result = await handleToolsCommand("group", ["list", "probuilder"], { project: projectPath }, emptyRuntime, requestId);
-  // Without the probuilder package installed, the group is not found
-  assert.equal(result.ok, false);
-  assert.equal(result.error?.code, "E_TOOL_GROUP_NOT_FOUND");
+  const probuilderResult = await handleToolsCommand("group", ["list", "probuilder"], { project: projectPath }, emptyRuntime, requestId);
+  assert.equal(probuilderResult.ok, false);
+  assert.equal(probuilderResult.error?.code, "E_TOOL_GROUP_NOT_FOUND");
+
+  const vfxResult = await handleToolsCommand("group", ["list", "vfx"], { project: projectPath }, emptyRuntime, requestId);
+  assert.equal(vfxResult.ok, true);
+  const data = vfxResult.data as { tools: Array<{ name: string; group: string; requiresPackages?: string[] }> };
+  assert.deepEqual(data.tools.map((t) => t.name), [
+    "vfx.particle-create",
+    "vfx.particle-info",
+    "vfx.particle-main",
+    "vfx.particle-emission",
+    "vfx.particle-shape",
+    "vfx.particle-play",
+    "vfx.particle-module",
+    "vfx.line-create",
+    "vfx.line-positions",
+    "vfx.trail"
+  ]);
+  assert.ok(data.tools.every((t) => t.group === "vfx"));
+  assert.ok(data.tools.every((t) => !t.requiresPackages || t.requiresPackages.length === 0));
 });
 
 test("tools group without --project does not include extension groups", async () => {
@@ -703,7 +765,7 @@ test("tools group without --project does not include extension groups", async ()
   assert.ok(!groupNames.includes("vfx"), "vfx group should NOT appear without --project");
 });
 
-test("tools group with --project includes extension groups when packages installed", async () => {
+test("tools group with --project includes extension groups when tools are available", async () => {
   const projectPath = await makeFakeProject({
     "com.unity.probuilder": "5.0.0"
   });
@@ -713,6 +775,25 @@ test("tools group with --project includes extension groups when packages install
   const data = result.data as { groups: Array<{ name: string }> };
   const groupNames = data.groups.map((g) => g.name);
   assert.ok(groupNames.includes("probuilder"), "probuilder group should appear when package is installed");
+  assert.ok(groupNames.includes("vfx"), "vfx group should appear because built-in component tools are available");
+});
+
+test("tools group with --instance uses the selected project for extension groups", async () => {
+  const projectPath = await makeFakeProject();
+  const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-p5t04-instance-"));
+  const endpoint = await startHealthServer();
+  await writeInstances(dataDir, [fakeInstance(projectPath, endpoint)]);
+  const runtime: ToolsRuntime = { dataDir, projectTools: [] };
+
+  const groups = await handleToolsCommand("group", [], { instance: "editor-vfx" }, runtime, requestId);
+  assert.equal(groups.ok, true);
+  const groupData = groups.data as { groups: Array<{ name: string }> };
+  assert.ok(groupData.groups.some((group) => group.name === "vfx"), "vfx group should appear from the selected instance project");
+
+  const listed = await handleToolsCommand("group", ["list", "vfx"], { instance: "editor-vfx" }, runtime, requestId);
+  assert.equal(listed.ok, true);
+  const listData = listed.data as { tools: Array<{ name: string }> };
+  assert.ok(listData.tools.some((tool) => tool.name === "vfx.particle-create"));
 });
 
 test("findToolByName still finds extension tools after registration", () => {

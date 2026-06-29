@@ -29,6 +29,7 @@ import {
   installExtensionBundle,
   removeExtensionBundle,
   readExtensionInstallManifest,
+  resolveInstallAvailability,
   ExtensionInstallerError,
   type ExtensionStatusCheck
 } from "../extensions/installer.js";
@@ -203,7 +204,8 @@ async function handleExtensionsInstall(
   }
 
   const installedPackages = await readInstalledUnityPackages(projectPath);
-  const availability = registry.resolveAvailability(extensionId, installedPackages);
+  const manifest = registry.getExtension(extensionId)!.manifest;
+  const availability = resolveInstallAvailability(manifest, installedPackages);
   if (availability.status !== "available") {
     return failure(requestId, "E_EXTENSION_DEPENDENCY_MISSING", `Extension "${extensionId}" requires Unity package(s) that are not installed: ${availability.missingPackageIds.join(", ")}.`, [
       "Install the required Unity package in Packages/manifest.json or Unity Package Manager.",
@@ -215,8 +217,6 @@ async function handleExtensionsInstall(
       missingPackageIds: availability.missingPackageIds
     });
   }
-
-  const manifest = registry.getExtension(extensionId)!.manifest;
   const installManifest = await readExtensionInstallManifest(projectPath);
   const alreadyInstalled = installManifest.extensions.some((entry) => entry.extensionId === extensionId);
   const installResult = await installExtensionBundle(projectPath, manifest);

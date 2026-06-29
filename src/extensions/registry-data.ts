@@ -89,34 +89,41 @@ export const PROBUILDER_MANIFEST: ExtensionManifest = {
 export const VFX_GRAPH_MANIFEST: ExtensionManifest = {
   id: "vfx-graph",
   name: "VFX Graph",
-  description: "Visual Effect Graph tools for creating and managing VFX assets and instances. Requires the Visual Effect Graph package.",
+  description: "Visual effects extension with VFX Graph package tools plus built-in ParticleSystem, LineRenderer, and TrailRenderer tools.",
   version: "1.0.0",
-  unityPackages: [
-    {
-      packageId: "com.unity.visualeffectgraph",
-      displayName: "Visual Effect Graph"
-    }
-  ],
+  unityPackages: [],
   unityInstall: {
     layout: "directory",
     include: ["extension.json", "unitypkg/", "docs/"]
   },
   contributions: {
     tools: [
-      { name: "vfx.graph", summary: "VFX Graph", description: "Get info on a Visual Effect graph asset, optionally create one.", group: "vfx", bridgeCommand: "vfx.graph", cliCommand: "tools run vfx.graph" },
-      { name: "vfx.effect", summary: "VFX Effect", description: "Manage a Visual Effect instance on a GameObject.", group: "vfx", bridgeCommand: "vfx.effect", cliCommand: "tools run vfx.effect" }
+      { name: "vfx.graph", summary: "VFX Graph", description: "Get info on a Visual Effect graph asset, optionally create one.", group: "vfx", bridgeCommand: "vfx.graph", cliCommand: "tools run vfx.graph", requiresPackages: ["com.unity.visualeffectgraph"] },
+      { name: "vfx.effect", summary: "VFX Effect", description: "Manage a Visual Effect instance on a GameObject.", group: "vfx", bridgeCommand: "vfx.effect", cliCommand: "tools run vfx.effect", requiresPackages: ["com.unity.visualeffectgraph"] },
+      { name: "vfx.parameter", summary: "VFX Parameter", description: "Set exposed parameters on a Visual Effect instance.", group: "vfx", bridgeCommand: "vfx.parameter", cliCommand: "tools run vfx.parameter", requiresPackages: ["com.unity.visualeffectgraph"] },
+      { name: "vfx.control", summary: "VFX Control", description: "Control playback of a Visual Effect instance.", group: "vfx", bridgeCommand: "vfx.control", cliCommand: "tools run vfx.control", requiresPackages: ["com.unity.visualeffectgraph"] },
+      { name: "vfx.event", summary: "VFX Event", description: "Send a named event to a Visual Effect instance.", group: "vfx", bridgeCommand: "vfx.event", cliCommand: "tools run vfx.event", requiresPackages: ["com.unity.visualeffectgraph"] },
+      { name: "vfx.template", summary: "VFX Template", description: "Create a Visual Effect Graph asset from a built-in template.", group: "vfx", bridgeCommand: "vfx.template", cliCommand: "tools run vfx.template", requiresPackages: ["com.unity.visualeffectgraph"] },
+      { name: "vfx.particle-create", summary: "Particle Create", description: "Create a Unity built-in ParticleSystem on a new or existing GameObject.", group: "vfx", bridgeCommand: "vfx.particle-create", cliCommand: "tools run vfx.particle-create", requiresPackages: [] },
+      { name: "vfx.particle-info", summary: "Particle Info", description: "Get ParticleSystem state and module settings.", group: "vfx", bridgeCommand: "vfx.particle-info", cliCommand: "tools run vfx.particle-info", requiresPackages: [] },
+      { name: "vfx.particle-main", summary: "Particle Main", description: "Set ParticleSystem main module properties.", group: "vfx", bridgeCommand: "vfx.particle-main", cliCommand: "tools run vfx.particle-main", requiresPackages: [] },
+      { name: "vfx.particle-emission", summary: "Particle Emission", description: "Set ParticleSystem emission module properties.", group: "vfx", bridgeCommand: "vfx.particle-emission", cliCommand: "tools run vfx.particle-emission", requiresPackages: [] },
+      { name: "vfx.particle-shape", summary: "Particle Shape", description: "Set ParticleSystem shape module properties.", group: "vfx", bridgeCommand: "vfx.particle-shape", cliCommand: "tools run vfx.particle-shape", requiresPackages: [] },
+      { name: "vfx.particle-play", summary: "Particle Play", description: "Play, stop, pause, or clear a ParticleSystem.", group: "vfx", bridgeCommand: "vfx.particle-play", cliCommand: "tools run vfx.particle-play", requiresPackages: [] },
+      { name: "vfx.particle-module", summary: "Particle Module", description: "Configure deep ParticleSystem modules.", group: "vfx", bridgeCommand: "vfx.particle-module", cliCommand: "tools run vfx.particle-module", requiresPackages: [] },
+      { name: "vfx.line-create", summary: "Line Create", description: "Create or configure a LineRenderer.", group: "vfx", bridgeCommand: "vfx.line-create", cliCommand: "tools run vfx.line-create", requiresPackages: [] },
+      { name: "vfx.line-positions", summary: "Line Positions", description: "Set LineRenderer positions.", group: "vfx", bridgeCommand: "vfx.line-positions", cliCommand: "tools run vfx.line-positions", requiresPackages: [] },
+      { name: "vfx.trail", summary: "Trail Renderer", description: "Create or configure a TrailRenderer.", group: "vfx", bridgeCommand: "vfx.trail", cliCommand: "tools run vfx.trail", requiresPackages: [] }
     ],
-    contexts: [
-      { key: "vfx.assets", description: "Visual Effect graph assets in the project." }
-    ],
+    contexts: [],
     bridgeCommands: [
-      { group: "vfx", commands: ["graph", "effect"] }
+      { group: "vfx", commands: ["graph", "effect", "parameter", "control", "event", "template", "particle-create", "particle-info", "particle-main", "particle-emission", "particle-shape", "particle-play", "particle-module", "line-create", "line-positions", "trail"] }
     ],
     csharpEntries: [
-      { type: "UnityCli.VfxCommands", description: "Bridge handler for VFX Graph asset and instance operations." }
+      { type: "UnityCli.VfxCommands", description: "Bridge handler for VFX Graph, ParticleSystem, LineRenderer, and TrailRenderer operations." }
     ],
     docs: [
-      { topic: "vfx", description: "VFX Graph tools: graph asset management and effect instances." }
+      { topic: "vfx", description: "VFX Graph tools plus built-in ParticleSystem, LineRenderer, and TrailRenderer tools." }
     ]
   },
   tags: ["vfx", "particles", "effects"]

@@ -4,7 +4,7 @@ import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readInstalledUnityPackages } from "./project-resolver.js";
-import { ExtensionRegistry } from "./registry.js";
+import { ExtensionRegistry, resolveExtensionAvailability } from "./registry.js";
 import type { ExtensionAvailabilityResult, ExtensionId, ExtensionManifest } from "./types.js";
 import { stripBom } from "../util.js";
 
@@ -111,7 +111,7 @@ export async function writeExtensionInstallManifest(projectPath: string, manifes
 /** 安装一个 extension 目录；只投影 Unity 侧文件，不安装可选 Unity package。 */
 export async function installExtensionBundle(projectPath: string, manifest: ExtensionManifest): Promise<ExtensionInstallResult> {
   const installedPackages = await readInstalledUnityPackages(projectPath);
-  const availability = new ExtensionRegistry().resolveAvailability(manifest.id, installedPackages);
+  const availability = resolveInstallAvailability(manifest, installedPackages);
   if (availability.status !== "available") {
     const missing = availability.missingPackageIds.join(", ");
     const error = new ExtensionInstallerError(
@@ -128,6 +128,16 @@ export async function installExtensionBundle(projectPath: string, manifest: Exte
   }
 
   return installExtensionBundleUnchecked(projectPath, manifest, "installed");
+}
+
+export function resolveInstallAvailability(
+  manifest: ExtensionManifest,
+  installedPackages: ReadonlyMap<string, string>
+): ExtensionAvailabilityResult {
+  return resolveExtensionAvailability(
+    { ...manifest, contributions: { ...manifest.contributions, tools: [] } },
+    installedPackages
+  );
 }
 
 /** 根据已解析依赖自动安装 extension 目录；调用方保证依赖可用。 */
@@ -211,7 +221,7 @@ export async function checkExtensionBundles(projectPath: string): Promise<Extens
 
   for (const extensionId of registry.extensionIds()) {
     const extension = registry.getExtension(extensionId)!;
-    const availability = registry.resolveAvailability(extensionId, installedPackages);
+    const bundleAvailability = resolveInstallAvailability(extension.manifest, installedPackages);
     const entry = installManifest.extensions.find((item) => item.extensionId === extensionId);
     const targetRoot = extensionInstallRoot(projectPath, extensionId);
     const sourceRoot = extensionSourceRoot(extensionId);
@@ -220,21 +230,21 @@ export async function checkExtensionBundles(projectPath: string): Promise<Extens
     const outdated = Boolean(entry && sourceHash && entry.sourceHash !== sourceHash);
     const hasUnknownFiles = fileCheck.unknownFiles.length > 0;
     const installed = Boolean(entry && fileCheck.missingFiles.length === 0 && fileCheck.changedFiles.length === 0 && !outdated && !hasUnknownFiles);
-    const status = resolvePhysicalStatus(availability, entry !== undefined, outdated, fileCheck.missingFiles, fileCheck.changedFiles, fileCheck.unknownFiles);
+    const status = resolvePhysicalStatus(bundleAvailability, entry !== undefined, outdated, fileCheck.missingFiles, fileCheck.changedFiles, fileCheck.unknownFiles);
 
     checks.push({
       extensionId,
       name: extension.manifest.name,
       status,
-      dependencyInstalled: availability.status === "available",
+      dependencyInstalled: bundleAvailability.status === "available",
       installed,
       outdated,
       unknownFiles: fileCheck.unknownFiles,
       missingFiles: fileCheck.missingFiles,
       changedFiles: fileCheck.changedFiles,
       providedTools: extension.manifest.contributions.tools?.map((tool) => tool.name) ?? [],
-      missingPackageIds: availability.missingPackageIds,
-      nextActions: nextActionsForStatus(extension.manifest, availability, status)
+      missingPackageIds: bundleAvailability.missingPackageIds,
+      nextActions: nextActionsForStatus(extension.manifest, bundleAvailability, status)
     });
   }
 
@@ -314,7 +324,11 @@ async function listUnknownFiles(targetRoot: string, managed: Iterable<string>): 
   }
   const managedSet = new Set(managed);
   const allFiles = await listFiles(targetRoot);
-  return allFiles.filter((file) => !managedSet.has(file)).sort();
+  return allFiles.filter((file) => !managedSet.has(file) && !isUnityGeneratedMetaFile(file)).sort();
+}
+
+function isUnityGeneratedMetaFile(path: string): boolean {
+  return path.endsWith(".meta");
 }
 
 async function listFiles(root: string, current = root): Promise<string[]> {

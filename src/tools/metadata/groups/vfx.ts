@@ -1,58 +1,61 @@
 import type { ToolMetadata } from "../types.js";
-import { objSchema, pageSchema } from "../schemas.js";
+import { objSchema } from "../schemas.js";
+
+const VFX_GRAPH_PACKAGE = "com.unity.visualeffectgraph";
+
+const VFX_GRAPH_COMMON = {
+  group: "vfx",
+  kind: "tool" as const,
+  source: "extension" as const,
+  target: "editor",
+  availabilityScope: "editorSession",
+  handler: "bridge" as const,
+  docsTopic: "vfx",
+  requiresPackages: [VFX_GRAPH_PACKAGE]
+};
+
+const BUILTIN_VFX_COMMON = {
+  group: "vfx",
+  kind: "tool" as const,
+  source: "extension" as const,
+  target: "editor",
+  availabilityScope: "editorSession",
+  handler: "bridge" as const,
+  docsTopic: "vfx"
+};
+
+const vector3Properties = { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } };
+const vector3Schema = objSchema(vector3Properties);
+const curveKeySchema = objSchema({ time: { type: "number" }, value: { type: "number" } }, ["time", "value"]);
+const gradientKeySchema = objSchema({ time: { type: "number" }, color: { type: "string" } }, ["time", "color"]);
 
 /**
- * VFX Graph extension tools.
- *
- * Critical reference notes:
- * - Critically references unity-mcp's Vfx/ManageVFX.cs (action router), VfxGraphRead.cs,
- *   VfxGraphWrite.cs, VfxGraphControl.cs, VfxGraphAssets.cs for the action decomposition
- *   and Unity API paths.
- * - Discarded: unity-mcp uses a single manage_vfx tool with action=... routing for both
- *   ParticleSystem and VFX Graph. alps-unity-cli keeps "multi-tool single-action" and only
- *   VFX Graph capabilities go under the vfx group; ParticleSystem belongs elsewhere.
- * - Discarded: unity-mcp uses #if UNITY_VFX_GRAPH / #else conditional compilation for VFX
- *   Graph code. alps-unity-cli uses runtime FindType() + PackageManifestContains detection
- *   (no conditional compile symbols) matching ProBuilder's pattern.
- * - Adapted: VFX parameter setting uses reflection-based SetFloat/SetVector3/etc instead of
- *   direct VisualEffect component API calls, since we have no compile-time dependency.
+ * VFX 扩展 descriptor：VFX Graph 工具保留 tool-level 包依赖，Particle/Line/Trail 使用 Unity 内置组件。
  */
 export const VFX_TOOLS: ToolMetadata[] = [
   {
     name: "vfx.graph",
     summary: "Get info on a Visual Effect graph asset, optionally create one.",
     description: "Get info on a Visual Effect graph asset, optionally create one. Requires the Visual Effect Graph package (com.unity.visualeffectgraph) to be installed in the target project.",
-    group: "vfx",
-    kind: "tool",
-    source: "extension",
+    ...VFX_GRAPH_COMMON,
     inputSchema: objSchema({ path: { type: "string" }, action: { type: "string", enum: ["info", "create"] }, create: { type: "boolean" }, overwrite: { type: "boolean" } }, ["path"]),
     destructiveHint: false,
-    handler: "bridge",
-    cliCommand: "tools run vfx.graph",
-    docsTopic: "vfx",
-    requiresPackages: ["com.unity.visualeffectgraph"]
+    cliCommand: "tools run vfx.graph"
   },
   {
     name: "vfx.effect",
     summary: "Manage a Visual Effect instance on a GameObject.",
     description: "Manage a Visual Effect instance on a GameObject. Requires the Visual Effect Graph package (com.unity.visualeffectgraph) to be installed in the target project.",
-    group: "vfx",
-    kind: "tool",
-    source: "extension",
+    ...VFX_GRAPH_COMMON,
     inputSchema: objSchema({ target: { type: "string" }, graph: { type: "string" }, add: { type: "boolean" } }, ["target"]),
     destructiveHint: false,
-    handler: "bridge",
-    cliCommand: "tools run vfx.effect",
-    docsTopic: "vfx",
-    requiresPackages: ["com.unity.visualeffectgraph"]
+    cliCommand: "tools run vfx.effect"
   },
   {
     name: "vfx.parameter",
-    summary: "Set exposed parameters on a Visual Effect instance (float, int, bool, vector, color, texture, mesh, gradient, animation curve).",
-    description: "Set exposed parameters on a Visual Effect instance (float, int, bool, vector, color, texture, mesh, gradient, animation curve). Requires the Visual Effect Graph package (com.unity.visualeffectgraph) to be installed in the target project.",
-    group: "vfx",
-    kind: "tool",
-    source: "extension",
+    summary: "Set exposed parameters on a Visual Effect instance.",
+    description: "Set exposed parameters on a Visual Effect instance: float, int, bool, vector2/3/4, color, texture, mesh, gradient, or curve. Requires com.unity.visualeffectgraph.",
+    ...VFX_GRAPH_COMMON,
     inputSchema: objSchema({
       target: { type: "string" },
       name: { type: "string" },
@@ -68,22 +71,17 @@ export const VFX_TOOLS: ToolMetadata[] = [
       a: { type: "number" }
     }, ["target", "name"]),
     destructiveHint: false,
-    handler: "bridge",
     cliCommand: "tools run vfx.parameter",
-    docsTopic: "vfx",
-    requiresPackages: ["com.unity.visualeffectgraph"],
     examples: [
-      { description: "Set an exposed float parameter", argv: ["tools", "run", "vfx.parameter", "VFXFire", "--name", "Intensity", "--type", "float", "--value", "2.5"] },
-      { description: "Set a vector3 parameter", argv: ["tools", "run", "vfx.parameter", "VFXFire", "--name", "Velocity", "--type", "vector3", "--x", "0", "--y", "1", "--z", "0"] }
+      { description: "Set an exposed float parameter", argv: ["tools", "run", "vfx.parameter", "--input", "{\"target\":\"VFXFire\",\"name\":\"Intensity\",\"type\":\"float\",\"value\":\"2.5\"}"] },
+      { description: "Set a vector3 parameter", argv: ["tools", "run", "vfx.parameter", "--input", "{\"target\":\"VFXFire\",\"name\":\"Velocity\",\"type\":\"vector3\",\"x\":0,\"y\":1,\"z\":0}"] }
     ]
   },
   {
     name: "vfx.control",
-    summary: "Control playback of a Visual Effect instance (play, stop, pause, reinit, set play rate, set seed).",
-    description: "Control playback of a Visual Effect instance (play, stop, pause, reinit, set play rate, set seed). Requires the Visual Effect Graph package (com.unity.visualeffectgraph) to be installed in the target project.",
-    group: "vfx",
-    kind: "tool",
-    source: "extension",
+    summary: "Control playback of a Visual Effect instance.",
+    description: "Control playback of a Visual Effect instance: play, stop, pause, reinit, set play rate, or set seed. Requires com.unity.visualeffectgraph.",
+    ...VFX_GRAPH_COMMON,
     inputSchema: objSchema({
       target: { type: "string" },
       action: { type: "string", enum: ["play", "stop", "pause", "reinit", "rate", "seed"] },
@@ -92,22 +90,16 @@ export const VFX_TOOLS: ToolMetadata[] = [
       resetSeedOnPlay: { type: "boolean" }
     }, ["target"]),
     destructiveHint: false,
-    handler: "bridge",
     cliCommand: "tools run vfx.control",
-    docsTopic: "vfx",
-    requiresPackages: ["com.unity.visualeffectgraph"],
     examples: [
-      { description: "Play a VFX effect", argv: ["tools", "run", "vfx.control", "VFXFire", "--action", "play"] },
-      { description: "Set playback rate to 0.5x", argv: ["tools", "run", "vfx.control", "VFXFire", "--action", "rate", "--rate", "0.5"] }
+      { description: "Play a VFX effect", argv: ["tools", "run", "vfx.control", "--input", "{\"target\":\"VFXFire\",\"action\":\"play\"}"] }
     ]
   },
   {
     name: "vfx.event",
-    summary: "Send a named event to a Visual Effect instance, optionally with attribute payloads (position, velocity, size, etc.).",
-    description: "Send a named event to a Visual Effect instance, optionally with attribute payloads (position, velocity, size, etc.). Requires the Visual Effect Graph package (com.unity.visualeffectgraph) to be installed in the target project.",
-    group: "vfx",
-    kind: "tool",
-    source: "extension",
+    summary: "Send a named event to a Visual Effect instance.",
+    description: "Send a named event to a Visual Effect instance, optionally with attribute payloads such as position or size. Requires com.unity.visualeffectgraph.",
+    ...VFX_GRAPH_COMMON,
     inputSchema: objSchema({
       target: { type: "string" },
       eventName: { type: "string" },
@@ -118,73 +110,56 @@ export const VFX_TOOLS: ToolMetadata[] = [
       attributeSize: { type: "number" }
     }, ["target", "eventName"]),
     destructiveHint: false,
-    handler: "bridge",
     cliCommand: "tools run vfx.event",
-    docsTopic: "vfx",
-    requiresPackages: ["com.unity.visualeffectgraph"],
     examples: [
-      { description: "Send an Explode event with position attribute", argv: ["tools", "run", "vfx.event", "VFXFire", "--event-name", "Explode", "--attribute-name", "position", "--attribute-x", "1", "--attribute-y", "2", "--attribute-z", "3"] }
+      { description: "Send an event with a position attribute", argv: ["tools", "run", "vfx.event", "--input", "{\"target\":\"VFXFire\",\"eventName\":\"Explode\",\"attributeName\":\"position\",\"attributeX\":1,\"attributeY\":2,\"attributeZ\":3}"] }
     ]
   },
   {
     name: "vfx.template",
-    summary: "Create a Visual Effect Graph asset from a built-in VFX Graph template.",
-    description: "Create a Visual Effect Graph asset from a built-in VFX Graph template. Requires the Visual Effect Graph package (com.unity.visualeffectgraph) to be installed in the target project.",
-    group: "vfx",
-    kind: "tool",
-    source: "extension",
-    inputSchema: objSchema({
-      path: { type: "string" },
-      template: { type: "string" },
-      overwrite: { type: "boolean" }
-    }, ["path"]),
+    summary: "Create a Visual Effect Graph asset from a built-in template.",
+    description: "Create a Visual Effect Graph asset from a built-in VFX Graph template. Requires com.unity.visualeffectgraph.",
+    ...VFX_GRAPH_COMMON,
+    inputSchema: objSchema({ path: { type: "string" }, template: { type: "string" }, overwrite: { type: "boolean" } }, ["path"]),
     destructiveHint: false,
-    handler: "bridge",
     cliCommand: "tools run vfx.template",
-    docsTopic: "vfx",
-    requiresPackages: ["com.unity.visualeffectgraph"],
     examples: [
-      { description: "Create from AR template", argv: ["tools", "run", "vfx.template", "Assets/VFX/Sparkle.vfx", "--template", "AR/AugmentedRealityTemplate"] }
+      { description: "Create a graph from an AR template", argv: ["tools", "run", "vfx.template", "--input", "{\"path\":\"Assets/VFX/Sparkle.vfx\",\"template\":\"AR/AugmentedRealityTemplate\"}"] }
     ]
   },
-  // ===== ParticleSystem =====
   {
     name: "vfx.particle-create",
-    summary: "Create a ParticleSystem on a new or existing GameObject with optional initial settings.",
-    description: "Create a ParticleSystem on a new or existing GameObject with optional initial settings.",
-    group: "vfx",
+    summary: "Create a ParticleSystem on a new or existing GameObject.",
+    description: "Create a Unity built-in ParticleSystem on a new or existing GameObject. This does not require the Visual Effect Graph package.",
+    ...BUILTIN_VFX_COMMON,
     inputSchema: objSchema({
       target: { type: "string" },
       name: { type: "string" },
       duration: { type: "number" },
       startLifetime: { type: "number" },
       startSpeed: { type: "number" },
+      startSize: { type: "number" },
+      startColor: { type: "string", description: "#RRGGBB/#RRGGBBAA or r,g,b[,a]." },
       maxParticles: { type: "integer" },
       loop: { type: "boolean" }
     }),
     destructiveHint: false,
-    handler: "bridge",
-    cliCommand: "tools run vfx.particle-create",
-    docsTopic: "vfx",
-    requiresPackages: ["com.unity.visualeffectgraph"]
+    cliCommand: "tools run vfx.particle-create"
   },
   {
     name: "vfx.particle-info",
-    summary: "Get ParticleSystem state, particle count, and main module settings.",
-    description: "Get ParticleSystem state, particle count, and main module settings.",
-    group: "vfx",
+    summary: "Get ParticleSystem state and module settings.",
+    description: "Get ParticleSystem state, particle count, main settings, and summaries for emission, shape, color, size, rotation, velocity, noise, collision, sub-emitters and trails.",
+    ...BUILTIN_VFX_COMMON,
     inputSchema: objSchema({ target: { type: "string" } }, ["target"]),
     destructiveHint: false,
-    handler: "bridge",
-    cliCommand: "tools run vfx.particle-info",
-    docsTopic: "vfx",
-    requiresPackages: ["com.unity.visualeffectgraph"]
+    cliCommand: "tools run vfx.particle-info"
   },
   {
     name: "vfx.particle-main",
-    summary: "Set main module properties: duration, lifetime, speed, size, color, rotation, gravity, max particles, loop, simulation space, scaling mode.",
-    description: "Set main module properties: duration, lifetime, speed, size, color, rotation, gravity, max particles, loop, simulation space, scaling mode.",
-    group: "vfx",
+    summary: "Set ParticleSystem main module properties.",
+    description: "Set ParticleSystem main module properties: duration, lifetime, speed, size, color, rotation, gravity, max particles, loop, playOnAwake, simulation space, and scaling mode.",
+    ...BUILTIN_VFX_COMMON,
     inputSchema: objSchema({
       target: { type: "string" },
       duration: { type: "number" },
@@ -192,25 +167,22 @@ export const VFX_TOOLS: ToolMetadata[] = [
       startSpeed: { type: "number" },
       startSize: { type: "number" },
       startColor: { type: "string" },
-      startRotation: { type: "number" },
+      startRotation: { type: "number", description: "Degrees; Unity stores radians internally." },
       gravityModifier: { type: "number" },
       maxParticles: { type: "integer" },
       loop: { type: "boolean" },
       playOnAwake: { type: "boolean" },
-      simulationSpace: { type: "string" },
-      scalingMode: { type: "string" }
+      simulationSpace: { type: "string", enum: ["Local", "World", "Custom"] },
+      scalingMode: { type: "string", enum: ["Hierarchy", "Local", "Shape"] }
     }, ["target"]),
     destructiveHint: false,
-    handler: "bridge",
-    cliCommand: "tools run vfx.particle-main",
-    docsTopic: "vfx",
-    requiresPackages: ["com.unity.visualeffectgraph"]
+    cliCommand: "tools run vfx.particle-main"
   },
   {
     name: "vfx.particle-emission",
-    summary: "Set emission module: enabled, rate over time/distance, burst count.",
-    description: "Set emission module: enabled, rate over time/distance, burst count.",
-    group: "vfx",
+    summary: "Set ParticleSystem emission module properties.",
+    description: "Set emission enabled state, rate over time/distance, and simple burst count. For detailed burst editing use object/component patch tools on the ParticleSystem when needed.",
+    ...BUILTIN_VFX_COMMON,
     inputSchema: objSchema({
       target: { type: "string" },
       enabled: { type: "boolean" },
@@ -219,16 +191,13 @@ export const VFX_TOOLS: ToolMetadata[] = [
       burstCount: { type: "integer" }
     }, ["target"]),
     destructiveHint: false,
-    handler: "bridge",
-    cliCommand: "tools run vfx.particle-emission",
-    docsTopic: "vfx",
-    requiresPackages: ["com.unity.visualeffectgraph"]
+    cliCommand: "tools run vfx.particle-emission"
   },
   {
     name: "vfx.particle-shape",
-    summary: "Set shape module: type, radius, angle, arc, length, box dimensions, random direction.",
-    description: "Set shape module: type, radius, angle, arc, length, box dimensions, random direction.",
-    group: "vfx",
+    summary: "Set ParticleSystem shape module properties.",
+    description: "Set shape enabled state, shape type, radius, angle, arc, length, box dimensions, and random direction.",
+    ...BUILTIN_VFX_COMMON,
     inputSchema: objSchema({
       target: { type: "string" },
       enabled: { type: "boolean" },
@@ -243,90 +212,117 @@ export const VFX_TOOLS: ToolMetadata[] = [
       randomDirection: { type: "boolean" }
     }, ["target"]),
     destructiveHint: false,
-    handler: "bridge",
-    cliCommand: "tools run vfx.particle-shape",
-    docsTopic: "vfx",
-    requiresPackages: ["com.unity.visualeffectgraph"]
+    cliCommand: "tools run vfx.particle-shape"
   },
   {
     name: "vfx.particle-play",
     summary: "Play, stop, pause, or clear a ParticleSystem.",
-    description: "Play, stop, pause, or clear a ParticleSystem.",
-    group: "vfx",
+    description: "Control a Unity built-in ParticleSystem: play, stop, pause, or clear, with optional child propagation and stop behavior.",
+    ...BUILTIN_VFX_COMMON,
     inputSchema: objSchema({
       target: { type: "string" },
       action: { type: "string", enum: ["play", "stop", "pause", "clear"] },
       withChildren: { type: "boolean" },
-      stopBehavior: { type: "string" }
+      stopBehavior: { type: "string", enum: ["StopEmitting", "StopEmittingAndClear"] }
     }, ["target"]),
     destructiveHint: false,
-    handler: "bridge",
-    cliCommand: "tools run vfx.particle-play",
-    docsTopic: "vfx",
-    requiresPackages: ["com.unity.visualeffectgraph"]
+    cliCommand: "tools run vfx.particle-play"
   },
   {
     name: "vfx.particle-module",
-    summary: "Enable or disable ParticleSystem modules: color/size/rotation/velocity/force over lifetime, noise, collision, sub-emitters, texture animation, lights, trails, inherit...",
-    description: "Enable or disable ParticleSystem modules: color/size/rotation/velocity/force over lifetime, noise, collision, sub-emitters, texture animation, lights, trails, inherit velocity, limit velocity.",
-    group: "vfx",
+    summary: "Configure deep ParticleSystem modules.",
+    description: "Enable and configure ParticleSystem modules: color/size/rotation/velocity/force over lifetime, noise, collision, sub-emitters, texture animation, lights, trails, inherit velocity, and limit velocity. Pass module plus only the fields to change.",
+    ...BUILTIN_VFX_COMMON,
     inputSchema: objSchema({
       target: { type: "string" },
-      module: { type: "string" },
-      enabled: { type: "boolean" }
-    }, ["target"]),
+      module: { type: "string", description: "color, size, rotation, velocity, force, noise, collision, subEmitter, textureAnimation, lights, trails, inheritVelocity, or limitVelocity." },
+      enabled: { type: "boolean" },
+      color: { type: "string" },
+      size: { type: "number" },
+      rotation: { type: "number", description: "Degrees per second for rotation over lifetime." },
+      x: { type: "number" },
+      y: { type: "number" },
+      z: { type: "number" },
+      space: { type: "string" },
+      speedModifier: { type: "number" },
+      strength: { type: "number" },
+      frequency: { type: "number" },
+      scrollSpeed: { type: "number" },
+      octaveCount: { type: "integer" },
+      quality: { type: "string" },
+      collisionType: { type: "string" },
+      collisionMode: { type: "string" },
+      dampen: { type: "number" },
+      bounce: { type: "number" },
+      lifetimeLoss: { type: "number" },
+      minKillSpeed: { type: "number" },
+      maxKillSpeed: { type: "number" },
+      radiusScale: { type: "number" },
+      ratio: { type: "number", description: "Particle trail ratio for the trails module." },
+      lifetime: { type: "number", description: "Particle trail lifetime multiplier for the trails module." },
+      width: { type: "number", description: "Particle trail width multiplier for the trails module." },
+      subEmitterAction: { type: "string", enum: ["add", "remove", "clear"] },
+      subEmitterTarget: { type: "string" },
+      subEmitterType: { type: "string" },
+      subEmitterProperties: { type: "string" }
+    }, ["target", "module"]),
     destructiveHint: false,
-    handler: "bridge",
     cliCommand: "tools run vfx.particle-module",
-    docsTopic: "vfx",
-    requiresPackages: ["com.unity.visualeffectgraph"]
+    examples: [
+      { description: "Enable noise with strength and frequency", argv: ["tools", "run", "vfx.particle-module", "--input", "{\"target\":\"Dust\",\"module\":\"noise\",\"enabled\":true,\"strength\":0.4,\"frequency\":0.8}"] },
+      { description: "Set velocity over lifetime", argv: ["tools", "run", "vfx.particle-module", "--input", "{\"target\":\"Dust\",\"module\":\"velocity\",\"enabled\":true,\"x\":0,\"y\":1,\"z\":0,\"space\":\"World\"}"] }
+    ]
   },
-  // ===== Line Renderer =====
   {
     name: "vfx.line-create",
-    summary: "Create a LineRenderer on a new or existing GameObject with optional width, color, and position settings.",
-    description: "Create a LineRenderer on a new or existing GameObject with optional width, color, and position settings.",
-    group: "vfx",
+    summary: "Create or configure a LineRenderer.",
+    description: "Create a LineRenderer on a new or existing GameObject and configure width, color, material, width curve, color gradient, alignment, texture mode, loop, and world-space behavior.",
+    ...BUILTIN_VFX_COMMON,
     inputSchema: objSchema({
       target: { type: "string" },
       name: { type: "string" },
       startWidth: { type: "number" },
       endWidth: { type: "number" },
+      widthMultiplier: { type: "number" },
+      widthCurve: { type: ["string", "array"], items: curveKeySchema, description: "Array of {time,value} keys or string '0:1,1:0.5'." },
       startColor: { type: "string" },
       endColor: { type: "string" },
+      colorGradient: { type: ["string", "array"], items: gradientKeySchema, description: "Array of {time,color} keys or string '0:#FFFFFF,1:#000000'." },
+      material: { type: "string", description: "Assets/*.mat path. Use null/none to clear sharedMaterial." },
       positionCount: { type: "integer" },
+      positions: { type: ["string", "array"], items: vector3Schema },
       loop: { type: "boolean" },
-      useWorldSpace: { type: "boolean" }
+      useWorldSpace: { type: "boolean" },
+      alignment: { type: "string", enum: ["View", "TransformZ"] },
+      textureMode: { type: "string" },
+      numCornerVertices: { type: "integer" },
+      numCapVertices: { type: "integer" }
     }),
     destructiveHint: false,
-    handler: "bridge",
     cliCommand: "tools run vfx.line-create",
-    docsTopic: "vfx",
-    requiresPackages: ["com.unity.visualeffectgraph"]
+    examples: [
+      { description: "Create a line with material and width curve", argv: ["tools", "run", "vfx.line-create", "--input", "{\"name\":\"AimLine\",\"material\":\"Assets/UnityCliAlignmentFixtures/Line.mat\",\"widthCurve\":[{\"time\":0,\"value\":0.1},{\"time\":1,\"value\":0.02}],\"alignment\":\"View\"}"] }
+    ]
   },
   {
     name: "vfx.line-positions",
-    summary: "Set all positions or a single position by index on a LineRenderer.",
-    description: "Set all positions or a single position by index on a LineRenderer.",
-    group: "vfx",
+    summary: "Set LineRenderer positions.",
+    description: "Set all positions or a single indexed position on a LineRenderer. Prefer structured positions:[{x,y,z}] in --input for reliable quoting.",
+    ...BUILTIN_VFX_COMMON,
     inputSchema: objSchema({
       target: { type: "string" },
-      positions: { type: "string" },
+      positions: { type: ["string", "array"], items: vector3Schema },
       index: { type: "integer" },
-      position: { type: "string" }
+      position: { type: ["string", "object"], properties: vector3Properties }
     }, ["target"]),
     destructiveHint: false,
-    handler: "bridge",
-    cliCommand: "tools run vfx.line-positions",
-    docsTopic: "vfx",
-    requiresPackages: ["com.unity.visualeffectgraph"]
+    cliCommand: "tools run vfx.line-positions"
   },
-  // ===== Trail Renderer =====
   {
     name: "vfx.trail",
-    summary: "Create or modify a TrailRenderer: time, width, vertex distance, emitting, autodestruct.",
-    description: "Create or modify a TrailRenderer: time, width, vertex distance, emitting, autodestruct.",
-    group: "vfx",
+    summary: "Create or configure a TrailRenderer.",
+    description: "Create or modify a TrailRenderer: time, width, width curve, color gradient, material, alignment, texture mode, vertex distance, emitting, and autodestruct.",
+    ...BUILTIN_VFX_COMMON,
     inputSchema: objSchema({
       target: { type: "string" },
       name: { type: "string" },
@@ -334,14 +330,24 @@ export const VFX_TOOLS: ToolMetadata[] = [
       time: { type: "number" },
       startWidth: { type: "number" },
       endWidth: { type: "number" },
+      widthMultiplier: { type: "number" },
+      widthCurve: { type: ["string", "array"], items: curveKeySchema },
+      startColor: { type: "string" },
+      endColor: { type: "string" },
+      colorGradient: { type: ["string", "array"], items: gradientKeySchema },
+      material: { type: "string", description: "Assets/*.mat path. Use null/none to clear sharedMaterial." },
       minVertexDistance: { type: "number" },
       autodestruct: { type: "boolean" },
-      emitting: { type: "boolean" }
+      emitting: { type: "boolean" },
+      alignment: { type: "string", enum: ["View", "TransformZ"] },
+      textureMode: { type: "string" },
+      numCornerVertices: { type: "integer" },
+      numCapVertices: { type: "integer" }
     }),
     destructiveHint: false,
-    handler: "bridge",
     cliCommand: "tools run vfx.trail",
-    docsTopic: "vfx",
-    requiresPackages: ["com.unity.visualeffectgraph"]
+    examples: [
+      { description: "Create and configure a trail", argv: ["tools", "run", "vfx.trail", "--input", "{\"name\":\"DashTrail\",\"create\":true,\"material\":\"Assets/UnityCliAlignmentFixtures/Trail.mat\",\"colorGradient\":[{\"time\":0,\"color\":\"#FFFFFFFF\"},{\"time\":1,\"color\":\"#00FFFFFF\"}],\"widthCurve\":[{\"time\":0,\"value\":0.3},{\"time\":1,\"value\":0}]}"] }
+    ]
   }
 ];

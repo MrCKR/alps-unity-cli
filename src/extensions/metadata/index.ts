@@ -63,14 +63,14 @@ const CINEMACHINE_EXTENSION: ExtensionMetadata = {
 
 const VFX_GRAPH_EXTENSION: ExtensionMetadata = {
   id: "vfx-graph",
-  title: "VFX Graph Extension",
-  description: "VFX Graph advanced visual effect tools: graph parameters, assets, templates, events.",
+  title: "VFX Extension",
+  description: "Visual effects tools: VFX Graph package tools plus built-in ParticleSystem, LineRenderer, and TrailRenderer tools.",
   kind: "extension",
   source: "built-in",
   version: "1.0.0",
   status: "available",
   providesTools: VFX_TOOLS.map((tool) => tool.name),
-  requiresUnityPackages: ["com.unity.visualeffectgraph"],
+  requiresUnityPackages: [],
   installMode: "auto",
   installCommand: "extensions install vfx-graph",
   equivalentMcpGroup: "vfx",

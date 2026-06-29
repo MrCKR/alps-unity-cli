@@ -102,8 +102,15 @@ export function collectAvailableTools(
   registry: ExtensionRegistry,
   installedPackages?: ReadonlyMap<string, string> | Readonly<Record<string, string>>
 ): ExtensionToolContribution[] {
-  const available = loadAvailableDescriptors(registry, installedPackages);
-  return available.flatMap((desc) => desc.tools);
+  return loadAllExtensionDescriptors(registry, installedPackages)
+    .flatMap((desc) => desc.tools.map((tool) => ({ tool, manifest: desc.manifest })))
+    .filter(({ tool, manifest }) => {
+      const requiredPackages = tool.requiresPackages ?? manifest.unityPackages.map((pkg) => pkg.packageId);
+      if (requiredPackages.length === 0) return true;
+      if (installedPackages === undefined) return false;
+      return requiredPackages.every((pkg) => hasInstalledPackage(installedPackages, pkg));
+    })
+    .map(({ tool }) => tool);
 }
 
 /**
@@ -112,6 +119,15 @@ export function collectAvailableTools(
  * Used by `tools group list` when the user explicitly wants to see all tools
  * regardless of availability.
  */
+function hasInstalledPackage(
+  installedPackages: ReadonlyMap<string, string> | Readonly<Record<string, string>>,
+  packageId: string
+): boolean {
+  return installedPackages instanceof Map
+    ? installedPackages.has(packageId)
+    : Object.prototype.hasOwnProperty.call(installedPackages, packageId);
+}
+
 export function collectAllTools(
   registry: ExtensionRegistry,
   installedPackages?: ReadonlyMap<string, string> | Readonly<Record<string, string>>

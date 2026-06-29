@@ -104,11 +104,12 @@ export function validateToolMetadataContracts(tools: ToolMetadata[], registry: B
 
 export function validateExtensionManifestContracts(
   manifests: ExtensionManifest[],
-  registry: BridgeCommandRegistry
+  registry: BridgeCommandRegistry,
+  toolMetadata: ToolMetadata[] = []
 ): void {
+  const metadataByName = new Map(toolMetadata.map((tool) => [tool.name, tool]));
   for (const manifest of manifests) {
     const tools = manifest.contributions.tools ?? [];
-    const expectedPackages = manifest.unityPackages.map((p) => p.packageId).sort();
 
     for (const tool of tools) {
       const contract = findCommandContract(tool.bridgeCommand);
@@ -138,13 +139,15 @@ export function validateExtensionManifestContracts(
         );
       }
 
-      // Verify the contract's requires_packages includes the extension's
-      // declared Unity packages (so the contract is the source of truth).
+      // Tool-level metadata is the source of truth for optional Unity package needs.
+      // A single extension bundle may contain built-in Unity component tools and
+      // package-specific tools, so extension-level packages are not inherited here.
+      const expectedPackages = (metadataByName.get(tool.name)?.requiresPackages ?? tool.requiresPackages ?? manifest.unityPackages.map((p) => p.packageId)).slice().sort();
       const contractPackages = (contract.requires_packages ?? []).slice().sort();
       if (JSON.stringify(contractPackages) !== JSON.stringify(expectedPackages)) {
         throw new Error(
           `Extension '${manifest.id}' tool '${tool.name}' requires_packages mismatch: ` +
-          `manifest=${JSON.stringify(expectedPackages)} contract=${JSON.stringify(contractPackages)}`
+          `metadata=${JSON.stringify(expectedPackages)} contract=${JSON.stringify(contractPackages)}`
         );
       }
 

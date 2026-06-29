@@ -14,7 +14,7 @@ validateBridgeRegistryContracts(bridgeCommandRegistry);
 validateToolMetadataContracts(allRegisteredToolMetadata(), bridgeCommandRegistry);
 
 // Validate extension manifest tool contributions against the contract.
-validateExtensionManifestContracts(BUILTIN_EXTENSION_MANIFESTS, bridgeCommandRegistry);
+validateExtensionManifestContracts(BUILTIN_EXTENSION_MANIFESTS, bridgeCommandRegistry, allRegisteredToolMetadata());
 
 const csharpCommands = extractAllCSharpRegisteredCommands();
 const requiredCsharpCommands = contracts

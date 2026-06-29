@@ -3009,10 +3009,7 @@
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
-      "timeout": 30000,
-      "requires_packages": [
-        "com.unity.visualeffectgraph"
-      ]
+      "timeout": 30000
     },
     {
       "bridgeCommand": "vfx.line-positions",
@@ -3021,10 +3018,7 @@
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
-      "timeout": 30000,
-      "requires_packages": [
-        "com.unity.visualeffectgraph"
-      ]
+      "timeout": 30000
     },
     {
       "bridgeCommand": "vfx.parameter",
@@ -3045,10 +3039,7 @@
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
-      "timeout": 30000,
-      "requires_packages": [
-        "com.unity.visualeffectgraph"
-      ]
+      "timeout": 30000
     },
     {
       "bridgeCommand": "vfx.particle-emission",
@@ -3057,10 +3048,7 @@
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
-      "timeout": 30000,
-      "requires_packages": [
-        "com.unity.visualeffectgraph"
-      ]
+      "timeout": 30000
     },
     {
       "bridgeCommand": "vfx.particle-info",
@@ -3069,10 +3057,7 @@
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
-      "timeout": 30000,
-      "requires_packages": [
-        "com.unity.visualeffectgraph"
-      ]
+      "timeout": 30000
     },
     {
       "bridgeCommand": "vfx.particle-main",
@@ -3081,10 +3066,7 @@
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
-      "timeout": 30000,
-      "requires_packages": [
-        "com.unity.visualeffectgraph"
-      ]
+      "timeout": 30000
     },
     {
       "bridgeCommand": "vfx.particle-module",
@@ -3093,10 +3075,7 @@
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
-      "timeout": 30000,
-      "requires_packages": [
-        "com.unity.visualeffectgraph"
-      ]
+      "timeout": 30000
     },
     {
       "bridgeCommand": "vfx.particle-play",
@@ -3105,10 +3084,7 @@
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
-      "timeout": 30000,
-      "requires_packages": [
-        "com.unity.visualeffectgraph"
-      ]
+      "timeout": 30000
     },
     {
       "bridgeCommand": "vfx.particle-shape",
@@ -3117,10 +3093,7 @@
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
-      "timeout": 30000,
-      "requires_packages": [
-        "com.unity.visualeffectgraph"
-      ]
+      "timeout": 30000
     },
     {
       "bridgeCommand": "vfx.template",
@@ -3141,10 +3114,7 @@
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
-      "timeout": 30000,
-      "requires_packages": [
-        "com.unity.visualeffectgraph"
-      ]
+      "timeout": 30000
     }
   ]
 }

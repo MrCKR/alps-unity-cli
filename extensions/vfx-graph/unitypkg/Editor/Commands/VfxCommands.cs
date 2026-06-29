@@ -734,31 +734,7 @@ private static string VfxTemplate(BridgeRequest request)
                 }
                 effects.Add(EffectJson("vfx.particle-create", "component", "added"));
             }
-            if (request.HasArg("duration"))
-            {
-                var main = ps.main;
-                main.duration = request.OptionalFloatArg("duration").Value;
-            }
-            if (request.HasArg("startLifetime"))
-            {
-                var main = ps.main;
-                main.startLifetime = request.OptionalFloatArg("startLifetime").Value;
-            }
-            if (request.HasArg("startSpeed"))
-            {
-                var main = ps.main;
-                main.startSpeed = request.OptionalFloatArg("startSpeed").Value;
-            }
-            if (request.HasArg("maxParticles"))
-            {
-                var main = ps.main;
-                main.maxParticles = request.OptionalIntArg("maxParticles").Value;
-            }
-            if (request.HasArg("loop"))
-            {
-                var main = ps.main;
-                main.loop = request.OptionalBoolArg("loop").Value;
-            }
+            ApplyParticleMainFields(ps, request, "vfx.particle-create", effects);
             EditorUtility.SetDirty(ps);
             EditorSceneManager.MarkSceneDirty(gameObject.scene);
             WriteLog("vfx_particle_create target=" + HierarchyPath(gameObject));
@@ -793,36 +769,8 @@ private static string VfxTemplate(BridgeRequest request)
             {
                 return ErrorJson("E_PARTICLE_SYSTEM_NOT_FOUND", "ParticleSystem not found: " + target, "Pass a GameObject name / hierarchy path with a ParticleSystem component.");
             }
-            var main = ps.main;
             var effects = new List<string>();
-            if (request.HasArg("duration")) { main.duration = request.OptionalFloatArg("duration").Value; effects.Add(EffectJson("vfx.particle-main", "duration", Number(main.duration))); }
-            if (request.HasArg("startLifetime")) { main.startLifetime = request.OptionalFloatArg("startLifetime").Value; effects.Add(EffectJson("vfx.particle-main", "startLifetime", Number(main.startLifetime.constant))); }
-            if (request.HasArg("startSpeed")) { main.startSpeed = request.OptionalFloatArg("startSpeed").Value; effects.Add(EffectJson("vfx.particle-main", "startSpeed", Number(main.startSpeed.constant))); }
-            if (request.HasArg("startSize")) { main.startSize = request.OptionalFloatArg("startSize").Value; effects.Add(EffectJson("vfx.particle-main", "startSize", Number(main.startSize.constant))); }
-            if (request.HasArg("startColor")) { main.startColor = ParseColor(request.StringArg("startColor")); effects.Add(EffectJson("vfx.particle-main", "startColor", request.StringArg("startColor"))); }
-            if (request.HasArg("startRotation")) { main.startRotation = request.OptionalFloatArg("startRotation").Value * Mathf.Deg2Rad; effects.Add(EffectJson("vfx.particle-main", "startRotation", request.StringArg("startRotation"))); }
-            if (request.HasArg("gravityModifier")) { main.gravityModifier = request.OptionalFloatArg("gravityModifier").Value; effects.Add(EffectJson("vfx.particle-main", "gravityModifier", Number(main.gravityModifier.constant))); }
-            if (request.HasArg("maxParticles")) { main.maxParticles = request.OptionalIntArg("maxParticles").Value; effects.Add(EffectJson("vfx.particle-main", "maxParticles", main.maxParticles.ToString(CultureInfo.InvariantCulture))); }
-            if (request.HasArg("loop")) { main.loop = request.OptionalBoolArg("loop").Value; effects.Add(EffectJson("vfx.particle-main", "loop", Bool(main.loop))); }
-            if (request.HasArg("playOnAwake")) { main.playOnAwake = request.OptionalBoolArg("playOnAwake").Value; effects.Add(EffectJson("vfx.particle-main", "playOnAwake", Bool(main.playOnAwake))); }
-            if (request.HasArg("simulationSpace"))
-            {
-                var value = request.StringArg("simulationSpace");
-                if (Enum.TryParse<ParticleSystemSimulationSpace>(value, true, out var parsed))
-                {
-                    main.simulationSpace = parsed;
-                    effects.Add(EffectJson("vfx.particle-main", "simulationSpace", value));
-                }
-            }
-            if (request.HasArg("scalingMode"))
-            {
-                var value = request.StringArg("scalingMode");
-                if (Enum.TryParse<ParticleSystemScalingMode>(value, true, out var parsed))
-                {
-                    main.scalingMode = parsed;
-                    effects.Add(EffectJson("vfx.particle-main", "scalingMode", value));
-                }
-            }
+            ApplyParticleMainFields(ps, request, "vfx.particle-main", effects);
             EditorUtility.SetDirty(ps);
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropRaw("target", GameObjectTargetJson(ps.gameObject))
@@ -974,76 +922,16 @@ private static string VfxTemplate(BridgeRequest request)
             }
             var module = request.OptionalStringArg("module") ?? "";
             var effects = new List<string>();
-            var enabled = request.OptionalBoolArg("enabled");
-            switch (module.ToLowerInvariant())
+            if (!ApplyParticleModuleFields(ps, request, module, effects))
             {
-                case "coloroverlifetime":
-                case "color":
-                    var col = ps.colorOverLifetime;
-                    if (enabled.HasValue) { col.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "colorOverLifetime.enabled", Bool(col.enabled))); }
-                    break;
-                case "sizeoverlifetime":
-                case "size":
-                    var sol = ps.sizeOverLifetime;
-                    if (enabled.HasValue) { sol.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "sizeOverLifetime.enabled", Bool(sol.enabled))); }
-                    break;
-                case "rotationoverlifetime":
-                case "rotation":
-                    var rol = ps.rotationOverLifetime;
-                    if (enabled.HasValue) { rol.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "rotationOverLifetime.enabled", Bool(rol.enabled))); }
-                    break;
-                case "velocityoverlifetime":
-                case "velocity":
-                    var vol = ps.velocityOverLifetime;
-                    if (enabled.HasValue) { vol.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "velocityOverLifetime.enabled", Bool(vol.enabled))); }
-                    break;
-                case "forceoverlifetime":
-                case "force":
-                    var fol = ps.forceOverLifetime;
-                    if (enabled.HasValue) { fol.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "forceOverLifetime.enabled", Bool(fol.enabled))); }
-                    break;
-                case "noise":
-                    var noise = ps.noise;
-                    if (enabled.HasValue) { noise.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "noise.enabled", Bool(noise.enabled))); }
-                    break;
-                case "collision":
-                    var collision = ps.collision;
-                    if (enabled.HasValue) { collision.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "collision.enabled", Bool(collision.enabled))); }
-                    break;
-                case "subemitter":
-                case "sub":
-                    var sub = ps.subEmitters;
-                    if (enabled.HasValue) { sub.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "subEmitters.enabled", Bool(sub.enabled))); }
-                    break;
-                case "textureanimation":
-                case "texture":
-                    var tex = ps.textureSheetAnimation;
-                    if (enabled.HasValue) { tex.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "textureSheetAnimation.enabled", Bool(tex.enabled))); }
-                    break;
-                case "lights":
-                    var lights = ps.lights;
-                    if (enabled.HasValue) { lights.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "lights.enabled", Bool(lights.enabled))); }
-                    break;
-                case "trail":
-                    var trail = ps.trails;
-                    if (enabled.HasValue) { trail.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "trails.enabled", Bool(trail.enabled))); }
-                    break;
-                case "inheritvelocity":
-                    var inherit = ps.inheritVelocity;
-                    if (enabled.HasValue) { inherit.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "inheritVelocity.enabled", Bool(inherit.enabled))); }
-                    break;
-                case "limitvelocityoverlifetime":
-                case "limitvelocity":
-                    var limit = ps.limitVelocityOverLifetime;
-                    if (enabled.HasValue) { limit.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "limitVelocityOverLifetime.enabled", Bool(limit.enabled))); }
-                    break;
-                default:
-                    return ErrorJson("E_UNKNOWN_MODULE", "Unknown or unsupported particle module: " + module, "Use color, size, rotation, velocity, force, noise, collision, subEmitter, textureAnimation, lights, trail, inheritVelocity, or limitVelocity.");
+                return ErrorJson("E_UNKNOWN_MODULE", "Unknown or unsupported particle module: " + module, "Use color, size, rotation, velocity, force, noise, collision, subEmitter, textureAnimation, lights, trails, inheritVelocity, or limitVelocity.");
             }
             EditorUtility.SetDirty(ps);
+            EditorSceneManager.MarkSceneDirty(ps.gameObject.scene);
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropRaw("target", GameObjectTargetJson(ps.gameObject))
                 .Prop("module", module)
+                .PropRaw("particleSystem", ParticleSystemJson(ps))
                 .PropArray("plannedEffects", arr => { foreach (var e in effects) arr.RawValue(e); })
                 .Prop("logPath", LogPath())
                 .EndObject().ToString());
@@ -1063,24 +951,13 @@ private static string VfxTemplate(BridgeRequest request)
                 line = gameObject.AddComponent<LineRenderer>();
                 effects.Add(EffectJson("vfx.line-create", "component", "added"));
             }
-            if (request.HasArg("startWidth")) { line.startWidth = request.OptionalFloatArg("startWidth").Value; effects.Add(EffectJson("vfx.line-create", "startWidth", Number(line.startWidth))); }
-            if (request.HasArg("endWidth")) { line.endWidth = request.OptionalFloatArg("endWidth").Value; effects.Add(EffectJson("vfx.line-create", "endWidth", Number(line.endWidth))); }
-            if (request.HasArg("startColor")) { line.startColor = ParseColor(request.StringArg("startColor")); effects.Add(EffectJson("vfx.line-create", "startColor", request.StringArg("startColor"))); }
-            if (request.HasArg("endColor")) { line.endColor = ParseColor(request.StringArg("endColor")); effects.Add(EffectJson("vfx.line-create", "endColor", request.StringArg("endColor"))); }
-            if (request.HasArg("positionCount")) { line.positionCount = request.OptionalIntArg("positionCount").Value; effects.Add(EffectJson("vfx.line-create", "positionCount", line.positionCount.ToString(CultureInfo.InvariantCulture))); }
-            if (request.HasArg("loop")) { line.loop = request.OptionalBoolArg("loop").Value; effects.Add(EffectJson("vfx.line-create", "loop", Bool(line.loop))); }
-            if (request.HasArg("useWorldSpace")) { line.useWorldSpace = request.OptionalBoolArg("useWorldSpace").Value; effects.Add(EffectJson("vfx.line-create", "useWorldSpace", Bool(line.useWorldSpace))); }
+            ApplyLineRendererFields(line, request, "vfx.line-create", effects);
             EditorUtility.SetDirty(line);
             EditorSceneManager.MarkSceneDirty(gameObject.scene);
             WriteLog("vfx_line_create target=" + HierarchyPath(gameObject));
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropRaw("target", GameObjectTargetJson(gameObject))
-                .PropObject("line", w => w
-                    .Prop("startWidth", line.startWidth)
-                    .Prop("endWidth", line.endWidth)
-                    .Prop("positionCount", (long)line.positionCount)
-                    .Prop("loop", line.loop)
-                    .Prop("useWorldSpace", line.useWorldSpace))
+                .PropRaw("line", LineRendererJson(line))
                 .PropArray("plannedEffects", arr => { foreach (var e in effects) arr.RawValue(e); })
                 .Prop("logPath", LogPath())
                 .EndObject().ToString());
@@ -1095,29 +972,29 @@ private static string VfxTemplate(BridgeRequest request)
                 return ErrorJson("E_LINE_RENDERER_NOT_FOUND", "LineRenderer not found: " + target, "Pass a GameObject name / hierarchy path with a LineRenderer component.");
             }
             var effects = new List<string>();
-            var positionsArg = request.StringArg("positions");
-            if (!string.IsNullOrEmpty(positionsArg))
+            if (request.HasArg("positions"))
             {
-                var positions = ParseVector3Array(positionsArg);
+                var positions = ParseVector3ArrayArg(request, "positions");
                 line.positionCount = positions.Length;
                 line.SetPositions(positions);
                 effects.Add(EffectJson("vfx.line-positions", "positions", positions.Length.ToString(CultureInfo.InvariantCulture)));
             }
             var index = request.OptionalIntArg("index");
-            var position = request.StringArg("position");
-            if (index.HasValue && !string.IsNullOrEmpty(position))
+            if (index.HasValue && request.HasArg("position"))
             {
                 if (index.Value < 0 || index.Value >= line.positionCount)
                 {
                     return ErrorJson("E_INDEX_OUT_OF_RANGE", "Line position index out of range: " + index.Value, "Use an index between 0 and " + (line.positionCount - 1) + ".");
                 }
-                line.SetPosition(index.Value, ParseVector3(position));
-                effects.Add(EffectJson("vfx.line-positions", "index" + index.Value.ToString(CultureInfo.InvariantCulture), position));
+                var position = ParseVector3Arg(request, "position");
+                line.SetPosition(index.Value, position);
+                effects.Add(EffectJson("vfx.line-positions", "index" + index.Value.ToString(CultureInfo.InvariantCulture), Vector3Json(position)));
             }
             EditorUtility.SetDirty(line);
+            EditorSceneManager.MarkSceneDirty(line.gameObject.scene);
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropRaw("target", GameObjectTargetJson(line.gameObject))
-                .Prop("positionCount", (long)line.positionCount)
+                .PropRaw("line", LineRendererJson(line))
                 .PropArray("plannedEffects", arr => { foreach (var e in effects) arr.RawValue(e); })
                 .Prop("logPath", LogPath())
                 .EndObject().ToString());
@@ -1137,24 +1014,14 @@ private static string VfxTemplate(BridgeRequest request)
             }
             if (trail == null)
             {
-                return ErrorJson("E_TRAIL_RENDERER_NOT_FOUND", "TrailRenderer not found on target: " + HierarchyPath(gameObject), "Pass --create to add one or choose a target with TrailRenderer.");
+                return ErrorJson("E_TRAIL_RENDERER_NOT_FOUND", "TrailRenderer not found on target: " + HierarchyPath(gameObject), "Pass create=true to add one or choose a target with TrailRenderer.");
             }
-            if (request.HasArg("time")) { trail.time = request.OptionalFloatArg("time").Value; effects.Add(EffectJson("vfx.trail", "time", Number(trail.time))); }
-            if (request.HasArg("startWidth")) { trail.startWidth = request.OptionalFloatArg("startWidth").Value; effects.Add(EffectJson("vfx.trail", "startWidth", Number(trail.startWidth))); }
-            if (request.HasArg("endWidth")) { trail.endWidth = request.OptionalFloatArg("endWidth").Value; effects.Add(EffectJson("vfx.trail", "endWidth", Number(trail.endWidth))); }
-            if (request.HasArg("minVertexDistance")) { trail.minVertexDistance = request.OptionalFloatArg("minVertexDistance").Value; effects.Add(EffectJson("vfx.trail", "minVertexDistance", Number(trail.minVertexDistance))); }
-            if (request.HasArg("autodestruct")) { trail.autodestruct = request.OptionalBoolArg("autodestruct").Value; effects.Add(EffectJson("vfx.trail", "autodestruct", Bool(trail.autodestruct))); }
-            if (request.HasArg("emitting")) { trail.emitting = request.OptionalBoolArg("emitting").Value; effects.Add(EffectJson("vfx.trail", "emitting", Bool(trail.emitting))); }
+            ApplyTrailRendererFields(trail, request, effects);
             EditorUtility.SetDirty(trail);
+            EditorSceneManager.MarkSceneDirty(gameObject.scene);
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropRaw("target", GameObjectTargetJson(gameObject))
-                .PropObject("trail", w => w
-                    .Prop("time", trail.time)
-                    .Prop("startWidth", trail.startWidth)
-                    .Prop("endWidth", trail.endWidth)
-                    .Prop("minVertexDistance", trail.minVertexDistance)
-                    .Prop("emitting", trail.emitting)
-                    .Prop("autodestruct", trail.autodestruct))
+                .PropRaw("trail", TrailRendererJson(trail))
                 .PropArray("plannedEffects", arr => { foreach (var e in effects) arr.RawValue(e); })
                 .Prop("logPath", LogPath())
                 .EndObject().ToString());
@@ -1204,9 +1071,221 @@ private static string VfxTemplate(BridgeRequest request)
             return null;
         }
 
+        private static void ApplyParticleMainFields(ParticleSystem ps, BridgeRequest request, string effectType, List<string> effects)
+        {
+            // MainModule 是 struct wrapper；必须每次从 ParticleSystem 获取后直接赋值。
+            var main = ps.main;
+            if (request.HasArg("duration")) { main.duration = request.OptionalFloatArg("duration").Value; effects.Add(EffectJson(effectType, "duration", Number(main.duration))); }
+            if (request.HasArg("startLifetime")) { main.startLifetime = request.OptionalFloatArg("startLifetime").Value; effects.Add(EffectJson(effectType, "startLifetime", Number(main.startLifetime.constant))); }
+            if (request.HasArg("startSpeed")) { main.startSpeed = request.OptionalFloatArg("startSpeed").Value; effects.Add(EffectJson(effectType, "startSpeed", Number(main.startSpeed.constant))); }
+            if (request.HasArg("startSize")) { main.startSize = request.OptionalFloatArg("startSize").Value; effects.Add(EffectJson(effectType, "startSize", Number(main.startSize.constant))); }
+            if (request.HasArg("startColor")) { main.startColor = ParseColor(request.StringArg("startColor")); effects.Add(EffectJson(effectType, "startColor", request.StringArg("startColor"))); }
+            if (request.HasArg("startRotation")) { main.startRotation = request.OptionalFloatArg("startRotation").Value * Mathf.Deg2Rad; effects.Add(EffectJson(effectType, "startRotation", Number(main.startRotation.constant * Mathf.Rad2Deg))); }
+            if (request.HasArg("gravityModifier")) { main.gravityModifier = request.OptionalFloatArg("gravityModifier").Value; effects.Add(EffectJson(effectType, "gravityModifier", Number(main.gravityModifier.constant))); }
+            if (request.HasArg("maxParticles")) { main.maxParticles = request.OptionalIntArg("maxParticles").Value; effects.Add(EffectJson(effectType, "maxParticles", main.maxParticles.ToString(CultureInfo.InvariantCulture))); }
+            if (request.HasArg("loop")) { main.loop = request.OptionalBoolArg("loop").Value; effects.Add(EffectJson(effectType, "loop", Bool(main.loop))); }
+            if (request.HasArg("playOnAwake")) { main.playOnAwake = request.OptionalBoolArg("playOnAwake").Value; effects.Add(EffectJson(effectType, "playOnAwake", Bool(main.playOnAwake))); }
+            if (request.HasArg("simulationSpace")) { main.simulationSpace = ParseEnumArg<ParticleSystemSimulationSpace>(request.StringArg("simulationSpace"), "E_PARTICLE_SIMULATION_SPACE_INVALID", "Use Local, World, or Custom."); effects.Add(EffectJson(effectType, "simulationSpace", main.simulationSpace.ToString())); }
+            if (request.HasArg("scalingMode")) { main.scalingMode = ParseEnumArg<ParticleSystemScalingMode>(request.StringArg("scalingMode"), "E_PARTICLE_SCALING_MODE_INVALID", "Use Hierarchy, Local, or Shape."); effects.Add(EffectJson(effectType, "scalingMode", main.scalingMode.ToString())); }
+        }
+
+        private static bool ApplyParticleModuleFields(ParticleSystem ps, BridgeRequest request, string module, List<string> effects)
+        {
+            var key = (module ?? string.Empty).Replace("-", string.Empty).Replace("_", string.Empty).ToLowerInvariant();
+            var enabled = request.OptionalBoolArg("enabled");
+            switch (key)
+            {
+                case "coloroverlifetime":
+                case "color":
+                    var color = ps.colorOverLifetime;
+                    if (enabled.HasValue) { color.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "colorOverLifetime.enabled", Bool(color.enabled))); }
+                    if (request.HasArg("color")) { color.color = new ParticleSystem.MinMaxGradient(ParseColor(request.StringArg("color"))); effects.Add(EffectJson("vfx.particle-module", "colorOverLifetime.color", request.StringArg("color"))); }
+                    return true;
+                case "sizeoverlifetime":
+                case "size":
+                    var size = ps.sizeOverLifetime;
+                    if (enabled.HasValue) { size.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "sizeOverLifetime.enabled", Bool(size.enabled))); }
+                    if (request.HasArg("size")) { size.size = new ParticleSystem.MinMaxCurve(request.OptionalFloatArg("size").Value); effects.Add(EffectJson("vfx.particle-module", "sizeOverLifetime.size", Number(size.size.constant))); }
+                    return true;
+                case "rotationoverlifetime":
+                case "rotation":
+                    var rotation = ps.rotationOverLifetime;
+                    if (enabled.HasValue) { rotation.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "rotationOverLifetime.enabled", Bool(rotation.enabled))); }
+                    if (request.HasArg("rotation")) { rotation.z = new ParticleSystem.MinMaxCurve(request.OptionalFloatArg("rotation").Value * Mathf.Deg2Rad); effects.Add(EffectJson("vfx.particle-module", "rotationOverLifetime.z", request.StringArg("rotation"))); }
+                    return true;
+                case "velocityoverlifetime":
+                case "velocity":
+                    var velocity = ps.velocityOverLifetime;
+                    if (enabled.HasValue) { velocity.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "velocityOverLifetime.enabled", Bool(velocity.enabled))); }
+                    if (request.HasArg("x")) { velocity.x = new ParticleSystem.MinMaxCurve(request.OptionalFloatArg("x").Value); effects.Add(EffectJson("vfx.particle-module", "velocityOverLifetime.x", Number(velocity.x.constant))); }
+                    if (request.HasArg("y")) { velocity.y = new ParticleSystem.MinMaxCurve(request.OptionalFloatArg("y").Value); effects.Add(EffectJson("vfx.particle-module", "velocityOverLifetime.y", Number(velocity.y.constant))); }
+                    if (request.HasArg("z")) { velocity.z = new ParticleSystem.MinMaxCurve(request.OptionalFloatArg("z").Value); effects.Add(EffectJson("vfx.particle-module", "velocityOverLifetime.z", Number(velocity.z.constant))); }
+                    if (request.HasArg("space")) { velocity.space = ParseEnumArg<ParticleSystemSimulationSpace>(request.StringArg("space"), "E_PARTICLE_SPACE_INVALID", "Use Local or World."); effects.Add(EffectJson("vfx.particle-module", "velocityOverLifetime.space", velocity.space.ToString())); }
+                    if (request.HasArg("speedModifier")) { velocity.speedModifier = new ParticleSystem.MinMaxCurve(request.OptionalFloatArg("speedModifier").Value); effects.Add(EffectJson("vfx.particle-module", "velocityOverLifetime.speedModifier", Number(velocity.speedModifier.constant))); }
+                    return true;
+                case "forceoverlifetime":
+                case "force":
+                    var force = ps.forceOverLifetime;
+                    if (enabled.HasValue) { force.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "forceOverLifetime.enabled", Bool(force.enabled))); }
+                    if (request.HasArg("x")) { force.x = new ParticleSystem.MinMaxCurve(request.OptionalFloatArg("x").Value); effects.Add(EffectJson("vfx.particle-module", "forceOverLifetime.x", Number(force.x.constant))); }
+                    if (request.HasArg("y")) { force.y = new ParticleSystem.MinMaxCurve(request.OptionalFloatArg("y").Value); effects.Add(EffectJson("vfx.particle-module", "forceOverLifetime.y", Number(force.y.constant))); }
+                    if (request.HasArg("z")) { force.z = new ParticleSystem.MinMaxCurve(request.OptionalFloatArg("z").Value); effects.Add(EffectJson("vfx.particle-module", "forceOverLifetime.z", Number(force.z.constant))); }
+                    if (request.HasArg("space")) { force.space = ParseEnumArg<ParticleSystemSimulationSpace>(request.StringArg("space"), "E_PARTICLE_SPACE_INVALID", "Use Local or World."); effects.Add(EffectJson("vfx.particle-module", "forceOverLifetime.space", force.space.ToString())); }
+                    return true;
+                case "noise":
+                    var noise = ps.noise;
+                    if (enabled.HasValue) { noise.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "noise.enabled", Bool(noise.enabled))); }
+                    if (request.HasArg("strength")) { noise.strength = request.OptionalFloatArg("strength").Value; effects.Add(EffectJson("vfx.particle-module", "noise.strength", Number(noise.strength.constant))); }
+                    if (request.HasArg("frequency")) { noise.frequency = request.OptionalFloatArg("frequency").Value; effects.Add(EffectJson("vfx.particle-module", "noise.frequency", Number(noise.frequency))); }
+                    if (request.HasArg("scrollSpeed")) { noise.scrollSpeed = request.OptionalFloatArg("scrollSpeed").Value; effects.Add(EffectJson("vfx.particle-module", "noise.scrollSpeed", Number(noise.scrollSpeed.constant))); }
+                    if (request.HasArg("octaveCount")) { noise.octaveCount = request.OptionalIntArg("octaveCount").Value; effects.Add(EffectJson("vfx.particle-module", "noise.octaveCount", noise.octaveCount.ToString(CultureInfo.InvariantCulture))); }
+                    if (request.HasArg("quality")) { noise.quality = ParseEnumArg<ParticleSystemNoiseQuality>(request.StringArg("quality"), "E_PARTICLE_NOISE_QUALITY_INVALID", "Use Low, Medium, or High."); effects.Add(EffectJson("vfx.particle-module", "noise.quality", noise.quality.ToString())); }
+                    return true;
+                case "collision":
+                    var collision = ps.collision;
+                    if (enabled.HasValue) { collision.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "collision.enabled", Bool(collision.enabled))); }
+                    if (request.HasArg("collisionType")) { collision.type = ParseEnumArg<ParticleSystemCollisionType>(request.StringArg("collisionType"), "E_PARTICLE_COLLISION_TYPE_INVALID", "Use Planes or World."); effects.Add(EffectJson("vfx.particle-module", "collision.type", collision.type.ToString())); }
+                    if (request.HasArg("collisionMode")) { collision.mode = ParseEnumArg<ParticleSystemCollisionMode>(request.StringArg("collisionMode"), "E_PARTICLE_COLLISION_MODE_INVALID", "Use Collision3D or Collision2D."); effects.Add(EffectJson("vfx.particle-module", "collision.mode", collision.mode.ToString())); }
+                    if (request.HasArg("dampen")) { collision.dampen = request.OptionalFloatArg("dampen").Value; effects.Add(EffectJson("vfx.particle-module", "collision.dampen", Number(collision.dampen.constant))); }
+                    if (request.HasArg("bounce")) { collision.bounce = request.OptionalFloatArg("bounce").Value; effects.Add(EffectJson("vfx.particle-module", "collision.bounce", Number(collision.bounce.constant))); }
+                    if (request.HasArg("lifetimeLoss")) { collision.lifetimeLoss = request.OptionalFloatArg("lifetimeLoss").Value; effects.Add(EffectJson("vfx.particle-module", "collision.lifetimeLoss", Number(collision.lifetimeLoss.constant))); }
+                    if (request.HasArg("minKillSpeed")) { collision.minKillSpeed = request.OptionalFloatArg("minKillSpeed").Value; effects.Add(EffectJson("vfx.particle-module", "collision.minKillSpeed", Number(collision.minKillSpeed))); }
+                    if (request.HasArg("maxKillSpeed")) { collision.maxKillSpeed = request.OptionalFloatArg("maxKillSpeed").Value; effects.Add(EffectJson("vfx.particle-module", "collision.maxKillSpeed", Number(collision.maxKillSpeed))); }
+                    if (request.HasArg("radiusScale")) { collision.radiusScale = request.OptionalFloatArg("radiusScale").Value; effects.Add(EffectJson("vfx.particle-module", "collision.radiusScale", Number(collision.radiusScale))); }
+                    return true;
+                case "subemitters":
+                case "subemitter":
+                case "sub":
+                    var sub = ps.subEmitters;
+                    if (enabled.HasValue) { sub.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "subEmitters.enabled", Bool(sub.enabled))); }
+                    ApplySubEmitterFields(sub, request, effects);
+                    return true;
+                case "textureanimation":
+                case "texturesheetanimation":
+                case "texture":
+                    var texture = ps.textureSheetAnimation;
+                    if (enabled.HasValue) { texture.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "textureSheetAnimation.enabled", Bool(texture.enabled))); }
+                    return true;
+                case "lights":
+                    var lights = ps.lights;
+                    if (enabled.HasValue) { lights.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "lights.enabled", Bool(lights.enabled))); }
+                    return true;
+                case "trails":
+                case "trail":
+                    var trails = ps.trails;
+                    if (enabled.HasValue) { trails.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "trails.enabled", Bool(trails.enabled))); }
+                    if (request.HasArg("ratio")) { trails.ratio = request.OptionalFloatArg("ratio").Value; effects.Add(EffectJson("vfx.particle-module", "trails.ratio", Number(trails.ratio))); }
+                    if (request.HasArg("lifetime")) { trails.lifetime = request.OptionalFloatArg("lifetime").Value; effects.Add(EffectJson("vfx.particle-module", "trails.lifetime", Number(trails.lifetime.constant))); }
+                    if (request.HasArg("width")) { trails.widthOverTrail = new ParticleSystem.MinMaxCurve(request.OptionalFloatArg("width").Value); effects.Add(EffectJson("vfx.particle-module", "trails.width", Number(trails.widthOverTrail.constant))); }
+                    if (request.HasArg("color")) { trails.colorOverTrail = new ParticleSystem.MinMaxGradient(ParseColor(request.StringArg("color"))); effects.Add(EffectJson("vfx.particle-module", "trails.color", request.StringArg("color"))); }
+                    return true;
+                case "inheritvelocity":
+                    var inherit = ps.inheritVelocity;
+                    if (enabled.HasValue) { inherit.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "inheritVelocity.enabled", Bool(inherit.enabled))); }
+                    if (request.HasArg("mode")) { inherit.mode = ParseEnumArg<ParticleSystemInheritVelocityMode>(request.StringArg("mode"), "E_PARTICLE_INHERIT_MODE_INVALID", "Use Initial or Current."); effects.Add(EffectJson("vfx.particle-module", "inheritVelocity.mode", inherit.mode.ToString())); }
+                    if (request.HasArg("curve")) { inherit.curve = new ParticleSystem.MinMaxCurve(request.OptionalFloatArg("curve") ?? 0f); effects.Add(EffectJson("vfx.particle-module", "inheritVelocity.curve", Number(inherit.curve.constant))); }
+                    return true;
+                case "limitvelocityoverlifetime":
+                case "limitvelocity":
+                    var limit = ps.limitVelocityOverLifetime;
+                    if (enabled.HasValue) { limit.enabled = enabled.Value; effects.Add(EffectJson("vfx.particle-module", "limitVelocityOverLifetime.enabled", Bool(limit.enabled))); }
+                    if (request.HasArg("speed")) { limit.limit = new ParticleSystem.MinMaxCurve(request.OptionalFloatArg("speed").Value); effects.Add(EffectJson("vfx.particle-module", "limitVelocityOverLifetime.limit", Number(limit.limit.constant))); }
+                    if (request.HasArg("dampen")) { limit.dampen = request.OptionalFloatArg("dampen").Value; effects.Add(EffectJson("vfx.particle-module", "limitVelocityOverLifetime.dampen", Number(limit.dampen))); }
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static void ApplyLineRendererFields(LineRenderer line, BridgeRequest request, string effectType, List<string> effects)
+        {
+            if (request.HasArg("startWidth")) { line.startWidth = request.OptionalFloatArg("startWidth").Value; effects.Add(EffectJson(effectType, "startWidth", Number(line.startWidth))); }
+            if (request.HasArg("endWidth")) { line.endWidth = request.OptionalFloatArg("endWidth").Value; effects.Add(EffectJson(effectType, "endWidth", Number(line.endWidth))); }
+            if (request.HasArg("widthMultiplier")) { line.widthMultiplier = request.OptionalFloatArg("widthMultiplier").Value; effects.Add(EffectJson(effectType, "widthMultiplier", Number(line.widthMultiplier))); }
+            if (request.HasArg("widthCurve")) { line.widthCurve = ParseAnimationCurveArg(request, "widthCurve"); effects.Add(EffectJson(effectType, "widthCurve", CurveJson(line.widthCurve))); }
+            if (request.HasArg("startColor")) { line.startColor = ParseColor(request.StringArg("startColor")); effects.Add(EffectJson(effectType, "startColor", request.StringArg("startColor"))); }
+            if (request.HasArg("endColor")) { line.endColor = ParseColor(request.StringArg("endColor")); effects.Add(EffectJson(effectType, "endColor", request.StringArg("endColor"))); }
+            if (request.HasArg("colorGradient")) { line.colorGradient = ParseGradientArg(request, "colorGradient"); effects.Add(EffectJson(effectType, "colorGradient", GradientJson(line.colorGradient))); }
+            if (request.HasArg("material")) { line.sharedMaterial = ResolveOptionalMaterial(request.StringArg("material")); effects.Add(EffectJson(effectType, "material", line.sharedMaterial == null ? "null" : AssetDatabase.GetAssetPath(line.sharedMaterial))); }
+            if (request.HasArg("positionCount")) { line.positionCount = request.OptionalIntArg("positionCount").Value; effects.Add(EffectJson(effectType, "positionCount", line.positionCount.ToString(CultureInfo.InvariantCulture))); }
+            if (request.HasArg("positions")) { var positions = ParseVector3ArrayArg(request, "positions"); line.positionCount = positions.Length; line.SetPositions(positions); effects.Add(EffectJson(effectType, "positions", positions.Length.ToString(CultureInfo.InvariantCulture))); }
+            if (request.HasArg("loop")) { line.loop = request.OptionalBoolArg("loop").Value; effects.Add(EffectJson(effectType, "loop", Bool(line.loop))); }
+            if (request.HasArg("useWorldSpace")) { line.useWorldSpace = request.OptionalBoolArg("useWorldSpace").Value; effects.Add(EffectJson(effectType, "useWorldSpace", Bool(line.useWorldSpace))); }
+            if (request.HasArg("alignment")) { line.alignment = ParseEnumArg<LineAlignment>(request.StringArg("alignment"), "E_LINE_ALIGNMENT_INVALID", "Use View or TransformZ."); effects.Add(EffectJson(effectType, "alignment", line.alignment.ToString())); }
+            if (request.HasArg("textureMode")) { line.textureMode = ParseEnumArg<LineTextureMode>(request.StringArg("textureMode"), "E_LINE_TEXTURE_MODE_INVALID", "Use Stretch, Tile, DistributePerSegment, or RepeatPerSegment."); effects.Add(EffectJson(effectType, "textureMode", line.textureMode.ToString())); }
+            if (request.HasArg("numCornerVertices")) { line.numCornerVertices = request.OptionalIntArg("numCornerVertices").Value; effects.Add(EffectJson(effectType, "numCornerVertices", line.numCornerVertices.ToString(CultureInfo.InvariantCulture))); }
+            if (request.HasArg("numCapVertices")) { line.numCapVertices = request.OptionalIntArg("numCapVertices").Value; effects.Add(EffectJson(effectType, "numCapVertices", line.numCapVertices.ToString(CultureInfo.InvariantCulture))); }
+        }
+
+        private static void ApplyTrailRendererFields(TrailRenderer trail, BridgeRequest request, List<string> effects)
+        {
+            if (request.HasArg("time")) { trail.time = request.OptionalFloatArg("time").Value; effects.Add(EffectJson("vfx.trail", "time", Number(trail.time))); }
+            if (request.HasArg("startWidth")) { trail.startWidth = request.OptionalFloatArg("startWidth").Value; effects.Add(EffectJson("vfx.trail", "startWidth", Number(trail.startWidth))); }
+            if (request.HasArg("endWidth")) { trail.endWidth = request.OptionalFloatArg("endWidth").Value; effects.Add(EffectJson("vfx.trail", "endWidth", Number(trail.endWidth))); }
+            if (request.HasArg("widthMultiplier")) { trail.widthMultiplier = request.OptionalFloatArg("widthMultiplier").Value; effects.Add(EffectJson("vfx.trail", "widthMultiplier", Number(trail.widthMultiplier))); }
+            if (request.HasArg("widthCurve")) { trail.widthCurve = ParseAnimationCurveArg(request, "widthCurve"); effects.Add(EffectJson("vfx.trail", "widthCurve", CurveJson(trail.widthCurve))); }
+            if (request.HasArg("startColor")) { trail.startColor = ParseColor(request.StringArg("startColor")); effects.Add(EffectJson("vfx.trail", "startColor", request.StringArg("startColor"))); }
+            if (request.HasArg("endColor")) { trail.endColor = ParseColor(request.StringArg("endColor")); effects.Add(EffectJson("vfx.trail", "endColor", request.StringArg("endColor"))); }
+            if (request.HasArg("colorGradient")) { trail.colorGradient = ParseGradientArg(request, "colorGradient"); effects.Add(EffectJson("vfx.trail", "colorGradient", GradientJson(trail.colorGradient))); }
+            if (request.HasArg("material")) { trail.sharedMaterial = ResolveOptionalMaterial(request.StringArg("material")); effects.Add(EffectJson("vfx.trail", "material", trail.sharedMaterial == null ? "null" : AssetDatabase.GetAssetPath(trail.sharedMaterial))); }
+            if (request.HasArg("minVertexDistance")) { trail.minVertexDistance = request.OptionalFloatArg("minVertexDistance").Value; effects.Add(EffectJson("vfx.trail", "minVertexDistance", Number(trail.minVertexDistance))); }
+            if (request.HasArg("autodestruct")) { trail.autodestruct = request.OptionalBoolArg("autodestruct").Value; effects.Add(EffectJson("vfx.trail", "autodestruct", Bool(trail.autodestruct))); }
+            if (request.HasArg("emitting")) { trail.emitting = request.OptionalBoolArg("emitting").Value; effects.Add(EffectJson("vfx.trail", "emitting", Bool(trail.emitting))); }
+            if (request.HasArg("alignment")) { trail.alignment = ParseEnumArg<LineAlignment>(request.StringArg("alignment"), "E_TRAIL_ALIGNMENT_INVALID", "Use View or TransformZ."); effects.Add(EffectJson("vfx.trail", "alignment", trail.alignment.ToString())); }
+            if (request.HasArg("textureMode")) { trail.textureMode = ParseEnumArg<LineTextureMode>(request.StringArg("textureMode"), "E_TRAIL_TEXTURE_MODE_INVALID", "Use Stretch, Tile, DistributePerSegment, or RepeatPerSegment."); effects.Add(EffectJson("vfx.trail", "textureMode", trail.textureMode.ToString())); }
+            if (request.HasArg("numCornerVertices")) { trail.numCornerVertices = request.OptionalIntArg("numCornerVertices").Value; effects.Add(EffectJson("vfx.trail", "numCornerVertices", trail.numCornerVertices.ToString(CultureInfo.InvariantCulture))); }
+            if (request.HasArg("numCapVertices")) { trail.numCapVertices = request.OptionalIntArg("numCapVertices").Value; effects.Add(EffectJson("vfx.trail", "numCapVertices", trail.numCapVertices.ToString(CultureInfo.InvariantCulture))); }
+        }
+
+        private static void ApplySubEmitterFields(ParticleSystem.SubEmittersModule sub, BridgeRequest request, List<string> effects)
+        {
+            var action = (request.OptionalStringArg("subEmitterAction") ?? string.Empty).ToLowerInvariant();
+            if (string.IsNullOrEmpty(action)) return;
+            if (action == "clear")
+            {
+                // Unity 2022.3 没有批量清空 API，倒序删除可避免索引移动。
+                for (var i = sub.subEmittersCount - 1; i >= 0; i--)
+                {
+                    sub.RemoveSubEmitter(i);
+                }
+                effects.Add(EffectJson("vfx.particle-module", "subEmitters", "cleared"));
+                return;
+            }
+            if (action == "remove")
+            {
+                var index = request.OptionalIntArg("index") ?? 0;
+                if (index < 0 || index >= sub.subEmittersCount) throw new BridgeCommandException("E_SUB_EMITTER_INDEX_INVALID", "Sub-emitter index out of range: " + index, "Pass a valid sub-emitter index.");
+                sub.RemoveSubEmitter(index);
+                effects.Add(EffectJson("vfx.particle-module", "subEmitters", "removed"));
+                return;
+            }
+            if (action == "add")
+            {
+                var target = request.StringArg("subEmitterTarget");
+                var subPs = ResolveParticleSystem(target);
+                if (subPs == null) throw new BridgeCommandException("E_SUB_EMITTER_NOT_FOUND", "Sub-emitter ParticleSystem not found: " + target, "Pass subEmitterTarget as a GameObject with ParticleSystem.");
+                var type = request.HasArg("subEmitterType") ? ParseEnumArg<ParticleSystemSubEmitterType>(request.StringArg("subEmitterType"), "E_SUB_EMITTER_TYPE_INVALID", "Use Birth, Collision, Death, Trigger, or Manual.") : ParticleSystemSubEmitterType.Birth;
+                var properties = request.HasArg("subEmitterProperties") ? ParseEnumArg<ParticleSystemSubEmitterProperties>(request.StringArg("subEmitterProperties"), "E_SUB_EMITTER_PROPERTIES_INVALID", "Use InheritNothing or InheritEverything.") : ParticleSystemSubEmitterProperties.InheritNothing;
+                sub.AddSubEmitter(subPs, type, properties);
+                effects.Add(EffectJson("vfx.particle-module", "subEmitters", "added"));
+                return;
+            }
+            throw new BridgeCommandException("E_SUB_EMITTER_ACTION_INVALID", "Unsupported subEmitterAction: " + action, "Use add, remove, or clear.");
+        }
+
         private static string ParticleSystemJson(ParticleSystem ps)
         {
             var main = ps.main;
+            var emission = ps.emission;
+            var shape = ps.shape;
+            var color = ps.colorOverLifetime;
+            var size = ps.sizeOverLifetime;
+            var rotation = ps.rotationOverLifetime;
+            var velocity = ps.velocityOverLifetime;
+            var noise = ps.noise;
+            var collision = ps.collision;
+            var sub = ps.subEmitters;
+            var trails = ps.trails;
             return new UnityCliJsonWriter().BeginObject()
                 .Prop("isPlaying", ps.isPlaying)
                 .Prop("isPaused", ps.isPaused)
@@ -1217,11 +1296,250 @@ private static string VfxTemplate(BridgeRequest request)
                     .Prop("startLifetime", main.startLifetime.constant)
                     .Prop("startSpeed", main.startSpeed.constant)
                     .Prop("startSize", main.startSize.constant)
+                    .Prop("startRotationDegrees", main.startRotation.constant * Mathf.Rad2Deg)
                     .Prop("maxParticles", (long)main.maxParticles)
                     .Prop("loop", main.loop)
                     .Prop("playOnAwake", main.playOnAwake)
                     .Prop("simulationSpace", main.simulationSpace.ToString())
+                    .Prop("scalingMode", main.scalingMode.ToString())
                     .Prop("gravityModifier", main.gravityModifier.constant))
+                .PropObject("emission", w => w.Prop("enabled", emission.enabled).Prop("rateOverTime", emission.rateOverTime.constant).Prop("rateOverDistance", emission.rateOverDistance.constant).Prop("burstCount", (long)emission.burstCount))
+                .PropObject("shape", w => w.Prop("enabled", shape.enabled).Prop("shapeType", shape.shapeType.ToString()).Prop("radius", shape.radius).Prop("angle", shape.angle).Prop("arc", shape.arc).Prop("length", shape.length).PropRaw("box", Vector3Json(shape.box)))
+                .PropObject("modules", w => w
+                    .Prop("colorOverLifetime", color.enabled)
+                    .Prop("sizeOverLifetime", size.enabled)
+                    .Prop("rotationOverLifetime", rotation.enabled)
+                    .Prop("velocityOverLifetime", velocity.enabled)
+                    .Prop("noise", noise.enabled)
+                    .Prop("collision", collision.enabled)
+                    .Prop("subEmitters", sub.enabled)
+                    .Prop("subEmittersCount", (long)sub.subEmittersCount)
+                    .Prop("trails", trails.enabled))
+                .EndObject().ToString();
+        }
+
+        private static string LineRendererJson(LineRenderer line)
+        {
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("startWidth", line.startWidth)
+                .Prop("endWidth", line.endWidth)
+                .Prop("widthMultiplier", line.widthMultiplier)
+                .PropRaw("widthCurve", CurveJson(line.widthCurve))
+                .PropRaw("startColor", ColorJson(line.startColor))
+                .PropRaw("endColor", ColorJson(line.endColor))
+                .PropRaw("colorGradient", GradientJson(line.colorGradient))
+                .Prop("material", line.sharedMaterial == null ? null : AssetDatabase.GetAssetPath(line.sharedMaterial))
+                .Prop("positionCount", (long)line.positionCount)
+                .Prop("loop", line.loop)
+                .Prop("useWorldSpace", line.useWorldSpace)
+                .Prop("alignment", line.alignment.ToString())
+                .Prop("textureMode", line.textureMode.ToString())
+                .Prop("numCornerVertices", (long)line.numCornerVertices)
+                .Prop("numCapVertices", (long)line.numCapVertices)
+                .EndObject().ToString();
+        }
+
+        private static string TrailRendererJson(TrailRenderer trail)
+        {
+            return new UnityCliJsonWriter().BeginObject()
+                .Prop("time", trail.time)
+                .Prop("startWidth", trail.startWidth)
+                .Prop("endWidth", trail.endWidth)
+                .Prop("widthMultiplier", trail.widthMultiplier)
+                .PropRaw("widthCurve", CurveJson(trail.widthCurve))
+                .PropRaw("startColor", ColorJson(trail.startColor))
+                .PropRaw("endColor", ColorJson(trail.endColor))
+                .PropRaw("colorGradient", GradientJson(trail.colorGradient))
+                .Prop("material", trail.sharedMaterial == null ? null : AssetDatabase.GetAssetPath(trail.sharedMaterial))
+                .Prop("minVertexDistance", trail.minVertexDistance)
+                .Prop("emitting", trail.emitting)
+                .Prop("autodestruct", trail.autodestruct)
+                .Prop("alignment", trail.alignment.ToString())
+                .Prop("textureMode", trail.textureMode.ToString())
+                .Prop("numCornerVertices", (long)trail.numCornerVertices)
+                .Prop("numCapVertices", (long)trail.numCapVertices)
+                .EndObject().ToString();
+        }
+
+        private static AnimationCurve ParseAnimationCurveArg(BridgeRequest request, string name)
+        {
+            var raw = request.RawJsonArg(name);
+            if (string.IsNullOrEmpty(raw)) return new AnimationCurve();
+            var trimmed = raw.Trim();
+            if (trimmed.StartsWith("\"", StringComparison.Ordinal)) trimmed = request.StringArg(name);
+            var keys = new List<Keyframe>();
+            if (!string.IsNullOrEmpty(trimmed) && trimmed.StartsWith("[", StringComparison.Ordinal))
+            {
+                foreach (var item in JsonArrayItems(trimmed))
+                {
+                    var time = JsonFloatProperty(item, "time");
+                    var value = JsonFloatProperty(item, "value");
+                    if (time.HasValue && value.HasValue) keys.Add(new Keyframe(time.Value, value.Value));
+                }
+            }
+            else
+            {
+                foreach (var part in (trimmed ?? string.Empty).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var pieces = part.Split(':');
+                    if (pieces.Length != 2) continue;
+                    keys.Add(new Keyframe(ParseVfxFloat(pieces[0], "time"), ParseVfxFloat(pieces[1], "value")));
+                }
+            }
+            return new AnimationCurve(keys.Count == 0 ? new[] { new Keyframe(0f, 1f), new Keyframe(1f, 1f) } : keys.ToArray());
+        }
+
+        private static Gradient ParseGradientArg(BridgeRequest request, string name)
+        {
+            var raw = request.RawJsonArg(name);
+            var trimmed = raw == null ? string.Empty : raw.Trim();
+            if (trimmed.StartsWith("\"", StringComparison.Ordinal)) trimmed = request.StringArg(name);
+            var colorKeys = new List<GradientColorKey>();
+            var alphaKeys = new List<GradientAlphaKey>();
+            if (!string.IsNullOrEmpty(trimmed) && trimmed.StartsWith("[", StringComparison.Ordinal))
+            {
+                foreach (var item in JsonArrayItems(trimmed))
+                {
+                    var time = JsonFloatProperty(item, "time") ?? 0f;
+                    var colorValue = JsonStringProperty(item, "color");
+                    if (string.IsNullOrEmpty(colorValue)) continue;
+                    var color = ParseColor(colorValue);
+                    colorKeys.Add(new GradientColorKey(color, time));
+                    alphaKeys.Add(new GradientAlphaKey(color.a, time));
+                }
+            }
+            else
+            {
+                foreach (var part in (trimmed ?? string.Empty).Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
+                {
+                    var pieces = part.Split(':');
+                    if (pieces.Length != 2) continue;
+                    var time = ParseVfxFloat(pieces[0], "time");
+                    var color = ParseColor(pieces[1]);
+                    colorKeys.Add(new GradientColorKey(color, time));
+                    alphaKeys.Add(new GradientAlphaKey(color.a, time));
+                }
+            }
+            if (colorKeys.Count == 0)
+            {
+                colorKeys.Add(new GradientColorKey(Color.white, 0f));
+                colorKeys.Add(new GradientColorKey(Color.white, 1f));
+                alphaKeys.Add(new GradientAlphaKey(1f, 0f));
+                alphaKeys.Add(new GradientAlphaKey(1f, 1f));
+            }
+            var gradient = new Gradient();
+            gradient.SetKeys(colorKeys.ToArray(), alphaKeys.ToArray());
+            return gradient;
+        }
+
+        private static Vector3[] ParseVector3ArrayArg(BridgeRequest request, string name)
+        {
+            var raw = request.RawJsonArg(name);
+            if (string.IsNullOrEmpty(raw)) return new Vector3[0];
+            var trimmed = raw.Trim();
+            if (trimmed.StartsWith("[", StringComparison.Ordinal))
+            {
+                var values = new List<Vector3>();
+                foreach (var item in JsonArrayItems(trimmed)) values.Add(ParseVector3JsonObject(item));
+                return values.ToArray();
+            }
+            return ParseVector3Array(request.StringArg(name));
+        }
+
+        private static Vector3 ParseVector3Arg(BridgeRequest request, string name)
+        {
+            var raw = request.RawJsonArg(name);
+            if (string.IsNullOrEmpty(raw)) return Vector3.zero;
+            var trimmed = raw.Trim();
+            if (trimmed.StartsWith("{", StringComparison.Ordinal)) return ParseVector3JsonObject(trimmed);
+            return ParseVector3(request.StringArg(name));
+        }
+
+        private static Vector3 ParseVector3JsonObject(string json)
+        {
+            return new Vector3(JsonFloatProperty(json, "x") ?? 0f, JsonFloatProperty(json, "y") ?? 0f, JsonFloatProperty(json, "z") ?? 0f);
+        }
+
+        private static Material ResolveOptionalMaterial(string rawPath)
+        {
+            if (string.IsNullOrEmpty(rawPath) || string.Equals(rawPath, "null", StringComparison.OrdinalIgnoreCase) || string.Equals(rawPath, "none", StringComparison.OrdinalIgnoreCase)) return null;
+            var path = NormalizeAssetPath(rawPath);
+            var material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material == null) throw new BridgeCommandException("E_VFX_MATERIAL_NOT_FOUND", "Material not found: " + rawPath, "Pass an existing Assets/*.mat path or omit material.");
+            return material;
+        }
+
+        private static T ParseEnumArg<T>(string value, string code, string nextAction) where T : struct
+        {
+            T parsed;
+            if (Enum.TryParse<T>(value, true, out parsed)) return parsed;
+            throw new BridgeCommandException(code, "Invalid " + typeof(T).Name + " value: " + value, nextAction);
+        }
+
+        private static float ParseVfxFloat(string value, string label)
+        {
+            float parsed;
+            if (float.TryParse((value ?? string.Empty).Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out parsed)) return parsed;
+            throw new BridgeCommandException("E_VFX_NUMBER_INVALID", "Invalid numeric " + label + ": " + value, "Pass a JSON number or invariant-culture numeric string.");
+        }
+
+        private static float? JsonFloatProperty(string json, string name)
+        {
+            var raw = JsonRawProperty(json, name);
+            if (string.IsNullOrEmpty(raw)) return null;
+            return ParseVfxFloat(raw.Trim().Trim('"'), name);
+        }
+
+        private static List<string> JsonArrayItems(string json)
+        {
+            var items = new List<string>();
+            var trimmed = (json ?? string.Empty).Trim();
+            if (!trimmed.StartsWith("[", StringComparison.Ordinal) || !trimmed.EndsWith("]", StringComparison.Ordinal)) return items;
+            var index = 1;
+            while (index < trimmed.Length - 1)
+            {
+                while (index < trimmed.Length - 1 && (char.IsWhiteSpace(trimmed[index]) || trimmed[index] == ',')) index++;
+                if (index >= trimmed.Length - 1) break;
+                var end = FindJsonValueEnd(trimmed, index);
+                if (end <= index) break;
+                items.Add(trimmed.Substring(index, end - index).Trim());
+                index = end;
+            }
+            return items;
+        }
+
+        private static string CurveJson(AnimationCurve curve)
+        {
+            return new UnityCliJsonWriter().BeginObject()
+                .PropArray("keys", arr =>
+                {
+                    foreach (var key in curve == null ? new Keyframe[0] : curve.keys)
+                    {
+                        arr.BeginObject().Prop("time", key.time).Prop("value", key.value).EndObject();
+                    }
+                })
+                .EndObject().ToString();
+        }
+
+        private static string GradientJson(Gradient gradient)
+        {
+            var colors = gradient == null ? new GradientColorKey[0] : gradient.colorKeys;
+            var alphas = gradient == null ? new GradientAlphaKey[0] : gradient.alphaKeys;
+            return new UnityCliJsonWriter().BeginObject()
+                .PropArray("colors", arr =>
+                {
+                    foreach (var key in colors)
+                    {
+                        arr.BeginObject().Prop("time", key.time).PropRaw("color", ColorJson(key.color)).EndObject();
+                    }
+                })
+                .PropArray("alphas", arr =>
+                {
+                    foreach (var key in alphas)
+                    {
+                        arr.BeginObject().Prop("time", key.time).Prop("alpha", key.alpha).EndObject();
+                    }
+                })
                 .EndObject().ToString();
         }
     }

@@ -46,6 +46,8 @@ export interface ExtensionToolContribution {
   toolName?: string;
   /** CLI argv prefix, e.g. "probuilder shape". */
   cliCommand: string;
+  /** Unity packages required by this specific tool; omitted means no extra package gate. */
+  requiresPackages?: string[];
 }
 
 /** A context descriptor contribution from an extension. */
