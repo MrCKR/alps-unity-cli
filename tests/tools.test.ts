@@ -518,6 +518,7 @@ test("S2.3 editor group has all required tools", () => {
   assert.ok(names.includes("editor.menu"));
   assert.ok(names.includes("editor.console"));
   assert.ok(names.includes("editor.refresh"));
+  assert.ok(names.includes("editor.launch-dialog.dismiss"));
 });
 
 test("S2.3 test group exposes only test execution tool", () => {
@@ -639,6 +640,17 @@ test("editor operation tools expose side-effect and recovery metadata", () => {
   assert.deepEqual(refresh.sideEffects, ["asset-refresh", "script-compile", "domain-reload"]);
   assert.equal(refresh.equivalentUnityMcp, "refresh_unity");
   assert.ok(refresh.longRunning);
+
+  const launchDialog = findToolByName("editor.launch-dialog.dismiss")!;
+  assert.equal(launchDialog.handler, "offline");
+  assert.equal(launchDialog.supportStatus, "cli-only");
+  assert.equal(launchDialog.playModeSupport, "editor-only");
+  assert.equal(launchDialog.destructiveHint, false);
+  assert.equal(launchDialog.supportsDryRun, true);
+  assert.deepEqual(launchDialog.sideEffects, ["desktop-dialog-click"]);
+  assert.match(launchDialog.description, /Safe Mode/);
+  assert.match(launchDialog.description, /processId/);
+  assert.ok(launchDialog.examples?.some((example) => example.argv.includes("--dry-run")));
 });
 
 test("editor state and play controls expose Play Mode transition metadata", () => {
@@ -727,6 +739,17 @@ test("tools describe editor.refresh returns job metadata", async () => {
   assert.equal(data.name, "editor.refresh");
   assert.equal("handler" in data, false);
   assert.equal("longRunning" in data, false);
+});
+
+test("tools describe editor.launch-dialog.dismiss returns CLI-only metadata", async () => {
+  const result = await handleToolsCommand("describe", ["editor.launch-dialog.dismiss"], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.name, "editor.launch-dialog.dismiss");
+  assert.equal(data.supportStatus, "cli-only");
+  assert.equal(data.supportsDryRun, true);
+  assert.equal("handler" in data, false);
+  assert.match(JSON.stringify(data.inputSchema), /processId/);
 });
 
 // ── S3.2 metadata: graphics, physics, animation, vfx ───────
@@ -1365,6 +1388,17 @@ test("tools run built-in job-handler tool with empty runtime returns E_TOOL_HAND
   const result = await handleToolsCommand("run", ["editor.refresh"], {}, emptyRuntime, requestId);
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "E_TOOL_HANDLER_UNSUPPORTED");
+});
+
+test("tools run editor.launch-dialog.dismiss supports no-op probe through --input", async () => {
+  const result = await handleToolsCommand("run", ["editor.launch-dialog.dismiss"], { input: '{"timeoutMs":0,"pid":44960}' }, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.command, "editor.launch-dialog.dismiss");
+  assert.equal(data.dismissed, false);
+  assert.equal(data.status, "not_found");
+  assert.equal(data.attempts, 0);
+  assert.equal(data.processId, 44960);
 });
 
 // ── job-routing: job-handler routing via dispatchJobHandler ──────────

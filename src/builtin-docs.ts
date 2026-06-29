@@ -118,7 +118,7 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   editor: {
     title: "Editor Commands",
-    summary: "Control the Unity Editor: play mode, console, menu items and refresh jobs. Handlers: bridge (state/play/pause/stop/menu/console), job (refresh). Target: editor. `editor.menu` is destructive (requires --yes)."
+    summary: "Control the Unity Editor: play mode, console, menu items, refresh jobs, and Windows launch-dialog dismiss. Handlers: bridge (state/play/pause/stop/menu/console), job (refresh), offline (launch-dialog.dismiss). Target: editor. `editor.menu` is destructive (requires --yes)."
   },
   diagnose: {
     title: "Diagnose Commands",

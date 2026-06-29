@@ -807,6 +807,15 @@
       "timeout": 30000
     },
     {
+      "bridgeCommand": "editor.launch-dialog.dismiss",
+      "group": "editor",
+      "command": "launch-dialog.dismiss",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
       "bridgeCommand": "editor.menu",
       "group": "editor",
       "command": "menu",

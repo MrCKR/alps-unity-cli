@@ -249,6 +249,47 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     equivalentUnityMcp: "refresh_unity"
   },
   {
+    name: "editor.launch-dialog.dismiss",
+    summary: "Dismiss a visible Unity launch-errors or Safe Mode desktop dialog by clicking Ignore.",
+    description: "Dismiss a visible Unity launch-errors or Safe Mode desktop dialog by clicking the Ignore button. This is a Windows desktop helper for Unity startup blocks such as Enter Safe Mode? or compiler-errors-at-launch dialogs; it does not open Unity and does not modify project files. Pass processId/pid when multiple Unity Editors are running so only that Unity.exe process is scanned. If no matching dialog is visible before timeoutMs, the tool still succeeds with dismissed=false and status=not_found. Use --dry-run to preview the planned desktop click without scanning or clicking.",
+    group: "editor",
+    inputSchema: objSchema({
+      timeoutMs: { type: "integer", default: 5000, description: "Maximum polling time in milliseconds. Use 0 for a no-op capability probe." },
+      intervalMs: { type: "integer", default: 250, description: "Polling interval in milliseconds while waiting for the dialog." },
+      processId: { type: "integer", description: "Optional Unity.exe process id to limit the scan. Alias: pid." },
+      pid: { type: "integer", description: "Alias for processId." }
+    }),
+    outputSchema: objSchema({
+      command: { type: "string" },
+      platform: { type: "string" },
+      supported: { type: "boolean" },
+      status: { type: "string", enum: ["dismissed", "not_found", "unsupported", "error", "dry_run"] },
+      dismissed: { type: "boolean" },
+      attempts: { type: "integer" },
+      processId: { type: "integer" },
+      title: { type: "string" },
+      button: { type: "string" },
+      lastError: { type: "string" },
+      plannedEffects: { type: "array", items: { type: "object" } },
+      nextActions: { type: "array", items: { type: "string" } }
+    }),
+    destructiveHint: false,
+    supportsDryRun: true,
+    playModeSupport: "editor-only",
+    sideEffects: ["desktop-dialog-click"],
+    riskLevel: "low",
+    handler: "offline",
+    supportStatus: "cli-only",
+    cliCommand: "tools run editor.launch-dialog.dismiss",
+    docsTopic: "editor",
+    examples: [
+      { description: "Dismiss any visible Unity launch error dialog", argv: ["tools", "run", "editor.launch-dialog.dismiss", "--input", "{\"timeoutMs\":5000}"] },
+      { description: "Limit dismiss to one Unity process", argv: ["tools", "run", "editor.launch-dialog.dismiss", "--input", "{\"processId\":44960,\"timeoutMs\":5000}"] },
+      { description: "Preview the desktop click", argv: ["tools", "run", "editor.launch-dialog.dismiss", "--dry-run", "--input", "{\"pid\":44960}"] }
+    ],
+    equivalentUnityMcp: "launch error dialog auto dismiss"
+  },
+  {
     name: "editor.selection.set",
     summary: "Set the active Unity Editor selection by instanceId, target name, or hierarchy path.",
     description: "Set the active Unity Editor selection by instanceId, target name, or hierarchy path. Reading selection is a Context (`context read editor.selection`); use --dry-run before selecting ambiguous scene objects.",
