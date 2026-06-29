@@ -6,7 +6,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { tmpdir } from "node:os";
 import test from "node:test";
 import { execute, isCliEntryPoint } from "../src/cli.js";
-import { failure, printJson } from "../src/output.js";
+import { failure, printJson, printResult } from "../src/output.js";
 import { JobRunner } from "../src/job-runner.js";
 import { JobStore } from "../src/job-store.js";
 import { defaultDataDir } from "../src/platform.js";
@@ -69,9 +69,10 @@ test("CLI entrypoint detection handles normalized and linked file paths", async 
 test("node dist cli help prints an envelope", async () => {
   const result = await runCli(["--help"]);
   assert.equal(result.code, 0, result.stderr);
-  const payload = JSON.parse(result.stdout) as { ok: boolean; data: { usage: string } };
+  const payload = JSON.parse(result.stdout) as { ok: boolean; data: { usage: string; options: string[] } };
   assert.equal(payload.ok, true);
   assert.equal(payload.data.usage, "unity_cli <command> [options]");
+  assert.ok(payload.data.options.some((option) => option.includes("--raw") && option.includes("compact single-line JSON")));
 });
 
 test("node dist cli version prints package version", async () => {
@@ -81,6 +82,28 @@ test("node dist cli version prints package version", async () => {
   const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
   assert.equal(payload.ok, true);
   assert.equal(payload.data.version, packageJson.version);
+});
+
+test("node dist cli raw output prints compact JSON envelope", async () => {
+  const result = await runCli(["--version", "--raw"]);
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.stdout.endsWith("\n"), true);
+  assert.equal(result.stdout.split("\n").filter(Boolean).length, 1);
+  assert.equal(result.stdout.includes("\n  "), false);
+  const payload = JSON.parse(result.stdout) as { ok: boolean; data: { version: string } };
+  assert.equal(payload.ok, true);
+  assert.equal(typeof payload.data.version, "string");
+});
+
+test("node dist cli raw output works before the command", async () => {
+  const result = await runCli(["--raw", "tools", "group"]);
+  assert.equal(result.code, 0, result.stderr);
+  assert.equal(result.stdout.endsWith("\n"), true);
+  assert.equal(result.stdout.split("\n").filter(Boolean).length, 1);
+  assert.equal(result.stdout.includes("\n  "), false);
+  const payload = JSON.parse(result.stdout) as { ok: boolean; data: { groups: unknown[] } };
+  assert.equal(payload.ok, true);
+  assert.ok(Array.isArray(payload.data.groups));
 });
 
 test("frozen top-level directories exist", async () => {
@@ -120,6 +143,27 @@ test("final CLI failure envelope preserves structured error details", () => {
     { id: 202, name: "HUD", path: "Overlay/HUD", components: ["UIDocument"] }
   ]);
   assert.deepEqual(payload.error.next_actions, ["Pass a hierarchy path or instance id."]);
+});
+
+test("printResult raw mode keeps envelope fields and removes pretty spacing", () => {
+  const originalWrite = process.stdout.write;
+  let output = "";
+  process.stdout.write = ((chunk: string | Uint8Array) => {
+    output += String(chunk);
+    return true;
+  }) as typeof process.stdout.write;
+
+  try {
+    printResult(failure("req_raw", "COMMAND_FAILED", "failed"), { raw: true });
+  } finally {
+    process.stdout.write = originalWrite;
+  }
+
+  assert.equal(output.includes("\n  "), false);
+  const payload = JSON.parse(output) as { ok: boolean; requestId: string; error: { code: string } };
+  assert.equal(payload.ok, false);
+  assert.equal(payload.requestId, "req_raw");
+  assert.equal(payload.error.code, "COMMAND_FAILED");
 });
 
 test("test run returns a job and status reaches succeeded", async () => {

@@ -259,6 +259,12 @@ export function printJson(result: CliResult): void {
   process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
 }
 
+/** 按 CLI 输出模式序列化 envelope；raw 模式用于管道消费。 */
+export function printResult(result: CliResult, options: { raw?: boolean } = {}): void {
+  const spacing = options.raw ? undefined : 2;
+  process.stdout.write(`${JSON.stringify(result, null, spacing)}\n`);
+}
+
 /** Validate and clamp a user-provided timeout against defaults and maxima. */
 export function clampTimeout(requestedMs: number | undefined, category: string): number {
   const fallback = DEFAULT_TIMEOUT_MS[category] ?? 10_000;

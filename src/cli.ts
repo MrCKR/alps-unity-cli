@@ -14,7 +14,7 @@ import type { CliCommandModule, Runtime } from "./cli-commands/types.js";
 import { summarizeJob } from "./cli-commands/unity-job.js";
 import { JobRunner } from "./job-runner.js";
 import { JobStore } from "./job-store.js";
-import { createRequestId, failure, printJson, success } from "./output.js";
+import { createRequestId, failure, printResult, success } from "./output.js";
 import { defaultDataDir, ensureWindows } from "./platform.js";
 import { handleToolsCommand } from "./tools.js";
 import { handleDoctorCommand } from "./doctor.js";
@@ -243,6 +243,9 @@ function help(): Record<string, unknown> {
       "batch run <file> [--preflight] [--parallel <n>] [--fail-fast true|false] --yes",
       "doctor [--project <path>] [--bridge-endpoint <url>]"
     ],
+    options: [
+      "--raw  Print the same JSON envelope as compact single-line JSON for pipes and scripts."
+    ],
     note: "Top-level commands are: tools, context, extensions, init, target, instances, jobs, batch, doctor. Unity capabilities (scene, asset, package, build, test, docs, reflect, editor, physics, profiler, ...) are exposed via `tools run <tool> --input <json>` and `context read <name>`. CLI control-plane state uses `target`, `instances`, `jobs`, `batch`, and `doctor`. `--instance <id|alias>` (alias `--target`) applies to every bridge-backed subcommand: tools group/list/describe/run/search, context list/describe/read, and diagnose.capabilities. In multi-instance scenarios prefer `--instance <alias>` (set via `target alias set`) over a mutable global active target, so each caller is bound to its own project."
   };
 }
@@ -264,8 +267,42 @@ function safeRealpath(path: string): string {
 }
 
 if (isCliEntryPoint(import.meta.url, process.argv[1])) {
-  execute(process.argv.slice(2)).then((result) => {
-    printJson(result);
+  const argv = process.argv.slice(2);
+  const rawOutput = readRawOutputFlag(argv);
+  execute(stripOutputOnlyFlags(argv)).then((result) => {
+    printResult(result, { raw: rawOutput });
     process.exitCode = result.ok ? 0 : 1;
   });
+}
+
+/** 读取只影响 stdout 序列化的全局 raw 开关，支持放在命令前后。 */
+function readRawOutputFlag(argv: string[]): boolean {
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index];
+    if (token === "--raw") {
+      const next = argv[index + 1];
+      return next === "false" ? false : true;
+    }
+    if (token === "--raw=false") return false;
+    if (token === "--raw=true") return true;
+  }
+  return false;
+}
+
+/** 移除只影响 stdout 序列化的全局开关，避免泄漏到业务 handler。 */
+function stripOutputOnlyFlags(argv: string[]): string[] {
+  const stripped: string[] = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    const token = argv[index];
+    if (token === "--raw") {
+      const next = argv[index + 1];
+      if (next === "true" || next === "false") index += 1;
+      continue;
+    }
+    if (token.startsWith("--raw=")) {
+      continue;
+    }
+    stripped.push(token);
+  }
+  return stripped;
 }
