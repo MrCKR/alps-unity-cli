@@ -30,7 +30,7 @@ Unity 能力域不要作为顶层命令使用。不要猜 `scene`、`asset`、`p
 
 ## 标准操作流程
 
-首次使用本 CLI 时，先主动执行一次 `unity_cli tools group`，读取所有 group 的 `summary` 建立能力地图；当前对话或任务链里已经执行过时不要重复执行。
+首次使用本 CLI 时，先主动执行一次 `unity_cli tools group`，读取所有 group 的 `summary` 建立能力地图。
 
 ```powershell
 unity_cli instances list
