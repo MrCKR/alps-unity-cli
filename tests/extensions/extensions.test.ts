@@ -32,7 +32,6 @@ import {
   collectAvailableTools,
   collectAllTools,
   collectAvailableContexts,
-  collectAvailableDocs,
   collectAvailableCSharpEntries,
   extensionAvailabilitySummary
 } from "../../src/extensions/descriptor-loader.js";
@@ -195,7 +194,7 @@ test("validateManifest rejects incomplete tool contribution", () => {
   assert.throws(
     () => validateManifest({
       ...PROBUILDER_MANIFEST,
-      contributions: { tools: [{ name: "test.tool" }] as unknown as typeof PROBUILDER_MANIFEST.contributions.tools }
+      contributions: { tools: [{}] as unknown as typeof PROBUILDER_MANIFEST.contributions.tools }
     }),
     (err: unknown) => err instanceof ExtensionRegistryError && err.code === "INVALID_MANIFEST"
   );
@@ -330,9 +329,7 @@ test("loadExtensionDescriptor loads a specific extension", () => {
   assert.equal(desc.availability.status, "available");
   assert.equal(desc.tools.length, 36);
   assert.equal(desc.contexts.length, 1);
-  assert.equal(desc.bridgeCommands.length, 1);
   assert.equal(desc.csharpEntries.length, 6);
-  assert.equal(desc.docs.length, 1);
 });
 
 test("loadExtensionDescriptor for unavailable extension has unavailable status", () => {
@@ -377,8 +374,8 @@ test("collectAvailableTools returns available extension tools and built-in VFX c
     "com.unity.probuilder": "5.2.0"
   });
   const toolNames = tools.map((t) => t.name);
-  assert.equal(tools.filter((t) => t.group === "probuilder").length, 36);
-  assert.equal(tools.filter((t) => t.group === "vfx").length, 10);
+  assert.equal(toolNames.filter((name) => name.startsWith("probuilder.")).length, 36);
+  assert.equal(toolNames.filter((name) => name.startsWith("vfx.")).length, 10);
   assert.ok(toolNames.includes("vfx.particle-create"));
   assert.ok(toolNames.includes("vfx.line-create"));
   assert.ok(toolNames.includes("vfx.trail"));
@@ -429,14 +426,6 @@ test("collectAvailableContexts returns implemented contexts from available exten
   });
   assert.ok(contexts.some((c) => c.key === "probuilder.scene"));
   assert.ok(!contexts.some((c) => c.key === "vfx.assets"));
-});
-
-test("collectAvailableDocs returns docs from available extensions", () => {
-  const registry = new ExtensionRegistry();
-  const docs = collectAvailableDocs(registry, {
-    "com.unity.probuilder": "5.2.0"
-  });
-  assert.ok(docs.some((d) => d.topic === "probuilder"));
 });
 
 test("collectAvailableCSharpEntries returns entries from available extensions", () => {
@@ -678,9 +667,7 @@ test("all five manifests have valid contributions", () => {
     assert.ok(m.contributions, `${m.id} should have contributions`);
     assert.ok(Array.isArray(m.contributions.tools), `${m.id} contributions.tools should be array`);
     assert.ok(Array.isArray(m.contributions.contexts), `${m.id} contributions.contexts should be array`);
-    assert.ok(Array.isArray(m.contributions.bridgeCommands), `${m.id} contributions.bridgeCommands should be array`);
     assert.ok(Array.isArray(m.contributions.csharpEntries), `${m.id} contributions.csharpEntries should be array`);
-    assert.ok(Array.isArray(m.contributions.docs), `${m.id} contributions.docs should be array`);
   }
 });
 
@@ -696,7 +683,7 @@ test("core package extension types do not reference optional Unity packages at c
   const typesModule = `
     ExtensionId, ExtensionAvailability, UnityPackageRequirement,
     ExtensionToolContribution, ExtensionContextContribution,
-    ExtensionDocsContribution, ExtensionCSharpEntry,
+    ExtensionCSharpEntry,
     ExtensionContributions, ExtensionManifest,
     PackageResolution, ExtensionAvailabilityResult, RegistryExtension,
     LoadedExtensionDescriptor

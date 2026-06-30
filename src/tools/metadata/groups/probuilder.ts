@@ -7,21 +7,15 @@ import { objSchema } from "../schemas.js";
  * Uses fine-grained single-action tools instead of coarse-grained probuilder.* entries.
  *
  * Unified constraints:
- *   group=probuilder, target=editor, availabilityScope=editorSession,
- *   requiresPackages=["com.unity.probuilder"], handler=hybrid,
- *   docsTopic=probuilder
+ *   group=probuilder, target=editor,
+ *   requiresPackages=["com.unity.probuilder"], handler=hybrid
  */
 
 const PB = "com.unity.probuilder";
 const PB_COMMON = {
   group: "probuilder",
   target: "editor",
-  availabilityScope: "editorSession",
   requiresPackages: [PB],
-  handler: "hybrid" as const,
-  source: "extension" as const,
-  docsTopic: "probuilder",
-  cancellationSemantics: "Live bridge execution is cooperative and usually short; --job execution can be cancelled with job cancel --id <jobId> using immediate Unity batchmode process termination semantics."
 };
 
 export const PROBUILDER_TOOLS: ToolMetadata[] = [
@@ -34,7 +28,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({}),
     outputSchema: objSchema({ installed: { type: "boolean" }, meshTypeAvailable: { type: "boolean" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.ping",
     examples: [{ description: "Check ProBuilder availability", argv: ["tools", "run", "probuilder.ping"] }]
   },
   // ─── Shape Creation ────────────────────────────────────
@@ -56,8 +49,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["shapeType"]),
     outputSchema: objSchema({ object: { type: "object", properties: { id: { type: "integer" }, name: { type: "string" }, path: { type: "string" }, shape: { type: "string" }, hasProBuilderMesh: { type: "boolean" } } } }),
     destructiveHint: false,
-    longRunning: true,
-    cliCommand: "tools run probuilder.create-shape",
     examples: [
       { description: "Create a ProBuilder cube", argv: ["tools", "run", "probuilder.create-shape", "Cube"] },
       { description: "Create a ProBuilder arch with radius", argv: ["tools", "run", "probuilder.create-shape", "Arch", "--radius", "2"] }
@@ -76,8 +67,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["points"]),
     outputSchema: objSchema({ object: { type: "object", properties: { id: { type: "integer" }, name: { type: "string" }, path: { type: "string" }, faceCount: { type: "integer" }, vertexCount: { type: "integer" } } } }),
     destructiveHint: false,
-    longRunning: true,
-    cliCommand: "tools run probuilder.create-poly-shape"
   },
   // ─── Face Operations ──────────────────────────────────
   {
@@ -93,7 +82,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target"]),
     outputSchema: objSchema({ modifiedFaceCount: { type: "integer" }, newVertexCount: { type: "integer" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.extrude-faces"
   },
   {
     name: "probuilder.delete-faces",
@@ -106,7 +94,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target", "faceIndices"]),
     outputSchema: objSchema({ deletedCount: { type: "integer" }, remainingFaceCount: { type: "integer" } }),
     destructiveHint: true,
-    cliCommand: "tools run probuilder.delete-faces"
   },
   {
     name: "probuilder.detach-faces",
@@ -120,7 +107,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target", "faceIndices"]),
     outputSchema: objSchema({ detachedObject: { type: "object", properties: { id: { type: "integer" }, name: { type: "string" }, path: { type: "string" } } }, faceCount: { type: "integer" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.detach-faces"
   },
   {
     name: "probuilder.merge-faces",
@@ -133,7 +119,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target", "faceIndices"]),
     outputSchema: objSchema({ mergedFaceIndex: { type: "integer" }, mergedFaceCount: { type: "integer" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.merge-faces"
   },
   {
     name: "probuilder.subdivide",
@@ -146,7 +131,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target"]),
     outputSchema: objSchema({ beforeFaceCount: { type: "integer" }, afterFaceCount: { type: "integer" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.subdivide"
   },
   {
     name: "probuilder.flip-normals",
@@ -159,7 +143,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target"]),
     outputSchema: objSchema({ flippedCount: { type: "integer" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.flip-normals"
   },
   {
     name: "probuilder.select-faces",
@@ -176,7 +159,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target"]),
     outputSchema: objSchema({ faceIndices: { type: "array", items: { type: "integer" } } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.select-faces"
   },
   {
     name: "probuilder.set-face-material",
@@ -190,7 +172,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target", "materialPath"]),
     outputSchema: objSchema({ assignedFaceCount: { type: "integer" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.set-face-material"
   },
   {
     name: "probuilder.set-face-color",
@@ -207,7 +188,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target"]),
     outputSchema: objSchema({ coloredFaceCount: { type: "integer" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.set-face-color"
   },
   {
     name: "probuilder.set-face-uvs",
@@ -225,7 +205,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target"]),
     outputSchema: objSchema({ updatedFaceCount: { type: "integer" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.set-face-uvs"
   },
   // ─── Edge Operations ──────────────────────────────────
   {
@@ -242,7 +221,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target"]),
     outputSchema: objSchema({ modifiedEdgeCount: { type: "integer" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.extrude-edges"
   },
   {
     name: "probuilder.bevel-edges",
@@ -257,7 +235,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target"]),
     outputSchema: objSchema({ modifiedEdgeCount: { type: "integer" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.bevel-edges"
   },
   {
     name: "probuilder.bridge-edges",
@@ -272,7 +249,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target", "edgeA", "edgeB"]),
     outputSchema: objSchema({ newFaceCount: { type: "integer" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.bridge-edges"
   },
   {
     name: "probuilder.connect-elements",
@@ -287,7 +263,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target"]),
     outputSchema: objSchema({ connectedCount: { type: "integer" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.connect-elements"
   },
   // ─── Mesh Combine / Merge ─────────────────────────────
   {
@@ -301,7 +276,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["targets"]),
     outputSchema: objSchema({ combinedObject: { type: "object", properties: { id: { type: "integer" }, name: { type: "string" }, path: { type: "string" } } }, sourceCount: { type: "integer" } }),
     destructiveHint: true,
-    cliCommand: "tools run probuilder.combine-meshes"
   },
   {
     name: "probuilder.merge-objects",
@@ -315,7 +289,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["targets"]),
     outputSchema: objSchema({ mergedObject: { type: "object", properties: { id: { type: "integer" }, name: { type: "string" }, path: { type: "string" } } } }),
     destructiveHint: true,
-    cliCommand: "tools run probuilder.merge-objects"
   },
   {
     name: "probuilder.duplicate-and-flip",
@@ -328,7 +301,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target"]),
     outputSchema: objSchema({ duplicatedCount: { type: "integer" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.duplicate-and-flip"
   },
   {
     name: "probuilder.create-polygon",
@@ -342,7 +314,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target", "vertexIndices"]),
     outputSchema: objSchema({ newFaceIndex: { type: "integer" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.create-polygon"
   },
   // ─── Vertex Operations ────────────────────────────────
   {
@@ -357,7 +328,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target", "vertexIndices"]),
     outputSchema: objSchema({ mergedVertexCount: { type: "integer" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.merge-vertices"
   },
   {
     name: "probuilder.weld-vertices",
@@ -371,7 +341,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target"]),
     outputSchema: objSchema({ weldedCount: { type: "integer" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.weld-vertices"
   },
   {
     name: "probuilder.split-vertices",
@@ -384,7 +353,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target", "vertexIndices"]),
     outputSchema: objSchema({ splitCount: { type: "integer" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.split-vertices"
   },
   {
     name: "probuilder.move-vertices",
@@ -400,7 +368,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target", "vertexIndices"]),
     outputSchema: objSchema({ movedCount: { type: "integer" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.move-vertices"
   },
   {
     name: "probuilder.insert-vertex",
@@ -415,7 +382,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target"]),
     outputSchema: objSchema({ insertedVertexIndex: { type: "integer" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.insert-vertex"
   },
   {
     name: "probuilder.append-vertices-to-edge",
@@ -430,7 +396,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target"]),
     outputSchema: objSchema({ insertedCount: { type: "integer" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.append-vertices-to-edge"
   },
   // ─── Info / Inspection ────────────────────────────────
   {
@@ -444,7 +409,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target"]),
     outputSchema: objSchema({ vertexCount: { type: "integer" }, faceCount: { type: "integer" }, edgeCount: { type: "integer" }, bounds: { type: "object" }, materials: { type: "array" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.mesh-info"
   },
   {
     name: "probuilder.validate-mesh",
@@ -456,7 +420,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target"]),
     outputSchema: objSchema({ healthy: { type: "boolean" }, degenerateTriangles: { type: "integer" }, unusedVertices: { type: "integer" }, issues: { type: "array", items: { type: "string" } } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.validate-mesh"
   },
   // ─── Conversion ───────────────────────────────────────
   {
@@ -469,7 +432,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target"]),
     outputSchema: objSchema({ converted: { type: "boolean" }, vertexCount: { type: "integer" }, faceCount: { type: "integer" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.convert-to-probuilder"
   },
   // ─── Smoothing ────────────────────────────────────────
   {
@@ -484,7 +446,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target", "smoothingGroup"]),
     outputSchema: objSchema({ modifiedFaceCount: { type: "integer" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.set-smoothing"
   },
   {
     name: "probuilder.auto-smooth",
@@ -498,7 +459,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target"]),
     outputSchema: objSchema({ smoothedFaceCount: { type: "integer" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.auto-smooth"
   },
   // ─── Pivot / Transform ────────────────────────────────
   {
@@ -511,7 +471,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target"]),
     outputSchema: objSchema({ pivotOffset: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } }, newPosition: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.center-pivot"
   },
   {
     name: "probuilder.freeze-transform",
@@ -523,7 +482,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target"]),
     outputSchema: objSchema({ bakedVertexCount: { type: "integer" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.freeze-transform"
   },
   {
     name: "probuilder.set-pivot",
@@ -538,7 +496,6 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target"]),
     outputSchema: objSchema({ newPivotPosition: { type: "object", properties: { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } } } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.set-pivot"
   },
   // ─── Repair ───────────────────────────────────────────
   {
@@ -551,6 +508,5 @@ export const PROBUILDER_TOOLS: ToolMetadata[] = [
     }, ["target"]),
     outputSchema: objSchema({ removedDegenerateCount: { type: "integer" }, fixedCount: { type: "integer" }, remainingIssues: { type: "integer" } }),
     destructiveHint: false,
-    cliCommand: "tools run probuilder.repair-mesh"
   }
 ];

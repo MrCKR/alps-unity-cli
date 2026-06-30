@@ -11,7 +11,8 @@ import { ExtensionRegistry } from "./extensions/index.js";
 import { readInstalledUnityPackages } from "./extensions/project-resolver.js";
 import { collectAllTools } from "./extensions/descriptor-loader.js";
 import type { ExtensionAvailabilityResult, ExtensionId } from "./extensions/types.js";
-import type { ToolMetadata } from "./tools/metadata/types.js";
+import { extensionToolMetadata } from "./tools/metadata/index.js";
+import type { ResolvedToolMetadata, ToolMetadata } from "./tools/metadata/types.js";
 import { getString } from "./args.js";
 
 /**
@@ -214,7 +215,7 @@ export async function checkContextExtensionAvailability(
  */
 export async function collectExtensionToolDescriptors(
   flags: Record<string, string | boolean>
-): Promise<Array<ToolMetadata & { extensionId?: ExtensionId; extensionAvailable?: boolean }>> {
+): Promise<Array<ResolvedToolMetadata & { extensionId?: ExtensionId; extensionAvailable?: boolean }>> {
   const registry = new ExtensionRegistry();
   const projectPath = getString(flags, "project");
 
@@ -227,22 +228,13 @@ export async function collectExtensionToolDescriptors(
     }
   }
 
+  const metadataByName = new Map(extensionToolMetadata().map((tool) => [tool.name, tool]));
   const allTools = collectAllTools(registry, installedPackages);
-  return allTools.map((extTool) => ({
-    name: extTool.name,
-    summary: extTool.summary,
-    description: extTool.description,
-    group: extTool.group,
-    inputSchema: {},
-    destructiveHint: false,
-    handler: "bridge" as const,
-    supportStatus: "live-bridge" as const,
-    cliCommand: extTool.cliCommand,
-    target: "editor",
-    requiresPackages: [],
-    extensionId: extTool.extensionId,
-    extensionAvailable: extTool.available
-  }));
+  return allTools.flatMap((extTool) => {
+    const metadata = metadataByName.get(extTool.name);
+    if (!metadata) return [];
+    return [{ ...metadata, extensionId: extTool.extensionId, extensionAvailable: extTool.available }];
+  });
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────

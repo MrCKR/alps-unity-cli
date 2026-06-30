@@ -19,10 +19,6 @@ export const ASSET_TOOLS: ToolMetadata[] = [
     }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    cliCommand: "tools run asset.search",
-    docsTopic: "asset",
-    equivalentUnityMcp: "assets-find",
     examples: [
       { description: "Search materials in a fixture folder", argv: ["tools", "run", "asset.search", "--input", "{\"filter\":\"Alignment t:Material\",\"path\":\"Assets/UnityCliAlignmentFixtures\",\"pageSize\":20}"] },
       { description: "Search by label with a small cap", argv: ["tools", "run", "asset.search", "--input", "{\"filter\":\"l:ui\",\"searchInFolders\":[\"Assets\"],\"maxResults\":10}"] }
@@ -36,10 +32,6 @@ export const ASSET_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ path: { type: "string", description: "Existing Assets/* asset or folder path." } }, ["path"]),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    cliCommand: "tools run asset.info",
-    docsTopic: "asset",
-    equivalentUnityMcp: "manage_asset.get_info",
     examples: [
       { description: "Inspect a fixture asset", argv: ["tools", "run", "asset.info", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentControllerCore.controller\"}"] }
     ]
@@ -53,10 +45,6 @@ export const ASSET_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    cliCommand: "tools run asset.create",
-    docsTopic: "asset",
-    equivalentUnityMcp: "manage_asset.create/create_folder",
     examples: [
       { description: "Create a fixture text asset", argv: ["tools", "run", "asset.create", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/GeneratedConfig.json\",\"type\":\"file\",\"content\":\"{}\",\"overwrite\":true}"] },
       { description: "Create a fixture folder", argv: ["tools", "run", "asset.create", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/GeneratedFolder\",\"type\":\"folder\"}"] }
@@ -71,10 +59,6 @@ export const ASSET_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    cliCommand: "tools run asset.import",
-    docsTopic: "asset",
-    equivalentUnityMcp: "manage_asset.import",
     examples: [
       { description: "Import inline text into a fixture asset", argv: ["tools", "run", "asset.import", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/ImportedNote.txt\",\"content\":\"hello\",\"overwrite\":true}"] }
     ]
@@ -88,10 +72,6 @@ export const ASSET_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    cliCommand: "tools run asset.modify",
-    docsTopic: "asset",
-    equivalentUnityMcp: "manage_asset.modify",
     examples: [
       { description: "Replace a fixture text asset", argv: ["tools", "run", "asset.modify", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/GeneratedConfig.json\",\"content\":\"{\\\"updated\\\":true}\"}"] }
     ]
@@ -106,10 +86,6 @@ export const ASSET_TOOLS: ToolMetadata[] = [
     sideEffects: ["asset-delete", "asset-import"],
     playModeSupport: "session-affecting",
     supportsDryRun: true,
-    handler: "bridge",
-    cliCommand: "tools run asset.delete",
-    docsTopic: "asset",
-    equivalentUnityMcp: "manage_asset.delete",
     examples: [
       { description: "Preview a fixture asset delete", argv: ["tools", "run", "asset.delete", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/GeneratedConfig.json\"}", "--dry-run"] },
       { description: "Delete a fixture asset after confirmation", argv: ["tools", "run", "asset.delete", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/GeneratedConfig.json\"}", "--yes"] }
@@ -124,10 +100,6 @@ export const ASSET_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    cliCommand: "tools run asset.duplicate",
-    docsTopic: "asset",
-    equivalentUnityMcp: "manage_asset.duplicate",
     examples: [
       { description: "Duplicate a fixture text asset", argv: ["tools", "run", "asset.duplicate", "--input", "{\"source\":\"Assets/UnityCliAlignmentFixtures/GeneratedConfig.json\",\"destination\":\"Assets/UnityCliAlignmentFixtures/GeneratedConfigCopy.json\"}"] }
     ]
@@ -141,10 +113,6 @@ export const ASSET_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["asset-move", "asset-import"],
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    cliCommand: "tools run asset.move",
-    docsTopic: "asset",
-    equivalentUnityMcp: "manage_asset.move",
     examples: [
       { description: "Move a fixture text asset", argv: ["tools", "run", "asset.move", "--input", "{\"source\":\"Assets/UnityCliAlignmentFixtures/GeneratedConfigCopy.json\",\"destination\":\"Assets/UnityCliAlignmentFixtures/MovedConfig.json\"}"] }
     ]
@@ -158,10 +126,6 @@ export const ASSET_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["asset-move", "asset-import"],
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    cliCommand: "tools run asset.rename",
-    docsTopic: "asset",
-    equivalentUnityMcp: "manage_asset.rename",
     examples: [
       { description: "Rename a fixture text asset", argv: ["tools", "run", "asset.rename", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/MovedConfig.json\",\"name\":\"RenamedConfig.json\"}"] }
     ]
@@ -174,11 +138,6 @@ export const ASSET_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ keyword: { type: "string", description: "AssetDatabase search text." }, type: { type: "string", description: "Optional main asset type name, e.g. Texture2D or Material." }, pageSize: { type: "integer", default: 100, description: "Maximum returned assets, clamped to 1..500." } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run asset.search-built-in",
-    docsTopic: "asset",
-    equivalentUnityMcp: "assets-find-built-in",
     examples: [
       { description: "Search package resources", argv: ["tools", "run", "asset.search-built-in", "--input", "{\"keyword\":\"Default\",\"pageSize\":25}"] }
     ]
@@ -211,11 +170,6 @@ export const ASSET_TOOLS: ToolMetadata[] = [
     }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run asset.get-data",
-    docsTopic: "asset",
-    equivalentUnityMcp: "assets-get-data",
     examples: [
       { description: "Read exact fields only", argv: ["tools", "run", "asset.get-data", "--input", "{\"assetPath\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeMaterial.mat\",\"paths\":[\"name\"],\"maxDepth\":2}"] },
       { description: "Read a filtered subtree", argv: ["tools", "run", "asset.get-data", "--input", "{\"assetPath\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeMaterial.mat\",\"viewQuery\":{\"namePattern\":\"name\",\"maxDepth\":1}}"] }
@@ -230,35 +184,26 @@ export const ASSET_TOOLS: ToolMetadata[] = [
     outputSchema: pageSchema({ type: "object", properties: { path: { type: "string" }, gameObject: { type: "string" }, componentIndex: { type: "integer" }, type: { type: "string" }, fullName: { type: "string" }, enabled: { type: "boolean" } } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run asset.get-components",
-    docsTopic: "asset",
-    equivalentUnityMcp: "manage_asset.get_components",
     examples: [
       { description: "List components in a prefab asset", argv: ["tools", "run", "asset.get-components", "--input", "{\"assetPath\":\"Assets/Prefabs/Player.prefab\",\"pageSize\":50}"] }
     ]
   },
   {
     name: "asset.refresh",
-    summary: "Refresh the AssetDatabase in the live Editor, or import one asset path with refresh options.",
-    description: "Refresh the AssetDatabase in the live Editor, or import one asset path with refresh options. This is the asset-domain live equivalent of editor.refresh batch jobs; use path for one asset or omit path to refresh the whole AssetDatabase. Supports dry-run for planned effects.",
+    summary: "Refresh the AssetDatabase in a live Editor or as a Unity batchmode job.",
+    description: "Refresh the AssetDatabase in a live Editor or as a Unity batchmode job. Without --job, this runs through the open Editor bridge and may import one Assets/* path with refresh options. With --job, this opens a closed project in Unity batchmode and runs the same Bridge command, so the project must not already be open in Unity. Supports dry-run for planned effects.",
     group: "asset",
-    inputSchema: objSchema({ path: { type: "string", description: "Optional Assets/* path to import instead of refreshing the whole AssetDatabase." }, assetPath: { type: "string", description: "Alias of path." }, forceUpdate: { type: "boolean", default: false, description: "Use ImportAssetOptions.ForceUpdate." }, importRecursive: { type: "boolean", default: false, description: "Use ImportAssetOptions.ImportRecursive for folder paths." } }),
-    outputSchema: objSchema({ command: { type: "string" }, path: { type: "string" }, options: { type: "string" }, refreshed: { type: "boolean" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
+    inputSchema: objSchema({ path: { type: "string", description: "Optional Assets/* path to import instead of refreshing the whole AssetDatabase." }, assetPath: { type: "string", description: "Alias of path." }, forceUpdate: { type: "boolean", default: false, description: "Use ImportAssetOptions.ForceUpdate." }, importRecursive: { type: "boolean", default: false, description: "Use ImportAssetOptions.ImportRecursive for folder paths." }, project: { type: "string", description: "Unity project path when using --job batchmode execution." }, unity: { type: "string", description: "Unity executable path when using --job batchmode execution." }, wait: { type: "boolean", default: false, description: "Wait for the batchmode job to finish when using --job." }, waitTimeoutMs: { type: "integer", description: "Maximum wait time for the batchmode job when wait=true." } }),
+    outputSchema: objSchema({ command: { type: "string" }, mode: { type: "string" }, path: { type: "string" }, options: { type: "string" }, refreshed: { type: "boolean" }, jobId: { type: "string" }, status: { type: "string" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: false,
-    sideEffects: ["asset-import", "asset-refresh"],
+    sideEffects: ["asset-import", "asset-refresh", "script-compile", "domain-reload"],
     playModeSupport: "session-affecting",
     supportsDryRun: true,
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run asset.refresh",
-    docsTopic: "asset",
-    equivalentUnityMcp: "assets-refresh",
     examples: [
-      { description: "Refresh the AssetDatabase", argv: ["tools", "run", "asset.refresh", "--input", "{}"] },
-      { description: "Preview importing one asset", argv: ["tools", "run", "asset.refresh", "--input", "{\"path\":\"Assets/Generated/config.json\",\"forceUpdate\":true}", "--dry-run"] }
-    ]
+      { description: "Refresh the live Editor AssetDatabase", argv: ["tools", "run", "asset.refresh", "--input", "{}"] },
+      { description: "Preview importing one asset in the live Editor", argv: ["tools", "run", "asset.refresh", "--input", "{\"path\":\"Assets/Generated/config.json\",\"forceUpdate\":true}", "--dry-run"] },
+      { description: "Refresh a closed project in batchmode", argv: ["tools", "run", "asset.refresh", "--job", "--input", "{\"project\":\"./Dev/UnityProject\",\"wait\":true}"] }
+    ],
   },
   {
     name: "asset.preview",
@@ -268,10 +213,5 @@ export const ASSET_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ assetPath: { type: "string" }, path: { type: "string" } }, ["assetPath"]),
     destructiveHint: false,
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run asset.preview",
-    docsTopic: "asset",
-    equivalentUnityMcp: "manage_asset.generate_preview"
   }
 ];

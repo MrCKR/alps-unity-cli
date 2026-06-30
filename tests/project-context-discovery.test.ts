@@ -65,7 +65,6 @@ test("rawDescriptorToContextDescriptor maps project context descriptor correctly
   assert.equal("summary" in descriptor!, false);
   assert.equal("kind" in descriptor!, false);
   assert.equal("requiresUnity" in descriptor!, false);
-  assert.equal("equivalentUnityMcpNote" in descriptor!, false);
   assert.equal(descriptor!.source, "project");
   assert.equal(descriptor!.category, "project");
   assert.deepEqual(descriptor!.inputSchema, raw.inputSchema);

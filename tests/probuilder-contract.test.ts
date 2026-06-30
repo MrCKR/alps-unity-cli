@@ -11,7 +11,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { builtinToolMetadata, allRegisteredToolMetadata, filterToolsByGroup, findToolByName, extensionToolMetadata, EXTENSION_GROUPS, type ToolMetadata } from "../src/tools/metadata/index.js";
+import { builtinToolMetadata, allRegisteredToolMetadata, filterToolsByGroup, findToolByName, extensionToolMetadata, EXTENSION_GROUPS, toolDocsTopic, type ToolMetadata } from "../src/tools/metadata/index.js";
 import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { commandContracts, findCommandContract } from "../src/contracts/command-contract.js";
 import "../src/extensions/index.js";
@@ -87,7 +87,7 @@ test("every ProBuilder tool has consistent metadata", () => {
     assert.equal(tool.availabilityScope, "editorSession", `${tool.name}: availabilityScope must be editorSession`);
     assert.deepEqual(tool.requiresPackages, ["com.unity.probuilder"], `${tool.name}: requiresPackages must be ["com.unity.probuilder"]`);
     assert.equal(tool.handler, "hybrid", `${tool.name}: handler must be hybrid`);
-    assert.equal(tool.docsTopic, "probuilder", `${tool.name}: docsTopic must be probuilder`);
+    assert.equal(toolDocsTopic(tool), "probuilder", `${tool.name}: docs topic must be probuilder`);
 
     // inputSchema must be an object
     assert.equal(typeof tool.inputSchema, "object", `${tool.name}: inputSchema must be an object`);

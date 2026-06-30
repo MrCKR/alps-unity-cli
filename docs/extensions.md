@@ -91,15 +91,16 @@ unity_cli extensions doctor --project <path>         # 扩展诊断
 
 当扩展依赖的 Unity Package 未安装时：
 
-- 扩展工具通过 `tools group/list/describe/run` 暴露，并标记为 `available: false`
+- 扩展工具通过 `tools group/list/describe/run` 暴露；缺依赖时 `tools describe` 返回 `extensionAvailability: "unavailable"`、`missingPackageIds` 和错误恢复用的 `next_actions`
 - 执行时返回错误，`next_actions` 指向手动安装 Unity Package 与随后运行 `extensions install <id>`
 - 不自动安装 Unity Package，不产生静默失败
 
 ```json
 {
   "name": "probuilder.create-shape",
-  "available": false,
+  "extensionAvailability": "unavailable",
   "requiresPackages": ["com.unity.probuilder"],
+  "missingPackageIds": ["com.unity.probuilder"],
   "next_actions": ["Install com.unity.probuilder manually via Unity Package Manager or Packages/manifest.json.", "Then run unity_cli extensions install probuilder --project <path>."]
 }
 ```
@@ -125,7 +126,7 @@ unity_cli extensions doctor --project <path>         # 扩展诊断
 
 ## 取证与依赖
 
-- 扩展基础设施：`extensions list/install/remove/doctor`、`init --auto-detect`、缺依赖 `available:false` + `next_actions`。
+- 扩展基础设施：`extensions list/install/remove/doctor`、`init --auto-detect`、缺依赖 `extensionAvailability:unavailable` + `next_actions`。
 - ProBuilder：源码位于 `extensions/probuilder/`，安装后位于 `Packages/com.unity_cli/Extensions/probuilder/`，通过 project-tool bridge 路由提供扩展工具。
 - Cinemachine/VFX/URP/HDRP：源码位于对应 `extensions/<id>/` 目录，安装后位于 `Packages/com.unity_cli/Extensions/<id>/`，通过 metadata、bridge domain 和 C# command handler 提供 live Bridge 工具。
 - 验证入口：`npm test`、`npm run contracts:validate`、extension availability tests。

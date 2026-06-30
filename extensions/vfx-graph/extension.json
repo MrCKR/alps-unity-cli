@@ -1,52 +1,96 @@
 {
   "id": "vfx-graph",
-  "name": "vfx-graph",
-  "title": "VFX Graph",
+  "name": "VFX Graph",
   "version": "1.0.0",
-  "description": "Visual effects extension for VFX Graph plus Unity built-in ParticleSystem, LineRenderer, and TrailRenderer tools.",
-  "packageName": "unity-cli-extension-vfx-graph",
-  "requiresUnityPackages": [],
+  "description": "Visual effects extension with VFX Graph package tools plus built-in ParticleSystem, LineRenderer, and TrailRenderer tools.",
   "unityPackages": [],
-  "providesTools": [
-    "vfx.graph",
-    "vfx.effect",
-    "vfx.parameter",
-    "vfx.control",
-    "vfx.event",
-    "vfx.template",
-    "vfx.particle-create",
-    "vfx.particle-info",
-    "vfx.particle-main",
-    "vfx.particle-emission",
-    "vfx.particle-shape",
-    "vfx.particle-play",
-    "vfx.particle-module",
-    "vfx.line-create",
-    "vfx.line-positions",
-    "vfx.trail"
-  ],
-  "toolPackageRequirements": {
-    "vfx.graph": ["com.unity.visualeffectgraph"],
-    "vfx.effect": ["com.unity.visualeffectgraph"],
-    "vfx.parameter": ["com.unity.visualeffectgraph"],
-    "vfx.control": ["com.unity.visualeffectgraph"],
-    "vfx.event": ["com.unity.visualeffectgraph"],
-    "vfx.template": ["com.unity.visualeffectgraph"]
+  "contributions": {
+    "tools": [
+      {
+        "name": "vfx.graph",
+        "requiresPackages": [
+          "com.unity.visualeffectgraph"
+        ]
+      },
+      {
+        "name": "vfx.effect",
+        "requiresPackages": [
+          "com.unity.visualeffectgraph"
+        ]
+      },
+      {
+        "name": "vfx.parameter",
+        "requiresPackages": [
+          "com.unity.visualeffectgraph"
+        ]
+      },
+      {
+        "name": "vfx.control",
+        "requiresPackages": [
+          "com.unity.visualeffectgraph"
+        ]
+      },
+      {
+        "name": "vfx.event",
+        "requiresPackages": [
+          "com.unity.visualeffectgraph"
+        ]
+      },
+      {
+        "name": "vfx.template",
+        "requiresPackages": [
+          "com.unity.visualeffectgraph"
+        ]
+      },
+      {
+        "name": "vfx.particle-create",
+        "requiresPackages": []
+      },
+      {
+        "name": "vfx.particle-info",
+        "requiresPackages": []
+      },
+      {
+        "name": "vfx.particle-main",
+        "requiresPackages": []
+      },
+      {
+        "name": "vfx.particle-emission",
+        "requiresPackages": []
+      },
+      {
+        "name": "vfx.particle-shape",
+        "requiresPackages": []
+      },
+      {
+        "name": "vfx.particle-play",
+        "requiresPackages": []
+      },
+      {
+        "name": "vfx.particle-module",
+        "requiresPackages": []
+      },
+      {
+        "name": "vfx.line-create",
+        "requiresPackages": []
+      },
+      {
+        "name": "vfx.line-positions",
+        "requiresPackages": []
+      },
+      {
+        "name": "vfx.trail",
+        "requiresPackages": []
+      }
+    ],
+    "contexts": [],
+    "csharpEntries": [
+      {
+        "type": "UnityCli.VfxCommands",
+        "description": "Bridge handler for VFX Graph, ParticleSystem, LineRenderer, and TrailRenderer operations."
+      }
+    ]
   },
-  "copyRoot": "extension-directory",
-  "installMode": "copy",
-  "toolGroups": [
-    "vfx"
-  ],
-  "descriptorEntry": "tools/metadata/vfx.js",
-  "bridgeEntry": "bridge/domains/vfx.js",
-  "unityPackageFiles": [
-    "extension.json",
-    "unitypkg/",
-    "docs/"
-  ],
-  "docsTopic": "vfx",
-  "docsEntry": "docs/vfx.md",
   "unityInstall": {
     "layout": "directory",
     "include": [

@@ -102,7 +102,7 @@ tools run <tool>                        → 执行只读读取
 
 ## Built-in Context
 
-当前内置 23 个只读 Context，与 unity-mcp 的 Resources 模型等价映射，并通过 `context describe <name>` 暴露 input/output schema 与 `equivalentUnityMcp` 信息。
+当前内置 23 个只读 Context，并通过 `context describe <name>` 暴露 input/output schema、只读边界和 Play Mode 语义。
 
 | Context 概念 | Context 名称示例 | unity-mcp Resource |
 |--------------|------------------|---------------------|

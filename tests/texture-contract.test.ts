@@ -33,7 +33,6 @@ test("texture group tools exist with correct safety hints", () => {
   assert.equal(info.destructiveHint, false);
   assert.equal(info.handler, "bridge");
   assert.equal(info.playModeSupport, "supported");
-  assert.equal(info.equivalentUnityMcp, "manage_texture.get_info");
 
   const create = findToolByName("texture.create")!;
   assert.equal(create.playModeSupport, "session-affecting");

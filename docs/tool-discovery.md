@@ -37,9 +37,9 @@ unity_cli tools group
     "command": "tools.group",
     "count": 34,
     "groups": [
-      { "name": "scene", "title": "...", "toolCount": 12, "source": "core", "cliCommand": "tools group list scene" },
-      { "name": "object", "title": "...", "toolCount": 2, "source": "core", "cliCommand": "tools group list object" },
-      { "name": "reflection", "title": "...", "toolCount": 2, "source": "core", "cliCommand": "tools group list reflection" }
+      { "name": "scene", "summary": "...", "toolCount": 12, "source": "built-in", "cliCommand": "tools group list scene" },
+      { "name": "object", "summary": "...", "toolCount": 2, "source": "built-in", "cliCommand": "tools group list object" },
+      { "name": "reflection", "summary": "...", "toolCount": 2, "source": "built-in", "cliCommand": "tools group list reflection" }
     ]
   }
 }
@@ -74,7 +74,7 @@ unity_cli tools group list camera --format text
 
 ## tools search
 
-按关键词搜索工具名称、标题、描述和分组。
+按关键词搜索工具名称、摘要、描述和分组。
 
 ```powershell
 unity_cli tools search screenshot
@@ -96,26 +96,25 @@ unity_cli tools describe camera.screenshot
 | 字段 | 说明 |
 |------|------|
 | `name` | 工具唯一标识 |
-| `title` | 人类可读标题 |
+| `summary` | 简短摘要 |
 | `description` | 详细说明 |
 | `group` | 所属分组 |
+| `source` | 来源：`built-in` / `extension` / `project` |
 | `inputSchema` | 输入参数 JSON Schema |
 | `outputSchema` | 输出格式 JSON Schema |
 | `destructiveHint` | 是否有破坏性 |
 | `supportsDryRun` | 是否支持 `--dry-run` |
-| `longRunning` | 是否长时间运行 |
-| `handler` | 执行通道 |
+| `riskLevel` | 根据权限和副作用推导的风险等级 |
+| `longRunning` | 是否长时间运行，仅长任务出现 |
+| `cancellation` | 长任务取消语义：`cooperative` / `job`，无特殊取消语义时省略 |
 | `supportStatus` | 支持状态 |
 | `target` | 目标类型 |
 | `availabilityScope` | 可用性范围 |
 | `playModeSupport` | Play Mode 行为：`supported` / `runtime-only` / `session-affecting` / `editor-only` / `unknown` |
-| `available` | 当前是否可用 |
 | `requiresPackages` | 依赖的 Unity 包 |
 | `examples` | 使用示例 |
-| `docsTopic` | 相关文档主题 |
-| `permissions` | 所需权限 |
-| `cancellationSemantics` | 取消行为说明 |
-| `timeoutMs` | 超时时间 |
+| `permissions` | 所需权限，仅需要特殊权限时出现 |
+| `cliCommand` | 可直接执行的 CLI 命令 |
 
 ### 自定义工具描述
 
@@ -133,11 +132,11 @@ unity_cli tools describe my.custom-tool --bridge-endpoint http://127.0.0.1:47392
 
 ### 执行通道判断
 
-- `handler: "bridge"` → 实时 Bridge 执行
-- `handler: "bridge-runtime"` → 需要 Play Mode 的 Runtime 工具
-- `handler: "hybrid"` → 支持 Bridge + job 双通道
-- `handler: "job"` → batchmode/job 执行
-- `handler: "offline"` → 本地 CLI 执行
+- `supportStatus: "live-bridge"` → 实时 Bridge 执行
+- `supportStatus: "live-bridge-runtime"` → 需要 Play Mode 的 Runtime 工具
+- `supportStatus: "bridge-job"` → 支持 Bridge + job 双通道
+- `supportStatus: "batch-job"` → batchmode/job 执行
+- `supportStatus: "cli-only"` → 本地 CLI 执行
 
 ### 可用性判断
 
@@ -149,7 +148,7 @@ unity_cli tools describe my.custom-tool --bridge-endpoint http://127.0.0.1:47392
 - `playModeSupport: "runtime-only"` → Play Mode 可执行，但结果只影响当前运行会话
 - `playModeSupport: "session-affecting"` → 可能触发 import、compile、domain reload 或 Play Mode 状态变化
 - `playModeSupport: "editor-only"` → Play Mode 下不可执行，返回 `E_TOOL_PLAYMODE_UNAVAILABLE`
-- `available` → 当前目标实例上是否可用
+- `extensionAvailability` / `missingPackageIds` → 扩展依赖在当前项目中的可用性（仅扩展工具缺依赖时出现）
 - `requiresPackages` → 需要安装的 Unity 包
 
 ## AI Agent 发现工作流
@@ -161,6 +160,6 @@ unity_cli tools describe my.custom-tool --bridge-endpoint http://127.0.0.1:47392
 
 ### 错误处理
 
-- `E_TOOL_NOT_FOUND_FOR_TARGET` → 工具在当前目标不可用，检查 `requiresPackages` 和 `available`
+- `E_TOOL_NOT_FOUND_FOR_TARGET` → 工具在当前目标不可用，检查 `requiresPackages`、`extensionAvailability` 和目标实例状态
 - `E_RUNTIME_NOT_READY` → Runtime 工具需要 Play Mode 活跃，检查 `target: "runtime"`
 - `E_TARGET_AMBIGUOUS` → 多个实例可用，需要显式指定 `--target`

@@ -92,7 +92,6 @@ test("editor.tool-states keeps purpose in description without MCP descriptor fie
   const block = source.slice(blockStart, blockEnd > blockStart ? blockEnd : tsIndex + 300);
   assert.match(block, /Description = .*Unity Editor transform tool settings/, "editor.tool-states must explain its Editor tool settings purpose");
   assert.match(block, /gridAvailable/, "editor.tool-states output schema must match runtime field gridAvailable");
-  assert.doesNotMatch(source, /equivalentUnityMcp/i, "Context descriptors must not expose MCP equivalence fields");
   assert.doesNotMatch(source, /resourceUri/i, "Context descriptors must not expose resourceUri fields");
 });
 

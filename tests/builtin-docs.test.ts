@@ -15,24 +15,23 @@ function customTool(overrides: Partial<ToolMetadata> = {}): ToolMetadata {
     destructiveHint: true,
     handler: "bridge",
     supportStatus: "live-bridge",
-    cliCommand: "tools run terrain.bake",
     ...overrides
   };
 }
 
-test("buildTopics includes dynamic custom tool topics", () => {
-  const topics = buildTopics([customTool({ docsTopic: "terrain" })]);
-  const topic = topics.find((candidate) => candidate.key === "terrain");
+test("buildTopics uses generated custom tool topics", () => {
+  const topics = buildTopics([customTool()]);
+  const topic = topics.find((candidate) => candidate.key === "terrain-tools");
 
   assert.ok(topic);
-  assert.equal(topic.title, "Terrain");
-  assert.equal(topic.summary, "Terrain registered by Unity project custom tools.");
+  assert.equal(topic.title, "Terrain Tools");
+  assert.equal(topic.summary, "Terrain Tools registered by Unity project custom tools.");
   assert.equal(topic.tools.length, 1);
   assert.ok(topic.tools[0].includes("terrain.bake"));
 });
 
 test("buildTopics falls back to unknown group title", () => {
-  const topics = buildTopics([customTool({ docsTopic: undefined })]);
+  const topics = buildTopics([customTool({ group: "terrain-tools" })]);
   const topic = topics.find((candidate) => candidate.key === "terrain-tools");
 
   assert.ok(topic);

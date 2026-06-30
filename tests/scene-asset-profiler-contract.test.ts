@@ -70,8 +70,11 @@ test("asset domain exposes paged search/get-data/get-components/refresh/preview 
   assert.ok(getComponentsProps.pageSize, "asset.get-components should expose pagination");
   assert.match(getComponents.description, /component summaries/, "asset.get-components should describe lightweight component summaries");
   const refresh = findToolByName("asset.refresh")!;
+  assert.equal(refresh.handler, "hybrid");
+  assert.equal(refresh.supportStatus, "bridge-job");
   assert.equal(refresh.supportsDryRun, true);
-  assert.deepEqual(refresh.sideEffects, ["asset-import", "asset-refresh"]);
+  assert.deepEqual(refresh.sideEffects, ["asset-import", "asset-refresh", "script-compile", "domain-reload"]);
+  assert.match(refresh.description, /batchmode job/);
   assert.equal(findToolByName("asset.preview")!.playModeSupport, "session-affecting");
 });
 
@@ -266,7 +269,6 @@ test("graphics tools expose complete metadata and current CLI guidance", async (
     assert.equal(tool.supportStatus, "live-bridge", `${tool.name} should disclose live bridge support`);
     assert.ok(tool.outputSchema, `${tool.name} should expose outputSchema`);
     assert.ok(tool.examples?.some((example) => example.argv.includes("--input")), `${tool.name} should include tools run --input examples`);
-    assert.ok(tool.equivalentUnityMcp, `${tool.name} should document reference-project equivalent`);
     assert.ok(tool.playModeSupport, `${tool.name} should declare Play Mode semantics`);
     assert.ok(tool.sideEffects, `${tool.name} should explicitly declare side effects, even when empty`);
   }

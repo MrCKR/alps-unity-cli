@@ -5,23 +5,13 @@ const VFX_GRAPH_PACKAGE = "com.unity.visualeffectgraph";
 
 const VFX_GRAPH_COMMON = {
   group: "vfx",
-  kind: "tool" as const,
-  source: "extension" as const,
   target: "editor",
-  availabilityScope: "editorSession",
-  handler: "bridge" as const,
-  docsTopic: "vfx",
   requiresPackages: [VFX_GRAPH_PACKAGE]
 };
 
 const BUILTIN_VFX_COMMON = {
   group: "vfx",
-  kind: "tool" as const,
-  source: "extension" as const,
   target: "editor",
-  availabilityScope: "editorSession",
-  handler: "bridge" as const,
-  docsTopic: "vfx"
 };
 
 const vector3Properties = { x: { type: "number" }, y: { type: "number" }, z: { type: "number" } };
@@ -40,7 +30,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
     ...VFX_GRAPH_COMMON,
     inputSchema: objSchema({ path: { type: "string" }, action: { type: "string", enum: ["info", "create"] }, create: { type: "boolean" }, overwrite: { type: "boolean" } }, ["path"]),
     destructiveHint: false,
-    cliCommand: "tools run vfx.graph"
   },
   {
     name: "vfx.effect",
@@ -49,7 +38,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
     ...VFX_GRAPH_COMMON,
     inputSchema: objSchema({ target: { type: "string" }, graph: { type: "string" }, add: { type: "boolean" } }, ["target"]),
     destructiveHint: false,
-    cliCommand: "tools run vfx.effect"
   },
   {
     name: "vfx.parameter",
@@ -71,7 +59,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
       a: { type: "number" }
     }, ["target", "name"]),
     destructiveHint: false,
-    cliCommand: "tools run vfx.parameter",
     examples: [
       { description: "Set an exposed float parameter", argv: ["tools", "run", "vfx.parameter", "--input", "{\"target\":\"VFXFire\",\"name\":\"Intensity\",\"type\":\"float\",\"value\":\"2.5\"}"] },
       { description: "Set a vector3 parameter", argv: ["tools", "run", "vfx.parameter", "--input", "{\"target\":\"VFXFire\",\"name\":\"Velocity\",\"type\":\"vector3\",\"x\":0,\"y\":1,\"z\":0}"] }
@@ -90,7 +77,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
       resetSeedOnPlay: { type: "boolean" }
     }, ["target"]),
     destructiveHint: false,
-    cliCommand: "tools run vfx.control",
     examples: [
       { description: "Play a VFX effect", argv: ["tools", "run", "vfx.control", "--input", "{\"target\":\"VFXFire\",\"action\":\"play\"}"] }
     ]
@@ -110,7 +96,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
       attributeSize: { type: "number" }
     }, ["target", "eventName"]),
     destructiveHint: false,
-    cliCommand: "tools run vfx.event",
     examples: [
       { description: "Send an event with a position attribute", argv: ["tools", "run", "vfx.event", "--input", "{\"target\":\"VFXFire\",\"eventName\":\"Explode\",\"attributeName\":\"position\",\"attributeX\":1,\"attributeY\":2,\"attributeZ\":3}"] }
     ]
@@ -122,7 +107,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
     ...VFX_GRAPH_COMMON,
     inputSchema: objSchema({ path: { type: "string" }, template: { type: "string" }, overwrite: { type: "boolean" } }, ["path"]),
     destructiveHint: false,
-    cliCommand: "tools run vfx.template",
     examples: [
       { description: "Create a graph from an AR template", argv: ["tools", "run", "vfx.template", "--input", "{\"path\":\"Assets/VFX/Sparkle.vfx\",\"template\":\"AR/AugmentedRealityTemplate\"}"] }
     ]
@@ -144,7 +128,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
       loop: { type: "boolean" }
     }),
     destructiveHint: false,
-    cliCommand: "tools run vfx.particle-create"
   },
   {
     name: "vfx.particle-info",
@@ -153,7 +136,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
     ...BUILTIN_VFX_COMMON,
     inputSchema: objSchema({ target: { type: "string" } }, ["target"]),
     destructiveHint: false,
-    cliCommand: "tools run vfx.particle-info"
   },
   {
     name: "vfx.particle-main",
@@ -176,7 +158,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
       scalingMode: { type: "string", enum: ["Hierarchy", "Local", "Shape"] }
     }, ["target"]),
     destructiveHint: false,
-    cliCommand: "tools run vfx.particle-main"
   },
   {
     name: "vfx.particle-emission",
@@ -191,7 +172,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
       burstCount: { type: "integer" }
     }, ["target"]),
     destructiveHint: false,
-    cliCommand: "tools run vfx.particle-emission"
   },
   {
     name: "vfx.particle-shape",
@@ -212,7 +192,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
       randomDirection: { type: "boolean" }
     }, ["target"]),
     destructiveHint: false,
-    cliCommand: "tools run vfx.particle-shape"
   },
   {
     name: "vfx.particle-play",
@@ -226,7 +205,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
       stopBehavior: { type: "string", enum: ["StopEmitting", "StopEmittingAndClear"] }
     }, ["target"]),
     destructiveHint: false,
-    cliCommand: "tools run vfx.particle-play"
   },
   {
     name: "vfx.particle-module",
@@ -267,7 +245,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
       subEmitterProperties: { type: "string" }
     }, ["target", "module"]),
     destructiveHint: false,
-    cliCommand: "tools run vfx.particle-module",
     examples: [
       { description: "Enable noise with strength and frequency", argv: ["tools", "run", "vfx.particle-module", "--input", "{\"target\":\"Dust\",\"module\":\"noise\",\"enabled\":true,\"strength\":0.4,\"frequency\":0.8}"] },
       { description: "Set velocity over lifetime", argv: ["tools", "run", "vfx.particle-module", "--input", "{\"target\":\"Dust\",\"module\":\"velocity\",\"enabled\":true,\"x\":0,\"y\":1,\"z\":0,\"space\":\"World\"}"] }
@@ -299,7 +276,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
       numCapVertices: { type: "integer" }
     }),
     destructiveHint: false,
-    cliCommand: "tools run vfx.line-create",
     examples: [
       { description: "Create a line with material and width curve", argv: ["tools", "run", "vfx.line-create", "--input", "{\"name\":\"AimLine\",\"material\":\"Assets/UnityCliAlignmentFixtures/Line.mat\",\"widthCurve\":[{\"time\":0,\"value\":0.1},{\"time\":1,\"value\":0.02}],\"alignment\":\"View\"}"] }
     ]
@@ -316,7 +292,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
       position: { type: ["string", "object"], properties: vector3Properties }
     }, ["target"]),
     destructiveHint: false,
-    cliCommand: "tools run vfx.line-positions"
   },
   {
     name: "vfx.trail",
@@ -345,7 +320,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
       numCapVertices: { type: "integer" }
     }),
     destructiveHint: false,
-    cliCommand: "tools run vfx.trail",
     examples: [
       { description: "Create and configure a trail", argv: ["tools", "run", "vfx.trail", "--input", "{\"name\":\"DashTrail\",\"create\":true,\"material\":\"Assets/UnityCliAlignmentFixtures/Trail.mat\",\"colorGradient\":[{\"time\":0,\"color\":\"#FFFFFFFF\"},{\"time\":1,\"color\":\"#00FFFFFF\"}],\"widthCurve\":[{\"time\":0,\"value\":0.3},{\"time\":1,\"value\":0}]}"] }
     ]

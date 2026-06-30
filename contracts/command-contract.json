@@ -204,7 +204,7 @@
       "bridgeCommand": "asset.refresh",
       "group": "asset",
       "command": "refresh",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -792,6 +792,15 @@
       "bridgeCommand": "editor.active-tool.set",
       "group": "editor",
       "command": "active-tool.set",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "editor.compile",
+      "group": "editor",
+      "command": "compile",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,

@@ -9,9 +9,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
     group: "vfx",
     inputSchema: objSchema({ path: { type: "string" }, action: { type: "string", enum: ["info", "create"] }, create: { type: "boolean" }, overwrite: { type: "boolean" } }, ["path"]),
     destructiveHint: false,
-    handler: "bridge",
-    cliCommand: "tools run vfx.graph",
-    docsTopic: "vfx",
     requiresPackages: ["com.unity.visualeffectgraph"]
   },
   {
@@ -21,9 +18,6 @@ export const VFX_TOOLS: ToolMetadata[] = [
     group: "vfx",
     inputSchema: objSchema({ target: { type: "string" }, graph: { type: "string" }, add: { type: "boolean" } }, ["target"]),
     destructiveHint: false,
-    handler: "bridge",
-    cliCommand: "tools run vfx.effect",
-    docsTopic: "vfx",
     requiresPackages: ["com.unity.visualeffectgraph"]
   }
 ];

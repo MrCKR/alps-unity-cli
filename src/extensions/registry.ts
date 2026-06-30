@@ -344,7 +344,7 @@ export function validateManifest(manifest: ExtensionManifest): void {
     throw new ExtensionRegistryError(
       "INVALID_MANIFEST",
       `Extension '${manifest.id}' requires a 'contributions' object.`,
-      ["Provide tool, context, bridgeCommand, csharp, and/or docs contributions."]
+      ["Provide tool capability IDs, context keys, and/or C# implementation entries."]
     );
   }
 
@@ -358,11 +358,11 @@ export function validateManifest(manifest: ExtensionManifest): void {
       );
     }
     for (const tool of manifest.contributions.tools) {
-      if (!tool.name || !tool.summary || !tool.description || !tool.group || !tool.bridgeCommand || !tool.cliCommand) {
+      if (!tool.name || typeof tool.name !== "string") {
         throw new ExtensionRegistryError(
           "INVALID_MANIFEST",
           `Extension '${manifest.id}' has an incomplete tool contribution: ${tool.name ?? "<missing name>"}.`,
-          ["Each tool must have: name, summary, description, group, bridgeCommand, cliCommand."]
+          ["Each tool contribution must declare a stable tool name."]
         );
       }
     }

@@ -18,13 +18,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     }),
     destructiveHint: false,
     sideEffects: ["project-settings-write"],
-    riskLevel: "low",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run physics.settings",
-    docsTopic: "physics",
-    equivalentUnityMcp: "manage_physics.set_settings",
     examples: [
       { description: "Read current physics settings", argv: ["tools", "run", "physics.settings", "--input", "{\"mode\":\"3d\"}"] }
     ]
@@ -37,13 +31,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ layerA: { type: "string", description: "First layer name or numeric index. Omit with layerB to read the full matrix." }, layerB: { type: "string", description: "Second layer name or numeric index. Omit with layerA to read the full matrix." }, ignore: { type: "boolean", description: "True to ignore/disable collision between layerA and layerB; false enables collision." } }),
     destructiveHint: false,
     sideEffects: ["project-settings-write"],
-    riskLevel: "low",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run physics.collision-matrix",
-    docsTopic: "physics",
-    equivalentUnityMcp: "manage_physics.collision_matrix",
     examples: [
       { description: "Read the full layer collision matrix", argv: ["tools", "run", "physics.collision-matrix", "--input", "{}"] },
       { description: "Read collision state between two layers", argv: ["tools", "run", "physics.collision-matrix", "--input", "{\"layerA\":\"Default\",\"layerB\":\"Ignore Raycast\"}"] }
@@ -57,13 +45,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ path: { type: "string", description: "Destination Assets/*.physicMaterial path." }, dynamicFriction: { type: "number" }, staticFriction: { type: "number" }, bounciness: { type: "number" }, overwrite: { type: "boolean" } }, ["path"]),
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],
-    riskLevel: "low",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run physics.material",
-    docsTopic: "physics",
-    equivalentUnityMcp: "manage_physics.physics_material",
     examples: [
       { description: "Create a bouncy physic material", argv: ["tools", "run", "physics.material", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/_probe.physicMaterial\",\"bounciness\":0.8}"] }
     ]
@@ -77,13 +59,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     supportsDryRun: true,
     sideEffects: ["scene-modify"],
-    riskLevel: "low",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run physics.assign-material",
-    docsTopic: "physics",
-    equivalentUnityMcp: "manage_physics.assign_physics_material",
     examples: [
       { description: "Assign a PhysicMaterial to the first Collider on a target", argv: ["tools", "run", "physics.assign-material", "--input", "{\"target\":\"Ball\",\"materialPath\":\"Assets/Physics/Bouncy.physicMaterial\"}"] }
     ]
@@ -96,13 +72,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ target: { type: "string", description: "Target GameObject with Rigidbody." }, type: { type: "string", description: "Joint type: Fixed, HingeJoint, SpringJoint, ConfigurableJoint." }, action: { type: "string", enum: ["add", "configure", "remove"], description: "Operation to perform. Defaults to add/configure." }, connectedBody: { type: "string", description: "Connected Rigidbody target for add/configure." }, componentIndex: { type: "integer", description: "For action=remove, remove this matching joint index; omit to remove all matching joints." }, anchor: { type: "string", description: "Anchor reference." } }, ["target", "type"]),
     destructiveHint: false,
     sideEffects: ["scene-modify"],
-    riskLevel: "low",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run physics.joint",
-    docsTopic: "physics",
-    equivalentUnityMcp: "manage_physics.joints",
     examples: [
       { description: "Add a FixedJoint to a Rigidbody", argv: ["tools", "run", "physics.joint", "--input", "{\"target\":\"PhysicsProbe\",\"type\":\"FixedJoint\"}"] },
       { description: "Remove all FixedJoint components from a target", argv: ["tools", "run", "physics.joint", "--input", "{\"target\":\"PhysicsProbe\",\"type\":\"FixedJoint\",\"action\":\"remove\"}"] }
@@ -116,13 +86,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ target: { type: "string", description: "Target GameObject with Rigidbody." }, x: { type: "number" }, y: { type: "number" }, z: { type: "number" }, mode: { type: "string" }, forceType: { type: "string", enum: ["normal", "explosion"] }, torqueX: { type: "number" }, torqueY: { type: "number" }, torqueZ: { type: "number" }, explosionX: { type: "number" }, explosionY: { type: "number" }, explosionZ: { type: "number" }, explosionRadius: { type: "number" }, explosionForce: { type: "number" }, upwardsModifier: { type: "number" } }, ["target"]),
     destructiveHint: false,
     sideEffects: ["runtime-state"],
-    riskLevel: "low",
     playModeSupport: "runtime-only",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run physics.force",
-    docsTopic: "physics",
-    equivalentUnityMcp: "manage_physics.forces",
     examples: [
       { description: "Apply an upward force", argv: ["tools", "run", "physics.force", "--input", "{\"target\":\"PhysicsProbe\",\"x\":0,\"y\":10,\"z\":0}"] }
     ]
@@ -135,11 +99,6 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ mode: { type: "string", enum: ["3d", "2d"] }, shape: { type: "string", enum: ["sphere", "circle", "box", "capsule"] }, originX: { type: "number" }, originY: { type: "number" }, originZ: { type: "number" }, radius: { type: "number" }, sizeX: { type: "number" }, sizeY: { type: "number" }, sizeZ: { type: "number" }, height: { type: "number" }, angle: { type: "number" }, capsuleDirection: { type: "string", enum: ["vertical", "horizontal"] }, layerMask: { type: "integer" } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run physics.overlap",
-    docsTopic: "physics",
-    equivalentUnityMcp: "manage_physics.overlap_queries",
     examples: [
       { description: "Sphere overlap at origin", argv: ["tools", "run", "physics.overlap", "--input", "{\"shape\":\"sphere\",\"originX\":0,\"originY\":0,\"originZ\":0,\"radius\":5}"] }
     ]
@@ -152,13 +111,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ target: { type: "string", description: "Target GameObject with Rigidbody." }, mass: { type: "number" }, drag: { type: "number" }, angularDrag: { type: "number" }, useGravity: { type: "boolean" }, isKinematic: { type: "boolean" }, validate: { type: "boolean", description: "Only validate, do not change." } }, ["target"]),
     destructiveHint: false,
     sideEffects: ["scene-modify"],
-    riskLevel: "low",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run physics.rigidbody",
-    docsTopic: "physics",
-    equivalentUnityMcp: "manage_physics.rigidbody",
     examples: [
       { description: "Read current Rigidbody state without modifying the target", argv: ["tools", "run", "physics.rigidbody", "--input", "{\"target\":\"PhysicsProbe\",\"validate\":true}"] },
       { description: "Configure a Rigidbody", argv: ["tools", "run", "physics.rigidbody", "--input", "{\"target\":\"PhysicsProbe\",\"mass\":2.0,\"useGravity\":true}"] }
@@ -172,11 +125,6 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ originX: { type: "number" }, originY: { type: "number" }, originZ: { type: "number" }, directionX: { type: "number" }, directionY: { type: "number" }, directionZ: { type: "number" }, distance: { type: "number" }, mode: { type: "string", enum: ["3d", "2d"] }, layerMask: { type: "integer" }, all: { type: "boolean" } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run physics.raycast",
-    docsTopic: "physics",
-    equivalentUnityMcp: "manage_physics.raycast",
     examples: [
       { description: "Raycast forward from origin", argv: ["tools", "run", "physics.raycast", "--input", "{\"originX\":0,\"originY\":0,\"originZ\":0,\"directionX\":0,\"directionY\":0,\"directionZ\":1,\"distance\":100}"] }
     ]
@@ -189,13 +137,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ steps: { type: "integer" }, deltaTime: { type: "number" }, simulate: { type: "boolean" }, mode: { type: "string", enum: ["3d", "2d"] } }),
     destructiveHint: false,
     sideEffects: ["runtime-state"],
-    riskLevel: "low",
     playModeSupport: "runtime-only",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run physics.simulation",
-    docsTopic: "physics",
-    equivalentUnityMcp: "manage_physics.simulate_step",
     examples: [
       { description: "Step simulation 10 frames", argv: ["tools", "run", "physics.simulation", "--input", "{\"steps\":10,\"deltaTime\":0.016,\"mode\":\"3d\"}"] }
     ]
@@ -208,11 +150,6 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ originX: { type: "number" }, originY: { type: "number" }, originZ: { type: "number" }, directionX: { type: "number" }, directionY: { type: "number" }, directionZ: { type: "number" }, distance: { type: "number" }, mode: { type: "string", enum: ["3d", "2d"] }, layerMask: { type: "integer" } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run physics.raycast-all",
-    docsTopic: "physics",
-    equivalentUnityMcp: "physics.raycast_all",
     examples: [
       { description: "Raycast all hits forward", argv: ["tools", "run", "physics.raycast-all", "--input", "{\"originX\":0,\"originY\":0,\"originZ\":0,\"directionX\":0,\"directionY\":0,\"directionZ\":1,\"distance\":100}"] }
     ]
@@ -225,11 +162,6 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ startX: { type: "number" }, startY: { type: "number" }, startZ: { type: "number" }, endX: { type: "number" }, endY: { type: "number" }, endZ: { type: "number" }, mode: { type: "string", enum: ["3d", "2d"] }, layerMask: { type: "integer" } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run physics.linecast",
-    docsTopic: "physics",
-    equivalentUnityMcp: "physics.linecast",
     examples: [
       { description: "Linecast between two points", argv: ["tools", "run", "physics.linecast", "--input", "{\"startX\":0,\"startY\":0,\"startZ\":0,\"endX\":0,\"endY\":10,\"endZ\":0}"] }
     ]
@@ -242,11 +174,6 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ mode: { type: "string", enum: ["3d", "2d"] }, shape: { type: "string", enum: ["sphere", "circle", "box", "capsule"] }, originX: { type: "number" }, originY: { type: "number" }, originZ: { type: "number" }, directionX: { type: "number" }, directionY: { type: "number" }, directionZ: { type: "number" }, distance: { type: "number" }, radius: { type: "number" }, sizeX: { type: "number" }, sizeY: { type: "number" }, angle: { type: "number" }, halfExtentX: { type: "number" }, halfExtentY: { type: "number" }, halfExtentZ: { type: "number" }, height: { type: "number" }, capsuleDirection: { type: "string", enum: ["vertical", "horizontal"] }, point1X: { type: "number" }, point1Y: { type: "number" }, point1Z: { type: "number" }, point2X: { type: "number" }, point2Y: { type: "number" }, point2Z: { type: "number" }, layerMask: { type: "integer" } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run physics.shapecast",
-    docsTopic: "physics",
-    equivalentUnityMcp: "physics.shapecast",
     examples: [
       { description: "Sphere cast forward", argv: ["tools", "run", "physics.shapecast", "--input", "{\"shape\":\"sphere\",\"originX\":0,\"originY\":0,\"originZ\":0,\"directionX\":0,\"directionY\":0,\"directionZ\":1,\"distance\":50,\"radius\":1}"] },
       { description: "2D circle cast to the right", argv: ["tools", "run", "physics.shapecast", "--input", "{\"mode\":\"2d\",\"shape\":\"circle\",\"originX\":0,\"originY\":0,\"directionX\":1,\"directionY\":0,\"distance\":10,\"radius\":0.5}"] }
@@ -260,11 +187,6 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ target: { type: "string", description: "Target GameObject: name, hierarchy path or instance id." }, path: { type: "string", description: "Alias of target." } }, ["target"]),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run physics.validate",
-    docsTopic: "physics",
-    equivalentUnityMcp: "physics.validate",
     examples: [
       { description: "Validate a physics setup", argv: ["tools", "run", "physics.validate", "--input", "{\"target\":\"PhysicsProbe\"}"] }
     ]

@@ -1,36 +1,40 @@
 {
   "id": "hdrp",
-  "name": "hdrp",
-  "title": "High Definition Render Pipeline",
+  "name": "High Definition Render Pipeline",
   "version": "1.0.0",
-  "description": "High Definition Render Pipeline extension for alps-unity-cli",
-  "packageName": "unity-cli-extension-hdrp",
-  "requiresUnityPackages": [
-    "com.unity.render-pipelines.high-definition"
-  ],
+  "description": "High Definition Render Pipeline extension for Unity. Provides HDRP volume configuration and pipeline settings through the HDRP package.",
   "unityPackages": [
     {
-      "name": "com.unity.render-pipelines.high-definition"
+      "packageId": "com.unity.render-pipelines.high-definition",
+      "displayName": "High Definition Render Pipeline"
     }
   ],
-  "providesTools": [
-    "hdrp.volume",
-    "hdrp.settings"
-  ],
-  "copyRoot": "extension-directory",
-  "installMode": "copy-if-package-present",
-  "toolGroups": [
-    "hdrp"
-  ],
-  "descriptorEntry": "tools/metadata/hdrp.js",
-  "bridgeEntry": "bridge/domains/hdrp.js",
-  "unityPackageFiles": [
-    "extension.json",
-    "unitypkg/",
-    "docs/"
-  ],
-  "docsTopic": "hdrp",
-  "docsEntry": "docs/hdrp.md",
+  "contributions": {
+    "tools": [
+      {
+        "name": "hdrp.volume"
+      },
+      {
+        "name": "hdrp.settings"
+      }
+    ],
+    "contexts": [
+      {
+        "key": "hdrp.pipeline",
+        "description": "HDRP render pipeline assets, volume profiles, and lighting configuration."
+      }
+    ],
+    "csharpEntries": [
+      {
+        "type": "UnityCli.HDRP.HdrpVolumeTools",
+        "description": "Bridge handlers for HDRP volume operations."
+      },
+      {
+        "type": "UnityCli.HDRP.HdrpSettingsTools",
+        "description": "Bridge handlers for HDRP pipeline settings operations."
+      }
+    ]
+  },
   "unityInstall": {
     "layout": "directory",
     "include": [

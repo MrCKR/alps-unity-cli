@@ -38,11 +38,6 @@ export const TEXTURE_TOOLS: ToolMetadata[] = [
     }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run texture.info",
-    docsTopic: "texture",
-    equivalentUnityMcp: "manage_texture.get_info",
     examples: [
       { description: "Inspect a texture and its importer settings", argv: ["tools", "run", "texture.info", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeTexture.png\"}"] }
     ]
@@ -62,12 +57,7 @@ export const TEXTURE_TOOLS: ToolMetadata[] = [
     }, ["path"]),
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],
-    riskLevel: "low",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    cliCommand: "tools run texture.create",
-    docsTopic: "texture",
-    equivalentUnityMcp: "manage_texture.create",
     examples: [
       { description: "Create a solid color texture", argv: ["tools", "run", "texture.create", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/GeneratedSolid.png\",\"width\":64,\"height\":64,\"color\":\"#ff0000\"}"] }
     ]
@@ -87,12 +77,7 @@ export const TEXTURE_TOOLS: ToolMetadata[] = [
     }, ["path"]),
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],
-    riskLevel: "low",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    cliCommand: "tools run texture.sprite",
-    docsTopic: "texture",
-    equivalentUnityMcp: "manage_texture.create_sprite",
     examples: [
       { description: "Convert a texture to a Single sprite", argv: ["tools", "run", "texture.sprite", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeTexture.png\",\"spriteMode\":\"Single\",\"pixelsPerUnit\":100}"] },
       { description: "Slice a 64x32 spritesheet into two sprites", argv: ["tools", "run", "texture.sprite", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/Sheet.png\",\"spriteMode\":\"Multiple\",\"slices\":[{\"name\":\"left\",\"x\":0,\"y\":0,\"width\":32,\"height\":32},{\"name\":\"right\",\"x\":32,\"y\":0,\"width\":32,\"height\":32}]}"] }
@@ -107,14 +92,8 @@ export const TEXTURE_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ texture: { type: "object" }, importSettings: { type: "object" }, changedPixels: { type: "integer" }, region: { type: "object" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: true,
     sideEffects: ["asset-write", "asset-import"],
-    riskLevel: "medium",
     supportsDryRun: true,
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run texture.modify",
-    docsTopic: "texture",
-    equivalentUnityMcp: "manage_texture.modify",
     examples: [
       { description: "Preview filling the full texture", argv: ["tools", "run", "texture.modify", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeTexture.png\",\"color\":\"#ff0000\"}", "--dry-run"] },
       { description: "Fill a 16x16 region after confirmation", argv: ["tools", "run", "texture.modify", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeTexture.png\",\"color\":\"#00ff00\",\"x\":0,\"y\":0,\"width\":16,\"height\":16}", "--yes"] }
@@ -129,14 +108,8 @@ export const TEXTURE_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ texture: { type: "object" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: true,
     sideEffects: ["asset-delete", "asset-import"],
-    riskLevel: "high",
     supportsDryRun: true,
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run texture.delete",
-    docsTopic: "texture",
-    equivalentUnityMcp: "manage_texture.delete",
     examples: [
       { description: "Preview deleting a generated texture", argv: ["tools", "run", "texture.delete", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/GeneratedSolid.png\"}", "--dry-run"] },
       { description: "Delete a generated texture after confirmation", argv: ["tools", "run", "texture.delete", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/GeneratedSolid.png\"}", "--yes"] }
@@ -166,12 +139,7 @@ export const TEXTURE_TOOLS: ToolMetadata[] = [
     }),
     destructiveHint: false,
     sideEffects: ["asset-import"],
-    riskLevel: "low",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    cliCommand: "tools run texture.import-settings",
-    docsTopic: "texture",
-    equivalentUnityMcp: "manage_texture.set_import_settings",
     examples: [
       { description: "Read current import settings (no mutation)", argv: ["tools", "run", "texture.import-settings", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeTexture.png\"}"] },
       { description: "Set compression and max size", argv: ["tools", "run", "texture.import-settings", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeTexture.png\",\"compression\":\"Compressed\",\"maxTextureSize\":512}"] }
@@ -193,14 +161,8 @@ export const TEXTURE_TOOLS: ToolMetadata[] = [
     }, ["path"]),
     destructiveHint: true,
     sideEffects: ["asset-write", "asset-import"],
-    riskLevel: "low",
     supportsDryRun: true,
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run texture.generate",
-    docsTopic: "texture",
-    equivalentUnityMcp: "manage_texture.apply_pattern",
     examples: [
       { description: "Preview a checkerboard (dry-run)", argv: ["tools", "run", "texture.generate", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/GeneratedChecker.png\",\"pattern\":\"checkerboard\",\"patternSize\":32}", "--dry-run"] },
       { description: "Generate a gradient texture", argv: ["tools", "run", "texture.generate", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/GeneratedGradient.png\",\"pattern\":\"gradient\",\"color\":\"#ff0000\",\"color2\":\"#0000ff\"}"] }

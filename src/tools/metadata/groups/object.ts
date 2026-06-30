@@ -36,11 +36,6 @@ export const OBJECT_TOOLS: ToolMetadata[] = [
     }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run object.get-data",
-    docsTopic: "object",
-    equivalentUnityMcp: "object-get-data",
     examples: [
       { description: "Read by instanceId", argv: ["tools", "run", "object.get-data", "--input", "{\"instanceId\":12345}"] },
       { description: "Read an asset name only", argv: ["tools", "run", "object.get-data", "--input", "{\"assetPath\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeMaterial.mat\",\"paths\":[\"name\"],\"maxDepth\":2}"] },
@@ -64,13 +59,7 @@ export const OBJECT_TOOLS: ToolMetadata[] = [
     destructiveHint: true,
     playModeSupport: "runtime-only",
     supportsDryRun: true,
-    riskLevel: "high",
     sideEffects: ["object-modify"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run object.modify",
-    docsTopic: "object",
-    equivalentUnityMcp: "object-modify",
     examples: [
       { description: "Patch by pathPatches", argv: ["tools", "run", "object.modify", "--input", "{\"instanceId\":123,\"pathPatches\":[{\"path\":\"m_Color\",\"value\":{\"r\":1,\"g\":0,\"b\":0,\"a\":1}}]}"] },
       { description: "Dry-run preview", argv: ["tools", "run", "object.modify", "--input", "{\"instanceId\":123,\"jsonPatch\":{\"m_Color\":{\"r\":1}}}", "--dry-run"] }

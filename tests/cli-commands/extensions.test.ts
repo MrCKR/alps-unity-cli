@@ -162,9 +162,9 @@ test("extensions install creates a Unity extension directory package", async () 
     assert.ok(data.fileCount > 0);
 
     const extensionRoot = join(project, "Packages", "com.unity_cli", "Extensions", "probuilder");
-    const installedManifest = JSON.parse(await readFile(join(extensionRoot, "extension.json"), "utf8")) as { id: string; copyRoot: string; unityInstall: { layout: string } };
+    const installedManifest = JSON.parse(await readFile(join(extensionRoot, "extension.json"), "utf8")) as { id: string; contributions: { tools: Array<{ name: string }> }; unityInstall: { layout: string } };
     assert.equal(installedManifest.id, "probuilder");
-    assert.equal(installedManifest.copyRoot, "extension-directory");
+    assert.ok(installedManifest.contributions.tools.some((tool) => tool.name === "probuilder.create-shape"));
     assert.equal(installedManifest.unityInstall.layout, "directory");
 
     const commandSource = await readFile(join(extensionRoot, "Editor", "Commands", "ProBuilderCommands.cs"), "utf8");

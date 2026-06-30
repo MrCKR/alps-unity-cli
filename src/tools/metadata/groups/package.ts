@@ -14,13 +14,7 @@ export const PACKAGE_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ package: { type: "string" }, packageId: { type: "string" } }, ["package"]),
     destructiveHint: true,
     supportsDryRun: true,
-    riskLevel: "high",
     sideEffects: ["domain-reload", "manifest-change", "file-copy"],
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run package.embed",
-    docsTopic: "package",
-    equivalentUnityMcp: "manage_package.embed"
   }
 ];

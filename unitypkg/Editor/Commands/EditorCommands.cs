@@ -14,6 +14,7 @@ using System.Threading.Tasks;
 using Microsoft.CSharp;
 using UnityEditor;
 using UnityEditor.SceneManagement;
+using UnityEditor.Compilation;
 using UnityEngine;
 using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
@@ -38,6 +39,7 @@ namespace UnityCli
             RegisterCommand(registry, "editor.redo", "editor", false, delegate(BridgeRequest request) { return SuccessJson(EditorUndoRedoJson("editor.redo")); });
             RegisterCommand(registry, "editor.resolution", "editor", false, delegate(BridgeRequest request) { return SuccessJson(EditorResolutionJson(request)); });
             RegisterCommand(registry, "editor.menu", "editor", false, delegate(BridgeRequest request) { return SuccessJson(EditorMenuJson(request)); });
+            RegisterCommand(registry, "editor.compile", "editor", false, EditorCompile);
             RegisterCommand(registry, "editor.console", "editor", false, EditorConsole);
             RegisterCommand(registry, "console.get", "console", false, ConsoleGet);
             RegisterCommand(registry, "console.clear", "console", false, ConsoleClear);
@@ -286,6 +288,93 @@ namespace UnityCli
                     .Prop("affected", "Unity Editor menu item executed"))
                 .PropRaw("state", EditorStateJson())
                 .EndObject().ToString();
+        }
+
+        /// <summary>editor.compile：在 live Editor 中主动请求脚本编译，可选刷新资产并等待空闲。</summary>
+        private static string EditorCompile(BridgeRequest request)
+        {
+            if (BuildPipeline.isBuildingPlayer)
+            {
+                throw new BridgeCommandException("E_UNITY_BUSY", "Unity Editor is building the player.", "Wait for the build to complete and retry.", transient: true, retryAfterMs: 10000);
+            }
+            var refresh = request.BoolArg("refresh", true);
+            var waitReady = request.BoolArg("waitReady", false) || request.BoolArg("wait-ready", false);
+            var timeoutMs = CompileTimeoutMs(request);
+            var wasCompiling = EditorApplication.isCompiling;
+            var wasUpdating = EditorApplication.isUpdating;
+            var alreadyBusy = wasCompiling || wasUpdating;
+            var skippedReason = alreadyBusy ? (wasCompiling ? "already-compiling" : "already-importing") : null;
+            if (request.DryRun)
+            {
+                return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                    .Prop("command", "editor.compile")
+                    .Prop("dryRun", true)
+                    .Prop("refresh", refresh)
+                    .Prop("waitReady", waitReady)
+                    .Prop("wouldRequest", !alreadyBusy)
+                    .Prop("skippedReason", skippedReason)
+                    .PropArray("plannedEffects", arr => {
+                        if (!alreadyBusy)
+                        {
+                            if (refresh) arr.BeginObject().Prop("type", "asset.refresh").EndObject();
+                            arr.BeginObject().Prop("type", "script-compile-request").EndObject();
+                        }
+                        if (waitReady) arr.BeginObject().Prop("type", "editor.wait-ready").Prop("timeoutMs", (long)timeoutMs).EndObject();
+                    })
+                    .Prop("logPath", LogPath())
+                    .EndObject().ToString());
+            }
+            if (!alreadyBusy)
+            {
+                if (refresh)
+                {
+                    AssetDatabase.Refresh();
+                }
+                CompilationPipeline.RequestScriptCompilation();
+            }
+            Func<string> responseFactory = () => new UnityCliJsonWriter().BeginObject()
+                .Prop("command", "editor.compile")
+                .Prop("requested", !alreadyBusy)
+                .Prop("refresh", refresh)
+                .Prop("waitReady", waitReady)
+                .Prop("wasCompiling", wasCompiling)
+                .Prop("wasUpdating", wasUpdating)
+                .Prop("skippedReason", skippedReason)
+                .PropObject("state", w => w
+                    .Prop("compiling", EditorApplication.isCompiling)
+                    .Prop("updating", EditorApplication.isUpdating)
+                    .Prop("domainReloading", domainReloading)
+                    .Prop("isBusy", EditorApplication.isCompiling || EditorApplication.isUpdating || domainReloading || BuildPipeline.isBuildingPlayer))
+                .PropArray("plannedEffects", arr => {
+                    if (!alreadyBusy)
+                    {
+                        if (refresh) arr.BeginObject().Prop("type", "asset.refresh").EndObject();
+                        arr.BeginObject().Prop("type", "script-compile-request").EndObject();
+                    }
+                    if (waitReady) arr.BeginObject().Prop("type", "editor.wait-ready").Prop("timeoutMs", (long)timeoutMs).EndObject();
+                })
+                .Prop("logPath", LogPath())
+                .EndObject().ToString();
+            if (!waitReady)
+            {
+                return SuccessJson(responseFactory());
+            }
+            var yieldedOnce = false;
+            return StartDeferredWait(
+                currentWorkItem,
+                () => {
+                    if (!yieldedOnce)
+                    {
+                        yieldedOnce = true;
+                        return false;
+                    }
+                    return !EditorApplication.isCompiling && !EditorApplication.isUpdating && !domainReloading;
+                },
+                timeoutMs,
+                responseFactory,
+                "E_COMPILE_TIMEOUT",
+                "Unity did not become idle after requesting script compilation before the timeout.",
+                "Increase timeoutMs or inspect editor.state before retrying.");
         }
 
         private static string EditorConsole(BridgeRequest request)
@@ -551,6 +640,13 @@ namespace UnityCli
         {
             var value = request.OptionalIntArg("timeoutMs");
             return value > 0 ? Math.Min(value.Value, 7000) : 7000;
+        }
+
+        /// <summary>脚本编译可能跨 import/domain reload，等待上限与 compile-diagnostics 保持一致。</summary>
+        private static int CompileTimeoutMs(BridgeRequest request)
+        {
+            var value = request.OptionalIntArg("timeoutMs");
+            return value > 0 ? Math.Min(value.Value, 55000) : 45000;
         }
 
         private static void EnsureEditorNotBusy(string command)

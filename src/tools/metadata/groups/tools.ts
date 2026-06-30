@@ -9,12 +9,7 @@ export const TOOLS_DISCOVERY_TOOLS: ToolMetadata[] = [
     group: "tools",
     inputSchema: objSchema({}),
     destructiveHint: false,
-    handler: "offline",
-    supportStatus: "cli-only",
     playModeSupport: "supported",
-    cliCommand: "tools group",
-    docsTopic: "tools",
-    equivalentUnityMcp: "tools/list-groups",
     examples: [
       { description: "List all tool groups", argv: ["tools", "group"] }
     ]
@@ -29,12 +24,7 @@ export const TOOLS_DISCOVERY_TOOLS: ToolMetadata[] = [
       includeCustom: { type: "boolean", default: false, description: "Include project custom [UnityCliTool] tools when targeting a project instance." }
     }, ["group"]),
     destructiveHint: false,
-    handler: "offline",
-    supportStatus: "cli-only",
     playModeSupport: "supported",
-    cliCommand: "tools group list",
-    docsTopic: "tools",
-    equivalentUnityMcp: "tools/list",
     examples: [
       { description: "List tools in the camera group", argv: ["tools", "group", "list", "camera"] }
     ]
@@ -48,12 +38,7 @@ export const TOOLS_DISCOVERY_TOOLS: ToolMetadata[] = [
       keyword: { type: "string", description: "Search keyword matched against name/title/description/group." }
     }, ["keyword"]),
     destructiveHint: false,
-    handler: "offline",
-    supportStatus: "cli-only",
     playModeSupport: "supported",
-    cliCommand: "tools search",
-    docsTopic: "tools",
-    equivalentUnityMcp: "tools/search",
     examples: [
       { description: "Search for hierarchy tools", argv: ["tools", "search", "hierarchy"] }
     ]
@@ -67,12 +52,7 @@ export const TOOLS_DISCOVERY_TOOLS: ToolMetadata[] = [
       name: { type: "string", description: "Dotted tool name, e.g. 'scene.hierarchy' or 'asset.search'." }
     }, ["name"]),
     destructiveHint: false,
-    handler: "offline",
-    supportStatus: "cli-only",
     playModeSupport: "supported",
-    cliCommand: "tools describe",
-    docsTopic: "tools",
-    equivalentUnityMcp: "tools/describe",
     examples: [
       { description: "Describe a tool's full schema", argv: ["tools", "describe", "asset.search"] }
     ]
@@ -92,13 +72,9 @@ export const TOOLS_DISCOVERY_TOOLS: ToolMetadata[] = [
       runtime: { type: "boolean", description: "Force runtime execution path for target=both tools" }
     }, ["name"]),
     destructiveHint: false,
-    handler: "hybrid",
     supportStatus: "live-bridge",
     playModeSupport: "supported",
-    cliCommand: "tools run",
-    docsTopic: "tool-execution",
     target: "both",
-    availabilityScope: "editorSession",
     examples: [
       { description: "Run an editor-domain tool", argv: ["tools", "run", "scene.hierarchy", "--target", "my-editor"] },
       { description: "Run a runtime tool (requires Play Mode active)", argv: ["tools", "run", "runtime.echo", "--target", "my-editor"] },

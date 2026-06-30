@@ -32,7 +32,6 @@ test("prefab group tools exist with correct safety hints", () => {
   const info = findToolByName("prefab.info")!;
   assert.equal(info.destructiveHint, false);
   assert.equal(info.playModeSupport, "supported");
-  assert.equal(info.equivalentUnityMcp, "manage_prefabs.get_info");
 
   const create = findToolByName("prefab.create")!;
   assert.equal(create.playModeSupport, "session-affecting");

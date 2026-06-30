@@ -1,37 +1,47 @@
 {
   "id": "urp",
-  "name": "urp",
-  "title": "Universal Render Pipeline",
+  "name": "Universal Render Pipeline",
   "version": "1.0.0",
-  "description": "Universal Render Pipeline extension for alps-unity-cli",
-  "packageName": "unity-cli-extension-urp",
-  "requiresUnityPackages": [
-    "com.unity.render-pipelines.universal"
-  ],
+  "description": "Universal Render Pipeline extension for Unity. Provides renderer feature management, volume configuration, and pipeline settings through the URP package.",
   "unityPackages": [
     {
-      "name": "com.unity.render-pipelines.universal"
+      "packageId": "com.unity.render-pipelines.universal",
+      "displayName": "Universal Render Pipeline"
     }
   ],
-  "providesTools": [
-    "urp.feature",
-    "urp.volume",
-    "urp.settings"
-  ],
-  "copyRoot": "extension-directory",
-  "installMode": "copy-if-package-present",
-  "toolGroups": [
-    "urp"
-  ],
-  "descriptorEntry": "tools/metadata/urp.js",
-  "bridgeEntry": "bridge/domains/urp.js",
-  "unityPackageFiles": [
-    "extension.json",
-    "unitypkg/",
-    "docs/"
-  ],
-  "docsTopic": "urp",
-  "docsEntry": "docs/urp.md",
+  "contributions": {
+    "tools": [
+      {
+        "name": "urp.feature"
+      },
+      {
+        "name": "urp.volume"
+      },
+      {
+        "name": "urp.settings"
+      }
+    ],
+    "contexts": [
+      {
+        "key": "urp.pipeline",
+        "description": "URP render pipeline assets, quality settings, and shader configuration."
+      }
+    ],
+    "csharpEntries": [
+      {
+        "type": "UnityCli.URP.UrpRendererFeatureTools",
+        "description": "Bridge handlers for URP renderer feature operations."
+      },
+      {
+        "type": "UnityCli.URP.UrpVolumeTools",
+        "description": "Bridge handlers for URP volume operations."
+      },
+      {
+        "type": "UnityCli.URP.UrpSettingsTools",
+        "description": "Bridge handlers for URP pipeline settings operations."
+      }
+    ]
+  },
   "unityInstall": {
     "layout": "directory",
     "include": [

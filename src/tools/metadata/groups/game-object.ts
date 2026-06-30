@@ -21,11 +21,6 @@ export const GO_TOOLS: ToolMetadata[] = [
     outputSchema: pageSchema({ type: "object", properties: { id: { type: "integer" }, name: { type: "string" }, path: { type: "string" }, active: { type: "boolean" }, tag: { type: "string" }, layer: { type: "integer" }, componentCount: { type: "integer" }, components: { type: "array", items: { type: "string" } } } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run go.find",
-    docsTopic: "go",
-    equivalentUnityMcp: "find_gameobjects / gameobject-find",
     examples: [
       { description: "Find by name", argv: ["tools", "run", "go.find", "--input", "{\"searchTerm\":\"Player\",\"searchMethod\":\"by_name\",\"pageSize\":25}"] },
       { description: "Find objects with Camera component", argv: ["tools", "run", "go.find", "--input", "{\"searchTerm\":\"Camera\",\"searchMethod\":\"by_component\",\"pageSize\":10}"] }
@@ -40,11 +35,6 @@ export const GO_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ gameObject: { type: "object" }, logPath: { type: "string" } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run go.inspect",
-    docsTopic: "go",
-    equivalentUnityMcp: "mcpforunity://scene/gameobject/{id} / gameobject-find",
     examples: [
       { description: "Inspect by hierarchy path", argv: ["tools", "run", "go.inspect", "--input", "{\"target\":\"Player/CameraRig\"}"] }
     ]
@@ -72,11 +62,6 @@ export const GO_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["scene-modify", "undo-stack"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run go.create",
-    docsTopic: "go",
-    equivalentUnityMcp: "manage_gameobject.create / gameobject-create",
     examples: [
       { description: "Create a cube under root", argv: ["tools", "run", "go.create", "--input", "{\"name\":\"AlignmentCube\",\"primitive\":\"cube\",\"position\":{\"x\":0,\"y\":1,\"z\":0}}"] }
     ]
@@ -105,11 +90,6 @@ export const GO_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["scene-modify", "undo-stack"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run go.modify",
-    docsTopic: "go",
-    equivalentUnityMcp: "manage_gameobject.modify / gameobject-modify",
     examples: [
       { description: "Move and deactivate by hierarchy path", argv: ["tools", "run", "go.modify", "--input", "{\"target\":\"Player/Avatar\",\"position\":{\"x\":1,\"y\":2,\"z\":3},\"active\":false}"] },
       { description: "Apply the same transform to multiple objects", argv: ["tools", "run", "go.modify", "--input", "{\"targets\":[\"Generated/A\",\"Generated/B\"],\"position\":{\"x\":0,\"y\":1,\"z\":0}}"] }
@@ -125,11 +105,6 @@ export const GO_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["scene-modify", "undo-stack"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run go.duplicate",
-    docsTopic: "go",
-    equivalentUnityMcp: "manage_gameobject.duplicate / gameobject-duplicate",
     examples: [
       { description: "Duplicate by hierarchy path", argv: ["tools", "run", "go.duplicate", "--input", "{\"target\":\"Player/Avatar\",\"newName\":\"Player Copy\"}"] }
     ]
@@ -144,11 +119,6 @@ export const GO_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["scene-modify", "undo-stack"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run go.move-relative",
-    docsTopic: "go",
-    equivalentUnityMcp: "manage_gameobject.move_relative",
     examples: [
       { description: "Move up by hierarchy path", argv: ["tools", "run", "go.move-relative", "--input", "{\"target\":\"Player/Avatar\",\"offset\":{\"x\":0,\"y\":2,\"z\":0}}"] }
     ]
@@ -163,11 +133,6 @@ export const GO_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["scene-modify", "undo-stack"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run go.look-at",
-    docsTopic: "go",
-    equivalentUnityMcp: "manage_gameobject.look_at",
     examples: [
       { description: "Look at another object by hierarchy path", argv: ["tools", "run", "go.look-at", "--input", "{\"target\":\"CameraRig/MainCamera\",\"lookAt\":\"Player/Avatar\"}"] }
     ]
@@ -182,11 +147,6 @@ export const GO_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["scene-modify", "undo-stack", "recursive-delete"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run go.delete",
-    docsTopic: "go",
-    equivalentUnityMcp: "manage_gameobject.delete / gameobject-destroy",
     examples: [
       { description: "Dry-run deletion by hierarchy path", argv: ["tools", "run", "go.delete", "--dry-run", "--input", "{\"target\":\"TempRoot/GeneratedChild\"}"] },
       { description: "Delete by instance id", argv: ["tools", "run", "go.delete", "--input", "{\"target\":\"12345\"}"] }
@@ -202,11 +162,6 @@ export const GO_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["scene-modify", "undo-stack", "hierarchy-reparent"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run go.set-parent",
-    docsTopic: "go",
-    equivalentUnityMcp: "manage_gameobject.modify parent / gameobject-set-parent",
     examples: [
       { description: "Dry-run reparent by hierarchy path", argv: ["tools", "run", "go.set-parent", "--dry-run", "--input", "{\"target\":\"Player/Sword\",\"parent\":\"Player/RightHand\",\"worldPositionStays\":true}"] },
       { description: "Detach to root by hierarchy path", argv: ["tools", "run", "go.set-parent", "--input", "{\"target\":\"Player/Sword\"}"] }
@@ -229,11 +184,6 @@ export const COMPONENT_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["component-add", "scene-modify"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run component.add",
-    docsTopic: "component",
-    equivalentUnityMcp: "manage_components.add / gameobject-component-add",
     examples: [
       { description: "Add Rigidbody with initial properties", argv: ["tools", "run", "component.add", "--input", "{\"target\":\"Player\",\"component\":\"Rigidbody\",\"properties\":{\"mass\":2,\"useGravity\":false}}"] }
     ]
@@ -253,11 +203,6 @@ export const COMPONENT_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["component-remove", "scene-modify"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run component.remove",
-    docsTopic: "component",
-    equivalentUnityMcp: "manage_components.remove / gameobject-component-destroy",
     examples: [
       { description: "Remove first BoxCollider", argv: ["tools", "run", "component.remove", "--input", "{\"target\":\"Player\",\"component\":\"BoxCollider\",\"componentIndex\":0}"] },
       { description: "Remove multiple component types", argv: ["tools", "run", "component.remove", "--input", "{\"target\":\"Player\",\"components\":[\"BoxCollider\",\"Rigidbody\"]}"] }
@@ -280,11 +225,6 @@ export const COMPONENT_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["component-modify", "scene-modify"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run component.set",
-    docsTopic: "component",
-    equivalentUnityMcp: "manage_components.set_property",
     examples: [
       { description: "Set multiple Rigidbody values", argv: ["tools", "run", "component.set", "--input", "{\"target\":\"Player\",\"component\":\"Rigidbody\",\"properties\":{\"mass\":5,\"useGravity\":false}}"] },
       { description: "Set one boolean value", argv: ["tools", "run", "component.set", "--input", "{\"target\":\"Main Camera\",\"component\":\"Camera\",\"property\":\"enabled\",\"value\":false}"] }
@@ -319,11 +259,6 @@ export const COMPONENT_TOOLS: ToolMetadata[] = [
     }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run component.get",
-    docsTopic: "component",
-    equivalentUnityMcp: "gameobject-component-get",
     examples: [
       { description: "Read Transform position only", argv: ["tools", "run", "component.get", "--input", "{\"path\":\"Main Camera\",\"component\":\"Transform\",\"paths\":[\"position\"],\"maxDepth\":2}"] },
       { description: "Read one filtered subtree", argv: ["tools", "run", "component.get", "--input", "{\"path\":\"Main Camera\",\"component\":\"Transform\",\"viewQuery\":{\"namePattern\":\"position\",\"maxDepth\":1}}"] }
@@ -348,13 +283,7 @@ export const COMPONENT_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     supportsDryRun: true,
-    riskLevel: "high",
     sideEffects: ["component-modify"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run component.modify",
-    docsTopic: "component",
-    equivalentUnityMcp: "gameobject-component-modify",
     examples: [
       { description: "Patch localPosition", argv: ["tools", "run", "component.modify", "--input", "{\"path\":\"Player\",\"component\":\"Transform\",\"pathPatches\":[{\"path\":\"localPosition\",\"value\":{\"x\":1,\"y\":2,\"z\":3}}]}"] }
     ]
@@ -368,11 +297,6 @@ export const COMPONENT_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ command: { type: "string" }, count: { type: "integer" }, types: { type: "array", items: { type: "object", properties: { fullName: { type: "string" }, name: { type: "string" }, assembly: { type: "string" }, namespace: { type: ["string", "null"] } } } }, pageInfo: pageSchema }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run component.list-types",
-    docsTopic: "component",
-    equivalentUnityMcp: "gameobject-component-list-all",
     examples: [
       { description: "List Rigidbody types", argv: ["tools", "run", "component.list-types", "--input", "{\"keyword\":\"Rigidbody\",\"pageSize\":20}"] }
     ]

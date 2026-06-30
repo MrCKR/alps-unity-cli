@@ -30,12 +30,10 @@ test("project.tag and project.layer exist with correct safety hints", () => {
   assert.equal(tag.handler, "bridge");
   assert.equal(tag.playModeSupport, "session-affecting");
   assert.ok(tag.sideEffects?.includes("project-settings-write"));
-  assert.equal(tag.equivalentUnityMcp, "manage_editor.add_tag/remove_tag");
 
   const layer = findToolByName("project.layer")!;
   assert.equal(layer.playModeSupport, "session-affecting");
   assert.ok(layer.sideEffects?.includes("project-settings-write"));
-  assert.equal(layer.equivalentUnityMcp, "manage_editor.add_layer/remove_layer");
 });
 
 test("project.tag/layer expose output schema with changed flag", () => {

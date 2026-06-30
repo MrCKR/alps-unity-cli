@@ -10,13 +10,7 @@ export const UI_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ name: { type: "string", description: "Canvas GameObject name." } }, ["name"]),
     destructiveHint: false,
     sideEffects: ["scene-modify"],
-    riskLevel: "low",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run ui.canvas.create",
-    docsTopic: "ui",
-    equivalentUnityMcp: "manage_ui.create_canvas",
     examples: [
       { description: "Create a UI Canvas", argv: ["tools", "run", "ui.canvas.create", "--input", "{\"name\":\"MainCanvas\"}"] }
     ]
@@ -36,13 +30,7 @@ export const UI_TOOLS: ToolMetadata[] = [
     }, ["name", "parent"]),
     destructiveHint: false,
     sideEffects: ["scene-modify"],
-    riskLevel: "low",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run ui.text.create",
-    docsTopic: "ui",
-    equivalentUnityMcp: "manage_ui.create_text",
     examples: [
       { description: "Create a UI Text under a canvas", argv: ["tools", "run", "ui.text.create", "--input", "{\"name\":\"Title\",\"parent\":\"MainCanvas\",\"text\":\"Hello\",\"fontSize\":24}"] }
     ]
@@ -59,13 +47,7 @@ export const UI_TOOLS: ToolMetadata[] = [
     }, ["name", "parent"]),
     destructiveHint: false,
     sideEffects: ["scene-modify"],
-    riskLevel: "low",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run ui.button.create",
-    docsTopic: "ui",
-    equivalentUnityMcp: "manage_ui.create_button",
     examples: [
       { description: "Create a UI Button under a canvas", argv: ["tools", "run", "ui.button.create", "--input", "{\"name\":\"StartBtn\",\"parent\":\"MainCanvas\",\"label\":\"Start\"}"] }
     ]
@@ -82,13 +64,7 @@ export const UI_TOOLS: ToolMetadata[] = [
     }, ["name", "parent"]),
     destructiveHint: false,
     sideEffects: ["scene-modify"],
-    riskLevel: "low",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run ui.image.create",
-    docsTopic: "ui",
-    equivalentUnityMcp: "manage_ui.create_image",
     examples: [
       { description: "Create a UI Image under a canvas", argv: ["tools", "run", "ui.image.create", "--input", "{\"name\":\"Icon\",\"parent\":\"MainCanvas\",\"sprite\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeTexture.png\"}"] }
     ]
@@ -105,11 +81,6 @@ export const UI_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ command: { type: "string" }, target: { type: "string" }, hasDocument: { type: "boolean" }, visualTree: { type: "object" } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run ui.document.info",
-    docsTopic: "ui",
-    equivalentUnityMcp: "manage_ui.get_ui_document_info",
     examples: [
       { description: "Inspect a UIDocument GameObject", argv: ["tools", "run", "ui.document.info", "--input", "{\"target\":\"UIDoc\"}"] }
     ]
@@ -127,13 +98,7 @@ export const UI_TOOLS: ToolMetadata[] = [
     }, ["uxml"]),
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],
-    riskLevel: "low",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run ui.document.create",
-    docsTopic: "ui",
-    equivalentUnityMcp: "manage_ui.create_ui_document",
     examples: [
       { description: "Create a UI Document", argv: ["tools", "run", "ui.document.create", "--input", "{\"uxml\":\"Assets/UnityCliAlignmentFixtures/GeneratedUI.uxml\"}"] }
     ]
@@ -147,14 +112,8 @@ export const UI_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ document: { type: "object" }, sizeBytes: { type: "integer" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: true,
     sideEffects: ["asset-write", "asset-import"],
-    riskLevel: "medium",
     supportsDryRun: true,
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run ui.document.update",
-    docsTopic: "ui",
-    equivalentUnityMcp: "manage_ui.update_ui_document",
     examples: [
       { description: "Preview replacing UXML content", argv: ["tools", "run", "ui.document.update", "--input", "{\"uxml\":\"Assets/UnityCliAlignmentFixtures/GeneratedUI.uxml\",\"content\":\"<ui:UXML xmlns:ui=\\\"UnityEngine.UIElements\\\" />\"}", "--dry-run"] }
     ]
@@ -168,14 +127,8 @@ export const UI_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ document: { type: "object" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: true,
     sideEffects: ["asset-delete", "asset-import"],
-    riskLevel: "high",
     supportsDryRun: true,
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run ui.document.delete",
-    docsTopic: "ui",
-    equivalentUnityMcp: "manage_ui.delete_ui_document",
     examples: [
       { description: "Preview deleting a generated UXML", argv: ["tools", "run", "ui.document.delete", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/GeneratedUI.uxml\"}", "--dry-run"] }
     ]
@@ -193,11 +146,6 @@ export const UI_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ command: { type: "string" }, count: { type: "integer" }, elements: { type: "array", items: { type: "object" } } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run ui.hierarchy",
-    docsTopic: "ui",
-    equivalentUnityMcp: "manage_ui.get_ui_hierarchy",
     examples: [
       { description: "List UI elements under a canvas", argv: ["tools", "run", "ui.hierarchy", "--input", "{\"target\":\"MainCanvas\",\"pageSize\":50}"] }
     ]
@@ -210,13 +158,7 @@ export const UI_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ target: { type: "string", description: "Target GameObject: name, hierarchy path or instance id." }, sourceAsset: { type: "string", description: "Assets/*.uxml source asset." }, panelSettings: { type: "string", description: "PanelSettings asset path." }, sortOrder: { type: "integer", default: 0, description: "Sorting order." } }, ["target"]),
     destructiveHint: false,
     sideEffects: ["scene-modify"],
-    riskLevel: "medium",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run ui.attach-document",
-    docsTopic: "ui",
-    equivalentUnityMcp: "manage_ui.attach_ui_document",
     examples: [
       { description: "Attach a UIDocument to a GameObject", argv: ["tools", "run", "ui.attach-document", "--input", "{\"target\":\"UIDoc\",\"sourceAsset\":\"Assets/UnityCliAlignmentFixtures/GeneratedUI.uxml\"}"] }
     ]
@@ -230,14 +172,8 @@ export const UI_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ target: { type: "object" }, removed: { type: "boolean" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: false,
     sideEffects: ["scene-modify"],
-    riskLevel: "medium",
     supportsDryRun: true,
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run ui.detach-document",
-    docsTopic: "ui",
-    equivalentUnityMcp: "manage_ui.detach_ui_document",
     examples: [
       { description: "Preview detaching a UIDocument", argv: ["tools", "run", "ui.detach-document", "--input", "{\"target\":\"UIDoc\"}", "--dry-run"] }
     ]
@@ -250,13 +186,7 @@ export const UI_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ path: { type: "string", description: "Destination Assets/*.asset PanelSettings path." }, scaleMode: { type: "string", enum: ["ConstantPixelSize", "ConstantPhysicalSize", "ScaleWithScreenSize"], default: "ScaleWithScreenSize", description: "Panel scale mode." }, referenceWidth: { type: "integer", default: 1920, description: "Reference resolution width." }, referenceHeight: { type: "integer", default: 1080, description: "Reference resolution height." }, sortingOrder: { type: "integer", description: "Optional PanelSettings sortingOrder/sortOrder when available in this Unity version." }, sortingLayerName: { type: "string", description: "Optional sorting layer name when available." }, targetTexture: { type: "string", description: "Optional RenderTexture asset path for PanelSettings.targetTexture when available." }, screenMatchMode: { type: "string", description: "Optional PanelScreenMatchMode enum when available." }, match: { type: "number", description: "Optional screen match value when available." }, clearColor: { type: "string", description: "Optional clear color when available." } }, ["path"]),
     destructiveHint: true,
     sideEffects: ["asset-write", "asset-import"],
-    riskLevel: "low",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run ui.create-panel-settings",
-    docsTopic: "ui",
-    equivalentUnityMcp: "manage_ui.create_panel_settings",
     examples: [
       { description: "Create a PanelSettings asset", argv: ["tools", "run", "ui.create-panel-settings", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/GeneratedPanel.asset\",\"referenceWidth\":1920,\"referenceHeight\":1080}"] }
     ]
@@ -270,14 +200,8 @@ export const UI_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ path: { type: "string" }, scaleMode: { type: "string" }, referenceResolution: { type: "string" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: true,
     sideEffects: ["asset-write", "asset-import"],
-    riskLevel: "medium",
     supportsDryRun: true,
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run ui.update-panel-settings",
-    docsTopic: "ui",
-    equivalentUnityMcp: "manage_ui.update_panel_settings",
     examples: [
       { description: "Preview changing PanelSettings resolution", argv: ["tools", "run", "ui.update-panel-settings", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/GeneratedPanel.asset\",\"referenceWidth\":1280,\"referenceHeight\":720}", "--dry-run"] }
     ]
@@ -291,11 +215,6 @@ export const UI_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ command: { type: "string" }, count: { type: "integer" }, elements: { type: "array", items: { type: "object" } } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run ui.get-visual-tree",
-    docsTopic: "ui",
-    equivalentUnityMcp: "manage_ui.get_visual_tree",
     examples: [
       { description: "Inspect a UIDocument visual tree", argv: ["tools", "run", "ui.get-visual-tree", "--input", "{\"target\":\"UIDoc\",\"maxDepth\":10}"] }
     ]
@@ -309,14 +228,8 @@ export const UI_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ target: { type: "object" }, element: { type: "object" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: false,
     sideEffects: ["ui-session-modify"],
-    riskLevel: "low",
     supportsDryRun: true,
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run ui.modify-visual-element",
-    docsTopic: "ui",
-    equivalentUnityMcp: "manage_ui.modify_visual_element",
     examples: [
       { description: "Preview adding a class to a VisualElement", argv: ["tools", "run", "ui.modify-visual-element", "--input", "{\"target\":\"UIDoc\",\"elementName\":\"Root\",\"addClass\":\"selected\"}", "--dry-run"] }
     ]
@@ -330,14 +243,8 @@ export const UI_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ document: { type: "object" }, styleSheet: { type: "object" }, changed: { type: "boolean" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: true,
     sideEffects: ["asset-write", "asset-import"],
-    riskLevel: "medium",
     supportsDryRun: true,
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run ui.link-stylesheet",
-    docsTopic: "ui",
-    equivalentUnityMcp: "manage_ui.link_stylesheet",
     examples: [
       { description: "Preview linking a stylesheet", argv: ["tools", "run", "ui.link-stylesheet", "--input", "{\"uxml\":\"Assets/UI/Layout.uxml\",\"uss\":\"Assets/UI/Styles.uss\"}", "--dry-run"] }
     ]
@@ -351,11 +258,6 @@ export const UI_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ count: { type: "integer" }, items: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run ui.list-documents",
-    docsTopic: "ui",
-    equivalentUnityMcp: "manage_ui.list_documents",
     examples: [
       { description: "List UXML documents", argv: ["tools", "run", "ui.list-documents", "--input", "{\"kind\":\"uxml\",\"pageSize\":50}"] }
     ]
@@ -369,14 +271,8 @@ export const UI_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ target: { type: "string" }, sourceAsset: { type: "string" }, output: { type: "string" }, width: { type: "integer" }, height: { type: "integer" }, sizeBytes: { type: "integer" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: true,
     sideEffects: ["asset-write", "asset-import", "artifact-write"],
-    riskLevel: "low",
     supportsDryRun: true,
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run ui.render-preview",
-    docsTopic: "ui",
-    equivalentUnityMcp: "manage_ui.render_preview",
     examples: [
       { description: "Preview rendering a UXML artifact", argv: ["tools", "run", "ui.render-preview", "--input", "{\"target\":\"Assets/UI/Layout.uxml\",\"output\":\"Assets/UnityCliArtifacts/UI/layout.png\"}", "--dry-run"] }
     ]

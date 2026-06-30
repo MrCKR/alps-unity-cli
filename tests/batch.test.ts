@@ -240,6 +240,7 @@ test("batch preflight accepts query edit test and screenshot example", async () 
       { id: "test", command: ["tools", "run", "test.run"], args: ["--platform", "EditMode"], dependsOn: ["edit"] },
       { id: "code", command: ["tools", "run", "code.exec"], args: ["--code", "return 1;"], dependsOn: ["edit"] },
       { id: "camera", command: ["tools", "run", "camera.info", "Main Camera"] },
+      { id: "compile", command: ["tools", "run", "editor.compile"], input: { refresh: false, waitReady: false } },
       { id: "compile-diagnostics", command: ["tools", "run", "editor.compile-diagnostics"], input: { refresh: false, waitReady: false, count: 20 } },
       { id: "launch-dialog", command: ["tools", "run", "editor.launch-dialog.dismiss"], input: { timeoutMs: 0 } },
       { id: "shader", command: ["tools", "run", "shader.read", "Assets/Shaders/Unlit.shader"] },
@@ -253,8 +254,9 @@ test("batch preflight accepts query edit test and screenshot example", async () 
   assert.equal(result.ok, true);
   const data = result.data as { preflight: Array<{ code: string }>; steps: Array<{ id: string; parallelSafe: boolean }> };
   assert.deepEqual(data.preflight.map((item) => item.code), ["BATCH_PREFLIGHT_OK"]);
-  assert.deepEqual(data.steps.map((step) => step.id), ["query", "edit", "test", "code", "camera", "compile-diagnostics", "launch-dialog", "shader", "texture", "screenshot"]);
+  assert.deepEqual(data.steps.map((step) => step.id), ["query", "edit", "test", "code", "camera", "compile", "compile-diagnostics", "launch-dialog", "shader", "texture", "screenshot"]);
   assert.equal(data.steps.find((step) => step.id === "code")?.parallelSafe, false);
+  assert.equal(data.steps.find((step) => step.id === "compile")?.parallelSafe, false);
   assert.equal(data.steps.find((step) => step.id === "compile-diagnostics")?.parallelSafe, false);
   assert.equal(data.steps.find((step) => step.id === "launch-dialog")?.parallelSafe, false);
   assert.equal(data.steps.find((step) => step.id === "shader")?.parallelSafe, true);

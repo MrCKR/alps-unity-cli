@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findToolByName } from "../src/tools/metadata/index.js";
+import { findToolByName, toolCancellation } from "../src/tools/metadata/index.js";
 import { findCommandContract } from "../src/contracts/command-contract.js";
 
 /**
@@ -19,7 +19,6 @@ test("test.run exists with job handler, longRunning and session-affecting play m
   assert.equal(tool.supportStatus, "batch-job");
   assert.ok(tool.sideEffects?.includes("session-affecting"));
   assert.equal(tool.riskLevel, "medium");
-  assert.equal(tool.equivalentUnityMcp, "run_tests");
   assert.ok(tool.examples && tool.examples.length > 0);
 });
 
@@ -34,10 +33,9 @@ test("test.run input schema documents platform enum", () => {
   assert.ok(props.timeoutMs, "timeoutMs should be documented");
 });
 
-test("test.run exposes cancellation semantics", () => {
+test("test.run exposes structured cancellation semantics", () => {
   const tool = findToolByName("test.run")!;
-  assert.ok(tool.cancellationSemantics, "test.run should document cancellation semantics");
-  assert.match(tool.cancellationSemantics!, /batchmode pid|cancelled/i, "cancellation semantics should describe pid/cancel");
+  assert.equal(toolCancellation(tool), "job");
 });
 
 test("contract entry exists for test.run", () => {

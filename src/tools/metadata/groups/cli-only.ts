@@ -16,11 +16,6 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ manifestPath: { type: "string" }, lockPath: { type: "string" }, registry: { type: "string" }, packages: { type: "array", items: { type: "object" } } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "offline",
-    supportStatus: "cli-only",
-    cliCommand: "tools run package.list",
-    docsTopic: "package",
-    equivalentUnityMcp: "manage_packages.list_packages",
     examples: [
       { description: "List installed packages", argv: ["tools", "run", "package.list", "--input", "{\"project\":\"D:/workspace/alps-unity-cli/Dev/UnityProject\"}"] }
     ]
@@ -34,11 +29,6 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ projectPath: { type: "string" }, manifestPath: { type: "string" }, packageCount: { type: "integer" }, registry: { type: "string" }, scopedRegistryCount: { type: "integer" }, packages: { type: "array", items: { type: "object" } } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "offline",
-    supportStatus: "cli-only",
-    cliCommand: "tools run package.status",
-    docsTopic: "package",
-    equivalentUnityMcp: "manage_packages.status",
     examples: [
       { description: "Show package status", argv: ["tools", "run", "package.status", "--input", "{\"project\":\"D:/workspace/alps-unity-cli/Dev/UnityProject\"}"] }
     ]
@@ -52,11 +42,6 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ projectPath: { type: "string" }, package: { type: "object" } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "offline",
-    supportStatus: "cli-only",
-    cliCommand: "tools run package.info",
-    docsTopic: "package",
-    equivalentUnityMcp: "manage_packages.get_package_info",
     examples: [
       { description: "Inspect one package", argv: ["tools", "run", "package.info", "--input", "{\"name\":\"com.unity_cli\",\"project\":\"D:/workspace/alps-unity-cli/Dev/UnityProject\"}"] }
     ]
@@ -70,11 +55,6 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ registry: { type: "string" }, query: { type: "string" }, packages: { type: "array", items: { type: "object" } } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "offline",
-    supportStatus: "cli-only",
-    cliCommand: "tools run package.search",
-    docsTopic: "package",
-    equivalentUnityMcp: "manage_packages.search_packages",
     examples: [
       { description: "Search a registry", argv: ["tools", "run", "package.search", "--input", "{\"query\":\"textmeshpro\"}"] }
     ]
@@ -88,13 +68,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ action: { type: "string" }, package: { type: "string" }, manifestPath: { type: "string" }, installedVersion: { type: "string" }, previousVersion: { type: "string" }, changed: { type: "boolean" } }),
     destructiveHint: true,
     sideEffects: ["manifest-change", "session-affecting"],
-    riskLevel: "high",
     playModeSupport: "session-affecting",
-    handler: "hybrid",
-    supportStatus: "bridge-job",
-    cliCommand: "tools run package.install",
-    docsTopic: "package",
-    equivalentUnityMcp: "manage_packages.add_package",
     examples: [
       { description: "Install a package", argv: ["tools", "run", "package.install", "--input", "{\"name\":\"com.unity.textmeshpro\",\"version\":\"3.0.7\"}"] }
     ]
@@ -109,13 +83,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     destructiveHint: true,
     supportsDryRun: true,
     sideEffects: ["manifest-change", "session-affecting"],
-    riskLevel: "high",
     playModeSupport: "session-affecting",
-    handler: "hybrid",
-    supportStatus: "bridge-job",
-    cliCommand: "tools run package.remove",
-    docsTopic: "package",
-    equivalentUnityMcp: "manage_packages.remove_package",
     examples: [
       { description: "Preview removing a package", argv: ["tools", "run", "package.remove", "--input", "{\"name\":\"com.unity.textmeshpro\"}", "--dry-run"] }
     ]
@@ -130,13 +98,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     destructiveHint: true,
     supportsDryRun: true,
     sideEffects: ["project-file-delete", "manifest-change", "session-affecting"],
-    riskLevel: "high",
     playModeSupport: "session-affecting",
-    handler: "offline",
-    supportStatus: "cli-only",
-    cliCommand: "tools run package.bridge-remove",
-    docsTopic: "package",
-    equivalentUnityMcp: "restore_package",
     examples: [
       { description: "Preview Bridge package removal", argv: ["tools", "run", "package.bridge-remove", "--input", "{\"project\":\"D:/workspace/alps-unity-cli/Dev/UnityProject\"}", "--dry-run"] }
     ]
@@ -151,13 +113,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     destructiveHint: true,
     supportsDryRun: true,
     sideEffects: ["project-file-write", "project-file-delete", "session-affecting"],
-    riskLevel: "high",
     playModeSupport: "session-affecting",
-    handler: "offline",
-    supportStatus: "cli-only",
-    cliCommand: "tools run package.deploy",
-    docsTopic: "package",
-    equivalentUnityMcp: "deploy_package",
     examples: [
       { description: "Preview deploying a local package", argv: ["tools", "run", "package.deploy", "--input", "{\"project\":\"D:/workspace/alps-unity-cli/Dev/UnityProject\",\"source\":\"D:/workspace/my-package\"}", "--dry-run"] },
       { description: "Deploy and request an open Editor refresh", argv: ["tools", "run", "package.deploy", "--input", "{\"source\":\"D:/workspace/my-package\"}", "--yes"] }
@@ -173,13 +129,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     destructiveHint: true,
     supportsDryRun: true,
     sideEffects: ["project-file-write", "project-file-delete", "session-affecting"],
-    riskLevel: "high",
     playModeSupport: "session-affecting",
-    handler: "offline",
-    supportStatus: "cli-only",
-    cliCommand: "tools run package.restore",
-    docsTopic: "package",
-    equivalentUnityMcp: "restore_package",
     examples: [
       { description: "Preview restoring a deployed package", argv: ["tools", "run", "package.restore", "--input", "{\"packageName\":\"com.acme.tool\"}", "--dry-run"] },
       { description: "Restore a deployed package", argv: ["tools", "run", "package.restore", "--input", "{\"packageName\":\"com.acme.tool\"}", "--yes"] }
@@ -192,15 +142,8 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     group: "package",
     inputSchema: objSchema({ project: { type: "string", description: "Unity project path." }, unity: { type: "string", description: "Unity executable path." }, wait: { type: "boolean", default: true, description: "Wait for the resolve job to finish." } }),
     destructiveHint: false,
-    longRunning: true,
     sideEffects: ["session-affecting"],
-    riskLevel: "medium",
     playModeSupport: "session-affecting",
-    handler: "hybrid",
-    supportStatus: "bridge-job",
-    cliCommand: "tools run package.resolve",
-    docsTopic: "package",
-    equivalentUnityMcp: "manage_packages.resolve_packages"
   },
   {
     name: "package.registry",
@@ -211,11 +154,6 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["manifest-change"],
     playModeSupport: "supported",
-    handler: "offline",
-    supportStatus: "cli-only",
-    cliCommand: "tools run package.registry",
-    docsTopic: "package",
-    equivalentUnityMcp: "manage_packages.list_registries",
     examples: [
       { description: "Read the primary registry", argv: ["tools", "run", "package.registry", "--input", "{\"action\":\"get\"}"] }
     ]
@@ -230,11 +168,6 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["manifest-change"],
     playModeSupport: "supported",
-    handler: "offline",
-    supportStatus: "cli-only",
-    cliCommand: "tools run package.scoped-registry",
-    docsTopic: "package",
-    equivalentUnityMcp: "manage_packages.add_registry",
     examples: [
       { description: "List scoped registries", argv: ["tools", "run", "package.scoped-registry", "--input", "{\"action\":\"list\"}"] },
       { description: "Preview removing a scoped registry", argv: ["tools", "run", "package.scoped-registry", "--input", "{\"action\":\"remove\",\"name\":\"Acme\"}", "--dry-run"] }
@@ -249,13 +182,9 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ command: { type: "string" }, mode: { type: "string" }, requiresUnity: { type: "boolean" }, count: { type: "integer" }, topics: { type: "array", items: { type: "object" } } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "offline",
-    cliCommand: "tools run docs.list",
-    docsTopic: "docs",
     examples: [
       { description: "List built-in CLI doc topics", argv: ["tools", "run", "docs.list", "--input", "{}"] }
     ],
-    equivalentUnityMcp: "unity_docs"
   },
   {
     name: "docs.topic",
@@ -266,13 +195,9 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ command: { type: "string" }, mode: { type: "string" }, requiresUnity: { type: "boolean" }, topic: { type: "string" }, title: { type: "string" }, summary: { type: "string" }, tools: { type: "array", items: { type: "string" } }, guide: { type: "string" } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "offline",
-    cliCommand: "tools run docs.topic",
-    docsTopic: "docs",
     examples: [
       { description: "Read the scene topic", argv: ["tools", "run", "docs.topic", "--input", "{\"topic\":\"scene\"}"] }
     ],
-    equivalentUnityMcp: "unity_docs"
   },
   {
     name: "docs.get",
@@ -283,13 +208,9 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ command: { type: "string" }, mode: { type: "string" }, requiresUnity: { type: "boolean" }, source: { type: "object" }, unityVersion: { type: "object" }, api: { type: "string" }, format: { type: "string" }, doc: { type: "object" }, text: { type: "string" } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "offline",
-    cliCommand: "tools run docs.get",
-    docsTopic: "docs",
     examples: [
       { description: "Read cached Camera docs", argv: ["tools", "run", "docs.get", "--input", "{\"api\":\"UnityEngine.Camera\",\"docsDir\":\".cache/unity-docs\",\"format\":\"text\"}"] }
     ],
-    equivalentUnityMcp: "unity_docs.get_doc"
   },
   {
     name: "docs.search",
@@ -300,13 +221,9 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     outputSchema: pageSchema({ type: "object", properties: { name: { type: "string" }, title: { type: "string" }, summary: { type: "string" }, path: { type: "string" } } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "offline",
-    cliCommand: "tools run docs.search",
-    docsTopic: "docs",
     examples: [
       { description: "Search cached Unity docs", argv: ["tools", "run", "docs.search", "--input", "{\"query\":\"Camera\",\"docsDir\":\".cache/unity-docs\",\"pageSize\":5}"] }
     ],
-    equivalentUnityMcp: "unity_docs.lookup"
   },
   {
     name: "reflect.type",
@@ -315,12 +232,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     group: "reflect",
     inputSchema: objSchema({ name: { type: "string", description: "Fully-qualified or simple C# type name, e.g. UnityEngine.Camera." }, reflectDir: { type: "string", description: "Offline reflection cache directory. Defaults to UNITY_CLI_REFLECT_DIR or <dataDir>/reflect." }, unityVersion: { type: "string", description: "Optional Unity version filter for the cache." }, format: { type: "string", enum: ["text", "json"], description: "Output format. text adds a readable signature; json is structured." } }, ["name"]),
     destructiveHint: false,
-    handler: "offline",
-    supportStatus: "cli-only",
     playModeSupport: "supported",
-    cliCommand: "tools run reflect.type",
-    docsTopic: "reflect",
-    equivalentUnityMcp: "unity_reflect.get_type",
     examples: [
       { description: "Read a type's member names", argv: ["tools", "run", "reflect.type", "UnityEngine.Camera", "--format", "text"] }
     ]
@@ -332,12 +244,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     group: "reflect",
     inputSchema: objSchema({ member: { type: "string", description: "Member target as Type.Member, e.g. UnityEngine.Camera.Render." }, reflectDir: { type: "string", description: "Offline reflection cache directory." }, format: { type: "string", enum: ["text", "json"], description: "Output format." } }, ["member"]),
     destructiveHint: false,
-    handler: "offline",
-    supportStatus: "cli-only",
     playModeSupport: "supported",
-    cliCommand: "tools run reflect.member",
-    docsTopic: "reflect",
-    equivalentUnityMcp: "unity_reflect.get_member",
     examples: [
       { description: "Read one member's full signature", argv: ["tools", "run", "reflect.member", "UnityEngine.Camera.Render"] }
     ]
@@ -349,12 +256,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     group: "reflect",
     inputSchema: objSchema({ query: { type: "string", description: "Search text matched against type and member names." }, reflectDir: { type: "string", description: "Offline reflection cache directory." }, pageSize: { type: "integer", default: 100, description: "Maximum results per page." }, cursor: { type: "integer", default: 0, description: "Zero-based result offset." }, format: { type: "string", enum: ["text", "json"], description: "Output format." } }, ["query"]),
     destructiveHint: false,
-    handler: "offline",
-    supportStatus: "cli-only",
     playModeSupport: "supported",
-    cliCommand: "tools run reflect.search",
-    docsTopic: "reflect",
-    equivalentUnityMcp: "unity_reflect.search",
     examples: [
       { description: "Search for Render-related members", argv: ["tools", "run", "reflect.search", "Render", "--page-size", "10"] }
     ]
@@ -368,14 +270,10 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ command: { type: "string" }, mode: { type: "string" }, requiresUnity: { type: "boolean" }, static: { type: "object" }, runtime: { type: "object" }, contextDiscovery: { type: "object" }, extensions: { type: "object" }, bridgeEndpoint: { type: "string" } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "offline",
-    cliCommand: "tools run diagnose.capabilities",
-    docsTopic: "diagnose",
     examples: [
       { description: "Read offline CLI capabilities", argv: ["tools", "run", "diagnose.capabilities", "--input", "{}"] },
       { description: "Include live bridge capabilities", argv: ["tools", "run", "diagnose.capabilities", "--input", "{\"bridgeEndpoint\":\"http://127.0.0.1:47395\"}"] }
     ],
-    equivalentUnityMcp: "manage_tools / debug_request_context"
   },
   {
     name: "test.run",
@@ -390,17 +288,9 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
       timeoutMs: { type: "integer" }
     }),
     destructiveHint: false,
-    longRunning: true,
     sideEffects: ["session-affecting"],
-    riskLevel: "medium",
     playModeSupport: "session-affecting",
-    handler: "job",
-    supportStatus: "batch-job",
-    cliCommand: "tools run test.run",
-    docsTopic: "test",
     examples: [{ description: "Run EditMode tests", argv: ["tools", "run", "test.run", "--project", ".", "--platform", "EditMode"] }],
-    cancellationSemantics: "Immediate process cancellation when a Unity batchmode pid is known; queued or pid-less jobs are marked cancelled and may already have finished or be waiting for Unity cleanup.",
-    equivalentUnityMcp: "run_tests"
   },
         {
     name: "build.run",
@@ -419,16 +309,10 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["build-output-write", "asset-import", "compile"],
     playModeSupport: "editor-only",
-    longRunning: true,
-    handler: "job",
-    cliCommand: "tools run build.run",
-    docsTopic: "build",
     examples: [
       { description: "Start a Windows build job", argv: ["tools", "run", "build.run", "--input", "{\"project\":\".\",\"target\":\"StandaloneWindows64\",\"output\":\"Builds/App.exe\"}"] },
       { description: "Start multi-platform build jobs", argv: ["tools", "run", "build.run", "--input", "{\"project\":\".\",\"targets\":\"StandaloneWindows64,WebGL\",\"output\":\"Builds/{target}/Player\"}"] }
     ],
-    cancellationSemantics: "Immediate process cancellation when a Unity batchmode pid is known; if Unity is already inside build cleanup, the job is marked cancelled and callers should inspect job logs for final filesystem state.",
-    equivalentUnityMcp: "manage_build.build"
   },
   {
     name: "build.status",
@@ -439,12 +323,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: [],
     playModeSupport: "supported",
-    handler: "offline",
-    supportStatus: "cli-only",
-    cliCommand: "tools run build.status",
-    docsTopic: "build",
     examples: [{ description: "Check a build job", argv: ["tools", "run", "build.status", "--input", "{\"jobId\":\"job_xxx\"}"] }],
-    equivalentUnityMcp: "manage_build.status"
   },
   {
     name: "build.cancel",
@@ -454,14 +333,7 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ jobId: { type: "string", description: "Build jobId returned by build.run." }, id: { type: "string", description: "Alias of jobId." } }, ["jobId"]),
     destructiveHint: false,
     sideEffects: ["job-cancel"],
-    riskLevel: "medium",
     playModeSupport: "session-affecting",
-    handler: "offline",
-    supportStatus: "cli-only",
-    cliCommand: "tools run build.cancel",
-    docsTopic: "build",
     examples: [{ description: "Cancel a build job", argv: ["tools", "run", "build.cancel", "--input", "{\"jobId\":\"job_xxx\"}"] }],
-    cancellationSemantics: "Attempts immediate process-tree termination when the Unity batchmode pid is known; queued or pid-less jobs are marked cancelled.",
-    equivalentUnityMcp: "manage_build.cancel"
   },
       ];

@@ -26,7 +26,7 @@ Package 依赖通过 `requiresPackages` 字段声明在工具 descriptor 中：
 }
 ```
 
-执行前可通过 `tools describe` 检查 `requiresPackages` 和 `available` 字段。
+执行前可通过 `tools describe` 检查 `requiresPackages`、`extensionAvailability`、`missingPackageIds`；执行失败时跟随错误里的 `next_actions`。
 
 ### 2. 项目工具注册
 
@@ -57,8 +57,8 @@ Package 依赖通过 `requiresPackages` 字段声明在工具 descriptor 中：
 
 | 编辑器状态 | `target: "editor"` 工具 | `target: "runtime"` 工具 |
 |-----------|------------------------|-------------------------|
-| 编辑模式 | `available: true` | `available: false` → `E_RUNTIME_NOT_READY`（transient） |
-| 播放模式 | `available: true` | `available: true` |
+| 编辑模式 | 可执行 | 执行返回 `E_RUNTIME_NOT_READY`（transient） |
+| 播放模式 | 可执行 | 可执行 |
 
 使 runtime 工具可用的步骤：
 1. `tools run editor.play` 进入 Play Mode
@@ -76,7 +76,7 @@ Unity domain reload 期间（如脚本编译后），Bridge 标记目标为过�
 ## AI Agent 处理方式
 
 1. **先解析目标。** 执行任何工具前先 `instances list` + `target set`
-2. **执行前先 describe。** descriptor 显示 `handler`、`supportStatus`、`target`、`availabilityScope`、`available`
+2. **执行前先 describe。** descriptor 显示 `supportStatus`、`target`、`availabilityScope`、`playModeSupport`
 3. **优雅处理错误。** Package-not-found、Bridge-unreachable 和 `E_RUNTIME_NOT_READY` 包含 `next_actions`
 4. **状态变化后重新发现。** 安装包或 domain reload 后，重新 `tools group list custom --include-custom`
 5. **检查 `editor.state`** 再调用 PlayMode 敏感工具。`target: "runtime"` 需先进入 Play Mode

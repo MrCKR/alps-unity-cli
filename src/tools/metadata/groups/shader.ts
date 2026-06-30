@@ -22,11 +22,6 @@ export const SHADER_TOOLS: ToolMetadata[] = [
     }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run shader.info",
-    docsTopic: "shader",
-    equivalentUnityMcp: "assets-shader-get-data",
     examples: [
       { description: "Inspect a shader asset and its compile diagnostics", argv: ["tools", "run", "shader.info", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeShader.shader\"}"] }
     ]
@@ -44,11 +39,6 @@ export const SHADER_TOOLS: ToolMetadata[] = [
     }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run shader.read",
-    docsTopic: "shader",
-    equivalentUnityMcp: "assets-shader-get-data",
     examples: [
       { description: "Read shader source for editing", argv: ["tools", "run", "shader.read", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeShader.shader\"}"] }
     ]
@@ -67,12 +57,7 @@ export const SHADER_TOOLS: ToolMetadata[] = [
     }, ["path"]),
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],
-    riskLevel: "low",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    cliCommand: "tools run shader.create",
-    docsTopic: "shader",
-    equivalentUnityMcp: "assets-shader-create",
     examples: [
       { description: "Create a default shader", argv: ["tools", "run", "shader.create", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/GeneratedProbe.shader\"}"] }
     ]
@@ -89,12 +74,7 @@ export const SHADER_TOOLS: ToolMetadata[] = [
     }, ["path"]),
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import", "shader-recompile"],
-    riskLevel: "medium",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    cliCommand: "tools run shader.update",
-    docsTopic: "shader",
-    equivalentUnityMcp: "assets-shader-update",
     examples: [
       { description: "Replace shader source and recompile", argv: ["tools", "run", "shader.update", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeShader.shader\",\"content\":\"Shader \\\"UnityCli/Probe\\\" { SubShader { Pass {} } }\"}"] }
     ]
@@ -108,14 +88,8 @@ export const SHADER_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ shader: { type: "object" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: true,
     sideEffects: ["asset-delete", "asset-import"],
-    riskLevel: "high",
     supportsDryRun: true,
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run shader.delete",
-    docsTopic: "shader",
-    equivalentUnityMcp: "manage_shader.delete",
     examples: [
       { description: "Preview deleting a generated shader", argv: ["tools", "run", "shader.delete", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/GeneratedProbe.shader\"}", "--dry-run"] },
       { description: "Delete a generated shader after confirmation", argv: ["tools", "run", "shader.delete", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/GeneratedProbe.shader\"}", "--yes"] }
@@ -137,11 +111,6 @@ export const SHADER_TOOLS: ToolMetadata[] = [
     }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run shader.list",
-    docsTopic: "shader",
-    equivalentUnityMcp: "assets-shader-list-all",
     examples: [
       { description: "List shaders to find a name for material.create", argv: ["tools", "run", "shader.list", "--input", "{\"keyword\":\"Standard\",\"pageSize\":25}"] }
     ]
@@ -176,11 +145,6 @@ export const SHADER_TOOLS: ToolMetadata[] = [
     }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run shader.get-data",
-    docsTopic: "shader",
-    equivalentUnityMcp: "assets-shader-get-data",
     examples: [
       { description: "Read shader property definitions and pass structure by path", argv: ["tools", "run", "shader.get-data", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeShader.shader\",\"includeSubshaders\":true,\"maxPasses\":8}"] },
       { description: "Resolve a built-in shader by name without source code", argv: ["tools", "run", "shader.get-data", "--input", "{\"name\":\"Standard\",\"includeSourceCode\":false}"] }

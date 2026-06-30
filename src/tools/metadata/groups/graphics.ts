@@ -32,11 +32,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["quality-settings", "project-settings-write"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.quality",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.pipeline_set_quality / pipeline_get_info",
     examples: [
       { description: "Inspect quality settings", argv: ["tools", "run", "graphics.quality", "--input", "{}"] },
       { description: "Set quality by level name and vSync", argv: ["tools", "run", "graphics.quality", "--input", "{\"level\":\"High\",\"vSyncCount\":1}"] }
@@ -62,11 +57,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["graphics-settings", "quality-settings", "project-settings-write"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.settings",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.pipeline_set_settings",
     examples: [
       { description: "Inspect graphics settings", argv: ["tools", "run", "graphics.settings", "--input", "{}"] },
       { description: "Use built-in render pipeline", argv: ["tools", "run", "graphics.settings", "--input", "{\"renderPipeline\":\"built-in\"}"] }
@@ -82,11 +72,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "supported",
     sideEffects: [],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.pipeline",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.ping / pipeline_get_info",
     examples: [
       { description: "Read pipeline summary", argv: ["tools", "run", "graphics.pipeline", "--input", "{}"] }
     ]
@@ -101,11 +86,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "supported",
     sideEffects: [],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.volume",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.volume_list",
     examples: [
       { description: "List scene volumes", argv: ["tools", "run", "graphics.volume", "--input", "{}"] },
       { description: "Inspect one volume by hierarchy path", argv: ["tools", "run", "graphics.volume", "--input", "{\"target\":\"Global Volume\"}"] }
@@ -121,11 +101,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["artifact-write", "scene-view-render"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.screenshot",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.capture_screenshot",
     examples: [
       { description: "Capture graphics screenshot", argv: ["tools", "run", "graphics.screenshot", "--input", "{\"path\":\".tmp/graphics/scene.png\",\"overwrite\":true,\"includeDiagnostics\":true}"] }
     ]
@@ -140,13 +115,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: true,
     playModeSupport: "editor-only",
     sideEffects: ["lightmapping-bake", "asset-write", "editor-long-running"],
-    riskLevel: "medium",
-    longRunning: true,
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.bake-start",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.light_bake_start",
     examples: [
       { description: "Start a real async bake after approval", argv: ["tools", "run", "graphics.bake-start", "--yes", "--input", "{}"] }
     ]
@@ -161,11 +129,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "editor-only",
     sideEffects: ["lightmapping-bake-cancel"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.bake-cancel",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.light_bake_cancel",
     examples: [
       { description: "Cancel active bake if present", argv: ["tools", "run", "graphics.bake-cancel", "--input", "{}"] }
     ]
@@ -180,11 +143,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "supported",
     sideEffects: [],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.bake-status",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.light_bake_status",
     examples: [
       { description: "Read bake status", argv: ["tools", "run", "graphics.bake-status", "--input", "{}"] }
     ]
@@ -199,12 +157,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: true,
     playModeSupport: "editor-only",
     sideEffects: ["lightmapping-data-clear", "asset-write"],
-    riskLevel: "high",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.bake-clear",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.light_bake_clear",
     examples: [
       { description: "Clear lighting data after explicit review", argv: ["tools", "run", "graphics.bake-clear", "--yes", "--input", "{\"bakedData\":true,\"realtimeData\":false}"] }
     ]
@@ -219,12 +171,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: true,
     playModeSupport: "editor-only",
     sideEffects: ["reflection-probe-bake", "asset-write"],
-    riskLevel: "medium",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.bake-reflection-probe",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.reflection_probe_bake",
     examples: [
       { description: "Bake an existing probe after approval", argv: ["tools", "run", "graphics.bake-reflection-probe", "--yes", "--input", "{\"target\":\"ReflectionProbe\"}"] }
     ]
@@ -249,11 +195,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["lighting-settings", "scene-modify"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.bake-settings",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.light_bake_settings",
     examples: [
       { description: "Read bake settings", argv: ["tools", "run", "graphics.bake-settings", "--input", "{}"] },
       { description: "Update sample count", argv: ["tools", "run", "graphics.bake-settings", "--input", "{\"directSamples\":32}"] }
@@ -269,11 +210,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["scene-modify", "component-add", "lighting-probes"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.light-probe-group",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.light_probe_group",
     examples: [
       { description: "Create or update probe group", argv: ["tools", "run", "graphics.light-probe-group", "--input", "{\"target\":\"ProbeRoot\",\"create\":true,\"positions\":\"0,0,0 1,1,1\"}"] }
     ]
@@ -297,11 +233,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["scene-modify", "component-add", "reflection-probe-settings"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.reflection-probe",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.reflection_probe",
     examples: [
       { description: "Create or update reflection probe", argv: ["tools", "run", "graphics.reflection-probe", "--input", "{\"target\":\"ReflectionProbeGate\",\"create\":true,\"resolution\":64,\"hdr\":true}"] }
     ]
@@ -316,11 +247,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["scene-modify", "probe-position-update"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.probe-positions",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.probe_positions",
     examples: [
       { description: "Set reflection probe center", argv: ["tools", "run", "graphics.probe-positions", "--input", "{\"target\":\"ReflectionProbeGate\",\"type\":\"reflection\",\"positions\":\"0,1,0\"}"] }
     ]
@@ -335,11 +261,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "supported",
     sideEffects: [],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.stats",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.render_stats",
     examples: [
       { description: "Read render stats", argv: ["tools", "run", "graphics.stats", "--input", "{}"] }
     ]
@@ -354,11 +275,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "supported",
     sideEffects: [],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.stats-counters",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.render_stats_counters",
     examples: [
       { description: "Read render stat counters", argv: ["tools", "run", "graphics.stats-counters", "--input", "{}"] }
     ]
@@ -373,11 +289,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "supported",
     sideEffects: [],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.stats-memory",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.render_stats_memory",
     examples: [
       { description: "Read graphics memory stats", argv: ["tools", "run", "graphics.stats-memory", "--input", "{}"] }
     ]
@@ -392,11 +303,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["editor-scene-view"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.scene-debug",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.scene_debug",
     examples: [
       { description: "Read current SceneView debug mode", argv: ["tools", "run", "graphics.scene-debug", "--input", "{}"] },
       { description: "Set wireframe draw mode", argv: ["tools", "run", "graphics.scene-debug", "--input", "{\"drawMode\":\"Wireframe\"}"] }
@@ -412,11 +318,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "supported",
     sideEffects: [],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.skybox-get",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.skybox_get",
     examples: [
       { description: "Read skybox/environment settings", argv: ["tools", "run", "graphics.skybox-get", "--input", "{}"] }
     ]
@@ -431,11 +332,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["render-settings", "asset-write"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.skybox-set-material",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.skybox_set_material",
     examples: [
       { description: "Assign skybox material", argv: ["tools", "run", "graphics.skybox-set-material", "--input", "{\"material\":\"Assets/Skyboxes/Day.mat\"}"] },
       { description: "Restore built-in default skybox", argv: ["tools", "run", "graphics.skybox-set-material", "--input", "{\"material\":\"builtin:Default-Skybox\"}"] }
@@ -451,11 +347,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["material-modify", "asset-write"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.skybox-set-properties",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.skybox_set_properties",
     examples: [
       { description: "Set skybox exposure", argv: ["tools", "run", "graphics.skybox-set-properties", "--input", "{\"property\":\"_Exposure\",\"value\":\"1\"}"] }
     ]
@@ -477,11 +368,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["render-settings", "scene-modify"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.skybox-set-ambient",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.skybox_set_ambient",
     examples: [
       { description: "Set ambient intensity", argv: ["tools", "run", "graphics.skybox-set-ambient", "--input", "{\"intensity\":1}"] }
     ]
@@ -503,11 +389,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["render-settings", "scene-modify"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.skybox-set-fog",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.skybox_set_fog",
     examples: [
       { description: "Disable fog", argv: ["tools", "run", "graphics.skybox-set-fog", "--input", "{\"enabled\":false}"] }
     ]
@@ -527,11 +408,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["render-settings", "scene-modify"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.skybox-set-reflection",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.skybox_set_reflection",
     examples: [
       { description: "Set reflection intensity", argv: ["tools", "run", "graphics.skybox-set-reflection", "--input", "{\"intensity\":1}"] }
     ]
@@ -546,11 +422,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["render-settings", "scene-modify"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.skybox-set-sun",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.skybox_set_sun",
     examples: [
       { description: "Set sun from a Light object", argv: ["tools", "run", "graphics.skybox-set-sun", "--input", "{\"target\":\"Directional Light\"}"] }
     ]
@@ -565,11 +436,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["render-pipeline-settings", "project-settings-write"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.pipeline-settings",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.pipeline_set_settings",
     examples: [
       { description: "Inspect pipeline assignment", argv: ["tools", "run", "graphics.pipeline-settings", "--input", "{}"] },
       { description: "Switch to Built-in pipeline", argv: ["tools", "run", "graphics.pipeline-settings", "--input", "{\"renderPipeline\":\"built-in\"}"] }
@@ -585,11 +451,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["quality-settings", "project-settings-write"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.pipeline-quality",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.pipeline_set_quality",
     examples: [
       { description: "Inspect quality levels", argv: ["tools", "run", "graphics.pipeline-quality", "--input", "{}"] },
       { description: "Set quality by name", argv: ["tools", "run", "graphics.pipeline-quality", "--input", "{\"level\":\"High\"}"] }
@@ -605,11 +466,6 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "supported",
     sideEffects: [],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run graphics.pipeline-info",
-    docsTopic: "graphics",
-    equivalentUnityMcp: "manage_graphics.pipeline_get_info",
     examples: [
       { description: "Read pipeline details", argv: ["tools", "run", "graphics.pipeline-info", "--input", "{}"] }
     ]

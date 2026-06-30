@@ -31,7 +31,6 @@ const PROBUILDER_EXTENSION: ExtensionMetadata = {
   requiresUnityPackages: ["com.unity.probuilder"],
   installMode: "auto",
   installCommand: "extensions install probuilder",
-  equivalentMcpGroup: "probuilder",
   nextActions: [
     "Run unity_cli extensions install probuilder to install this extension.",
     "Run unity_cli init to auto-detect and install extensions for your Unity project."
@@ -52,7 +51,6 @@ const CINEMACHINE_EXTENSION: ExtensionMetadata = {
   requiresUnityPackages: ["com.unity.cinemachine"],
   installMode: "auto",
   installCommand: "extensions install cinemachine",
-  equivalentMcpGroup: "cinemachine",
   nextActions: [
     "Run unity_cli extensions install cinemachine to install this extension.",
     "Run unity_cli init to auto-detect and install extensions for your Unity project."
@@ -73,7 +71,6 @@ const VFX_GRAPH_EXTENSION: ExtensionMetadata = {
   requiresUnityPackages: [],
   installMode: "auto",
   installCommand: "extensions install vfx-graph",
-  equivalentMcpGroup: "vfx",
   nextActions: [
     "Run unity_cli extensions install vfx-graph to install this extension.",
     "Run unity_cli init to auto-detect and install extensions for your Unity project."

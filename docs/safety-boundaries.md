@@ -12,7 +12,7 @@ alps-unity-cli 的安全模型围绕三个核心原则：Tool 可有副作用但
 | `supportsDryRun` | boolean | true = 支持 `--dry-run` 预览 |
 | `longRunning` | boolean | true = 可能长时间运行 |
 | `permissions` | string[] | 执行所需权限 |
-| `cancellationSemantics` | string | 取消行为描述 |
+| `cancellation` | string | 长任务取消语义：`cooperative` 或 `job`，无特殊取消语义时省略 |
 | `playModeSupport` | string | Play Mode 行为：`supported` / `runtime-only` / `session-affecting` / `editor-only` / `unknown` |
 
 ## Tool 安全规则

@@ -1,47 +1,69 @@
 {
   "id": "cinemachine",
-  "name": "cinemachine",
-  "title": "Cinemachine",
+  "name": "Cinemachine",
   "version": "1.0.0",
-  "description": "Cinemachine smart camera extension for alps-unity-cli",
-  "packageName": "unity-cli-extension-cinemachine",
-  "requiresUnityPackages": [
-    "com.unity.cinemachine"
-  ],
+  "description": "Smart camera system for Unity. Provides camera composition, tracking, blending, noise, and extension management through the Cinemachine package.",
   "unityPackages": [
     {
-      "name": "com.unity.cinemachine"
+      "packageId": "com.unity.cinemachine",
+      "displayName": "Cinemachine"
     }
   ],
-  "providesTools": [
-    "cinemachine.ping",
-    "cinemachine.create",
-    "cinemachine.target",
-    "cinemachine.lens",
-    "cinemachine.priority",
-    "cinemachine.blend",
-    "cinemachine.body",
-    "cinemachine.aim",
-    "cinemachine.noise",
-    "cinemachine.brain",
-    "cinemachine.force-camera",
-    "cinemachine.release-override",
-    "cinemachine.extension"
-  ],
-  "copyRoot": "extension-directory",
-  "installMode": "copy-if-package-present",
-  "toolGroups": [
-    "cinemachine"
-  ],
-  "descriptorEntry": "tools/metadata/cinemachine.js",
-  "bridgeEntry": "bridge/domains/cinemachine.js",
-  "unityPackageFiles": [
-    "extension.json",
-    "unitypkg/",
-    "docs/"
-  ],
-  "docsTopic": "cinemachine",
-  "docsEntry": "docs/cinemachine.md",
+  "contributions": {
+    "tools": [
+      {
+        "name": "cinemachine.ping"
+      },
+      {
+        "name": "cinemachine.create"
+      },
+      {
+        "name": "cinemachine.target"
+      },
+      {
+        "name": "cinemachine.lens"
+      },
+      {
+        "name": "cinemachine.priority"
+      },
+      {
+        "name": "cinemachine.blend"
+      },
+      {
+        "name": "cinemachine.body"
+      },
+      {
+        "name": "cinemachine.aim"
+      },
+      {
+        "name": "cinemachine.noise"
+      },
+      {
+        "name": "cinemachine.brain"
+      },
+      {
+        "name": "cinemachine.force-camera"
+      },
+      {
+        "name": "cinemachine.release-override"
+      },
+      {
+        "name": "cinemachine.extension"
+      }
+    ],
+    "contexts": [
+      {
+        "key": "cinemachine.cameras",
+        "description": "Cinemachine virtual cameras and composition in the current scene."
+      }
+    ],
+    "csharpEntries": [
+      {
+        "type": "UnityCli.Cinemachine.CinemachineCameraTools",
+        "description": "Bridge handlers for Cinemachine ping, create, target, lens, priority, blend, body, aim, noise, brain, force-camera, release-override, and extension operations."
+      }
+    ]
+  },
   "unityInstall": {
     "layout": "directory",
     "include": [

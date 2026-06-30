@@ -32,7 +32,6 @@ test("shader group tools exist with correct safety hints", () => {
   assert.equal(info.destructiveHint, false);
   assert.equal(info.handler, "bridge");
   assert.equal(info.playModeSupport, "supported");
-  assert.equal(info.equivalentUnityMcp, "assets-shader-get-data");
 
   const create = findToolByName("shader.create")!;
   assert.equal(create.playModeSupport, "session-affecting");
@@ -50,7 +49,6 @@ test("shader group tools exist with correct safety hints", () => {
 
   const list = findToolByName("shader.list")!;
   assert.equal(list.playModeSupport, "supported");
-  assert.equal(list.equivalentUnityMcp, "assets-shader-list-all");
 
   const getData = findToolByName("shader.get-data")!;
   assert.equal(getData.playModeSupport, "supported");

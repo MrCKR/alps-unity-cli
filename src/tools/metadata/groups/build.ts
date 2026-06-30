@@ -16,11 +16,6 @@ export const BUILD_TOOLS: ToolMetadata[] = [
     sideEffects: ["build-settings-modify"],
     playModeSupport: "session-affecting",
     supportsDryRun: true,
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run build.scenes",
-    docsTopic: "build",
-    equivalentUnityMcp: "manage_build.scenes",
     examples: [
       { description: "Read Build Settings scenes", argv: ["tools", "run", "build.scenes", "--input", "{\"action\":\"get\"}"] },
       { description: "Preview adding a scene", argv: ["tools", "run", "build.scenes", "--input", "{\"action\":\"add\",\"path\":\"Assets/UnityCliAlignmentFixtures/BuildScene.unity\"}", "--dry-run"] }
@@ -36,11 +31,6 @@ export const BUILD_TOOLS: ToolMetadata[] = [
     sideEffects: ["build-target-switch", "asset-import", "domain-reload"],
     playModeSupport: "session-affecting",
     supportsDryRun: true,
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run build.platform",
-    docsTopic: "build",
-    equivalentUnityMcp: "manage_build.platform",
     examples: [
       { description: "Read active build platform", argv: ["tools", "run", "build.platform", "--input", "{\"action\":\"get\"}"] },
       { description: "Preview a platform switch", argv: ["tools", "run", "build.platform", "--input", "{\"action\":\"set\",\"target\":\"StandaloneWindows64\"}", "--dry-run"] }
@@ -57,11 +47,6 @@ export const BUILD_TOOLS: ToolMetadata[] = [
     sideEffects: ["build-profile-asset-write", "build-profile-switch"],
     playModeSupport: "session-affecting",
     supportsDryRun: true,
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run build.profiles",
-    docsTopic: "build",
-    equivalentUnityMcp: "manage_build.profiles",
     examples: [
       { description: "List Build Profiles or report API availability", argv: ["tools", "run", "build.profiles", "--input", "{\"action\":\"list\"}"] },
       { description: "Preview creating a Build Profile", argv: ["tools", "run", "build.profiles", "--input", "{\"action\":\"create\",\"path\":\"Assets/BuildProfiles/Windows.asset\",\"name\":\"Windows\"}", "--dry-run"] }
@@ -77,11 +62,6 @@ export const BUILD_TOOLS: ToolMetadata[] = [
     sideEffects: ["player-settings-write"],
     playModeSupport: "supported",
     supportsDryRun: true,
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run build.settings",
-    docsTopic: "build",
-    equivalentUnityMcp: "manage_build.settings",
     examples: [
       { description: "Read PlayerSettings build configuration", argv: ["tools", "run", "build.settings", "--input", "{\"action\":\"get\"}"] },
       { description: "Preview changing product name", argv: ["tools", "run", "build.settings", "--input", "{\"action\":\"set\",\"productName\":\"MyGame\"}", "--dry-run"] }

@@ -33,13 +33,7 @@ export const SCREENSHOT_TOOLS: ToolMetadata[] = [
     outputSchema: SCREENSHOT_OUTPUT,
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],
-    riskLevel: "low",
     playModeSupport: "editor-only",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run screenshot.capture",
-    docsTopic: "screenshot",
-    equivalentUnityMcp: "screenshot.capture",
     examples: [
       { description: "Capture the scene view to a PNG", argv: ["tools", "run", "screenshot.capture", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/CapturedShot.png\"}"] }
     ]
@@ -60,13 +54,7 @@ export const SCREENSHOT_TOOLS: ToolMetadata[] = [
     outputSchema: SCREENSHOT_OUTPUT,
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],
-    riskLevel: "low",
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run screenshot.game-view",
-    docsTopic: "screenshot",
-    equivalentUnityMcp: "screenshot.game-view",
     examples: [
       { description: "Capture the game view with diagnostics", argv: ["tools", "run", "screenshot.game-view", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/GameShot.png\",\"width\":1280,\"height\":720,\"includeDiagnostics\":true}"] }
     ]
@@ -87,13 +75,7 @@ export const SCREENSHOT_TOOLS: ToolMetadata[] = [
     outputSchema: SCREENSHOT_OUTPUT,
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],
-    riskLevel: "low",
     playModeSupport: "editor-only",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run screenshot.scene-view",
-    docsTopic: "screenshot",
-    equivalentUnityMcp: "screenshot.scene-view",
     examples: [
       { description: "Capture the scene view", argv: ["tools", "run", "screenshot.scene-view", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/SceneShot.png\"}"] }
     ]
@@ -116,13 +98,7 @@ export const SCREENSHOT_TOOLS: ToolMetadata[] = [
     outputSchema: SCREENSHOT_OUTPUT,
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],
-    riskLevel: "low",
     playModeSupport: "editor-only",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run screenshot.isolated-object",
-    docsTopic: "screenshot",
-    equivalentUnityMcp: "screenshot.isolated-object",
     examples: [
       { description: "Isolate and render an object", argv: ["tools", "run", "screenshot.isolated-object", "--input", "{\"target\":\"AlignmentProbe\",\"path\":\"Assets/UnityCliAlignmentFixtures/IsoShot.png\",\"width\":512,\"height\":512}"] }
     ]
@@ -154,13 +130,7 @@ export const SCREENSHOT_TOOLS: ToolMetadata[] = [
     destructiveHint: true,
     supportsDryRun: true,
     sideEffects: ["artifact-write", "asset-write"],
-    riskLevel: "medium",
     playModeSupport: "editor-only",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run screenshot.surround",
-    docsTopic: "screenshot",
-    equivalentUnityMcp: "manage_camera.screenshot batch=surround",
     examples: [
       { description: "Create a six-angle contact sheet", argv: ["tools", "run", "screenshot.surround", "--input", "{\"target\":\"AlignmentProbe\",\"output-dir\":\"Assets/UnityCliAlignmentFixtures/SurroundShots\",\"overwrite\":true}", "--yes"] }
     ]
@@ -186,13 +156,7 @@ export const SCREENSHOT_TOOLS: ToolMetadata[] = [
     }),
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],
-    riskLevel: "low",
     playModeSupport: "editor-only",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run screenshot.orbit",
-    docsTopic: "screenshot",
-    equivalentUnityMcp: "screenshot.orbit",
     examples: [
       { description: "Orbit an object with 8 shots", argv: ["tools", "run", "screenshot.orbit", "--input", "{\"target\":\"AlignmentProbe\",\"output-dir\":\"Assets/UnityCliAlignmentFixtures/OrbitShots\",\"count\":8,\"radius\":5}"] }
     ]

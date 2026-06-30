@@ -1,5 +1,5 @@
 import { getString } from "./args.js";
-import { builtinToolMetadata, extensionToolMetadata, allRegisteredToolMetadata, supportStatusForTool, type ToolMetadata } from "./tools/metadata/index.js";
+import { allRegisteredToolMetadata, supportStatusForTool, toolCliCommand, toolDocsTopic, type ToolMetadata } from "./tools/metadata/index.js";
 import { failure, success } from "./output.js";
 import type { CliResult } from "./types.js";
 
@@ -24,7 +24,7 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   "tool-discovery": {
     title: "Tool Discovery",
-    summary: "Group-first tool discovery surface. All tools — built-in and project-local — share the same descriptor schema. Use `tools describe <name>` before executing any tool. Descriptor includes `target`, `availabilityScope`, and `available` fields for runtime-aware routing.",
+    summary: "Group-first tool discovery surface. All tools — built-in and project-local — share the same descriptor schema. Use `tools describe <name>` before executing any tool. Descriptor includes `target`, `availabilityScope`, `supportStatus`, and `playModeSupport` for runtime-aware routing.",
     guide: "Run `tools group` to list all tool groups, then `tools group list <group>` to see tools in a group. Use `tools search <keyword>` when you know the domain. Always `tools describe <name>` before executing."
   },
   "tool-execution": {
@@ -34,7 +34,7 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   "availability-differences": {
     title: "Availability Differences",
-    summary: "Why different Unity instances return different tool availability: package dependencies, project tool registration, Bridge reachability, PlayMode state (`available` field on runtime tools), and domain reload timing.",
+    summary: "Why different Unity instances return different tool availability: package dependencies, project tool registration, Bridge reachability, PlayMode state, and domain reload timing.",
     guide: "Always resolve target first. Use `tools group` then `tools group list <group> --include-custom` against the specific instance. After package installs or domain reload, re-discover tools. Handle package-not-found and E_RUNTIME_NOT_READY errors using `next_actions`."
   },
   "error-codes": {
@@ -118,7 +118,7 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   editor: {
     title: "Editor Commands",
-    summary: "Control the Unity Editor: play mode, console, menu items, compile diagnostics, refresh jobs, and Windows launch-dialog dismiss. Handlers: bridge (state/play/pause/stop/menu/console), hybrid (compile-diagnostics), job (refresh), offline (launch-dialog.dismiss). Target: editor. `editor.menu` is destructive (requires --yes)."
+    summary: "Control the Unity Editor: play mode, console, menu items, live compile requests, compile diagnostics, refresh jobs, and Windows launch-dialog dismiss. Handlers: bridge (state/play/pause/stop/menu/console/compile), hybrid (compile-diagnostics), job (refresh), offline (launch-dialog.dismiss). Target: editor. `editor.menu` is destructive (requires --yes)."
   },
   diagnose: {
     title: "Diagnose Commands",
@@ -266,7 +266,7 @@ export function getBuiltinDocTopic(
 export function buildTopics(projectTools: ToolMetadata[] = []): DocTopic[] {
   const byTopic = new Map<string, ToolMetadata[]>();
   for (const tool of [...allRegisteredToolMetadata(), ...projectTools]) {
-    const topic = tool.docsTopic ?? tool.group;
+    const topic = toolDocsTopic(tool);
     const tools = byTopic.get(topic) ?? [];
     tools.push(tool);
     byTopic.set(topic, tools);
@@ -296,7 +296,7 @@ function toolLine(tool: ToolMetadata): string {
     tool.destructiveHint ? "destructive" : undefined,
     `target:${target}`
   ].filter(Boolean).join(", ");
-  return `${tool.name}${tool.cliCommand ? ` (${tool.cliCommand})` : ""} - ${tool.summary}; ${notes}.`;
+  return `${tool.name} (${toolCliCommand(tool)}) - ${tool.summary}; ${notes}.`;
 }
 
 function titleFromKey(key: string): string {

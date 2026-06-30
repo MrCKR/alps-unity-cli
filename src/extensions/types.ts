@@ -30,23 +30,11 @@ export interface UnityPackageRequirement {
   displayName: string;
 }
 
-/** A tool contribution from an extension. */
+/** A tool capability ID contributed by an extension. Full AI-facing metadata lives in extension tool metadata. */
 export interface ExtensionToolContribution {
-  /** Tool name (dotted), e.g. "probuilder.shape". */
+  /** Tool name (dotted), e.g. "probuilder.create-shape". */
   name: string;
-  /** Short tool summary for discovery. */
-  summary: string;
-  /** One-paragraph description. */
-  description: string;
-  /** Logical group for tool discovery. */
-  group: string;
-  /** Bridge command name for execution routing. */
-  bridgeCommand: string;
-  /** When bridgeCommand is "project-tool.run", the underlying tool name. */
-  toolName?: string;
-  /** CLI argv prefix, e.g. "probuilder shape". */
-  cliCommand: string;
-  /** Unity packages required by this specific tool; omitted means no extra package gate. */
+  /** Unity packages required by this specific tool; omitted means the extension-level package gate applies. */
   requiresPackages?: string[];
 }
 
@@ -55,14 +43,6 @@ export interface ExtensionContextContribution {
   /** Context key, e.g. "probuilder.scene". */
   key: string;
   /** Human-readable description of the context. */
-  description: string;
-}
-
-/** A docs fragment contribution from an extension. */
-export interface ExtensionDocsContribution {
-  /** Documentation topic key, e.g. "probuilder". */
-  topic: string;
-  /** Short description of the documentation. */
   description: string;
 }
 
@@ -82,12 +62,8 @@ export interface ExtensionContributions {
   tools?: ExtensionToolContribution[];
   /** Context descriptors contributed by this extension. */
   contexts?: ExtensionContextContribution[];
-  /** Bridge commands contributed by this extension (group → command list). */
-  bridgeCommands?: Array<{ group: string; commands: string[] }>;
   /** C# implementation entry points. */
   csharpEntries?: ExtensionCSharpEntry[];
-  /** Documentation fragment topics. */
-  docs?: ExtensionDocsContribution[];
 }
 
 /** 投影到 Packages/com.unity_cli/Extensions/<id> 的 Unity 侧文件布局。 */
@@ -164,10 +140,6 @@ export interface LoadedExtensionDescriptor {
   tools: ExtensionToolContribution[];
   /** Context descriptors contributed by this extension. */
   contexts: ExtensionContextContribution[];
-  /** Bridge command groups contributed. */
-  bridgeCommands: Array<{ group: string; commands: string[] }>;
   /** C# implementation entries. */
   csharpEntries: ExtensionCSharpEntry[];
-  /** Documentation topics. */
-  docs: ExtensionDocsContribution[];
 }

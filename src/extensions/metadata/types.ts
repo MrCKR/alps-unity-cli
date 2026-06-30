@@ -37,8 +37,6 @@ export interface ExtensionMetadata {
   installMode: ExtensionInstallMode;
   /** CLI command to install this extension, e.g. 'extensions install probuilder'. */
   installCommand?: string;
-  /** Mapping to equivalent unity-mcp group name, for parity tracking. */
-  equivalentMcpGroup?: string;
   /** Suggested next actions after listing/describing the extension. */
   nextActions?: string[];
 }

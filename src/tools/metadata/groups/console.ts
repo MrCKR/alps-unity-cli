@@ -21,11 +21,6 @@ export const CONSOLE_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ command: { type: "string" }, type: { type: "string" }, filter: { type: ["string", "null"] }, items: { type: "array", items: { type: "object" } }, pageInfo: { type: "object" }, logPath: { type: "string" } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run console.get",
-    docsTopic: "console",
-    equivalentUnityMcp: "read_console / console.get",
     examples: [
       { description: "Read recent errors", argv: ["tools", "run", "console.get", "--input", "{\"type\":\"error\",\"count\":20}"] },
       { description: "Search recent compile messages", argv: ["tools", "run", "console.get", "--input", "{\"search\":\"CS\",\"count\":20,\"cursor\":0}"] }
@@ -42,12 +37,6 @@ export const CONSOLE_TOOLS: ToolMetadata[] = [
     supportsDryRun: true,
     playModeSupport: "session-affecting",
     sideEffects: ["console-clear"],
-    riskLevel: "medium",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run console.clear",
-    docsTopic: "console",
-    equivalentUnityMcp: "console.clear",
     examples: [
       { description: "Preview clearing Console", argv: ["tools", "run", "console.clear", "--dry-run"] },
       { description: "Clear Console after reviewing logs", argv: ["tools", "run", "console.clear", "--yes"] }

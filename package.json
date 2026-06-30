@@ -1,6 +1,6 @@
 {
   "name": "@alpsckr/unity_cli",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Windows-first CLI for Unity CLI automation.",
   "type": "module",
   "bin": {

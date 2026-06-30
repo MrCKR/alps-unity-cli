@@ -11,7 +11,7 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { bridgeCommandRegistry, type BridgeRequest } from "../src/bridge/index.js";
 import { handleToolsCommand, type ToolsRuntime } from "../src/tools.js";
-import { builtinToolMetadata, builtinToolGroups, findToolByName, filterToolsByGroup, searchTools, allRegisteredToolMetadata, extensionToolMetadata, allRegisteredToolGroups, EXTENSION_GROUPS, supportStatusForTool, normalizeToolMetadata } from "../src/tools/metadata/index.js";
+import { builtinToolMetadata, builtinToolGroups, findToolByName, filterToolsByGroup, searchTools, allRegisteredToolMetadata, extensionToolMetadata, allRegisteredToolGroups, EXTENSION_GROUPS, supportStatusForTool, normalizeToolMetadata, toolDocsTopic } from "../src/tools/metadata/index.js";
 import "../src/extensions/index.js";
 
 const requestId = "test_req_tools_001";
@@ -313,6 +313,21 @@ test("editor.refresh metadata exists with job handler and longRunning", () => {
   assert.ok(tool.examples && tool.examples.length > 0);
 });
 
+test("editor.compile metadata documents the live compile request", () => {
+  const tool = findToolByName("editor.compile");
+  assert.ok(tool, "editor.compile should exist");
+  assert.equal(tool.group, "editor");
+  assert.equal(tool.handler, "bridge");
+  assert.equal(tool.supportStatus, "live-bridge");
+  assert.equal(tool.longRunning, true);
+  assert.equal(tool.supportsDryRun, true);
+  assert.equal(tool.destructiveHint, false);
+  assert.equal(tool.playModeSupport, "session-affecting");
+  assert.deepEqual(tool.sideEffects, ["asset-refresh", "script-compile", "domain-reload"]);
+  assert.match(tool.description, /RequestScriptCompilation/);
+  assert.match(JSON.stringify(tool.inputSchema), /waitReady/);
+});
+
 test("editor.compile-diagnostics metadata documents the live compile loop", () => {
   const tool = findToolByName("editor.compile-diagnostics");
   assert.ok(tool, "editor.compile-diagnostics should exist");
@@ -359,7 +374,6 @@ test("code.exec exposes critical execution risk metadata", () => {
 test("go tools expose search paging and scene mutation metadata", () => {
   const find = findToolByName("go.find")!;
   assert.equal(find.playModeSupport, "supported");
-  assert.equal(find.equivalentUnityMcp, "find_gameobjects / gameobject-find");
   const findProps = find.inputSchema.properties as Record<string, unknown>;
   assert.ok(findProps.searchMethod, "go.find should expose searchMethod");
   assert.ok(findProps.includeInactive, "go.find should expose includeInactive");
@@ -399,15 +413,11 @@ test("go tools expose search paging and scene mutation metadata", () => {
 });
 
 test("asset CRUD tools expose Play Mode side effects and examples", () => {
-  const readOnly = new Map([
-    ["asset.info", "manage_asset.get_info"],
-    ["asset.search-built-in", "assets-find-built-in"]
-  ]);
-  for (const [name, equivalent] of readOnly) {
+  const readOnly = ["asset.info", "asset.search-built-in"];
+  for (const name of readOnly) {
     const tool = findToolByName(name)!;
     assert.equal(tool.playModeSupport, "supported");
     assert.equal(tool.destructiveHint, false);
-    assert.equal(tool.equivalentUnityMcp, equivalent);
     assert.ok(tool.examples?.some((example) => example.argv.includes("--input")), `${name} should show --input usage`);
   }
 
@@ -424,7 +434,6 @@ test("asset CRUD tools expose Play Mode side effects and examples", () => {
     assert.equal(tool.playModeSupport, "session-affecting", `${name} imports or writes project assets`);
     assert.equal(tool.destructiveHint, false);
     assert.deepEqual(tool.sideEffects, sideEffects);
-    assert.ok(tool.equivalentUnityMcp?.startsWith("manage_asset."), `${name} should link to manage_asset`);
     assert.ok(tool.examples?.some((example) => example.argv.includes("--input")), `${name} should show --input usage`);
   }
 
@@ -479,7 +488,6 @@ test("build.run metadata exists with job handler and longRunning", () => {
   assert.equal(tool.destructiveHint, false);
   assert.equal(tool.playModeSupport, "editor-only");
   assert.deepEqual(tool.sideEffects, ["build-output-write", "asset-import", "compile"]);
-  assert.equal(tool.equivalentUnityMcp, "manage_build.build");
   assert.ok(tool.examples?.some((example) => example.argv.includes("--input")));
 });
 
@@ -499,13 +507,11 @@ test("build bridge tools expose Play Mode and dry-run semantics", () => {
   const profiles = findToolByName("build.profiles")!;
   assert.equal(profiles.playModeSupport, "session-affecting");
   assert.equal(profiles.supportsDryRun, true);
-  assert.equal(profiles.equivalentUnityMcp, "manage_build.profiles");
   assert.ok(profiles.examples?.some((example) => example.argv.includes("--dry-run")));
 
   const settings = findToolByName("build.settings")!;
   assert.equal(settings.playModeSupport, "supported");
   assert.equal(settings.destructiveHint, false);
-  assert.equal(settings.equivalentUnityMcp, "manage_build.settings");
   assert.ok(settings.examples?.some((example) => example.argv.includes("--input")));
 });
 
@@ -535,6 +541,7 @@ test("S2.3 editor group has all required tools", () => {
   assert.ok(names.includes("editor.menu"));
   assert.ok(names.includes("editor.console"));
   assert.ok(names.includes("editor.refresh"));
+  assert.ok(names.includes("editor.compile"));
   assert.ok(names.includes("editor.compile-diagnostics"));
   assert.ok(names.includes("editor.launch-dialog.dismiss"));
 });
@@ -563,7 +570,7 @@ test("S3.1 creation domains have frozen metadata coverage", () => {
     assert.deepEqual(tools.map((tool) => tool.name), expectedNames);
     for (const tool of tools) {
       assert.equal(tool.handler, "bridge", `${tool.name} should be a live bridge handler`);
-      assert.equal(tool.docsTopic, group, `${tool.name} should be discoverable from its docs topic`);
+      assert.equal(toolDocsTopic(tool), group, `${tool.name} should be discoverable from its docs topic`);
       assert.ok(tool.cliCommand, `${tool.name} should expose a CLI command`);
     }
   }
@@ -600,7 +607,6 @@ test("camera tools expose Play Mode semantics, examples and output contracts", (
     const tool = findToolByName(name)!;
     assert.equal(tool.playModeSupport, "session-affecting", `${name} changes scene/session state or writes artifacts`);
     assert.deepEqual(tool.sideEffects, sideEffects);
-    assert.ok(tool.equivalentUnityMcp, `${name} should link to reference behavior`);
     assert.ok(tool.outputSchema, `${name} should describe returned data`);
     assert.ok(tool.examples?.some((example) => example.argv.includes("--input")), `${name} should show --input usage`);
   }
@@ -648,7 +654,6 @@ test("editor operation tools expose side-effect and recovery metadata", () => {
   assert.equal(menu.destructiveHint, true);
   assert.equal(menu.playModeSupport, "session-affecting");
   assert.deepEqual(menu.sideEffects, ["editor-menu", "unknown-editor-side-effect"]);
-  assert.equal(menu.equivalentUnityMcp, "execute_menu_item");
   assert.ok(menu.examples?.some((example) => example.argv.includes("--yes")));
 
   const refresh = findToolByName("editor.refresh")!;
@@ -656,8 +661,14 @@ test("editor operation tools expose side-effect and recovery metadata", () => {
   assert.equal(refresh.supportStatus, "batch-job");
   assert.equal(refresh.playModeSupport, "editor-only");
   assert.deepEqual(refresh.sideEffects, ["asset-refresh", "script-compile", "domain-reload"]);
-  assert.equal(refresh.equivalentUnityMcp, "refresh_unity");
   assert.ok(refresh.longRunning);
+
+  const compile = findToolByName("editor.compile")!;
+  assert.equal(compile.handler, "bridge");
+  assert.equal(compile.supportStatus, "live-bridge");
+  assert.equal(compile.destructiveHint, false);
+  assert.equal(compile.supportsDryRun, true);
+  assert.deepEqual(compile.sideEffects, ["asset-refresh", "script-compile", "domain-reload"]);
 
   const compileDiagnostics = findToolByName("editor.compile-diagnostics")!;
   assert.equal(compileDiagnostics.handler, "hybrid");
@@ -685,7 +696,6 @@ test("editor state and play controls expose Play Mode transition metadata", () =
   assert.equal(state.supportStatus, "live-bridge");
   assert.ok(state.outputSchema);
   assert.ok(state.examples?.some((example) => example.argv.includes("--input")));
-  assert.equal(state.equivalentUnityMcp, "editor-application-get-state / editor_state");
 
   const consoleAlias = findToolByName("editor.console")!;
   assert.equal(consoleAlias.playModeSupport, "supported");
@@ -732,7 +742,6 @@ test("docs and diagnose tools expose offline/live usability metadata", () => {
 
   const docsGet = findToolByName("docs.get")!;
   assert.match(docsGet.description, /offline docs cache/);
-  assert.equal(docsGet.equivalentUnityMcp, "unity_docs.get_doc");
 
   const docsTopicProps = findToolByName("docs.topic")!.inputSchema.properties as Record<string, { description?: string }>;
   assert.match(docsTopicProps.topic.description ?? "", /docs\.list/);
@@ -745,7 +754,8 @@ test("tools describe test.run returns full metadata", async () => {
   assert.equal(data.name, "test.run");
   assert.equal(data.group, "test");
   assert.equal("handler" in data, false);
-  assert.equal("longRunning" in data, false);
+  assert.equal(data.longRunning, true);
+  assert.equal(data.cancellation, "job");
 });
 
 test("tools describe build.run returns full metadata", async () => {
@@ -755,7 +765,8 @@ test("tools describe build.run returns full metadata", async () => {
   assert.equal(data.name, "build.run");
   assert.equal(data.group, "build");
   assert.equal("handler" in data, false);
-  assert.equal("longRunning" in data, false);
+  assert.equal(data.longRunning, true);
+  assert.equal(data.cancellation, "job");
 });
 
 test("tools describe editor.refresh returns job metadata", async () => {
@@ -764,7 +775,21 @@ test("tools describe editor.refresh returns job metadata", async () => {
   const data = result.data as Record<string, unknown>;
   assert.equal(data.name, "editor.refresh");
   assert.equal("handler" in data, false);
-  assert.equal("longRunning" in data, false);
+  assert.equal(data.longRunning, true);
+  assert.equal(data.cancellation, "job");
+});
+
+test("tools describe editor.compile returns live bridge metadata", async () => {
+  const result = await handleToolsCommand("describe", ["editor.compile"], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.name, "editor.compile");
+  assert.equal(data.supportStatus, "live-bridge");
+  assert.equal(data.supportsDryRun, true);
+  assert.equal("handler" in data, false);
+  assert.equal(data.longRunning, true);
+  assert.equal(data.cancellation, "cooperative");
+  assert.match(JSON.stringify(data.inputSchema), /waitReady/);
 });
 
 test("tools describe editor.compile-diagnostics returns live bridge metadata", async () => {
@@ -775,7 +800,8 @@ test("tools describe editor.compile-diagnostics returns live bridge metadata", a
   assert.equal(data.supportStatus, "live-bridge");
   assert.equal(data.supportsDryRun, true);
   assert.equal("handler" in data, false);
-  assert.equal("longRunning" in data, false);
+  assert.equal(data.longRunning, true);
+  assert.equal(data.cancellation, "cooperative");
   assert.match(JSON.stringify(data.inputSchema), /waitTimeoutMs/);
   assert.match(JSON.stringify(data.outputSchema), /diagnostics/);
 });
@@ -806,7 +832,7 @@ test("S3.4 profiler domain exposes expected tools and safety hints", () => {
   for (const name of expectedNames) {
     const tool = findToolByName(name);
     assert.ok(tool, `${name} should exist`);
-    assert.equal(tool?.docsTopic, "profiler");
+    assert.equal(tool ? toolDocsTopic(tool) : undefined, "profiler");
     assert.ok(tool?.cliCommand, `${name} should expose a CLI command`);
   }
 
@@ -871,7 +897,6 @@ test("animation tools expose Play Mode side-effect semantics", () => {
   assert.equal(clip.destructiveHint, false);
   assert.ok(clipProps.maxCurveKeys, "animation.clip should expose bounded curve key reads");
   assert.ok(clipOutput.clip, "animation.clip should document clip output");
-  assert.equal(clip.equivalentUnityMcp, "manage_animation.clip_get_info");
 
   const createClip = findToolByName("animation.clip.create")!;
   const createProps = createClip.inputSchema.properties as Record<string, unknown>;
@@ -882,7 +907,6 @@ test("animation tools expose Play Mode side-effect semantics", () => {
   assert.ok(createProps.wrapMode, "animation.clip.create should expose wrapMode");
   assert.ok(createProps.loopTime, "animation.clip.create should expose loopTime");
   assert.ok(createProps.length, "animation.clip.create should expose length");
-  assert.equal(createClip.equivalentUnityMcp, "manage_animation.clip_create");
 
   const modifyClip = findToolByName("animation.clip.modify")!;
   const modifyProps = modifyClip.inputSchema.properties as Record<string, unknown>;
@@ -892,11 +916,9 @@ test("animation tools expose Play Mode side-effect semantics", () => {
   assert.deepEqual(modifyClip.sideEffects, ["asset-write", "asset-import"]);
   assert.ok(modifyProps.wrapMode, "animation.clip.modify should expose wrapMode");
   assert.ok(modifyProps.loopTime, "animation.clip.modify should expose loopTime");
-  assert.equal(modifyClip.equivalentUnityMcp, "manage_animation.clip_set_properties");
 
   const state = findToolByName("animation.state")!;
   assert.equal(state.playModeSupport, "supported");
-  assert.equal(state.equivalentUnityMcp, "manage_animation.animator_get_info");
 
   for (const name of ["animation.play", "animation.stop"]) {
     const tool = findToolByName(name)!;
@@ -909,16 +931,13 @@ test("animation tools expose Play Mode side-effect semantics", () => {
 test("animator parameter tools expose read/write Play Mode semantics", () => {
   const getInfo = findToolByName("animator.get-info")!;
   assert.equal(getInfo.playModeSupport, "supported");
-  assert.equal(getInfo.equivalentUnityMcp, "manage_animation.animator_get_info");
 
   const getParameter = findToolByName("animator.get-parameter")!;
   assert.equal(getParameter.playModeSupport, "supported");
-  assert.equal(getParameter.equivalentUnityMcp, "manage_animation.animator_get_parameter");
 
   const setParameter = findToolByName("animator.set-parameter")!;
   assert.equal(setParameter.playModeSupport, "session-affecting");
   assert.deepEqual(setParameter.sideEffects, ["animator-controller-modify", "asset-write"]);
-  assert.equal(setParameter.equivalentUnityMcp, "manage_animation.animator_set_parameter");
   const props = setParameter.inputSchema.properties as Record<string, { enum?: string[] }>;
   assert.deepEqual(props.parameterType.enum, ["float", "int", "bool", "trigger"]);
 
@@ -929,17 +948,12 @@ test("animator parameter tools expose read/write Play Mode semantics", () => {
 });
 
 test("animator session tools expose state-changing Play Mode semantics", () => {
-  const expected = new Map([
-    ["animator.crossfade", "manage_animation.animator_crossfade"],
-    ["animator.set-speed", "manage_animation.animator_set_speed"],
-    ["animator.set-enabled", "manage_animation.animator_set_enabled"]
-  ]);
+  const expected = ["animator.crossfade", "animator.set-speed", "animator.set-enabled"];
 
-  for (const [name, equivalent] of expected) {
+  for (const name of expected) {
     const tool = findToolByName(name)!;
     assert.equal(tool.playModeSupport, "session-affecting", `${name} changes Animator component/session state`);
     assert.deepEqual(tool.sideEffects, ["animation-state", "scene-modify"]);
-    assert.equal(tool.equivalentUnityMcp, equivalent);
     assert.ok(tool.examples?.some((example) => example.argv.includes("--input")), `${name} should show --input usage`);
   }
 });
@@ -948,23 +962,19 @@ test("controller core tools expose asset and scene Play Mode semantics", () => {
   const create = findToolByName("controller.create")!;
   assert.equal(create.playModeSupport, "session-affecting");
   assert.deepEqual(create.sideEffects, ["asset-write", "asset-import"]);
-  assert.equal(create.equivalentUnityMcp, "manage_animation.controller_create");
 
   const getInfo = findToolByName("controller.get-info")!;
   assert.equal(getInfo.playModeSupport, "supported");
-  assert.equal(getInfo.equivalentUnityMcp, "manage_animation.controller_get_info");
 
   const addParameter = findToolByName("controller.add-parameter")!;
   assert.equal(addParameter.playModeSupport, "session-affecting");
   assert.deepEqual(addParameter.sideEffects, ["animator-controller-modify", "asset-write"]);
-  assert.equal(addParameter.equivalentUnityMcp, "manage_animation.controller_add_parameter");
   const props = addParameter.inputSchema.properties as Record<string, { enum?: string[] }>;
   assert.deepEqual(props.parameterType.enum, ["float", "int", "bool", "trigger"]);
 
   const assign = findToolByName("controller.assign")!;
   assert.equal(assign.playModeSupport, "session-affecting");
   assert.deepEqual(assign.sideEffects, ["component-add", "component-modify", "scene-modify"]);
-  assert.equal(assign.equivalentUnityMcp, "manage_animation.controller_assign");
 
   for (const name of ["controller.create", "controller.get-info", "controller.add-parameter", "controller.assign"]) {
     const tool = findToolByName(name)!;
@@ -973,18 +983,12 @@ test("controller core tools expose asset and scene Play Mode semantics", () => {
 });
 
 test("controller state and layer tools expose asset mutation semantics", () => {
-  const expected = new Map([
-    ["controller.add-state", "manage_animation.controller_add_state"],
-    ["controller.add-transition", "manage_animation.controller_add_transition"],
-    ["controller.add-layer", "manage_animation.controller_add_layer"],
-    ["controller.set-layer-weight", "manage_animation.controller_set_layer_weight"]
-  ]);
+  const expected = ["controller.add-state", "controller.add-transition", "controller.add-layer", "controller.set-layer-weight"];
 
-  for (const [name, equivalent] of expected) {
+  for (const name of expected) {
     const tool = findToolByName(name)!;
     assert.equal(tool.playModeSupport, "session-affecting", `${name} writes AnimatorController asset state`);
     assert.deepEqual(tool.sideEffects, ["animator-controller-modify", "asset-write"]);
-    assert.equal(tool.equivalentUnityMcp, equivalent);
     assert.ok(tool.examples?.some((example) => example.argv.includes("--input")), `${name} should show --input usage`);
   }
 
@@ -999,22 +1003,16 @@ test("controller state and layer tools expose asset mutation semantics", () => {
   assert.equal(removeLayer.playModeSupport, "session-affecting");
   assert.equal(removeLayer.destructiveHint, true);
   assert.deepEqual(removeLayer.sideEffects, ["animator-controller-modify", "asset-write", "asset-delete-nested"]);
-  assert.equal(removeLayer.equivalentUnityMcp, "manage_animation.controller_remove_layer");
   assert.ok(removeLayer.examples?.some((example) => example.argv.includes("--input") && example.argv.includes("--yes")));
 });
 
 test("controller blend tree tools expose nested asset mutation semantics", () => {
-  const expected = new Map([
-    ["controller.create-blend-tree-1d", "manage_animation.controller_create_blend_tree_1d"],
-    ["controller.create-blend-tree-2d", "manage_animation.controller_create_blend_tree_2d"],
-    ["controller.add-blend-tree-child", "manage_animation.controller_add_blend_tree_child"]
-  ]);
+  const expected = ["controller.create-blend-tree-1d", "controller.create-blend-tree-2d", "controller.add-blend-tree-child"];
 
-  for (const [name, equivalent] of expected) {
+  for (const name of expected) {
     const tool = findToolByName(name)!;
     assert.equal(tool.playModeSupport, "session-affecting", `${name} writes nested BlendTree assets`);
     assert.deepEqual(tool.sideEffects, ["animator-controller-modify", "asset-write", "asset-add-nested"]);
-    assert.equal(tool.equivalentUnityMcp, equivalent);
     assert.ok(tool.examples?.some((example) => example.argv.includes("--input")), `${name} should show --input usage`);
   }
 
@@ -1147,8 +1145,7 @@ test("tools run with target=runtime project tool routes to runtime-tool.run", as
       inputSchema: { type: "object", properties: { message: { type: "string" } }, required: ["message"] },
       destructiveHint: false,
       handler: "bridge-runtime",
-      target: "runtime",
-      availabilityScope: "playModeSession"
+      target: "runtime"
     }],
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
@@ -1172,8 +1169,7 @@ test("tools run target=both with --runtime flag routes to runtime-tool.run", asy
       inputSchema: { type: "object" },
       destructiveHint: false,
       handler: "bridge",
-      target: "both",
-      availabilityScope: "editorSession"
+      target: "both"
     }],
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
@@ -1197,8 +1193,7 @@ test("tools run custom editor-domain tool routes to project-tool.run", async () 
       inputSchema: { type: "object" },
       destructiveHint: false,
       handler: "bridge",
-      target: "both",
-      availabilityScope: "editorSession"
+      target: "both"
     }],
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
@@ -1234,8 +1229,7 @@ test("tools run custom editor tool routes to project-tool.run", async () => {
       inputSchema: { type: "object" },
       destructiveHint: false,
       handler: "bridge",
-      target: "editor",
-      availabilityScope: "editorSession"
+      target: "editor"
     }],
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
@@ -1429,6 +1423,21 @@ test("tools run built-in job-handler tool with empty runtime returns E_TOOL_HAND
   assert.equal(result.error?.code, "E_TOOL_HANDLER_UNSUPPORTED");
 });
 
+test("tools run editor.compile forwards live compile request", async () => {
+  const requests: BridgeRequest[] = [];
+  const runtime: ToolsRuntime = {
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { command: "editor.compile", requested: true, refresh: payload.args.refresh, waitReady: payload.args.waitReady } };
+    }
+  };
+
+  const result = await handleToolsCommand("run", ["editor.compile"], { input: '{"refresh":false,"waitReady":true,"timeoutMs":5000}' }, runtime, requestId);
+  assert.equal(result.ok, true);
+  assert.deepEqual(requests.map((request) => request.command), ["editor.compile"]);
+  assert.deepEqual(requests[0].args, { refresh: false, waitReady: true, timeoutMs: 5000 });
+});
+
 test("tools run editor.compile-diagnostics orchestrates refresh wait and console", async () => {
   const requests: BridgeRequest[] = [];
   const runtime: ToolsRuntime = {
@@ -1602,8 +1611,7 @@ test("tools run custom project tool passes name and input to project-tool.run", 
       inputSchema: { type: "object", properties: { message: { type: "string" } } },
       destructiveHint: false,
       handler: "bridge",
-      target: "editor",
-      availabilityScope: "editorSession"
+      target: "editor"
     }],
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
@@ -1844,7 +1852,7 @@ test("tools run discovers runtime tools when --runtime flag is provided", async 
 
 // ── normalizeToolMetadata defaults and extension source ───────
 
-test("normalizeToolMetadata fills default kind and source", () => {
+test("normalizeToolMetadata fills generated source and Play Mode defaults", () => {
   const normalized = normalizeToolMetadata({
     name: "test.tool",
     summary: "Test",
@@ -1853,8 +1861,8 @@ test("normalizeToolMetadata fills default kind and source", () => {
     inputSchema: {},
     destructiveHint: false
   });
-  assert.equal(normalized.kind, "tool");
   assert.equal(normalized.source, "built-in");
+  assert.equal(normalized.playModeSupport, "supported");
 });
 
 test("probuilder and vfx tools have source: extension", () => {

@@ -33,11 +33,6 @@ export const MATERIAL_TOOLS: ToolMetadata[] = [
     }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run material.info",
-    docsTopic: "material",
-    equivalentUnityMcp: "manage_material.get_material_info",
     examples: [
       { description: "Read only specific properties (token-safe)", argv: ["tools", "run", "material.info", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeMaterial.mat\",\"namePattern\":\"_Color,_MainTex\"}"] },
       { description: "Full material audit", argv: ["tools", "run", "material.info", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeMaterial.mat\"}"] }
@@ -55,12 +50,7 @@ export const MATERIAL_TOOLS: ToolMetadata[] = [
     }, ["path", "shader"]),
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],
-    riskLevel: "low",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    cliCommand: "tools run material.create",
-    docsTopic: "material",
-    equivalentUnityMcp: "assets-material-create",
     examples: [
       { description: "Create a fixture material", argv: ["tools", "run", "material.create", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/GeneratedMaterial.mat\",\"shader\":\"Standard\"}"] }
     ]
@@ -77,12 +67,7 @@ export const MATERIAL_TOOLS: ToolMetadata[] = [
     }, ["target", "material"]),
     destructiveHint: false,
     sideEffects: ["scene-modify"],
-    riskLevel: "medium",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    cliCommand: "tools run material.assign",
-    docsTopic: "material",
-    equivalentUnityMcp: "manage_material.assign_material_to_renderer",
     examples: [
       { description: "Assign a material to a fixture object's slot 0", argv: ["tools", "run", "material.assign", "--input", "{\"target\":\"AlignmentProbe\",\"material\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeMaterial.mat\",\"slot\":0}"] }
     ]
@@ -104,12 +89,7 @@ export const MATERIAL_TOOLS: ToolMetadata[] = [
     }, ["path", "property"]),
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],
-    riskLevel: "low",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    cliCommand: "tools run material.set",
-    docsTopic: "material",
-    equivalentUnityMcp: "manage_material.set_material_shader_property",
     examples: [
       { description: "Set a color property", argv: ["tools", "run", "material.set", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeMaterial.mat\",\"property\":\"_Color\",\"value\":\"#FF0000\",\"type\":\"color\"}"] },
       { description: "Set a float property", argv: ["tools", "run", "material.set", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeMaterial.mat\",\"property\":\"_Metallic\",\"floatValue\":0.8,\"type\":\"float\"}"] }
@@ -124,14 +104,8 @@ export const MATERIAL_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ target: { type: "object" }, property: { type: "string" }, color: { type: "object" }, slot: { type: ["integer", "null"] }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: false,
     sideEffects: ["scene-modify", "renderer-property-block"],
-    riskLevel: "low",
     playModeSupport: "session-affecting",
     supportsDryRun: true,
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run material.set-renderer-color",
-    docsTopic: "material",
-    equivalentUnityMcp: "manage_material.set_renderer_color",
     examples: [
       { description: "Set one renderer color without editing the material asset", argv: ["tools", "run", "material.set-renderer-color", "--input", "{\"target\":\"Player\",\"color\":\"#ff0000\"}"] }
     ]

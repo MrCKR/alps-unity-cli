@@ -8,16 +8,13 @@ export type ToolHandler = "bridge" | "bridge-runtime" | "job" | "offline" | "hyb
 export type ToolSupportStatus = "live-bridge" | "live-bridge-runtime" | "bridge-job" | "batch-job" | "cli-only" | "planned";
 export type ToolSource = "built-in" | "project" | "extension";
 export type ToolRiskLevel = "safe" | "low" | "medium" | "high" | "critical";
+export type ToolCancellation = "none" | "cooperative" | "job";
 export type PlayModeSupport = "supported" | "runtime-only" | "session-affecting" | "editor-only" | "unknown";
 
 export interface ToolMetadata {
   name: string;
   summary: string;
   description: string;
-  /** Discriminator: always 'tool' for ToolMetadata. Distinguishes from ContextMetadata (kind='context'). Defaults to 'tool' when omitted. */
-  kind?: "tool";
-  /** Origin: built-in (shipped with CLI), project (custom tool in Unity project), extension (from extension package). Defaults to 'built-in' when omitted. */
-  source?: ToolSource;
   /** Logical group for discovery and `tools group list <group>`. */
   group: string;
   inputSchema: Record<string, unknown>;
@@ -25,29 +22,30 @@ export interface ToolMetadata {
   destructiveHint: boolean;
   /** Side effect categories this tool may produce, e.g. ['file-write', 'scene-modify']. */
   sideEffects?: string[];
-  /** Risk level classification for safety disclosure. */
-  riskLevel?: ToolRiskLevel;
   /** Play Mode execution semantics for AI routing and runtime safety. */
   playModeSupport?: PlayModeSupport;
-  /** Mapping to equivalent unity-mcp tool name, for parity tracking. */
-  equivalentUnityMcp?: string;
-  longRunning?: boolean;
-  requiresMainThread?: boolean;
   supportsDryRun?: boolean;
   timeoutMs?: number;
   permissions?: string[];
-  cancellationSemantics?: string;
   examples?: ToolExample[];
-  docsTopic?: string;
+  /** Internal execution route override. Omit when the route can be inferred from the bridge registry or tool name. */
   handler?: ToolHandler;
   supportStatus?: ToolSupportStatus;
-  cliCommand?: string;
   /** Execution target: "editor" (default), "runtime", or "both". */
   target?: string;
-  /** Availability scope for the tool. "playModeSession" for runtime tools, "editorSession" for editor tools. */
-  availabilityScope?: string;
   /** Whether the tool is currently available based on session state (runtime tools: only in Play Mode). */
   available?: boolean;
   /** Unity package names required by this tool at runtime. When absent the tool has no package prerequisites. */
   requiresPackages?: string[];
 }
+
+export type ResolvedToolMetadata = ToolMetadata & {
+  source: ToolSource;
+  handler: ToolHandler;
+  playModeSupport: PlayModeSupport;
+  supportStatus: ToolSupportStatus;
+  cliCommand: string;
+  availabilityScope: string;
+  riskLevel: ToolRiskLevel;
+  longRunning?: boolean;
+};

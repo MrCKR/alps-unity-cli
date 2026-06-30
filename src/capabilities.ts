@@ -14,7 +14,7 @@ import { discoverProjectContexts, shouldDiscoverContexts, type ProjectContextRun
 import { builtinToolGroups, builtinToolMetadata, extensionToolMetadata, allRegisteredToolMetadata, EXTENSION_GROUPS, type ToolMetadata } from "./tools/metadata/index.js";
 import { builtinContextMetadata, type ContextMetadata } from "./context/metadata/index.js";
 import { builtinExtensionMetadata, type ExtensionMetadata } from "./extensions/metadata/index.js";
-import { supportStatusForTool } from "./tools/metadata/status.js";
+import { isLongRunningTool, supportStatusForTool } from "./tools/metadata/index.js";
 import { ExtensionRegistry, extensionAvailabilitySummary, collectAvailableTools, collectAllTools } from "./extensions/index.js";
 import { readInstalledUnityPackages } from "./extensions/project-resolver.js";
 import { failure, success } from "./output.js";
@@ -47,13 +47,9 @@ export async function handleCapabilitiesCommand(
   // are enabled and separate their groups from the core `groups` map.
   const extensionGroupFilter = new Set<string>();
   const registry = new ExtensionRegistry();
-  // All registered extension tool groups are extension groups
-  for (const extId of registry.extensionIds()) {
-    const ext = registry.getExtension(extId)!;
-    const toolGroups = [...new Set(ext.manifest.contributions.tools?.map((t) => t.group) ?? [])];
-    for (const group of toolGroups) {
-      extensionGroupFilter.add(group);
-    }
+  // All registered extension tool groups are extension groups; group names come from tool metadata, not manifests.
+  for (const tool of extensionToolMetadata()) {
+    extensionGroupFilter.add(tool.group);
   }
   if (projectPath) {
     try {
@@ -168,7 +164,7 @@ function buildStaticCapabilities(projectTools: ToolMetadata[] = [], projectConte
   const coreGroups = [...new Set([...coreTools, ...projectTools].map((tool) => tool.group))].sort();
 
   const destructiveTools = tools.filter((t) => t.destructiveHint).map((t) => t.name);
-  const longRunningTools = tools.filter((t) => t.longRunning).map((t) => t.name);
+  const longRunningTools = tools.filter((t) => isLongRunningTool(t)).map((t) => t.name);
   const liveBridgeTools = tools.filter((t) => supportStatusForTool(t) === "live-bridge").map((t) => t.name);
   const hybridTools = tools.filter((t) => supportStatusForTool(t) === "bridge-job").map((t) => t.name);
   const batchJobTools = tools.filter((t) => supportStatusForTool(t) === "batch-job").map((t) => t.name);

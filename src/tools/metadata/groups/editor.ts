@@ -11,14 +11,9 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     outputSchema: pageSchema({ type: "object", properties: { index: { type: "integer" }, type: { type: "string" }, message: { type: "string" }, file: { type: "string" }, line: { type: "integer" } } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run editor.console",
-    docsTopic: "editor",
     examples: [
       { description: "Read recent errors", argv: ["tools", "run", "editor.console", "--input", "{\"type\":\"error\",\"count\":20}"] }
     ],
-    equivalentUnityMcp: "read_console / console-get-logs"
   },
   {
     name: "editor.state",
@@ -29,14 +24,9 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ playMode: { type: "object" }, busy: { type: "object", description: "busy.isBusy or busy.compiling/updating/domainReloading/playModeChanging means AI should wait/retry before stateful operations." }, activeScene: { type: "object" }, prefabStage: { type: ["object", "null"] }, bridge: { type: "object" }, runtime: { type: "object" } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run editor.state",
-    docsTopic: "editor",
     examples: [
       { description: "Read editor state", argv: ["tools", "run", "editor.state", "--input", "{}"] }
     ],
-    equivalentUnityMcp: "editor-application-get-state / editor_state"
   },
   {
     name: "editor.play",
@@ -48,14 +38,9 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["playmode-transition", "domain-reload"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run editor.play",
-    docsTopic: "editor",
     examples: [
       { description: "Enter Play Mode", argv: ["tools", "run", "editor.play", "--input", "{\"timeoutMs\":7000}"] }
     ],
-    equivalentUnityMcp: "manage_editor.play / editor-application-set-state"
   },
   {
     name: "editor.pause",
@@ -67,14 +52,9 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["playmode-pause"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run editor.pause",
-    docsTopic: "editor",
     examples: [
       { description: "Toggle pause", argv: ["tools", "run", "editor.pause", "--input", "{}"] }
     ],
-    equivalentUnityMcp: "manage_editor.pause / editor-application-set-state"
   },
   {
     name: "editor.stop",
@@ -86,14 +66,9 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["playmode-transition", "domain-reload"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run editor.stop",
-    docsTopic: "editor",
     examples: [
       { description: "Exit Play Mode", argv: ["tools", "run", "editor.stop", "--input", "{}"] }
     ],
-    equivalentUnityMcp: "manage_editor.stop / editor-application-set-state"
   },
   {
     name: "editor.undo",
@@ -105,14 +80,9 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["undo-stack", "scene-or-asset-modify"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run editor.undo",
-    docsTopic: "editor",
     examples: [
       { description: "Undo last editor operation", argv: ["tools", "run", "editor.undo", "--input", "{}"] }
     ],
-    equivalentUnityMcp: "manage_editor.undo"
   },
   {
     name: "editor.redo",
@@ -124,14 +94,9 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["undo-stack", "scene-or-asset-modify"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run editor.redo",
-    docsTopic: "editor",
     examples: [
       { description: "Redo last editor operation", argv: ["tools", "run", "editor.redo", "--input", "{}"] }
     ],
-    equivalentUnityMcp: "manage_editor.redo"
   },
   {
     name: "editor.resolution",
@@ -143,14 +108,9 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["player-settings", "project-settings-write"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run editor.resolution",
-    docsTopic: "editor",
     examples: [
       { description: "Set default player resolution", argv: ["tools", "run", "editor.resolution", "--input", "{\"width\":1280,\"height\":720,\"fullscreen\":false}"] }
     ],
-    equivalentUnityMcp: "manage_editor.set_resolution"
   },
   {
     name: "editor.menu",
@@ -162,14 +122,9 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     destructiveHint: true,
     playModeSupport: "session-affecting",
     sideEffects: ["editor-menu", "unknown-editor-side-effect"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run editor.menu",
-    docsTopic: "editor",
     examples: [
       { description: "Refresh assets through Unity menu", argv: ["tools", "run", "editor.menu", "--yes", "--input", "{\"path\":\"Assets/Refresh\",\"timeoutMs\":7000}"] }
     ],
-    equivalentUnityMcp: "execute_menu_item"
   },
   {
     name: "project.tag",
@@ -185,13 +140,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     }),
     destructiveHint: false,
     sideEffects: ["project-settings-write"],
-    riskLevel: "low",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run project.tag",
-    docsTopic: "project",
-    equivalentUnityMcp: "manage_editor.add_tag/remove_tag",
     examples: [
       { description: "Add a project tag", argv: ["tools", "run", "project.tag", "--input", "{\"action\":\"add\",\"name\":\"UnityCliProbe\"}"] }
     ]
@@ -210,13 +159,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     }),
     destructiveHint: false,
     sideEffects: ["project-settings-write"],
-    riskLevel: "low",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run project.layer",
-    docsTopic: "project",
-    equivalentUnityMcp: "manage_editor.add_layer/remove_layer",
     examples: [
       { description: "Add a project layer", argv: ["tools", "run", "project.layer", "--input", "{\"action\":\"add\",\"name\":\"UnityCliProbeLayer\"}"] }
     ]
@@ -235,18 +178,44 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     }),
     outputSchema: objSchema({ jobId: { type: "string" }, status: { type: "string" }, command: { type: "string" }, logPath: { type: "string" } }),
     destructiveHint: false,
-    longRunning: true,
     playModeSupport: "editor-only",
     sideEffects: ["asset-refresh", "script-compile", "domain-reload"],
-    handler: "job",
-    supportStatus: "batch-job",
-    cliCommand: "tools run editor.refresh",
-    docsTopic: "editor",
     examples: [
       { description: "Refresh assets in batchmode", argv: ["tools", "run", "editor.refresh", "--input", "{\"project\":\"./Dev/UnityProject\",\"unity\":\"C:/Program Files/Unity/Hub/Editor/2022.3.61f1/Editor/Unity.exe\",\"wait\":true}"] },
       { description: "Refresh and request compilation", argv: ["tools", "run", "editor.refresh", "--input", "{\"project\":\"./Dev/UnityProject\",\"compile\":true,\"wait\":true}"] }
     ],
-    equivalentUnityMcp: "refresh_unity"
+  },
+  {
+    name: "editor.compile",
+    summary: "Request script compilation in the live Unity Editor, optionally refreshing assets and waiting for readiness.",
+    description: "Request script compilation in the live Unity Editor without reading or clearing Console entries. By default it first calls AssetDatabase.Refresh, then calls CompilationPipeline.RequestScriptCompilation. If Unity is already compiling or importing, it does not issue another refresh/compile request; requested=false and skippedReason explain the existing busy state, and waitReady=true waits for that state to settle. Use editor.compile-diagnostics when you also need Console compiler diagnostics in the same call. This tool does not save project files and does not start a batchmode Editor.",
+    group: "editor",
+    inputSchema: objSchema({
+      refresh: { type: "boolean", default: true, description: "Refresh AssetDatabase before requesting script compilation." },
+      waitReady: { type: "boolean", default: false, description: "Wait until compile/import/domain reload settles before returning." },
+      timeoutMs: { type: "integer", default: 45000, maximum: 55000, description: "Maximum wait time when waitReady=true." }
+    }),
+    outputSchema: objSchema({
+      command: { type: "string" },
+      requested: { type: "boolean", description: "True when this call issued a new CompilationPipeline.RequestScriptCompilation request; false when Unity was already compiling or importing." },
+      skippedReason: { type: ["string", "null"], enum: ["already-compiling", "already-importing", null], description: "Why no new compile request was issued." },
+      refresh: { type: "boolean" },
+      waitReady: { type: "boolean" },
+      wasCompiling: { type: "boolean" },
+      wasUpdating: { type: "boolean" },
+      state: { type: "object", properties: { compiling: { type: "boolean" }, updating: { type: "boolean" }, domainReloading: { type: "boolean" }, isBusy: { type: "boolean" } } },
+      plannedEffects: { type: "array", items: { type: "object" } },
+      logPath: { type: "string" }
+    }),
+    destructiveHint: false,
+    supportsDryRun: true,
+    playModeSupport: "session-affecting",
+    sideEffects: ["asset-refresh", "script-compile", "domain-reload"],
+    examples: [
+      { description: "Request live Editor script compilation", argv: ["tools", "run", "editor.compile", "--input", "{\"refresh\":true}"] },
+      { description: "Request compile and wait until Unity is ready", argv: ["tools", "run", "editor.compile", "--input", "{\"refresh\":true,\"waitReady\":true,\"timeoutMs\":45000}"] },
+      { description: "Preview compile request side effects", argv: ["tools", "run", "editor.compile", "--dry-run", "--input", "{\"waitReady\":true}"] }
+    ],
   },
   {
     name: "editor.compile-diagnostics",
@@ -280,20 +249,14 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     }),
     destructiveHint: false,
     supportsDryRun: true,
-    longRunning: true,
     playModeSupport: "session-affecting",
     sideEffects: ["asset-refresh", "script-compile", "domain-reload", "console-read"],
-    riskLevel: "low",
-    handler: "hybrid",
     supportStatus: "live-bridge",
-    cliCommand: "tools run editor.compile-diagnostics",
-    docsTopic: "editor",
     examples: [
       { description: "Refresh, wait, and read recent compiler diagnostics", argv: ["tools", "run", "editor.compile-diagnostics", "--input", "{\"waitTimeoutMs\":45000,\"count\":100}"] },
       { description: "Import one changed script before reading diagnostics", argv: ["tools", "run", "editor.compile-diagnostics", "--input", "{\"path\":\"Assets/Scripts/Player.cs\",\"forceUpdate\":true}"] },
       { description: "Only wait and read Console without triggering refresh", argv: ["tools", "run", "editor.compile-diagnostics", "--input", "{\"refresh\":false,\"count\":50}"] }
     ],
-    equivalentUnityMcp: "refresh_unity + read_console / compile diagnostics loop"
   },
   {
     name: "editor.launch-dialog.dismiss",
@@ -324,17 +287,11 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     supportsDryRun: true,
     playModeSupport: "editor-only",
     sideEffects: ["desktop-dialog-click"],
-    riskLevel: "low",
-    handler: "offline",
-    supportStatus: "cli-only",
-    cliCommand: "tools run editor.launch-dialog.dismiss",
-    docsTopic: "editor",
     examples: [
       { description: "Dismiss any visible Unity launch error dialog", argv: ["tools", "run", "editor.launch-dialog.dismiss", "--input", "{\"timeoutMs\":5000}"] },
       { description: "Limit dismiss to one Unity process", argv: ["tools", "run", "editor.launch-dialog.dismiss", "--input", "{\"processId\":44960,\"timeoutMs\":5000}"] },
       { description: "Preview the desktop click", argv: ["tools", "run", "editor.launch-dialog.dismiss", "--dry-run", "--input", "{\"pid\":44960}"] }
     ],
-    equivalentUnityMcp: "launch error dialog auto dismiss"
   },
   {
     name: "editor.selection.set",
@@ -347,15 +304,10 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     supportsDryRun: true,
     playModeSupport: "session-affecting",
     sideEffects: ["editor-selection"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run editor.selection.set",
-    docsTopic: "editor",
     examples: [
       { description: "Select a GameObject by path", argv: ["tools", "run", "editor.selection.set", "--yes", "--input", "{\"target\":\"Player\"}"] },
       { description: "Dry-run selection", argv: ["tools", "run", "editor.selection.set", "--dry-run", "--input", "{\"target\":\"Player\"}"] }
     ],
-    equivalentUnityMcp: "editor-selection-set"
   },
   {
     name: "editor.active-tool.set",
@@ -367,13 +319,8 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     sideEffects: ["editor-active-tool"],
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run editor.active-tool.set",
-    docsTopic: "editor",
     examples: [
       { description: "Activate Move tool", argv: ["tools", "run", "editor.active-tool.set", "--yes", "--input", "{\"tool\":\"move\"}"] }
     ],
-    equivalentUnityMcp: "manage_editor.set_active_tool"
   }
 ];

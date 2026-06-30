@@ -18,17 +18,14 @@ test("reflect group tools exist with offline handler and supported play mode", (
   assert.equal(type.destructiveHint, false);
   assert.equal(type.handler, "offline");
   assert.equal(type.playModeSupport, "supported");
-  assert.equal(type.equivalentUnityMcp, "unity_reflect.get_type");
 
   const member = findToolByName("reflect.member")!;
   assert.equal(member.handler, "offline");
   assert.equal(member.playModeSupport, "supported");
-  assert.equal(member.equivalentUnityMcp, "unity_reflect.get_member");
 
   const search = findToolByName("reflect.search")!;
   assert.equal(search.handler, "offline");
   assert.equal(search.playModeSupport, "supported");
-  assert.equal(search.equivalentUnityMcp, "unity_reflect.search");
 });
 
 test("reflect tools expose examples and argument descriptions", () => {

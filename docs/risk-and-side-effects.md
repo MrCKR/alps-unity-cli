@@ -10,9 +10,9 @@ Every tool carries risk hints in its descriptor. These are the only way to asses
 |-----------------|---------|---------------------|
 | `destructiveHint: true` | Tool may irreversibly modify or delete data | Must confirm with `--yes`; consider `--dry-run` first |
 | `supportsDryRun: true` | Tool accepts `--dry-run` for safe preview | Always preview with `--dry-run` before `--yes` |
-| `longRunning: true` | Tool may take seconds or minutes | Check `cancellationSemantics`; consider `--timeout-ms` |
+| `longRunning: true` | Tool may take seconds or minutes | Check `cancellation`; consider `--timeout-ms` |
 | `permissions` | Permission tokens required (e.g. `["executes_code"]`) | Ensure the context allows the required permissions |
-| `cancellationSemantics` | How cancellation works for this tool | Use `job cancel` or cooperative cancel as described |
+| `cancellation` | Structured cancellation mode for long-running tools | Use job cancellation when value is `job`; treat `cooperative` as tool-specific wait/cancel behavior |
 
 ## Destructive Commands
 
@@ -101,10 +101,10 @@ The `doctor` command reports fingerprint status for all project tools. Use it to
 
 ## How to Assess Risk as an AI Agent
 
-1. **Always `tools describe` first.** Read `destructiveHint`, `supportsDryRun`, `target`, `availabilityScope`, and `available`.
+1. **Always `tools describe` first.** Read `destructiveHint`, `supportsDryRun`, `target`, `availabilityScope`, and `supportStatus`.
 2. **For destructive tools**: Use `--dry-run` if supported; otherwise, explain the planned effects to the user before calling with `--yes`.
-3. **For runtime tools**: Verify `available: true` and Play Mode state before calling `target: "runtime"` tools.
-4. **For long-running tools**: Set appropriate `--timeout-ms`; understand `cancellationSemantics` before starting.
+3. **For runtime tools**: Verify Play Mode state before calling `target: "runtime"` tools.
+4. **For long-running tools**: Set appropriate `--timeout-ms`; check `cancellation` before starting.
 5. **For project tools**: Check fingerprint status with `doctor`; use `--fingerprint-mode block` (default) to ensure integrity.
 
 ## Known Limitations

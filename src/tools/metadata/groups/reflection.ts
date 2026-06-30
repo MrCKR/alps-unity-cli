@@ -27,11 +27,6 @@ export const REFLECTION_TOOLS: ToolMetadata[] = [
     }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run reflection.method.find",
-    docsTopic: "reflection",
-    equivalentUnityMcp: "reflection-method-find",
     examples: [
       { description: "Find Translate on Transform", argv: ["tools", "run", "reflection.method.find", "--input", "{\"typeName\":\"UnityEngine.Transform\",\"methodName\":\"Translate\"}"] },
       { description: "List all methods including private", argv: ["tools", "run", "reflection.method.find", "--input", "{\"typeName\":\"UnityEngine.Rigidbody\",\"includePrivate\":true}"] }
@@ -60,14 +55,8 @@ export const REFLECTION_TOOLS: ToolMetadata[] = [
     }),
     destructiveHint: true,
     supportsDryRun: true,
-    riskLevel: "critical",
     sideEffects: ["arbitrary-method-invocation"],
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run reflection.method.call",
-    docsTopic: "reflection",
-    equivalentUnityMcp: "reflection-method-call",
     examples: [
       { description: "Preview a static method call", argv: ["tools", "run", "reflection.method.call", "--dry-run", "--input", "{\"typeName\":\"UnityEngine.Application\",\"methodName\":\"get_unityVersion\"}"] },
       { description: "Execute only after reviewing dry-run", argv: ["tools", "run", "reflection.method.call", "--yes", "--input", "{\"typeName\":\"UnityEngine.Application\",\"methodName\":\"get_unityVersion\"}"] }
@@ -90,11 +79,6 @@ export const REFLECTION_TOOLS: ToolMetadata[] = [
     }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run type.schema",
-    docsTopic: "reflection",
-    equivalentUnityMcp: "type-get-json-schema",
     examples: [
       { description: "Schema for Rigidbody", argv: ["tools", "run", "type.schema", "--input", "{\"typeName\":\"UnityEngine.Rigidbody\"}"] }
     ]

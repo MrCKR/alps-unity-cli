@@ -16,7 +16,7 @@ export const assetBridgeSpecs: BridgeCommandSpec[] = [
   { group: "asset", command: "get-data", bridgeCommand: "asset.get-data", buildArgs: assetGetDataArgs },
   { group: "asset", command: "get-components", bridgeCommand: "asset.get-components", buildArgs: assetGetComponentsArgs },
   { group: "asset", command: "preview", bridgeCommand: "asset.preview", buildArgs: assetPreviewArgs },
-  { group: "asset", command: "refresh", bridgeCommand: "asset.refresh", buildArgs: assetRefreshArgs, supportsDryRun: true }
+  { group: "asset", command: "refresh", bridgeCommand: "asset.refresh", buildArgs: assetRefreshArgs, supportsDryRun: true, supportsJob: true }
 ];
 
 /** 读取 tools run --input 中无法映射为简单 flag 的结构化字段。 */

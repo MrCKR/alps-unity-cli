@@ -25,7 +25,6 @@ export {
   collectAvailableTools,
   collectAllTools,
   collectAvailableContexts,
-  collectAvailableDocs,
   collectAvailableCSharpEntries,
   extensionAvailabilitySummary
 } from "./descriptor-loader.js";
@@ -57,7 +56,6 @@ export type {
   UnityPackageRequirement,
   ExtensionToolContribution,
   ExtensionContextContribution,
-  ExtensionDocsContribution,
   ExtensionCSharpEntry,
   ExtensionContributions,
   ExtensionUnityInstallLayout,

@@ -14,7 +14,6 @@ import type {
   ExtensionAvailabilityResult,
   ExtensionCSharpEntry,
   ExtensionContextContribution,
-  ExtensionDocsContribution,
   ExtensionId,
   ExtensionToolContribution,
   LoadedExtensionDescriptor
@@ -64,9 +63,7 @@ export function loadExtensionDescriptor(
     availability,
     tools: contributions.tools ?? [],
     contexts: contributions.contexts ?? [],
-    bridgeCommands: contributions.bridgeCommands ?? [],
-    csharpEntries: contributions.csharpEntries ?? [],
-    docs: contributions.docs ?? []
+    csharpEntries: contributions.csharpEntries ?? []
   };
 }
 
@@ -151,17 +148,6 @@ export function collectAvailableContexts(
 ): ExtensionContextContribution[] {
   const available = loadAvailableDescriptors(registry, installedPackages);
   return available.flatMap((desc) => desc.contexts);
-}
-
-/**
- * Collect all docs topic contributions across available extensions.
- */
-export function collectAvailableDocs(
-  registry: ExtensionRegistry,
-  installedPackages?: ReadonlyMap<string, string> | Readonly<Record<string, string>>
-): ExtensionDocsContribution[] {
-  const available = loadAvailableDescriptors(registry, installedPackages);
-  return available.flatMap((desc) => desc.docs);
 }
 
 /**

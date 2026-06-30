@@ -13,11 +13,6 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
     }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run prefab.info",
-    docsTopic: "prefab",
-    equivalentUnityMcp: "manage_prefabs.get_info",
     examples: [
       { description: "Inspect a prefab asset", argv: ["tools", "run", "prefab.info", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbe.prefab\"}"] }
     ]
@@ -34,12 +29,7 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
     }, ["source", "path"]),
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],
-    riskLevel: "low",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    cliCommand: "tools run prefab.create",
-    docsTopic: "prefab",
-    equivalentUnityMcp: "manage_prefabs.create_from_gameobject",
     examples: [
       { description: "Save a scene object as a prefab", argv: ["tools", "run", "prefab.create", "--input", "{\"source\":\"AlignmentProbe\",\"path\":\"Assets/UnityCliAlignmentFixtures/GeneratedProbe.prefab\"}"] }
     ]
@@ -58,12 +48,7 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
     }, ["path"]),
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],
-    riskLevel: "low",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    cliCommand: "tools run prefab.modify",
-    docsTopic: "prefab",
-    equivalentUnityMcp: "manage_prefabs.modify_contents",
     examples: [
       { description: "Add a child to a prefab", argv: ["tools", "run", "prefab.modify", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbe.prefab\",\"addChild\":\"NewChild\"}"] }
     ]
@@ -76,12 +61,7 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ path: { type: "string", description: "Existing Assets/*.prefab path to open." } }, ["path"]),
     destructiveHint: false,
     sideEffects: ["editor-session"],
-    riskLevel: "medium",
     playModeSupport: "editor-only",
-    handler: "bridge",
-    cliCommand: "tools run prefab.stage-open",
-    docsTopic: "prefab",
-    equivalentUnityMcp: "manage_prefabs.open_prefab_stage",
     examples: [
       { description: "Open a prefab for interactive editing", argv: ["tools", "run", "prefab.stage-open", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbe.prefab\"}"] }
     ]
@@ -94,12 +74,7 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ path: { type: "string", description: "Optional prefab path to confirm the open stage target." } }),
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],
-    riskLevel: "low",
     playModeSupport: "editor-only",
-    handler: "bridge",
-    cliCommand: "tools run prefab.stage-save",
-    docsTopic: "prefab",
-    equivalentUnityMcp: "manage_prefabs.save_prefab_stage",
     examples: [
       { description: "Save the current prefab stage", argv: ["tools", "run", "prefab.stage-save"] }
     ]
@@ -112,12 +87,7 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ path: { type: "string", description: "Optional prefab path to confirm the open stage target." }, save: { type: "boolean", description: "Persist modifications before closing." } }),
     destructiveHint: false,
     sideEffects: ["editor-session"],
-    riskLevel: "low",
     playModeSupport: "editor-only",
-    handler: "bridge",
-    cliCommand: "tools run prefab.stage-close",
-    docsTopic: "prefab",
-    equivalentUnityMcp: "manage_prefabs.close_prefab_stage",
     examples: [
       { description: "Close the prefab stage without saving", argv: ["tools", "run", "prefab.stage-close", "--input", "{\"save\":false}"] },
       { description: "Save and close the prefab stage", argv: ["tools", "run", "prefab.stage-close", "--input", "{\"save\":true}"] }
@@ -142,11 +112,6 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
     }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run prefab.hierarchy",
-    docsTopic: "prefab",
-    equivalentUnityMcp: "manage_prefabs.get_hierarchy",
     examples: [
       { description: "List a prefab's children", argv: ["tools", "run", "prefab.hierarchy", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbe.prefab\",\"pageSize\":50}"] }
     ]
@@ -166,14 +131,8 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
     }, ["path"]),
     destructiveHint: false,
     sideEffects: ["scene-modify"],
-    riskLevel: "low",
     supportsDryRun: true,
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run prefab.instantiate",
-    docsTopic: "prefab",
-    equivalentUnityMcp: "prefab.instantiate",
     examples: [
       { description: "Instantiate a prefab at origin", argv: ["tools", "run", "prefab.instantiate", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbe.prefab\",\"x\":0,\"y\":0,\"z\":0}"] }
     ]
@@ -186,14 +145,8 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ target: { type: "string", description: "Prefab instance in the scene: name, hierarchy path or instance id." }, path: { type: "string", description: "Alias of target." } }, ["target"]),
     destructiveHint: false,
     sideEffects: ["scene-modify", "prefab-unlink"],
-    riskLevel: "medium",
     supportsDryRun: true,
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run prefab.unpack",
-    docsTopic: "prefab",
-    equivalentUnityMcp: "prefab.unpack",
     examples: [
       { description: "Preview unpacking a prefab instance", argv: ["tools", "run", "prefab.unpack", "--input", "{\"target\":\"AlignmentProbe(Clone)\"}", "--dry-run"] }
     ]

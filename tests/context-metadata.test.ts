@@ -15,7 +15,7 @@ test("builtin context metadata contains all required entries", () => {
 });
 
 test("builtin context metadata does not expose removed public descriptor fields", () => {
-  const forbidden = ["title", "summary", "kind", "resourceUri", "equivalentUnityMcp", "equivalentUnityMcpNote", "destructiveHint", "bridgeCommand"];
+  const forbidden = ["title", "summary", "kind", "resourceUri", "destructiveHint", "bridgeCommand"];
   for (const ctx of builtinContextMetadata()) {
     for (const field of forbidden) {
       assert.equal(field in ctx, false, `${ctx.name} must not expose ${field}`);

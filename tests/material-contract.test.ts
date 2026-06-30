@@ -32,12 +32,10 @@ test("material group tools exist with correct safety hints", () => {
   assert.equal(info.destructiveHint, false);
   assert.equal(info.handler, "bridge");
   assert.equal(info.playModeSupport, "supported");
-  assert.equal(info.equivalentUnityMcp, "manage_material.get_material_info");
 
   const create = findToolByName("material.create")!;
   assert.equal(create.playModeSupport, "session-affecting");
   assert.ok(create.sideEffects?.includes("asset-write"));
-  assert.equal(create.equivalentUnityMcp, "assets-material-create");
 
   const assign = findToolByName("material.assign")!;
   assert.equal(assign.playModeSupport, "session-affecting");

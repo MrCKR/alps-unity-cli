@@ -33,14 +33,12 @@ test("object group tools exist with correct safety hints", () => {
   assert.equal(getData.destructiveHint, false);
   assert.equal(getData.handler, "bridge");
   assert.equal(getData.playModeSupport, "supported");
-  assert.equal(getData.equivalentUnityMcp, "object-get-data");
 
   const modify = findToolByName("object.modify")!;
   assert.equal(modify.destructiveHint, true);
   assert.equal(modify.supportsDryRun, true);
   assert.equal(modify.playModeSupport, "runtime-only");
   assert.equal(modify.riskLevel, "high");
-  assert.equal(modify.equivalentUnityMcp, "object-modify");
 });
 
 test("object.modify input schema supports pathPatches and jsonPatch", () => {

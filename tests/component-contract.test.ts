@@ -37,7 +37,6 @@ test("component tools expose lifecycle and deep-read metadata", () => {
   const add = findToolByName("component.add")!;
   assert.equal(add.playModeSupport, "session-affecting");
   assert.deepEqual(add.sideEffects, ["component-add", "scene-modify"]);
-  assert.equal(add.equivalentUnityMcp, "manage_components.add / gameobject-component-add");
   assert.ok(add.outputSchema);
   assert.ok(add.examples?.some((example) => example.argv.includes("--input")));
 
@@ -45,28 +44,23 @@ test("component tools expose lifecycle and deep-read metadata", () => {
   assert.equal(remove.destructiveHint, false);
   assert.equal(remove.playModeSupport, "session-affecting");
   assert.deepEqual(remove.sideEffects, ["component-remove", "scene-modify"]);
-  assert.equal(remove.equivalentUnityMcp, "manage_components.remove / gameobject-component-destroy");
 
   const set = findToolByName("component.set")!;
   assert.equal(set.playModeSupport, "session-affecting");
   assert.deepEqual(set.sideEffects, ["component-modify", "scene-modify"]);
-  assert.equal(set.equivalentUnityMcp, "manage_components.set_property");
   assert.ok(set.outputSchema);
   assert.ok(set.examples?.some((example) => example.argv.includes("--input")));
 
   const get = findToolByName("component.get")!;
   assert.equal(get.playModeSupport, "supported");
-  assert.equal(get.equivalentUnityMcp, "gameobject-component-get");
 
   const modify = findToolByName("component.modify")!;
   assert.equal(modify.destructiveHint, false);
   assert.equal(modify.supportsDryRun, true);
   assert.equal(modify.playModeSupport, "session-affecting");
-  assert.equal(modify.equivalentUnityMcp, "gameobject-component-modify");
 
   const listTypes = findToolByName("component.list-types")!;
   assert.equal(listTypes.playModeSupport, "supported");
-  assert.equal(listTypes.equivalentUnityMcp, "gameobject-component-list-all");
   assert.ok(listTypes.outputSchema);
 });
 

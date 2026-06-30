@@ -445,28 +445,21 @@ test("capabilities without --project does not include extension package availabi
 
 test("validateExtensionManifestContracts passes for built-in manifests", () => {
   // Should not throw
-  validateExtensionManifestContracts(BUILTIN_EXTENSION_MANIFESTS, bridgeCommandRegistry);
+  validateExtensionManifestContracts(BUILTIN_EXTENSION_MANIFESTS, bridgeCommandRegistry, extensionToolMetadata());
 });
 
-test("validateExtensionManifestContracts detects group mismatch", () => {
+test("validateExtensionManifestContracts detects missing tool metadata", () => {
   const badManifest = {
     ...PROBUILDER_MANIFEST,
     contributions: {
       ...PROBUILDER_MANIFEST.contributions,
-      tools: [{
-        name: "probuilder.ping",
-        summary: "ProBuilder Shape",
-        description: "Create shape",
-        group: "wrong-group", // mismatch!
-        bridgeCommand: "probuilder.ping",
-        cliCommand: "tools run probuilder.ping"
-      }]
+      tools: [{ name: "probuilder.missing-tool" }]
     }
   };
 
   assert.throws(
-    () => validateExtensionManifestContracts([badManifest], bridgeCommandRegistry),
-    (err: unknown) => err instanceof Error && err.message.includes("group mismatch")
+    () => validateExtensionManifestContracts([badManifest], bridgeCommandRegistry, extensionToolMetadata()),
+    (err: unknown) => err instanceof Error && err.message.includes("unknown tool")
   );
 });
 

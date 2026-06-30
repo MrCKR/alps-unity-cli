@@ -38,10 +38,6 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ cameras: { type: "array", items: objSchema(cameraSchema) }, count: { type: "integer" } }, ["cameras", "count"]),
     destructiveHint: false,
     playModeSupport: "supported",
-    equivalentUnityMcp: "manage_camera.list_cameras / mcpforunity://scene/cameras",
-    handler: "bridge",
-    cliCommand: "tools run camera.list",
-    docsTopic: "camera",
     examples: [
       { description: "List scene cameras", argv: ["tools", "run", "camera.list", "--input", "{}"] }
     ]
@@ -55,10 +51,6 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ camera: objSchema(cameraSchema) }, ["camera"]),
     destructiveHint: false,
     playModeSupport: "supported",
-    equivalentUnityMcp: "manage_camera.list_cameras",
-    handler: "bridge",
-    cliCommand: "tools run camera.info",
-    docsTopic: "camera",
     examples: [
       { description: "Inspect Main Camera", argv: ["tools", "run", "camera.info", "--input", "{\"target\":\"Main Camera\"}"] }
     ]
@@ -73,10 +65,6 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["artifact-write", "render-texture"],
     playModeSupport: "session-affecting",
-    equivalentUnityMcp: "manage_camera.screenshot / screenshot-camera",
-    handler: "bridge",
-    cliCommand: "tools run camera.screenshot",
-    docsTopic: "camera",
     examples: [
       { description: "Capture from Main Camera", argv: ["tools", "run", "camera.screenshot", "--input", "{\"target\":\"Main Camera\",\"output\":\"Artifacts/camera-main.png\",\"width\":640,\"height\":360,\"overwrite\":true}"] }
     ]
@@ -102,10 +90,6 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["scene-modify", "component-add"],
     playModeSupport: "session-affecting",
-    equivalentUnityMcp: "manage_camera.create_camera",
-    handler: "bridge",
-    cliCommand: "tools run camera.create",
-    docsTopic: "camera",
     examples: [
       { description: "Create a perspective camera", argv: ["tools", "run", "camera.create", "--input", "{\"name\":\"UnityCliAlignmentCamera\",\"position\":\"0,2,-6\",\"rotation\":\"15,0,0\",\"fieldOfView\":60}"] },
       { description: "Create an orthographic camera", argv: ["tools", "run", "camera.create", "--input", "{\"name\":\"UnityCliAlignmentTopView\",\"orthographic\":true,\"orthographicSize\":5,\"clearFlags\":\"SolidColor\"}"] }
@@ -126,10 +110,6 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["scene-modify"],
     playModeSupport: "session-affecting",
-    equivalentUnityMcp: "manage_camera.set_target",
-    handler: "bridge",
-    cliCommand: "tools run camera.target",
-    docsTopic: "camera",
     examples: [
       { description: "Point a camera at a target", argv: ["tools", "run", "camera.target", "--input", "{\"target\":\"UnityCliAlignmentCamera\",\"lookAt\":\"UnityCliAlignmentProbe\"}"] },
       { description: "Move and rotate a camera", argv: ["tools", "run", "camera.target", "--input", "{\"target\":\"UnityCliAlignmentCamera\",\"position\":\"0,3,-8\",\"rotation\":\"20,0,0\"}"] }
@@ -154,10 +134,6 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["scene-modify"],
     playModeSupport: "session-affecting",
-    equivalentUnityMcp: "manage_camera.set_lens",
-    handler: "bridge",
-    cliCommand: "tools run camera.lens",
-    docsTopic: "camera",
     examples: [
       { description: "Set camera FOV", argv: ["tools", "run", "camera.lens", "--input", "{\"target\":\"UnityCliAlignmentCamera\",\"fieldOfView\":45,\"nearClipPlane\":0.1,\"farClipPlane\":1000}"] },
       { description: "Switch to orthographic", argv: ["tools", "run", "camera.lens", "--input", "{\"target\":\"UnityCliAlignmentCamera\",\"orthographic\":true,\"orthographicSize\":10}"] }
@@ -179,10 +155,6 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["artifact-write", "render-texture"],
     playModeSupport: "session-affecting",
-    equivalentUnityMcp: "manage_camera.screenshot_multiview",
-    handler: "bridge",
-    cliCommand: "tools run camera.multiview",
-    docsTopic: "camera",
     examples: [
       { description: "Capture from two cameras", argv: ["tools", "run", "camera.multiview", "--input", "{\"targets\":\"Main Camera,UnityCliAlignmentCamera\",\"output\":\"Artifacts/camera-multiview\",\"width\":320,\"height\":180,\"format\":\"png\"}"] }
     ]

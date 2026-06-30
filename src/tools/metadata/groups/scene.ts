@@ -19,12 +19,6 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     outputSchema: pageSchema(objSchema({ id: { type: "integer" }, name: { type: "string" }, path: { type: "string" }, depth: { type: "integer" }, active: { type: "boolean" }, activeInHierarchy: { type: "boolean" }, tag: { type: "string" }, layer: { type: "integer" }, childCount: { type: "integer" }, componentCount: { type: "integer" }, components: { type: "array", items: { type: "string" } } })),
     destructiveHint: false,
     playModeSupport: "supported",
-    requiresMainThread: true,
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run scene.hierarchy",
-    docsTopic: "scene",
-    equivalentUnityMcp: "manage_scene.get_hierarchy / scene-get-data",
     examples: [
       { description: "List a bounded hierarchy page", argv: ["tools", "run", "scene.hierarchy", "--input", "{\"pageSize\":25,\"maxDepth\":1}"] },
       { description: "Find camera nodes with component previews", argv: ["tools", "run", "scene.hierarchy", "--input", "{\"nameFilter\":\"Camera\",\"includeComponents\":true,\"pageSize\":10}"] }
@@ -39,12 +33,6 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ command: { type: "string" }, name: { type: "string" }, path: { type: "string" }, buildIndex: { type: "integer" }, isLoaded: { type: "boolean" }, isDirty: { type: "boolean" } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    requiresMainThread: true,
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run scene.active",
-    docsTopic: "scene",
-    equivalentUnityMcp: "manage_scene.get_active",
     examples: [
       { description: "Get the active scene", argv: ["tools", "run", "scene.active"] }
     ]
@@ -58,11 +46,6 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ command: { type: "string" }, count: { type: "integer" }, scenes: { type: "array", items: { type: "object" } } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run scene.build-settings",
-    docsTopic: "scene",
-    equivalentUnityMcp: "manage_scene.get_build_settings",
     examples: [
       { description: "List build settings scenes", argv: ["tools", "run", "scene.build-settings"] }
     ]
@@ -75,13 +58,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ path: { type: "string", description: "Destination Assets/* image path." }, width: { type: "integer", default: 1280 }, height: { type: "integer", default: 720 }, format: { type: "string", enum: ["png", "jpg"], default: "png" }, overwrite: { type: "boolean" } }, ["path"]),
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],
-    riskLevel: "low",
     playModeSupport: "editor-only",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run scene.screenshot",
-    docsTopic: "scene",
-    equivalentUnityMcp: "manage_camera.screenshot",
     examples: [
       { description: "Capture a scene screenshot", argv: ["tools", "run", "scene.screenshot", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/_scene_shot.png\"}"] }
     ]
@@ -94,13 +71,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ path: { type: "string", description: "Destination Assets/*.unity path." }, name: { type: "string", description: "Optional scene name (defaults to file name)." } }),
     destructiveHint: false,
     sideEffects: ["scene-modify", "asset-write"],
-    riskLevel: "low",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run scene.create",
-    docsTopic: "scene",
-    equivalentUnityMcp: "manage_scene.create",
     examples: [
       { description: "Create a new scene", argv: ["tools", "run", "scene.create", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/_probe.unity\"}"] }
     ]
@@ -113,13 +84,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ path: { type: "string", description: "Assets/*.unity scene path." }, name: { type: "string", description: "Scene name (alternative to path)." } }),
     destructiveHint: false,
     sideEffects: ["scene-modify"],
-    riskLevel: "medium",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run scene.load",
-    docsTopic: "scene",
-    equivalentUnityMcp: "manage_scene.load",
     examples: [
       { description: "Load a scene by path", argv: ["tools", "run", "scene.load", "--input", "{\"path\":\"Assets/Scenes/Main.unity\"}"] }
     ]
@@ -133,13 +98,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     destructiveHint: true,
     supportsDryRun: true,
     sideEffects: ["asset-write", "scene-modify"],
-    riskLevel: "medium",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run scene.save",
-    docsTopic: "scene",
-    equivalentUnityMcp: "manage_scene.save",
     examples: [
       { description: "Save the active scene", argv: ["tools", "run", "scene.save"] }
     ]
@@ -153,13 +112,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     supportsDryRun: true,
     sideEffects: ["scene-modify"],
-    riskLevel: "medium",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run scene.unload",
-    docsTopic: "scene",
-    equivalentUnityMcp: "scene-unload",
     examples: [
       { description: "Preview unloading a scene", argv: ["tools", "run", "scene.unload", "--input", "{\"path\":\"Assets/Scenes/Level2.unity\"}", "--dry-run"] }
     ]
@@ -172,13 +125,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ path: { type: "string", description: "Assets/*.unity path of a loaded scene." }, name: { type: "string", description: "Scene name (alternative to path)." } }, ["path"]),
     destructiveHint: false,
     sideEffects: ["editor-session"],
-    riskLevel: "low",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run scene.set-active",
-    docsTopic: "scene",
-    equivalentUnityMcp: "scene-set-active",
     examples: [
       { description: "Set the active scene", argv: ["tools", "run", "scene.set-active", "--input", "{\"path\":\"Assets/Scenes/Main.unity\"}"] }
     ]
@@ -192,11 +139,6 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ command: { type: "string" }, count: { type: "integer" }, activeScene: { type: "string" }, scenes: { type: "array", items: { type: "object" } } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run scene.list-opened",
-    docsTopic: "scene",
-    equivalentUnityMcp: "manage_scene.get_loaded_scenes",
     examples: [
       { description: "List opened scenes", argv: ["tools", "run", "scene.list-opened"] }
     ]
@@ -210,11 +152,6 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ command: { type: "string" }, count: { type: "integer" }, items: { type: "array", items: { type: "object" } } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run scene.data",
-    docsTopic: "scene",
-    equivalentUnityMcp: "scene-get-data",
     examples: [
       { description: "Read scene data with filter", argv: ["tools", "run", "scene.data", "--input", "{\"nameFilter\":\"Camera\",\"maxDepth\":2}\"}"] }
     ]
@@ -228,11 +165,6 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "session-affecting",
     supportsDryRun: true,
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run scene.move-object",
-    docsTopic: "scene",
-    equivalentUnityMcp: "manage_scene.move_to_scene",
     examples: [
       { description: "Move an object to another scene", argv: ["tools", "run", "scene.move-object", "--input", "{\"target\":\"Player\",\"scene\":\"Assets/Scenes/Gameplay.unity\"}"] }
     ]
@@ -245,11 +177,6 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ path: { type: "string", description: "Scene asset path to validate; defaults to the active scene." } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run scene.validate",
-    docsTopic: "scene",
-    equivalentUnityMcp: "manage_scene.validate",
     examples: [
       { description: "Validate the active scene", argv: ["tools", "run", "scene.validate", "--input", "{}"] }
     ]
@@ -262,11 +189,6 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ target: { type: "string", description: "GameObject to frame: name, hierarchy path or instance id." }, path: { type: "string", description: "Alias of target." }, frameAll: { type: "boolean", description: "Frame all objects instead of one target." } }),
     destructiveHint: false,
     playModeSupport: "editor-only",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run scene.view-frame",
-    docsTopic: "scene",
-    equivalentUnityMcp: "manage_scene.scene_view_frame",
     examples: [
       { description: "Frame all objects", argv: ["tools", "run", "scene.view-frame", "--input", "{\"frameAll\":true}"] }
     ]

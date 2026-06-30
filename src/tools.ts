@@ -33,7 +33,7 @@ import {
 import { failure, success } from "./output.js";
 
 import { confirmDestructiveExecution } from "./security.js";
-import { supportStatusForTool } from "./tools/metadata/status.js";
+import { inferToolRiskLevel, isLongRunningTool, supportStatusForTool, toolAvailabilityScope, toolCancellation, toolCliCommand, toolHandler, toolSource } from "./tools/metadata/index.js";
 import type { CliResult } from "./types.js";
 import { handleBuild } from "./cli-commands/build.js";
 import { handleEditor } from "./cli-commands/editor.js";
@@ -216,13 +216,13 @@ async function handleToolsGroupList(
       name: t.name,
       summary: t.summary,
       group: t.group,
-      source: t.source ?? (customTools.includes(t) ? "project" : "built-in"),
+      source: toolSource(t, customTools.includes(t) ? "project" : "built-in"),
       destructiveHint: t.destructiveHint,
       playModeSupport: t.playModeSupport,
       supportStatus,
       target: t.target ?? "editor",
       requiresPackages: t.requiresPackages,
-      cliCommand: t.cliCommand ?? `tools run ${t.name}`
+      cliCommand: toolCliCommand(t)
     };
   });
 
@@ -282,13 +282,13 @@ async function handleToolsSearch(
       name: t.name,
       summary: t.summary,
       group: t.group,
-      source: t.source ?? "built-in",
+      source: toolSource(t),
       destructiveHint: t.destructiveHint,
       playModeSupport: t.playModeSupport,
       supportStatus,
-      cliCommand: t.cliCommand,
+      cliCommand: toolCliCommand(t),
       target: t.target ?? "editor",
-      availabilityScope: t.availabilityScope ?? (t.target === "runtime" ? "playModeSession" : "editorSession"),
+      availabilityScope: toolAvailabilityScope(t),
       requiresPackages: t.requiresPackages
     };
   });
@@ -362,22 +362,22 @@ async function handleToolsDescribe(
 function publicToolDescriptor(tool: ToolMetadata, supportStatus: ReturnType<typeof supportStatusForTool>, extra: Record<string, unknown> = {}): Record<string, unknown> {
   const {
     handler: _handler,
-    docsTopic: _docsTopic,
-    equivalentUnityMcp: _equivalentUnityMcp,
-    kind: _kind,
-    availabilityScope: _availabilityScope,
-    longRunning: _longRunning,
-    requiresMainThread: _requiresMainThread,
     timeoutMs: _timeoutMs,
-    permissions: _permissions,
-    cancellationSemantics: _cancellationSemantics,
     available: _available,
     ...publicTool
   } = tool;
+  const longRunning = isLongRunningTool(tool);
+  const cancellation = toolCancellation(tool);
   return {
     ...extra,
     ...publicTool,
+    riskLevel: inferToolRiskLevel(tool),
+    ...(tool.permissions?.length ? { permissions: tool.permissions } : {}),
+    ...(longRunning ? { longRunning } : {}),
+    ...(cancellation !== "none" ? { cancellation } : {}),
+    cliCommand: toolCliCommand(tool),
     target: tool.target ?? "editor",
+    availabilityScope: toolAvailabilityScope(tool),
     supportStatus
   };
 }
@@ -464,7 +464,9 @@ async function handleToolsRun(
   // 仅当存在 bridge spec 时走 bridge 路由(scene/camera/go/.../code.exec 等)。
   // 无 bridge spec 的 hybrid/offline 工具(package.*/docs.*/reflect.*/...)
   // 走下面的原生 handler dispatch。
-  if (builtinTool && (tool.handler === "bridge" || tool.handler === "hybrid") && findBridgeSpecForTool(toolName)) {
+  const handler = toolHandler(tool);
+
+  if (builtinTool && (handler === "bridge" || handler === "hybrid") && findBridgeSpecForTool(toolName)) {
     const parsedInput = await parseToolInput(flags, requestId);
     if (!parsedInput.ok) return parsedInput.error!;
     const mergedFlags = mergeInputToFlags(parsedInput.input, flags);
@@ -503,19 +505,19 @@ async function handleToolsRun(
   }
 
   // ── Built-in job-handler tools: route to native job CLI handlers ──
-  if (builtinTool && tool.handler === "job") {
+  if (builtinTool && handler === "job") {
     return dispatchJobHandler(tool, flags, runtime, requestId);
   }
 
   // ── Built-in offline/hybrid(no bridge spec) tools: route to native CLI handlers ──
   // 迁移自旧顶层命令的 docs/reflect/package/diagnose/tools 发现。
-  if (builtinTool && (tool.handler === "offline" || tool.handler === "hybrid")) {
+  if (builtinTool && (handler === "offline" || handler === "hybrid")) {
     return dispatchOfflineHandler(tool, flags, runtime, requestId, positional);
   }
 
   // ── Built-in tools with other unsupported handlers ──
   if (builtinTool) {
-    return failure(requestId, "E_TOOL_HANDLER_UNSUPPORTED", `Tool "${toolName}" uses handler "${tool.handler}" which is not supported by tools run.`, [
+    return failure(requestId, "E_TOOL_HANDLER_UNSUPPORTED", `Tool "${toolName}" uses handler "${handler}" which is not supported by tools run.`, [
       "Run unity_cli tools describe <tool> for details."
     ]);
   }
@@ -527,7 +529,7 @@ async function handleToolsRun(
 /** 返回 bridge/hybrid 工具未声明 job 支持时的结构化错误。 */
 function unsupportedBridgeJob(requestId: string, toolName: string): CliResult {
   return failure(requestId, "E_TOOL_JOB_UNSUPPORTED", `Tool does not support --job: ${toolName}.`, [
-    `Run unity_cli tools describe ${toolName} and check supportStatus/cancellationSemantics.`,
+    `Run unity_cli tools describe ${toolName} and check supportStatus/cancellation.`,
     "Remove --job to run through the live Bridge, or choose a tool whose descriptor documents bridge-job support."
   ], {
     tool: toolName,

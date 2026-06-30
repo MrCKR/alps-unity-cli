@@ -94,7 +94,7 @@ public static class SampleRuntimeTool
 Runtime target 行为：
 - 仅在 Play Mode 活跃时可用
 - 非 Play Mode 时返回 `E_RUNTIME_NOT_READY`（transient error）
-- 通过 `tools group list custom --include-custom` 发现（Play Mode 下自动标记 `available: true/false`）
+- 通过 `tools group list custom --include-custom` 发现；非 Play Mode 执行 runtime 工具会返回 `E_RUNTIME_NOT_READY`
 - Runtime 工具通常声明 `PlayModeSupport = "runtime-only"`，提示 AI 不要把运行时结果当作持久资产修改
 
 ## 特性参数

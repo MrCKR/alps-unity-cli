@@ -27,11 +27,7 @@ const CM_PACKAGE = "com.unity.cinemachine";
 const CM_COMMON = {
   group: "cinemachine",
   target: "editor" as const,
-  availabilityScope: "editorSession" as const,
   requiresPackages: [CM_PACKAGE],
-  handler: "hybrid" as const,
-  source: "extension" as const,
-  docsTopic: "cinemachine",
 };
 
 export const CINEMACHINE_TOOLS: ToolMetadata[] = [
@@ -54,9 +50,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
       }
     }),
     destructiveHint: false,
-    riskLevel: "safe",
     playModeSupport: "supported",
-    cliCommand: "tools run cinemachine.ping",
     examples: [
       { description: "Check Cinemachine availability", argv: ["tools", "run", "cinemachine.ping"] }
     ]
@@ -78,9 +72,6 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
       priority: { type: "integer" }
     }),
     destructiveHint: false,
-    longRunning: true,
-    cliCommand: "tools run cinemachine.create",
-    cancellationSemantics: "Live bridge execution is cooperative and usually short; --job execution can be cancelled with job cancel --id <jobId> using immediate Unity batchmode process termination semantics.",
     examples: [
       { description: "Create a follow Cinemachine camera", argv: ["tools", "run", "cinemachine.create", "follow", "--name", "PlayerCam", "--follow", "Player"] },
       { description: "Create a static dolly camera aimed at the scene origin", argv: ["tools", "run", "cinemachine.create", "dolly", "--name", "DollyCam", "--look-at", "Main Camera"] }
@@ -93,7 +84,6 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     description: "Set the Follow and/or LookAt targets on a Cinemachine virtual camera. Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({ target: { type: "string" }, follow: { type: "string" }, lookAt: { type: "string" } }, ["target"]),
     destructiveHint: false,
-    cliCommand: "tools run cinemachine.target",
     examples: [
       { description: "Set follow target on a Cinemachine camera", argv: ["tools", "run", "cinemachine.target", "PlayerCam", "--follow", "Player"] }
     ]
@@ -112,7 +102,6 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
       dutch: { type: "number" }
     }, ["target"]),
     destructiveHint: false,
-    cliCommand: "tools run cinemachine.lens",
     examples: [
       { description: "Set a 60 degree field of view", argv: ["tools", "run", "cinemachine.lens", "PlayerCam", "--field-of-view", "60"] }
     ]
@@ -124,7 +113,6 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     description: "Get or set the priority (and enabled flag) on a Cinemachine virtual camera via SerializedObject PrioritySettings struct. Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({ target: { type: "string" }, priority: { type: "integer" }, enabled: { type: "boolean" } }, ["target"]),
     destructiveHint: false,
-    cliCommand: "tools run cinemachine.priority",
     examples: [
       { description: "Boost a camera priority to 20", argv: ["tools", "run", "cinemachine.priority", "PlayerCam", "--priority", "20"] }
     ]
@@ -136,7 +124,6 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     description: "Get or set the DefaultBlend (style + duration) on the CinemachineBrain of a target camera owner. Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({ target: { type: "string" }, style: { type: "string", enum: ["cut", "ease_in_out", "ease_in", "ease_out", "hard_in", "hard_out", "linear", "soft_in", "soft_out"] }, duration: { type: "number" } }),
     destructiveHint: false,
-    cliCommand: "tools run cinemachine.blend",
     examples: [
       { description: "Configure a 2 second ease in/out blend", argv: ["tools", "run", "cinemachine.blend", "--target", "Main Camera", "--style", "ease_in_out", "--duration", "2"] }
     ]
@@ -148,7 +135,6 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     description: "Swap or configure the Cinemachine Body pipeline component on a virtual camera (e.g. CinemachineFollow, CinemachinePositionComposer, CinemachineOrbitalFollow, CinemachineSplineDolly, CinemachineThirdPersonFollow). Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({ target: { type: "string" }, body: { type: "string" }, property: { type: "string" }, value: { type: "string" } }, ["target"]),
     destructiveHint: false,
-    cliCommand: "tools run cinemachine.body",
     examples: [
       { description: "Swap body to CinemachineFollow", argv: ["tools", "run", "cinemachine.body", "PlayerCam", "--body", "CinemachineFollow"] }
     ]
@@ -160,7 +146,6 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     description: "Swap or configure the Cinemachine Aim pipeline component on a virtual camera (e.g. CinemachineRotationComposer, CinemachineHardLookAt). Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({ target: { type: "string" }, aim: { type: "string" }, property: { type: "string" }, value: { type: "string" } }, ["target"]),
     destructiveHint: false,
-    cliCommand: "tools run cinemachine.aim",
     examples: [
       { description: "Swap aim to CinemachineRotationComposer", argv: ["tools", "run", "cinemachine.aim", "PlayerCam", "--aim", "CinemachineRotationComposer"] }
     ]
@@ -172,7 +157,6 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     description: "Add, configure or remove a CinemachineBasicMultiChannelPerlin noise component on a virtual camera. Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({ target: { type: "string" }, noiseProfile: { type: "string" }, amplitude: { type: "number" }, frequency: { type: "number" }, remove: { type: "boolean" } }, ["target"]),
     destructiveHint: false,
-    cliCommand: "tools run cinemachine.noise",
     examples: [
       { description: "Add a hand-held noise profile", argv: ["tools", "run", "cinemachine.noise", "PlayerCam", "--noise-profile", "Handheld_tele"] }
     ]
@@ -184,7 +168,6 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     description: "Ensure a CinemachineBrain is attached to the target camera owner, or report the brain's active virtual camera, blending state and active blend. Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({ target: { type: "string" }, action: { type: "string", enum: ["ensure", "status"] } }, ["target"]),
     destructiveHint: false,
-    cliCommand: "tools run cinemachine.brain",
     examples: [
       { description: "Report brain blending status", argv: ["tools", "run", "cinemachine.brain", "Main Camera", "--action", "status"] }
     ]
@@ -210,9 +193,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     }),
     destructiveHint: false,
     sideEffects: ["editor-session-state"],
-    riskLevel: "low",
     playModeSupport: "supported",
-    cliCommand: "tools run cinemachine.force-camera",
     examples: [
       { description: "Force a virtual camera and capture the override id", argv: ["tools", "run", "cinemachine.force-camera", "CloseupCam", "--brain", "Main Camera"] },
       { description: "Force with structured input", argv: ["tools", "run", "cinemachine.force-camera", "--input", "{\"target\":\"CloseupCam\",\"brain\":\"Main Camera\",\"weight\":1}"] }
@@ -234,9 +215,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
     }),
     destructiveHint: false,
     sideEffects: ["editor-session-state"],
-    riskLevel: "low",
     playModeSupport: "supported",
-    cliCommand: "tools run cinemachine.release-override",
     examples: [
       { description: "Release a forced camera override", argv: ["tools", "run", "cinemachine.release-override", "--input", "{\"overrideId\":12,\"brain\":\"Main Camera\"}"] }
     ]
@@ -252,7 +231,6 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
       extensionType: { type: "string" }
     }, ["target"]),
     destructiveHint: true,
-    cliCommand: "tools run cinemachine.extension",
     examples: [
       { description: "List extensions on a virtual camera", argv: ["tools", "run", "cinemachine.extension", "PlayerCam", "--action", "list"] }
     ]

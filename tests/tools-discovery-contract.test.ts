@@ -38,11 +38,3 @@ test("tools.run is the unified hybrid execution entry", () => {
   assert.ok(props.fingerprintMode, "tools.run accepts fingerprintMode");
   assert.ok(run.description.toLowerCase().includes("runtime") || run.description.includes("Play Mode"), "tools.run describes runtime/Play Mode routing");
 });
-
-test("tools discovery tools declare equivalentUnityMcp routing labels", () => {
-  // 这些对应 MCP 标准的 tools/list, tools/search 等语义，而非具体 Unity 工具
-  assert.equal(findToolByName("tools.group")!.equivalentUnityMcp, "tools/list-groups");
-  assert.equal(findToolByName("tools.group-list")!.equivalentUnityMcp, "tools/list");
-  assert.equal(findToolByName("tools.search")!.equivalentUnityMcp, "tools/search");
-  assert.equal(findToolByName("tools.describe")!.equivalentUnityMcp, "tools/describe");
-});

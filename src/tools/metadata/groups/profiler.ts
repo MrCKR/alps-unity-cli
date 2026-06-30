@@ -10,10 +10,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({}),
     outputSchema: objSchema({ profiler: { type: "object" }, modules: { type: "array", items: { type: "string" } }, platform: { type: "string" }, frameTimingAvailable: { type: "boolean" }, logPath: { type: "string" } }),
     destructiveHint: false,
-    handler: "bridge",
     playModeSupport: "supported",
-    cliCommand: "tools run profiler.status",
-    docsTopic: "profiler",
   },
   {
     name: "profiler.start",
@@ -22,10 +19,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     group: "profiler",
     inputSchema: objSchema({ deepProfiling: { type: "boolean" }, logFile: { type: "string", description: "Binary profiler log file path; sets Profiler.logFile + enableBinaryLog." }, enableCallstacks: { type: "boolean", description: "Enable allocation callstacks for memory analysis." } }),
     destructiveHint: false,
-    handler: "hybrid",
     playModeSupport: "session-affecting",
-    cliCommand: "tools run profiler.start",
-    docsTopic: "profiler",
   },
   {
     name: "profiler.stop",
@@ -34,10 +28,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     group: "profiler",
     inputSchema: objSchema({}),
     destructiveHint: false,
-    handler: "bridge",
     playModeSupport: "session-affecting",
-    cliCommand: "tools run profiler.stop",
-    docsTopic: "profiler",
   },
   {
     name: "profiler.pause",
@@ -46,10 +37,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     group: "profiler",
     inputSchema: objSchema({ paused: { type: "boolean" } }),
     destructiveHint: false,
-    handler: "bridge",
     playModeSupport: "session-affecting",
-    cliCommand: "tools run profiler.pause",
-    docsTopic: "profiler",
   },
   {
     name: "profiler.counter",
@@ -58,10 +46,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     group: "profiler",
     inputSchema: objSchema({ category: { type: "string" }, counter: { type: "string" } }),
     destructiveHint: false,
-    handler: "bridge",
     playModeSupport: "supported",
-    cliCommand: "tools run profiler.counter",
-    docsTopic: "profiler",
   },
   {
     name: "profiler.memory",
@@ -70,10 +55,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     group: "profiler",
     inputSchema: objSchema({}),
     destructiveHint: false,
-    handler: "bridge",
     playModeSupport: "supported",
-    cliCommand: "tools run profiler.memory",
-    docsTopic: "profiler",
   },
   {
     name: "profiler.frame",
@@ -83,10 +65,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ module: { type: "string" } }),
     outputSchema: objSchema({ profiler: { type: "object" }, frame: { type: "object", description: "Includes frameCount, deltaTime and frameTiming with 12 FrameTimingManager fields (cpuFrameTimeMs, gpuFrameTimeMs, etc.)." }, logPath: { type: "string" } }),
     destructiveHint: false,
-    handler: "bridge",
     playModeSupport: "supported",
-    cliCommand: "tools run profiler.frame",
-    docsTopic: "profiler",
   },
   {
     name: "profiler.capture",
@@ -95,13 +74,8 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     group: "profiler",
     inputSchema: objSchema({ path: { type: "string" }, durationMs: { type: "integer" }, frames: { type: "integer" }, format: { type: "string", enum: ["json", "raw"] }, overwrite: { type: "boolean" }, captureTag: { type: "string", description: "Optional logical sampling tag. When set, a <path>.metadata.json sidecar is written alongside the artifact for archival/correlation." } }, ["path"]),
     destructiveHint: false,
-    longRunning: true,
     supportsDryRun: false,
-    handler: "hybrid",
     playModeSupport: "session-affecting",
-    cliCommand: "tools run profiler.capture",
-    cancellationSemantics: "Live bridge captures are cooperative and may finish before cancellation can take effect; --job captures can be cancelled with job cancel --id <jobId> using immediate Unity batchmode process termination semantics.",
-    docsTopic: "profiler",
     examples: [
       { description: "Capture 1 second of profiler data", argv: ["tools", "run", "profiler.capture", "profile.json", "--duration-ms", "1000"] },
       { description: "Capture as batchmode job with wait", argv: ["tools", "run", "profiler.capture", "--input", "{\"path\":\"profile.json\",\"format\":\"json\",\"overwrite\":true}", "--job", "--wait", "--project", "<closed-project-path>", "--unity", "<Unity.exe>"] },
@@ -115,11 +89,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     group: "profiler",
     inputSchema: objSchema({ path: { type: "string" }, format: { type: "string", enum: ["json", "raw"] }, overwrite: { type: "boolean" } }, ["path"]),
     destructiveHint: false,
-    longRunning: true,
-    handler: "bridge",
     playModeSupport: "session-affecting",
-    cliCommand: "tools run profiler.export",
-    docsTopic: "profiler",
     examples: [
       { description: "Export profiler JSON", argv: ["tools", "run", "profiler.export", "profile.json", "--overwrite"] }
     ],
@@ -131,12 +101,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     group: "profiler",
     inputSchema: objSchema({}),
     destructiveHint: false,
-    handler: "bridge",
     playModeSupport: "supported",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run profiler.modules",
-    docsTopic: "profiler",
-    equivalentUnityMcp: "profiler.modules"
   },
   {
     name: "profiler.module-enable",
@@ -145,12 +110,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     group: "profiler",
     inputSchema: objSchema({ module: { type: "string" }, enabled: { type: "boolean", default: true } }, ["module"]),
     destructiveHint: false,
-    handler: "bridge",
     playModeSupport: "session-affecting",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run profiler.module-enable",
-    docsTopic: "profiler",
-    equivalentUnityMcp: "profiler.module-enable"
   },
   {
     name: "profiler.clear",
@@ -160,12 +120,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({}),
     destructiveHint: false,
     supportsDryRun: true,
-    handler: "bridge",
     playModeSupport: "session-affecting",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run profiler.clear",
-    docsTopic: "profiler",
-    equivalentUnityMcp: "profiler.clear"
   },
   {
     name: "profiler.load",
@@ -174,12 +129,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     group: "profiler",
     inputSchema: objSchema({ path: { type: "string" } }, ["path"]),
     destructiveHint: false,
-    handler: "bridge",
     playModeSupport: "session-affecting",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run profiler.load",
-    docsTopic: "profiler",
-    equivalentUnityMcp: "profiler.load"
   },
   {
     name: "profiler.areas",
@@ -188,12 +138,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     group: "profiler",
     inputSchema: objSchema({}),
     destructiveHint: false,
-    handler: "bridge",
     playModeSupport: "supported",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run profiler.areas",
-    docsTopic: "profiler",
-    equivalentUnityMcp: "profiler.areas"
   },
   {
     name: "profiler.object-memory",
@@ -202,12 +147,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     group: "profiler",
     inputSchema: objSchema({ target: { type: "string" }, path: { type: "string" } }, ["target"]),
     destructiveHint: false,
-    handler: "bridge",
     playModeSupport: "supported",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run profiler.object-memory",
-    docsTopic: "profiler",
-    equivalentUnityMcp: "profiler.object-memory"
   },
   {
     name: "profiler.rendering-stats",
@@ -216,12 +156,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     group: "profiler",
     inputSchema: objSchema({}),
     destructiveHint: false,
-    handler: "bridge",
     playModeSupport: "supported",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run profiler.rendering-stats",
-    docsTopic: "profiler",
-    equivalentUnityMcp: "profiler.rendering-stats"
   },
   {
     name: "profiler.script-stats",
@@ -230,12 +165,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     group: "profiler",
     inputSchema: objSchema({}),
     destructiveHint: false,
-    handler: "bridge",
     playModeSupport: "supported",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run profiler.script-stats",
-    docsTopic: "profiler",
-    equivalentUnityMcp: "profiler.script-stats"
   },
   {
     name: "profiler.deep",
@@ -245,11 +175,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ enabled: { type: "boolean", description: "Omit to read the current Deep Profiling state; set true/false to toggle. Toggling requires the Profiler to be stopped." } }),
     outputSchema: objSchema({ command: { type: "string" }, deepProfiling: { type: "boolean" }, previous: { type: "boolean" }, changed: { type: "boolean" }, profiler: { type: "object" }, logPath: { type: "string" } }),
     destructiveHint: false,
-    handler: "bridge",
     playModeSupport: "supported",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run profiler.deep",
-    docsTopic: "profiler",
     examples: [
       { description: "Read current Deep Profiling state", argv: ["tools", "run", "profiler.deep"] },
       { description: "Enable Deep Profiling before a capture", argv: ["tools", "run", "profiler.deep", "--input", "{\"enabled\":true}"] }
@@ -263,11 +189,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ frame: { type: "integer", description: "Frame index to read; omit or -1 for the latest recorded frame." }, thread: { type: "integer", description: "Thread index, default 0 (main thread)." }, top: { type: "integer", description: "Max children emitted per level (breadth), default 50." }, depth: { type: "integer", description: "Max recursion depth, default 8." } }),
     outputSchema: objSchema({ command: { type: "string" }, frame: { type: "integer" }, thread: { type: "integer" }, rootItems: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: false,
-    handler: "bridge",
     playModeSupport: "supported",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run profiler.hierarchy",
-    docsTopic: "profiler",
     examples: [
       { description: "Latest frame main-thread top markers", argv: ["tools", "run", "profiler.hierarchy", "--input", "{\"top\":20,\"depth\":6}"] },
       { description: "Specific frame/thread", argv: ["tools", "run", "profiler.hierarchy", "--input", "{\"frame\":100,\"thread\":0}"] }
@@ -281,13 +203,8 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ path: { type: "string", description: "Output .snap path. Defaults to <tempCachePath>/MemoryCaptures/snapshot_<timestamp>.snap." } }),
     outputSchema: objSchema({ command: { type: "string" }, path: { type: "string" }, sizeBytes: { type: "integer" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: false,
-    longRunning: true,
-    handler: "bridge",
     playModeSupport: "supported",
-    cliCommand: "tools run profiler.memory-snapshot.take",
     requiresPackages: ["com.unity.memoryprofiler"],
-    docsTopic: "profiler",
-    equivalentUnityMcp: "profiler.memory-snapshot.take",
     examples: [
       { description: "Take a memory snapshot to a custom path", argv: ["tools", "run", "profiler.memory-snapshot.take", "--input", "{\"path\":\"Artifacts/snap1.snap\"}"] }
     ]
@@ -300,12 +217,8 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ path: { type: "string", description: "Directory to search. Defaults to MemoryCaptures under tempCachePath and project root." } }),
     outputSchema: objSchema({ command: { type: "string" }, snapshots: { type: "array", items: { type: "object" } }, searchedDirs: { type: "array", items: { type: "string" } }, logPath: { type: "string" } }),
     destructiveHint: false,
-    handler: "bridge",
     playModeSupport: "supported",
-    cliCommand: "tools run profiler.memory-snapshot.list",
     requiresPackages: ["com.unity.memoryprofiler"],
-    docsTopic: "profiler",
-    equivalentUnityMcp: "profiler.memory-snapshot.list"
   },
   {
     name: "profiler.memory-snapshot.compare",
@@ -315,12 +228,8 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ snapshotA: { type: "string" }, snapshotB: { type: "string" }, pathA: { type: "string", description: "Alias for snapshotA." }, pathB: { type: "string", description: "Alias for snapshotB." } }, ["snapshotA", "snapshotB"]),
     outputSchema: objSchema({ command: { type: "string" }, snapshotA: { type: "object" }, snapshotB: { type: "object" }, delta: { type: "object" }, note: { type: "string" }, logPath: { type: "string" } }),
     destructiveHint: false,
-    handler: "bridge",
     playModeSupport: "supported",
-    cliCommand: "tools run profiler.memory-snapshot.compare",
     requiresPackages: ["com.unity.memoryprofiler"],
-    docsTopic: "profiler",
-    equivalentUnityMcp: "profiler.memory-snapshot.compare"
   },
   {
     name: "profiler.frame-debugger.enable",
@@ -330,11 +239,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({}),
     outputSchema: objSchema({ command: { type: "string" }, enabled: { type: "boolean" }, eventCount: { type: "integer" }, logPath: { type: "string" } }),
     destructiveHint: false,
-    handler: "bridge",
     playModeSupport: "session-affecting",
-    cliCommand: "tools run profiler.frame-debugger.enable",
-    docsTopic: "profiler",
-    equivalentUnityMcp: "profiler.frame-debugger.enable"
   },
   {
     name: "profiler.frame-debugger.disable",
@@ -344,11 +249,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({}),
     outputSchema: objSchema({ command: { type: "string" }, enabled: { type: "boolean" }, logPath: { type: "string" } }),
     destructiveHint: false,
-    handler: "bridge",
     playModeSupport: "session-affecting",
-    cliCommand: "tools run profiler.frame-debugger.disable",
-    docsTopic: "profiler",
-    equivalentUnityMcp: "profiler.frame-debugger.disable"
   },
   {
     name: "profiler.frame-debugger.events",
@@ -358,10 +259,6 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ pageSize: { type: "integer", default: 50 }, cursor: { type: "integer", default: 0 } }),
     outputSchema: objSchema({ command: { type: "string" }, totalEvents: { type: "integer" }, pageSize: { type: "integer" }, cursor: { type: "integer" }, events: { type: "array", items: { type: "object" } }, nextCursor: { type: "integer" }, logPath: { type: "string" } }),
     destructiveHint: false,
-    handler: "bridge",
     playModeSupport: "supported",
-    cliCommand: "tools run profiler.frame-debugger.events",
-    docsTopic: "profiler",
-    equivalentUnityMcp: "profiler.frame-debugger.events"
   }
 ];

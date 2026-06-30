@@ -1,13 +1,13 @@
 import { getBoolean, getString } from "./args.js";
 import { executeBridgeCommand, type BridgeRuntime } from "./bridge/index.js";
-import { inferPlayModeSupport, type PlayModeSupport, type ToolMetadata } from "./tools/metadata/index.js";
+import { inferPlayModeSupport, normalizeToolMetadata, type PlayModeSupport, type ResolvedToolMetadata, type ToolMetadata } from "./tools/metadata/index.js";
 import type { CliResult } from "./types.js";
 
 export interface ProjectToolRuntime extends Partial<BridgeRuntime> {
   projectTools?: ToolMetadata[];
 }
 
-export type ProjectToolDiscovery = { ok: true; tools: ToolMetadata[]; mode: "runtime" | "bridge" | "skipped" } | (CliResult & { ok: false });
+export type ProjectToolDiscovery = { ok: true; tools: ResolvedToolMetadata[]; mode: "runtime" | "bridge" | "skipped" } | (CliResult & { ok: false });
 
 export function shouldDiscoverProjectTools(flags: Record<string, string | boolean>, runtime: ProjectToolRuntime): boolean {
   return getBoolean(flags, "include-custom") ||
@@ -44,10 +44,10 @@ export async function discoverProjectTools(
   if (!Array.isArray(rawTools)) {
     return { ok: true, tools: [], mode: "bridge" };
   }
-  return { ok: true, tools: rawTools.map(projectDescriptorToToolMetadata).filter(isToolMetadata), mode: "bridge" };
+  return { ok: true, tools: rawTools.map(projectDescriptorToToolMetadata).filter(isResolvedToolMetadata), mode: "bridge" };
 }
 
-export function projectDescriptorToToolMetadata(value: unknown): ToolMetadata | undefined {
+export function projectDescriptorToToolMetadata(value: unknown): ResolvedToolMetadata | undefined {
   if (!value || typeof value !== "object") {
     return undefined;
   }
@@ -62,12 +62,10 @@ export function projectDescriptorToToolMetadata(value: unknown): ToolMetadata | 
   }
   const group = stringProp(descriptor, "group") ?? groupFromName(name);
   const target = stringProp(descriptor, "target") ?? "editor";
-  const availabilityScope = stringProp(descriptor, "availabilityScope") ?? (target === "runtime" ? "playModeSession" : "editorSession");
   return ensureProjectToolDefaults({
     name,
     summary,
     description: stringProp(descriptor, "description") ?? summary,
-    source: "project",
     group,
     inputSchema: objectProp(descriptor, "inputSchema") ?? {},
     outputSchema: objectProp(descriptor, "outputSchema"),
@@ -75,30 +73,22 @@ export function projectDescriptorToToolMetadata(value: unknown): ToolMetadata | 
     playModeSupport: playModeSupportProp(descriptor, "playModeSupport"),
     timeoutMs: numberProp(descriptor, "defaultTimeoutMs") ?? numberProp(descriptor, "timeoutMs"),
     permissions: stringArrayProp(descriptor, "permissions"),
-    docsTopic: stringProp(descriptor, "docsTopic") ?? "project-tool",
     handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: stringProp(descriptor, "cliCommand") ?? `tools run ${name}`,
     target,
-    availabilityScope,
     available: booleanProp(descriptor, "available") ?? undefined
   });
 }
 
-function ensureProjectToolDefaults(tool: ToolMetadata): ToolMetadata {
-  return {
+function ensureProjectToolDefaults(tool: ToolMetadata): ResolvedToolMetadata {
+  return normalizeToolMetadata({
     ...tool,
     handler: tool.handler ?? (tool.target === "runtime" ? "bridge-runtime" : "bridge"),
-    supportStatus: tool.supportStatus ?? (tool.target === "runtime" ? "live-bridge-runtime" : "live-bridge"),
-    cliCommand: tool.cliCommand ?? `tools run ${tool.name}`,
-    docsTopic: tool.docsTopic ?? (tool.target === "runtime" ? "runtime-tool" : "project-tool"),
     target: tool.target ?? "editor",
-    availabilityScope: tool.availabilityScope ?? (tool.target === "runtime" ? "playModeSession" : "editorSession"),
     playModeSupport: tool.playModeSupport ?? inferPlayModeSupport(tool)
-  };
+  }, "project");
 }
 
-function isToolMetadata(value: ToolMetadata | undefined): value is ToolMetadata {
+function isResolvedToolMetadata(value: ResolvedToolMetadata | undefined): value is ResolvedToolMetadata {
   return value !== undefined;
 }
 
@@ -166,5 +156,5 @@ export async function discoverRuntimeTools(
   if (!Array.isArray(rawTools)) {
     return { ok: true, tools: [], mode: "bridge" };
   }
-  return { ok: true, tools: rawTools.map(projectDescriptorToToolMetadata).filter(isToolMetadata), mode: "bridge" };
+  return { ok: true, tools: rawTools.map(projectDescriptorToToolMetadata).filter(isResolvedToolMetadata), mode: "bridge" };
 }

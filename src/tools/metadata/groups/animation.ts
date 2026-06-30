@@ -44,10 +44,6 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     outputSchema: ANIMATION_CLIP_OUTPUT,
     destructiveHint: false,
     playModeSupport: "supported",
-    equivalentUnityMcp: "manage_animation.clip_get_info",
-    handler: "bridge",
-    cliCommand: "tools run animation.clip",
-    docsTopic: "animation",
     examples: [
       { description: "Read clip settings and bounded curve keys", argv: ["tools", "run", "animation.clip", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentAnimationProbe.anim\",\"maxCurveKeys\":3}"] }
     ]
@@ -66,12 +62,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     destructiveHint: true,
     supportsDryRun: true,
     sideEffects: ["asset-write", "asset-import"],
-    riskLevel: "medium",
     playModeSupport: "session-affecting",
-    equivalentUnityMcp: "manage_animation.clip_create",
-    handler: "bridge",
-    cliCommand: "tools run animation.clip.create",
-    docsTopic: "animation",
     examples: [
       { description: "Preview creating a looping clip", argv: ["tools", "run", "animation.clip.create", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/NewClip.anim\",\"frameRate\":30,\"length\":1,\"loopTime\":true,\"wrapMode\":\"Loop\"}", "--dry-run"] },
       { description: "Create a looping clip after confirmation", argv: ["tools", "run", "animation.clip.create", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/NewClip.anim\",\"frameRate\":30,\"length\":1,\"loopTime\":true,\"wrapMode\":\"Loop\"}", "--yes"] }
@@ -90,12 +81,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     destructiveHint: true,
     supportsDryRun: true,
     sideEffects: ["asset-write", "asset-import"],
-    riskLevel: "medium",
     playModeSupport: "session-affecting",
-    equivalentUnityMcp: "manage_animation.clip_set_properties",
-    handler: "bridge",
-    cliCommand: "tools run animation.clip.modify",
-    docsTopic: "animation",
     examples: [
       { description: "Preview changing loop settings", argv: ["tools", "run", "animation.clip.modify", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentAnimationProbe.anim\",\"loopTime\":true,\"wrapMode\":\"Loop\"}", "--dry-run"] },
       { description: "Apply clip-level settings", argv: ["tools", "run", "animation.clip.modify", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentAnimationProbe.anim\",\"loopTime\":true,\"wrapMode\":\"Loop\"}", "--yes"] }
@@ -109,10 +95,6 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ target: { type: "string" }, layer: { type: "integer" } }, ["target"]),
     destructiveHint: false,
     playModeSupport: "supported",
-    equivalentUnityMcp: "manage_animation.animator_get_info",
-    handler: "bridge",
-    cliCommand: "tools run animation.state",
-    docsTopic: "animation",
     examples: [
       { description: "Read current Animator state", argv: ["tools", "run", "animation.state", "--input", "{\"target\":\"UnityCliAlignmentProbe\",\"layer\":0}"] }
     ]
@@ -126,10 +108,6 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["animation-state", "scene-modify"],
     playModeSupport: "session-affecting",
-    equivalentUnityMcp: "manage_animation.animator_play",
-    handler: "bridge",
-    cliCommand: "tools run animation.play",
-    docsTopic: "animation",
     examples: [
       { description: "Play an Animator state", argv: ["tools", "run", "animation.play", "--input", "{\"target\":\"UnityCliAlignmentProbe\",\"state\":\"Base Layer.Idle\",\"layer\":0}"] }
     ]
@@ -143,10 +121,6 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["animation-state", "scene-modify"],
     playModeSupport: "session-affecting",
-    equivalentUnityMcp: "manage_animation.animator_*",
-    handler: "bridge",
-    cliCommand: "tools run animation.stop",
-    docsTopic: "animation",
     examples: [
       { description: "Reset Animator playback", argv: ["tools", "run", "animation.stop", "--input", "{\"target\":\"UnityCliAlignmentProbe\"}"] }
     ]
@@ -159,10 +133,6 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ target: { type: "string", description: "GameObject name, hierarchy path, or instance id with an Animator component." } }, ["target"]),
     destructiveHint: false,
     playModeSupport: "supported",
-    equivalentUnityMcp: "manage_animation.animator_get_info",
-    handler: "bridge",
-    cliCommand: "tools run animator.get-info",
-    docsTopic: "animation",
     examples: [
       { description: "Inspect Animator parameters and layers", argv: ["tools", "run", "animator.get-info", "--input", "{\"target\":\"UnityCliAlignmentProbe\"}"] }
     ]
@@ -175,10 +145,6 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     inputSchema: objSchema({ target: { type: "string", description: "GameObject name, hierarchy path, or instance id with an Animator component." }, parameterName: { type: "string", description: "Exact Animator parameter name." } }, ["target", "parameterName"]),
     destructiveHint: false,
     playModeSupport: "supported",
-    equivalentUnityMcp: "manage_animation.animator_get_parameter",
-    handler: "bridge",
-    cliCommand: "tools run animator.get-parameter",
-    docsTopic: "animation",
     examples: [
       { description: "Read an Animator parameter", argv: ["tools", "run", "animator.get-parameter", "--input", "{\"target\":\"UnityCliAlignmentProbe\",\"parameterName\":\"Speed\"}"] }
     ]
@@ -192,10 +158,6 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["animator-controller-modify", "asset-write"],
     playModeSupport: "session-affecting",
-    equivalentUnityMcp: "manage_animation.animator_set_parameter",
-    handler: "bridge",
-    cliCommand: "tools run animator.set-parameter",
-    docsTopic: "animation",
     examples: [
       { description: "Set a Controller parameter default", argv: ["tools", "run", "animator.set-parameter", "--input", "{\"target\":\"UnityCliAlignmentProbe\",\"parameterName\":\"Speed\",\"parameterType\":\"float\",\"value\":\"1.5\"}"] }
     ]
@@ -209,10 +171,6 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["animation-state", "scene-modify"],
     playModeSupport: "session-affecting",
-    equivalentUnityMcp: "manage_animation.animator_crossfade",
-    handler: "bridge",
-    cliCommand: "tools run animator.crossfade",
-    docsTopic: "animation",
     examples: [
       { description: "Crossfade to a state", argv: ["tools", "run", "animator.crossfade", "--input", "{\"target\":\"UnityCliAlignmentProbe\",\"state\":\"Base Layer.Idle\",\"duration\":0.25,\"layer\":0}"] }
     ]
@@ -226,10 +184,6 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["animation-state", "scene-modify"],
     playModeSupport: "session-affecting",
-    equivalentUnityMcp: "manage_animation.animator_set_speed",
-    handler: "bridge",
-    cliCommand: "tools run animator.set-speed",
-    docsTopic: "animation",
     examples: [
       { description: "Set Animator speed", argv: ["tools", "run", "animator.set-speed", "--input", "{\"target\":\"UnityCliAlignmentProbe\",\"speed\":1.25}"] }
     ]
@@ -243,10 +197,6 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["animation-state", "scene-modify"],
     playModeSupport: "session-affecting",
-    equivalentUnityMcp: "manage_animation.animator_set_enabled",
-    handler: "bridge",
-    cliCommand: "tools run animator.set-enabled",
-    docsTopic: "animation",
     examples: [
       { description: "Disable Animator", argv: ["tools", "run", "animator.set-enabled", "--input", "{\"target\":\"UnityCliAlignmentProbe\",\"value\":false}"] },
       { description: "Enable Animator", argv: ["tools", "run", "animator.set-enabled", "--input", "{\"target\":\"UnityCliAlignmentProbe\",\"value\":true}"] }
@@ -262,10 +212,6 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],
     playModeSupport: "session-affecting",
-    equivalentUnityMcp: "manage_animation.controller_create",
-    handler: "bridge",
-    cliCommand: "tools run controller.create",
-    docsTopic: "animation",
     examples: [
       { description: "Create a controller", argv: ["tools", "run", "controller.create", "--input", "{\"controllerPath\":\"Assets/UnityCliAlignmentFixtures/NewAnimator.controller\"}"] }
     ]
@@ -279,10 +225,6 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["animator-controller-modify", "asset-write"],
     playModeSupport: "session-affecting",
-    equivalentUnityMcp: "manage_animation.controller_add_state",
-    handler: "bridge",
-    cliCommand: "tools run controller.add-state",
-    docsTopic: "animation",
     examples: [
       { description: "Add default Idle state", argv: ["tools", "run", "controller.add-state", "--input", "{\"controllerPath\":\"Assets/UnityCliAlignmentFixtures/NewAnimator.controller\",\"stateName\":\"Idle\",\"isDefault\":true}"] },
       { description: "Add state with clip", argv: ["tools", "run", "controller.add-state", "--input", "{\"controllerPath\":\"Assets/UnityCliAlignmentFixtures/NewAnimator.controller\",\"stateName\":\"Run\",\"clipPath\":\"Assets/UnityCliAlignmentFixtures/Run.anim\",\"speed\":1.0}"] }
@@ -297,10 +239,6 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["animator-controller-modify", "asset-write"],
     playModeSupport: "session-affecting",
-    equivalentUnityMcp: "manage_animation.controller_add_transition",
-    handler: "bridge",
-    cliCommand: "tools run controller.add-transition",
-    docsTopic: "animation",
     examples: [
       { description: "Add transition", argv: ["tools", "run", "controller.add-transition", "--input", "{\"controllerPath\":\"Assets/UnityCliAlignmentFixtures/NewAnimator.controller\",\"fromState\":\"Idle\",\"toState\":\"Run\",\"hasExitTime\":false,\"duration\":0.25}"] },
       { description: "Add conditional transition", argv: ["tools", "run", "controller.add-transition", "--input", "{\"controllerPath\":\"Assets/UnityCliAlignmentFixtures/NewAnimator.controller\",\"fromState\":\"Idle\",\"toState\":\"Run\",\"conditions\":[{\"parameter\":\"Speed\",\"mode\":\"greater\",\"threshold\":0.1}]}"] }
@@ -315,10 +253,6 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["animator-controller-modify", "asset-write"],
     playModeSupport: "session-affecting",
-    equivalentUnityMcp: "manage_animation.controller_add_parameter",
-    handler: "bridge",
-    cliCommand: "tools run controller.add-parameter",
-    docsTopic: "animation",
     examples: [
       { description: "Add float parameter", argv: ["tools", "run", "controller.add-parameter", "--input", "{\"controllerPath\":\"Assets/UnityCliAlignmentFixtures/NewAnimator.controller\",\"parameterName\":\"Speed\",\"parameterType\":\"float\",\"defaultValue\":\"0\"}"] },
       { description: "Add trigger parameter", argv: ["tools", "run", "controller.add-parameter", "--input", "{\"controllerPath\":\"Assets/UnityCliAlignmentFixtures/NewAnimator.controller\",\"parameterName\":\"Jump\",\"parameterType\":\"trigger\"}"] }
@@ -333,10 +267,6 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ path: { type: "string" }, guid: { type: "string" }, name: { type: "string" }, layerCount: { type: "integer" }, parameterCount: { type: "integer" }, layers: { type: "array", items: { type: "object", properties: { index: { type: "integer" }, name: { type: "string" }, stateCount: { type: "integer" }, anyStateTransitionCount: { type: "integer" }, states: { type: "array", items: { type: "object", properties: { name: { type: "string" }, motionType: { type: "string" }, blendTree: { type: "object" }, transitions: { type: "array", items: { type: "object" } } } } }, anyStateTransitions: { type: "array", items: { type: "object" } } } } }, parameters: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    equivalentUnityMcp: "manage_animation.controller_get_info",
-    handler: "bridge",
-    cliCommand: "tools run controller.get-info",
-    docsTopic: "animation",
     examples: [
       { description: "Inspect controller", argv: ["tools", "run", "controller.get-info", "--input", "{\"controllerPath\":\"Assets/UnityCliAlignmentFixtures/NewAnimator.controller\"}"] }
     ]
@@ -350,10 +280,6 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["component-add", "component-modify", "scene-modify"],
     playModeSupport: "session-affecting",
-    equivalentUnityMcp: "manage_animation.controller_assign",
-    handler: "bridge",
-    cliCommand: "tools run controller.assign",
-    docsTopic: "animation",
     examples: [
       { description: "Assign controller to GameObject", argv: ["tools", "run", "controller.assign", "--input", "{\"controllerPath\":\"Assets/UnityCliAlignmentFixtures/NewAnimator.controller\",\"target\":\"UnityCliAlignmentProbe\"}"] }
     ]
@@ -367,10 +293,6 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["animator-controller-modify", "asset-write"],
     playModeSupport: "session-affecting",
-    equivalentUnityMcp: "manage_animation.controller_add_layer",
-    handler: "bridge",
-    cliCommand: "tools run controller.add-layer",
-    docsTopic: "animation",
     examples: [
       { description: "Add additive layer", argv: ["tools", "run", "controller.add-layer", "--input", "{\"controllerPath\":\"Assets/UnityCliAlignmentFixtures/NewAnimator.controller\",\"layerName\":\"UpperBody\",\"weight\":0.8,\"blendingMode\":\"additive\"}"] }
     ]
@@ -385,10 +307,6 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     supportsDryRun: false,
     sideEffects: ["animator-controller-modify", "asset-write", "asset-delete-nested"],
     playModeSupport: "session-affecting",
-    equivalentUnityMcp: "manage_animation.controller_remove_layer",
-    handler: "bridge",
-    cliCommand: "tools run controller.remove-layer",
-    docsTopic: "animation",
     examples: [
       { description: "Remove layer by name", argv: ["tools", "run", "controller.remove-layer", "--yes", "--input", "{\"controllerPath\":\"Assets/UnityCliAlignmentFixtures/NewAnimator.controller\",\"layerName\":\"UpperBody\"}"] }
     ]
@@ -402,10 +320,6 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["animator-controller-modify", "asset-write"],
     playModeSupport: "session-affecting",
-    equivalentUnityMcp: "manage_animation.controller_set_layer_weight",
-    handler: "bridge",
-    cliCommand: "tools run controller.set-layer-weight",
-    docsTopic: "animation",
     examples: [
       { description: "Set layer weight", argv: ["tools", "run", "controller.set-layer-weight", "--input", "{\"controllerPath\":\"Assets/UnityCliAlignmentFixtures/NewAnimator.controller\",\"layerName\":\"UpperBody\",\"weight\":0.5}"] }
     ]
@@ -419,10 +333,6 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["animator-controller-modify", "asset-write", "asset-add-nested"],
     playModeSupport: "session-affecting",
-    equivalentUnityMcp: "manage_animation.controller_create_blend_tree_1d",
-    handler: "bridge",
-    cliCommand: "tools run controller.create-blend-tree-1d",
-    docsTopic: "animation",
     examples: [
       { description: "Create 1D blend tree", argv: ["tools", "run", "controller.create-blend-tree-1d", "--input", "{\"controllerPath\":\"Assets/UnityCliAlignmentFixtures/NewAnimator.controller\",\"stateName\":\"Locomotion\",\"blendParameter\":\"Speed\"}"] }
     ]
@@ -436,10 +346,6 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["animator-controller-modify", "asset-write", "asset-add-nested"],
     playModeSupport: "session-affecting",
-    equivalentUnityMcp: "manage_animation.controller_create_blend_tree_2d",
-    handler: "bridge",
-    cliCommand: "tools run controller.create-blend-tree-2d",
-    docsTopic: "animation",
     examples: [
       { description: "Create 2D blend tree", argv: ["tools", "run", "controller.create-blend-tree-2d", "--input", "{\"controllerPath\":\"Assets/UnityCliAlignmentFixtures/NewAnimator.controller\",\"stateName\":\"Movement\",\"blendParameterX\":\"VelocityX\",\"blendParameterY\":\"VelocityY\",\"blendType\":\"freeformcartesian2d\"}"] }
     ]
@@ -453,10 +359,6 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     sideEffects: ["animator-controller-modify", "asset-write", "asset-add-nested"],
     playModeSupport: "session-affecting",
-    equivalentUnityMcp: "manage_animation.controller_add_blend_tree_child",
-    handler: "bridge",
-    cliCommand: "tools run controller.add-blend-tree-child",
-    docsTopic: "animation",
     examples: [
       { description: "Add 1D child clip", argv: ["tools", "run", "controller.add-blend-tree-child", "--input", "{\"controllerPath\":\"Assets/UnityCliAlignmentFixtures/NewAnimator.controller\",\"stateName\":\"Locomotion\",\"clipPath\":\"Assets/UnityCliAlignmentFixtures/Walk.anim\",\"threshold\":1}"] },
       { description: "Add 2D child clip", argv: ["tools", "run", "controller.add-blend-tree-child", "--input", "{\"controllerPath\":\"Assets/UnityCliAlignmentFixtures/NewAnimator.controller\",\"stateName\":\"Movement\",\"clipPath\":\"Assets/UnityCliAlignmentFixtures/WalkForward.anim\",\"positionX\":0,\"positionY\":1}"] }

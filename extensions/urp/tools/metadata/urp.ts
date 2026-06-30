@@ -25,11 +25,7 @@ const URP_PACKAGE = "com.unity.render-pipelines.universal";
 const URP_COMMON = {
   group: "urp",
   target: "editor" as const,
-  availabilityScope: "editorSession" as const,
   requiresPackages: [URP_PACKAGE],
-  handler: "hybrid" as const,
-  source: "extension" as const,
-  docsTopic: "urp",
 };
 
 export const URP_TOOLS: ToolMetadata[] = [
@@ -48,7 +44,6 @@ export const URP_TOOLS: ToolMetadata[] = [
       rendererIndex: { type: "integer" }
     }),
     destructiveHint: true,
-    cliCommand: "tools run urp.feature",
     examples: [
       { description: "List all renderer features", argv: ["tools", "run", "urp.feature", "--action", "list"] },
       { description: "Add a ScreenSpaceAmbientOcclusion feature", argv: ["tools", "run", "urp.feature", "--action", "add", "--feature-type", "ScreenSpaceAmbientOcclusion"] }
@@ -70,7 +65,6 @@ export const URP_TOOLS: ToolMetadata[] = [
       value: { type: "string" }
     }),
     destructiveHint: false,
-    cliCommand: "tools run urp.volume",
     examples: [
       { description: "List URP volumes in scene", argv: ["tools", "run", "urp.volume", "--action", "list"] },
       { description: "Create a global URP volume", argv: ["tools", "run", "urp.volume", "--action", "create", "--is-global", "--name", "GlobalVolume"] }
@@ -86,7 +80,6 @@ export const URP_TOOLS: ToolMetadata[] = [
       value: { type: "string" }
     }),
     destructiveHint: false,
-    cliCommand: "tools run urp.settings",
     examples: [
       { description: "Read URP pipeline settings", argv: ["tools", "run", "urp.settings"] },
       { description: "Set render scale", argv: ["tools", "run", "urp.settings", "--property", "renderScale", "--value", "1.5"] }

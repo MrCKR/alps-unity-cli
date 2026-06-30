@@ -22,11 +22,7 @@ const HDRP_PACKAGE = "com.unity.render-pipelines.high-definition";
 const HDRP_COMMON = {
   group: "hdrp",
   target: "editor" as const,
-  availabilityScope: "editorSession" as const,
   requiresPackages: [HDRP_PACKAGE],
-  handler: "hybrid" as const,
-  source: "extension" as const,
-  docsTopic: "hdrp",
 };
 
 export const HDRP_TOOLS: ToolMetadata[] = [
@@ -46,7 +42,6 @@ export const HDRP_TOOLS: ToolMetadata[] = [
       value: { type: "string" }
     }),
     destructiveHint: false,
-    cliCommand: "tools run hdrp.volume",
     examples: [
       { description: "List HDRP volumes in scene", argv: ["tools", "run", "hdrp.volume", "--action", "list"] },
       { description: "Create a global HDRP volume", argv: ["tools", "run", "hdrp.volume", "--action", "create", "--is-global", "true", "--name", "GlobalVolume"] }
@@ -62,7 +57,6 @@ export const HDRP_TOOLS: ToolMetadata[] = [
       value: { type: "string" }
     }),
     destructiveHint: false,
-    cliCommand: "tools run hdrp.settings",
     examples: [
       { description: "Read HDRP pipeline settings", argv: ["tools", "run", "hdrp.settings"] },
       { description: "Set shadow distance", argv: ["tools", "run", "hdrp.settings", "--property", "shadowDistance", "--value", "500"] }

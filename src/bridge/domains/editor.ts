@@ -11,6 +11,7 @@ export const editorBridgeSpecs: BridgeCommandSpec[] = [
   { group: "editor", command: "redo", bridgeCommand: "editor.redo", buildArgs: editorArgs },
   { group: "editor", command: "resolution", bridgeCommand: "editor.resolution", buildArgs: editorArgs },
   { group: "editor", command: "menu", bridgeCommand: "editor.menu", buildArgs: editorArgs },
+  { group: "editor", command: "compile", bridgeCommand: "editor.compile", buildArgs: editorCompileArgs, supportsDryRun: true },
   { group: "editor", command: "selection-set", bridgeCommand: "editor.selection.set", buildArgs: selectionSetArgs },
   { group: "editor", command: "active-tool-set", bridgeCommand: "editor.active-tool.set", buildArgs: activeToolSetArgs },
   { group: "project", command: "tag", bridgeCommand: "project.tag", buildArgs: editorArgs },
@@ -56,6 +57,16 @@ function editorArgs({ command, flags, positionalTarget }: Parameters<BridgeComma
     return compactArgs({ action: stringFlag(flags, "action") ?? stringField(flags, "action"), name: positionalTarget ?? stringFlag(flags, "name") ?? stringField(flags, "name"), index: numberFlag(flags, "index") ?? numberField(flags, "index") });
   }
   return compactArgs({ ...queryArgs(flags), path: positionalTarget ?? stringFlag(flags, "path"), timeoutMs: numberFlag(flags, "timeout-ms") ?? numberFlag(flags, "timeout") });
+}
+
+function editorCompileArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  const structured = structuredInput(flags);
+  return compactArgs({
+    refresh: boolFlag(flags, "refresh") ?? structured.refresh,
+    waitReady: boolFlag(flags, "wait-ready") ?? structured.waitReady,
+    timeoutMs: numberFlag(flags, "timeout-ms") ?? numberFlag(flags, "timeout") ?? structured.timeoutMs,
+    dryRun: boolFlag(flags, "dry-run") ?? structured.dryRun
+  });
 }
 
 function selectionSetArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {

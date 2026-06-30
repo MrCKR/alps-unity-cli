@@ -239,12 +239,13 @@ namespace UnityCli
                 WriteJson(context, TransientErrorJson("E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", "Wait for domain reload to complete and retry.", 10000), 200);
                 return;
             }
-            if (cachedIsCompiling)
+            var allowedDuringCompileOrImport = request.Command == "editor.compile";
+            if (cachedIsCompiling && !allowedDuringCompileOrImport)
             {
                 WriteJson(context, TransientErrorJson("E_UNITY_COMPILING", "Unity Editor is compiling scripts.", "Wait for Unity to finish compiling and retry.", 5000), 200);
                 return;
             }
-            if (cachedIsUpdating)
+            if (cachedIsUpdating && !allowedDuringCompileOrImport)
             {
                 WriteJson(context, TransientErrorJson("E_UNITY_IMPORTING", "Unity Editor is importing assets.", "Wait for Unity to finish importing and retry.", 5000), 200);
                 return;

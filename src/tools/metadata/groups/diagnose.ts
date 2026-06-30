@@ -11,14 +11,9 @@ export const DIAGNOSE_TOOLS: ToolMetadata[] = [
     outputSchema: objSchema({ command: { type: "string" }, targetCommand: { type: ["string", "null"] }, project: { type: "object" }, editor: { type: "object" }, bridge: { type: "object" }, customTools: { type: "object" }, customContexts: { type: "object" }, checks: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run diagnose.preflight",
-    docsTopic: "diagnose",
     examples: [
       { description: "Run live preflight", argv: ["tools", "run", "diagnose.preflight", "--input", "{}"] },
       { description: "Preflight before component work", argv: ["tools", "run", "diagnose.preflight", "--input", "{\"command\":\"component.add\"}"] }
     ],
-    equivalentUnityMcp: "manage_tools / debug_request_context"
   }
 ];

@@ -41,29 +41,40 @@ import { OBJECT_TOOLS } from "./groups/object.js";
 import { REFLECTION_TOOLS } from "./groups/reflection.js";
 import { CLI_ONLY_TOOLS } from "./groups/cli-only.js";
 import { TOOLS_DISCOVERY_TOOLS } from "./groups/tools.js";
-import type { PlayModeSupport, ToolMetadata, ToolSource } from "./types.js";
+import type { PlayModeSupport, ResolvedToolMetadata, ToolMetadata, ToolSource } from "./types.js";
+import { inferToolRiskLevel, isLongRunningTool, toolAvailabilityScope, toolCliCommand, toolSource } from "./derived.js";
+import { supportStatusForTool, toolHandler } from "./status.js";
 
-export { supportStatusForTool } from "./status.js";
-export type { PlayModeSupport, ToolExample, ToolHandler, ToolMetadata, ToolSource, ToolRiskLevel, ToolSupportStatus } from "./types.js";
+export { supportStatusForTool, toolHandler } from "./status.js";
+export { inferToolRiskLevel, isLongRunningTool, toolAvailabilityScope, toolCancellation, toolCliCommand, toolDocsTopic, toolSource } from "./derived.js";
+export type { PlayModeSupport, ResolvedToolMetadata, ToolCancellation, ToolExample, ToolHandler, ToolMetadata, ToolSource, ToolRiskLevel, ToolSupportStatus } from "./types.js";
 
 /** Extension groups that register through the contribution loader, not core aggregation. */
 export const EXTENSION_GROUPS = new Set(["probuilder", "cinemachine", "vfx", "urp", "hdrp"]);
 
-/** Normalize a ToolMetadata entry to include default kind/source values. */
-export function normalizeToolMetadata(tool: ToolMetadata): ToolMetadata & { kind: "tool"; source: ToolSource; playModeSupport: PlayModeSupport } {
-  return {
+/** Normalize a ToolMetadata entry to include generated source and Play Mode defaults. */
+export function normalizeToolMetadata(tool: ToolMetadata, source: ToolSource = "built-in"): ResolvedToolMetadata {
+  const longRunning = isLongRunningTool(tool);
+  const normalized: ResolvedToolMetadata = {
     ...tool,
-    kind: tool.kind ?? "tool",
-    source: tool.source ?? "built-in",
+    source: toolSource(tool, source),
+    handler: toolHandler(tool),
     playModeSupport: tool.playModeSupport ?? inferPlayModeSupport(tool),
+    supportStatus: supportStatusForTool(tool),
+    cliCommand: toolCliCommand(tool),
+    availabilityScope: toolAvailabilityScope(tool),
+    riskLevel: inferToolRiskLevel(tool),
+    ...(longRunning ? { longRunning: true } : {})
   };
+  return normalized;
 }
 
 /** 推导迁移期默认 Play Mode 语义，显式 metadata 可覆盖。 */
 export function inferPlayModeSupport(tool: ToolMetadata): PlayModeSupport {
-  if (tool.target === "runtime" || tool.handler === "bridge-runtime") return "runtime-only";
-  if (tool.handler === "job" || tool.handler === "offline") return "editor-only";
-  if (tool.longRunning || tool.sideEffects?.some((effect) => ["asset-import", "file-write", "package-modify"].includes(effect))) return "session-affecting";
+  const handler = toolHandler(tool);
+  if (tool.target === "runtime" || handler === "bridge-runtime") return "runtime-only";
+  if (handler === "job" || handler === "offline") return "editor-only";
+  if (isLongRunningTool(tool) || tool.sideEffects?.some((effect) => ["asset-import", "file-write", "package-modify"].includes(effect))) return "session-affecting";
   if (tool.destructiveHint || tool.supportsDryRun) return "runtime-only";
   return "supported";
 }
@@ -137,18 +148,21 @@ export function validateExtensionToolMetadata(): void {
 }
 
 /** Return core built-in tool metadata entries (no extension tools). */
-export function builtinToolMetadata(): ToolMetadata[] {
-  return CORE_TOOLS.map(normalizeToolMetadata);
+export function builtinToolMetadata(): ResolvedToolMetadata[] {
+  return CORE_TOOLS.map((tool) => normalizeToolMetadata(tool, "built-in"));
 }
 
 /** Return extension tool metadata entries (registered by extension contributions). */
-export function extensionToolMetadata(): ToolMetadata[] {
-  return extensionTools.map(normalizeToolMetadata);
+export function extensionToolMetadata(): ResolvedToolMetadata[] {
+  return extensionTools.map((tool) => normalizeToolMetadata(tool, "extension"));
 }
 
 /** Return all registered tool metadata entries (core + extension). */
-export function allRegisteredToolMetadata(): ToolMetadata[] {
-  return [...CORE_TOOLS, ...extensionTools].map(normalizeToolMetadata);
+export function allRegisteredToolMetadata(): ResolvedToolMetadata[] {
+  return [
+    ...CORE_TOOLS.map((tool) => normalizeToolMetadata(tool, "built-in")),
+    ...extensionTools.map((tool) => normalizeToolMetadata(tool, "extension"))
+  ];
 }
 
 /** Return distinct core group names from built-in metadata. */
@@ -170,17 +184,17 @@ export function allRegisteredToolGroups(): string[] {
 }
 
 /** Find a single tool by its dotted name (core + extension). */
-export function findToolByName(name: string): ToolMetadata | undefined {
+export function findToolByName(name: string): ResolvedToolMetadata | undefined {
   return allRegisteredToolMetadata().find((t) => t.name === name);
 }
 
 /** Filter tools by group (core + extension). */
-export function filterToolsByGroup(group: string): ToolMetadata[] {
+export function filterToolsByGroup(group: string): ResolvedToolMetadata[] {
   return allRegisteredToolMetadata().filter((t) => t.group === group);
 }
 
 /** Search tools by keyword across name, summary, description, group (built-in + extension). */
-export function searchTools(keyword: string): ToolMetadata[] {
+export function searchTools(keyword: string): ResolvedToolMetadata[] {
   const lower = keyword.toLowerCase();
   return allRegisteredToolMetadata().filter((t) =>
     t.name.toLowerCase().includes(lower) ||
@@ -204,19 +218,20 @@ function validateBuiltinTools(tools: ToolMetadata[], skipCliCommandBridgeCheck: 
     }
     names.add(tool.name);
 
-    if (!skipCliCommandBridgeCheck && tool.handler === "bridge" && tool.supportStatus !== "planned" && tool.cliCommand) {
+    if (!skipCliCommandBridgeCheck && toolHandler(tool) === "bridge" && tool.supportStatus !== "planned") {
+      const cliCommand = toolCliCommand(tool);
       // cliCommand 现为 "tools run <name>" 形态(README Project Baseline)。
       // 通过工具名查 bridge spec,验证 bridgeCommand/toolName 与 tool.name 一致。
-      const match = /^tools run (.+)$/.exec(tool.cliCommand);
+      const match = /^tools run (.+)$/.exec(cliCommand);
       if (match) {
         const toolName = match[1];
         const spec = bridgeCommandRegistry.specs().find((s) => s.toolName === toolName || s.bridgeCommand === toolName);
         if (!spec) {
-          throw new Error(`Bridge tool metadata mismatch: ${tool.name} uses cliCommand="${tool.cliCommand}" but no bridge spec resolves toolName/bridgeCommand="${toolName}"`);
+          throw new Error(`Bridge tool metadata mismatch: ${tool.name} uses cliCommand="${cliCommand}" but no bridge spec resolves toolName/bridgeCommand="${toolName}"`);
         }
         const resolved = spec.toolName ?? spec.bridgeCommand;
         if (resolved !== tool.name) {
-          throw new Error(`Bridge tool metadata mismatch: ${tool.name} uses cliCommand="${tool.cliCommand}" but bridge registry resolves ${resolved}`);
+          throw new Error(`Bridge tool metadata mismatch: ${tool.name} uses cliCommand="${cliCommand}" but bridge registry resolves ${resolved}`);
         }
       }
     }

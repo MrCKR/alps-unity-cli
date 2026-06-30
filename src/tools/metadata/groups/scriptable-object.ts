@@ -15,13 +15,7 @@ export const SCRIPTABLE_OBJECT_TOOLS: ToolMetadata[] = [
     destructiveHint: true,
     supportsDryRun: true,
     sideEffects: ["asset-write", "asset-import"],
-    riskLevel: "high",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run scriptable-object.create",
-    docsTopic: "scriptable-object",
-    equivalentUnityMcp: "manage_scriptable_object.create",
     examples: [
       { description: "Preview ScriptableObject asset creation", argv: ["tools", "run", "scriptable-object.create", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/GeneratedConfig.asset\",\"type\":\"UnityCliAlignmentFixtures.AlignmentConfig\"}", "--dry-run"] },
       { description: "Create a ScriptableObject asset after confirmation", argv: ["tools", "run", "scriptable-object.create", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/GeneratedConfig.asset\",\"type\":\"UnityCliAlignmentFixtures.AlignmentConfig\"}", "--yes"] }
@@ -44,11 +38,6 @@ export const SCRIPTABLE_OBJECT_TOOLS: ToolMetadata[] = [
     }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run scriptable-object.info",
-    docsTopic: "scriptable-object",
-    equivalentUnityMcp: "manage_scriptable_object.info",
     examples: [
       { description: "Inspect a ScriptableObject asset", argv: ["tools", "run", "scriptable-object.info", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentConfigProbe.asset\"}"] }
     ]
@@ -72,11 +61,6 @@ export const SCRIPTABLE_OBJECT_TOOLS: ToolMetadata[] = [
     }),
     destructiveHint: false,
     playModeSupport: "supported",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run scriptable-object.list-types",
-    docsTopic: "scriptable-object",
-    equivalentUnityMcp: "manage_scriptable_object.list_types",
     examples: [
       { description: "Find config ScriptableObject types", argv: ["tools", "run", "scriptable-object.list-types", "--input", "{\"namePattern\":\"Config\",\"pageSize\":20}"] }
     ]
@@ -103,13 +87,7 @@ export const SCRIPTABLE_OBJECT_TOOLS: ToolMetadata[] = [
     destructiveHint: true,
     supportsDryRun: true,
     sideEffects: ["asset-write"],
-    riskLevel: "high",
     playModeSupport: "session-affecting",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "tools run scriptable-object.modify",
-    docsTopic: "scriptable-object",
-    equivalentUnityMcp: "manage_scriptable_object.modify",
     examples: [
       { description: "Validate SerializedObject patches", argv: ["tools", "run", "scriptable-object.modify", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentConfigProbe.asset\",\"patches\":[{\"propertyPath\":\"MaxValue\",\"value\":100}]}", "--dry-run"] },
       { description: "Set an integer field after confirmation", argv: ["tools", "run", "scriptable-object.modify", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentConfigProbe.asset\",\"property\":\"MaxValue\",\"value\":\"100\"}", "--yes"] }

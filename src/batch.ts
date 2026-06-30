@@ -285,6 +285,7 @@ const commandRegistry = new Map<string, { parallelSafe: boolean }>([
   ["project.tag", { parallelSafe: false }],
   ["project.layer", { parallelSafe: false }],
   ["editor.refresh", { parallelSafe: false }],
+  ["editor.compile", { parallelSafe: false }],
   ["editor.compile-diagnostics", { parallelSafe: false }],
   ["editor.launch-dialog.dismiss", { parallelSafe: false }],
   ["editor.selection.set", { parallelSafe: false }],

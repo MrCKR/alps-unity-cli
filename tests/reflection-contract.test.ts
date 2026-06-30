@@ -32,12 +32,10 @@ test("reflection group tools exist with correct safety hints", () => {
 
   const find = findToolByName("reflection.method.find")!;
   assert.equal(find.destructiveHint, false);
-  assert.equal(find.equivalentUnityMcp, "reflection-method-find");
 
   const call = findToolByName("reflection.method.call")!;
   assert.equal(call.destructiveHint, true);
   assert.equal(call.riskLevel, "critical");
-  assert.equal(call.equivalentUnityMcp, "reflection-method-call");
 });
 
 test("type.schema tool exists as read-only bridge", () => {
@@ -45,7 +43,6 @@ test("type.schema tool exists as read-only bridge", () => {
   assert.equal(schema.group, "type");
   assert.equal(schema.destructiveHint, false);
   assert.equal(schema.handler, "bridge");
-  assert.equal(schema.equivalentUnityMcp, "type-get-json-schema");
   assert.match(schema.description, /enum/, "type.schema should advertise enum schema support");
   assert.match(schema.description, /generic/, "type.schema should advertise generic schema support");
   assert.match(schema.description, /\$defs/, "type.schema should advertise $defs references");

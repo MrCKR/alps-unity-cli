@@ -35,11 +35,9 @@ test("scriptable-object group tools exist with correct safety hints", () => {
   assert.equal(create.handler, "bridge");
   assert.equal(create.playModeSupport, "session-affecting");
   assert.ok(create.sideEffects?.includes("asset-write"));
-  assert.equal(create.equivalentUnityMcp, "manage_scriptable_object.create");
 
   const info = findToolByName("scriptable-object.info")!;
   assert.equal(info.playModeSupport, "supported");
-  assert.equal(info.equivalentUnityMcp, "manage_scriptable_object.info");
 
   const listTypes = findToolByName("scriptable-object.list-types")!;
   assert.equal(listTypes.destructiveHint, false);
@@ -51,7 +49,6 @@ test("scriptable-object group tools exist with correct safety hints", () => {
   assert.equal(modify.playModeSupport, "session-affecting");
   assert.ok(modify.sideEffects?.includes("asset-write"));
   assert.equal(modify.riskLevel, "high");
-  assert.equal(modify.equivalentUnityMcp, "manage_scriptable_object.modify");
 });
 
 test("scriptable-object.info exposes output schema with properties", () => {
