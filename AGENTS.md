@@ -130,6 +130,7 @@ Context 规则：
 每个 Tool / Context descriptor 必须满足：
 
 - 名称稳定、语义单一、与 group 一致。
+- `summary` 能作为 AI 自发现阶段的路由字段，让陌生 AI 在 `tools group` / `tools group list <group>` 中选对 group 和 tool。
 - `description` 说明能力边界，不夸大、不遗漏关键副作用。
 - `inputSchema` 足够具体，字段名稳定，必填项准确。
 - `outputSchema` 描述主要成功输出字段。
@@ -137,6 +138,39 @@ Context 规则：
 - 风险字段准确，包括 `destructiveHint`、`supportsDryRun`、`sideEffects`、`riskLevel`、`permissions`。
 - 执行状态字段准确，包括 `handler`、`supportStatus`、`target`、`availabilityScope`、`playModeSupport`、`requiresPackages`。
 - 错误路径有明确 `next_actions`，不能让 AI 猜。
+
+### Summary 路由字段规范
+
+`summary` 是 AI 自发现阶段的路由字段，不是营销文案，也不是完整文档。`tools group`、`tools group list <group>`、`context list` 和扩展发现输出中的 summary 必须让陌生 AI 在不读源码、不读 README 的情况下选对能力入口。
+
+Group / Context group summary 必须：
+
+- 覆盖该 group 当前公开 Tool / Context 的主要能力类别，不能只描述历史子集或单个 happy path。
+- 说明领域对象和主要动作，例如 `Camera operations: list/info, create, aim, lens settings, screenshots, and multiview capture.`
+- 与相邻 group 保持清晰边界；易混 group 必须在 summary 中写明区别，例如 `offline cache`、`live method call`、`schema generation`、`runtime component`、`asset editing`、`scene object`。
+- 明确默认入口关系；如果某 group 只是别名、兼容入口或诊断入口，不得在 summary 中表现得比主入口更推荐。
+- 不得包含该 group 不具备的能力，不得把其他 group 的能力写进本 group summary。
+- 避免空泛词，如 `manage`、`various`、`utilities`、`helpers`；如需使用，后面必须列出具体能力类别。
+- 控制为一句话，优先 12-24 个英文词，最多 32 个英文词；中文也必须是一句短句。
+
+Tool summary 必须：
+
+- 描述单一工具动作，包含作用对象和主要结果，让 AI 能在同 group 内选对 Tool。
+- 在有邻近 Tool 时说明差异，例如 `source text` vs `structured data`、`asset` vs `scene object`、`offline cache` vs `live Editor reflection`、`summary read` vs `deep read`。
+- 对影响路由的风险或执行模式给出短提示，例如 `executes C#`、`writes asset files`、`requires --yes`、`dry-run supported`、`runtime-only`。
+- 不列完整参数，不替代 `inputSchema`；参数细节、边界、错误路径和副作用写进 `description`、schema、examples。
+- 不承诺工具不支持的状态、对象、持久化结果或副作用。
+- 不写同义反复，例如 `Run <tool>`、`Manage <domain>`、`Tool for <name>`。
+
+`summary` 与 `description` 的分工必须清晰：`summary` 只负责发现阶段路由；`description` 负责解释边界、推荐替代工具、别名关系、PlayMode 差异、副作用、不可用原因和下一步指导。
+
+修改或新增 summary 时必须检查：
+
+- `tools group` 输出能否让 AI 选对 group。
+- `tools group list <group>` 输出能否让 AI 选对 Tool。
+- summary 是否覆盖当前真实能力，且没有写入不存在的能力。
+- 易混 group / Tool 是否有明确边界和推荐主入口。
+- legacy alias、兼容入口、危险入口是否没有抢占主入口地位。
 
 ## Extension 形态与文件结构
 

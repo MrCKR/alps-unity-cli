@@ -3,45 +3,37 @@ name: unity_cli
 description: 当任务涉及 Unity Editor 或 Unity 时都优先使用本 Skill。该 Skill 支持通过 `unity_cli` 连接并读取和操作 Unity，包括但不限于查看/修改场景、GameObject、Prefab、日志、资源、Package 和项目设置，读取项目上下文，运行测试、构建、截图，诊断 Bridge/target/instance/job，以及处理项目自定义 Tool/Context。触发词包括 Unity、Editor、Scene、GameObject、Prefab、Asset、Build、Test、GameView、SceneView、Bridge、target、instance、job、截图、打包、场景修改、资源检查。
 ---
 
-# unity_cli — AI 入口卡片
+# unity_cli — AI 操作 Unity 的入口
 
-`unity_cli` 是本机用于操作 Unity Editor 的 CLI。你可以用它发现运行中的 Unity 实例、选择目标 Editor、读取只读 Context、执行 Tool、管理扩展包、运行批处理和诊断问题。
+`unity_cli` 是 AI 操作 Unity Editor 的可发现能力目录和统一执行协议。AI 应该通过 CLI 观察、描述、调用 Unity 能力。
 
-不要把本 Skill 当完整文档。除顶层命令和基本流程外，具体工具、参数、输入输出 schema、风险等级，都通过 CLI 自发现。
+## 哲学
 
-## 顶层命令
+- `unity_cli` 是 AI 的 Unity Editor 操作入口：发现实例、读取 Context、执行 Tool、诊断目标和 Bridge 状态。
+- 能力不是靠记忆使用，而是靠自发现使用：先看 group 或 context 列表，再 `describe`，最后 `run` 或 `read`。
+- Tool 用于动作，可能修改 Unity 状态、资源、场景或产生 artifact；Context 只读，用于观察项目和 Editor 状态。
+- Descriptor 是调用契约的权威来源；`inputSchema`、`outputSchema`、风险、PlayMode 支持、依赖和示例都以 `describe` 为准。
+- `unity_cli` 功能非常多,请仔细查找你需要的功能，如果没有可以考虑自定义功能。
 
-只使用这些用户可见入口：
+## 发现能力
 
-- `unity_cli init`：把 Bridge 包安装到 Unity 项目；如果项目已有 `.pi`、`.claude` 或 `.agents`，会自动安装本 Skill。
-- `unity_cli extensions list`：查看 CLI 扩展包状态。
-- `unity_cli extensions install <id>`：安装满足依赖的 Unity 侧扩展目录到 `Packages/com.unity_cli/Extensions/<id>/`。
-- `unity_cli extensions remove <id>`：移除扩展包 Unity 侧目录中 manifest 管理的文件。
-- `unity_cli extensions doctor`：诊断扩展包依赖和安装状态。
-- `unity_cli target current|set|clear|alias`：查看或设置当前 Unity Editor 目标。
-- `unity_cli instances list|prune`：查看或清理 Bridge 注册的 Unity Editor 实例。
-- `unity_cli jobs status|logs|describe|cancel`：管理长任务。
-- `unity_cli batch schema|run`：查看或执行批处理文件。
-- `unity_cli doctor`：诊断 CLI 控制面、Bridge、目标和扩展状态；当 Bridge 报 `E_UNITY_COMPILING` 或所有命令失败时，优先看 `compile_status` 检查项——它会列出 Unity 当前编译错误（常见于 `Packages/com.unity_cli/Extensions/` 下扩展脚本不兼容），并指向具体错误，避免把扩展编译失败误判为 Bridge 不可达。
-- `unity_cli tools group|describe|run|search`：发现和执行 Unity Tool。
-- `unity_cli context list|describe|read`：发现和读取只读 Context。
-
-Unity 能力域不要作为顶层命令使用。不要猜 `scene`、`asset`、`package`、`build`、`test`、`editor` 等顶层入口；这些能力走 `tools run <tool>` 或 `context read <context>`。
-
-## 标准操作流程
-
-首次使用本 CLI 时，先主动执行一次 `unity_cli tools group`，读取所有 group 的 `summary` 建立能力地图。
+先找到 Unity 实例并选定目标：
 
 ```powershell
 unity_cli instances list
 unity_cli target set <instanceId-or-alias>
+```
+
+使用 Tool 前走 group-first 发现链：
+
+```powershell
 unity_cli tools group
 unity_cli tools group list <group>
 unity_cli tools describe <tool>
 unity_cli tools run <tool> --input '<json>'
 ```
 
-如果只需要状态或上下文，优先走 Context：
+只读观察优先走 Context：
 
 ```powershell
 unity_cli context list
@@ -49,78 +41,102 @@ unity_cli context describe <context>
 unity_cli context read <context> --input '<json>'
 ```
 
-目标选择规则：
+不要猜 `scene`、`asset`、`package`、`build`、`test`、`editor` 等 Unity 能力域是顶层命令；Unity 能力通过 `tools run <tool>` 或 `context read <context>` 暴露。CLI 控制面才使用 `init`、`extensions`、`target`、`instances`、`jobs`、`batch`、`doctor`。
 
-- 没有 ready 实例：提示用户打开 Unity Editor，并运行 `unity_cli init --project <path>` 安装 Bridge。
-- 多个 ready 实例：不要猜，先 `unity_cli target set <id|alias>`。
-- 不要手动读取 Bridge 注册文件或直接 ping 端点；用 `instances`、`target`、`doctor`。
+## 工具地图
 
-## Tool 自发现
-
-使用 group-first 发现方式，避免一次性展开过多工具。`tools group` 和 `tools group list <group>` 使用 `summary` 做短说明，`tools describe <tool>` 再返回完整 schema 和风险字段：
+首次接触时，先执行一次：
 
 ```powershell
 unity_cli tools group
-unity_cli tools group list <group>
-unity_cli tools describe <tool>
-unity_cli tools search <keyword>
 ```
 
-固定字段含义：
-
-- `source`：`built-in` 为 CLI 内置能力，`extension` 为扩展贡献能力，`project` 为目标 Unity 项目自定义能力。
-- `destructiveHint`：为 `true` 时需要 `--yes`；通常表示持久化资产/项目文件修改或任意代码执行。
-- `playModeSupport`：`supported`、`session-affecting`、`editor-only`、`runtime-only`、`unknown`。
-- `supportStatus`：`live-bridge`、`bridge-job`、`batch-job`、`cli-only`、`planned`、`live-bridge-runtime`。
-- `target`：工具或 Context 的作用目标，只能是 `editor`、`runtime` 或 `both`。
-
-执行规则：
-
-- 执行前先 `tools describe <tool>`，读取 `inputSchema`、`destructiveHint`、`supportsDryRun`、`requiresPackages`、`target`、`availabilityScope`、`playModeSupport`。
-- 用 `--input`、`--input-file` 或 `--stdin` 传参；缺少 `inputSchema.required` 字段会在执行前返回 `E_SCHEMA_INVALID`。
-- Bridge 工具在 Unity 主线程执行；Unity 正在 compile/import/build、Play Mode 切换或 domain reload 时，先用 `tools run editor.state --input '{"waitReady":true}'` 等待 `busy.isBusy=false`。
-- Bridge listener 会在 domain reload 后自动重连；用 `editor.state` 的 `bridge` heartbeat/build stamp 判断恢复，不要手动读注册文件或 ping endpoint。
-- 大响应工具先用小页和过滤：层级/列表传 `pageSize`、`cursor`、`parent`、`query`、`componentType`、`className`，按 `pageInfo.nextCursor` 续读；深读工具优先用 `paths` 或 `viewQuery`，用 `maxDepth`、`maxArrayItems` 控制输出；文本源码按 `offset`/`maxBytes` 分段；截图/相机默认使用 artifact 路径，只有需要时才传 `inlineBase64:true`。
-- `destructiveHint: true` 的工具先用 `--dry-run`（如支持），确认后加 `--yes`。
-- Runtime 工具通常需要 Play Mode；遇到 `E_RUNTIME_NOT_READY`，按 `next_actions` 处理。
-- `playModeSupport: "editor-only"` 的工具不要在 Play Mode 下运行；
-- 长任务返回 job 时，用 `unity_cli jobs status <jobId>`、`unity_cli jobs logs <jobId>`、`unity_cli jobs cancel <jobId> --yes`。
-
-## Context 自发现
-
-Context 是只读入口，用于让 AI 先理解项目/Editor 状态。Context 不使用 `summary`，在 list 和 describe 中都用 `description` 说明用途和边界：
+这一步用于建立工具地图，只读每个 group 的 `summary`。然后展开你认为相关的 group：
 
 ```powershell
-unity_cli context list
-unity_cli context describe <context>
-unity_cli context read <context> --input '<json>'
+unity_cli tools group list <group>
 ```
 
-规则：
+执行任何你不了解的 Tool 前必须先读：
 
-- Context 不应修改 Unity 状态。
-- 读取前先 `context describe <context>` 看输入输出 schema。
-- 如果找不到 Context，按错误里的 `next_actions` 使用 `context list` 或 `--include-custom`。
+```powershell
+unity_cli tools describe <tool>
+```
 
-## 自定义 Tool / Context 扩展
+不要从工具名猜输入字段与参数。`describe` 里看清楚 `inputSchema.required`、示例、风险字段、PlayMode 支持和返回结构后再构造 `--input`。
 
-当 CLI 没有某种能力时，按以下优先级决策：
+## 通用协议
 
-1. **一次性需求**：用 `tools run code.exec --yes` 动态执行 C# 代码解决。
-2. **反复需要的只读信息**：创建自定义 Context（`[UnityCliContext]`），必须声明 `Description`，读取 `references/custom-contexts.md`。
-3. **反复需要的操作能力**：创建自定义 Tool（`[UnityCliTool]`），必须声明 `Summary`，读取 `references/custom-tools.md`。
+CLI 输出统一是 JSON envelope。
 
-不要绕过 CLI 用其他方式操作 Unity——优先在 CLI 框架内解决。
+成功时重点看：
 
-**目录约定**：所有自定义 Tool 和 Context 的 C# 文件必须放在名为 `UnityCLI` 的目录下（如 `Assets/UnityCLI/`、`Assets/Editor/UnityCLI/`、`Assets/SomeModule/UnityCLI/`）。位置和数量不限，但目录名必须是 `UnityCLI`，便于统一发现和管理。
+- `ok`：是否成功。
+- `requestId`：本次调用 ID，用于排查日志。
+- `data`：业务结果。
+- `warnings`：非阻断警告。
+- `logsRef`：日志引用。
+- `jobId`：长任务 ID，后续用 `jobs status/logs/cancel`。
+- `durationMs`：执行耗时。
 
-**扩展包编译约定**：CLI 扩展（`unity_cli extensions install`）的 C# 脚本会安装到 `Packages/com.unity_cli/Extensions/<id>/`，它们以 `partial class UnityCliBridge` 形式与主包同一程序集。因此扩展不自带独立 `.asmdef`，其可编译性依赖主包根部的 `Packages/com.unity_cli/UnityCli.Editor.asmdef`（作用域递归覆盖 `Extensions/`）。如果修改安装投影、移动 asmdef、或把扩展脚本放到包外，会破坏 partial class 并导致整个工程编译失败——此时 `unity_cli doctor` 的 `compile_status` 检查项会列出 Unity 编译错误并指向具体文件。
+失败时重点看：
 
-日常使用自定义能力时不需要读取引文，直接走发现链：
+- `error.code`：稳定错误码。
+- `error.message`：人类可读错误。
+- `error.transient`：是否适合等待后重试。
+- `error.retry_after_ms`：建议等待时间。
+- `error.next_actions`：下一步操作；优先按它处理，不要猜补救方案。
+
+Descriptor 常用字段：
+
+- `source`：`built-in`、`extension` 或 `project`。
+- `inputSchema` / `outputSchema`：输入输出契约。
+- `destructiveHint`：为 `true` 时需要 `--yes`。
+- `supportsDryRun`：是否可先 `--dry-run` 预览。
+- `sideEffects` / `riskLevel`：副作用和风险等级。
+- `playModeSupport`：`supported`、`session-affecting`、`editor-only`、`runtime-only`、`unknown`。
+- `target` / `availabilityScope`：作用于 Editor、Runtime 还是两者，以及可用范围。
+- `supportStatus`：实现形态，如 `live-bridge`、`bridge-job`、`batch-job`、`cli-only`。
+- `requiresPackages`：需要的 Unity package 或扩展依赖。
+
+大输出协议：
+
+- 层级/列表先用 `pageSize`、`cursor`、`parent`、`query`、`nameFilter`、`componentType`、`className` 缩小结果；按 `pageInfo.nextCursor` 续读。
+- 深读对象优先用 `paths` 或 `viewQuery`，再用 `maxDepth`、`maxArrayItems` 控制展开。
+- 文本和源码用 `offset`、`maxBytes` 分段；看 `truncated` 和 `nextOffset`。
+- 数组和深层字段看 `truncated`、`returnedCount`、`totalCount`、`nextPath`。
+- 截图和相机默认使用 artifact path；只有确实需要内联图像时才传 `inlineBase64:true`。
+
+## AI 规则
+
+- 执行前先确认目标实例；多个 ready 实例时不要猜，先 `target set`。
+- 不要手动读取 Bridge 注册文件，不要直接 ping endpoint；用 `instances`、`target`、`doctor` 和 `editor.state`。
+- Unity 正在 compile/import/build、PlayMode 切换或 domain reload 时，先用 `tools run editor.state --input '{"waitReady":true}'` 等待 `busy.isBusy=false`。
+- `destructiveHint:true` 的 Tool 先 `--dry-run`（如果支持），确认计划输出后再加 `--yes`。
+- `playModeSupport:"editor-only"` 不要在 PlayMode 下运行；`runtime-only` 通常需要先进入 PlayMode；遇到 `E_RUNTIME_NOT_READY` 按 `next_actions` 处理。
+- 缺少必填输入会返回 `E_SCHEMA_INVALID`；回到 `describe` 修正 schema，而不是猜字段名。
+- 能用内置 Tool 或 Context 解决时，不要绕过 CLI；一次性 Unity 侧代码执行才考虑 `code.exec --yes`。
+- 长任务返回 `jobId` 时，用 `unity_cli jobs status <jobId>`、`unity_cli jobs logs <jobId>`、`unity_cli jobs cancel <jobId> --yes` 管理。
+
+## 自定义 Tool / Context
+
+当内置能力不够时，按这个顺序决策：
+
+1. 一次性 Unity 侧操作：使用 `tools run code.exec --yes` 动态执行 C#。
+2. 反复需要的只读信息：创建自定义 Context，使用 `[UnityCliContext]`，必须声明 `Description`。
+3. 反复需要的操作能力：创建自定义 Tool，使用 `[UnityCliTool]`，必须声明 `Summary`。
+
+自定义 C# 文件必须放在名为 `UnityCLI` 的目录下，例如：
+
+- `Assets/UnityCLI/`
+- `Assets/Editor/UnityCLI/`
+- `Assets/SomeModule/UnityCLI/`
+
+创建后仍然通过公开发现链使用，不要假设名称或 group：
 
 ```powershell
 unity_cli context read tools.custom
-unity_cli tools group list <custom-tool-group> --include-custom
+unity_cli tools group list <real-group> --include-custom
 unity_cli tools describe <custom-tool> --include-custom
 unity_cli tools run <custom-tool> --include-custom --input '<json>'
 
@@ -129,22 +145,4 @@ unity_cli context describe <custom-context> --include-custom
 unity_cli context read <custom-context> --include-custom --input '<json>'
 ```
 
-其中 `<custom-tool-group>` 使用 `context read tools.custom` 返回的真实 `group`，不要假设存在名为 `custom` 的工具组。
-
-## 错误与安全
-
-CLI 输出是 JSON envelope。失败时重点看：
-
-- `error.code`
-- `error.message`
-- `error.transient`
-- `error.retry_after_ms`
-- `error.next_actions`
-
-处理规则：
-
-- `transient: true`：等待 `retry_after_ms` 后重试，最多重试少量次数。
-- `E_TARGET_AMBIGUOUS`：先 `unity_cli target set <id|alias>`。
-- `E_RUNTIME_NOT_READY`：进入 Play Mode 或按 `next_actions` 处理。
-- `E_TOOL_FINGERPRINT_MISMATCH`：通知用户；只有审计后才用 `--fingerprint-mode warn`。
-- 执行任何会改项目/场景/资源的命令前，先确认目标、风险和输入。
+如果需要编写自定义能力，再读取 `references/custom-tools.md` 或 `references/custom-contexts.md`；日常调用不需要先读这些引用文档。
