@@ -28,7 +28,7 @@ export const GO_TOOLS: ToolMetadata[] = [
   },
   {
     name: "go.inspect",
-    summary: "Inspect one GameObject by name, hierarchy path, or instance id.",
+    summary: "Inspect one GameObject summary by name/path/id; use component.get for deep component fields.",
     description: "Inspect one GameObject by name, hierarchy path, or instance id. Returns transform, components and direct children; use object.get-data or component.get for deeper serialized data and keep go.find/scene.hierarchy for discovery.",
     group: "go",
     inputSchema: objSchema({ target: { type: "string", description: "GameObject name, hierarchy path, or instance id." } }, ["target"]),
@@ -232,7 +232,7 @@ export const COMPONENT_TOOLS: ToolMetadata[] = [
   },
   {
     name: "component.get",
-    summary: "Deep-read one Component after selecting a GameObject with go.find/go.inspect or context read scene.gameobject.components.",
+    summary: "Deep-read one Component by GameObject and component selector; use paths/viewQuery for token-safe fields.",
     description: "Deep-read one Component after selecting a GameObject with go.find/go.inspect or context read scene.gameobject.components. For token safety, pass exact paths or one viewQuery; they are mutually exclusive and skip full fields/props expansion. Use componentIndex/componentInstanceId when duplicate components exist. Keep maxDepth low before expanding MonoBehaviours.",
     group: "component",
     inputSchema: objSchema({
@@ -271,7 +271,7 @@ export const COMPONENT_TOOLS: ToolMetadata[] = [
   },
   {
     name: "component.modify",
-    summary: "Apply pathPatches, jsonPatch (Merge Patch) or componentDiff to a Component.",
+    summary: "Modify one Component with pathPatches/jsonPatch/componentDiff; use component.get/type.schema first.",
     description: "Apply pathPatches, jsonPatch (Merge Patch) or componentDiff to a Component. Returns updated data, changed paths, logs and audit. Use component.get first. In Play Mode, scene component changes affect only the current runtime session unless later persisted by Unity workflow; in Edit Mode they mark scene/component state dirty.",
     group: "component",
     inputSchema: objSchema({

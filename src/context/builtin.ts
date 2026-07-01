@@ -80,7 +80,7 @@ const PROJECT_LAYERS: ContextDescriptor = {
           },
           required: ["index", "name"]
         },
-        description: "List of layer entries."
+        description: "List of layer entries.",
       }
     },
     required: ["layers"]
@@ -195,7 +195,7 @@ const EDITOR_WINDOWS: ContextDescriptor = {
           },
           required: ["title", "typeName"]
         },
-        description: "List of open editor windows."
+        description: "List of open editor windows.",
       }
     },
     required: ["windows"]
@@ -246,7 +246,7 @@ const EDITOR_MENU_ITEMS: ContextDescriptor = {
           },
           required: ["path", "label"]
         },
-        description: "List of menu items, often empty because Unity has no stable public menu enumeration API."
+        description: "List of menu items, often empty because Unity has no stable public menu enumeration API.",
       },
       count: { type: "integer", description: "Number of returned menu items." },
       diagnostics: { type: "string", description: "Explanation when menu enumeration is unavailable." }
@@ -419,7 +419,7 @@ const SCENE_CAMERAS: ContextDescriptor = {
           },
           required: ["id", "name", "path"]
         },
-        description: "List of cameras in the scene."
+        description: "List of cameras in the scene.",
       },
       count: { type: "integer", description: "Number of cameras." }
     },
@@ -451,7 +451,7 @@ const SCENE_VOLUMES: ContextDescriptor = {
           },
           required: ["target"]
         },
-        description: "List of volumes."
+        description: "List of volumes.",
       },
       count: { type: "integer", description: "Number of volumes." },
       pageInfo: { type: "object", description: "Pagination metadata." }

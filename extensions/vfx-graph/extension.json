@@ -2,7 +2,7 @@
   "id": "vfx-graph",
   "name": "VFX Graph",
   "version": "1.0.0",
-  "description": "Visual effects extension with VFX Graph package tools plus built-in ParticleSystem, LineRenderer, and TrailRenderer tools.",
+  "description": "Visual effects tools: VFX Graph assets/instances, exposed parameters, events, ParticleSystem modules, LineRenderer, and TrailRenderer.",
   "unityPackages": [],
   "contributions": {
     "tools": [

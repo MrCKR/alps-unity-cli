@@ -54,8 +54,8 @@ export const SCENE_TOOLS: ToolMetadata[] = [
   },
   {
     name: "scene.screenshot",
-    summary: "Capture a screenshot of the active scene viewport and save to an Assets/* image path.",
-    description: "Capture a screenshot of the active scene viewport and save to an Assets/* image path. Use screenshot.scene-view for explicit viewport control.",
+    summary: "Compatibility alias for active scene viewport screenshots; prefer screenshot.scene-view for explicit source.",
+    description: "Compatibility alias that captures the active scene viewport and saves to an Assets/* image path. Prefer screenshot.scene-view for explicit SceneView source control, or screenshot.game-view for Game View output.",
     group: "scene",
     inputSchema: objSchema({ path: { type: "string", description: "Destination Assets/* image path." }, width: { type: "integer", default: 1280 }, height: { type: "integer", default: 720 }, format: { type: "string", enum: ["png", "jpg"], default: "png" }, overwrite: { type: "boolean" } }, ["path"]),
     destructiveHint: false,
@@ -147,7 +147,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
   },
   {
     name: "scene.data",
-    summary: "Parameterized deep read of the active scene hierarchy: maxDepth, nameFilter, includeComponents, maxResults.",
+    summary: "Deep-read active scene hierarchy with maxDepth/nameFilter; prefer scene.hierarchy for paged navigation.",
     description: "Parameterized deep read of the active scene hierarchy: maxDepth, nameFilter, includeComponents, maxResults. Read-only; for paged lightweight state use scene.hierarchy or context read scene.*.",
     group: "scene",
     inputSchema: objSchema({ maxDepth: { type: "integer", default: 2, description: "Maximum traversal depth." }, maxResults: { type: "integer", default: 200, description: "Maximum items returned." }, nameFilter: { type: "string", description: "Case-insensitive name filter." }, includeComponents: { type: "boolean", default: false, description: "Include component type names per item." } }),

@@ -14,7 +14,7 @@ import type { ExtensionManifest } from "./types.js";
 export const PROBUILDER_MANIFEST: ExtensionManifest = {
   id: "probuilder",
   name: "ProBuilder",
-  description: "3D modeling and level design tools for Unity. Provides 36 fine-grained tools for shape creation, mesh editing, vertex operations, smoothing, and boolean CSG operations through the ProBuilder package.",
+  description: "ProBuilder 3D modeling tools: shape creation, mesh editing, face/edge/vertex operations, smoothing, pivots, repair, and boolean CSG through the ProBuilder package.",
   version: "1.0.0",
   unityPackages: [
     {
@@ -66,7 +66,7 @@ export const PROBUILDER_MANIFEST: ExtensionManifest = {
       { name: "probuilder.repair-mesh" }
     ],
     contexts: [
-      { key: "probuilder.scene", description: "ProBuilder mesh elements and operations in the current scene." }
+      { key: "probuilder.scene", description: "Read ProBuilder mesh objects, face/edge/vertex selection context, and editable mesh state in the current scene." }
     ],
     csharpEntries: [
       { type: "UnityCli.ProBuilder.ProBuilderUtilityTools", description: "Bridge handlers for ProBuilder ping, mesh-info, and validate-mesh." },
@@ -83,7 +83,7 @@ export const PROBUILDER_MANIFEST: ExtensionManifest = {
 export const VFX_GRAPH_MANIFEST: ExtensionManifest = {
   id: "vfx-graph",
   name: "VFX Graph",
-  description: "Visual effects extension with VFX Graph package tools plus built-in ParticleSystem, LineRenderer, and TrailRenderer tools.",
+  description: "Visual effects tools: VFX Graph assets/instances, exposed parameters, events, ParticleSystem modules, LineRenderer, and TrailRenderer.",
   version: "1.0.0",
   unityPackages: [],
   unityInstall: {
@@ -120,7 +120,7 @@ export const VFX_GRAPH_MANIFEST: ExtensionManifest = {
 export const CINEMACHINE_MANIFEST: ExtensionManifest = {
   id: "cinemachine",
   name: "Cinemachine",
-  description: "Smart camera system for Unity. Provides camera composition, tracking, blending, noise, and extension management through the Cinemachine package.",
+  description: "Cinemachine camera tools: virtual camera creation, targets, lens, priority, blends, body/aim/noise, brain overrides, and extensions.",
   version: "1.0.0",
   unityPackages: [
     {
@@ -149,7 +149,7 @@ export const CINEMACHINE_MANIFEST: ExtensionManifest = {
       { name: "cinemachine.extension" }
     ],
     contexts: [
-      { key: "cinemachine.cameras", description: "Cinemachine virtual cameras and composition in the current scene." }
+      { key: "cinemachine.cameras", description: "Read Cinemachine virtual cameras, Follow/LookAt targets, lens, priority, brain, and composition state in the current scene." }
     ],
     csharpEntries: [
       { type: "UnityCli.Cinemachine.CinemachineCameraTools", description: "Bridge handlers for Cinemachine ping, create, target, lens, priority, blend, body, aim, noise, brain, force-camera, release-override, and extension operations." }
@@ -161,7 +161,7 @@ export const CINEMACHINE_MANIFEST: ExtensionManifest = {
 export const URP_MANIFEST: ExtensionManifest = {
   id: "urp",
   name: "Universal Render Pipeline",
-  description: "Universal Render Pipeline extension for Unity. Provides renderer feature management, volume configuration, and pipeline settings through the URP package.",
+  description: "URP rendering tools: renderer features, volume components, and Universal Render Pipeline asset settings.",
   version: "1.0.0",
   unityPackages: [
     {
@@ -180,7 +180,7 @@ export const URP_MANIFEST: ExtensionManifest = {
       { name: "urp.settings" }
     ],
     contexts: [
-      { key: "urp.pipeline", description: "URP render pipeline assets, quality settings, and shader configuration." }
+      { key: "urp.pipeline", description: "Read URP render pipeline assets, renderer features, quality settings, and shader/pipeline configuration." }
     ],
     csharpEntries: [
       { type: "UnityCli.URP.UrpRendererFeatureTools", description: "Bridge handlers for URP renderer feature operations." },
@@ -194,7 +194,7 @@ export const URP_MANIFEST: ExtensionManifest = {
 export const HDRP_MANIFEST: ExtensionManifest = {
   id: "hdrp",
   name: "High Definition Render Pipeline",
-  description: "High Definition Render Pipeline extension for Unity. Provides HDRP volume configuration and pipeline settings through the HDRP package.",
+  description: "HDRP rendering tools: volume components and High Definition Render Pipeline asset settings.",
   version: "1.0.0",
   unityPackages: [
     {
@@ -212,7 +212,7 @@ export const HDRP_MANIFEST: ExtensionManifest = {
       { name: "hdrp.settings" }
     ],
     contexts: [
-      { key: "hdrp.pipeline", description: "HDRP render pipeline assets, volume profiles, and lighting configuration." }
+      { key: "hdrp.pipeline", description: "Read HDRP render pipeline assets, volume profiles, lighting configuration, and pipeline settings." }
     ],
     csharpEntries: [
       { type: "UnityCli.HDRP.HdrpVolumeTools", description: "Bridge handlers for HDRP volume operations." },

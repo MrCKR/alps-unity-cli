@@ -22,7 +22,7 @@ export type { ExtensionMetadata } from "./types.js";
 const PROBUILDER_EXTENSION: ExtensionMetadata = {
   id: "probuilder",
   title: "ProBuilder Extension",
-  description: "ProBuilder 3D modeling tools: create shapes, CSG operations, mesh editing.",
+  description: "ProBuilder 3D modeling tools: shape creation, mesh editing, face/edge/vertex operations, smoothing, pivots, and repair.",
   kind: "extension",
   source: "built-in",
   version: "1.0.0",
@@ -42,7 +42,7 @@ const PROBUILDER_EXTENSION: ExtensionMetadata = {
 const CINEMACHINE_EXTENSION: ExtensionMetadata = {
   id: "cinemachine",
   title: "Cinemachine Extension",
-  description: "Cinemachine camera system tools: target, lens, priority, blend, body, aim, noise, brain.",
+  description: "Cinemachine camera tools: virtual camera creation, targets, lens, priority, blends, body/aim/noise, brain, overrides, and extensions.",
   kind: "extension",
   source: "built-in",
   version: "1.0.0",
@@ -62,7 +62,7 @@ const CINEMACHINE_EXTENSION: ExtensionMetadata = {
 const VFX_GRAPH_EXTENSION: ExtensionMetadata = {
   id: "vfx-graph",
   title: "VFX Extension",
-  description: "Visual effects tools: VFX Graph package tools plus built-in ParticleSystem, LineRenderer, and TrailRenderer tools.",
+  description: "Visual effects tools: VFX Graph assets/instances, parameters, events, ParticleSystem modules, LineRenderer, and TrailRenderer.",
   kind: "extension",
   source: "built-in",
   version: "1.0.0",
@@ -82,7 +82,7 @@ const VFX_GRAPH_EXTENSION: ExtensionMetadata = {
 const URP_EXTENSION: ExtensionMetadata = {
   id: "urp",
   title: "URP Extension",
-  description: "Universal Render Pipeline tools: renderer features, URP-specific volume and rendering.",
+  description: "URP rendering tools: renderer features, volume components, and Universal Render Pipeline asset settings.",
   kind: "extension",
   source: "built-in",
   version: "1.0.0",
@@ -103,7 +103,7 @@ const URP_EXTENSION: ExtensionMetadata = {
 const HDRP_EXTENSION: ExtensionMetadata = {
   id: "hdrp",
   title: "HDRP Extension",
-  description: "High Definition Render Pipeline tools: HDRP volume, rendering, and pipeline-specific features.",
+  description: "HDRP rendering tools: volume components and High Definition Render Pipeline asset settings.",
   kind: "extension",
   source: "built-in",
   version: "1.0.0",

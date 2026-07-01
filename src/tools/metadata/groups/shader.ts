@@ -4,7 +4,7 @@ import { objSchema } from "../schemas.js";
 export const SHADER_TOOLS: ToolMetadata[] = [
   {
     name: "shader.info",
-    summary: "Read metadata of a shader asset: name, asset type, ShaderGraph flag, file size, and compilation diagnostics (supported flag + compiler messages).",
+    summary: "Read shader asset metadata and compile diagnostics; use shader.get-data for properties/passes.",
     description: "Read metadata of a shader asset: name, asset type, ShaderGraph flag, file size, and compilation diagnostics (supported flag + compiler messages). Use shader.list to discover the path when unknown. For full property/passes detail use shader.get-data instead.",
     group: "shader",
     inputSchema: objSchema({ path: { type: "string", description: "Existing Assets/*.shader or Assets/*.shadergraph path." } }, ["path"]),
@@ -28,7 +28,7 @@ export const SHADER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "shader.read",
-    summary: "Read a UTF-8 .shader file in bounded byte ranges.",
+    summary: "Read .shader source text in bounded byte ranges with offset/nextOffset continuation.",
     description: "Read a UTF-8 .shader file in bounded byte ranges. Defaults to maxBytes=65536 and returns nextOffset when truncated; pass offset from the previous response to continue. ShaderGraph (.shadergraph) assets are binary JSON and not meant for line editing; prefer shader.info for those.",
     group: "shader",
     inputSchema: objSchema({ path: { type: "string", description: "Existing Assets/*.shader path." }, offset: { type: "integer", default: 0, description: "Byte offset to start reading from." }, maxBytes: { type: "integer", default: 65536, description: "Maximum bytes to return, clamped by the bridge." } }, ["path"]),
@@ -52,7 +52,7 @@ export const SHADER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "shader.create",
-    summary: "Create a new .shader asset.",
+    summary: "Create a new .shader or .shadergraph asset file and import it.",
     description: "Create a new .shader asset. When source is omitted, a compilable default unlit/vertex-color shader is generated. ShaderGraph (.shadergraph) creation requires explicit source via content/content-file. Refuses to overwrite an existing file unless overwrite is true. Use shader.list first to pick a non-conflicting path.",
     group: "shader",
     inputSchema: objSchema({
@@ -71,7 +71,7 @@ export const SHADER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "shader.update",
-    summary: "Replace the source of an existing .shader asset and force a reimport, which recompiles the shader.",
+    summary: "Replace .shader source text and force reimport/recompile; inspect diagnostics afterward.",
     description: "Replace the source of an existing .shader asset and force a reimport, which recompiles the shader. This can surface compile errors visible via shader.info diagnostics; inspect them after updating. Prefer shader.read first to capture the current source as a precondition.",
     group: "shader",
     inputSchema: objSchema({
@@ -104,7 +104,7 @@ export const SHADER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "shader.list",
-    summary: "List shader assets in the project with name, path, guid, property count and render queue.",
+    summary: "List shader assets with path/name/guid/property count before info/read/get-data calls.",
     description: "List shader assets in the project with name, path, guid, property count and render queue. Keep pageSize small; use this to discover a valid shader name for material.create. Results are capped by pageSize (clamped 1..500).",
     group: "shader",
     inputSchema: objSchema({
@@ -124,7 +124,7 @@ export const SHADER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "shader.get-data",
-    summary: "Read shader properties, diagnostics, SubShader and Pass structure with token-safe include switches.",
+    summary: "Read structured shader properties, diagnostics, SubShader and Pass data; source code is opt-in.",
     description: "Read shader properties, diagnostics, SubShader and Pass structure with token-safe include switches. Accepts an Assets/* path or a shader name resolved via Shader.Find. Defaults include compile messages, properties and capped SubShader/Pass structure; source code is omitted unless includeSourceCode=true. Use shader.list or asset.search with filter t:Shader first to locate the path. This returns property definitions, not material instance values; for material values use material.info.",
     group: "shader",
     inputSchema: objSchema({

@@ -20,8 +20,8 @@ const SCREENSHOT_OUTPUT = objSchema({
 export const SCREENSHOT_TOOLS: ToolMetadata[] = [
   {
     name: "screenshot.capture",
-    summary: "Capture the active SceneView (or main Camera when no SceneView is open) to an Assets/* image path.",
-    description: "Capture the active SceneView (or main Camera when no SceneView is open) to an Assets/* image path. A lightweight alias of scene.screenshot; prefer screenshot.scene-view or screenshot.game-view for explicit source control. Returns the saved artifact path and size.",
+    summary: "Compatibility alias: capture active SceneView or main Camera; prefer scene-view/game-view for explicit source.",
+    description: "Compatibility alias that captures the active SceneView (or main Camera when no SceneView is open) to an Assets/* image path. Prefer screenshot.scene-view or screenshot.game-view when the source matters. Returns the saved artifact path and size.",
     group: "screenshot",
     inputSchema: objSchema({
       path: { type: "string", description: "Destination Assets/* image path (.png/.jpg)." },
@@ -40,7 +40,7 @@ export const SCREENSHOT_TOOLS: ToolMetadata[] = [
   },
   {
     name: "screenshot.game-view",
-    summary: "Capture the Game View by rendering all active cameras to an Assets/* image.",
+    summary: "Capture Game View output by rendering active cameras to an Assets/* image artifact.",
     description: "Capture the Game View by rendering all active cameras to an Assets/* image. Optionally include rendering diagnostics. Use this for runtime gameplay output; use screenshot.scene-view for the editor viewport. Default 1280x720.",
     group: "screenshot",
     inputSchema: objSchema({
@@ -61,7 +61,7 @@ export const SCREENSHOT_TOOLS: ToolMetadata[] = [
   },
   {
     name: "screenshot.scene-view",
-    summary: "Capture the Editor SceneView camera to an Assets/* image.",
+    summary: "Capture the Editor SceneView camera to an Assets/* image artifact.",
     description: "Capture the Editor SceneView camera to an Assets/* image. Use this for editor authoring output; in Play Mode prefer screenshot.game-view. Supports png/jpg via format.",
     group: "screenshot",
     inputSchema: objSchema({
@@ -82,7 +82,7 @@ export const SCREENSHOT_TOOLS: ToolMetadata[] = [
   },
   {
     name: "screenshot.isolated-object",
-    summary: "Render a single GameObject in isolation with a temporary camera and save to an Assets/* image.",
+    summary: "Render one GameObject in isolation with a temporary camera to an Assets/* image artifact.",
     description: "Render a single GameObject in isolation with a temporary camera and save to an Assets/* image. Useful for clean asset previews. target resolves by name, hierarchy path or instance id. Orthographic (default) frames the object by size; perspective needs radius. Aligns with IvanMurzak isolated render.",
     group: "screenshot",
     inputSchema: objSchema({
@@ -105,7 +105,7 @@ export const SCREENSHOT_TOOLS: ToolMetadata[] = [
   },
   {
     name: "screenshot.surround",
-    summary: "Capture six fixed angles around a target GameObject and save a 3x2 contact sheet plus the six source PNGs.",
+    summary: "Capture six fixed angles around a GameObject; writes contact sheet and source PNGs, requires --yes.",
     description: "Capture six fixed angles around a target GameObject (front, back, left, right, top, bird_eye) and save a 3x2 contact sheet plus the six source PNGs. target resolves by name, hierarchy path or instance id. This writes image artifacts; use --dry-run to preview paths or --yes to execute. inlineBase64 returns the contact sheet as base64 only when explicitly requested.",
     group: "screenshot",
     inputSchema: objSchema({
@@ -137,7 +137,7 @@ export const SCREENSHOT_TOOLS: ToolMetadata[] = [
   },
   {
     name: "screenshot.orbit",
-    summary: "Capture multiple screenshots orbiting a target GameObject at evenly spaced angles and save each PNG under output-dir.",
+    summary: "Capture multiple orbit screenshots around a GameObject and save each PNG under output-dir.",
     description: "Capture multiple screenshots orbiting a target GameObject at evenly spaced angles, saving each PNG under output-dir. target resolves by name, hierarchy path or instance id. Use this to generate turntable previews. Aligns with CoplayDev orbit/surround.",
     group: "screenshot",
     inputSchema: objSchema({

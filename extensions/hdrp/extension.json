@@ -2,7 +2,7 @@
   "id": "hdrp",
   "name": "High Definition Render Pipeline",
   "version": "1.0.0",
-  "description": "High Definition Render Pipeline extension for Unity. Provides HDRP volume configuration and pipeline settings through the HDRP package.",
+  "description": "HDRP rendering tools: volume components and High Definition Render Pipeline asset settings.",
   "unityPackages": [
     {
       "packageId": "com.unity.render-pipelines.high-definition",
@@ -21,7 +21,7 @@
     "contexts": [
       {
         "key": "hdrp.pipeline",
-        "description": "HDRP render pipeline assets, volume profiles, and lighting configuration."
+        "description": "Read HDRP render pipeline assets, volume profiles, lighting configuration, and pipeline settings."
       }
     ],
     "csharpEntries": [

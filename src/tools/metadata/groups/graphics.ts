@@ -93,8 +93,8 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "graphics.screenshot",
-    summary: "Capture a SceneView or active Camera screenshot with optional graphics diagnostics.",
-    description: "Capture a SceneView or active Camera screenshot with optional graphics diagnostics. Writes an image artifact; pass path under a deliberate artifact/output directory.",
+    summary: "Capture a screenshot with graphics diagnostics; prefer screenshot.* for normal captures.",
+    description: "Capture a SceneView or active Camera screenshot with optional graphics diagnostics. Prefer screenshot.scene-view, screenshot.game-view, or camera.screenshot for normal capture routing. Writes an image artifact; pass path under a deliberate artifact/output directory.",
     group: "graphics",
     inputSchema: objSchema({ path: { type: "string" }, width: { type: "integer" }, height: { type: "integer" }, format: { type: "string" }, overwrite: { type: "boolean" }, includeDiagnostics: { type: "boolean" } }, ["path"]),
     outputSchema: objSchema({ diagnostics: { type: "object" }, qualitySettings: { type: "object" }, screenshot: { type: "object" }, screenshotPath: { type: "string" }, artifactPath: { type: "string" }, plannedEffects: plannedEffectsSchema, logPath: logPathSchema }),

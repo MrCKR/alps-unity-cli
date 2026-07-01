@@ -2,7 +2,7 @@
   "id": "probuilder",
   "name": "ProBuilder",
   "version": "1.0.0",
-  "description": "3D modeling and level design tools for Unity. Provides 36 fine-grained tools for shape creation, mesh editing, vertex operations, smoothing, and boolean CSG operations through the ProBuilder package.",
+  "description": "ProBuilder 3D modeling tools: shape creation, mesh editing, face/edge/vertex operations, smoothing, pivots, repair, and boolean CSG through the ProBuilder package.",
   "unityPackages": [
     {
       "packageId": "com.unity.probuilder",
@@ -123,7 +123,7 @@
     "contexts": [
       {
         "key": "probuilder.scene",
-        "description": "ProBuilder mesh elements and operations in the current scene."
+        "description": "Read ProBuilder mesh objects, face/edge/vertex selection context, and editable mesh state in the current scene."
       }
     ],
     "csharpEntries": [

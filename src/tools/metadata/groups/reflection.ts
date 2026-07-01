@@ -9,7 +9,7 @@ import { objSchema } from "../schemas.js";
 export const REFLECTION_TOOLS: ToolMetadata[] = [
   {
     name: "reflection.method.find",
-    summary: "Find C# methods on a live Unity type.",
+    summary: "Find live Editor C# methods before calling reflection.method.call.",
     description: "Find C# methods on a live Unity type. No scope restriction: public/private/static/instance methods are all discoverable. Read-only. Use this before reflection.method.call to discover signatures and parameters.",
     group: "reflection",
     inputSchema: objSchema({
@@ -34,7 +34,7 @@ export const REFLECTION_TOOLS: ToolMetadata[] = [
   },
   {
     name: "reflection.method.call",
-    summary: "Invoke any C# method via reflection.",
+    summary: "Invoke a live C# method via reflection; executes arbitrary code and requires --yes.",
     description: "Invoke any C# method via reflection. No scope restriction: public/private/static/instance, any namespace/assembly, Editor/Runtime. Critical risk: run --dry-run first to preview the target and planned effects, then rerun with --yes only for a known safe method. Use reflection.method.find first to discover signatures.",
     group: "reflection",
     inputSchema: objSchema({
@@ -64,7 +64,7 @@ export const REFLECTION_TOOLS: ToolMetadata[] = [
   },
   {
     name: "type.schema",
-    summary: "Generate a live JSON Schema for any C# / Unity type, including enum, array, generic, dictionary and $defs references.",
+    summary: "Generate a live C# / Unity type JSON Schema before object.modify or component.modify.",
     description: "Generate a live JSON Schema for any C# / Unity type by reflecting over public fields and properties. Handles enum values, arrays/lists, generic type arguments, dictionaries via additionalProperties, and repeated complex types via $defs/$ref. Use before object.modify/component.modify to understand writable structure; keep maxDepth low for large Unity types.",
     group: "type",
     inputSchema: objSchema({

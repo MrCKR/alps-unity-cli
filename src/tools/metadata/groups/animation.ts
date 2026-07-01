@@ -89,7 +89,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
   },
   {
     name: "animation.state",
-    summary: "Query the current Animator state on a target GameObject.",
+    summary: "Read only the current Animator state on a GameObject; use animator.get-info for full component data.",
     description: "Query the current Animator state on a target GameObject. Read-only; use animator.get-info when parameters, layers, and clips are also needed.",
     group: "animation",
     inputSchema: objSchema({ target: { type: "string" }, layer: { type: "integer" } }, ["target"]),
@@ -101,7 +101,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
   },
   {
     name: "animation.play",
-    summary: "Play an animation state on a target GameObject's Animator.",
+    summary: "Play a named Animator state on a GameObject; session-affecting playback control.",
     description: "Play an animation state on a target GameObject's Animator. Session-affecting: changes the current Animator state; in Play Mode this affects only the running session, while edit-mode calls can mark the Animator dirty.",
     group: "animation",
     inputSchema: objSchema({ target: { type: "string" }, state: { type: "string" }, layer: { type: "integer" }, normalizedTime: { type: "number" } }, ["target", "state"]),
@@ -114,7 +114,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
   },
   {
     name: "animation.stop",
-    summary: "Stop/reset the current Animator playback on a target.",
+    summary: "Stop and reset Animator playback on a GameObject; session-affecting playback control.",
     description: "Stop/reset the current Animator playback on a target. Session-affecting: Rebind/Update changes Animator runtime state and may mark the component dirty in edit mode.",
     group: "animation",
     inputSchema: objSchema({ target: { type: "string" } }, ["target"]),
@@ -127,7 +127,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
   },
   {
     name: "animator.get-info",
-    summary: "Get comprehensive Animator component info including enabled state, speed, controller, parameters, layers, and clips.",
+    summary: "Inspect a runtime Animator component: enabled state, speed, controller, parameters, layers, and clips.",
     description: "Get comprehensive Animator component info including enabled state, speed, controller, parameters, layers, and clips. Read-only; returns E_ANIMATOR_NOT_FOUND with nextActions when no Animator is present.",
     group: "animator",
     inputSchema: objSchema({ target: { type: "string", description: "GameObject name, hierarchy path, or instance id with an Animator component." } }, ["target"]),
@@ -151,7 +151,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
   },
   {
     name: "animator.set-parameter",
-    summary: "Set an Animator parameter default on the assigned AnimatorController asset.",
+    summary: "Set an AnimatorController parameter default through a GameObject's assigned Animator.",
     description: "Set an Animator parameter default on the assigned AnimatorController asset. Session-affecting: saves controller asset defaults; it does not drive the current runtime parameter value. Trigger parameters have no stored default and are acknowledged as a no-op. Returns E_ANIMATOR_PARAMETER_NOT_FOUND or E_ANIMATOR_NO_CONTROLLER when setup is incomplete.",
     group: "animator",
     inputSchema: objSchema({ target: { type: "string", description: "GameObject name, hierarchy path, or instance id with an Animator component." }, parameterName: { type: "string", description: "Exact AnimatorController parameter name." }, parameterType: { type: "string", enum: ["float", "int", "bool", "trigger"], description: "Optional expected parameter type; actual controller parameter type wins." }, value: { type: "string", description: "Default value to store on the AnimatorController asset." } }, ["target", "parameterName", "value"]),
@@ -164,7 +164,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
   },
   {
     name: "animator.crossfade",
-    summary: "Cross-fade the Animator to a named state over a given duration.",
+    summary: "Cross-fade a runtime Animator component to a named state over a duration.",
     description: "Cross-fade the Animator to a named state over a given duration. Session-affecting: changes current Animator state; in Play Mode this affects only the running session, while edit-mode calls can mark the Animator dirty. Defaults: duration 0.25s, layer -1.",
     group: "animator",
     inputSchema: objSchema({ target: { type: "string", description: "GameObject name, hierarchy path, or instance id with an Animator component." }, state: { type: "string", description: "Animator state name or full path, e.g. Base Layer.Idle." }, duration: { type: "number", description: "Crossfade duration in seconds; defaults to 0.25." }, layer: { type: "integer", description: "Animator layer index, or -1 for Unity's default layer resolution." } }, ["target", "state"]),
@@ -177,7 +177,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
   },
   {
     name: "animator.set-speed",
-    summary: "Set the Animator playback speed.",
+    summary: "Set runtime Animator component playback speed on a GameObject.",
     description: "Set the Animator playback speed. Session-affecting: writes the Animator component speed and may mark the scene dirty; speed 0 pauses playback, 1 restores normal speed. Returns E_ANIMATOR_NOT_FOUND when no Animator is present.",
     group: "animator",
     inputSchema: objSchema({ target: { type: "string", description: "GameObject name, hierarchy path, or instance id with an Animator component." }, speed: { type: "number", description: "Animator playback speed; defaults to 1.0 when omitted." } }, ["target"]),
@@ -190,7 +190,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
   },
   {
     name: "animator.set-enabled",
-    summary: "Enable or disable the Animator component.",
+    summary: "Enable or disable the Animator component on a GameObject.",
     description: "Enable or disable the Animator component. Session-affecting: toggles component state and may mark the scene dirty. Default is true (enable). Returns E_ANIMATOR_NOT_FOUND when no Animator is present.",
     group: "animator",
     inputSchema: objSchema({ target: { type: "string", description: "GameObject name, hierarchy path, or instance id with an Animator component." }, value: { type: "boolean", description: "Whether the Animator component should be enabled; defaults to true." } }, ["target"]),
@@ -232,8 +232,8 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
   },
   {
     name: "controller.add-transition",
-    summary: "Add a transition between two states in an AnimatorController.",
-    description: "Add a transition between two states in an AnimatorController. Supports AnyState as source. Conditions can be a JSON array of {parameter, mode, threshold}. Session-affecting: writes the controller asset. Returns E_STATE_NOT_FOUND or E_LAYER_INDEX_INVALID on invalid states/layers.",
+    summary: "Add a new AnimatorController transition; existing transition edits are not a dedicated tool.",
+    description: "Add a new transition between two states in an AnimatorController. Supports AnyState as source. Conditions can be a JSON array of {parameter, mode, threshold}. This does not edit an existing transition; use controller.get-info with includeTransitions to inspect existing transitions, then use a generic object path workflow only if you need unsupported transition-property edits. Session-affecting: writes the controller asset. Returns E_STATE_NOT_FOUND or E_LAYER_INDEX_INVALID on invalid states/layers.",
     group: "controller",
     inputSchema: objSchema({ controllerPath: { type: "string", description: "AnimatorController asset path." }, fromState: { type: "string", description: "Source state name, AnyState, Any, or Any State." }, toState: { type: "string", description: "Destination state name." }, layerIndex: { type: "integer", description: "Target layer index; defaults to 0." }, hasExitTime: { type: "boolean", description: "Whether the transition uses exit time; defaults to true." }, duration: { type: "number", description: "Transition duration; defaults to 0.25." }, exitTime: { type: "number", description: "Exit time; defaults to 0.75." }, conditions: { type: "array", description: "Optional transition conditions.", items: { type: "object", properties: { parameter: { type: "string" }, mode: { type: "string", enum: ["greater", "less", "equals", "notequal", "if", "ifnot"] }, threshold: { type: "number" } } } } }, ["controllerPath", "fromState", "toState"]),
     destructiveHint: false,
@@ -260,8 +260,8 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
   },
   {
     name: "controller.get-info",
-    summary: "Get AnimatorController summary data with opt-in transitions and BlendTree detail.",
-    description: "Get AnimatorController summary data with layers, state counts, state summaries and parameters. Transitions and BlendTree children are omitted by default; pass includeTransitions/includeBlendTrees and optional layerName/stateName when detailed state-machine auditing is needed.",
+    summary: "Read AnimatorController structure and existing transitions; does not modify them.",
+    description: "Get AnimatorController summary data with layers, state counts, state summaries and parameters. Transitions and BlendTree children are omitted by default; pass includeTransitions/includeBlendTrees and optional layerName/stateName when detailed state-machine auditing is needed. Use controller.add-transition only to create a new transition; no dedicated existing-transition edit tool is exposed.",
     group: "controller",
     inputSchema: objSchema({ controllerPath: { type: "string", description: "AnimatorController asset path." }, layerName: { type: "string", description: "Optional layer name filter." }, stateName: { type: "string", description: "Optional state name filter." }, includeTransitions: { type: "boolean", default: false, description: "Include transition arrays, capped by maxTransitionsPerState." }, includeBlendTrees: { type: "boolean", default: false, description: "Include BlendTree child details." }, maxStatesPerLayer: { type: "integer", default: 50 }, maxTransitionsPerState: { type: "integer", default: 20 }, pageSize: { type: "integer", default: 50 }, cursor: { type: "integer", default: 0 } }, ["controllerPath"]),
     outputSchema: objSchema({ path: { type: "string" }, guid: { type: "string" }, name: { type: "string" }, layerCount: { type: "integer" }, parameterCount: { type: "integer" }, layers: { type: "array", items: { type: "object", properties: { index: { type: "integer" }, name: { type: "string" }, stateCount: { type: "integer" }, anyStateTransitionCount: { type: "integer" }, states: { type: "array", items: { type: "object", properties: { name: { type: "string" }, motionType: { type: "string" }, blendTree: { type: "object" }, transitions: { type: "array", items: { type: "object" } } } } }, anyStateTransitions: { type: "array", items: { type: "object" } } } } }, parameters: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
@@ -274,7 +274,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
   },
   {
     name: "controller.assign",
-    summary: "Assign an AnimatorController asset to a target GameObject's Animator component.",
+    summary: "Assign an AnimatorController asset to a GameObject's Animator, adding Animator if missing.",
     description: "Assign an AnimatorController asset to a target GameObject's Animator component. Adds an Animator component if one does not exist. Session-affecting: modifies scene/component state and may refresh Animator runtime caches. Returns E_CONTROLLER_NOT_FOUND or E_TARGET_NOT_FOUND.",
     group: "controller",
     inputSchema: objSchema({ controllerPath: { type: "string", description: "AnimatorController asset path." }, target: { type: "string", description: "GameObject name, hierarchy path, or instance id." } }, ["controllerPath", "target"]),

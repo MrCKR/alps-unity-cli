@@ -58,7 +58,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
   {
     ...CM_COMMON,
     name: "cinemachine.create",
-    summary: "Create a Cinemachine virtual camera with an optional preset (follow, third_person, freelook, dolly, static, top_down, side_scroller) that configures Body/Aim pipeline...",
+    summary: "Create a Cinemachine virtual camera with an optional preset that configures Body and Aim pipeline components.",
     description: "Create a Cinemachine virtual camera with an optional preset (follow, third_person, freelook, dolly, static, top_down, side_scroller) that configures Body/Aim pipeline components. Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({
       preset: { type: "string", enum: ["follow", "third_person", "freelook", "dolly", "static", "top_down", "side_scroller"] },
@@ -91,7 +91,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
   {
     ...CM_COMMON,
     name: "cinemachine.lens",
-    summary: "Get or set lens properties (fieldOfView, nearClipPlane, farClipPlane, orthographicSize, dutch) on a Cinemachine virtual camera via SerializedObject to survive...",
+    summary: "Get or set Cinemachine virtual camera lens properties via SerializedObject-backed fields.",
     description: "Get or set lens properties (fieldOfView, nearClipPlane, farClipPlane, orthographicSize, dutch) on a Cinemachine virtual camera via SerializedObject to survive internal field renames. Requires the Cinemachine package (com.unity.cinemachine) to be installed in the target project.",
     inputSchema: objSchema({
       target: { type: "string" },

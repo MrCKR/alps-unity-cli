@@ -4,7 +4,7 @@ import { objSchema } from "../schemas.js";
 export const PHYSICS_TOOLS: ToolMetadata[] = [
   {
     name: "physics.settings",
-    summary: "Read or set physics gravity (3d/2d), default contact offset, bounce threshold, solver iterations and query flags.",
+    summary: "Read or set 3D/2D physics gravity, solver, contact, bounce, and query settings.",
     description: "Read or set physics gravity (3d/2d), default contact offset, bounce threshold, solver iterations and query flags. With no setting fields it is a read; with any setting field it writes ProjectSettings/DynamicsManager. Use mode 3d/2d to target the right manager.",
     group: "physics",
     inputSchema: objSchema({
@@ -105,7 +105,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
   },
   {
     name: "physics.rigidbody",
-    summary: "Read, validate or configure a Rigidbody's mass, drag, angularDrag, useGravity and isKinematic flags.",
+    summary: "Read, validate, or configure a Rigidbody's mass, drag, gravity, and kinematic flags.",
     description: "Read, validate or configure a Rigidbody's mass, drag, angularDrag, useGravity and isKinematic flags. target resolves by name, hierarchy path or instance id. Pass validate=true to read current Rigidbody/Rigidbody2D state without adding or modifying components.",
     group: "physics",
     inputSchema: objSchema({ target: { type: "string", description: "Target GameObject with Rigidbody." }, mass: { type: "number" }, drag: { type: "number" }, angularDrag: { type: "number" }, useGravity: { type: "boolean" }, isKinematic: { type: "boolean" }, validate: { type: "boolean", description: "Only validate, do not change." } }, ["target"]),

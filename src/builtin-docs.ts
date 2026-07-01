@@ -64,27 +64,27 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   component: {
     title: "Component Commands",
-    summary: "Add, remove and set properties on Unity components in the current scene/session. Handler: bridge. Target: editor."
+    summary: "Add, remove and set properties on Unity components in the current scene/session. Handler: bridge. Target: editor.",
   },
   asset: {
     title: "Asset Commands",
-    summary: "Search, inspect and manage project assets. Handler: bridge. Target: editor. `asset.delete` is destructive (supports --dry-run, requires --yes)."
+    summary: "Search, inspect and manage project assets. Handler: bridge. Target: editor. `asset.delete` is destructive (supports --dry-run, requires --yes).",
   },
   prefab: {
     title: "Prefab Commands",
-    summary: "Create, inspect and edit Unity prefabs. Handler: bridge. Target: editor."
+    summary: "Create, inspect and edit Unity prefabs. Handler: bridge. Target: editor.",
   },
   material: {
     title: "Material Commands",
-    summary: "Create, inspect and modify materials. Handler: bridge. Target: editor."
+    summary: "Create, inspect and modify materials. Handler: bridge. Target: editor.",
   },
   graphics: {
     title: "Graphics Commands",
-    summary: "Query and modify graphics quality and rendering settings. Handler: bridge. Target: editor."
+    summary: "Query and modify graphics quality and rendering settings. Handler: bridge. Target: editor.",
   },
   physics: {
     title: "Physics Commands",
-    summary: "Query physics settings, perform raycasts and step simulation. Handler: bridge. Target: editor/runtime."
+    summary: "Query physics settings, perform raycasts and step simulation. Handler: bridge. Target: editor/runtime.",
   },
   profiler: {
     title: "Profiler Commands",
@@ -98,35 +98,35 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   shader: {
     title: "Shader Commands",
-    summary: "Inspect, create and update shader assets. Handler: bridge. Target: editor."
+    summary: "Inspect, create and update shader assets. Handler: bridge. Target: editor.",
   },
   texture: {
     title: "Texture Commands",
-    summary: "Inspect, create and configure texture assets. Handler: bridge. Target: editor."
+    summary: "Inspect, create and configure texture assets. Handler: bridge. Target: editor.",
   },
   animation: {
     title: "Animation Commands",
-    summary: "Query and control animation clips and states. Handler: bridge. Target: editor/runtime."
+    summary: "Query and control animation clips and states. Handler: bridge. Target: editor/runtime.",
   },
   vfx: {
     title: "VFX Commands",
-    summary: "Manage Visual Effect graphs and instances. Handler: bridge. Target: editor. Requires com.unity.visualeffectgraph package. Availability depends on target instance packages."
+    summary: "Manage Visual Effect graphs and instances. Handler: bridge. Target: editor. Requires com.unity.visualeffectgraph package. Availability depends on target instance packages.",
   },
   ui: {
     title: "UI Commands",
-    summary: "Create and inspect UI elements (Canvas, Text, Button, Image, UI Document). Handler: bridge + offline fallback. Target: editor."
+    summary: "Create and inspect UI elements (Canvas, Text, Button, Image, UI Document). Handler: bridge + offline fallback. Target: editor.",
   },
   editor: {
     title: "Editor Commands",
-    summary: "Control the Unity Editor: play mode, console, menu items, live compile requests, compile diagnostics, refresh jobs, and Windows launch-dialog dismiss. Handlers: bridge (state/play/pause/stop/menu/console/compile), hybrid (compile-diagnostics), job (refresh), offline (launch-dialog.dismiss). Target: editor. `editor.menu` is destructive (requires --yes)."
+    summary: "Control the Unity Editor: play mode, console, menu items, live compile requests, compile diagnostics, refresh jobs, and Windows launch-dialog dismiss. Handlers: bridge (state/play/pause/stop/menu/console/compile), hybrid (compile-diagnostics), job (refresh), offline (launch-dialog.dismiss). Target: editor. `editor.menu` is destructive (requires --yes).",
   },
   diagnose: {
     title: "Diagnose Commands",
-    summary: "Run project and bridge health checks. Handler: bridge. Target: editor."
+    summary: "Run project and bridge health checks. Handler: bridge. Target: editor.",
   },
   screenshot: {
     title: "Screenshot Commands",
-    summary: "Capture game-view screenshots. Handler: bridge. Target: editor."
+    summary: "Capture game-view screenshots. Handler: bridge. Target: editor.",
   },
   code: {
     title: "Code Execution",
@@ -135,19 +135,19 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   cli: {
     title: "CLI Management Commands",
-    summary: "Project initialization, package management, batch execution, and offline tools. Handler: offline. Target: none (no Unity required)."
+    summary: "Project initialization, package management, batch execution, and offline tools. Handler: offline. Target: none (no Unity required).",
   },
   init: {
     title: "Project Initialization",
-    summary: "Deploy the Unity CLI Bridge package into a project. Handler: offline. Target: none."
+    summary: "Deploy the Unity CLI Bridge package into a project. Handler: offline. Target: none.",
   },
   package: {
     title: "Package Management",
-    summary: "List, search, install, remove, deploy and restore Unity packages from the CLI. Handlers: offline (list/info/search/registry/deploy/restore), hybrid (install/remove/resolve). Target: editor for resolve and refresh. `package.install`, `package.remove`, `package.deploy`, `package.restore`, and `package.bridge-remove` are destructive; deploy/restore support --dry-run."
+    summary: "List, search, install, remove, deploy and restore Unity packages from the CLI. Handlers: offline (list/info/search/registry/deploy/restore), hybrid (install/remove/resolve). Target: editor for resolve and refresh. `package.install`, `package.remove`, `package.deploy`, `package.restore`, and `package.bridge-remove` are destructive; deploy/restore support --dry-run.",
   },
   batch: {
     title: "Batch Execution",
-    summary: "Execute a JSON file containing multiple CLI commands in sequence or parallel. Handler: offline. Target: routed per-step. `batch run` is destructive (supports --preflight dry-run, requires --yes)."
+    summary: "Execute a JSON file containing multiple CLI commands in sequence or parallel. Handler: offline. Target: routed per-step. `batch run` is destructive (supports --preflight dry-run, requires --yes).",
   },
   docs: {
     title: "Built-in and Offline Documentation",
@@ -161,11 +161,11 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   test: {
     title: "Test Commands",
-    summary: "Run Unity tests as jobs. Inspect or cancel them with top-level `jobs status/logs/cancel`. Handler: job (run). Target: editor (batch job)."
+    summary: "Run Unity tests as jobs. Inspect or cancel them with top-level `jobs status/logs/cancel`. Handler: job (run). Target: editor (batch job).",
   },
   build: {
     title: "Build Commands",
-    summary: "Run Unity builds as jobs. Inspect or cancel them with top-level `jobs status/logs/cancel`. Handler: job (run). Target: editor (batch job)."
+    summary: "Run Unity builds as jobs. Inspect or cancel them with top-level `jobs status/logs/cancel`. Handler: job (run). Target: editor (batch job).",
   },
   "project-tool": {
     title: "Project Tools (Custom)",

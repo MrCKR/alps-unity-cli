@@ -44,7 +44,7 @@ export const TEXTURE_TOOLS: ToolMetadata[] = [
   },
   {
     name: "texture.create",
-    summary: "Create a texture asset.",
+    summary: "Create a PNG/JPG texture asset under Assets/.",
     description: "Create a texture asset. With a source path it copies an existing image file; otherwise it generates a solid-color .png/.jpg of the given width/height. Refuses to overwrite an existing asset unless overwrite is true. Use texture.generate for patterns/gradients/noise, or texture.import-settings to tune the importer afterward.",
     group: "texture",
     inputSchema: objSchema({
@@ -85,7 +85,7 @@ export const TEXTURE_TOOLS: ToolMetadata[] = [
   },
   {
     name: "texture.modify",
-    summary: "Modify an existing PNG/JPG texture asset by filling a pixel region with one color.",
+    summary: "Modify an existing PNG/JPG texture by filling a pixel region with one color.",
     description: "Modify an existing PNG/JPG texture asset by filling a pixel region with one color, then reimport it. Use this for Unity-side texture mutations; for arbitrary image editing, write the file directly and call asset.refresh. Supports --dry-run to preview the affected region.",
     group: "texture",
     inputSchema: objSchema({ path: { type: "string", description: "Existing Assets/*.png/.jpg/.jpeg texture path." }, color: { type: "string", description: "Fill color as #RRGGBB, #RRGGBBAA, or hex without #." }, fillColor: { type: "string", description: "Alias of color." }, x: { type: "integer", default: 0, description: "Region origin X in pixels." }, y: { type: "integer", default: 0, description: "Region origin Y in pixels." }, width: { type: "integer", description: "Region width in pixels. Defaults to remaining texture width." }, height: { type: "integer", description: "Region height in pixels. Defaults to remaining texture height." } }, ["path", "color"]),
@@ -117,7 +117,7 @@ export const TEXTURE_TOOLS: ToolMetadata[] = [
   },
   {
     name: "texture.import-settings",
-    summary: "Read and/or apply TextureImporter settings on a texture asset.",
+    summary: "Read or apply TextureImporter settings on a texture asset.",
     description: "Read and/or apply TextureImporter settings on a texture asset. With no setting fields it is a read returning current importSettings; with any setting field it reimports. Enum values mirror Unity's TextureImporter. Use texture.info for a pure read that never reimports.",
     group: "texture",
     inputSchema: objSchema({
@@ -147,7 +147,7 @@ export const TEXTURE_TOOLS: ToolMetadata[] = [
   },
   {
     name: "texture.generate",
-    summary: "Generate a procedural texture and save it as PNG under Assets/.",
+    summary: "Generate a procedural texture pattern and save it as PNG under Assets/.",
     description: "Generate a procedural texture and save it as PNG under Assets/. Patterns: solid, gradient (linear), radial, noise (Perlin), checkerboard, stripes, dots, grid, brick. color/color2 accept #hex; patternSize controls cell size. Supports --dry-run to preview planned effects without writing. Prefer this over texture.create for test/debug textures.",
     group: "texture",
     inputSchema: objSchema({

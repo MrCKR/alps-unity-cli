@@ -36,7 +36,7 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
   },
   {
     name: "prefab.modify",
-    summary: "Apply small prefab asset edits headlessly without opening the stage: rename the root, or add/remove a direct child by name.",
+    summary: "Apply small headless Prefab asset edits without opening Prefab Stage.",
     description: "Apply small prefab asset edits headlessly without opening the stage: rename the root, or add/remove a direct child by name. For interactive editing (component fields, nested transforms) open the stage and edit inside it, then save. Use prefab.hierarchy to inspect child paths before removeChild.",
     group: "prefab",
     inputSchema: objSchema({
@@ -95,7 +95,7 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
   },
   {
     name: "prefab.hierarchy",
-    summary: "List a prefab asset hierarchy as a small, paged summary.",
+    summary: "List a Prefab asset hierarchy as a small paged summary with parent/cursor continuation.",
     description: "List a prefab asset hierarchy as a small, paged summary. Defaults return only the prefab root or one parent's direct children, with child counts and component type names; use parent plus pageInfo.nextCursor to continue. dependencies.items and nestedPrefabs.items are omitted by default and only returned when includeSummaryDetails=true.",
     group: "prefab",
     inputSchema: objSchema({
@@ -125,7 +125,7 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
   },
   {
     name: "prefab.instantiate",
-    summary: "Instantiate a prefab asset into the active scene, optionally under a parent and at a position. parent resolves by name, hierarchy path or instance id.",
+    summary: "Instantiate a Prefab asset into the active scene, optionally under a parent and position.",
     description: "Instantiate a prefab asset into the active scene, optionally under a parent and at a position. parent resolves by name, hierarchy path or instance id. Use go.find/scene.hierarchy first to locate the parent. Supports --dry-run to preview without creating the instance.",
     group: "prefab",
     inputSchema: objSchema({
@@ -146,7 +146,7 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
   },
   {
     name: "prefab.unpack",
-    summary: "Unpack a prefab instance in the scene into a regular GameObject, breaking the prefab link irreversibly. target resolves by name, hierarchy path or instance id; prefer...",
+    summary: "Unpack a scene Prefab instance into regular GameObjects, irreversibly breaking the Prefab link.",
     description: "Unpack a prefab instance in the scene into a regular GameObject, breaking the prefab link irreversibly. target resolves by name, hierarchy path or instance id; prefer path/id. Destructive and structural; always inspect the target first and use --dry-run before --yes.",
     group: "prefab",
     inputSchema: objSchema({ target: { type: "string", description: "Prefab instance in the scene: name, hierarchy path or instance id." }, path: { type: "string", description: "Alias of target." } }, ["target"]),

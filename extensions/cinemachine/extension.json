@@ -2,7 +2,7 @@
   "id": "cinemachine",
   "name": "Cinemachine",
   "version": "1.0.0",
-  "description": "Smart camera system for Unity. Provides camera composition, tracking, blending, noise, and extension management through the Cinemachine package.",
+  "description": "Cinemachine camera tools: virtual camera creation, targets, lens, priority, blends, body/aim/noise, brain overrides, and extensions.",
   "unityPackages": [
     {
       "packageId": "com.unity.cinemachine",
@@ -54,7 +54,7 @@
     "contexts": [
       {
         "key": "cinemachine.cameras",
-        "description": "Cinemachine virtual cameras and composition in the current scene."
+        "description": "Read Cinemachine virtual cameras, Follow/LookAt targets, lens, priority, brain, and composition state in the current scene."
       }
     ],
     "csharpEntries": [

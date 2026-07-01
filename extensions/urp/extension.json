@@ -2,7 +2,7 @@
   "id": "urp",
   "name": "Universal Render Pipeline",
   "version": "1.0.0",
-  "description": "Universal Render Pipeline extension for Unity. Provides renderer feature management, volume configuration, and pipeline settings through the URP package.",
+  "description": "URP rendering tools: renderer features, volume components, and Universal Render Pipeline asset settings.",
   "unityPackages": [
     {
       "packageId": "com.unity.render-pipelines.universal",
@@ -24,7 +24,7 @@
     "contexts": [
       {
         "key": "urp.pipeline",
-        "description": "URP render pipeline assets, quality settings, and shader configuration."
+        "description": "Read URP render pipeline assets, renderer features, quality settings, and shader/pipeline configuration."
       }
     ],
     "csharpEntries": [

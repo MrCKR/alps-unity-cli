@@ -144,7 +144,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
   },
   {
     name: "asset.get-data",
-    summary: "Deep-serialize an asset's main Unity Object.",
+    summary: "Deep-read one asset's main Unity Object; use paths/viewQuery for token-safe fields.",
     description: "Deep-serialize an asset's main Unity Object. Use asset.search first when the path is unknown. Control payload with exact paths or one viewQuery; they are mutually exclusive. Avoid default-deep reads on large prefabs, textures, or ScriptableObjects.",
     group: "asset",
     inputSchema: objSchema({
@@ -182,7 +182,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
   },
   {
     name: "asset.get-components",
-    summary: "Read paged Prefab/GameObject component summaries for an asset without deep-serializing fields.",
+    summary: "List paged component summaries inside a Prefab/GameObject asset without deep field serialization.",
     description: "Read paged Prefab/GameObject component summaries for an asset without deep-serializing fields. Use query to filter GameObject path/name, componentType to filter components, and pageInfo.nextCursor to continue. For component field values use component.get with paths or viewQuery.",
     group: "asset",
     inputSchema: objSchema({ assetPath: { type: "string", description: "Exact Assets/* path to inspect." }, path: { type: "string", description: "Alias of assetPath." }, includeInactive: { type: "boolean", default: true }, query: { type: "string", description: "Optional GameObject name/path substring filter." }, componentType: { type: "string", description: "Optional component type filter, e.g. Animator or UnityEngine.Camera." }, pageSize: { type: "integer", default: 50, maximum: 500 }, cursor: { type: "integer", default: 0 } }, ["assetPath"]),
@@ -196,7 +196,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
   },
   {
     name: "asset.refresh",
-    summary: "Refresh the AssetDatabase in a live Editor or as a Unity batchmode job.",
+    summary: "Refresh AssetDatabase in a live Editor, or use --job for a closed-project batch refresh.",
     description: "Refresh the AssetDatabase in a live Editor or as a Unity batchmode job. Without --job, this runs through the open Editor bridge and may import one Assets/* path with refresh options. With --job, this opens a closed project in Unity batchmode and runs the same Bridge command, so the project must not already be open in Unity. Supports dry-run for planned effects.",
     group: "asset",
     inputSchema: objSchema({ path: { type: "string", description: "Optional Assets/* path to import instead of refreshing the whole AssetDatabase." }, assetPath: { type: "string", description: "Alias of path." }, forceUpdate: { type: "boolean", default: false, description: "Use ImportAssetOptions.ForceUpdate." }, importRecursive: { type: "boolean", default: false, description: "Use ImportAssetOptions.ImportRecursive for folder paths." }, project: { type: "string", description: "Unity project path when using --job batchmode execution." }, unity: { type: "string", description: "Unity executable path when using --job batchmode execution." }, wait: { type: "boolean", default: false, description: "Wait for the batchmode job to finish when using --job." }, waitTimeoutMs: { type: "integer", description: "Maximum wait time for the batchmode job when wait=true." } }),
@@ -213,7 +213,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
   },
   {
     name: "asset.preview",
-    summary: "Generate/read the asset preview thumbnail metadata (size, dimensions, transient state).",
+    summary: "Generate or read Unity asset preview thumbnail metadata, including size and transient state.",
     description: "Generate/read the asset preview thumbnail metadata (size, dimensions, transient state). Preview generation can be session-affecting because Unity may refresh transient preview cache.",
     group: "asset",
     inputSchema: objSchema({ assetPath: { type: "string" }, path: { type: "string" } }, ["assetPath"]),

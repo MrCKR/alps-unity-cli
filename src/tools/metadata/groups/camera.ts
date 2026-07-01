@@ -44,7 +44,7 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
   },
   {
     name: "camera.info",
-    summary: "Get one Camera's serializable settings.",
+    summary: "Get one scene Camera's serializable settings by name, path, or instance id.",
     description: "Get one Camera's serializable settings. Resolves by Camera name, hierarchy path, or instance id; returns E_CAMERA_NOT_FOUND with recovery guidance when missing.",
     group: "camera",
     inputSchema: objSchema({ target: { type: "string", description: "Camera name, hierarchy path, or instance id from camera.list." } }, ["target"]),
@@ -57,7 +57,7 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
   },
   {
     name: "camera.screenshot",
-    summary: "Render a screenshot from a specific Camera into a PNG/JPG artifact file.",
+    summary: "Render a PNG/JPG artifact from one specific Camera; use screenshot.* for view-based captures.",
     description: "Render a screenshot from a specific Camera into a PNG/JPG artifact file. Defaults return artifact paths only; inlineBase64 must be explicit and is omitted with a warning when the image exceeds the bridge inline limit. Restores camera render state after capture.",
     group: "camera",
     inputSchema: objSchema({ target: { type: "string", description: "Camera name, hierarchy path, or instance id." }, path: { type: "string", description: "File path for the artifact; relative paths resolve under the Unity project root." }, output: { type: "string", description: "Alias of path for CLI compatibility." }, width: { type: "integer", default: 1280, description: "Output width in pixels, clamped by the bridge for safety." }, height: { type: "integer", default: 720, description: "Output height in pixels, clamped by the bridge for safety." }, format: { type: "string", enum: ["png", "jpg", "jpeg"], description: "Defaults from output/path extension; jpeg is normalized to jpg." }, transparent: { type: "boolean", description: "Use transparent solid-color background for PNG-style captures." }, quality: { type: "integer", description: "JPG quality, clamped to 1..100." }, overwrite: { type: "boolean", description: "Allow replacing an existing output file." }, inlineBase64: { type: "boolean", default: false, description: "Also return imageBase64 when the encoded artifact is below the bridge inline limit." } }, ["target", "path"]),
@@ -97,7 +97,7 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
   },
   {
     name: "camera.target",
-    summary: "Set a Camera transform by looking at a GameObject and/or assigning explicit position/rotation.",
+    summary: "Aim or move one Camera transform using lookAt and/or explicit position/rotation.",
     description: "Set a Camera transform by looking at a GameObject and/or assigning explicit position/rotation. Session-affecting: marks the Camera dirty and can affect the running Play Mode view without persisting runtime-only state.",
     group: "camera",
     inputSchema: objSchema({
@@ -141,7 +141,7 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
   },
   {
     name: "camera.multiview",
-    summary: "Capture one PNG/JPG artifact per named Camera into an output directory.",
+    summary: "Capture one PNG/JPG artifact per named Camera into an output directory for multiview review.",
     description: "Capture one PNG/JPG artifact per named Camera into an output directory. This is a file-artifact variant of CoplayDev's multiview/contact-sheet idea; keep target count and resolution small for token and disk efficiency.",
     group: "camera",
     inputSchema: objSchema({

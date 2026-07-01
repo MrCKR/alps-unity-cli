@@ -4,7 +4,7 @@ import { objSchema, pageSchema } from "../schemas.js";
 export const EDITOR_TOOLS: ToolMetadata[] = [
   {
     name: "editor.console",
-    summary: "Read recent Unity Editor console entries through the legacy editor alias.",
+    summary: "Legacy alias for reading Console entries; prefer console.get for filters and pagination.",
     description: "Read recent Unity Editor console entries through the legacy editor alias. Prefer console.get for filter/search/cursor pagination. This alias is read-only; use console.clear with --dry-run or --yes for destructive clearing.",
     group: "editor",
     inputSchema: objSchema({ type: { type: "string", enum: ["error", "warning", "log", "assert", "all"], default: "all" }, count: { type: "integer", default: 50, description: "Recent entries to return, clamped to 1..500." } }),
@@ -17,7 +17,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
   },
   {
     name: "editor.state",
-    summary: "Query current Unity Editor readiness: Play Mode, pause, compile/import/build/domain-reload busy flags, active scene, prefab stage, bridge build stamp, and runtime...",
+    summary: "Read Editor readiness: PlayMode, busy flags, active scene, Prefab Stage, Bridge, and runtime status.",
     description: "Query current Unity Editor readiness: Play Mode, pause, compile/import/build/domain-reload busy flags, active scene, prefab stage, bridge build stamp, and runtime tool availability. Bridge commands run on Unity's main thread; use this before expensive tools and after editor.play/editor.stop/editor.menu to decide whether to retry later or continue. The bridge listener re-registers after domain reload; heartbeat/build stamp changes here are the observable reconnect signal.",
     group: "editor",
     inputSchema: objSchema({}),
@@ -166,8 +166,8 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
   },
   {
     name: "editor.refresh",
-    summary: "Trigger AssetDatabase.Refresh in a separate Unity batch job, optionally requesting script compilation and waiting for readiness.",
-    description: "Trigger AssetDatabase.Refresh in a separate Unity batch job, optionally requesting script compilation and waiting for readiness. Do not use this against a project already open in Unity; open projects can return UNITY_BUSY due to UnityLockfile.",
+    summary: "Closed-project batch refresh job; prefer asset.refresh for an already open live Editor.",
+    description: "Trigger AssetDatabase.Refresh in a separate Unity batch job, optionally requesting script compilation and waiting for readiness. Prefer asset.refresh for an already open live Editor; do not use this against a project already open in Unity because open projects can return UNITY_BUSY due to UnityLockfile.",
     group: "editor",
     inputSchema: objSchema({
       compile: { type: "boolean", default: false, description: "Request script compilation after refresh." },
@@ -219,7 +219,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
   },
   {
     name: "editor.compile-diagnostics",
-    summary: "Refresh the live Editor, wait for compile/import to settle, then return Console compile diagnostics.",
+    summary: "Refresh/wait live Editor, then return Console compile diagnostics for C# edit loops.",
     description: "Refresh the live Unity Editor AssetDatabase, wait for the Editor to become idle, and read recent Console errors in one call. This is the live-bridge compile diagnostics loop for AI workflows after editing C# files: it does not clear Console entries, does not save project files, and does not start a batchmode Editor. The CLI orchestrates existing live Bridge calls (asset.refresh, context read editor.state, console.get), retrying transient compile/import/domain-reload states within waitTimeoutMs. Use refresh=false to only wait/read Console, or pass path/assetPath to import a specific Assets/* path before collecting diagnostics.",
     group: "editor",
     inputSchema: objSchema({
