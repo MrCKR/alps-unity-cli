@@ -255,6 +255,10 @@ Packages/com.unity_cli/Extensions/<id>/
 - JSON Schema 与实际输入输出一致。
 - README、docs、Skill 中的命令形态一致。
 - 相关测试覆盖成功路径、错误路径、Editor/PlayMode 差异、extension availability。
+- 凡新增或修改 Tool / Context / Extension 能力，必须建立真实调用测试矩阵；单元测试、契约测试、源码断言只能作为补充，不能替代 Unity 实例上的真实调用。
+- 真实调用矩阵必须覆盖每个受影响能力的每类公开用法：默认调用、主要可选参数、筛选/分页/精读/续读等新增能力、边界值、错误路径、权限/`--yes`/`--dry-run` 行为，以及 Editor/PlayMode 差异。组合爆炸时可以按等价类压缩，但不得跳过任何公开行为类别。
+- 正向用例必须验证输出 envelope 的关键业务字段，不只检查 `ok:true`；反向用例必须验证稳定 `error.code`、`message`、`transient`、`retry_after_ms`、`next_actions`。
+- 每个真实调用证据必须记录完整命令、输入 JSON、输出 envelope、前置状态、测试夹具、目标 Unity instance/endpoint 和是否产生持久化副作用。
 
 不得为了让测试通过而降低 descriptor 质量或放宽契约。
 
@@ -272,6 +276,9 @@ Packages/com.unity_cli/Extensions/<id>/
 - 如果本轮修改了 `unitypkg/`、扩展 `unitypkg/`、Bridge C# handler、Unity 安装投影逻辑或 Dev 测试夹具，必须先通过当前 CLI 的 init/install 流程同步到 `./Dev/UnityProject`。
 - 如果本轮修改了影响 init/install 的 TypeScript CLI 逻辑，必须先完成必要 build，再同步到 `./Dev/UnityProject`。
 - 同步后必须等待 Unity import、compile、domain reload 完成，并用 `editor.state` 或等价只读检查确认 Unity 不处于 busy 状态；否则真实调用证据无效。
+- Dev 烟测不得只抽样一个 happy path；凡本轮影响 Unity 侧行为，必须在 `./Dev` 上真实调用所有受影响 Tool / Context / Extension 能力，并按契约与测试章节的矩阵要求覆盖正向、反向、边界、Editor/PlayMode 差异和持久化安全行为。
+- 破坏性持久化能力的真实调用必须优先使用 `--dry-run` 验证计划输出；需要真实写入/删除时，只能在 `./Dev` 专用夹具路径执行，并必须记录清理或保留原因。
+- 如果某个矩阵项因 Unity 机制、缺少 package、环境故障或安全风险无法真实调用，必须记录精确 blocker、不可替代原因、已覆盖的邻近证据和解锁条件；不得把未调用项写成通过。
 
 ## 子代理门禁
 
@@ -279,11 +286,13 @@ Packages/com.unity_cli/Extensions/<id>/
 
 强制标准：
 
+- 子代理模型应该显式使用"LMD/deepseek-v4-pro"
 - 子代理不能继承实现细节或开发过程上下文。
 - 子代理必须像陌生 AI 一样，从 CLI 自发现开始。
-- Tool 必须经过 `tools group` / `tools group list <group>` / `tools describe <tool>` 后，一次性 `tools run <tool>` 调用成功。
-- Context 必须经过 `context list` / `context describe <context>` 后，一次性 `context read <context>` 调用成功。
-- Extension 必须能理解安装状态、依赖提示、可用性，然后成功发现、describe、调用其贡献能力。
+- Tool 必须经过 `tools group` / `tools group list <group>` / `tools describe <tool>` 后，真实执行 `tools run <tool>`；不得只读取 descriptor 或只调用无关工具。
+- Context 必须经过 `context list` / `context describe <context>` 后，真实执行 `context read <context>`；不得只读取 description。
+- Extension 必须能理解安装状态、依赖提示、可用性，然后成功发现、describe、真实调用其贡献能力。
+- 子代理必须覆盖所有本轮新增或修改的 Tool / Context / Extension 能力。每个受影响能力至少包含默认正向调用、一个代表性可选用法正向调用、一个反向/错误路径调用；新增分页、筛选、精读、续读、PlayMode、dry-run 或 destructive 行为时，还必须覆盖对应行为类别。组合爆炸时可以按等价类压缩，但必须说明未枚举组合为什么等价。
 - 子代理只能学习一次 descriptor；如果还需要额外人工解释，说明接口设计失败。
 - 主 Agent 给子代理的提示词只能用自然语言说明任务目标、需要验证的能力名称、项目/实例/夹具信息和安全边界；最多只能提示“先查看 describe/工具说明再调用”，不得写出具体发现命令链、最终 `tools run` / `context read` 命令、完整输入 JSON、预期成功输出、源码路径、实现细节或人工补充参数解释。
 - 子代理需要使用什么参数、如何构造输入、何时先查哪个能力，必须由公开 describe 信息提供；如果还需要主 Agent 在提示词里补充使用细节，说明 descriptor 设计失败。
@@ -294,9 +303,10 @@ Packages/com.unity_cli/Extensions/<id>/
 
 - 子代理使用的发现链。
 - 子代理读取的 descriptor 或 context description。
-- 最终执行命令。
-- 输入 JSON。
-- 输出 envelope。
+- 每个受影响能力的测试矩阵，标明正向、反向、边界、Editor/PlayMode、dry-run/destructive、分页/筛选/精读/续读等覆盖项。
+- 每次真实调用的最终执行命令。
+- 每次真实调用的输入 JSON。
+- 每次真实调用的输出 envelope。
 - 子代理是否收到过被禁止的具体发现链、最终命令、输入 JSON、预期输出、源码路径、实现细节或人工参数解释。
 - 如失败，记录失败原因与回改内容。
 

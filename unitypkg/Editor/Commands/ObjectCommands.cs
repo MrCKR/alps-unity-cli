@@ -110,6 +110,7 @@ namespace UnityCli
             var options = new ObjectSerializer.Options
             {
                 MaxDepth = request.IntArg("maxDepth", 4),
+                MaxArrayItems = Math.Max(0, Math.Min(request.IntArg("maxArrayItems", 50), 1000)),
                 IncludeFields = request.BoolArg("includeFields", true),
                 IncludeProperties = request.BoolArg("includeProperties", true),
                 DeepSerialization = request.BoolArg("deepSerialization", true)

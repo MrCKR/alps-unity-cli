@@ -76,6 +76,10 @@ function assetGetComponentsArgs({ flags, positionalTarget }: Parameters<BridgeCo
   return compactArgs({
     assetPath: positionalTarget ?? stringFlag(flags, "asset-path") ?? stringFlag(flags, "path") ?? stringFlag(flags, "target") ?? structured.assetPath ?? structured.path,
     includeInactive: boolFlag(flags, "include-inactive") ?? structured.includeInactive,
+    query: stringFlag(flags, "query") ?? structured.query,
+    nameFilter: stringFlag(flags, "name-filter") ?? structured.nameFilter,
+    pathFilter: stringFlag(flags, "path-filter") ?? structured.pathFilter,
+    componentType: stringFlag(flags, "component-type") ?? structured.componentType,
     pageSize: numberFlag(flags, "page-size") ?? structured.pageSize,
     cursor: numberFlag(flags, "cursor") ?? structured.cursor
   });

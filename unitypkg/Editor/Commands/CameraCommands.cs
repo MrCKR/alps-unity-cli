@@ -106,9 +106,9 @@ namespace UnityCli
                 texture.Apply();
                 var bytes = format == "jpg" ? texture.EncodeToJPG(quality) : texture.EncodeToPNG();
                 WriteScreenshotBytes(outputPath, bytes);
-                var imageBase64 = request.BoolArg("inlineBase64", false) ? Convert.ToBase64String(bytes) : null;
+                var inlineRequested = request.BoolArg("inlineBase64", false);
                 WriteLog("screenshot_written path=" + outputPath + " width=" + width + " height=" + height + " format=" + format);
-                return new ScreenshotResult(outputPath, format, width, height, transparent, quality, imageBase64);
+                return new ScreenshotResult(outputPath, format, width, height, transparent, quality, null, bytes, inlineRequested);
             }
             finally
             {
@@ -185,7 +185,7 @@ namespace UnityCli
                 .Prop("quality", (long)capture.Quality)
                 .Prop("source", source)
                 .Prop("target", target);
-            AppendInlineScreenshot(w, capture.ImageBase64, capture.Width, capture.Height, capture.Format == "jpg" ? "image/jpeg" : "image/png");
+            AppendCameraInlineScreenshot(w, capture);
             return w.Prop("logPath", LogPath()).EndObject().ToString();
         }
 
@@ -201,8 +201,24 @@ namespace UnityCli
                 .Prop("quality", (long)capture.Quality)
                 .Prop("source", source)
                 .Prop("target", target);
-            AppendInlineScreenshot(w, capture.ImageBase64, capture.Width, capture.Height, capture.Format == "jpg" ? "image/jpeg" : "image/png");
+            AppendCameraInlineScreenshot(w, capture);
             return w.EndObject().ToString();
+        }
+
+        /// <summary>按图片字节上限控制相机截图内联，避免大 base64 进入响应。</summary>
+        private static void AppendCameraInlineScreenshot(UnityCliJsonWriter writer, ScreenshotResult capture)
+        {
+            if (capture == null || !capture.InlineBase64Requested) return;
+            var mimeType = capture.Format == "jpg" ? "image/jpeg" : "image/png";
+            if (capture.ImageBytes != null)
+            {
+                AppendInlineScreenshotBytes(writer, BridgeRequest.Parse("{\"inlineBase64\":true}"), capture.ImageBytes, capture.Width, capture.Height, mimeType);
+                return;
+            }
+            if (ShouldInlineScreenshotBase64(writer, capture.ImageBase64))
+            {
+                AppendInlineScreenshot(writer, capture.ImageBase64, capture.Width, capture.Height, mimeType);
+            }
         }
 
         private static string CameraCreate(BridgeRequest request)

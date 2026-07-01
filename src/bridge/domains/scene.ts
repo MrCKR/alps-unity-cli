@@ -54,7 +54,9 @@ function sceneHierarchyArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]
     cursor: numberFlag(flags, "cursor") ?? numberValue(structured.cursor),
     parent: stringFlag(flags, "parent") ?? stringValue(structured.parent),
     maxDepth: numberFlag(flags, "max-depth") ?? numberValue(structured.maxDepth),
-    nameFilter: stringFlag(flags, "name-filter") ?? stringFlag(flags, "filter") ?? stringValue(structured.nameFilter),
+    nameFilter: stringFlag(flags, "name-filter") ?? stringFlag(flags, "filter") ?? stringFlag(flags, "query") ?? stringValue(structured.nameFilter) ?? stringValue(structured.query),
+    query: stringFlag(flags, "query") ?? stringValue(structured.query),
+    componentType: stringFlag(flags, "component-type") ?? stringValue(structured.componentType),
     includeComponents: boolFlag(flags, "include-components") ?? boolValue(structured.includeComponents),
     includeInactive: boolFlag(flags, "include-inactive") ?? boolValue(structured.includeInactive)
   });

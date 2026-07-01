@@ -65,6 +65,8 @@ namespace UnityCli
             }
         }
 
+        private static bool? previousProfilerEditorRecording;
+
         private static bool GetProfilerSessionEnabled()
         {
             var property = ProfilerDriverEnabledProperty();
@@ -73,6 +75,17 @@ namespace UnityCli
                 return (bool)property.GetValue(null, null);
             }
             return UnityEngine.Profiling.Profiler.enabled;
+        }
+
+        private static bool GetProfilerEditorRecording()
+        {
+            var type = FindType("UnityEditorInternal.ProfilerDriver");
+            var property = type == null ? null : type.GetProperty("profileEditor", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            if (property != null && property.CanRead)
+            {
+                try { return (bool)property.GetValue(null, null); } catch { }
+            }
+            return false;
         }
 
         private static void SetProfilerSessionEnabled(bool enabled)
@@ -86,10 +99,39 @@ namespace UnityCli
             UnityEngine.Profiling.Profiler.enabled = enabled;
         }
 
+        // Editor Profiler 历史帧需要同时打开 Profile Editor，否则 hierarchy 读不到 frame data。
+        private static void SetProfilerEditorRecording(bool enabled)
+        {
+            var type = FindType("UnityEditorInternal.ProfilerDriver");
+            var property = type == null ? null : type.GetProperty("profileEditor", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            if (property != null && property.CanWrite)
+            {
+                property.SetValue(null, enabled, null);
+            }
+        }
+
         private static PropertyInfo ProfilerDriverEnabledProperty()
         {
             var type = FindType("UnityEditorInternal.ProfilerDriver");
             return type == null ? null : type.GetProperty("enabled", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+        }
+
+        private static int ProfilerDriverIntProperty(string name, int fallback)
+        {
+            var type = FindType("UnityEditorInternal.ProfilerDriver");
+            var property = type == null ? null : type.GetProperty(name, BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            if (property == null || !property.CanRead)
+            {
+                return fallback;
+            }
+            try
+            {
+                return (int)property.GetValue(null, null);
+            }
+            catch
+            {
+                return fallback;
+            }
         }
 
         private const string ProfilerHandlerFingerprint = "profiler-driver-session-v2";
@@ -101,6 +143,7 @@ namespace UnityCli
                 .Prop("enableBinaryLog", UnityEngine.Profiling.Profiler.enableBinaryLog)
                 .Prop("logFile", UnityEngine.Profiling.Profiler.logFile)
                 .Prop("enableAllocationCallstacks", UnityEngine.Profiling.Profiler.enableAllocationCallstacks)
+                .Prop("profileEditor", GetProfilerEditorRecording())
                 .Prop("isPaused", EditorApplication.isPaused)
                 .Prop("supported", UnityEngine.Profiling.Profiler.supported)
                 .Prop("maxUsedMemoryBytes", (long)UnityEngine.Profiling.Profiler.maxUsedMemory)
@@ -408,6 +451,11 @@ namespace UnityCli
             var deepProfiling = request.BoolArg("deepProfiling", false);
             var logFile = request.StringArg("logFile");
             var enableCallstacks = request.BoolArg("enableCallstacks", false);
+            if (!previousProfilerEditorRecording.HasValue)
+            {
+                previousProfilerEditorRecording = GetProfilerEditorRecording();
+            }
+            SetProfilerEditorRecording(true);
             SetProfilerSessionEnabled(true);
             SetProfilerDeepProfiling(deepProfiling);
             // 可选：启动时指定二进制日志文件，等价 Profiler.logFile + enableBinaryLog。
@@ -435,6 +483,11 @@ namespace UnityCli
         private static string ProfilerStop(BridgeRequest request)
         {
             SetProfilerSessionEnabled(false);
+            if (previousProfilerEditorRecording.HasValue)
+            {
+                SetProfilerEditorRecording(previousProfilerEditorRecording.Value);
+                previousProfilerEditorRecording = null;
+            }
             UnityEngine.Profiling.Profiler.enableBinaryLog = false;
             WriteLog("profiler_stopped");
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
@@ -733,18 +786,23 @@ namespace UnityCli
             {
                 return ErrorJson("E_PROFILER_HIERARCHY_UNAVAILABLE", "UnityEditorInternal.ProfilerDriver is not available; hierarchy requires the Editor Profiler.", "Run this in the Unity Editor (not batchmode without profiler support).");
             }
-            var frame = request.OptionalIntArg("frame") ?? -1; // -1 表示最新已采集帧
+            var frame = request.OptionalIntArg("frame") ?? ProfilerDriverIntProperty("lastFrameIndex", -1); // 省略 frame 时读取最新已采集帧
             var threadIndex = request.OptionalIntArg("thread") ?? 0;
-            var top = Math.Max(1, Math.Min(request.OptionalIntArg("top") ?? 50, 5000));
-            var maxDepth = Math.Max(1, Math.Min(request.OptionalIntArg("depth") ?? 8, 32));
+            var top = Math.Max(1, Math.Min(request.OptionalIntArg("top") ?? 20, 5000));
+            var maxDepth = Math.Max(1, Math.Min(request.OptionalIntArg("depth") ?? 5, 32));
 
-            // GetHierarchyFrameDataView(int frame, int threadIndex, HierarchyFrameDataView.ViewModes viewMode, ...) → HierarchyFrameDataView
-            var hierarchyViewType = FindType("UnityEngine.Profiling.HierarchyFrameDataView");
+            // Unity 2022.3 当前类型位于 UnityEditor.Profiling；保留旧命名空间作为兼容回退。
+            var hierarchyViewType = FindType("UnityEditor.Profiling.HierarchyFrameDataView")
+                ?? FindType("UnityEditorInternal.HierarchyFrameDataView")
+                ?? FindType("UnityEngine.Profiling.HierarchyFrameDataView");
             if (hierarchyViewType == null)
             {
-                return ErrorJson("E_PROFILER_HIERARCHY_UNAVAILABLE", "HierarchyFrameDataView type not available in this Unity version.", "Use Unity 2018.4+ where UnityEngine.Profiling.HierarchyFrameDataView exists.");
+                return ErrorJson("E_PROFILER_HIERARCHY_UNAVAILABLE", "HierarchyFrameDataView type not available in this Unity version.", "Use an Editor version that exposes UnityEditor.Profiling.HierarchyFrameDataView, then record profiler frames before retrying.");
             }
-            var getHierarchy = driverType.GetMethod("GetHierarchyFrameDataView", new[] { typeof(int), typeof(int), hierarchyViewType.GetTypeInfo().GetDeclaredNestedType("ViewModes")?.AsType() ?? typeof(int), typeof(int), typeof(int) });
+            var viewModesType = hierarchyViewType.GetTypeInfo().GetDeclaredNestedType("ViewModes")?.AsType();
+            var getHierarchy = viewModesType == null
+                ? null
+                : driverType.GetMethod("GetHierarchyFrameDataView", new[] { typeof(int), typeof(int), viewModesType, typeof(int), typeof(bool) });
             // 不同 Unity 版本签名不同；退回 (int,int) 最简重载。
             if (getHierarchy == null)
             {
@@ -760,7 +818,7 @@ namespace UnityCli
             {
                 view = getHierarchy.GetParameters().Length == 2
                     ? getHierarchy.Invoke(null, new object[] { frame, threadIndex })
-                    : getHierarchy.Invoke(null, new object[] { frame, threadIndex, 0, 0, 0 });
+                    : getHierarchy.Invoke(null, new object[] { frame, threadIndex, 0, 0, false });
             }
             catch (Exception exception)
             {
@@ -790,6 +848,8 @@ namespace UnityCli
             w.Prop("command", "profiler.hierarchy");
             w.Prop("frame", (long)resolvedFrame);
             w.Prop("thread", (long)threadIndex);
+            w.Prop("top", (long)top);
+            w.Prop("depth", (long)maxDepth);
             w.PropArray("rootItems", arr => { BuildHierarchyItems(view, hierarchyViewType, 0, top, maxDepth, 0, arr); });
             w.Prop("logPath", LogPath());
             return SuccessJson(w.EndObject().ToString());
@@ -820,15 +880,17 @@ namespace UnityCli
                 double ms = 0;
                 try { if (nameMethod != null) name = nameMethod.Invoke(view, new object[] { childId }) as string; } catch { }
                 try { if (msMethod != null) { var v = msMethod.Invoke(view, new object[] { childId }); if (v is double d) ms = d; else if (v is float f) ms = f; } } catch { }
+                var grandChildren = new List<int>();
+                try { if (childrenProp != null) childrenProp.Invoke(view, new object[] { childId, grandChildren }); } catch { }
                 arr.BeginObject()
                     .Prop("id", (long)childId)
                     .Prop("name", name ?? "(unknown)")
                     .Prop("depth", (long)depth)
                     .Prop("ms", ms)
-                    .Prop("childCount", (long)childIds.Count);
+                    .Prop("siblingCount", (long)childIds.Count)
+                    .Prop("childCount", (long)grandChildren.Count)
+                    .Prop("childrenTruncated", grandChildren.Count > top || (grandChildren.Count > 0 && depth + 1 > maxDepth));
                 // 递归子项写入 children 数组
-                var grandChildren = new List<int>();
-                try { if (childrenProp != null) childrenProp.Invoke(view, new object[] { childId, grandChildren }); } catch { }
                 if (grandChildren.Count > 0 && depth + 1 <= maxDepth)
                 {
                     arr.PropArray("children", childArr => BuildHierarchyItems(view, viewType, childId, top, maxDepth, depth + 1, childArr));

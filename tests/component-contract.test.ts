@@ -95,7 +95,10 @@ test("component.get supports ObjectRef resolution and token-safe read scopes", (
   assert.ok(props.component, "component type name should be supported");
   assert.ok(props.paths, "paths should be supported for exact component reads");
   assert.ok(props.viewQuery, "viewQuery should be supported for scoped component reads");
+  assert.ok(props.maxArrayItems, "maxArrayItems should cap large arrays/lists/dictionaries");
   assert.ok(output.data, "component.get output should expose serialized data");
+  assert.ok(output.truncated, "component.get output should expose truncation continuation state");
+  assert.ok(output.nextPath, "component.get output should expose nextPath for precision continuation");
   assert.match(get.description, /mutually exclusive/, "describe text should warn paths/viewQuery are mutually exclusive");
 });
 

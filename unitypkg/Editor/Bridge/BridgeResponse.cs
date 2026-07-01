@@ -30,7 +30,7 @@ namespace UnityCli
     {
         private sealed class ScreenshotResult
         {
-            public ScreenshotResult(string path, string format, int width, int height, bool transparent, int quality, string imageBase64)
+            public ScreenshotResult(string path, string format, int width, int height, bool transparent, int quality, string imageBase64, byte[] imageBytes = null, bool inlineBase64Requested = false)
             {
                 Path = path;
                 Format = format;
@@ -39,6 +39,8 @@ namespace UnityCli
                 Transparent = transparent;
                 Quality = quality;
                 ImageBase64 = imageBase64;
+                ImageBytes = imageBytes;
+                InlineBase64Requested = inlineBase64Requested;
             }
 
             public string Path { get; private set; }
@@ -48,6 +50,8 @@ namespace UnityCli
             public bool Transparent { get; private set; }
             public int Quality { get; private set; }
             public string ImageBase64 { get; private set; }
+            public byte[] ImageBytes { get; private set; }
+            public bool InlineBase64Requested { get; private set; }
         }
     }
 }

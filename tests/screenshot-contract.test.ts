@@ -59,9 +59,9 @@ test("contract entries exist for screenshot tools with present C# handler", () =
 
 test("screenshot tools expose play mode support, side effects and output schema", () => {
   const expected: Record<string, { playModeSupport: string; sideEffects?: string[] }> = {
-    "screenshot.capture": { playModeSupport: "editor-only", sideEffects: ["asset-write"] },
+    "screenshot.capture": { playModeSupport: "supported", sideEffects: ["asset-write"] },
     "screenshot.game-view": { playModeSupport: "supported", sideEffects: ["asset-write"] },
-    "screenshot.scene-view": { playModeSupport: "editor-only", sideEffects: ["asset-write"] },
+    "screenshot.scene-view": { playModeSupport: "supported", sideEffects: ["asset-write"] },
     "screenshot.isolated-object": { playModeSupport: "editor-only", sideEffects: ["asset-write"] },
     "screenshot.orbit": { playModeSupport: "editor-only", sideEffects: ["asset-write"] },
     "screenshot.surround": { playModeSupport: "editor-only", sideEffects: ["asset-write"] }
@@ -78,12 +78,16 @@ test("screenshot tools expose play mode support, side effects and output schema"
 test("screenshot inline base64 and surround fields are self-describing", () => {
   for (const name of ["screenshot.capture", "screenshot.game-view", "screenshot.scene-view", "screenshot.isolated-object"]) {
     const props = findToolByName(name)!.inputSchema.properties as Record<string, unknown>;
-    assert.ok(props.inlineBase64, `${name} should document inlineBase64`);
+    const inlineBase64 = props.inlineBase64 as { description?: string };
+    assert.ok(inlineBase64, `${name} should document inlineBase64`);
+    assert.match(inlineBase64.description ?? "", /Defaults false|base64/i, `${name} should explain bounded optional inline output`);
   }
   const surround = findToolByName("screenshot.surround")!;
   const props = surround.inputSchema.properties as Record<string, unknown>;
   assert.ok(props.contactSheetPath, "surround should document contactSheetPath");
-  assert.ok(props.inlineBase64, "surround should document optional contact sheet base64");
+  const inlineBase64 = props.inlineBase64 as { description?: string };
+  assert.ok(inlineBase64, "surround should document optional contact sheet base64");
+  assert.match(inlineBase64.description ?? "", /Defaults false|base64/i);
   assert.match(surround.description, /six fixed angles/i);
   assert.match(surround.description, /--dry-run/);
 });

@@ -80,6 +80,7 @@ unity_cli tools search <keyword>
 - 用 `--input`、`--input-file` 或 `--stdin` 传参；缺少 `inputSchema.required` 字段会在执行前返回 `E_SCHEMA_INVALID`。
 - Bridge 工具在 Unity 主线程执行；Unity 正在 compile/import/build、Play Mode 切换或 domain reload 时，先用 `tools run editor.state --input '{"waitReady":true}'` 等待 `busy.isBusy=false`。
 - Bridge listener 会在 domain reload 后自动重连；用 `editor.state` 的 `bridge` heartbeat/build stamp 判断恢复，不要手动读注册文件或 ping endpoint。
+- 大响应工具先用小页和过滤：层级/列表传 `pageSize`、`cursor`、`parent`、`query`、`componentType`、`className`，按 `pageInfo.nextCursor` 续读；深读工具优先用 `paths` 或 `viewQuery`，用 `maxDepth`、`maxArrayItems` 控制输出；文本源码按 `offset`/`maxBytes` 分段；截图/相机默认使用 artifact 路径，只有需要时才传 `inlineBase64:true`。
 - `destructiveHint: true` 的工具先用 `--dry-run`（如支持），确认后加 `--yes`。
 - Runtime 工具通常需要 Play Mode；遇到 `E_RUNTIME_NOT_READY`，按 `next_actions` 处理。
 - `playModeSupport: "editor-only"` 的工具不要在 Play Mode 下运行；

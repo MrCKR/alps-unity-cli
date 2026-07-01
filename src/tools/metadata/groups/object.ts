@@ -18,6 +18,7 @@ export const OBJECT_TOOLS: ToolMetadata[] = [
       path: { type: "string", description: "GameObject hierarchy path or name." },
       name: { type: "string", description: "GameObject name (alias of path)." },
       maxDepth: { type: "integer", default: 4, description: "Max serialization depth for full reads or viewQuery subtree." },
+      maxArrayItems: { type: "integer", default: 50, description: "Maximum array/list/dictionary entries returned per serialized member before truncation." },
       includeFields: { type: "boolean", default: true },
       includeProperties: { type: "boolean", default: true },
       deepSerialization: { type: "boolean", default: true },
@@ -32,13 +33,17 @@ export const OBJECT_TOOLS: ToolMetadata[] = [
       path: { type: "string", description: "SerializedMember root path." },
       fields: { type: "array", items: { type: "object" }, description: "Present for path aggregate or expanded field data." },
       props: { type: "array", items: { type: "object" }, description: "Present for property data when included." },
-      unityObjectRef: { type: "object" }
+      unityObjectRef: { type: "object" },
+      truncated: { type: "boolean" },
+      totalCount: { type: "integer" },
+      returnedCount: { type: "integer" },
+      nextPath: { type: "string" }
     }),
     destructiveHint: false,
     playModeSupport: "supported",
     examples: [
-      { description: "Read by instanceId", argv: ["tools", "run", "object.get-data", "--input", "{\"instanceId\":12345}"] },
       { description: "Read an asset name only", argv: ["tools", "run", "object.get-data", "--input", "{\"assetPath\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeMaterial.mat\",\"paths\":[\"name\"],\"maxDepth\":2}"] },
+      { description: "Read a selected object field by instance id", argv: ["tools", "run", "object.get-data", "--input", "{\"instanceId\":12345,\"paths\":[\"name\"],\"maxArrayItems\":50}"] },
       { description: "Read a filtered asset subtree", argv: ["tools", "run", "object.get-data", "--input", "{\"assetPath\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeMaterial.mat\",\"viewQuery\":{\"namePattern\":\"name\",\"maxDepth\":1}}"] }
     ]
   },

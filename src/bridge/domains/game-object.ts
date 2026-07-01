@@ -159,6 +159,7 @@ function componentDeepArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>
     component: stringFlag(flags, "component") ?? stringFlag(flags, "type") ?? structured.component,
     componentType: stringFlag(flags, "component-type") ?? structured.componentType,
     maxDepth: numberFlag(flags, "max-depth") ?? structured.maxDepth,
+    maxArrayItems: numberFlag(flags, "max-array-items") ?? structured.maxArrayItems,
     includeFields: boolFlag(flags, "include-fields") ?? structured.includeFields,
     includeProperties: boolFlag(flags, "include-properties") ?? structured.includeProperties,
     deepSerialization: boolFlag(flags, "deep-serialization") ?? structured.deepSerialization,

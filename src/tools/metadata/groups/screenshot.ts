@@ -33,7 +33,7 @@ export const SCREENSHOT_TOOLS: ToolMetadata[] = [
     outputSchema: SCREENSHOT_OUTPUT,
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],
-    playModeSupport: "editor-only",
+    playModeSupport: "supported",
     examples: [
       { description: "Capture the scene view to a PNG", argv: ["tools", "run", "screenshot.capture", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/CapturedShot.png\"}"] }
     ]
@@ -75,7 +75,7 @@ export const SCREENSHOT_TOOLS: ToolMetadata[] = [
     outputSchema: SCREENSHOT_OUTPUT,
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],
-    playModeSupport: "editor-only",
+    playModeSupport: "supported",
     examples: [
       { description: "Capture the scene view", argv: ["tools", "run", "screenshot.scene-view", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/SceneShot.png\"}"] }
     ]

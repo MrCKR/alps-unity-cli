@@ -28,19 +28,26 @@ export const SHADER_TOOLS: ToolMetadata[] = [
   },
   {
     name: "shader.read",
-    summary: "Read the UTF-8 source code of a .shader file.",
-    description: "Read the UTF-8 source code of a .shader file. Use this to inspect or port HLSL before shader.update. ShaderGraph (.shadergraph) assets are binary JSON and not meant for line editing; prefer shader.info for those.",
+    summary: "Read a UTF-8 .shader file in bounded byte ranges.",
+    description: "Read a UTF-8 .shader file in bounded byte ranges. Defaults to maxBytes=65536 and returns nextOffset when truncated; pass offset from the previous response to continue. ShaderGraph (.shadergraph) assets are binary JSON and not meant for line editing; prefer shader.info for those.",
     group: "shader",
-    inputSchema: objSchema({ path: { type: "string", description: "Existing Assets/*.shader path." } }, ["path"]),
+    inputSchema: objSchema({ path: { type: "string", description: "Existing Assets/*.shader path." }, offset: { type: "integer", default: 0, description: "Byte offset to start reading from." }, maxBytes: { type: "integer", default: 65536, description: "Maximum bytes to return, clamped by the bridge." } }, ["path"]),
     outputSchema: objSchema({
       shader: objSchema({ path: { type: "string" }, guid: { type: "string" }, name: { type: "string" }, encoding: { type: "string" } }),
       content: { type: "string" },
-      encoding: { type: "string" }
+      encoding: { type: "string" },
+      offset: { type: "integer" },
+      maxBytes: { type: "integer" },
+      sizeBytes: { type: "integer" },
+      returnedBytes: { type: "integer" },
+      truncated: { type: "boolean" },
+      nextOffset: { type: "string" }
     }),
     destructiveHint: false,
     playModeSupport: "supported",
     examples: [
-      { description: "Read shader source for editing", argv: ["tools", "run", "shader.read", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeShader.shader\"}"] }
+      { description: "Read the first shader source chunk", argv: ["tools", "run", "shader.read", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeShader.shader\",\"maxBytes\":65536}"] },
+      { description: "Continue reading from nextOffset", argv: ["tools", "run", "shader.read", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeShader.shader\",\"offset\":65536,\"maxBytes\":65536}"] }
     ]
   },
   {
@@ -146,7 +153,7 @@ export const SHADER_TOOLS: ToolMetadata[] = [
     destructiveHint: false,
     playModeSupport: "supported",
     examples: [
-      { description: "Read shader property definitions and pass structure by path", argv: ["tools", "run", "shader.get-data", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeShader.shader\",\"includeSubshaders\":true,\"maxPasses\":8}"] },
+      { description: "Read shader properties and capped pass structure", argv: ["tools", "run", "shader.get-data", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeShader.shader\",\"includeSourceCode\":false,\"maxPasses\":4}"] },
       { description: "Resolve a built-in shader by name without source code", argv: ["tools", "run", "shader.get-data", "--input", "{\"name\":\"Standard\",\"includeSourceCode\":false}"] }
     ]
   }

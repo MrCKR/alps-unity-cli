@@ -453,6 +453,18 @@ test("component lifecycle tools forward structured --input fields", async () => 
   assert.equal(requests[2].command, "component.set");
   assert.deepEqual(requests[2].args, singleInput);
 
+  const getInput = { target: "Main Camera", component: "Camera", paths: ["layerCullDistances"], maxArrayItems: 5 };
+  const getResult = await execute(["tools", "run", "component.get", "--input", JSON.stringify(getInput)], {
+    ...runtime,
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { command: payload.command } };
+    }
+  });
+  assert.equal(getResult.ok, true);
+  assert.equal(requests[3].command, "component.get");
+  assert.deepEqual(requests[3].args, { path: "Main Camera", component: "Camera", paths: ["layerCullDistances"], maxArrayItems: 5 });
+
   const removeInput = { target: "UnityCliAlignmentProbe", component: "BoxCollider", componentIndex: 0 };
   const removeResult = await execute(["tools", "run", "component.remove", "--input", JSON.stringify(removeInput)], {
     ...runtime,
@@ -462,8 +474,8 @@ test("component lifecycle tools forward structured --input fields", async () => 
     }
   });
   assert.equal(removeResult.ok, true);
-  assert.equal(requests[3].command, "component.remove");
-  assert.deepEqual(requests[3].args, removeInput);
+  assert.equal(requests[4].command, "component.remove");
+  assert.deepEqual(requests[4].args, removeInput);
 
   const batchRemoveInput = { target: "UnityCliAlignmentProbe", components: ["BoxCollider", "Rigidbody"] };
   const batchRemoveResult = await execute(["tools", "run", "component.remove", "--input", JSON.stringify(batchRemoveInput)], {
@@ -474,8 +486,8 @@ test("component lifecycle tools forward structured --input fields", async () => 
     }
   });
   assert.equal(batchRemoveResult.ok, true);
-  assert.equal(requests[4].command, "component.remove");
-  assert.deepEqual(requests[4].args, batchRemoveInput);
+  assert.equal(requests[5].command, "component.remove");
+  assert.deepEqual(requests[5].args, batchRemoveInput);
 });
 
 test("tools run forwards structured --input fields with pwsh escaping", async () => {
@@ -666,7 +678,7 @@ test("prefab commands forward paths, pagination, modify args and planned effects
   const create = await execute(["tools", "run", "prefab.create", "Player", "--path", "Assets/Prefabs/Player.prefab", "--overwrite"], { ...runtime, bridgeExecute });
   const modify = await execute(["tools", "run", "prefab.modify", "Assets/Prefabs/Player.prefab", "--name", "Hero", "--add-child", "Socket", "--remove-child", "OldSocket", "--overwrite"], { ...runtime, bridgeExecute });
   const open = await execute(["tools", "run", "prefab.stage-open", "Assets/Prefabs/Player.prefab"], { ...runtime, bridgeExecute });
-  const hierarchy = await execute(["tools", "run", "prefab.hierarchy", "Assets/Prefabs/Player.prefab", "--page-size", "25", "--cursor", "50"], { ...runtime, bridgeExecute });
+  const hierarchy = await execute(["tools", "run", "prefab.hierarchy", "Assets/Prefabs/Player.prefab", "--page-size", "25", "--cursor", "50", "--parent", "Player", "--query", "Socket", "--component-type", "Transform"], { ...runtime, bridgeExecute });
   const save = await execute(["tools", "run", "prefab.stage-save"], { ...runtime, bridgeExecute });
   const close = await execute(["tools", "run", "prefab.stage-close", "--save"], { ...runtime, bridgeExecute });
 
@@ -681,7 +693,7 @@ test("prefab commands forward paths, pagination, modify args and planned effects
   assert.deepEqual(requests[0].args, { path: "Assets/Prefabs/Player.prefab" });
   assert.deepEqual(requests[1].args, { source: "Player", path: "Assets/Prefabs/Player.prefab", overwrite: true });
   assert.deepEqual(requests[2].args, { path: "Assets/Prefabs/Player.prefab", name: "Hero", addChild: "Socket", removeChild: "OldSocket", overwrite: true });
-  assert.deepEqual(requests[4].args, { pageSize: 25, cursor: "50", path: "Assets/Prefabs/Player.prefab" });
+  assert.deepEqual(requests[4].args, { pageSize: 25, cursor: "50", path: "Assets/Prefabs/Player.prefab", parent: "Player", query: "Socket", componentType: "Transform" });
   assert.deepEqual(requests[5].args, {});
   assert.deepEqual(requests[6].args, { save: true });
   assert.deepEqual((create.data as { plannedEffects: unknown[] }).plannedEffects, [{ type: "prefab.create", path: "Assets/Prefabs/Player.prefab" }]);
@@ -743,7 +755,7 @@ test("destructive bridge commands pass dryRun and security proof when explicitly
 
   const search = await execute(["tools", "run", "asset.search", "Player", "--type", "Prefab", "--page-size", "10"], { ...runtime, bridgeExecute });
   const info = await execute(["tools", "run", "asset.info", "Assets/Prefabs/Player.prefab"], { ...runtime, bridgeExecute });
-  const components = await execute(["tools", "run", "asset.get-components", "Assets/Prefabs/Player.prefab", "--page-size", "25"], { ...runtime, bridgeExecute });
+  const components = await execute(["tools", "run", "asset.get-components", "Assets/Prefabs/Player.prefab", "--page-size", "25", "--query", "Camera", "--component-type", "Transform"], { ...runtime, bridgeExecute });
   const refresh = await execute(["tools", "run", "asset.refresh", "Assets/Generated", "--force-update", "--dry-run"], { ...runtime, bridgeExecute });
   const create = await execute(["tools", "run", "asset.create", "Assets/Generated/config.json", "--content", "{}", "--overwrite"], { ...runtime, bridgeExecute });
   const mkdir = await execute(["tools", "run", "asset.create", "Assets/Generated"], { ...runtime, bridgeExecute });
@@ -759,7 +771,7 @@ test("destructive bridge commands pass dryRun and security proof when explicitly
   }
   assert.deepEqual(requests.map((request) => request.command), ["asset.search", "asset.info", "asset.get-components", "asset.refresh", "asset.create", "asset.create", "asset.import", "asset.modify", "asset.duplicate", "asset.move", "asset.rename", "asset.delete"]);
   assert.deepEqual(requests[0].args, { pageSize: 10, target: "Player", query: "Player", type: "Prefab" });
-  assert.deepEqual(requests[2].args, { assetPath: "Assets/Prefabs/Player.prefab", pageSize: 25 });
+  assert.deepEqual(requests[2].args, { assetPath: "Assets/Prefabs/Player.prefab", query: "Camera", componentType: "Transform", pageSize: 25 });
   assert.deepEqual(requests[3].args, { path: "Assets/Generated", forceUpdate: true, dryRun: true });
   assert.equal(requests[3].dryRun, true);
   assert.deepEqual(requests[4].args, { path: "Assets/Generated/config.json", content: "{}", overwrite: true });
@@ -1038,7 +1050,7 @@ test("shader commands forward paths, content and overwrite", async () => {
   };
 
   const info = await execute(["tools", "run", "shader.info", "Assets/Shaders/Unlit.shader"], { ...runtime, bridgeExecute });
-  const read = await execute(["tools", "run", "shader.read", "Assets/Shaders/Unlit.shader"], { ...runtime, bridgeExecute });
+  const read = await execute(["tools", "run", "shader.read", "Assets/Shaders/Unlit.shader", "--offset", "5", "--max-bytes", "128"], { ...runtime, bridgeExecute });
   const create = await execute(["tools", "run", "shader.create", "Assets/Shaders/Created.shader", "--content-file", contentFile, "--overwrite"], { ...runtime, bridgeExecute });
   const update = await execute(["tools", "run", "shader.update", "Assets/Shaders/Unlit.shader", "--content", "Shader X {}"], { ...runtime, bridgeExecute });
   const del = await execute(["tools", "run", "shader.delete", "Assets/Shaders/Unlit.shader", "--dry-run"], { ...runtime, bridgeExecute });
@@ -1052,6 +1064,7 @@ test("shader commands forward paths, content and overwrite", async () => {
   assert.equal(getData.ok, true);
   assert.deepEqual(requests.map((request) => request.command), ["shader.info", "shader.read", "shader.create", "shader.update", "shader.delete", "shader.get-data"]);
   assert.deepEqual(requests[0].args, { path: "Assets/Shaders/Unlit.shader", target: "Assets/Shaders/Unlit.shader" });
+  assert.deepEqual(requests[1].args, { path: "Assets/Shaders/Unlit.shader", target: "Assets/Shaders/Unlit.shader", offset: 5, maxBytes: 128 });
   assert.equal(requests[2].args.content, "Shader \"UnityCli/Test\" {}\n");
   assert.equal(requests[2].args.overwrite, true);
   assert.equal(requests[3].args.content, "Shader X {}");
@@ -1129,12 +1142,12 @@ test("ui commands forward creation, document and hierarchy arguments", async () 
   const documentInfo = await execute(["tools", "run", "ui.document.info", "MainUIDocument", "--uss", "Assets/UI/Main.uss"], { ...runtime, bridgeExecute });
   const documentUpdate = await execute(["tools", "run", "ui.document.update", "Assets/UI/Main.uxml", "--content-file", contentFile, "--dry-run"], { ...runtime, bridgeExecute });
   const documentDelete = await execute(["tools", "run", "ui.document.delete", "Assets/UI/Main.uxml", "--dry-run"], { ...runtime, bridgeExecute });
-  const hierarchy = await execute(["tools", "run", "ui.hierarchy", "HUD", "--page-size", "25", "--cursor", "50"], { ...runtime, bridgeExecute });
+  const hierarchy = await execute(["tools", "run", "ui.hierarchy", "HUD", "--page-size", "25", "--cursor", "50", "--query", "Canvas", "--type", "RectTransform", "--class-name", "screen"], { ...runtime, bridgeExecute });
   const attach = await execute(["tools", "run", "ui.attach-document", "UIDoc", "--source-asset", "Assets/UI/Main.uxml", "--panel-settings", "Assets/UI/Panel.asset", "--sort-order", "5"], { ...runtime, bridgeExecute });
   const detach = await execute(["tools", "run", "ui.detach-document", "UIDoc", "--dry-run"], { ...runtime, bridgeExecute });
   const panelCreate = await execute(["tools", "run", "ui.create-panel-settings", "Assets/UI/Panel.asset", "--reference-width", "1920", "--reference-height", "1080", "--sorting-order", "3", "--target-texture", "Assets/UI/Target.renderTexture", "--yes"], { ...runtime, bridgeExecute });
   const panelUpdate = await execute(["tools", "run", "ui.update-panel-settings", "Assets/UI/Panel.asset", "--scale-mode", "ScaleWithScreenSize", "--reference-width", "1280", "--reference-height", "720", "--sorting-layer-name", "UI", "--match", "0.5", "--dry-run"], { ...runtime, bridgeExecute });
-  const visualTree = await execute(["tools", "run", "ui.get-visual-tree", "UIDoc", "--max-depth", "4"], { ...runtime, bridgeExecute });
+  const visualTree = await execute(["tools", "run", "ui.get-visual-tree", "UIDoc", "--max-depth", "4", "--parent", "root", "--query", "button", "--type", "Button", "--class-name", "primary", "--page-size", "10", "--cursor", "20"], { ...runtime, bridgeExecute });
   const modifyVisual = await execute(["tools", "run", "ui.modify-visual-element", "UIDoc", "--element-name", "Root", "--add-class", "selected", "--background-color", "#ff0000", "--dry-run"], { ...runtime, bridgeExecute });
   const linkStylesheet = await execute(["tools", "run", "ui.link-stylesheet", "Assets/UI/Main.uxml", "--uss", "Assets/UI/Main.uss", "--dry-run"], { ...runtime, bridgeExecute });
   const listDocuments = await execute(["tools", "run", "ui.list-documents", "uxml", "--page-size", "20"], { ...runtime, bridgeExecute });
@@ -1168,12 +1181,12 @@ test("ui commands forward creation, document and hierarchy arguments", async () 
   assert.equal(requests[6].args.content, "<ui:UXML xmlns:ui=\"UnityEngine.UIElements\" />\n");
   assert.equal(requests[6].args.dryRun, true);
   assert.equal(requests[7].dryRun, true);
-  assert.deepEqual(requests[8].args, { pageSize: 25, cursor: "50", target: "HUD" });
+  assert.deepEqual(requests[8].args, { pageSize: 25, cursor: "50", target: "HUD", query: "Canvas", type: "RectTransform", className: "screen" });
   assert.deepEqual(requests[9].args, { target: "UIDoc", sourceAsset: "Assets/UI/Main.uxml", panelSettings: "Assets/UI/Panel.asset", sortOrder: 5 });
   assert.deepEqual(requests[10].args, { target: "UIDoc", dryRun: true });
   assert.deepEqual(requests[11].args, { path: "Assets/UI/Panel.asset", referenceWidth: 1920, referenceHeight: 1080, sortingOrder: 3, targetTexture: "Assets/UI/Target.renderTexture" });
   assert.deepEqual(requests[12].args, { path: "Assets/UI/Panel.asset", scaleMode: "ScaleWithScreenSize", referenceWidth: 1280, referenceHeight: 720, sortingLayerName: "UI", match: 0.5, dryRun: true });
-  assert.deepEqual(requests[13].args, { target: "UIDoc", maxDepth: 4 });
+  assert.deepEqual(requests[13].args, { target: "UIDoc", parent: "root", query: "button", type: "Button", className: "primary", pageSize: 10, cursor: "20", maxDepth: 4 });
   assert.deepEqual(requests[14].args, { target: "UIDoc", elementName: "Root", addClass: "selected", backgroundColor: "#ff0000", dryRun: true });
   assert.deepEqual(requests[15].args, { target: "Assets/UI/Main.uxml", path: "Assets/UI/Main.uxml", uxml: "Assets/UI/Main.uxml", uss: "Assets/UI/Main.uss", dryRun: true });
   assert.deepEqual(requests[16].args, { kind: "uxml", pageSize: 20 });

@@ -8,20 +8,22 @@ export const SCENE_TOOLS: ToolMetadata[] = [
     description: "Read a lightweight, paged hierarchy of active scene GameObjects. Use parent to list a subtree, maxDepth to bound recursion, nameFilter/filter to narrow results, and includeComponents only when component previews are needed. For deep object or component fields, use go.inspect, object.get-data, or component.get after selecting a stable path/id.",
     group: "scene",
     inputSchema: objSchema({
-      pageSize: { type: "integer", default: 100, maximum: 500, description: "Maximum hierarchy items returned in this page." },
+      pageSize: { type: "integer", default: 50, maximum: 500, description: "Maximum hierarchy items returned in this page." },
       cursor: { type: "integer", default: 0, description: "0-based result offset for pagination." },
-      parent: { type: "string", description: "Optional parent GameObject path/name/id; returns descendants under that parent." },
+      parent: { type: "string", description: "Optional parent GameObject path/name/id; lists that parent's direct children and bounded descendants." },
       maxDepth: { type: "integer", default: 1, description: "Maximum descendant depth from roots or parent children. 0 lists only the selected level." },
+      query: { type: "string", description: "Case-insensitive name/path filter alias." },
       nameFilter: { type: "string", description: "Case-insensitive name/path filter." },
-      includeComponents: { type: "boolean", default: false, description: "Include component type names for each item; leave false for large scenes." },
+      componentType: { type: "string", description: "Optional component type filter, e.g. Camera or UnityEngine.Animator." },
+      includeComponents: { type: "boolean", default: false, description: "Also include legacy components arrays; componentTypes are always returned as a compact summary." },
       includeInactive: { type: "boolean", default: false, description: "Include inactive GameObjects in hierarchy results." }
     }),
-    outputSchema: pageSchema(objSchema({ id: { type: "integer" }, name: { type: "string" }, path: { type: "string" }, depth: { type: "integer" }, active: { type: "boolean" }, activeInHierarchy: { type: "boolean" }, tag: { type: "string" }, layer: { type: "integer" }, childCount: { type: "integer" }, componentCount: { type: "integer" }, components: { type: "array", items: { type: "string" } } })),
+    outputSchema: pageSchema(objSchema({ id: { type: "integer" }, name: { type: "string" }, path: { type: "string" }, depth: { type: "integer" }, active: { type: "boolean" }, activeInHierarchy: { type: "boolean" }, tag: { type: "string" }, layer: { type: "integer" }, childCount: { type: "integer" }, childrenTruncated: { type: "boolean" }, componentCount: { type: "integer" }, componentTypes: { type: "array", items: { type: "string" } }, components: { type: "array", items: { type: "string" } } })),
     destructiveHint: false,
     playModeSupport: "supported",
     examples: [
       { description: "List a bounded hierarchy page", argv: ["tools", "run", "scene.hierarchy", "--input", "{\"pageSize\":25,\"maxDepth\":1}"] },
-      { description: "Find camera nodes with component previews", argv: ["tools", "run", "scene.hierarchy", "--input", "{\"nameFilter\":\"Camera\",\"includeComponents\":true,\"pageSize\":10}"] }
+      { description: "Find camera nodes by component type", argv: ["tools", "run", "scene.hierarchy", "--input", "{\"componentType\":\"Camera\",\"pageSize\":10}"] }
     ]
   },
   {

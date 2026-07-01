@@ -35,7 +35,9 @@ test("scene domain exposes paged hierarchy and scene data tools", () => {
   assert.equal(hierarchy.playModeSupport, "supported");
   assert.ok(hierarchyProps.parent, "scene.hierarchy should expose parent subtree reads");
   assert.ok(hierarchyProps.maxDepth, "scene.hierarchy should expose maxDepth");
+  assert.ok(hierarchyProps.query, "scene.hierarchy should expose query alias");
   assert.ok(hierarchyProps.nameFilter, "scene.hierarchy should expose nameFilter");
+  assert.ok(hierarchyProps.componentType, "scene.hierarchy should expose componentType filtering");
   assert.ok(hierarchyProps.includeComponents, "scene.hierarchy should expose component preview control");
   assert.match(hierarchy.description, /paged hierarchy/, "scene.hierarchy should describe paged lightweight hierarchy reads");
   const unload = findToolByName("scene.unload")!;
@@ -62,11 +64,14 @@ test("asset domain exposes paged search/get-data/get-components/refresh/preview 
   const getDataOutput = getDataTool.outputSchema?.properties as Record<string, unknown>;
   assert.ok(getDataProps.paths, "asset.get-data should expose paths for exact reads");
   assert.ok(getDataProps.viewQuery, "asset.get-data should expose viewQuery for scoped reads");
+  assert.ok(getDataProps.maxArrayItems, "asset.get-data should expose maxArrayItems cap");
   assert.ok(getDataOutput.fields, "asset.get-data output should expose SerializedMember fields");
   assert.ok(getDataOutput.path, "asset.get-data output should expose SerializedMember path");
   assert.match(getDataTool.description, /mutually exclusive/, "asset.get-data should warn paths/viewQuery are mutually exclusive");
   const getComponents = findToolByName("asset.get-components")!;
   const getComponentsProps = getComponents.inputSchema.properties as Record<string, unknown>;
+  assert.ok(getComponentsProps.query, "asset.get-components should expose query filtering");
+  assert.ok(getComponentsProps.componentType, "asset.get-components should expose componentType filtering");
   assert.ok(getComponentsProps.pageSize, "asset.get-components should expose pagination");
   assert.match(getComponents.description, /component summaries/, "asset.get-components should describe lightweight component summaries");
   const refresh = findToolByName("asset.refresh")!;
@@ -97,11 +102,17 @@ test("asset get-data/get-components/refresh/preview handlers return bridge succe
 test("camera commands no longer advertise legacy top-level camera CLI", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Commands/CameraCommands.cs", import.meta.url), "utf8");
   assert.doesNotMatch(source, /unity_cli camera/, "camera error guidance must not use removed top-level camera commands");
+  const screenshot = findToolByName("camera.screenshot")!;
+  const props = screenshot.inputSchema.properties as Record<string, unknown>;
+  assert.ok(props.path, "camera.screenshot should document path artifact output");
+  assert.ok(props.output, "camera.screenshot should keep output alias documented");
+  assert.ok(props.inlineBase64, "camera.screenshot should document optional inlineBase64");
+  assert.match(screenshot.description, /inlineBase64/, "camera.screenshot should document explicit inline output");
 });
 
 test("scene.hierarchy C# handler supports parent/depth/filter/component preview controls", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Commands/SceneCommands.cs", import.meta.url), "utf8");
-  assert.match(source, /private static string SceneHierarchy[\s\S]*request\.StringArg\("parent"\)[\s\S]*maxDepth[\s\S]*nameFilter[\s\S]*includeComponents/, "scene.hierarchy should parse parent/depth/filter/includeComponents");
+  assert.match(source, /private static string SceneHierarchy[\s\S]*request\.StringArg\("parent"\)[\s\S]*query[\s\S]*componentType[\s\S]*includeComponents/, "scene.hierarchy should parse parent/query/componentType/includeComponents");
   const goSource = await readFile(new URL("../unitypkg/Editor/Commands/GameObjectCommands.cs", import.meta.url), "utf8");
   assert.match(goSource, /CollectHierarchy\(Transform transform, List<string> items, int depth, int maxDepth, string nameFilter, bool includeInactive, bool includeComponents\)/, "hierarchy collection should be bounded and filterable");
   assert.match(goSource, /HierarchyItemJson\(transform, depth, includeComponents\)/, "hierarchy items should optionally include components");

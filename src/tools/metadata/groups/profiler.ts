@@ -184,14 +184,14 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
   {
     name: "profiler.hierarchy",
     summary: "Read the per-function CPU call hierarchy (marker tree) for one profiler frame/thread.",
-    description: "Read the CPU call hierarchy for a single profiler frame and thread via ProfilerDriver.GetHierarchyFrameDataView, recursing GetItemChildren to emit a structured marker tree (name, depth, ms, children). Requires profiler frames to have been recorded (profiler.start → play → profiler.stop). Use `frame` (omit or -1 for latest recorded), `thread` (default 0, main thread), `top` (children per level, default 50) and `depth` (max recursion depth, default 8) to bound output size.",
+    description: "Read the CPU call hierarchy for a single profiler frame and thread via ProfilerDriver.GetHierarchyFrameDataView, recursing GetItemChildren to emit a structured marker tree. Defaults are bounded (top=20, depth=5); each node reports childCount and childrenTruncated so AI can see when detail was omitted.",
     group: "profiler",
-    inputSchema: objSchema({ frame: { type: "integer", description: "Frame index to read; omit or -1 for the latest recorded frame." }, thread: { type: "integer", description: "Thread index, default 0 (main thread)." }, top: { type: "integer", description: "Max children emitted per level (breadth), default 50." }, depth: { type: "integer", description: "Max recursion depth, default 8." } }),
+    inputSchema: objSchema({ frame: { type: "integer", description: "Frame index to read; omit or -1 for the latest recorded frame." }, thread: { type: "integer", description: "Thread index, default 0 (main thread)." }, top: { type: "integer", default: 20, description: "Max children emitted per level (breadth)." }, depth: { type: "integer", default: 5, description: "Max recursion depth." } }),
     outputSchema: objSchema({ command: { type: "string" }, frame: { type: "integer" }, thread: { type: "integer" }, rootItems: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: false,
     playModeSupport: "supported",
     examples: [
-      { description: "Latest frame main-thread top markers", argv: ["tools", "run", "profiler.hierarchy", "--input", "{\"top\":20,\"depth\":6}"] },
+      { description: "Latest frame main-thread top markers", argv: ["tools", "run", "profiler.hierarchy", "--input", "{\"top\":20,\"depth\":5}"] },
       { description: "Specific frame/thread", argv: ["tools", "run", "profiler.hierarchy", "--input", "{\"frame\":100,\"thread\":0}"] }
     ]
   },

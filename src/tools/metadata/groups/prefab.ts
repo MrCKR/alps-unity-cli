@@ -95,25 +95,32 @@ export const PREFAB_TOOLS: ToolMetadata[] = [
   },
   {
     name: "prefab.hierarchy",
-    summary: "List the child hierarchy of a prefab asset (loaded via LoadPrefabContents and unloaded without modification).",
-    description: "List the child hierarchy of a prefab asset (loaded via LoadPrefabContents and unloaded without modification). Paged by pageSize/cursor; use this before prefab.modify removeChild or before prefab.stage-open. For scene object hierarchies use scene.hierarchy instead.",
+    summary: "List a prefab asset hierarchy as a small, paged summary.",
+    description: "List a prefab asset hierarchy as a small, paged summary. Defaults return only the prefab root or one parent's direct children, with child counts and component type names; use parent plus pageInfo.nextCursor to continue. dependencies.items and nestedPrefabs.items are omitted by default and only returned when includeSummaryDetails=true.",
     group: "prefab",
     inputSchema: objSchema({
       path: { type: "string", description: "Existing Assets/*.prefab path." },
-      pageSize: { type: "integer", default: 100, description: "Maximum children per page." },
-      cursor: { type: "string", description: "Cursor from a previous pageInfo.nextCursor." }
+      parent: { type: "string", description: "Optional returned node path/name whose direct children should be listed." },
+      query: { type: "string", description: "Optional name/path substring filter for returned nodes." },
+      componentType: { type: "string", description: "Optional component type filter, e.g. Animator or UnityEngine.Camera." },
+      includeSummaryDetails: { type: "boolean", default: false, description: "Include dependency/nested prefab item arrays. Defaults false to keep output small." },
+      pageSize: { type: "integer", default: 25, maximum: 500, description: "Maximum nodes returned in this page." },
+      cursor: { type: "integer", default: 0, description: "Cursor from a previous pageInfo.nextCursor." }
     }, ["path"]),
     outputSchema: objSchema({
-      command: { type: "string" },
-      path: { type: "string" },
-      count: { type: "integer" },
-      children: { type: "array", items: { type: "object" } },
+      prefab: { type: "object" },
+      parent: { type: "string" },
+      query: { type: "string" },
+      componentType: { type: "string" },
+      items: { type: "array", items: { type: "object" } },
+      children: { type: "array", items: { type: "object" }, description: "Compatibility alias of items." },
       pageInfo: { type: "object" }
     }),
     destructiveHint: false,
     playModeSupport: "supported",
     examples: [
-      { description: "List a prefab's children", argv: ["tools", "run", "prefab.hierarchy", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbe.prefab\",\"pageSize\":50}"] }
+      { description: "List a small prefab hierarchy page", argv: ["tools", "run", "prefab.hierarchy", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbe.prefab\",\"pageSize\":25}"] },
+      { description: "Continue from one parent", argv: ["tools", "run", "prefab.hierarchy", "--input", "{\"path\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbe.prefab\",\"parent\":\"AlignmentProbe/Child\",\"pageSize\":25}"] }
     ]
   },
   {

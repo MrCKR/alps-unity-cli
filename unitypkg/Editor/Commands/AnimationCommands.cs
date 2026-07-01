@@ -1192,52 +1192,38 @@ namespace UnityCli
             {
                 return ErrorJson("E_CONTROLLER_NOT_FOUND", "AnimatorController not found at: " + controllerPath, "Check the path or create one with tools run controller.create --input '{\"controllerPath\":\"<Assets/...>.controller\"}'.");
             }
+            var layerName = request.StringArg("layerName");
+            var stateName = request.StringArg("stateName");
+            var includeTransitions = request.BoolArg("includeTransitions", false);
+            var includeBlendTrees = request.BoolArg("includeBlendTrees", false);
+            var maxStatesPerLayer = Math.Max(1, Math.Min(request.IntArg("maxStatesPerLayer", 50), 500));
+            var maxTransitionsPerState = Math.Max(1, Math.Min(request.IntArg("maxTransitionsPerState", 20), 500));
+            var pageSize = LargeOutputPageSize(request, 50, 500);
+            var cursor = LargeOutputCursor(request);
+            var layerRows = new List<AnimatorControllerLayer>();
+            foreach (var layer in controller.layers)
+            {
+                if (string.IsNullOrEmpty(layerName) || string.Equals(layer.name, layerName, StringComparison.OrdinalIgnoreCase))
+                {
+                    layerRows.Add(layer);
+                }
+            }
+            var page = layerRows.Skip(cursor).Take(pageSize).ToList();
             var writer = new UnityCliJsonWriter().BeginObject()
                 .Prop("path", controllerPath)
                 .Prop("guid", AssetDatabase.AssetPathToGUID(controllerPath))
                 .Prop("name", controller.name)
                 .Prop("layerCount", (long)controller.layers.Length)
                 .Prop("parameterCount", (long)controller.parameters.Length)
+                .Prop("layerName", layerName)
+                .Prop("stateName", stateName)
+                .Prop("includeTransitions", includeTransitions)
+                .Prop("includeBlendTrees", includeBlendTrees)
                 .PropArray("layers", arr =>
                 {
-                    for (int i = 0; i < controller.layers.Length; i++)
+                    for (int i = 0; i < page.Count; i++)
                     {
-                        var layer = controller.layers[i];
-                        var stateMachine = layer.stateMachine;
-                        var anyStateTransitions = stateMachine != null && stateMachine.anyStateTransitions != null
-                            ? stateMachine.anyStateTransitions
-                            : new AnimatorStateTransition[0];
-                        arr.BeginObject()
-                            .Prop("index", (long)i)
-                            .Prop("name", layer.name)
-                            .Prop("defaultWeight", layer.defaultWeight)
-                            .Prop("blendingMode", layer.blendingMode.ToString())
-                            .Prop("stateCount", (long)(stateMachine != null ? stateMachine.states.Length : 0))
-                            .Prop("anyStateTransitionCount", (long)anyStateTransitions.Length)
-                            .PropArray("states", stateArr =>
-                            {
-                                if (stateMachine != null)
-                                {
-                                    foreach (var cs in stateMachine.states)
-                                    {
-                                        if (cs.state == null) continue;
-                                        var transitions = cs.state.transitions ?? new AnimatorStateTransition[0];
-                                        stateArr.BeginObject()
-                                            .Prop("name", cs.state.name)
-                                            .Prop("speed", cs.state.speed)
-                                            .Prop("hasMotion", cs.state.motion != null)
-                                            .Prop("motionName", cs.state.motion != null ? cs.state.motion.name : null)
-                                            .Prop("motionType", cs.state.motion != null ? cs.state.motion.GetType().Name : null)
-                                            .PropRaw("blendTree", BlendTreeJson(cs.state.motion as BlendTree))
-                                            .Prop("isDefault", stateMachine.defaultState == cs.state)
-                                            .Prop("transitionCount", (long)transitions.Length)
-                                            .PropArray("transitions", transitionArr => WriteControllerTransitions(transitionArr, transitions))
-                                            .EndObject();
-                                    }
-                                }
-                            })
-                            .PropArray("anyStateTransitions", transitionArr => WriteControllerTransitions(transitionArr, anyStateTransitions))
-                            .EndObject();
+                        WriteControllerLayerSummary(arr, page[i], cursor + i, stateName, includeTransitions, includeBlendTrees, maxStatesPerLayer, maxTransitionsPerState);
                     }
                 })
                 .PropArray("parameters", arr =>
@@ -1253,9 +1239,77 @@ namespace UnityCli
                             .EndObject();
                     }
                 })
+                .PropRaw("pageInfo", PageInfoJson(pageSize, cursor, layerRows.Count, page.Count))
                 .Prop("logPath", LogPath())
                 .EndObject();
             return SuccessJson(writer.ToString());
+        }
+
+        private static void WriteControllerLayerSummary(UnityCliJsonWriter arr, AnimatorControllerLayer layer, int index, string stateName, bool includeTransitions, bool includeBlendTrees, int maxStatesPerLayer, int maxTransitionsPerState)
+        {
+            var stateMachine = layer.stateMachine;
+            var anyStateTransitions = stateMachine != null && stateMachine.anyStateTransitions != null
+                ? stateMachine.anyStateTransitions
+                : new AnimatorStateTransition[0];
+            var states = new List<ChildAnimatorState>();
+            if (stateMachine != null)
+            {
+                foreach (var cs in stateMachine.states)
+                {
+                    if (cs.state == null) continue;
+                    if (string.IsNullOrEmpty(stateName) || string.Equals(cs.state.name, stateName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        states.Add(cs);
+                    }
+                }
+            }
+            var emittedStates = states.Take(maxStatesPerLayer).ToList();
+            arr.BeginObject()
+                .Prop("index", (long)index)
+                .Prop("name", layer.name)
+                .Prop("defaultWeight", layer.defaultWeight)
+                .Prop("blendingMode", layer.blendingMode.ToString())
+                .Prop("stateCount", (long)(stateMachine != null ? stateMachine.states.Length : 0))
+                .Prop("returnedStateCount", (long)emittedStates.Count)
+                .Prop("statesTruncated", states.Count > emittedStates.Count)
+                .Prop("anyStateTransitionCount", (long)anyStateTransitions.Length)
+                .PropArray("states", stateArr =>
+                {
+                    foreach (var cs in emittedStates)
+                    {
+                        WriteControllerStateSummary(stateArr, stateMachine, cs, includeTransitions, includeBlendTrees, maxTransitionsPerState);
+                    }
+                });
+            if (includeTransitions)
+            {
+                arr.PropArray("anyStateTransitions", transitionArr => WriteControllerTransitions(transitionArr, anyStateTransitions.Take(maxTransitionsPerState).ToArray()));
+                arr.Prop("anyStateTransitionsTruncated", anyStateTransitions.Length > maxTransitionsPerState);
+            }
+            arr.EndObject();
+        }
+
+        private static void WriteControllerStateSummary(UnityCliJsonWriter stateArr, AnimatorStateMachine stateMachine, ChildAnimatorState cs, bool includeTransitions, bool includeBlendTrees, int maxTransitionsPerState)
+        {
+            var transitions = cs.state.transitions ?? new AnimatorStateTransition[0];
+            stateArr.BeginObject()
+                .Prop("name", cs.state.name)
+                .Prop("speed", cs.state.speed)
+                .Prop("hasMotion", cs.state.motion != null)
+                .Prop("motionName", cs.state.motion != null ? cs.state.motion.name : null)
+                .Prop("motionType", cs.state.motion != null ? cs.state.motion.GetType().Name : null)
+                .Prop("blendTreeChildCount", cs.state.motion is BlendTree bt ? (long)bt.children.Length : 0L)
+                .Prop("isDefault", stateMachine != null && stateMachine.defaultState == cs.state)
+                .Prop("transitionCount", (long)transitions.Length)
+                .Prop("transitionsTruncated", includeTransitions && transitions.Length > maxTransitionsPerState);
+            if (includeBlendTrees)
+            {
+                stateArr.PropRaw("blendTree", BlendTreeJson(cs.state.motion as BlendTree));
+            }
+            if (includeTransitions)
+            {
+                stateArr.PropArray("transitions", transitionArr => WriteControllerTransitions(transitionArr, transitions.Take(maxTransitionsPerState).ToArray()));
+            }
+            stateArr.EndObject();
         }
 
         /// <summary>写出 BlendTree 参数与子 motion 明细，供 AI 审计 blend tree 子节点是否落盘。</summary>

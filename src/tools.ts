@@ -615,6 +615,7 @@ function validateRequiredInputFields(
     const fieldPresent = input[field] !== undefined || input[kebab] !== undefined || input[snake] !== undefined || flags[field] !== undefined || flags[kebab] !== undefined || flags[snake] !== undefined;
     const assetSourceAliasPresent = (tool.name === "asset.duplicate" || tool.name === "asset.move") && field === "source" && (input.path !== undefined || flags.path !== undefined || positionalTarget !== undefined);
     const assetPathAliasPresent = (tool.name === "asset.get-data" || tool.name === "asset.get-components" || tool.name === "asset.preview") && field === "assetPath" && (input.path !== undefined || flags.path !== undefined || positionalTarget !== undefined);
+    const cameraOutputAliasPresent = tool.name === "camera.screenshot" && field === "path" && (input.output !== undefined || flags.output !== undefined || positionalTarget !== undefined);
     const physicsMaterialPathAliasPresent = tool.name === "physics.assign-material" && field === "materialPath" && (input.path !== undefined || flags.path !== undefined); // 允许 PhysicMaterial 路径沿用 path 参数。
     const materialColorAliasPresent = tool.name === "material.set-renderer-color" && field === "color" && (input.value !== undefined || flags.value !== undefined);
     const textureColorAliasPresent = tool.name === "texture.modify" && field === "color" && (input.fillColor !== undefined || flags["fill-color"] !== undefined || flags.fillColor !== undefined);
@@ -623,7 +624,7 @@ function validateRequiredInputFields(
     const uiContentAliasPresent = tool.name === "ui.document.update" && field === "content" && (flags["content-file"] !== undefined || flags.contentFile !== undefined);
     const uiStylesheetAliasPresent = tool.name === "ui.link-stylesheet" && field === "uss" && (input.styleSheet !== undefined || flags["style-sheet"] !== undefined || flags.styleSheet !== undefined);
     const uiRenderTargetAliasPresent = tool.name === "ui.render-preview" && field === "target" && (input.uxml !== undefined || input.path !== undefined || flags.uxml !== undefined || flags.path !== undefined || positionalTarget !== undefined);
-    if (!positionalSatisfiesField && !fieldPresent && !assetSourceAliasPresent && !assetPathAliasPresent && !physicsMaterialPathAliasPresent && !materialColorAliasPresent && !textureColorAliasPresent && !uiUxmlAliasPresent && !uiPathAliasPresent && !uiContentAliasPresent && !uiStylesheetAliasPresent && !uiRenderTargetAliasPresent) {
+    if (!positionalSatisfiesField && !fieldPresent && !assetSourceAliasPresent && !assetPathAliasPresent && !cameraOutputAliasPresent && !physicsMaterialPathAliasPresent && !materialColorAliasPresent && !textureColorAliasPresent && !uiUxmlAliasPresent && !uiPathAliasPresent && !uiContentAliasPresent && !uiStylesheetAliasPresent && !uiRenderTargetAliasPresent) {
       missing.push(field);
     }
   }

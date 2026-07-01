@@ -60,7 +60,9 @@ async function shaderArgs({ flags, positionalTarget }: Parameters<BridgeCommandS
     includeSubshaders: boolFlag(flags, "include-subshaders") ?? boolField(flags, "includeSubshaders"),
     includeSourceCode: boolFlag(flags, "include-source-code") ?? boolField(flags, "includeSourceCode"),
     maxSubshaders: numberFlag(flags, "max-subshaders") ?? numberField(flags, "maxSubshaders"),
-    maxPasses: numberFlag(flags, "max-passes") ?? numberField(flags, "maxPasses")
+    maxPasses: numberFlag(flags, "max-passes") ?? numberField(flags, "maxPasses"),
+    offset: numberFlag(flags, "offset") ?? numberField(flags, "offset"),
+    maxBytes: numberFlag(flags, "max-bytes") ?? numberField(flags, "maxBytes")
   });
 }
 

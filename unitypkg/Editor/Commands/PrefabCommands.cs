@@ -309,23 +309,42 @@ namespace UnityCli
         {
             var path = RequirePrefabPath(request.StringArg("path"));
             LoadPrefabAsset(path);
-            var pageSize = Math.Max(1, request.IntArg("pageSize", 100));
-            var cursor = Math.Max(0, request.IntArg("cursor", 0));
+            var pageSize = LargeOutputPageSize(request, 25, 500);
+            var cursor = LargeOutputCursor(request);
+            var parent = request.StringArg("parent");
+            var query = request.StringArg("query") ?? request.StringArg("nameFilter") ?? request.StringArg("filter");
+            var componentType = request.StringArg("componentType");
+            var includeSummaryDetails = request.BoolArg("includeSummaryDetails", false);
             var root = PrefabUtility.LoadPrefabContents(path);
             try
             {
-                var items = new List<string>();
-                var total = CountHierarchy(root.transform);
-                CollectHierarchy(root.transform, items, cursor, pageSize, new Counter());
-                var nextCursor = cursor + items.Count < total ? (cursor + items.Count).ToString(CultureInfo.InvariantCulture) : null;
+                var parentTransform = ResolvePrefabHierarchyParent(root.transform, parent);
+                var candidates = new List<GameObject>();
+                if (string.IsNullOrEmpty(parent))
+                {
+                    candidates.Add(root);
+                }
+                else
+                {
+                    foreach (Transform child in parentTransform)
+                    {
+                        candidates.Add(child.gameObject);
+                    }
+                }
+                var matches = candidates
+                    .Where(go => LargeOutputTextMatches(query, go.name, HierarchyPath(go)) && LargeOutputComponentMatches(go, componentType))
+                    .OrderBy(go => HierarchyPath(go), StringComparer.Ordinal)
+                    .ToList();
+                var page = matches.Skip(cursor).Take(pageSize).ToList();
+                Action<UnityCliJsonWriter> writePage = arr => { foreach (var item in page) { arr.RawValue(PrefabHierarchySummaryJson(item)); } };
                 return SuccessJson(new UnityCliJsonWriter().BeginObject()
-                    .PropRaw("prefab", PrefabAssetJson(path, root, root))
-                    .PropArray("items", arr => { foreach (var item in items) { arr.RawValue(item); } })
-                    .PropObject("pageInfo", pageInfo => pageInfo
-                        .Prop("pageSize", (long)pageSize)
-                        .Prop("cursor", (long)cursor)
-                        .Prop("nextCursor", nextCursor)
-                        .Prop("total", (long)total))
+                    .PropRaw("prefab", PrefabAssetJson(path, root, root, includeSummaryDetails))
+                    .Prop("parent", parent)
+                    .Prop("query", query)
+                    .Prop("componentType", componentType)
+                    .PropArray("items", writePage)
+                    .PropArray("children", writePage)
+                    .PropRaw("pageInfo", PageInfoJson(pageSize, cursor, matches.Count, page.Count))
                     .Prop("logPath", LogPath())
                     .EndObject()
                     .ToString());
@@ -334,6 +353,38 @@ namespace UnityCli
             {
                 PrefabUtility.UnloadPrefabContents(root);
             }
+        }
+
+        private static Transform ResolvePrefabHierarchyParent(Transform root, string parent)
+        {
+            if (string.IsNullOrEmpty(parent)) return root;
+            if (string.Equals(parent, root.name, StringComparison.Ordinal) || string.Equals(parent, HierarchyPath(root.gameObject), StringComparison.Ordinal)) return root;
+            foreach (var transform in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (transform == null) continue;
+                if (string.Equals(transform.name, parent, StringComparison.Ordinal) || string.Equals(HierarchyPath(transform.gameObject), parent, StringComparison.Ordinal))
+                {
+                    return transform;
+                }
+            }
+            throw new BridgeCommandException("E_PREFAB_HIERARCHY_PARENT_NOT_FOUND", "Prefab hierarchy parent not found: " + parent, "Run prefab.hierarchy without parent, then pass a returned path as parent.");
+        }
+
+        private static string PrefabHierarchySummaryJson(GameObject gameObject)
+        {
+            var writer = new UnityCliJsonWriter().BeginObject()
+                .Prop("id", (long)gameObject.GetInstanceID())
+                .Prop("name", gameObject.name)
+                .Prop("path", HierarchyPath(gameObject))
+                .Prop("active", gameObject.activeSelf)
+                .Prop("activeInHierarchy", gameObject.activeInHierarchy)
+                .Prop("tag", gameObject.tag)
+                .Prop("layer", (long)gameObject.layer)
+                .Prop("childCount", (long)gameObject.transform.childCount)
+                .Prop("childrenTruncated", gameObject.transform.childCount > 0)
+                .Prop("componentCount", (long)gameObject.GetComponents<Component>().Length);
+            WriteComponentTypes(writer, gameObject);
+            return writer.EndObject().ToString();
         }
 
         private static string RequirePrefabPath(string rawPath)
@@ -415,11 +466,21 @@ namespace UnityCli
 
         private static string PrefabAssetJson(string path, GameObject prefab, GameObject contentsRoot)
         {
+            return PrefabAssetJson(path, prefab, contentsRoot, true);
+        }
+
+        private static string PrefabAssetJson(string path, GameObject prefab, GameObject contentsRoot, bool includeSummaryDetails)
+        {
             var dependencies = AssetDatabase.GetDependencies(path, false);
-            return PrefabAssetJson(path, prefab, contentsRoot, dependencies);
+            return PrefabAssetJson(path, prefab, contentsRoot, dependencies, includeSummaryDetails);
         }
 
         private static string PrefabAssetJson(string path, GameObject prefab, GameObject contentsRoot, string[] dependencies)
+        {
+            return PrefabAssetJson(path, prefab, contentsRoot, dependencies, true);
+        }
+
+        private static string PrefabAssetJson(string path, GameObject prefab, GameObject contentsRoot, string[] dependencies, bool includeSummaryDetails)
         {
             var guid = AssetDatabase.AssetPathToGUID(path);
             var assetType = PrefabUtility.GetPrefabAssetType(prefab).ToString();
@@ -433,8 +494,8 @@ namespace UnityCli
                 .Prop("isVariant", assetType == "Variant")
                 .PropRaw("variant", PrefabVariantJson(prefab))
                 .Prop("dependencyCount", (long)dependencies.Length)
-                .PropRaw("dependencies", DependencySummaryJson(dependencies))
-                .PropRaw("nestedPrefabs", NestedPrefabReferencesJson(path, contentsRoot))
+                .PropRaw("dependencies", DependencySummaryJson(dependencies, includeSummaryDetails))
+                .PropRaw("nestedPrefabs", NestedPrefabReferencesJson(path, contentsRoot, includeSummaryDetails))
                 .EndObject()
                 .ToString();
         }
@@ -456,19 +517,28 @@ namespace UnityCli
 
         private static string DependencySummaryJson(string[] dependencies)
         {
+            return DependencySummaryJson(dependencies, true);
+        }
+
+        private static string DependencySummaryJson(string[] dependencies, bool includeItems)
+        {
             var items = new List<string>();
-            foreach (var dependency in dependencies)
+            if (includeItems)
             {
-                var type = AssetDatabase.GetMainAssetTypeAtPath(dependency);
-                items.Add(new UnityCliJsonWriter().BeginObject()
-                    .Prop("path", NormalizeAssetPath(dependency))
-                    .Prop("guid", AssetDatabase.AssetPathToGUID(dependency))
-                    .Prop("type", type == null ? null : type.Name)
-                    .EndObject()
-                    .ToString());
+                foreach (var dependency in dependencies)
+                {
+                    var type = AssetDatabase.GetMainAssetTypeAtPath(dependency);
+                    items.Add(new UnityCliJsonWriter().BeginObject()
+                        .Prop("path", NormalizeAssetPath(dependency))
+                        .Prop("guid", AssetDatabase.AssetPathToGUID(dependency))
+                        .Prop("type", type == null ? null : type.Name)
+                        .EndObject()
+                        .ToString());
+                }
             }
             return new UnityCliJsonWriter().BeginObject()
                 .Prop("count", (long)dependencies.Length)
+                .Prop("itemsIncluded", includeItems)
                 .PropArray("items", arr => { foreach (var item in items) { arr.RawValue(item); } })
                 .EndObject()
                 .ToString();
@@ -476,15 +546,20 @@ namespace UnityCli
 
         private static string NestedPrefabReferencesJson(string prefabPath, GameObject contentsRoot)
         {
+            return NestedPrefabReferencesJson(prefabPath, contentsRoot, true);
+        }
+
+        private static string NestedPrefabReferencesJson(string prefabPath, GameObject contentsRoot, bool includeItems)
+        {
             if (contentsRoot != null)
             {
-                return NestedPrefabReferencesJsonFromRoot(prefabPath, contentsRoot);
+                return NestedPrefabReferencesJsonFromRoot(prefabPath, contentsRoot, includeItems);
             }
 
             var root = PrefabUtility.LoadPrefabContents(prefabPath);
             try
             {
-                return NestedPrefabReferencesJsonFromRoot(prefabPath, root);
+                return NestedPrefabReferencesJsonFromRoot(prefabPath, root, includeItems);
             }
             finally
             {
@@ -494,17 +569,23 @@ namespace UnityCli
 
         private static string NestedPrefabReferencesJsonFromRoot(string prefabPath, GameObject root)
         {
+            return NestedPrefabReferencesJsonFromRoot(prefabPath, root, true);
+        }
+
+        private static string NestedPrefabReferencesJsonFromRoot(string prefabPath, GameObject root, bool includeItems)
+        {
             var items = new List<string>();
             var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            CollectNestedPrefabReferences(prefabPath, root.transform, root.transform, items, seen);
+            CollectNestedPrefabReferences(prefabPath, root.transform, root.transform, items, seen, includeItems);
             return new UnityCliJsonWriter().BeginObject()
-                .Prop("count", (long)items.Count)
+                .Prop("count", (long)seen.Count)
+                .Prop("itemsIncluded", includeItems)
                 .PropArray("items", arr => { foreach (var item in items) { arr.RawValue(item); } })
                 .EndObject()
                 .ToString();
         }
 
-        private static void CollectNestedPrefabReferences(string prefabPath, Transform root, Transform current, List<string> items, HashSet<string> seen)
+        private static void CollectNestedPrefabReferences(string prefabPath, Transform root, Transform current, List<string> items, HashSet<string> seen, bool includeItems)
         {
             if (current != root && PrefabUtility.IsAnyPrefabInstanceRoot(current.gameObject))
             {
@@ -512,7 +593,7 @@ namespace UnityCli
                 if (!string.IsNullOrEmpty(sourcePath) && !string.Equals(sourcePath, prefabPath, StringComparison.OrdinalIgnoreCase))
                 {
                     var key = sourcePath + "|" + HierarchyPath(current.gameObject);
-                    if (seen.Add(key))
+                    if (seen.Add(key) && includeItems)
                     {
                         items.Add(NestedPrefabReferenceJson(current.gameObject, sourcePath));
                     }
@@ -521,7 +602,7 @@ namespace UnityCli
 
             foreach (Transform child in current)
             {
-                CollectNestedPrefabReferences(prefabPath, root, child, items, seen);
+                CollectNestedPrefabReferences(prefabPath, root, child, items, seen, includeItems);
             }
         }
 

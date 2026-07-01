@@ -148,19 +148,31 @@ namespace UnityCli
             var path = ResolveShaderPath(request.StringArg("path") ?? request.StringArg("target"));
             LoadShaderLikeAsset(path);
             var fullPath = AssetFullPath(path);
-            string content;
+            byte[] bytes;
             try
             {
-                content = File.ReadAllText(fullPath, Encoding.UTF8);
+                bytes = File.ReadAllBytes(fullPath);
             }
             catch (Exception exception)
             {
                 throw new BridgeCommandException("E_IO_ERROR", "Failed to read Shader file: " + exception.Message, "Check file encoding and permissions: " + path);
             }
+            var offset = Math.Max(0, request.IntArg("offset", 0));
+            var maxBytes = Math.Max(1, Math.Min(request.IntArg("maxBytes", 65536), 1024 * 1024));
+            if (offset > bytes.Length) offset = bytes.Length;
+            var returnedBytes = Math.Min(maxBytes, bytes.Length - offset);
+            var content = Encoding.UTF8.GetString(bytes, offset, returnedBytes);
+            var nextOffset = offset + returnedBytes < bytes.Length ? (offset + returnedBytes).ToString(CultureInfo.InvariantCulture) : null;
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropRaw("shader", ShaderAssetJson(path, AssetDatabase.LoadAssetAtPath<Shader>(path), true))
                 .Prop("content", content)
                 .Prop("encoding", "utf-8")
+                .Prop("offset", (long)offset)
+                .Prop("maxBytes", (long)maxBytes)
+                .Prop("sizeBytes", (long)bytes.Length)
+                .Prop("returnedBytes", (long)returnedBytes)
+                .Prop("truncated", nextOffset != null)
+                .Prop("nextOffset", nextOffset)
                 .Prop("logPath", LogPath())
                 .EndObject().ToString());
         }

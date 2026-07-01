@@ -612,7 +612,7 @@ namespace UnityCli
             return HierarchyItemJson(transform, -1, true);
         }
 
-        /// <summary>生成轻量 GameObject 层级项；components 可关闭以控制大场景返回量。</summary>
+        /// <summary>生成轻量 GameObject 层级项；默认只给组件类型摘要，详细字段交给 component.get。</summary>
         private static string HierarchyItemJson(Transform transform, int depth, bool includeComponents)
         {
             var componentNames = new List<string>();
@@ -630,7 +630,9 @@ namespace UnityCli
                 .Prop("tag", gameObject.tag)
                 .Prop("layer", (long)gameObject.layer)
                 .Prop("childCount", (long)transform.childCount)
-                .Prop("componentCount", (long)componentNames.Count);
+                .Prop("childrenTruncated", transform.childCount > 0)
+                .Prop("componentCount", (long)componentNames.Count)
+                .PropArray("componentTypes", arr => { foreach (var name in componentNames) { arr.Value(name); } });
             if (depth >= 0)
             {
                 writer.Prop("depth", (long)depth);
@@ -645,10 +647,15 @@ namespace UnityCli
         /// <summary>按深度、名称过滤和 inactive 策略收集层级摘要，分页在调用方统一处理。</summary>
         private static void CollectHierarchy(Transform transform, List<string> items, int depth, int maxDepth, string nameFilter, bool includeInactive, bool includeComponents)
         {
+            CollectHierarchy(transform, items, depth, maxDepth, nameFilter, includeInactive, includeComponents, null);
+        }
+
+        private static void CollectHierarchy(Transform transform, List<string> items, int depth, int maxDepth, string query, bool includeInactive, bool includeComponents, string componentType)
+        {
             var gameObject = transform.gameObject;
             if (includeInactive || gameObject.activeInHierarchy)
             {
-                if (string.IsNullOrEmpty(nameFilter) || gameObject.name.IndexOf(nameFilter, StringComparison.OrdinalIgnoreCase) >= 0 || HierarchyPath(gameObject).IndexOf(nameFilter, StringComparison.OrdinalIgnoreCase) >= 0)
+                if (LargeOutputTextMatches(query, gameObject.name, HierarchyPath(gameObject)) && LargeOutputComponentMatches(gameObject, componentType))
                 {
                     items.Add(HierarchyItemJson(transform, depth, includeComponents));
                 }
@@ -659,7 +666,7 @@ namespace UnityCli
             }
             foreach (Transform child in transform)
             {
-                CollectHierarchy(child, items, depth + 1, maxDepth, nameFilter, includeInactive, includeComponents);
+                CollectHierarchy(child, items, depth + 1, maxDepth, query, includeInactive, includeComponents, componentType);
             }
         }
 

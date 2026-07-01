@@ -428,37 +428,71 @@ namespace UnityCli
             var uiDoc = go.GetComponent<UIDocument>();
             if (uiDoc == null || uiDoc.rootVisualElement == null)
                 return ErrorJson("E_UI_DOCUMENT_NOT_FOUND", "No UIDocument with a root visual element on " + go.name, "Attach a UIDocument first via ui.attach-document.");
-            var maxDepth = Math.Max(1, Math.Min(request.IntArg("maxDepth", 10), 50));
-            var items = new List<string>();
-            CollectVisualElement(uiDoc.rootVisualElement, 0, maxDepth, items);
+            var maxDepth = Math.Max(0, Math.Min(request.IntArg("maxDepth", 1), 20));
+            var pageSize = LargeOutputPageSize(request, 50, 500);
+            var cursor = LargeOutputCursor(request);
+            var parent = request.StringArg("parent");
+            var query = request.StringArg("query") ?? request.StringArg("nameFilter") ?? request.StringArg("filter");
+            var typeFilter = request.StringArg("type") ?? request.StringArg("typeFilter");
+            var className = request.StringArg("className");
+            var root = ResolveVisualElementParent(uiDoc.rootVisualElement, parent);
+            var allItems = new List<string>();
+            CollectVisualElement(root, 0, maxDepth, query, typeFilter, className, allItems);
+            var page = allItems.Skip(cursor).Take(pageSize).ToList();
             var w = new UnityCliJsonWriter().BeginObject();
             w.Prop("command", "ui.get-visual-tree");
             w.PropRaw("target", GameObjectTargetJson(go));
-            w.Prop("count", (long)items.Count);
-            w.PropArray("elements", arr => { foreach (var i in items) arr.RawValue(i); });
+            w.Prop("parent", parent);
+            w.Prop("query", query);
+            w.Prop("type", typeFilter);
+            w.Prop("className", className);
+            w.Prop("maxDepth", (long)maxDepth);
+            w.Prop("count", (long)allItems.Count);
+            w.PropArray("items", arr => { foreach (var i in page) arr.RawValue(i); });
+            w.PropArray("elements", arr => { foreach (var i in page) arr.RawValue(i); });
+            w.PropRaw("pageInfo", PageInfoJson(pageSize, cursor, allItems.Count, page.Count));
             w.Prop("logPath", LogPath());
             return SuccessJson(w.EndObject().ToString());
         }
 
-        private static void CollectVisualElement(VisualElement ve, int depth, int maxDepth, List<string> items)
+        private static void CollectVisualElement(VisualElement ve, int depth, int maxDepth, string query, string typeFilter, string className, List<string> items)
         {
             if (ve == null || depth > maxDepth) return;
-            var w = new UnityCliJsonWriter().BeginObject();
-            w.Prop("name", ve.name).Prop("type", ve.GetType().Name).Prop("depth", (long)depth);
-            w.PropArray("classes", arr => { foreach (var c in ve.GetClasses()) arr.Value(c); });
-            w.Prop("childCount", (long)ve.childCount);
-            w.EndObject();
-            items.Add(w.ToString());
-            for (var i = 0; i < ve.childCount; i++) CollectVisualElement(ve[i], depth + 1, maxDepth, items);
+            if (VisualElementMatches(ve, query, typeFilter, className))
+            {
+                items.Add(VisualElementSummaryJson(ve, depth));
+            }
+            if (depth >= maxDepth) return;
+            for (var i = 0; i < ve.childCount; i++) CollectVisualElement(ve[i], depth + 1, maxDepth, query, typeFilter, className, items);
         }
 
         private static string UiHierarchy(BridgeRequest request)
         {
-            var pageSize = Math.Max(1, request.IntArg("pageSize", 100));
-            var cursor = Math.Max(0, request.IntArg("cursor", 0));
+            var pageSize = LargeOutputPageSize(request, 50, 500);
+            var cursor = LargeOutputCursor(request);
             var target = request.StringArg("target");
+            var parent = request.StringArg("parent");
+            var query = request.StringArg("query") ?? request.StringArg("nameFilter") ?? request.StringArg("filter");
+            var typeFilter = request.StringArg("type") ?? request.StringArg("typeFilter");
+            var className = request.StringArg("className");
             var roots = new List<GameObject>();
-            if (!string.IsNullOrEmpty(target))
+            if (!string.IsNullOrEmpty(parent))
+            {
+                var parentResolution = ResolveGameObjectTarget(parent);
+                if (parentResolution.Ambiguous)
+                {
+                    return TargetAmbiguousErrorJson("UI hierarchy parent", parent, parentResolution, "Pass a hierarchy path or instance id for the intended UI parent.");
+                }
+                if (parentResolution.Target == null)
+                {
+                    return ErrorJson("E_TARGET_NOT_FOUND", "UI hierarchy parent not found: " + parent, "Pass a returned UI hierarchy path as parent.");
+                }
+                foreach (Transform child in parentResolution.Target.transform)
+                {
+                    roots.Add(child.gameObject);
+                }
+            }
+            else if (!string.IsNullOrEmpty(target))
             {
                 var resolution = ResolveGameObjectTarget(target);
                 if (resolution.Ambiguous)
@@ -490,15 +524,15 @@ namespace UnityCli
             var summaries = new List<string>();
             foreach (var root in roots)
             {
-                CollectUiHierarchy(root.transform, summaries);
+                CollectUiHierarchy(root.transform, summaries, query, typeFilter, className);
             }
-            var items = new List<string>();
-            for (var index = cursor; index < summaries.Count && items.Count < pageSize; index++)
-            {
-                items.Add(summaries[index]);
-            }
-            var nextCursor = cursor + items.Count < summaries.Count ? (cursor + items.Count).ToString(CultureInfo.InvariantCulture) : null;
+            var items = summaries.Skip(cursor).Take(pageSize).ToList();
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
+                .Prop("target", target)
+                .Prop("parent", parent)
+                .Prop("query", query)
+                .Prop("type", typeFilter)
+                .Prop("className", className)
                 .PropArray("items", arr =>
                 {
                     foreach (var item in items)
@@ -506,10 +540,7 @@ namespace UnityCli
                         arr.RawValue(item);
                     }
                 })
-                .PropObject("pageInfo", pg =>
-                {
-                    pg.Prop("pageSize", (long)pageSize).Prop("cursor", (long)cursor).Prop("nextCursor", nextCursor).Prop("total", (long)summaries.Count);
-                })
+                .PropRaw("pageInfo", PageInfoJson(pageSize, cursor, summaries.Count, items.Count))
                 .Prop("logPath", LogPath())
                 .EndObject().ToString());
         }
@@ -791,12 +822,36 @@ namespace UnityCli
 
         private static string VisualElementSummaryJson(VisualElement element)
         {
-            return new UnityCliJsonWriter().BeginObject()
+            return VisualElementSummaryJson(element, -1);
+        }
+
+        private static string VisualElementSummaryJson(VisualElement element, int depth)
+        {
+            var writer = new UnityCliJsonWriter().BeginObject()
                 .Prop("name", element.name)
                 .Prop("type", element.GetType().Name)
                 .PropArray("classes", arr => { foreach (var c in element.GetClasses()) arr.Value(c); })
                 .Prop("childCount", (long)element.childCount)
-                .EndObject().ToString();
+                .Prop("childrenTruncated", element.childCount > 0);
+            if (depth >= 0) writer.Prop("depth", (long)depth);
+            return writer.EndObject().ToString();
+        }
+
+        private static bool VisualElementMatches(VisualElement element, string query, string typeFilter, string className)
+        {
+            if (element == null) return false;
+            if (!LargeOutputTextMatches(query, element.name, element.GetType().Name)) return false;
+            if (!string.IsNullOrEmpty(typeFilter) && element.GetType().Name.IndexOf(typeFilter, StringComparison.OrdinalIgnoreCase) < 0 && element.GetType().FullName.IndexOf(typeFilter, StringComparison.OrdinalIgnoreCase) < 0) return false;
+            if (!string.IsNullOrEmpty(className) && !element.ClassListContains(className)) return false;
+            return true;
+        }
+
+        private static VisualElement ResolveVisualElementParent(VisualElement root, string parent)
+        {
+            if (root == null || string.IsNullOrEmpty(parent)) return root;
+            var found = FindVisualElementByName(root, parent);
+            if (found != null) return found;
+            throw new BridgeCommandException("E_UI_VISUAL_PARENT_NOT_FOUND", "UI visual parent not found: " + parent, "Run ui.hierarchy or ui.get-visual-tree without parent, then pass a returned element name as parent.");
         }
 
         private static string ComponentNamesJson(GameObject gameObject)
@@ -991,20 +1046,36 @@ namespace UnityCli
 
         private static void CollectUiHierarchy(Transform transform, List<string> items)
         {
+            CollectUiHierarchy(transform, items, null, null, null);
+        }
+
+        private static void CollectUiHierarchy(Transform transform, List<string> items, string query, string typeFilter, string className)
+        {
             var gameObject = transform.gameObject;
-            if (gameObject.GetComponent<Canvas>() != null || gameObject.GetComponent<RectTransform>() != null || gameObject.GetComponent<UIDocument>() != null)
+            var documentComponent = gameObject.GetComponent<UIDocument>();
+            var canvas = gameObject.GetComponent<Canvas>();
+            var rectTransform = gameObject.GetComponent<RectTransform>();
+            if (canvas != null || rectTransform != null || documentComponent != null)
             {
-                var kind = gameObject.GetComponent<UIDocument>() != null ? "UIDocument" : gameObject.GetComponent<Canvas>() != null ? "Canvas" : "RectTransform";
-                var documentComponent = gameObject.GetComponent<UIDocument>();
-                items.Add(new UnityCliJsonWriter().BeginObject()
-                    .PropRaw("item", UiGameObjectJson(gameObject, kind))
-                    .PropRaw("rectTransform", RectTransformJson(gameObject.GetComponent<RectTransform>()))
-                    .PropRaw("document", documentComponent == null ? "null" : UiDocumentJson(documentComponent))
-                    .EndObject().ToString());
+                var kind = documentComponent != null ? "UIDocument" : canvas != null ? "Canvas" : "RectTransform";
+                var classMatch = string.IsNullOrEmpty(className) || (documentComponent != null && documentComponent.rootVisualElement != null && documentComponent.rootVisualElement.ClassListContains(className));
+                if (classMatch && LargeOutputTextMatches(query, gameObject.name, HierarchyPath(gameObject), kind) && (string.IsNullOrEmpty(typeFilter) || kind.IndexOf(typeFilter, StringComparison.OrdinalIgnoreCase) >= 0))
+                {
+                    items.Add(new UnityCliJsonWriter().BeginObject()
+                        .Prop("name", gameObject.name)
+                        .Prop("path", HierarchyPath(gameObject))
+                        .Prop("type", kind)
+                        .Prop("childCount", (long)transform.childCount)
+                        .Prop("childrenTruncated", transform.childCount > 0)
+                        .PropRaw("item", UiGameObjectJson(gameObject, kind))
+                        .PropRaw("rectTransform", RectTransformJson(rectTransform))
+                        .PropRaw("document", documentComponent == null ? "null" : UiDocumentJson(documentComponent))
+                        .EndObject().ToString());
+                }
             }
             foreach (Transform child in transform)
             {
-                CollectUiHierarchy(child, items);
+                CollectUiHierarchy(child, items, query, typeFilter, className);
             }
         }
 

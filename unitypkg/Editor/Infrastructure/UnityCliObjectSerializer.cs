@@ -21,13 +21,15 @@ namespace UnityCli
         internal static class ObjectSerializer
         {
             private const int DefaultMaxDepth = 4;
-            private const int MaxArrayItems = 64;
+            private const int DefaultMaxArrayItems = 50;
+            private const int AbsoluteMaxArrayItems = 1000;
             private const int MaxMembers = 256;
 
             /// <summary>序列化选项。</summary>
             public sealed class Options
             {
                 public int MaxDepth = DefaultMaxDepth;
+                public int MaxArrayItems = DefaultMaxArrayItems;
                 public bool IncludeFields = true;
                 public bool IncludeProperties = true;
                 public bool DeepSerialization = true;
@@ -90,6 +92,7 @@ namespace UnityCli
                 return new Options
                 {
                     MaxDepth = options.MaxDepth,
+                    MaxArrayItems = options.MaxArrayItems,
                     IncludeFields = options.IncludeFields,
                     IncludeProperties = options.IncludeProperties,
                     DeepSerialization = options.DeepSerialization,
@@ -270,8 +273,9 @@ namespace UnityCli
                 {
                     member.IsArray = true;
                     member.ArrayLength = list.Count;
-                    var limit = Math.Min(list.Count, MaxArrayItems);
-                    member.Truncated = list.Count > MaxArrayItems;
+                    var maxArrayItems = ClampMaxArrayItems(options.MaxArrayItems);
+                    var limit = Math.Min(list.Count, maxArrayItems);
+                    member.Truncated = list.Count > maxArrayItems;
                     for (var i = 0; i < limit; i++)
                     {
                         var itemPath = path + "[" + i + "]";
@@ -289,7 +293,7 @@ namespace UnityCli
                     var limit = 0;
                     foreach (DictionaryEntry entry in dict)
                     {
-                        if (limit >= MaxArrayItems) { member.Truncated = true; break; }
+                        if (limit >= ClampMaxArrayItems(options.MaxArrayItems)) { member.Truncated = true; break; }
                         var keyStr = Convert.ToString(entry.Key, CultureInfo.InvariantCulture);
                         var entryPath = path + "[" + keyStr + "]";
                         if (!PathAllowed(entryPath, options)) continue;
@@ -310,7 +314,7 @@ namespace UnityCli
                     var count = 0;
                     foreach (var item in enumerable)
                     {
-                        if (count >= MaxArrayItems) { member.Truncated = true; break; }
+                        if (count >= ClampMaxArrayItems(options.MaxArrayItems)) { member.Truncated = true; break; }
                         var itemPath = path + "[" + count + "]";
                         if (PathAllowed(itemPath, options))
                         {
@@ -395,6 +399,11 @@ namespace UnityCli
                         }
                     }
                 }
+            }
+
+            private static int ClampMaxArrayItems(int value)
+            {
+                return Math.Max(0, Math.Min(value <= 0 ? DefaultMaxArrayItems : value, AbsoluteMaxArrayItems));
             }
 
             private static bool PathAllowed(string path, Options options)
@@ -498,6 +507,9 @@ namespace UnityCli
                 {
                     w.Prop("isArray", true);
                     w.Prop("arrayLength", (long)member.ArrayLength);
+                    w.Prop("totalCount", (long)member.ArrayLength);
+                    w.Prop("returnedCount", (long)member.ArrayItems.Count);
+                    if (member.Truncated) w.Prop("nextPath", member.Path + "[" + member.ArrayItems.Count.ToString(CultureInfo.InvariantCulture) + "]");
                     w.PropArray("items", arr =>
                     {
                         foreach (var item in member.ArrayItems) arr.RawValue(MemberToJson(item));
@@ -506,6 +518,8 @@ namespace UnityCli
                 if (member.IsDictionary)
                 {
                     w.Prop("isDictionary", true);
+                    w.Prop("totalCount", (long)member.ArrayLength);
+                    w.Prop("returnedCount", (long)member.DictionaryEntries.Count);
                     w.PropArray("entries", arr =>
                     {
                         foreach (var entry in member.DictionaryEntries)

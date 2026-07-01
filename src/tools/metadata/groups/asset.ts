@@ -151,6 +151,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
       assetPath: { type: "string", description: "Exact Assets/* path to the asset main object." },
       path: { type: "string", description: "Backward-compatible alias of assetPath." },
       maxDepth: { type: "integer", default: 4, description: "Maximum serialization depth for full reads or viewQuery subtree." },
+      maxArrayItems: { type: "integer", default: 50, description: "Maximum array/list/dictionary entries returned per serialized member before truncation." },
       includeFields: { type: "boolean", default: true },
       includeProperties: { type: "boolean", default: true },
       deepSerialization: { type: "boolean", default: true },
@@ -166,7 +167,11 @@ export const ASSET_TOOLS: ToolMetadata[] = [
       path: { type: "string", description: "SerializedMember root path." },
       fields: { type: "array", items: { type: "object" }, description: "Present for path aggregate or expanded field data." },
       props: { type: "array", items: { type: "object" }, description: "Present for property data when included." },
-      unityObjectRef: { type: "object" }
+      unityObjectRef: { type: "object" },
+      truncated: { type: "boolean" },
+      totalCount: { type: "integer" },
+      returnedCount: { type: "integer" },
+      nextPath: { type: "string" }
     }),
     destructiveHint: false,
     playModeSupport: "supported",
@@ -177,15 +182,16 @@ export const ASSET_TOOLS: ToolMetadata[] = [
   },
   {
     name: "asset.get-components",
-    summary: "Read importer and Prefab/GameObject component summaries for an asset without deep-serializing the whole object graph.",
-    description: "Read importer and Prefab/GameObject component summaries for an asset without deep-serializing the whole object graph. For prefab assets, returns paged component rows with hierarchy path, GameObject active state, component type, and componentIndex. For non-GameObject assets, returns importer/main object metadata with componentCount=0.",
+    summary: "Read paged Prefab/GameObject component summaries for an asset without deep-serializing fields.",
+    description: "Read paged Prefab/GameObject component summaries for an asset without deep-serializing fields. Use query to filter GameObject path/name, componentType to filter components, and pageInfo.nextCursor to continue. For component field values use component.get with paths or viewQuery.",
     group: "asset",
-    inputSchema: objSchema({ assetPath: { type: "string", description: "Exact Assets/* path to inspect." }, path: { type: "string", description: "Alias of assetPath." }, includeInactive: { type: "boolean", default: true }, pageSize: { type: "integer", default: 200, maximum: 1000 }, cursor: { type: "integer", default: 0 } }, ["assetPath"]),
+    inputSchema: objSchema({ assetPath: { type: "string", description: "Exact Assets/* path to inspect." }, path: { type: "string", description: "Alias of assetPath." }, includeInactive: { type: "boolean", default: true }, query: { type: "string", description: "Optional GameObject name/path substring filter." }, componentType: { type: "string", description: "Optional component type filter, e.g. Animator or UnityEngine.Camera." }, pageSize: { type: "integer", default: 50, maximum: 500 }, cursor: { type: "integer", default: 0 } }, ["assetPath"]),
     outputSchema: pageSchema({ type: "object", properties: { path: { type: "string" }, gameObject: { type: "string" }, componentIndex: { type: "integer" }, type: { type: "string" }, fullName: { type: "string" }, enabled: { type: "boolean" } } }),
     destructiveHint: false,
     playModeSupport: "supported",
     examples: [
-      { description: "List components in a prefab asset", argv: ["tools", "run", "asset.get-components", "--input", "{\"assetPath\":\"Assets/Prefabs/Player.prefab\",\"pageSize\":50}"] }
+      { description: "List a small component summary page", argv: ["tools", "run", "asset.get-components", "--input", "{\"assetPath\":\"Assets/Prefabs/Player.prefab\",\"pageSize\":50}"] },
+      { description: "Filter prefab components by type", argv: ["tools", "run", "asset.get-components", "--input", "{\"assetPath\":\"Assets/Prefabs/Player.prefab\",\"componentType\":\"Animator\",\"pageSize\":25}"] }
     ]
   },
   {

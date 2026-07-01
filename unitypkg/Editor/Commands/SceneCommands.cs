@@ -451,10 +451,11 @@ namespace UnityCli
             var parent = request.StringArg("parent");
             var includeInactive = request.BoolArg("includeInactive", false);
             var includeComponents = request.BoolArg("includeComponents", false);
-            var nameFilter = request.StringArg("nameFilter") ?? request.StringArg("filter");
+            var query = request.StringArg("query") ?? request.StringArg("nameFilter") ?? request.StringArg("filter");
+            var componentType = request.StringArg("componentType");
             var maxDepth = Math.Max(0, Math.Min(request.IntArg("maxDepth", 1), 16));
-            var cursor = Math.Max(0, request.IntArg("cursor", 0));
-            var pageSize = Math.Max(1, Math.Min(request.IntArg("pageSize", 100), 500));
+            var cursor = LargeOutputCursor(request);
+            var pageSize = LargeOutputPageSize(request, 50, 500);
 
             var roots = new List<GameObject>();
             if (!string.IsNullOrEmpty(parent))
@@ -477,19 +478,20 @@ namespace UnityCli
             var allItems = new List<string>();
             foreach (var root in roots.OrderBy(g => HierarchyPath(g), StringComparer.Ordinal))
             {
-                CollectHierarchy(root.transform, allItems, 0, maxDepth, nameFilter, includeInactive, includeComponents);
+                CollectHierarchy(root.transform, allItems, 0, maxDepth, query, includeInactive, includeComponents, componentType);
             }
 
             var total = allItems.Count;
             var page = allItems.Skip(cursor).Take(pageSize).ToList();
-            var nextCursor = cursor + page.Count < total ? (cursor + page.Count).ToString(CultureInfo.InvariantCulture) : null;
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropObject("scene", w => w
                     .Prop("name", scene.name)
                     .Prop("path", scene.path))
                 .Prop("parent", parent)
                 .Prop("maxDepth", (long)maxDepth)
-                .Prop("nameFilter", nameFilter)
+                .Prop("query", query)
+                .Prop("nameFilter", query)
+                .Prop("componentType", componentType)
                 .Prop("includeInactive", includeInactive)
                 .Prop("includeComponents", includeComponents)
                 .PropArray("items", arr =>
@@ -499,11 +501,7 @@ namespace UnityCli
                         arr.RawValue(item);
                     }
                 })
-                .PropObject("pageInfo", w => w
-                    .Prop("pageSize", (long)pageSize)
-                    .Prop("cursor", (long)cursor)
-                    .Prop("nextCursor", nextCursor)
-                    .Prop("total", (long)total))
+                .PropRaw("pageInfo", PageInfoJson(pageSize, cursor, total, page.Count))
                 .Prop("logPath", LogPath())
                 .EndObject().ToString());
         }

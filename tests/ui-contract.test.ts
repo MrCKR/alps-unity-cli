@@ -48,6 +48,16 @@ test("ui read tools are supported in any play mode", () => {
     assert.equal(tool.playModeSupport, "supported", `${name} play mode supported`);
     assert.ok(tool.outputSchema, `${name} output schema`);
   }
+  const hierarchyProps = findToolByName("ui.hierarchy")!.inputSchema.properties as Record<string, unknown>;
+  assert.ok(hierarchyProps.parent, "ui.hierarchy should expose parent continuation");
+  assert.ok(hierarchyProps.query, "ui.hierarchy should expose query filtering");
+  assert.ok(hierarchyProps.className, "ui.hierarchy should expose className filtering");
+  assert.ok(hierarchyProps.pageSize, "ui.hierarchy should expose pagination");
+  const visualProps = findToolByName("ui.get-visual-tree")!.inputSchema.properties as Record<string, unknown>;
+  assert.ok(visualProps.parent, "ui.get-visual-tree should expose parent continuation");
+  assert.ok(visualProps.query, "ui.get-visual-tree should expose query filtering");
+  assert.ok(visualProps.className, "ui.get-visual-tree should expose className filtering");
+  assert.ok(visualProps.pageSize, "ui.get-visual-tree should expose pagination");
 });
 
 test("ui mutating tools declare safety and dry-run support", () => {

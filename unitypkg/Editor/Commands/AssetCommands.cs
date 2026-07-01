@@ -221,8 +221,10 @@ namespace UnityCli
         {
             var path = RequireExistingAssetPath(request.StringArg("assetPath") ?? request.StringArg("path") ?? request.StringArg("target"));
             var includeInactive = request.BoolArg("includeInactive", true);
-            var pageSize = Math.Max(1, Math.Min(request.IntArg("pageSize", 200), 1000));
-            var cursor = Math.Max(0, request.IntArg("cursor", 0));
+            var pageSize = LargeOutputPageSize(request, 50, 500);
+            var cursor = LargeOutputCursor(request);
+            var query = request.StringArg("query") ?? request.StringArg("nameFilter") ?? request.StringArg("pathFilter");
+            var componentType = request.StringArg("componentType");
             var asset = AssetDatabase.LoadMainAssetAtPath(path);
             var importer = AssetImporter.GetAtPath(path);
             var root = AssetDatabase.LoadAssetAtPath<GameObject>(path);
@@ -231,15 +233,18 @@ namespace UnityCli
             {
                 foreach (var transform in root.GetComponentsInChildren<Transform>(includeInactive))
                 {
+                    var gameObject = transform.gameObject;
+                    var relativePath = PrefabRelativePath(root.transform, transform);
+                    if (!LargeOutputTextMatches(query, gameObject.name, relativePath)) continue;
                     var components = transform.GetComponents<Component>();
                     for (var index = 0; index < components.Length; index++)
                     {
-                        rows.Add(AssetComponentJson(root, transform.gameObject, components[index], index));
+                        if (!LargeOutputComponentTypeMatches(components[index], componentType)) continue;
+                        rows.Add(AssetComponentJson(root, gameObject, components[index], index));
                     }
                 }
             }
             var page = rows.Skip(cursor).Take(pageSize).ToList();
-            var nextCursor = cursor + page.Count < rows.Count ? (cursor + page.Count).ToString(CultureInfo.InvariantCulture) : null;
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .Prop("command", "asset.get-components")
                 .Prop("assetPath", path)
@@ -251,9 +256,11 @@ namespace UnityCli
                     .Prop("userData", importer == null ? null : importer.userData))
                 .Prop("isGameObjectAsset", root != null)
                 .Prop("includeInactive", includeInactive)
+                .Prop("query", query)
+                .Prop("componentType", componentType)
                 .Prop("componentCount", (long)rows.Count)
                 .PropArray("components", arr => { foreach (var item in page) arr.RawValue(item); })
-                .PropObject("pageInfo", p => p.Prop("pageSize", (long)pageSize).Prop("cursor", (long)cursor).Prop("nextCursor", nextCursor).Prop("total", (long)rows.Count))
+                .PropRaw("pageInfo", PageInfoJson(pageSize, cursor, rows.Count, page.Count))
                 .Prop("logPath", LogPath())
                 .EndObject().ToString());
         }

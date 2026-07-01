@@ -58,8 +58,11 @@ test("object.get-data supports ObjectRef resolution and token-safe read scopes",
   const output = getData.outputSchema?.properties as Record<string, unknown>;
   assert.ok(props.paths, "paths should be supported for exact reads");
   assert.ok(props.viewQuery, "viewQuery should be supported for scoped reads");
+  assert.ok(props.maxArrayItems, "maxArrayItems should cap large arrays/lists/dictionaries");
   assert.ok(output.fields, "output schema should expose SerializedMember fields");
   assert.ok(output.path, "output schema should expose SerializedMember path");
+  assert.ok(output.truncated, "output schema should expose truncation continuation state");
+  assert.ok(output.nextPath, "output schema should expose nextPath for precision continuation");
   assert.equal(output.data, undefined, "output schema should not claim an extra data wrapper");
   assert.match(getData.description, /mutually exclusive/, "describe text should warn paths/viewQuery are mutually exclusive");
 });

@@ -123,6 +123,30 @@ unity_cli tools run profiler.capture --input '{"path":"profile.json"}' --job --w
 unity_cli jobs status <jobId>
 ```
 
+## 大响应治理
+
+可能返回大量数据的工具默认应先返回小摘要，AI 调用时也应优先使用过滤、分页和精确读取，避免一次性展开场景、Prefab、序列化对象、Shader 源码或图片 base64。
+
+通用规则：
+
+- 列表/层级工具优先传 `pageSize`、`cursor`、`parent`、`query`、`componentType` 或 `className`。继续读取时使用输出里的 `pageInfo.nextCursor`；`hasMore`、`truncated` 或 `childrenTruncated` 表示还有更深或更多内容。
+- 深度序列化工具（`object.get-data`、`asset.get-data`、`component.get`）优先传 `paths` 或 `viewQuery`，并保持 `maxDepth` 较低。数组、列表和字典受 `maxArrayItems` 限制；输出里的 `totalCount`、`returnedCount`、`truncated`、`nextPath` 用于判断是否需要继续按路径读取。
+- 文本源码工具（如 `shader.read`）使用 `offset` 和 `maxBytes` 分段读取。输出 `truncated=true` 时，下一次把 `nextOffset` 作为新的 `offset`。
+- 截图和相机工具默认返回 artifact 路径。只有确实需要内联图片时才传 `inlineBase64:true`；图片超过 Bridge 内联上限时会省略 `imageBase64` 并返回 warning，继续使用 artifact 路径。
+
+示例：
+
+```powershell
+# 先读场景小页，再用 nextCursor 续页
+unity_cli tools run scene.hierarchy --input '{"pageSize":50,"query":"Camera"}'
+
+# 深读时只读需要的字段，并限制数组项
+unity_cli tools run component.get --input '{"path":"Player","component":"Inventory","paths":["items"],"maxArrayItems":20}'
+
+# Shader 源码分段读取
+unity_cli tools run shader.read --input '{"path":"Assets/Shaders/Probe.shader","maxBytes":65536}'
+```
+
 ## 验证策略
 
 执行后应验证结果：

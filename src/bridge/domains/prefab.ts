@@ -63,6 +63,11 @@ function prefabArgs({ command, flags, positionalTarget }: Parameters<BridgeComma
   return compactArgs({
     ...queryArgs(flags),
     path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "prefab") ?? stringField(flags, "path"),
+    parent: stringFlag(flags, "parent") ?? stringField(flags, "parent"),
+    query: stringFlag(flags, "query") ?? stringField(flags, "query"),
+    nameFilter: stringFlag(flags, "name-filter") ?? stringField(flags, "nameFilter"),
+    componentType: stringFlag(flags, "component-type") ?? stringField(flags, "componentType"),
+    includeSummaryDetails: boolFlag(flags, "include-summary-details") ?? boolField(flags, "includeSummaryDetails"),
     pageSize: numberFlag(flags, "page-size") ?? numberField(flags, "pageSize"),
     cursor: stringFlag(flags, "cursor") ?? stringField(flags, "cursor")
   });

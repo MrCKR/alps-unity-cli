@@ -63,6 +63,29 @@ test("profiler.clear is non-destructive with dry-run", () => {
   assert.equal(clear.supportsDryRun, true);
 });
 
+test("profiler.hierarchy exposes bounded defaults and truncation summaries", () => {
+  const hierarchy = findToolByName("profiler.hierarchy")!;
+  const props = hierarchy.inputSchema.properties as Record<string, { default?: unknown }>;
+  assert.equal(props.top.default, 20);
+  assert.equal(props.depth.default, 5);
+  assert.match(hierarchy.description, /childrenTruncated/, "profiler.hierarchy should document truncated children");
+});
+
+test("profiler.hierarchy C# supports current hierarchy API and latest-frame default", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Commands/ProfilerCommands.cs", import.meta.url), "utf8");
+  assert.match(source, /UnityEditor\.Profiling\.HierarchyFrameDataView[\s\S]*UnityEditorInternal\.HierarchyFrameDataView[\s\S]*UnityEngine\.Profiling\.HierarchyFrameDataView/, "profiler.hierarchy should try UnityEditor.Profiling first, then compatibility type names");
+  assert.match(source, /typeof\(bool\)/, "Unity 2022.3 GetHierarchyFrameDataView sortAscending parameter should be bool");
+  assert.match(source, /ProfilerDriverIntProperty\("lastFrameIndex", -1\)/, "omitted frame should resolve to ProfilerDriver.lastFrameIndex");
+});
+
+test("profiler.start records Editor frames and profiler.stop restores profileEditor", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Commands/ProfilerCommands.cs", import.meta.url), "utf8");
+  assert.match(source, /GetProperty\("profileEditor"/, "profiler should reflect ProfilerDriver.profileEditor");
+  assert.match(source, /previousProfilerEditorRecording = GetProfilerEditorRecording\(\)/, "profiler.start should remember previous profileEditor state");
+  assert.match(source, /SetProfilerEditorRecording\(true\)[\s\S]*SetProfilerSessionEnabled\(true\)/, "profiler.start should enable Profile Editor before recording");
+  assert.match(source, /SetProfilerEditorRecording\(previousProfilerEditorRecording\.Value\)/, "profiler.stop should restore previous profileEditor state");
+});
+
 test("bridge specs resolve for profiler tools", () => {
   for (const [cmd, expected] of [["status", "profiler.status"], ["start", "profiler.start"], ["stop", "profiler.stop"], ["pause", "profiler.pause"], ["counter", "profiler.counter"], ["memory", "profiler.memory"], ["frame", "profiler.frame"], ["capture", "profiler.capture"], ["export", "profiler.export"], ["modules", "profiler.modules"], ["module-enable", "profiler.module-enable"], ["clear", "profiler.clear"], ["load", "profiler.load"], ["areas", "profiler.areas"], ["object-memory", "profiler.object-memory"], ["rendering-stats", "profiler.rendering-stats"], ["script-stats", "profiler.script-stats"], ["deep", "profiler.deep"], ["hierarchy", "profiler.hierarchy"], ["memory-snapshot.take", "profiler.memory-snapshot.take"], ["memory-snapshot.list", "profiler.memory-snapshot.list"], ["memory-snapshot.compare", "profiler.memory-snapshot.compare"], ["frame-debugger.enable", "profiler.frame-debugger.enable"], ["frame-debugger.disable", "profiler.frame-debugger.disable"], ["frame-debugger.events", "profiler.frame-debugger.events"]] as const) {
     const spec = bridgeCommandRegistry.lookup("profiler", cmd);

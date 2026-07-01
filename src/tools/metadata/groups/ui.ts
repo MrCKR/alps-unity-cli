@@ -135,19 +135,24 @@ export const UI_TOOLS: ToolMetadata[] = [
   },
   {
     name: "ui.hierarchy",
-    summary: "List UI elements under a Canvas (uGUI) or UI Document (UIToolkit) hierarchy.",
-    description: "List UI elements under a Canvas (uGUI) or UI Document (UIToolkit) hierarchy. Paged by pageSize/cursor. Use this to inspect UI structure before modifying elements.",
+    summary: "List UI hierarchy nodes as small paged summaries.",
+    description: "List UI hierarchy nodes as small paged summaries. Use target for an initial root, parent to continue from a returned GameObject path, query/type/className to filter, and pageInfo.nextCursor to continue. This is the preferred UI navigation tool before reading or modifying specific elements.",
     group: "ui",
     inputSchema: objSchema({
-      target: { type: "string", description: "Canvas or UIDocument GameObject: name, hierarchy path or instance id." },
-      pageSize: { type: "integer", default: 100, description: "Maximum elements per page." },
-      cursor: { type: "string", description: "Cursor from a previous pageInfo.nextCursor." }
+      target: { type: "string", description: "Canvas, UIDocument, RectTransform or UI GameObject root: name, hierarchy path or instance id." },
+      parent: { type: "string", description: "Optional returned UI GameObject path whose direct children should be listed." },
+      query: { type: "string", description: "Optional name/path/type substring filter." },
+      type: { type: "string", description: "Optional UI node type filter, e.g. Canvas, UIDocument, RectTransform." },
+      className: { type: "string", description: "Optional UI Toolkit class filter for UIDocument root elements." },
+      pageSize: { type: "integer", default: 50, maximum: 500, description: "Maximum elements per page." },
+      cursor: { type: "integer", default: 0, description: "Cursor from a previous pageInfo.nextCursor." }
     }),
-    outputSchema: objSchema({ command: { type: "string" }, count: { type: "integer" }, elements: { type: "array", items: { type: "object" } } }),
+    outputSchema: objSchema({ items: { type: "array", items: { type: "object" } }, pageInfo: { type: "object" }, logPath: { type: "string" } }),
     destructiveHint: false,
     playModeSupport: "supported",
     examples: [
-      { description: "List UI elements under a canvas", argv: ["tools", "run", "ui.hierarchy", "--input", "{\"target\":\"MainCanvas\",\"pageSize\":50}"] }
+      { description: "List a small UI hierarchy page", argv: ["tools", "run", "ui.hierarchy", "--input", "{\"target\":\"MainCanvas\",\"pageSize\":50}"] },
+      { description: "Filter UI nodes by query", argv: ["tools", "run", "ui.hierarchy", "--input", "{\"target\":\"MainCanvas\",\"query\":\"Button\",\"pageSize\":25}"] }
     ]
   },
   {
@@ -208,15 +213,16 @@ export const UI_TOOLS: ToolMetadata[] = [
   },
   {
     name: "ui.get-visual-tree",
-    summary: "Inspect the visual tree of a UIDocument: element name, type, classes, child count up to maxDepth.",
-    description: "Inspect the visual tree of a UIDocument: element name, type, classes, child count up to maxDepth. Read-only. Aligns with CoplayDev manage_ui.get_visual_tree.",
+    summary: "Inspect a UIDocument visual tree as a shallow, paged summary.",
+    description: "Inspect a UIDocument visual tree as a shallow, paged summary. Defaults to maxDepth=1 and pageSize=50; use parent/query/type/className plus pageInfo.nextCursor to narrow or continue. Prefer ui.hierarchy for mixed uGUI/UIToolkit navigation.",
     group: "ui",
-    inputSchema: objSchema({ target: { type: "string", description: "UIDocument GameObject: name, hierarchy path or instance id." }, maxDepth: { type: "integer", default: 10, description: "Maximum traversal depth." } }, ["target"]),
-    outputSchema: objSchema({ command: { type: "string" }, count: { type: "integer" }, elements: { type: "array", items: { type: "object" } } }),
+    inputSchema: objSchema({ target: { type: "string", description: "UIDocument GameObject: name, hierarchy path or instance id." }, parent: { type: "string", description: "Optional VisualElement name to start from." }, query: { type: "string", description: "Optional element name/type substring filter." }, type: { type: "string", description: "Optional VisualElement type filter." }, className: { type: "string", description: "Optional USS class filter." }, maxDepth: { type: "integer", default: 1, description: "Maximum traversal depth from the selected parent." }, pageSize: { type: "integer", default: 50, maximum: 500 }, cursor: { type: "integer", default: 0 } }, ["target"]),
+    outputSchema: objSchema({ command: { type: "string" }, count: { type: "integer" }, items: { type: "array", items: { type: "object" } }, elements: { type: "array", items: { type: "object" } }, pageInfo: { type: "object" } }),
     destructiveHint: false,
     playModeSupport: "supported",
     examples: [
-      { description: "Inspect a UIDocument visual tree", argv: ["tools", "run", "ui.get-visual-tree", "--input", "{\"target\":\"UIDoc\",\"maxDepth\":10}"] }
+      { description: "Inspect a shallow visual tree page", argv: ["tools", "run", "ui.get-visual-tree", "--input", "{\"target\":\"UIDoc\",\"maxDepth\":1,\"pageSize\":50}"] },
+      { description: "Filter by USS class", argv: ["tools", "run", "ui.get-visual-tree", "--input", "{\"target\":\"UIDoc\",\"className\":\"primary\",\"pageSize\":25}"] }
     ]
   },
   {

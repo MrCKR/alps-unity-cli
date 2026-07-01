@@ -64,16 +64,28 @@ namespace UnityCli
                 rt.Release();
                 UnityEngine.Object.DestroyImmediate(rt);
             }
+            var format = outputPath.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ? "jpg" : "png";
+            var capture = new ScreenshotResult(outputPath, format, width, height, false, 95, null, bytes, request.BoolArg("inlineBase64", false));
             var w = new UnityCliJsonWriter().BeginObject();
             w.Prop("command", "screenshot.game-view");
-            w.PropRaw("artifact", ScreenshotArtifactJson("game-view", outputPath, width, height, "Camera.main/allCameras"));
-            if (request.BoolArg("inlineBase64", false)) AppendInlineScreenshot(w, Convert.ToBase64String(bytes), width, height, outputPath.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ? "image/jpeg" : "image/png");
+            w.PropRaw("artifact", ScreenshotDataJson(capture, "game-view", "Camera.main/allCameras"));
+            w.Prop("screenshotPath", capture.Path)
+                .Prop("artifactPath", capture.Path)
+                .Prop("path", capture.Path)
+                .Prop("format", capture.Format)
+                .Prop("width", (long)capture.Width)
+                .Prop("height", (long)capture.Height)
+                .Prop("transparent", capture.Transparent)
+                .Prop("quality", (long)capture.Quality)
+                .Prop("source", "game-view")
+                .Prop("target", "Camera.main/allCameras");
+            AppendCameraInlineScreenshot(w, capture);
             if (includeDiagnostics)
             {
                 w.PropRaw("diagnostics", GraphicsStatsSummaryJson());
             }
             w.Prop("logPath", LogPath());
-            return w.EndObject().ToString();
+            return SuccessJson(w.EndObject().ToString());
         }
 
         /// <summary>SceneView 截图：对齐 Ivan scene-view。</summary>
@@ -87,9 +99,20 @@ namespace UnityCli
             var capture = CaptureCamera(sceneView.camera, request);
             var w = new UnityCliJsonWriter().BeginObject();
             w.Prop("command", "screenshot.scene-view");
-            w.PropRaw("artifact", ScreenshotArtifactJson("scene-view", capture.Path, capture.Width, capture.Height, "SceneView.camera"));
+            w.PropRaw("artifact", ScreenshotDataJson(capture, "scene-view", "SceneView.camera"));
+            w.Prop("screenshotPath", capture.Path)
+                .Prop("artifactPath", capture.Path)
+                .Prop("path", capture.Path)
+                .Prop("format", capture.Format)
+                .Prop("width", (long)capture.Width)
+                .Prop("height", (long)capture.Height)
+                .Prop("transparent", capture.Transparent)
+                .Prop("quality", (long)capture.Quality)
+                .Prop("source", "scene-view")
+                .Prop("target", "SceneView.camera");
+            AppendCameraInlineScreenshot(w, capture);
             w.Prop("logPath", LogPath());
-            return w.EndObject().ToString();
+            return SuccessJson(w.EndObject().ToString());
         }
 
         /// <summary>隔离对象截图：对齐 Ivan isolated。在临时场景渲染单个对象。</summary>
@@ -144,13 +167,24 @@ namespace UnityCli
                 UnityEngine.Object.DestroyImmediate(rt);
                 UnityEngine.Object.DestroyImmediate(tempGo);
             }
+            var format = outputPath.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ? "jpg" : "png";
+            var capture = new ScreenshotResult(outputPath, format, width, height, false, 95, null, bytes, request.BoolArg("inlineBase64", false));
             var w = new UnityCliJsonWriter().BeginObject();
             w.Prop("command", "screenshot.isolated-object");
-            w.PropRaw("artifact", ScreenshotArtifactJson("isolated-object", outputPath, width, height, "isolated:" + go.name));
-            if (request.BoolArg("inlineBase64", false)) AppendInlineScreenshot(w, Convert.ToBase64String(bytes), width, height, outputPath.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ? "image/jpeg" : "image/png");
-            w.Prop("target", go.name);
+            w.PropRaw("artifact", ScreenshotDataJson(capture, "isolated-object", "isolated:" + go.name));
+            w.Prop("screenshotPath", capture.Path)
+                .Prop("artifactPath", capture.Path)
+                .Prop("path", capture.Path)
+                .Prop("format", capture.Format)
+                .Prop("width", (long)capture.Width)
+                .Prop("height", (long)capture.Height)
+                .Prop("transparent", capture.Transparent)
+                .Prop("quality", (long)capture.Quality)
+                .Prop("source", "isolated-object")
+                .Prop("target", go.name);
+            AppendCameraInlineScreenshot(w, capture);
             w.Prop("logPath", LogPath());
-            return w.EndObject().ToString();
+            return SuccessJson(w.EndObject().ToString());
         }
 
         /// <summary>环绕截图：对齐 CoplayDev orbit/surround。从多个角度截图同一对象。</summary>
@@ -215,7 +249,7 @@ namespace UnityCli
             w.Prop("count", (long)artifacts.Count);
             w.PropArray("artifacts", arr => { foreach (var a in artifacts) arr.RawValue(a); });
             w.Prop("logPath", LogPath());
-            return w.EndObject().ToString();
+            return SuccessJson(w.EndObject().ToString());
         }
 
         /// <summary>6 角度环绕截图并生成 contact sheet。用于 AI 快速检查对象外观。</summary>
@@ -325,7 +359,7 @@ namespace UnityCli
                 .PropRaw("contactSheet", ScreenshotArtifactJson("surround-contact-sheet", contactSheetPath, width * 3, height * 2, "surround"))
                 .PropArray("artifacts", arr => { foreach (var artifact in artifacts) arr.RawValue(artifact); });
             if (request.BoolArg("inlineBase64", false)) AppendInlineScreenshot(w, Convert.ToBase64String(contactBytes), width * 3, height * 2);
-            return w.Prop("logPath", LogPath()).EndObject().ToString();
+            return SuccessJson(w.Prop("logPath", LogPath()).EndObject().ToString());
         }
 
         private static string ScreenshotArtifactJson(string source, string path, int width, int height, string camera)
@@ -342,7 +376,7 @@ namespace UnityCli
 
         private static void AppendInlineScreenshot(UnityCliJsonWriter writer, string imageBase64, int width, int height, string mimeType = "image/png")
         {
-            if (string.IsNullOrEmpty(imageBase64)) return;
+            if (!ShouldInlineScreenshotBase64(writer, imageBase64)) return;
             writer.Prop("imageBase64", imageBase64)
                 .Prop("imageWidth", (long)width)
                 .Prop("imageHeight", (long)height)

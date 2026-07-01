@@ -260,15 +260,16 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
   },
   {
     name: "controller.get-info",
-    summary: "Get detailed AnimatorController asset info including layers, states, BlendTree parameters/children, per-state transitions, AnyState transitions, transition...",
-    description: "Get detailed AnimatorController asset info including layers, states, BlendTree parameters/children, per-state transitions, AnyState transitions, transition conditions, and parameters. Read-only; use before/after add-state/add-transition/assign/blend-tree edits to avoid missing names and audit state-machine edits. Returns E_CONTROLLER_NOT_FOUND or E_CONTROLLER_PATH_REQUIRED.",
+    summary: "Get AnimatorController summary data with opt-in transitions and BlendTree detail.",
+    description: "Get AnimatorController summary data with layers, state counts, state summaries and parameters. Transitions and BlendTree children are omitted by default; pass includeTransitions/includeBlendTrees and optional layerName/stateName when detailed state-machine auditing is needed.",
     group: "controller",
-    inputSchema: objSchema({ controllerPath: { type: "string", description: "AnimatorController asset path." } }, ["controllerPath"]),
+    inputSchema: objSchema({ controllerPath: { type: "string", description: "AnimatorController asset path." }, layerName: { type: "string", description: "Optional layer name filter." }, stateName: { type: "string", description: "Optional state name filter." }, includeTransitions: { type: "boolean", default: false, description: "Include transition arrays, capped by maxTransitionsPerState." }, includeBlendTrees: { type: "boolean", default: false, description: "Include BlendTree child details." }, maxStatesPerLayer: { type: "integer", default: 50 }, maxTransitionsPerState: { type: "integer", default: 20 }, pageSize: { type: "integer", default: 50 }, cursor: { type: "integer", default: 0 } }, ["controllerPath"]),
     outputSchema: objSchema({ path: { type: "string" }, guid: { type: "string" }, name: { type: "string" }, layerCount: { type: "integer" }, parameterCount: { type: "integer" }, layers: { type: "array", items: { type: "object", properties: { index: { type: "integer" }, name: { type: "string" }, stateCount: { type: "integer" }, anyStateTransitionCount: { type: "integer" }, states: { type: "array", items: { type: "object", properties: { name: { type: "string" }, motionType: { type: "string" }, blendTree: { type: "object" }, transitions: { type: "array", items: { type: "object" } } } } }, anyStateTransitions: { type: "array", items: { type: "object" } } } } }, parameters: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: false,
     playModeSupport: "supported",
     examples: [
-      { description: "Inspect controller", argv: ["tools", "run", "controller.get-info", "--input", "{\"controllerPath\":\"Assets/UnityCliAlignmentFixtures/NewAnimator.controller\"}"] }
+      { description: "Inspect controller summary", argv: ["tools", "run", "controller.get-info", "--input", "{\"controllerPath\":\"Assets/UnityCliAlignmentFixtures/NewAnimator.controller\",\"pageSize\":50}"] },
+      { description: "Inspect one state with transitions", argv: ["tools", "run", "controller.get-info", "--input", "{\"controllerPath\":\"Assets/UnityCliAlignmentFixtures/NewAnimator.controller\",\"layerName\":\"Base Layer\",\"stateName\":\"Idle\",\"includeTransitions\":true}"] }
     ]
   },
   {

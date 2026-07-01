@@ -17,7 +17,8 @@ export function screenshotArgs(flags: BridgeFlags, positionalPath: string | unde
     transparent: boolFlag(flags, "transparent"),
     quality: numberFlag(flags, "quality"),
     overwrite: boolFlag(flags, "overwrite"),
-    gameView: boolFlag(flags, "game-view")
+    gameView: boolFlag(flags, "game-view"),
+    inlineBase64: boolFlag(flags, "inline-base64")
   });
 }
 

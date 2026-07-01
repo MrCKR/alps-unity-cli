@@ -58,7 +58,17 @@ function boolField(flags: BridgeFlags, key: string): boolean | undefined {
 
 async function uiArgs({ command, flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Promise<Record<string, unknown>> {
   if (command === "ui.hierarchy") {
-    return compactArgs({ ...queryArgs(flags), target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") ?? stringField(flags, "target"), pageSize: numberFlag(flags, "page-size") ?? numberField(flags, "pageSize"), cursor: stringFlag(flags, "cursor") ?? stringField(flags, "cursor") });
+    return compactArgs({
+      ...queryArgs(flags),
+      target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") ?? stringField(flags, "target"),
+      parent: stringFlag(flags, "parent") ?? stringField(flags, "parent"),
+      query: stringFlag(flags, "query") ?? stringField(flags, "query"),
+      nameFilter: stringFlag(flags, "name-filter") ?? stringField(flags, "nameFilter"),
+      type: stringFlag(flags, "type") ?? stringField(flags, "type"),
+      className: stringFlag(flags, "class-name") ?? stringField(flags, "className"),
+      pageSize: numberFlag(flags, "page-size") ?? numberField(flags, "pageSize"),
+      cursor: stringFlag(flags, "cursor") ?? stringField(flags, "cursor")
+    });
   }
   if (command === "ui.document.info") {
     const documentTarget = positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") ?? stringField(flags, "target");
@@ -136,6 +146,13 @@ function uiPanelArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["
 function uiVisualTreeArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
     target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target"),
+    parent: stringFlag(flags, "parent") ?? stringField(flags, "parent"),
+    query: stringFlag(flags, "query") ?? stringField(flags, "query"),
+    nameFilter: stringFlag(flags, "name-filter") ?? stringField(flags, "nameFilter"),
+    type: stringFlag(flags, "type") ?? stringField(flags, "type"),
+    className: stringFlag(flags, "class-name") ?? stringField(flags, "className"),
+    pageSize: numberFlag(flags, "page-size") ?? numberField(flags, "pageSize"),
+    cursor: stringFlag(flags, "cursor") ?? stringField(flags, "cursor"),
     maxDepth: numberFlag(flags, "max-depth") ?? numberField(flags, "maxDepth")
   });
 }

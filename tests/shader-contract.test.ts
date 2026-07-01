@@ -54,7 +54,15 @@ test("shader group tools exist with correct safety hints", () => {
   assert.equal(getData.playModeSupport, "supported");
 });
 
-test("shader.list and shader.get-data expose output schemas", () => {
+test("shader.read, shader.list and shader.get-data expose bounded output schemas", () => {
+  const read = findToolByName("shader.read")!;
+  const readProps = read.inputSchema.properties as Record<string, unknown>;
+  const readOut = read.outputSchema?.properties as Record<string, unknown>;
+  assert.ok(readProps.offset, "shader.read should accept offset continuation");
+  assert.ok(readProps.maxBytes, "shader.read should accept maxBytes cap");
+  assert.ok(readOut.nextOffset, "shader.read output should expose nextOffset when truncated");
+  assert.match(read.description, /nextOffset/, "shader.read should document continuation");
+
   const list = findToolByName("shader.list")!;
   const listOut = list.outputSchema?.properties as Record<string, unknown>;
   assert.ok(listOut.shaders, "list output should expose shaders array");
@@ -64,6 +72,9 @@ test("shader.list and shader.get-data expose output schemas", () => {
   const props = getData.inputSchema.properties as Record<string, unknown>;
   assert.ok(props.path, "get-data should accept path");
   assert.ok(props.name, "get-data should accept name for Shader.Find resolution");
+  assert.equal((props.includeSourceCode as { default?: boolean }).default, false, "source code should be opt-in");
+  assert.ok(props.maxSubshaders, "get-data should expose maxSubshaders cap");
+  assert.ok(props.maxPasses, "get-data should expose maxPasses cap");
   const out = getData.outputSchema?.properties as Record<string, unknown>;
   assert.ok(out.properties, "get-data output should expose properties");
   assert.ok(out.isSupported, "get-data output should expose isSupported");

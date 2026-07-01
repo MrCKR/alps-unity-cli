@@ -58,15 +58,15 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
   {
     name: "camera.screenshot",
     summary: "Render a screenshot from a specific Camera into a PNG/JPG artifact file.",
-    description: "Render a screenshot from a specific Camera into a PNG/JPG artifact file. Restores the camera targetTexture, clearFlags, backgroundColor, and active RenderTexture after capture. Output must be explicit; pass overwrite only when replacing the file is intended.",
+    description: "Render a screenshot from a specific Camera into a PNG/JPG artifact file. Defaults return artifact paths only; inlineBase64 must be explicit and is omitted with a warning when the image exceeds the bridge inline limit. Restores camera render state after capture.",
     group: "camera",
-    inputSchema: objSchema({ target: { type: "string", description: "Camera name, hierarchy path, or instance id." }, output: { type: "string", description: "File path for the artifact; relative paths resolve under the Unity project root." }, width: { type: "integer", default: 1280, description: "Output width in pixels, clamped by the bridge for safety." }, height: { type: "integer", default: 720, description: "Output height in pixels, clamped by the bridge for safety." }, format: { type: "string", enum: ["png", "jpg", "jpeg"], description: "Defaults from output extension; jpeg is normalized to jpg." }, transparent: { type: "boolean", description: "Use transparent solid-color background for PNG-style captures." }, quality: { type: "integer", description: "JPG quality, clamped to 1..100." }, overwrite: { type: "boolean", description: "Allow replacing an existing output file." } }, ["target", "output"]),
+    inputSchema: objSchema({ target: { type: "string", description: "Camera name, hierarchy path, or instance id." }, path: { type: "string", description: "File path for the artifact; relative paths resolve under the Unity project root." }, output: { type: "string", description: "Alias of path for CLI compatibility." }, width: { type: "integer", default: 1280, description: "Output width in pixels, clamped by the bridge for safety." }, height: { type: "integer", default: 720, description: "Output height in pixels, clamped by the bridge for safety." }, format: { type: "string", enum: ["png", "jpg", "jpeg"], description: "Defaults from output/path extension; jpeg is normalized to jpg." }, transparent: { type: "boolean", description: "Use transparent solid-color background for PNG-style captures." }, quality: { type: "integer", description: "JPG quality, clamped to 1..100." }, overwrite: { type: "boolean", description: "Allow replacing an existing output file." }, inlineBase64: { type: "boolean", default: false, description: "Also return imageBase64 when the encoded artifact is below the bridge inline limit." } }, ["target", "path"]),
     outputSchema: objSchema(artifactSchema, ["screenshotPath", "artifactPath", "format", "width", "height", "source", "target"]),
     destructiveHint: false,
     sideEffects: ["artifact-write", "render-texture"],
     playModeSupport: "session-affecting",
     examples: [
-      { description: "Capture from Main Camera", argv: ["tools", "run", "camera.screenshot", "--input", "{\"target\":\"Main Camera\",\"output\":\"Artifacts/camera-main.png\",\"width\":640,\"height\":360,\"overwrite\":true}"] }
+      { description: "Capture from Main Camera", argv: ["tools", "run", "camera.screenshot", "--input", "{\"target\":\"Main Camera\",\"path\":\"Artifacts/camera-main.png\",\"width\":640,\"height\":360,\"overwrite\":true}"] }
     ]
   },
   {
