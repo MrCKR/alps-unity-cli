@@ -1,5 +1,5 @@
 import { boolFlag, compactArgs, floatFlag, numberFlag, queryArgs, stringFlag, targetArgs } from "../args.js";
-import type { BridgeCommandSpec } from "../types.js";
+import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 /**
  * ProBuilder extension bridge specs — 36 single-action tools.
@@ -85,237 +85,237 @@ function probuilderPingArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]
 
 function probuilderCreateShapeArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    shapeType: positionalTarget ?? stringFlag(flags, "shape-type") ?? stringFlag(flags, "shape") ?? stringFlag(flags, "type"),
-    name: stringFlag(flags, "name"),
+    shapeType: positionalTarget ?? stringFlag(flags, "shape-type") ?? stringFlag(flags, "shape") ?? stringFlag(flags, "type") ?? stringField(flags, "shapeType"),
+    name: stringFlag(flags, "name") ?? stringField(flags, "name"),
     position: positionalPosition(flags),
-    width: floatFlag(flags, "width"),
-    height: floatFlag(flags, "height"),
-    depth: floatFlag(flags, "depth"),
-    radius: floatFlag(flags, "radius"),
-    segments: numberFlag(flags, "segments"),
-    sides: numberFlag(flags, "sides"),
-    x: floatFlag(flags, "x"),
-    y: floatFlag(flags, "y"),
-    z: floatFlag(flags, "z"),
-    parent: stringFlag(flags, "parent")
+    width: floatFlag(flags, "width") ?? numberField(flags, "width"),
+    height: floatFlag(flags, "height") ?? numberField(flags, "height"),
+    depth: floatFlag(flags, "depth") ?? numberField(flags, "depth"),
+    radius: floatFlag(flags, "radius") ?? numberField(flags, "radius"),
+    segments: numberFlag(flags, "segments") ?? numberField(flags, "segments"),
+    sides: numberFlag(flags, "sides") ?? numberField(flags, "sides"),
+    x: floatFlag(flags, "x") ?? numberField(flags, "x"),
+    y: floatFlag(flags, "y") ?? numberField(flags, "y"),
+    z: floatFlag(flags, "z") ?? numberField(flags, "z"),
+    parent: stringFlag(flags, "parent") ?? stringField(flags, "parent")
   });
 }
 
 function probuilderCreatePolyShapeArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    points: stringFlag(flags, "points") ? parseJsonFlag(stringFlag(flags, "points")!) : undefined,
-    extrudeHeight: floatFlag(flags, "extrude-height") ?? floatFlag(flags, "height"),
-    flipNormals: boolFlag(flags, "flip-normals"),
-    name: stringFlag(flags, "name")
+    points: jsonField(flags, "points", "points"),
+    extrudeHeight: floatFlag(flags, "extrude-height") ?? floatFlag(flags, "height") ?? numberField(flags, "extrudeHeight"),
+    flipNormals: boolFlag(flags, "flip-normals") ?? boolField(flags, "flipNormals"),
+    name: stringFlag(flags, "name") ?? stringField(flags, "name")
   });
 }
 
 function probuilderTargetWithIndicesArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target"),
-    faceIndices: stringFlag(flags, "face-indices") ? parseJsonFlag(stringFlag(flags, "face-indices")!) : undefined
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target"),
+    faceIndices: jsonField(flags, "face-indices", "faceIndices")
   });
 }
 
 function probuilderTargetWithOptionalIndicesArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target"),
-    faceIndices: stringFlag(flags, "face-indices") ? parseJsonFlag(stringFlag(flags, "face-indices")!) : undefined
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target"),
+    faceIndices: jsonField(flags, "face-indices", "faceIndices")
   });
 }
 
 function probuilderDetachFacesArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target"),
-    faceIndices: stringFlag(flags, "face-indices") ? parseJsonFlag(stringFlag(flags, "face-indices")!) : undefined,
-    deleteSourceFaces: boolFlag(flags, "delete-source-faces")
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target"),
+    faceIndices: jsonField(flags, "face-indices", "faceIndices"),
+    deleteSourceFaces: boolFlag(flags, "delete-source-faces") ?? boolField(flags, "deleteSourceFaces")
   });
 }
 
 function probuilderSelectFacesArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target"),
-    direction: stringFlag(flags, "direction"),
-    grow: numberFlag(flags, "grow"),
-    flood: boolFlag(flags, "flood"),
-    loop: boolFlag(flags, "loop"),
-    ring: boolFlag(flags, "ring")
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target"),
+    direction: stringFlag(flags, "direction") ?? stringField(flags, "direction"),
+    grow: numberFlag(flags, "grow") ?? numberField(flags, "grow"),
+    flood: boolFlag(flags, "flood") ?? boolField(flags, "flood"),
+    loop: boolFlag(flags, "loop") ?? boolField(flags, "loop"),
+    ring: boolFlag(flags, "ring") ?? boolField(flags, "ring")
   });
 }
 
 function probuilderSetFaceMaterialArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target"),
-    faceIndices: stringFlag(flags, "face-indices") ? parseJsonFlag(stringFlag(flags, "face-indices")!) : undefined,
-    materialPath: stringFlag(flags, "material-path") ?? stringFlag(flags, "material")
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target"),
+    faceIndices: jsonField(flags, "face-indices", "faceIndices"),
+    materialPath: stringFlag(flags, "material-path") ?? stringFlag(flags, "material") ?? stringField(flags, "materialPath")
   });
 }
 
 function probuilderSetFaceColorArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target"),
-    faceIndices: stringFlag(flags, "face-indices") ? parseJsonFlag(stringFlag(flags, "face-indices")!) : undefined,
-    r: floatFlag(flags, "r"),
-    g: floatFlag(flags, "g"),
-    b: floatFlag(flags, "b"),
-    a: floatFlag(flags, "a")
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target"),
+    faceIndices: jsonField(flags, "face-indices", "faceIndices"),
+    r: floatFlag(flags, "r") ?? numberField(flags, "r"),
+    g: floatFlag(flags, "g") ?? numberField(flags, "g"),
+    b: floatFlag(flags, "b") ?? numberField(flags, "b"),
+    a: floatFlag(flags, "a") ?? numberField(flags, "a")
   });
 }
 
 function probuilderSetFaceUvsArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target"),
-    faceIndices: stringFlag(flags, "face-indices") ? parseJsonFlag(stringFlag(flags, "face-indices")!) : undefined,
-    scale: floatFlag(flags, "scale"),
-    offsetU: floatFlag(flags, "offset-u"),
-    offsetV: floatFlag(flags, "offset-v"),
-    rotation: floatFlag(flags, "rotation"),
-    flipU: boolFlag(flags, "flip-u"),
-    flipV: boolFlag(flags, "flip-v")
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target"),
+    faceIndices: jsonField(flags, "face-indices", "faceIndices"),
+    scale: floatFlag(flags, "scale") ?? numberField(flags, "scale"),
+    offsetU: floatFlag(flags, "offset-u") ?? numberField(flags, "offsetU"),
+    offsetV: floatFlag(flags, "offset-v") ?? numberField(flags, "offsetV"),
+    rotation: floatFlag(flags, "rotation") ?? numberField(flags, "rotation"),
+    flipU: boolFlag(flags, "flip-u") ?? boolField(flags, "flipU"),
+    flipV: boolFlag(flags, "flip-v") ?? boolField(flags, "flipV")
   });
 }
 
 function probuilderEdgeArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target"),
-    edgeIndices: stringFlag(flags, "edge-indices") ? parseJsonFlag(stringFlag(flags, "edge-indices")!) : undefined,
-    edges: stringFlag(flags, "edges") ? parseJsonFlag(stringFlag(flags, "edges")!) : undefined,
-    distance: floatFlag(flags, "distance"),
-    asGroup: boolFlag(flags, "as-group")
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target"),
+    edgeIndices: jsonField(flags, "edge-indices", "edgeIndices"),
+    edges: jsonField(flags, "edges", "edges"),
+    distance: floatFlag(flags, "distance") ?? numberField(flags, "distance"),
+    asGroup: boolFlag(flags, "as-group") ?? boolField(flags, "asGroup")
   });
 }
 
 function probuilderBevelArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target"),
-    edgeIndices: stringFlag(flags, "edge-indices") ? parseJsonFlag(stringFlag(flags, "edge-indices")!) : undefined,
-    edges: stringFlag(flags, "edges") ? parseJsonFlag(stringFlag(flags, "edges")!) : undefined,
-    amount: floatFlag(flags, "amount")
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target"),
+    edgeIndices: jsonField(flags, "edge-indices", "edgeIndices"),
+    edges: jsonField(flags, "edges", "edges"),
+    amount: floatFlag(flags, "amount") ?? numberField(flags, "amount")
   });
 }
 
 function probuilderBridgeEdgesArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target"),
-    edgeA: stringFlag(flags, "edge-a") ? parseJsonFlag(stringFlag(flags, "edge-a")!) : undefined,
-    edgeB: stringFlag(flags, "edge-b") ? parseJsonFlag(stringFlag(flags, "edge-b")!) : undefined,
-    allowNonManifold: boolFlag(flags, "allow-non-manifold")
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target"),
+    edgeA: jsonField(flags, "edge-a", "edgeA"),
+    edgeB: jsonField(flags, "edge-b", "edgeB"),
+    allowNonManifold: boolFlag(flags, "allow-non-manifold") ?? boolField(flags, "allowNonManifold")
   });
 }
 
 function probuilderConnectArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target"),
-    edgeIndices: stringFlag(flags, "edge-indices") ? parseJsonFlag(stringFlag(flags, "edge-indices")!) : undefined,
-    edges: stringFlag(flags, "edges") ? parseJsonFlag(stringFlag(flags, "edges")!) : undefined,
-    faceIndices: stringFlag(flags, "face-indices") ? parseJsonFlag(stringFlag(flags, "face-indices")!) : undefined
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target"),
+    edgeIndices: jsonField(flags, "edge-indices", "edgeIndices"),
+    edges: jsonField(flags, "edges", "edges"),
+    faceIndices: jsonField(flags, "face-indices", "faceIndices")
   });
 }
 
 function probuilderMultiTargetArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    targets: stringFlag(flags, "targets") ? parseJsonFlag(stringFlag(flags, "targets")!) : undefined,
-    name: stringFlag(flags, "name")
+    targets: jsonField(flags, "targets", "targets"),
+    name: stringFlag(flags, "name") ?? stringField(flags, "name")
   });
 }
 
 function probuilderMergeObjectsArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    targets: stringFlag(flags, "targets") ? parseJsonFlag(stringFlag(flags, "targets")!) : undefined,
-    name: stringFlag(flags, "name"),
-    autoConvert: boolFlag(flags, "auto-convert") ?? true
+    targets: jsonField(flags, "targets", "targets"),
+    name: stringFlag(flags, "name") ?? stringField(flags, "name"),
+    autoConvert: boolFlag(flags, "auto-convert") ?? boolField(flags, "autoConvert") ?? true
   });
 }
 
 function probuilderCreatePolygonArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target"),
-    vertexIndices: stringFlag(flags, "vertex-indices") ? parseJsonFlag(stringFlag(flags, "vertex-indices")!) : undefined,
-    unordered: boolFlag(flags, "unordered")
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target"),
+    vertexIndices: jsonField(flags, "vertex-indices", "vertexIndices"),
+    unordered: boolFlag(flags, "unordered") ?? boolField(flags, "unordered")
   });
 }
 
 function probuilderVertexIndicesArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target"),
-    vertexIndices: stringFlag(flags, "vertex-indices") ? parseJsonFlag(stringFlag(flags, "vertex-indices")!) : undefined
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target"),
+    vertexIndices: jsonField(flags, "vertex-indices", "vertexIndices")
   });
 }
 
 function probuilderWeldArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target"),
-    vertexIndices: stringFlag(flags, "vertex-indices") ? parseJsonFlag(stringFlag(flags, "vertex-indices")!) : undefined,
-    radius: floatFlag(flags, "radius")
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target"),
+    vertexIndices: jsonField(flags, "vertex-indices", "vertexIndices"),
+    radius: floatFlag(flags, "radius") ?? numberField(flags, "radius")
   });
 }
 
 function probuilderMoveVerticesArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target"),
-    vertexIndices: stringFlag(flags, "vertex-indices") ? parseJsonFlag(stringFlag(flags, "vertex-indices")!) : undefined,
-    x: floatFlag(flags, "x"),
-    y: floatFlag(flags, "y"),
-    z: floatFlag(flags, "z")
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target"),
+    vertexIndices: jsonField(flags, "vertex-indices", "vertexIndices"),
+    x: floatFlag(flags, "x") ?? numberField(flags, "x"),
+    y: floatFlag(flags, "y") ?? numberField(flags, "y"),
+    z: floatFlag(flags, "z") ?? numberField(flags, "z")
   });
 }
 
 function probuilderInsertVertexArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target"),
-    edge: stringFlag(flags, "edge") ? parseJsonFlag(stringFlag(flags, "edge")!) : undefined,
-    faceIndex: numberFlag(flags, "face-index"),
-    point: stringFlag(flags, "point") ? parseJsonFlag(stringFlag(flags, "point")!) : undefined,
-    x: floatFlag(flags, "x"),
-    y: floatFlag(flags, "y"),
-    z: floatFlag(flags, "z")
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target"),
+    edge: jsonField(flags, "edge", "edge"),
+    faceIndex: numberFlag(flags, "face-index") ?? numberField(flags, "faceIndex"),
+    point: jsonField(flags, "point", "point"),
+    x: floatFlag(flags, "x") ?? numberField(flags, "x"),
+    y: floatFlag(flags, "y") ?? numberField(flags, "y"),
+    z: floatFlag(flags, "z") ?? numberField(flags, "z")
   });
 }
 
 function probuilderAppendVerticesArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target"),
-    edgeIndices: stringFlag(flags, "edge-indices") ? parseJsonFlag(stringFlag(flags, "edge-indices")!) : undefined,
-    edges: stringFlag(flags, "edges") ? parseJsonFlag(stringFlag(flags, "edges")!) : undefined,
-    count: numberFlag(flags, "count")
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target"),
+    edgeIndices: jsonField(flags, "edge-indices", "edgeIndices"),
+    edges: jsonField(flags, "edges", "edges"),
+    count: numberFlag(flags, "count") ?? numberField(flags, "count")
   });
 }
 
 function probuilderMeshInfoArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target"),
-    include: stringFlag(flags, "include") ?? "summary"
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target"),
+    include: stringFlag(flags, "include") ?? stringField(flags, "include") ?? "summary"
   });
 }
 
 function probuilderTargetOnlyArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target")
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target")
   });
 }
 
 function probuilderSetSmoothingArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target"),
-    faceIndices: stringFlag(flags, "face-indices") ? parseJsonFlag(stringFlag(flags, "face-indices")!) : undefined,
-    smoothingGroup: numberFlag(flags, "smoothing-group")
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target"),
+    faceIndices: jsonField(flags, "face-indices", "faceIndices"),
+    smoothingGroup: numberFlag(flags, "smoothing-group") ?? numberField(flags, "smoothingGroup")
   });
 }
 
 function probuilderAutoSmoothArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target"),
-    angleThreshold: floatFlag(flags, "angle-threshold") ?? floatFlag(flags, "angle"),
-    faceIndices: stringFlag(flags, "face-indices") ? parseJsonFlag(stringFlag(flags, "face-indices")!) : undefined
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target"),
+    angleThreshold: floatFlag(flags, "angle-threshold") ?? floatFlag(flags, "angle") ?? numberField(flags, "angleThreshold"),
+    faceIndices: jsonField(flags, "face-indices", "faceIndices")
   });
 }
 
 function probuilderSetPivotArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target"),
-    x: floatFlag(flags, "x"),
-    y: floatFlag(flags, "y"),
-    z: floatFlag(flags, "z")
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target"),
+    x: floatFlag(flags, "x") ?? numberField(flags, "x"),
+    y: floatFlag(flags, "y") ?? numberField(flags, "y"),
+    z: floatFlag(flags, "z") ?? numberField(flags, "z")
   });
 }
 
@@ -329,7 +329,45 @@ function parseJsonFlag(raw: string): unknown {
   }
 }
 
-function positionalPosition(flags: Record<string, string | boolean>): Record<string, unknown> | undefined {
+// 读取 tools run --input 中无法映射为简单 flag 的数组/对象字段。
+function structuredInput(flags: BridgeFlags): Record<string, unknown> {
+  const raw = typeof flags.__structuredInput === "string" ? flags.__structuredInput : undefined;
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed) ? parsed as Record<string, unknown> : {};
+  } catch {
+    return {};
+  }
+}
+
+// 优先使用显式 CLI flag；否则保留 --input 中的结构化 JSON 值。
+function jsonField(flags: BridgeFlags, flagName: string, fieldName: string): unknown {
+  const raw = stringFlag(flags, flagName);
+  if (raw !== undefined) return parseJsonFlag(raw);
+  return structuredInput(flags)[fieldName];
+}
+
+function stringField(flags: BridgeFlags, fieldName: string): string | undefined {
+  const value = structuredInput(flags)[fieldName];
+  return typeof value === "string" ? value : undefined;
+}
+
+function numberField(flags: BridgeFlags, fieldName: string): number | undefined {
+  const value = structuredInput(flags)[fieldName];
+  return typeof value === "number" ? value : undefined;
+}
+
+function boolField(flags: BridgeFlags, fieldName: string): boolean | undefined {
+  const value = structuredInput(flags)[fieldName];
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function positionalPosition(flags: BridgeFlags): Record<string, unknown> | undefined {
+  const structuredPosition = structuredInput(flags).position;
+  if (typeof structuredPosition === "object" && structuredPosition !== null && !Array.isArray(structuredPosition)) {
+    return structuredPosition as Record<string, unknown>;
+  }
   const x = floatFlag(flags, "x");
   const y = floatFlag(flags, "y");
   const z = floatFlag(flags, "z");

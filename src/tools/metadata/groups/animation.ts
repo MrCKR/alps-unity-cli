@@ -354,7 +354,7 @@ export const ANIMATION_TOOLS: ToolMetadata[] = [
   {
     name: "controller.add-blend-tree-child",
     summary: "Add a child AnimationClip to an existing BlendTree state.",
-    description: "Add a child AnimationClip to an existing BlendTree state. For 1D BlendTrees, pass threshold. For 2D BlendTrees, pass positionX and positionY (CoplayDev uses a position tuple; this CLI keeps explicit fields). Session-affecting: modifies the nested BlendTree asset.",
+    description: "Add a child AnimationClip to an existing BlendTree state. For 1D BlendTrees, pass threshold. For 2D BlendTrees, pass explicit positionX and positionY fields. Session-affecting: modifies the nested BlendTree asset.",
     group: "controller",
     inputSchema: objSchema({ controllerPath: { type: "string", description: "AnimatorController asset path." }, stateName: { type: "string", description: "Existing state whose motion is a BlendTree." }, clipPath: { type: "string", description: "AnimationClip asset path to add as a child motion." }, layerIndex: { type: "integer", description: "Target layer index; defaults to 0." }, threshold: { type: "number", description: "Required for Simple1D BlendTrees." }, positionX: { type: "number", description: "Required for 2D BlendTrees." }, positionY: { type: "number", description: "Required for 2D BlendTrees." } }, ["controllerPath", "stateName", "clipPath"]),
     destructiveHint: false,

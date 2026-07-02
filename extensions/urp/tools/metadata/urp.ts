@@ -43,6 +43,7 @@ export const URP_TOOLS: ToolMetadata[] = [
       value: { type: "string" },
       rendererIndex: { type: "integer" }
     }),
+    outputSchema: objSchema({ command: { type: "string" }, action: { type: "string" }, rendererIndex: { type: "integer" }, features: { type: "array", items: { type: "object" } }, feature: { type: "object" }, changed: { type: "boolean" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: true,
     examples: [
       { description: "List all renderer features", argv: ["tools", "run", "urp.feature", "--action", "list"] },

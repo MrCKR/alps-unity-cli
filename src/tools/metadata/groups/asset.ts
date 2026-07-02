@@ -14,7 +14,7 @@ export const ASSET_TOOLS: ToolMetadata[] = [
       path: { type: "string", description: "Optional single search root under Assets/ or Packages/. Not search text." },
       searchInFolders: { type: "array", items: { type: "string" }, description: "Optional folder scopes under Assets/ or Packages/. Use instead of path when searching multiple folders." },
       pageSize: { type: "integer", default: 100, description: "Maximum results per page, clamped to 1..500." },
-      maxResults: { type: "integer", description: "Alias of pageSize for IvanMurzak-style calls; clamped to 1..500." },
+      maxResults: { type: "integer", description: "Compatibility alias of pageSize for callers that use a max-results field; clamped to 1..500." },
       cursor: { type: "integer", default: 0, description: "Zero-based result offset from a previous pageInfo.nextCursor." }
     }),
     destructiveHint: false,
@@ -214,10 +214,14 @@ export const ASSET_TOOLS: ToolMetadata[] = [
   {
     name: "asset.preview",
     summary: "Generate or read Unity asset preview thumbnail metadata, including size and transient state.",
-    description: "Generate/read the asset preview thumbnail metadata (size, dimensions, transient state). Preview generation can be session-affecting because Unity may refresh transient preview cache.",
+    description: "Generate or read Unity AssetPreview thumbnail metadata for one asset. Preview generation may update Unity's transient preview cache, but it does not write project assets. Use asset.info or asset.search first when the exact assetPath is unknown.",
     group: "asset",
     inputSchema: objSchema({ assetPath: { type: "string" }, path: { type: "string" } }, ["assetPath"]),
+    outputSchema: objSchema({ command: { type: "string" }, assetPath: { type: "string" }, guid: { type: "string" }, typeName: { type: "string" }, hasPreview: { type: "boolean" }, width: { type: "integer" }, height: { type: "integer" }, isTransient: { type: "boolean" }, logPath: { type: "string" } }),
     destructiveHint: false,
     playModeSupport: "session-affecting",
+    examples: [
+      { description: "Read preview metadata for a fixture asset", argv: ["tools", "run", "asset.preview", "--input", "{\"assetPath\":\"Assets/UnityCliAlignmentFixtures/AlignmentProbeMaterial.mat\"}"] }
+    ],
   }
 ];

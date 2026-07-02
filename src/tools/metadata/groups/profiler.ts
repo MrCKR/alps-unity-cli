@@ -5,7 +5,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
   {
     name: "profiler.status",
     summary: "Check whether the Unity profiler is currently active, with max-used memory and platform support.",
-    description: "Check whether the Unity profiler is currently active, with max-used memory and platform support.",
+    description: "Read the current Unity Profiler state, available modules, max-used memory and platform support. Use this before start/stop/pause when you need to know whether recording is already active.",
     group: "profiler",
     inputSchema: objSchema({}),
     outputSchema: objSchema({ profiler: { type: "object" }, modules: { type: "array", items: { type: "string" } }, platform: { type: "string" }, frameTimingAvailable: { type: "boolean" }, logPath: { type: "string" } }),
@@ -15,34 +15,49 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
   {
     name: "profiler.start",
     summary: "Begin profiler data collection with optional deep profiling, binary log file and allocation callstacks.",
-    description: "Begin profiler data collection with optional deep profiling, binary log file and allocation callstacks.",
+    description: "Begin Unity Profiler data collection in the Editor session. This enables profiling state and may enable deep profiling, binary logging or allocation callstacks; use profiler.stop when the sample window is complete.",
     group: "profiler",
     inputSchema: objSchema({ deepProfiling: { type: "boolean" }, logFile: { type: "string", description: "Binary profiler log file path; sets Profiler.logFile + enableBinaryLog." }, enableCallstacks: { type: "boolean", description: "Enable allocation callstacks for memory analysis." } }),
+    outputSchema: objSchema({ profiler: { type: "object" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: false,
     playModeSupport: "session-affecting",
+    examples: [
+      { description: "Start profiler collection", argv: ["tools", "run", "profiler.start", "--input", "{\"deepProfiling\":false}"] },
+      { description: "Start with allocation callstacks", argv: ["tools", "run", "profiler.start", "--input", "{\"enableCallstacks\":true}"] }
+    ],
   },
   {
     name: "profiler.stop",
     summary: "Stop profiler data collection.",
-    description: "Stop profiler data collection.",
+    description: "Stop Unity Profiler data collection and restore the previous Editor profiling state when one was saved by profiler.start. Returns the latest profiler state and plannedEffects so callers can verify recording stopped before reading captured frames.",
     group: "profiler",
     inputSchema: objSchema({}),
+    outputSchema: objSchema({ profiler: { type: "object" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: false,
     playModeSupport: "session-affecting",
+    examples: [
+      { description: "Stop profiler collection", argv: ["tools", "run", "profiler.stop", "--input", "{}"] }
+    ],
   },
+
   {
     name: "profiler.pause",
     summary: "Pause or resume Profiler data collection by toggling Unity Profiler.enabled.",
-    description: "Pause or resume Profiler data collection by toggling Unity Profiler.enabled.",
+    description: "Pause or resume Profiler data collection by toggling Unity Profiler.enabled for the current Editor session. Pass paused=true to pause recording or paused=false to resume; omit paused to pause the current enabled state.",
     group: "profiler",
     inputSchema: objSchema({ paused: { type: "boolean" } }),
+    outputSchema: objSchema({ profiler: { type: "object" }, paused: { type: "boolean" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: false,
     playModeSupport: "session-affecting",
+    examples: [
+      { description: "Pause profiler recording", argv: ["tools", "run", "profiler.pause", "--input", "{\"paused\":true}"] },
+      { description: "Resume profiler recording", argv: ["tools", "run", "profiler.pause", "--input", "{\"paused\":false}"] }
+    ],
   },
   {
     name: "profiler.counter",
     summary: "Read current profiler counter values and available counter metadata.",
-    description: "Read current profiler counter values and available counter metadata.",
+    description: "Read current profiler counter values and available counter metadata, optionally narrowed by category and counter name. This is read-only and does not start or stop recording.",
     group: "profiler",
     inputSchema: objSchema({ category: { type: "string" }, counter: { type: "string" } }),
     destructiveHint: false,
@@ -51,7 +66,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
   {
     name: "profiler.memory",
     summary: "Query Unity memory usage from the live Editor.",
-    description: "Query Unity memory usage from the live Editor.",
+    description: "Query Unity memory usage from the live Editor, including values exposed by UnityEngine.Profiling.Profiler. Use object-memory when you need per-object/component runtime memory size.",
     group: "profiler",
     inputSchema: objSchema({}),
     destructiveHint: false,
@@ -60,7 +75,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
   {
     name: "profiler.frame",
     summary: "Read current frame count, timing, selected profiler module diagnostics and FrameTimingManager CPU/GPU frame timing fields.",
-    description: "Read current frame count, timing, selected profiler module diagnostics and FrameTimingManager CPU/GPU frame timing fields.",
+    description: "Read current frame count, timing, selected profiler module diagnostics and FrameTimingManager CPU/GPU timing fields. Use module when you want diagnostics for one Profiler area.",
     group: "profiler",
     inputSchema: objSchema({ module: { type: "string" } }),
     outputSchema: objSchema({ profiler: { type: "object" }, frame: { type: "object", description: "Includes frameCount, deltaTime and frameTiming with 12 FrameTimingManager fields (cpuFrameTimeMs, gpuFrameTimeMs, etc.)." }, logPath: { type: "string" } }),
@@ -85,7 +100,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
   {
     name: "profiler.export",
     summary: "Export a profiler snapshot artifact in JSON or raw profiler format.",
-    description: "Export a profiler snapshot artifact in JSON or raw profiler format.",
+    description: "Export a profiler snapshot artifact in JSON or raw profiler format to the requested path. This writes an artifact file and may overwrite only when overwrite=true.",
     group: "profiler",
     inputSchema: objSchema({ path: { type: "string" }, format: { type: "string", enum: ["json", "raw"] }, overwrite: { type: "boolean" } }, ["path"]),
     destructiveHint: false,
@@ -97,7 +112,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
   {
     name: "profiler.modules",
     summary: "List available Profiler modules and their visibility state.",
-    description: "List available Profiler modules and their visibility state.",
+    description: "List available Profiler modules and their visibility state. Use the returned module names with profiler.module-enable when toggling collection areas.",
     group: "profiler",
     inputSchema: objSchema({}),
     destructiveHint: false,
@@ -106,35 +121,49 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
   {
     name: "profiler.module-enable",
     summary: "Enable or disable a Profiler module (area) by name via Profiler.SetAreaEnabled.",
-    description: "Enable or disable a Profiler module (area) by name via Profiler.SetAreaEnabled. Run profiler.areas to list valid area names.",
+    description: "Enable or disable a Profiler module (area) by name via Profiler.SetAreaEnabled. Run profiler.areas to list valid area names; the change affects the current Editor profiling session.",
     group: "profiler",
     inputSchema: objSchema({ module: { type: "string" }, enabled: { type: "boolean", default: true } }, ["module"]),
+    outputSchema: objSchema({ command: { type: "string" }, module: { type: "string" }, enabled: { type: "boolean" }, wasEnabled: { type: "boolean" }, isEnabled: { type: "boolean" }, logPath: { type: "string" } }),
     destructiveHint: false,
     playModeSupport: "session-affecting",
+    examples: [
+      { description: "Enable a Profiler area", argv: ["tools", "run", "profiler.module-enable", "--input", "{\"module\":\"CPU\",\"enabled\":true}"] },
+      { description: "Disable a Profiler area", argv: ["tools", "run", "profiler.module-enable", "--input", "{\"module\":\"Rendering\",\"enabled\":false}"] }
+    ],
   },
   {
     name: "profiler.clear",
     summary: "Clear all collected profiler data.",
-    description: "Clear all collected profiler data. High-risk: discards profiling history.",
+    description: "Clear all collected profiler data from the current Editor session. This discards profiling history; use --dry-run first when you need to confirm the planned effect without clearing samples.",
     group: "profiler",
     inputSchema: objSchema({}),
+    outputSchema: objSchema({ command: { type: "string" }, dryRun: { type: "boolean" }, cleared: { type: "boolean" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: false,
     supportsDryRun: true,
     playModeSupport: "session-affecting",
+    examples: [
+      { description: "Preview clearing profiler data", argv: ["tools", "run", "profiler.clear", "--input", "{}", "--dry-run"] },
+      { description: "Clear profiler data", argv: ["tools", "run", "profiler.clear", "--input", "{}"] }
+    ],
   },
   {
     name: "profiler.load",
     summary: "Load a saved profiler data file (.raw/.data) into the Profiler window.",
-    description: "Load a saved profiler data file (.raw/.data) into the Profiler window.",
+    description: "Load a saved profiler data file (.raw/.data) into the Profiler window for the current Editor session. This changes Profiler window state but does not modify the source capture file.",
     group: "profiler",
     inputSchema: objSchema({ path: { type: "string" } }, ["path"]),
+    outputSchema: objSchema({ command: { type: "string" }, path: { type: "string" }, plannedEffects: { type: "array", items: { type: "object" } }, logPath: { type: "string" } }),
     destructiveHint: false,
     playModeSupport: "session-affecting",
+    examples: [
+      { description: "Load a profiler data file", argv: ["tools", "run", "profiler.load", "--input", "{\"path\":\"Artifacts/profiler/baseline.raw\"}"] }
+    ],
   },
   {
     name: "profiler.areas",
     summary: "List all Profiler area enum names.",
-    description: "List all Profiler area enum names.",
+    description: "List all Profiler area enum names accepted by profiler.module-enable. This is read-only and returns the enum type, count and area names for the current Unity version.",
     group: "profiler",
     inputSchema: objSchema({}),
     destructiveHint: false,
@@ -143,7 +172,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
   {
     name: "profiler.object-memory",
     summary: "Query memory size of components on a GameObject via Profiler.GetRuntimeMemorySizeLong.",
-    description: "Query memory size of components on a GameObject via Profiler.GetRuntimeMemorySizeLong.",
+    description: "Query runtime memory size of components on a GameObject via Profiler.GetRuntimeMemorySizeLong. target resolves by name/path/id; path can narrow to a specific child GameObject.",
     group: "profiler",
     inputSchema: objSchema({ target: { type: "string" }, path: { type: "string" } }, ["target"]),
     destructiveHint: false,
@@ -161,7 +190,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
   {
     name: "profiler.script-stats",
     summary: "Script/GC memory sample statistics (gcAllocs, monoHeap, monoUsed).",
-    description: "Script/GC memory sample statistics (gcAllocs, monoHeap, monoUsed).",
+    description: "Read Script/GC memory sample statistics such as gcAllocs, monoHeap and monoUsed from Unity Profiler counters. This is read-only and reflects the currently available Profiler sample data.",
     group: "profiler",
     inputSchema: objSchema({}),
     destructiveHint: false,
@@ -212,7 +241,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
   {
     name: "profiler.memory-snapshot.list",
     summary: "List .snap memory snapshot files in the default capture directories or a custom path.",
-    description: "List .snap memory snapshot files in the default capture directories or a custom path.",
+    description: "List .snap memory snapshot files in the default capture directories or a custom path. This reads file metadata only and does not open or modify snapshots.",
     group: "profiler",
     inputSchema: objSchema({ path: { type: "string", description: "Directory to search. Defaults to MemoryCaptures under tempCachePath and project root." } }),
     outputSchema: objSchema({ command: { type: "string" }, snapshots: { type: "array", items: { type: "object" } }, searchedDirs: { type: "array", items: { type: "string" } }, logPath: { type: "string" } }),
@@ -234,22 +263,28 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
   {
     name: "profiler.frame-debugger.enable",
     summary: "Enable the Unity Frame Debugger to capture draw call events.",
-    description: "Enable the Unity Frame Debugger to capture draw call events. In Play Mode the game must be paused first (editor.pause). Opens the Frame Debugger window.",
+    description: "Enable the Unity Frame Debugger to capture draw call events for the current Editor session. In Play Mode the game must be paused first with editor.pause; this opens the Frame Debugger window and returns the captured event count.",
     group: "profiler",
     inputSchema: objSchema({}),
     outputSchema: objSchema({ command: { type: "string" }, enabled: { type: "boolean" }, eventCount: { type: "integer" }, logPath: { type: "string" } }),
     destructiveHint: false,
     playModeSupport: "session-affecting",
+    examples: [
+      { description: "Enable Frame Debugger", argv: ["tools", "run", "profiler.frame-debugger.enable", "--input", "{}"] }
+    ],
   },
   {
     name: "profiler.frame-debugger.disable",
     summary: "Disable the Unity Frame Debugger.",
-    description: "Disable the Unity Frame Debugger.",
+    description: "Disable the Unity Frame Debugger for the current Editor session. Use this after profiler.frame-debugger.events when draw-call inspection is complete; it returns enabled=false without modifying project assets.",
     group: "profiler",
     inputSchema: objSchema({}),
     outputSchema: objSchema({ command: { type: "string" }, enabled: { type: "boolean" }, logPath: { type: "string" } }),
     destructiveHint: false,
     playModeSupport: "session-affecting",
+    examples: [
+      { description: "Disable Frame Debugger", argv: ["tools", "run", "profiler.frame-debugger.disable", "--input", "{}"] }
+    ],
   },
   {
     name: "profiler.frame-debugger.events",

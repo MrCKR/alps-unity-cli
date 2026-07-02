@@ -3,7 +3,7 @@
  */
 
 import assert from "node:assert/strict";
-import { mkdtemp, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
@@ -134,6 +134,21 @@ test("context list with text format", async () => {
   assert.ok(data.text.length > 0);
 });
 
+test("context list filters extension contexts by extension id category", async () => {
+  const projectDir = await makeProjectWithPackages({ "com.unity.probuilder": "5.2.2" });
+  const runtime = makeRuntime();
+
+  const result = await handleContextCommand("list", [], { project: projectDir, category: "probuilder" }, runtime, requestId);
+
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  const contexts = data.contexts as Array<Record<string, unknown>>;
+  assert.equal(data.count, 1);
+  assert.equal(contexts[0].name, "probuilder.scene");
+  assert.equal(contexts[0].category, "probuilder");
+  assert.equal(contexts[0].source, "extension");
+});
+
 test("context list (no command) defaults to list", async () => {
   const runtime = makeRuntime();
   const result = await handleContextCommand(undefined, [], {}, runtime, requestId);
@@ -185,6 +200,25 @@ test("context describe for unknown context returns error", async () => {
   const result = await handleContextCommand("describe", ["nonexistent.xyz"], {}, runtime, requestId);
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "E_CONTEXT_NOT_FOUND");
+});
+
+test("context describe resolves available extension contexts from manifest descriptors", async () => {
+  const projectDir = await makeProjectWithPackages({ "com.unity.probuilder": "5.2.2" });
+  const runtime = makeRuntime();
+
+  const result = await handleContextCommand("describe", ["probuilder.scene"], { project: projectDir }, runtime, requestId);
+
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.command, "context.describe");
+  assert.equal(data.name, "probuilder.scene");
+  assert.equal(data.category, "probuilder");
+  assert.equal(data.source, "extension");
+  assert.equal(data.extensionAvailability, "available");
+  assert.equal(data.extensionId, "probuilder");
+  assert.ok((data.inputSchema as { properties: Record<string, unknown> }).properties.pageSize);
+  assert.ok((data.inputSchema as { properties: Record<string, unknown> }).properties.namePattern);
+  assert.ok((data.outputSchema as { properties: Record<string, unknown> }).properties.objects);
 });
 
 // ── context read CLI ──────────────────────────────────────────────────────
@@ -284,6 +318,21 @@ test("context read supports --input-file", async () => {
   assert.deepEqual(payloads[0].args, { name: "editor.menu-items", input: { search: "File" }, search: "File" });
 });
 
+test("context read routes available extension contexts through bridge", async () => {
+  const projectDir = await makeProjectWithPackages({ "com.unity.probuilder": "5.2.2" });
+  const payloads: Array<{ command: string; args: Record<string, unknown> }> = [];
+  const runtime = makeRuntime(async (payload: { command: string; args: Record<string, unknown> }) => {
+    payloads.push(payload);
+    return { ok: true, data: { context: "probuilder.scene", objectCount: 0, objects: [] } };
+  });
+
+  const result = await handleContextCommand("read", ["probuilder.scene"], { project: projectDir, input: JSON.stringify({ pageSize: 5 }) }, runtime, requestId);
+
+  assert.equal(result.ok, true);
+  assert.equal(payloads[0].command, "context.read");
+  assert.deepEqual(payloads[0].args, { input: { pageSize: 5 }, name: "probuilder.scene", pageSize: 5 });
+});
+
 // ── unknown subcommand ────────────────────────────────────────────────────
 
 test("unknown context subcommand returns error", async () => {
@@ -292,3 +341,15 @@ test("unknown context subcommand returns error", async () => {
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "UNKNOWN_CONTEXT_COMMAND");
 });
+
+/** 创建带 packages-lock 的最小 Unity project，用于扩展 Context 可用性测试。 */
+async function makeProjectWithPackages(packages: Record<string, string>): Promise<string> {
+  const projectDir = await mkdtemp(join(tmpdir(), "unity-cli-context-ext-"));
+  const packagesDir = join(projectDir, "Packages");
+  await mkdir(packagesDir, { recursive: true });
+  await writeFile(join(packagesDir, "manifest.json"), JSON.stringify({ dependencies: packages }), "utf8");
+  await writeFile(join(packagesDir, "packages-lock.json"), JSON.stringify({
+    dependencies: Object.fromEntries(Object.entries(packages).map(([id, version]) => [id, { version }]))
+  }), "utf8");
+  return projectDir;
+}

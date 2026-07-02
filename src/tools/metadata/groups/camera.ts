@@ -142,7 +142,7 @@ export const CAMERA_TOOLS: ToolMetadata[] = [
   {
     name: "camera.multiview",
     summary: "Capture one PNG/JPG artifact per named Camera into an output directory for multiview review.",
-    description: "Capture one PNG/JPG artifact per named Camera into an output directory. This is a file-artifact variant of CoplayDev's multiview/contact-sheet idea; keep target count and resolution small for token and disk efficiency.",
+    description: "Capture one PNG/JPG artifact per named Camera into an output directory for side-by-side scene review. Returns artifact paths instead of inline image bytes; keep target count and resolution small for token and disk efficiency.",
     group: "camera",
     inputSchema: objSchema({
       targets: { type: "string", description: "Comma-separated camera names, hierarchy paths, or instance ids." },

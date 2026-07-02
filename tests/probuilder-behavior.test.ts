@@ -174,6 +174,24 @@ test("ProBuilderInput EdgePair parsing extracts a and b fields", () => {
   );
 });
 
+// ─── create-shape: descriptor enum must match runtime validation ───────
+
+test("create-shape rejects unsupported shapeType before fallback creation", () => {
+  const createStart = SHAPE_SRC.indexOf("ProBuilderCreateShapeTool");
+  const createEnd = SHAPE_SRC.indexOf("ProBuilderCreatePolyShapeTool", createStart + 1);
+  const createSection = SHAPE_SRC.substring(createStart, createEnd);
+
+  // 公开 descriptor 暴露 shapeType enum，因此 Unity 侧必须先拒绝非 enum 值，不能创建默认 Cube。
+  assert.ok(createSection.includes("IsSupportedShape(shapeType)"), "create-shape must validate shapeType against the public enum");
+  assert.ok(createSection.includes("ProBuilderErrors.SchemaInvalid"), "unsupported shapeType must return E_SCHEMA_INVALID");
+  assert.ok(
+    createSection.indexOf("IsSupportedShape(shapeType)") < createSection.indexOf("ProBuilderReflection.CreateShape"),
+    "create-shape must validate shapeType before calling ProBuilder API"
+  );
+  assert.ok(createSection.includes("default: return null;"), "fallback primitive creation must not default unknown shapes to Cube");
+  assert.ok(!createSection.includes("default: return GameObject.CreatePrimitive(PrimitiveType.Cube);"), "unknown shape fallback must not create Cube");
+});
+
 // ─── create-poly-shape: must use CreateShapeFromPolygon, not cube ──────
 
 test("create-poly-shape uses CreateShapeFromPolygon instead of cube fallback", () => {

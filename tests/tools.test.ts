@@ -1643,6 +1643,34 @@ test("tools run built-in hybrid tool routes to native bridge command", async () 
   assert.deepEqual((requests[0].args as Record<string, unknown>).deepProfiling, true);
 });
 
+test("tools run ProBuilder extension tools forward structured --input arrays", async () => {
+  const dataDir = makeTempDir("tools-probuilder-input");
+  try {
+    const project = makeUnityProject(dataDir, { "com.unity.probuilder": "5.0.7" });
+    const requests: BridgeRequest[] = [];
+    const runtime: ToolsRuntime = {
+      bridgeExecute: async (payload: BridgeRequest) => {
+        requests.push(payload);
+        return { ok: true, data: { result: "ok" } };
+      }
+    };
+
+    const deleteFaces = await handleToolsCommand("run", ["probuilder.delete-faces"], { project, yes: true, input: JSON.stringify({ target: "Probe", faceIndices: [0, 1] }) }, runtime, requestId);
+    const combine = await handleToolsCommand("run", ["probuilder.combine-meshes"], { project, yes: true, input: JSON.stringify({ targets: ["A", "B"], name: "Combined" }) }, runtime, requestId);
+    const merge = await handleToolsCommand("run", ["probuilder.merge-objects"], { project, yes: true, input: JSON.stringify({ targets: ["A", "B"], name: "Merged", autoConvert: false }) }, runtime, requestId);
+
+    assert.equal(deleteFaces.ok, true);
+    assert.equal(combine.ok, true);
+    assert.equal(merge.ok, true);
+    assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run"]);
+    assert.deepEqual(requests[0].args, { name: "probuilder.delete-faces", input: { target: "Probe", faceIndices: [0, 1] } });
+    assert.deepEqual(requests[1].args, { name: "probuilder.combine-meshes", input: { targets: ["A", "B"], name: "Combined" } });
+    assert.deepEqual(requests[2].args, { name: "probuilder.merge-objects", input: { targets: ["A", "B"], name: "Merged", autoConvert: false } });
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
 test("tools run bridge tool returns structured error when --job is unsupported", async () => {
   const result = await handleToolsCommand("run", ["scene.active"], { job: true }, emptyRuntime, requestId);
 

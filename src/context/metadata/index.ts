@@ -144,7 +144,7 @@ const EDITOR_TOOL_STATES: ContextMetadata = {
 
 const PREFAB_STAGE: ContextMetadata = {
   name: "prefab.stage",
-  description: "Current Prefab Mode / Prefab Stage state if a prefab is being edited.",
+  description: "Read current Prefab editing stage state: whether a prefab is being edited, its path, and dirty status. This observes Prefab Stage only and does not open, save, close, or modify it.",
   source: "built-in",
   category: "prefab",
   inputSchema: {},

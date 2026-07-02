@@ -83,7 +83,7 @@ export const SCREENSHOT_TOOLS: ToolMetadata[] = [
   {
     name: "screenshot.isolated-object",
     summary: "Render one GameObject in isolation with a temporary camera to an Assets/* image artifact.",
-    description: "Render a single GameObject in isolation with a temporary camera and save to an Assets/* image. Useful for clean asset previews. target resolves by name, hierarchy path or instance id. Orthographic (default) frames the object by size; perspective needs radius. Aligns with IvanMurzak isolated render.",
+    description: "Render a single GameObject in isolation with a temporary camera and save to an Assets/* image. Useful for clean asset previews. target resolves by name, hierarchy path or instance id. Orthographic (default) frames the object by size; perspective needs radius. Returns artifact metadata and optional base64 only when inlineBase64=true.",
     group: "screenshot",
     inputSchema: objSchema({
       target: { type: "string", description: "GameObject to isolate: name, hierarchy path or instance id." },
@@ -138,7 +138,7 @@ export const SCREENSHOT_TOOLS: ToolMetadata[] = [
   {
     name: "screenshot.orbit",
     summary: "Capture multiple orbit screenshots around a GameObject and save each PNG under output-dir.",
-    description: "Capture multiple screenshots orbiting a target GameObject at evenly spaced angles, saving each PNG under output-dir. target resolves by name, hierarchy path or instance id. Use this to generate turntable previews. Aligns with CoplayDev orbit/surround.",
+    description: "Capture multiple screenshots orbiting a target GameObject at evenly spaced angles, saving each PNG under output-dir. target resolves by name, hierarchy path or instance id. Use this to generate turntable previews from artifact paths without returning inline image bytes.",
     group: "screenshot",
     inputSchema: objSchema({
       target: { type: "string", description: "GameObject to orbit: name, hierarchy path or instance id." },

@@ -329,7 +329,15 @@ test("loadExtensionDescriptor loads a specific extension", () => {
   assert.equal(desc.availability.status, "available");
   assert.equal(desc.tools.length, 36);
   assert.equal(desc.contexts.length, 1);
-  assert.equal(desc.csharpEntries.length, 6);
+  assert.equal(desc.contexts[0].key, "probuilder.scene");
+  assert.equal(desc.contexts[0].category, "probuilder");
+  const inputProps = schemaProperties(desc.contexts[0].inputSchema);
+  const outputProps = schemaProperties(desc.contexts[0].outputSchema);
+  assert.ok(inputProps.pageSize);
+  assert.ok(inputProps.namePattern);
+  assert.ok(outputProps.objects);
+  assert.equal(desc.csharpEntries.length, 7);
+  assert.ok(desc.csharpEntries.some((entry) => entry.type === "UnityCli.ProBuilder.ProBuilderSceneContext"));
 });
 
 test("loadExtensionDescriptor for unavailable extension has unavailable status", () => {
@@ -424,7 +432,12 @@ test("collectAvailableContexts returns implemented contexts from available exten
     "com.unity.probuilder": "5.2.0",
     "com.unity.visualeffectgraph": "14.0.0"
   });
-  assert.ok(contexts.some((c) => c.key === "probuilder.scene"));
+  const probuilderScene = contexts.find((c) => c.key === "probuilder.scene");
+  assert.ok(probuilderScene);
+  assert.match(probuilderScene.description, /Read ProBuilder mesh objects/);
+  assert.equal(probuilderScene.category, "probuilder");
+  assert.ok(schemaProperties(probuilderScene.inputSchema).pageSize);
+  assert.ok(schemaProperties(probuilderScene.outputSchema).objects);
   assert.ok(!contexts.some((c) => c.key === "vfx.assets"));
 });
 
@@ -730,6 +743,12 @@ test("unavailable extension with multiple missing packages lists all", () => {
   assert.equal(result.packages[0].installed, true);
   assert.equal(result.packages[1].installed, false);
 });
+
+function schemaProperties(schema: unknown): Record<string, unknown> {
+  if (!schema || typeof schema !== "object") return {};
+  const properties = (schema as { properties?: unknown }).properties;
+  return properties && typeof properties === "object" ? properties as Record<string, unknown> : {};
+}
 
 test("partially available extension shows per-package resolution", () => {
   const dualPkg: typeof PROBUILDER_MANIFEST = {

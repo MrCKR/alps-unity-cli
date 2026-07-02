@@ -230,6 +230,7 @@ export const CINEMACHINE_TOOLS: ToolMetadata[] = [
       action: { type: "string", enum: ["list", "add", "remove"] },
       extensionType: { type: "string" }
     }, ["target"]),
+    outputSchema: objSchema({ command: { type: "string" }, target: { type: "object" }, action: { type: "string" }, extensions: { type: "array", items: { type: "object" } }, added: { type: "boolean" }, removed: { type: "boolean" }, extensionType: { type: "string" }, logPath: { type: "string" } }),
     destructiveHint: true,
     examples: [
       { description: "List extensions on a virtual camera", argv: ["tools", "run", "cinemachine.extension", "PlayerCam", "--action", "list"] }

@@ -258,7 +258,7 @@ const EDITOR_MENU_ITEMS: ContextDescriptor = {
 
 const EDITOR_PREFAB_STAGE: ContextDescriptor = {
   name: "prefab.stage",
-  description: "Current Prefab editing stage state: whether a prefab is being edited, its path, and dirty status.",
+  description: "Read current Prefab editing stage state: whether a prefab is being edited, its path, and dirty status. This observes Prefab Stage only and does not open, save, close, or modify it.",
   category: "prefab",
   cliCommand: "context read prefab.stage",
   inputSchema: { type: "object", properties: {} },

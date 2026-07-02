@@ -172,6 +172,39 @@ Tool summary 必须：
 - 易混 group / Tool 是否有明确边界和推荐主入口。
 - legacy alias、兼容入口、危险入口是否没有抢占主入口地位。
 
+### Describe 输出规范
+
+`tools describe <tool>` / `context describe <context>` 是 AI 的单工具学习入口。describe 输出必须自足，让陌生 AI 不读源码、不读 README，也能判断是否该调用、如何构造输入、预期输出是什么、有什么风险和不可用条件。
+
+Describe descriptor 字段分工必须清晰：
+
+- `summary` 负责发现阶段路由。
+- `description` 负责调用阶段判断：能力边界、默认行为、相邻工具差异、副作用、PlayMode 语义、安全确认、输出控制和跨字段约束。
+- `inputSchema` / `outputSchema` 负责字段级输入输出说明。
+- `examples` 负责可直接照抄的典型调用。
+- 风险与状态字段负责机器可读判断，包括 `destructiveHint`、`supportsDryRun`、`sideEffects`、`playModeSupport`、`supportStatus`、`target`、`availabilityScope`、`requiresPackages`。
+
+Describe 输出必须按需覆盖：
+
+- 操作或读取的对象、动作范围、主要成功结果。
+- 必填输入、默认行为、互斥字段、字段优先级、路径/目标解析顺序。
+- 相邻工具选择，特别是 alias、兼容入口、fallback 工具和推荐主入口。
+- 持久化、副作用、PlayMode/session-affecting、`--yes`、`--dry-run` 语义。
+- 大输出工具的分页、截断、continuation、artifact path、`inlineBase64` 等输出控制。
+- Context 的只读边界，不得暗示会刷新、修改或触发 Unity 状态变化。
+
+Describe 输出不得包含：
+
+- 内部开发记录、竞品来源说明、changelog、迁移说明或临时阶段说明。
+- 与 schema、examples、风险字段、Bridge 实际行为或错误路径不一致的承诺。
+- 让字段互相替代的重复内容，例如在 `description` 里写完整参数表或完整调用样例。
+
+新增或修改 describe 相关字段时必须检查：
+
+- `tools describe <tool>` / `context describe <context>` 是否足够让陌生 AI 一次调用成功。
+- `tools search <keyword>` 是否会因为 describe 文本误导到错误工具。
+- describe 输出是否与 discovery summary、schema、examples、风险字段、Bridge 行为、错误 envelope 和文档一致。
+
 ## Extension 形态与文件结构
 
 扩展包必须沿用现有 extension 形态，不得随意发明新结构。

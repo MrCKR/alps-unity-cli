@@ -23,6 +23,7 @@ import {
   allContextDescriptors,
   discoverCustomContexts,
   customContextToDescriptor,
+  extensionContextDescriptors,
   toListEntry,
   type ContextBridgeRuntime,
 } from "../context/registry.js";
@@ -109,6 +110,12 @@ async function resolveContextDescriptor(
   const builtin = findBuiltinContextByName(contextName);
   if (builtin) {
     return { found: true, descriptor: builtin };
+  }
+
+  // 扩展 Context 来自 extension manifest；describe/read 也必须接受 list 中公开的同名条目。
+  const extension = (await extensionContextDescriptors(flags)).find((c) => c.name === contextName);
+  if (extension) {
+    return { found: true, descriptor: extension };
   }
 
   const includeCustom = shouldDiscoverProjectTools(flags, runtime) || getBoolean(flags, "include-custom");

@@ -11,6 +11,37 @@
 
 import type { ExtensionManifest } from "./types.js";
 
+const PROBUILDER_SCENE_CONTEXT_INPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    namePattern: {
+      type: "string",
+      description: "Optional case-insensitive substring filter for ProBuilder GameObject names or hierarchy paths."
+    },
+    pageSize: {
+      type: "integer",
+      minimum: 1,
+      maximum: 200,
+      default: 50,
+      description: "Maximum number of ProBuilder mesh objects to return in this read."
+    }
+  }
+};
+
+const PROBUILDER_SCENE_CONTEXT_OUTPUT_SCHEMA = {
+  type: "object",
+  properties: {
+    installed: { type: "boolean" },
+    sceneCount: { type: "integer" },
+    objectCount: { type: "integer" },
+    selectedObjectCount: { type: "integer" },
+    pageSize: { type: "integer" },
+    truncated: { type: "boolean" },
+    objects: { type: "array", items: { type: "object" } },
+    selection: { type: "object" }
+  }
+};
+
 export const PROBUILDER_MANIFEST: ExtensionManifest = {
   id: "probuilder",
   name: "ProBuilder",
@@ -66,7 +97,17 @@ export const PROBUILDER_MANIFEST: ExtensionManifest = {
       { name: "probuilder.repair-mesh" }
     ],
     contexts: [
-      { key: "probuilder.scene", description: "Read ProBuilder mesh objects, face/edge/vertex selection context, and editable mesh state in the current scene." }
+      {
+        key: "probuilder.scene",
+        description: "Read ProBuilder mesh objects, face/edge/vertex selection context, and editable mesh state in the current scene.",
+        category: "probuilder",
+        inputSchema: PROBUILDER_SCENE_CONTEXT_INPUT_SCHEMA,
+        outputSchema: PROBUILDER_SCENE_CONTEXT_OUTPUT_SCHEMA,
+        target: "editor",
+        availabilityScope: "editorSession",
+        playModeSupport: "supported",
+        refreshBehavior: "onDemand"
+      }
     ],
     csharpEntries: [
       { type: "UnityCli.ProBuilder.ProBuilderUtilityTools", description: "Bridge handlers for ProBuilder ping, mesh-info, and validate-mesh." },
@@ -74,7 +115,8 @@ export const PROBUILDER_MANIFEST: ExtensionManifest = {
       { type: "UnityCli.ProBuilder.ProBuilderMeshEditTools", description: "Bridge handlers for ProBuilder face, edge, and mesh editing operations." },
       { type: "UnityCli.ProBuilder.ProBuilderVertexTools", description: "Bridge handlers for ProBuilder vertex operations." },
       { type: "UnityCli.ProBuilder.ProBuilderSelectionTools", description: "Bridge handlers for ProBuilder selection and material/color/UV operations." },
-      { type: "UnityCli.ProBuilder.ProBuilderSmoothingTools", description: "Bridge handlers for ProBuilder smoothing, pivot, transform, and repair operations." }
+      { type: "UnityCli.ProBuilder.ProBuilderSmoothingTools", description: "Bridge handlers for ProBuilder smoothing, pivot, transform, and repair operations." },
+      { type: "UnityCli.ProBuilder.ProBuilderSceneContext", description: "Read-only context for ProBuilder scene mesh objects, counts, and selection state." }
     ],
   },
   tags: ["modeling", "3d", "level-design"]

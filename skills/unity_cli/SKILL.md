@@ -24,11 +24,12 @@ unity_cli instances list
 unity_cli target set <instanceId-or-alias>
 ```
 
-使用 Tool 前走 group-first 发现链：
+使用 Tool 前走 group-first 发现链；不确定关键词时先查搜索结果：
 
 ```powershell
 unity_cli tools group
 unity_cli tools group list <group>
+unity_cli tools search <keyword>
 unity_cli tools describe <tool>
 unity_cli tools run <tool> --input '<json>'
 ```
@@ -41,7 +42,7 @@ unity_cli context describe <context>
 unity_cli context read <context> --input '<json>'
 ```
 
-不要猜 `scene`、`asset`、`package`、`build`、`test`、`editor` 等 Unity 能力域是顶层命令；Unity 能力通过 `tools run <tool>` 或 `context read <context>` 暴露。CLI 控制面才使用 `init`、`extensions`、`target`、`instances`、`jobs`、`batch`、`doctor`。
+不要猜 `scene`、`asset`、`package`、`build`、`test`、`editor` 等 Unity 能力域是顶层命令；Unity 能力通过 `tools run <tool>` 或 `context read <context>` 暴露。CLI 控制面才使用 `init`、`extensions`、`target`、`instances`、`jobs`、`batch`、`doctor`。扩展管理使用 `extensions list`、`extensions install`、`extensions remove`、`extensions doctor`。
 
 ## 工具地图
 

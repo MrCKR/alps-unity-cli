@@ -41,6 +41,8 @@ namespace UnityCli.ProBuilder
             var shapeType = ProBuilderInput.StringArg(context.InputJson, "shapeType");
             if (string.IsNullOrEmpty(shapeType))
                 return ProBuilderErrors.SchemaInvalid("shapeType is required for probuilder.create-shape.");
+            if (!IsSupportedShape(shapeType))
+                return ProBuilderErrors.SchemaInvalid("Unsupported shapeType for probuilder.create-shape: " + shapeType + ". Supported values: " + SupportedShapeValues + ".");
 
             var name = ProBuilderInput.StringArg(context.InputJson, "name") ?? ("ProBuilder_" + shapeType);
             var x = ProBuilderInput.FloatArg(context.InputJson, "x", 0f);
@@ -94,12 +96,39 @@ namespace UnityCli.ProBuilder
             return ProBuilderErrors.Success("probuilder.create-shape", result);
         }
 
+        private const string SupportedShapeValues = "Cube, Cylinder, Sphere, Plane, Cone, Torus, Pipe, Arch, Stair, CurvedStair, Door, Prism";
+
         private static string NormalizeShape(string shapeType)
         {
             var s = (shapeType ?? "Cube").Trim();
             if (string.Equals(s, "box", StringComparison.OrdinalIgnoreCase)) return "Cube";
             if (string.Equals(s, "quad", StringComparison.OrdinalIgnoreCase)) return "Plane";
             return s;
+        }
+
+        /// <summary>
+        /// 验证 shapeType 与公开 descriptor enum 一致，避免未知值静默创建错误形状。
+        /// </summary>
+        private static bool IsSupportedShape(string shapeType)
+        {
+            switch (shapeType ?? string.Empty)
+            {
+                case "Cube":
+                case "Cylinder":
+                case "Sphere":
+                case "Plane":
+                case "Cone":
+                case "Torus":
+                case "Pipe":
+                case "Arch":
+                case "Stair":
+                case "CurvedStair":
+                case "Door":
+                case "Prism":
+                    return true;
+                default:
+                    return false;
+            }
         }
 
         private static GameObject CreateUnityPrimitive(string shape)
@@ -111,7 +140,7 @@ namespace UnityCli.ProBuilder
                 case "cylinder": return GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                 case "plane": return GameObject.CreatePrimitive(PrimitiveType.Plane);
                 case "cone": return GameObject.CreatePrimitive(PrimitiveType.Capsule); // closest
-                default: return GameObject.CreatePrimitive(PrimitiveType.Cube);
+                default: return null;
             }
         }
 

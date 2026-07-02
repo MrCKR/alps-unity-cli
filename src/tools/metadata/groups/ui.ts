@@ -38,7 +38,7 @@ export const UI_TOOLS: ToolMetadata[] = [
   {
     name: "ui.button.create",
     summary: "Create a uGUI Button element (with Text child) under a parent Canvas/RectTransform. parent resolves by name, hierarchy path or instance id.",
-    description: "Create a uGUI Button element (with Text child) under a parent Canvas/RectTransform. parent resolves by name, hierarchy path or instance id.",
+    description: "Create a uGUI Button GameObject with Image/Button components and a Text child under a parent Canvas or RectTransform. parent resolves by name, hierarchy path or instance id; create a Canvas first when no UI root exists.",
     group: "ui",
     inputSchema: objSchema({
       name: { type: "string", description: "Button GameObject name." },
@@ -158,7 +158,7 @@ export const UI_TOOLS: ToolMetadata[] = [
   {
     name: "ui.attach-document",
     summary: "Attach a UIDocument component to a GameObject, optionally with a UXML source asset and PanelSettings.",
-    description: "Attach a UIDocument component to a GameObject, optionally with a UXML source asset and PanelSettings. Destructive: modifies the target GameObject. Aligns with CoplayDev manage_ui.attach_ui_document.",
+    description: "Attach a UIDocument component to a GameObject, optionally with a UXML source asset and PanelSettings. Session-affecting: modifies the target GameObject in the current scene/session without writing UXML or PanelSettings assets.",
     group: "ui",
     inputSchema: objSchema({ target: { type: "string", description: "Target GameObject: name, hierarchy path or instance id." }, sourceAsset: { type: "string", description: "Assets/*.uxml source asset." }, panelSettings: { type: "string", description: "PanelSettings asset path." }, sortOrder: { type: "integer", default: 0, description: "Sorting order." } }, ["target"]),
     destructiveHint: false,
@@ -186,7 +186,7 @@ export const UI_TOOLS: ToolMetadata[] = [
   {
     name: "ui.create-panel-settings",
     summary: "Create a PanelSettings asset with scale mode and reference resolution.",
-    description: "Create a PanelSettings asset with scale mode and reference resolution. Destructive: writes a new asset (overwrites existing at path). Aligns with CoplayDev manage_ui.create_panel_settings.",
+    description: "Create a PanelSettings asset with scale mode and reference resolution. This writes an Assets/*.asset file and may overwrite an existing asset at path, so pass --yes only after confirming the destination.",
     group: "ui",
     inputSchema: objSchema({ path: { type: "string", description: "Destination Assets/*.asset PanelSettings path." }, scaleMode: { type: "string", enum: ["ConstantPixelSize", "ConstantPhysicalSize", "ScaleWithScreenSize"], default: "ScaleWithScreenSize", description: "Panel scale mode." }, referenceWidth: { type: "integer", default: 1920, description: "Reference resolution width." }, referenceHeight: { type: "integer", default: 1080, description: "Reference resolution height." }, sortingOrder: { type: "integer", description: "Optional PanelSettings sortingOrder/sortOrder when available in this Unity version." }, sortingLayerName: { type: "string", description: "Optional sorting layer name when available." }, targetTexture: { type: "string", description: "Optional RenderTexture asset path for PanelSettings.targetTexture when available." }, screenMatchMode: { type: "string", description: "Optional PanelScreenMatchMode enum when available." }, match: { type: "number", description: "Optional screen match value when available." }, clearColor: { type: "string", description: "Optional clear color when available." } }, ["path"]),
     destructiveHint: true,

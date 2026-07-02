@@ -136,7 +136,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   {
     name: "graphics.bake-status",
     summary: "Query current lighting bake running state, progress, and lighting mode without starting or cancelling a bake.",
-    description: "Query current lighting bake running state, progress, and lighting mode without starting or cancelling a bake.",
+    description: "Read current lighting bake running state, progress, and lighting mode. This is observation-only; it does not start, cancel, clear or write lighting data.",
     group: "graphics",
     inputSchema: objSchema({}),
     outputSchema: objSchema({ baking: { type: "boolean" }, progress: { type: "number" }, mode: { type: "object" }, logPath: logPathSchema }),
@@ -254,7 +254,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   {
     name: "graphics.stats",
     summary: "Query current rendering statistics such as draw calls, batches, triangles, vertices, render textures and set-pass calls.",
-    description: "Query current rendering statistics such as draw calls, batches, triangles, vertices, render textures and set-pass calls.",
+    description: "Read current rendering statistics such as draw calls, batches, triangles, vertices, render textures and set-pass calls. Values reflect the currently rendered Editor/Game View frame and may be empty before rendering has occurred.",
     group: "graphics",
     inputSchema: objSchema({}),
     outputSchema: objSchema({ stats: { type: "object" }, logPath: logPathSchema }),
@@ -268,7 +268,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   {
     name: "graphics.stats-counters",
     summary: "List a compact array of render stat counters for dashboards and quick diagnostics.",
-    description: "List a compact array of render stat counters for dashboards and quick diagnostics.",
+    description: "List render stat counters as compact name/value records for dashboards and quick diagnostics. This is read-only and avoids the larger structured graphics.stats object.",
     group: "graphics",
     inputSchema: objSchema({}),
     outputSchema: objSchema({ counters: { type: "array", items: { type: "object" } }, logPath: logPathSchema }),
@@ -282,7 +282,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   {
     name: "graphics.stats-memory",
     summary: "Query GPU/render memory counters including texture memory, render texture bytes and vertex buffer usage.",
-    description: "Query GPU/render memory counters including texture memory, render texture bytes and vertex buffer usage.",
+    description: "Read GPU/render memory counters including texture memory, render texture bytes and vertex buffer usage. Use this when graphics.stats is too broad and only memory-related counters are needed.",
     group: "graphics",
     inputSchema: objSchema({}),
     outputSchema: objSchema({ usedTextureMemory: { type: "integer" }, renderTextureBytes: { type: "integer" }, usedVertexBuffer: { type: "integer" }, usedVertexBufferVRAM: { type: "integer" }, renderTextureCount: { type: "integer" }, logPath: logPathSchema }),
@@ -311,7 +311,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   {
     name: "graphics.skybox-get",
     summary: "Read current RenderSettings skybox material, sun, ambient, fog, and reflection settings.",
-    description: "Read current RenderSettings skybox material, sun, ambient, fog, and reflection settings.",
+    description: "Read current RenderSettings skybox material, sun, ambient, fog, and reflection settings. Use this before skybox-set tools when you need to capture the previous environment state.",
     group: "graphics",
     inputSchema: objSchema({}),
     outputSchema: objSchema({ skybox: { type: "object" }, sun: { type: "object" }, ambient: { type: "object" }, fog: { type: "object" }, reflection: { type: "object" }, logPath: logPathSchema }),
@@ -375,7 +375,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   {
     name: "graphics.skybox-set-fog",
     summary: "Set RenderSettings fog enabled, mode, color, density and distance for the current scene/session.",
-    description: "Set RenderSettings fog enabled, mode, color, density and distance for the current scene/session.",
+    description: "Set RenderSettings fog enabled, mode, color, density and distance for the current scene/session. Call graphics.skybox-get first when you need to record the previous fog state before changing it.",
     group: "graphics",
     inputSchema: objSchema({
       enabled: { type: "boolean" },
@@ -396,7 +396,7 @@ export const GRAPHICS_TOOLS: ToolMetadata[] = [
   {
     name: "graphics.skybox-set-reflection",
     summary: "Set RenderSettings environment reflection mode, bounces, intensity and default resolution.",
-    description: "Set RenderSettings environment reflection mode, bounces, intensity and default resolution.",
+    description: "Set RenderSettings environment reflection mode, bounces, intensity and default resolution. These values affect the current scene/session render environment; use graphics.skybox-get first when you need a restore point.",
     group: "graphics",
     inputSchema: objSchema({
       mode: { type: "string" },

@@ -138,12 +138,17 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
   {
     name: "package.resolve",
     summary: "Resolve all packages in the project manifest by running Unity PackageManager (batch job).",
-    description: "Resolve all packages in the project manifest by running Unity PackageManager (batch job). Long-running; use after manual manifest edits or install/remove. Triggers import/domain reload in Unity.",
+    description: "Resolve all packages in the project manifest by running Unity PackageManager as a batch job. Use this after manual manifest edits or install/remove when no live Editor refresh is available; it is long-running and can trigger import, compile or domain reload.",
     group: "package",
     inputSchema: objSchema({ project: { type: "string", description: "Unity project path." }, unity: { type: "string", description: "Unity executable path." }, wait: { type: "boolean", default: true, description: "Wait for the resolve job to finish." } }),
+    outputSchema: objSchema({ jobId: { type: "string" }, status: { type: "string" }, projectPath: { type: "string" }, command: { type: "string" }, startedAt: { type: "string" }, finishedAt: { type: "string" }, exitCode: { type: "integer" }, logPath: { type: "string" }, bridge: { type: "object" }, nextActions: { type: "array", items: { type: "string" } } }),
     destructiveHint: false,
     sideEffects: ["session-affecting"],
     playModeSupport: "session-affecting",
+    examples: [
+      { description: "Start a package resolve job", argv: ["tools", "run", "package.resolve", "--input", "{\"project\":\"D:/workspace/alps-unity-cli/Dev/UnityProject\",\"wait\":false}"] },
+      { description: "Run and wait for package resolve", argv: ["tools", "run", "package.resolve", "--input", "{\"project\":\"D:/workspace/alps-unity-cli/Dev/UnityProject\",\"wait\":true}"] }
+    ],
   },
   {
     name: "package.registry",

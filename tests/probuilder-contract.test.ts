@@ -196,3 +196,36 @@ test("target-scoped ProBuilder tools require target in inputSchema", () => {
     assert.ok("target" in props, `${tool.name}: inputSchema must have 'target' property`);
   }
 });
+
+test("ProBuilder scene context is implemented as read-only UnityCliContext", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const contextSource = await readFile(new URL("../extensions/probuilder/unitypkg/Editor/ProBuilder/ProBuilderSceneContext.cs", import.meta.url), "utf8");
+
+  assert.match(contextSource, /UnityCliContext\(/);
+  assert.match(contextSource, /"probuilder\.scene"/);
+  assert.match(contextSource, /Category\s*=\s*"probuilder"/);
+  assert.match(contextSource, /RequiresPackages\s*=\s*"com\.unity\.probuilder"/);
+  assert.match(contextSource, /public static string Provide\(UnityCliContextRequest/);
+  assert.doesNotMatch(contextSource, /\[UnityCliTool\(/);
+  assert.doesNotMatch(contextSource, /public static string Execute\(/);
+  assert.doesNotMatch(contextSource, /public static string Run\(/);
+
+  const bannedTokens = [
+    "ExecuteMenuItem",
+    "SaveAssets",
+    "AssetDatabase.Refresh",
+    "isPlaying =",
+    "EditorSceneManager.SaveScene",
+    "MarkSceneDirty",
+    "PackageManager.",
+    "File.Write",
+    "File.WriteAll",
+    "File.Append",
+    "Directory.Create",
+    "Directory.Delete",
+    "Process.Start"
+  ];
+  for (const token of bannedTokens) {
+    assert.doesNotMatch(contextSource, new RegExp(token.replace(".", "\\.")), `ProBuilder scene context must not contain source-guard token ${token}`);
+  }
+});

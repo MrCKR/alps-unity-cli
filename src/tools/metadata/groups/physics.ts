@@ -40,7 +40,7 @@ export const PHYSICS_TOOLS: ToolMetadata[] = [
   {
     name: "physics.material",
     summary: "Create or update a PhysicMaterial asset with friction and bounciness settings at an Assets/*.physicMaterial path.",
-    description: "Create or update a PhysicMaterial asset with friction and bounciness settings at an Assets/*.physicMaterial path.",
+    description: "Create or update a PhysicMaterial asset with friction and bounciness settings at an Assets/*.physicMaterial path. This writes/imports the asset and should be followed by physics.assign-material when applying it to scene Colliders.",
     group: "physics",
     inputSchema: objSchema({ path: { type: "string", description: "Destination Assets/*.physicMaterial path." }, dynamicFriction: { type: "number" }, staticFriction: { type: "number" }, bounciness: { type: "number" }, overwrite: { type: "boolean" } }, ["path"]),
     destructiveHint: false,

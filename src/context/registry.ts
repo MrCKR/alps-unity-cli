@@ -97,16 +97,23 @@ function extensionContributionToDescriptor(ec: ExtensionContextContribution): Co
   return {
     name: ec.key,
     description: ec.description,
-    category: "extension",
+    category: ec.category ?? extensionContextCategory(ec.key),
     source: "extension",
-    target: "editor",
-    availabilityScope: "editorSession",
-    playModeSupport: "supported",
+    target: ec.target ?? "editor",
+    availabilityScope: ec.availabilityScope ?? "editorSession",
+    playModeSupport: ec.playModeSupport ?? "supported",
     supportStatus: "live-bridge",
     cliCommand: `context read ${ec.key}`,
-    inputSchema: { type: "object", properties: {} },
-    outputSchema: { type: "object", properties: {} },
+    inputSchema: ec.inputSchema ?? { type: "object", properties: {} },
+    outputSchema: ec.outputSchema ?? { type: "object", properties: {} },
+    refreshBehavior: ec.refreshBehavior,
   };
+}
+
+/** 扩展 Context 默认按 dotted key 前缀归类，便于 AI 用领域 category 发现能力。 */
+function extensionContextCategory(key: string): string {
+  const separator = key.indexOf(".");
+  return separator > 0 ? key.slice(0, separator) : "extension";
 }
 
 // ── Custom context discovery */
