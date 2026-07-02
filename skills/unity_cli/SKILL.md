@@ -127,7 +127,7 @@ Descriptor 常用字段：
 2. 反复需要的只读信息：创建自定义 Context，使用 `[UnityCliContext]`，必须声明 `Description`。
 3. 反复需要的操作能力：创建自定义 Tool，使用 `[UnityCliTool]`，必须声明 `Summary`。
 
-自定义 C# 文件必须放在名为 `UnityCLI` 的目录下，例如：
+自定义 C# 文件必须放在名为 `UnityCLI/` 的目录下， `UnityCLI ` 必须包含 `RunTime` 和 `Editor`，例如：
 
 - `Assets/UnityCLI/`
 - `Assets/Editor/UnityCLI/`
