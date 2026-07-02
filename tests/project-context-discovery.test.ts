@@ -563,15 +563,15 @@ test("custom context does not enter tools execution path", async () => {
   assert.match(sampleContext, /\[UnityCliContext\(/);
   assert.doesNotMatch(sampleContext, /\[UnityCliTool\(/);
 
-  // SampleEchoTool uses [UnityCliTool], not [UnityCliContext]
-  assert.match(sampleTool, /\[UnityCliTool\(/);
-  assert.doesNotMatch(sampleTool, /\[UnityCliContext\(/);
+  // SampleEchoTool 新形态:用 IUnityCliTool<,> 泛型接口,不再用 [UnityCliTool] attribute
+  assert.match(sampleTool, /IUnityCliTool</);
+  assert.doesNotMatch(sampleTool, /\[UnityCliTool\(/);
 
   // Context handler takes UnityCliContextRequest, not UnityCliProjectToolContext
   assert.match(sampleContext, /UnityCliContextRequest/);
   assert.doesNotMatch(sampleContext, /UnityCliProjectToolContext/);
 
-  // Tool handler takes UnityCliProjectToolContext, not UnityCliContextRequest
+  // Tool handler(新形态)接 UnityCliProjectToolContext(ctx 参数)
   assert.match(sampleTool, /UnityCliProjectToolContext/);
   assert.doesNotMatch(sampleTool, /UnityCliContextRequest/);
 });

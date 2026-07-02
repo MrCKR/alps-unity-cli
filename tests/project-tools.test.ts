@@ -86,31 +86,28 @@ test("tools describe resolves custom descriptor without hand-written CLI metadat
   assert.equal(data.playModeSupport, "editor-only");
 });
 
-test("Unity C# custom tool registry supports UnityCliToolAttribute descriptors and sample Editor tool", async () => {
+test("Unity C# custom tool registry supports IUnityCliTool interface descriptors and sample Editor tool", async () => {
   const registry = await readFile(new URL("../../unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs", import.meta.url), "utf8");
-  const attribute = await readFile(new URL("../../unitypkg/Editor/ProjectTools/UnityCliToolAttribute.cs", import.meta.url), "utf8");
+  const interfaceFile = await readFile(new URL("../../unitypkg/Editor/ProjectTools/IUnityCliTool.cs", import.meta.url), "utf8");
   const sample = await readFile(new URL("../../unitypkg/Editor/Samples/SampleEchoTool.cs", import.meta.url), "utf8");
 
-  assert.match(attribute, /AttributeTargets\.Class \| AttributeTargets\.Method/);
-  assert.match(attribute, /public string Group \{ get; set; \}/);
-  assert.match(attribute, /public string PlayModeSupport \{ get; set; \}/);
-  assert.doesNotMatch(attribute, /ArchitectureSensitive|FrozenDecision|CoverageScope/);
-  assert.match(registry, /typeof\(UnityCliToolAttribute\)/);
-  assert.match(registry, /reason=ambiguous_class_level_execute_method/);
-  assert.match(registry, /specific method when multiple candidates exist/);
-  assert.match(registry, /ProjectToolDefinitionJson/);
-  assert.match(registry, /ProjectToolFingerprintJson/);
-  assert.match(registry, /ProjectToolHandlerFingerprintMaterial/);
-  assert.match(registry, /E_TOOL_FINGERPRINT_MISMATCH/);
-  assert.match(registry, /UNITY_CLI_PROJECT_TOOL_FINGERPRINT_MODE/);
-  assert.match(registry, /UnityCliProjectToolFingerprints/);
-  assert.match(registry, /sha256-handler-code-plus-descriptor-v1/);
-  assert.match(registry, /Prop\("descriptorSource", definition\.DescriptorSource\)/);
-  assert.match(registry, /Prop\("playModeSupport", definition\.PlayModeSupport\)/);
-  assert.match(registry, /PropRaw\("fingerprint", ProjectToolFingerprintJson\(definition\)\)/);
-  assert.match(registry, /Prop\("handler", "bridge"\)/);
-  assert.match(sample, /\[UnityCliTool\(\s*"sample\.echo"/);
-  assert.match(sample, /PlayModeSupport\s*=\s*"editor-only"/);
+  // 新形态:IUnityCliTool<TReq,TRes> 泛型接口声明工具
+  assert.match(interfaceFile, /interface IUnityCliTool<TReq, TRes>/);
+  assert.match(interfaceFile, /ToolDescriptor Describe\(\)/);
+  assert.match(interfaceFile, /TRes Execute\(TReq request, UnityCliProjectToolContext ctx\)/);
+
+  // registry 扫描 IUnityCliTool<,> 实现类(与旧 attribute 并存)
+  assert.match(registry, /TryRegisterInterfaceProjectTool/);
+  assert.match(registry, /typeof\(IUnityCliTool<,>\)/);
+  assert.match(registry, /UnityCliSchemaDeriver\.DeriveSchema/);
+
+  // SampleEchoTool 新形态:实现 IUnityCliTool,不再用 attribute
+  assert.match(sample, /class SampleEchoTool : IUnityCliTool</);
+  assert.match(sample, /public ToolDescriptor Describe\(\)/);
+  assert.match(sample, /public Result Execute\(Request request, UnityCliProjectToolContext ctx\)/);
+  assert.match(sample, /required string Message/);
+  assert.doesNotMatch(sample, /\[UnityCliTool\(/);
+  assert.doesNotMatch(sample, /InputSchema\s*=\s*"/);
   assert.doesNotMatch(sample, /manifest\.json|config\.json|\.yaml|\.yml/);
 });
 

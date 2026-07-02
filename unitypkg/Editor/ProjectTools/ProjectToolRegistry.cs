@@ -89,6 +89,10 @@ namespace UnityCli
                 foreach (var type in types)
                 {
                     if (type == null) continue;
+
+                    // 新形态:扫描实现 IUnityCliTool<,> 泛型接口的类(与旧 attribute 并存,过渡期)
+                    TryRegisterInterfaceProjectTool(assembly, type);
+
                     var classAttribute = Attribute.GetCustomAttribute(type, typeof(UnityCliToolAttribute)) as UnityCliToolAttribute;
                     if (classAttribute != null)
                     {
@@ -173,6 +177,111 @@ namespace UnityCli
             }
             WriteLog("custom_tool_registration_skipped name=" + toolName + " reason=ambiguous_class_level_execute_method type=" + type.FullName + " candidateCount=" + methods.Length.ToString(CultureInfo.InvariantCulture));
             return null;
+        }
+
+        // ── 新形态:IUnityCliTool<TReq,TRes> 泛型接口实现类发现与注册 ──
+        // 设计依据:.plan/自定义工具定义规范.md(废除 attribute,实现接口即声明)
+        // 过渡期与旧 attribute 并存;同优先以新形态为准(后注册覆盖旧)。
+        private static void TryRegisterInterfaceProjectTool(Assembly assembly, Type type)
+        {
+            if (type == null || type.IsAbstract || type.IsInterface) return;
+
+            // 查找实现的 IUnityCliTool<TReq,TRes> 接口
+            Type toolInterface = null;
+            Type reqType = null;
+            Type resType = null;
+            foreach (var iface in type.GetInterfaces())
+            {
+                if (iface.IsGenericType && iface.GetGenericTypeDefinition() == typeof(IUnityCliTool<,>))
+                {
+                    toolInterface = iface;
+                    var args = iface.GetGenericArguments();
+                    reqType = args[0];
+                    resType = args[1];
+                    break;
+                }
+            }
+            if (toolInterface == null) return;
+
+            // 实例化工具类(要求无参构造)
+            object instance;
+            try
+            {
+                instance = Activator.CreateInstance(type);
+            }
+            catch (Exception e)
+            {
+                WriteLog("custom_tool_registration_skipped type=" + type.FullName + " reason=instantiation_failed err=" + e.GetType().Name);
+                return;
+            }
+
+            // 调 Describe() 取 desc 人写字段
+            ToolDescriptor descriptor = null;
+            try
+            {
+                var describeMethod = type.GetMethod("Describe", Type.EmptyTypes);
+                if (describeMethod == null)
+                {
+                    WriteLog("custom_tool_registration_skipped type=" + type.FullName + " reason=missing_describe");
+                    return;
+                }
+                descriptor = describeMethod.Invoke(instance, null) as ToolDescriptor;
+            }
+            catch (Exception e)
+            {
+                WriteLog("custom_tool_registration_skipped type=" + type.FullName + " reason=describe_failed err=" + e.GetType().Name);
+                return;
+            }
+            if (descriptor == null || string.IsNullOrEmpty(descriptor.Name))
+            {
+                WriteLog("custom_tool_registration_skipped type=" + type.FullName + " reason=descriptor_incomplete");
+                return;
+            }
+
+            // 从 TReq/TRes 反射派生 schema(框架派生,Describe 无法染指)
+            var inputSchema = UnityCliSchemaDeriver.DeriveSchema(reqType);
+            var outputSchema = UnityCliSchemaDeriver.DeriveSchema(resType);
+
+            // 包装 Execute 为旧 UnityCliProjectToolDefinition.Execute 委托(string in/out)
+            // 输入 JSON → 反序列化为 TReq → 调 Execute(TReq):TRes → 序列化 TRes 为 JSON
+            var executeMethod = toolInterface.GetMethod("Execute");
+            var definition = new UnityCliProjectToolDefinition
+            {
+                Name = descriptor.Name,
+                Summary = descriptor.Summary,
+                Description = descriptor.Description,
+                Group = string.IsNullOrEmpty(descriptor.Group) ? "custom" : descriptor.Group,
+                Version = string.IsNullOrEmpty(descriptor.Version) ? "1.0.0" : descriptor.Version,
+                InputSchema = string.IsNullOrEmpty(inputSchema) ? "{}" : inputSchema,
+                OutputSchema = string.IsNullOrEmpty(outputSchema) ? "{}" : outputSchema,
+                CapabilityType = string.IsNullOrEmpty(descriptor.CapabilityType) ? "project-write" : descriptor.CapabilityType,
+                DestructiveHint = descriptor.DestructiveHint,
+                Target = string.IsNullOrEmpty(descriptor.Target) ? "editor" : descriptor.Target,
+                PlayModeSupport = string.IsNullOrEmpty(descriptor.PlayModeSupport) ? "editor-only" : descriptor.PlayModeSupport,
+                DefaultTimeoutMs = descriptor.DefaultTimeoutMs <= 0 ? 30000 : descriptor.DefaultTimeoutMs,
+                MaxTimeoutMs = descriptor.MaxTimeoutMs <= 0 ? 600000 : descriptor.MaxTimeoutMs,
+                SupportsJob = descriptor.SupportsJob,
+                ArtifactKinds = descriptor.ArtifactKinds ?? new[] { "json", "log", "file", "image" },
+                RequiredInput = new string[0],
+                RegisteredBy = "unity-editor-package",
+                DescriptorSource = "IUnityCliTool",
+                Assembly = assembly.GetName().Name,
+                Method = type.FullName + ".Execute",
+                Fingerprint = descriptor.Fingerprint,
+                PinnedFingerprint = descriptor.Fingerprint,
+                ExpectedFingerprint = descriptor.Fingerprint,
+                Execute = delegate(UnityCliProjectToolContext context)
+                {
+                    // 输入:JSON → TReq(反序列化,废除 StringArg 正则刮)
+                    var req = UnityCliSerializer.Deserialize<TReq>(context.InputJson);
+                    // 调 handler(传 ctx)
+                    var result = executeMethod.Invoke(instance, new object[] { req, context });
+                    // 输出:TRes → JSON(反射序列化)
+                    return result == null ? "null" : UnityCliSerializer.Serialize(result);
+                }
+            };
+            RegisterProjectTool(definition);
+            WriteLog("custom_tool_registered name=" + descriptor.Name + " source=IUnityCliTool type=" + type.FullName);
         }
 
         private static string ProjectToolGroupFromName(string name)
