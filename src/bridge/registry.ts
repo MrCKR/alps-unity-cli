@@ -107,7 +107,10 @@ export class BridgeCommandRegistry {
   }
 
   public lookupBridgeCommand(bridgeCommand: string): BridgeCommandSpec | undefined {
-    return this.byBridgeCommand.get(bridgeCommand)?.[0];
+    const specs = this.byBridgeCommand.get(bridgeCommand);
+    if (!specs || specs.length === 0) return undefined;
+    // 优先返回通用 spec(无 toolName),避免工具特定 spec(如 scene.active 的 project-tool.run)被误用于通用路由
+    return specs.find((s) => !s.toolName) ?? specs[0];
   }
 
   public specs(): BridgeCommandSpec[] {

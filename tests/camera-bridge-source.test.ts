@@ -92,7 +92,8 @@ test("Unity Bridge exposes documented core camera, screenshot, prefab, UI, mater
   assert.match(source, /RegisterCommand\(registry, "camera\.target", "camera", true/);
   assert.match(source, /RegisterCommand\(registry, "camera\.lens", "camera", true/);
   assert.match(source, /RegisterCommand\(registry, "camera\.multiview", "camera", true/);
-  assert.match(source, /RegisterCommand\(registry, "scene\.active", "scene", false/);
+  // scene.active 已迁移为 IUnityCliTool(unitypkg/Editor/Tools/scene/active.cs),不再用 RegisterCommand
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "scene\.active"/);
   assert.match(source, /RegisterCommand\(registry, "scene\.build-settings", "scene", false/);
   assert.match(source, /RegisterCommand\(registry, "scene\.screenshot", "scene", true/);
   assert.match(source, /RegisterCommand\(registry, "scene\.create", "scene", true/);

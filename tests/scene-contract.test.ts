@@ -66,9 +66,12 @@ test("scene editor-only tools (screenshot/view-frame)", () => {
 });
 
 test("bridge specs resolve for scene tools", () => {
+  // scene.active 已迁移为 IUnityCliTool → 路由 project-tool.run;其余仍直连 bridge command
+  const MIGRATED = new Set(["active"]);
   for (const [cmd, expected] of [["active", "scene.active"], ["build-settings", "scene.build-settings"], ["screenshot", "scene.screenshot"], ["create", "scene.create"], ["load", "scene.load"], ["save", "scene.save"], ["unload", "scene.unload"], ["set-active", "scene.set-active"], ["list-opened", "scene.list-opened"], ["data", "scene.data"], ["view-frame", "scene.view-frame"]] as const) {
     const spec = bridgeCommandRegistry.lookup("scene", cmd);
-    assert.equal(spec?.bridgeCommand, expected, `scene ${cmd} should resolve`);
+    const expectedBridge = MIGRATED.has(cmd) ? "project-tool.run" : expected;
+    assert.equal(spec?.bridgeCommand, expectedBridge, `scene ${cmd} should resolve`);
   }
 });
 
@@ -80,7 +83,7 @@ test("contract entries exist for scene tools with present C# handler", () => {
   }
 });
 
-test("C# RegisterCommand calls exist for scene commands", async () => {
+test("C# handlers exist for scene commands (RegisterCommand or IUnityCliTool)", async () => {
   const csFiles = await listCsFiles(new URL("../unitypkg/Editor/", import.meta.url));
   const allSource = (
     await Promise.all(
@@ -88,7 +91,10 @@ test("C# RegisterCommand calls exist for scene commands", async () => {
     )
   ).join("\n");
   for (const command of SCENE_COMMANDS) {
-    assert.ok(allSource.includes(`RegisterCommand(registry, "${command}"`), `${command} should be registered`);
+    // 接受 RegisterCommand(旧)或 IUnityCliTool(新,Name="...")两种形态
+    const hasRegisterCommand = allSource.includes(`RegisterCommand(registry, "${command}"`);
+    const hasIUnityCliTool = allSource.includes(`Name = "${command}"`);
+    assert.ok(hasRegisterCommand || hasIUnityCliTool, `${command} should be registered via RegisterCommand or IUnityCliTool`);
   }
 });
 

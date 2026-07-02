@@ -89,7 +89,13 @@ test("live bridge tool metadata resolves through BridgeCommandRegistry", () => {
     assert.equal(tool.cliCommand, `tools run ${tool.name}`);
     const spec = bridgeCommandRegistry.specs().find((candidate) => candidate.bridgeCommand === tool.name || candidate.toolName === tool.name);
     assert.ok(spec, `${tool.name} cliCommand is missing from BridgeCommandRegistry: ${tool.cliCommand}`);
-    assert.equal(spec.bridgeCommand, tool.name);
+    // 迁移到 IUnityCliTool 的工具 bridgeCommand="project-tool.run",toolName=tool.name;未迁移的 bridgeCommand=tool.name
+    if (spec.toolName) {
+      assert.equal(spec.bridgeCommand, "project-tool.run", `${tool.name} should route via project-tool.run`);
+      assert.equal(spec.toolName, tool.name, `${tool.name} toolName should match`);
+    } else {
+      assert.equal(spec.bridgeCommand, tool.name);
+    }
   }
 });
 
@@ -1436,13 +1442,14 @@ test("tools run built-in bridge tool without --input sends empty args", async ()
   const runtime: ToolsRuntime = {
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: { name: "Untitled", path: "/Assets/Untitled.unity", buildIndex: -1 } };
+      return { ok: true, data: { scenes: [] } };
     }
   };
 
-  const result = await handleToolsCommand("run", ["scene.active"], {}, runtime, requestId);
+  // scene.active 已迁移为 IUnityCliTool(project-tool.run 路由),用 scene.build-settings 测试直连 bridge command
+  const result = await handleToolsCommand("run", ["scene.build-settings"], {}, runtime, requestId);
   assert.equal(result.ok, true);
-  assert.equal(requests[0].command, "scene.active");
+  assert.equal(requests[0].command, "scene.build-settings");
   assert.deepEqual(requests[0].args, {});
 });
 

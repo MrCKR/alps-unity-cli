@@ -95,16 +95,25 @@ test("command contract marks C# handler gaps as present", async () => {
   }
 
   assert.equal(csharpCommands.size, 233);
-  assert.equal(extensionCsharpCommands.size, 34);
-  assert.equal(allCsharpCommands.size, 267);
+  assert.equal(extensionCsharpCommands.size, 70);
+  assert.equal(allCsharpCommands.size, 303);
 });
 
 async function registeredCsharpCommands(directory: URL): Promise<Set<string>> {
   const commands = new Set<string>();
   for (const file of await listCSharpFiles(directory)) {
+    // 排除 Samples(样板工具不参与核心契约)
+    if (file.pathname.includes("/Samples/") || file.pathname.includes("\\Samples\\")) continue;
     const source = await readFile(file, "utf8");
+    // RegisterCommand 形态(旧)
     for (const match of source.matchAll(/RegisterCommand\(registry, "([^"]+)"/g)) {
       commands.add(match[1]);
+    }
+    // IUnityCliTool 形态(新,Stage 2+):文件含 IUnityCliTool< 则提取 Name="..."
+    if (source.includes(": IUnityCliTool<") || source.includes(": IUnityCliContext<")) {
+      for (const match of source.matchAll(/Name\s*=\s*"([a-z][a-z0-9]*(?:\.[a-z0-9-]+)+)"/g)) {
+        commands.add(match[1]);
+      }
     }
   }
   return commands;

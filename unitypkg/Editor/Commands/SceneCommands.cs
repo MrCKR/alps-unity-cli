@@ -30,7 +30,7 @@ namespace UnityCli
     {
         private static void RegisterSceneCommands(BridgeCommandRegistry registry)
         {
-            RegisterCommand(registry, "scene.active", "scene", false, SceneActive);
+            // scene.active 已迁移为 IUnityCliTool(unitypkg/Editor/Tools/scene/active.cs)
             RegisterCommand(registry, "scene.hierarchy", "scene", false, SceneHierarchy);
             RegisterCommand(registry, "scene.build-settings", "scene", false, SceneBuildSettings);
             RegisterCommand(registry, "scene.screenshot", "scene", true, SceneScreenshot);
@@ -47,13 +47,7 @@ namespace UnityCli
             RegisterCommand(registry, "screenshot.capture", "scene", true, SceneScreenshot);
         }
 
-        private static string SceneActive(BridgeRequest request)
-        {
-            return SuccessJson(new UnityCliJsonWriter().BeginObject()
-                .PropRaw("scene", ActiveSceneJson())
-                .Prop("logPath", LogPath())
-                .EndObject().ToString());
-        }
+        // SceneActive handler 已迁移为 IUnityCliTool(unitypkg/Editor/Tools/scene/active.cs)
 
         private static string SceneBuildSettings(BridgeRequest request)
         {

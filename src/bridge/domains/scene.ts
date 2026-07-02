@@ -2,7 +2,7 @@ import { boolFlag, compactArgs, numberFlag, queryArgs, screenshotArgs, stringFla
 import type { BridgeCommandSpec } from "../types.js";
 
 export const sceneBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "scene", command: "active", bridgeCommand: "scene.active", buildArgs: ({ flags }) => queryArgs(flags) },
+  { group: "scene", command: "active", bridgeCommand: "project-tool.run", toolName: "scene.active", buildArgs: ({ flags }) => queryArgs(flags) },
   { group: "scene", command: "hierarchy", bridgeCommand: "scene.hierarchy", buildArgs: sceneHierarchyArgs },
   { group: "scene", command: "build-settings", bridgeCommand: "scene.build-settings", buildArgs: ({ flags }) => queryArgs(flags) },
   { group: "scene", command: "screenshot", bridgeCommand: "scene.screenshot", buildArgs: ({ flags, positionalTarget }) => screenshotArgs(flags, positionalTarget) },
