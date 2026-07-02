@@ -39,13 +39,13 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("extrude-faces", "No ProBuilderMesh component on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("extrude-faces", "No ProBuilderMesh component on target.");
 
             var faceIndices = ProBuilderInput.IntArrayArg(context.InputJson, "faceIndices");
             var distance = ProBuilderInput.FloatArg(context.InputJson, "distance", 0.5f);
@@ -72,7 +72,7 @@ namespace UnityCli.ProBuilder
                 .Prop("newVertexCount", afterVertexCount - beforeVertexCount)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.extrude-faces", result);
+            return result;
         }
     }
 
@@ -98,13 +98,13 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("extrude-edges", "No ProBuilderMesh component on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("extrude-edges", "No ProBuilderMesh component on target.");
 
             var distance = ProBuilderInput.FloatArg(context.InputJson, "distance", 0.5f);
             var asGroup = ProBuilderInput.BoolArg(context.InputJson, "asGroup", true);
@@ -112,7 +112,7 @@ namespace UnityCli.ProBuilder
             var edgePairs = ProBuilderInput.EdgePairArrayArg(context.InputJson, "edges");
 
             if ((edgeIndices == null || edgeIndices.Length == 0) && (edgePairs == null || edgePairs.Length == 0))
-                return ProBuilderErrors.SchemaInvalid("edgeIndices or edges parameter is required for extrude-edges.");
+                throw ProBuilderErrors.SchemaInvalid("edgeIndices or edges parameter is required for extrude-edges.");
 
             Undo.RecordObject(go, "ProBuilder Extrude Edges");
             var edgeCount = ProBuilderReflection.ExtrudeEdgesBySelection(mesh, edgeIndices, edgePairs, distance, asGroup);
@@ -123,7 +123,7 @@ namespace UnityCli.ProBuilder
                 .Prop("modifiedEdgeCount", edgeCount)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.extrude-edges", result);
+            return result;
         }
     }
 
@@ -149,17 +149,17 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("delete-faces", "No ProBuilderMesh component on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("delete-faces", "No ProBuilderMesh component on target.");
 
             var faceIndices = ProBuilderInput.IntArrayArg(context.InputJson, "faceIndices");
             if (faceIndices == null || faceIndices.Length == 0)
-                return ProBuilderErrors.SchemaInvalid("faceIndices is required for probuilder.delete-faces.");
+                throw ProBuilderErrors.SchemaInvalid("faceIndices is required for probuilder.delete-faces.");
 
             var beforeFaceCount = ProBuilderReflection.GetFaceCount(mesh);
             Undo.RecordObject(go, "ProBuilder Delete Faces");
@@ -175,7 +175,7 @@ namespace UnityCli.ProBuilder
                 .Prop("remainingFaceCount", afterFaceCount)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.delete-faces", result);
+            return result;
         }
     }
 
@@ -201,17 +201,17 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("detach-faces", "No ProBuilderMesh on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("detach-faces", "No ProBuilderMesh on target.");
 
             var faceIndices = ProBuilderInput.IntArrayArg(context.InputJson, "faceIndices");
             if (faceIndices == null || faceIndices.Length == 0)
-                return ProBuilderErrors.SchemaInvalid("faceIndices is required.");
+                throw ProBuilderErrors.SchemaInvalid("faceIndices is required.");
 
             Undo.RecordObject(go, "ProBuilder Detach Faces");
             var detached = ProBuilderReflection.DetachFaces(mesh, faceIndices);
@@ -242,7 +242,7 @@ namespace UnityCli.ProBuilder
                 .Prop("faceCount", faceCount)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.detach-faces", result);
+            return result;
         }
 
         private static string HierarchyPath(GameObject go)
@@ -276,17 +276,17 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("merge-faces", "No ProBuilderMesh on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("merge-faces", "No ProBuilderMesh on target.");
 
             var faceIndices = ProBuilderInput.IntArrayArg(context.InputJson, "faceIndices");
             if (faceIndices == null || faceIndices.Length < 2)
-                return ProBuilderErrors.SchemaInvalid("At least 2 faceIndices required for merge.");
+                throw ProBuilderErrors.SchemaInvalid("At least 2 faceIndices required for merge.");
 
             var beforeCount = ProBuilderReflection.GetFaceCount(mesh);
             Undo.RecordObject(go, "ProBuilder Merge Faces");
@@ -301,7 +301,7 @@ namespace UnityCli.ProBuilder
                 .Prop("mergedFaceCount", beforeCount - afterCount + 1)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.merge-faces", result);
+            return result;
         }
     }
 
@@ -327,13 +327,13 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("subdivide", "No ProBuilderMesh on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("subdivide", "No ProBuilderMesh on target.");
 
             var faceIndices = ProBuilderInput.IntArrayArg(context.InputJson, "faceIndices");
             var beforeCount = ProBuilderReflection.GetFaceCount(mesh);
@@ -353,7 +353,7 @@ namespace UnityCli.ProBuilder
                 .Prop("afterFaceCount", afterCount)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.subdivide", result);
+            return result;
         }
     }
 
@@ -379,13 +379,13 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("flip-normals", "No ProBuilderMesh on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("flip-normals", "No ProBuilderMesh on target.");
 
             var faceIndices = ProBuilderInput.IntArrayArg(context.InputJson, "faceIndices");
             var faceCount = ProBuilderReflection.GetFaceCount(mesh);
@@ -404,7 +404,7 @@ namespace UnityCli.ProBuilder
                 .Prop("flippedCount", flipped)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.flip-normals", result);
+            return result;
         }
     }
 
@@ -430,25 +430,25 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("bridge-edges", "No ProBuilderMesh on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("bridge-edges", "No ProBuilderMesh on target.");
 
             var edgeA = ProBuilderInput.EdgeArg(context.InputJson, "edgeA");
             var edgeB = ProBuilderInput.EdgeArg(context.InputJson, "edgeB");
             if (edgeA == null || edgeB == null)
-                return ProBuilderErrors.SchemaInvalid("edgeA and edgeB parameters are required (as {a, b} vertex index pairs).");
+                throw ProBuilderErrors.SchemaInvalid("edgeA and edgeB parameters are required (as {a, b} vertex index pairs).");
 
             var allowNonManifold = ProBuilderInput.BoolArg(context.InputJson, "allowNonManifold");
 
             Undo.RecordObject(go, "ProBuilder Bridge Edges");
             var bridged = ProBuilderReflection.BridgeEdges(mesh, edgeA.Value.a, edgeA.Value.b, edgeB.Value.a, edgeB.Value.b, allowNonManifold);
             if (!bridged)
-                return ProBuilderErrors.OperationFailed("bridge-edges", "AppendElements.Bridge method not found or failed in ProBuilder assembly.");
+                throw ProBuilderErrors.OperationFailed("bridge-edges", "AppendElements.Bridge method not found or failed in ProBuilder assembly.");
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
@@ -458,7 +458,7 @@ namespace UnityCli.ProBuilder
                 .Prop("newFaceCount", newFaceCount)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.bridge-edges", result);
+            return result;
         }
     }
 
@@ -484,13 +484,13 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("connect-elements", "No ProBuilderMesh on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("connect-elements", "No ProBuilderMesh on target.");
 
             var edgeIndices = ProBuilderInput.IntArrayArg(context.InputJson, "edgeIndices");
             var edgePairs = ProBuilderInput.EdgePairArrayArg(context.InputJson, "edges");
@@ -499,12 +499,12 @@ namespace UnityCli.ProBuilder
             if ((edgeIndices == null || edgeIndices.Length == 0) &&
                 (edgePairs == null || edgePairs.Length == 0) &&
                 (faceIndices == null || faceIndices.Length == 0))
-                return ProBuilderErrors.SchemaInvalid("Either edgeIndices, edges, or faceIndices parameter is required for connect-elements.");
+                throw ProBuilderErrors.SchemaInvalid("Either edgeIndices, edges, or faceIndices parameter is required for connect-elements.");
 
             Undo.RecordObject(go, "ProBuilder Connect Elements");
             var connected = ProBuilderReflection.ConnectElements(mesh, edgeIndices, edgePairs, faceIndices);
             if (!connected)
-                return ProBuilderErrors.OperationFailed("connect-elements", "ConnectElements.Connect method not found or failed in ProBuilder assembly.");
+                throw ProBuilderErrors.OperationFailed("connect-elements", "ConnectElements.Connect method not found or failed in ProBuilder assembly.");
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
@@ -513,7 +513,7 @@ namespace UnityCli.ProBuilder
                 .Prop("connectedCount", 1)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.connect-elements", result);
+            return result;
         }
     }
 
@@ -539,25 +539,25 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("bevel-edges", "No ProBuilderMesh on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("bevel-edges", "No ProBuilderMesh on target.");
 
             var amount = ProBuilderInput.FloatArg(context.InputJson, "amount", 0.1f);
             var edgeIndices = ProBuilderInput.IntArrayArg(context.InputJson, "edgeIndices");
             var edgePairs = ProBuilderInput.EdgePairArrayArg(context.InputJson, "edges");
 
             if ((edgeIndices == null || edgeIndices.Length == 0) && (edgePairs == null || edgePairs.Length == 0))
-                return ProBuilderErrors.SchemaInvalid("edgeIndices or edges parameter is required for bevel-edges.");
+                throw ProBuilderErrors.SchemaInvalid("edgeIndices or edges parameter is required for bevel-edges.");
 
             Undo.RecordObject(go, "ProBuilder Bevel Edges");
             var modifiedEdgeCount = ProBuilderReflection.BevelEdges(mesh, edgeIndices, edgePairs, amount);
             if (modifiedEdgeCount == 0)
-                return ProBuilderErrors.OperationFailed("bevel-edges", "Bevel.BevelEdges method not found or failed in ProBuilder assembly.");
+                throw ProBuilderErrors.OperationFailed("bevel-edges", "Bevel.BevelEdges method not found or failed in ProBuilder assembly.");
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
@@ -566,7 +566,7 @@ namespace UnityCli.ProBuilder
                 .Prop("modifiedEdgeCount", modifiedEdgeCount)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.bevel-edges", result);
+            return result;
         }
     }
 
@@ -592,13 +592,13 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("duplicate-and-flip", "No ProBuilderMesh on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("duplicate-and-flip", "No ProBuilderMesh on target.");
 
             var faceIndices = ProBuilderInput.IntArrayArg(context.InputJson, "faceIndices");
             var faceCount = ProBuilderReflection.GetFaceCount(mesh);
@@ -608,7 +608,7 @@ namespace UnityCli.ProBuilder
                 : ProBuilderReflection.GetAllFaces(mesh);
 
             if (faces == null || faces.Length == 0)
-                return ProBuilderErrors.OperationFailed("duplicate-and-flip", "No faces found on target.");
+                throw ProBuilderErrors.OperationFailed("duplicate-and-flip", "No faces found on target.");
 
             Undo.RecordObject(go, "ProBuilder Duplicate and Flip");
             var duplicated = ProBuilderReflection.DuplicateAndFlip(mesh, faces);
@@ -626,7 +626,7 @@ namespace UnityCli.ProBuilder
                 .Prop("duplicatedCount", duplicatedCount)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.duplicate-and-flip", result);
+            return result;
         }
     }
 
@@ -652,11 +652,11 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var targets = ProBuilderInput.ResolveTargets(context.InputJson);
             if (targets == null || targets.Length < 2)
-                return ProBuilderErrors.SchemaInvalid("At least 2 targets required for combine-meshes.");
+                throw ProBuilderErrors.SchemaInvalid("At least 2 targets required for combine-meshes.");
 
             var name = ProBuilderInput.StringArg(context.InputJson, "name") ?? "ProBuilder_Combined";
 
@@ -666,12 +666,12 @@ namespace UnityCli.ProBuilder
             {
                 var pbMesh = ProBuilderReflection.GetProBuilderMesh(go);
                 if (pbMesh == null)
-                    return ProBuilderErrors.OperationFailed("combine-meshes", $"GameObject '{go.name}' does not have a ProBuilderMesh component.");
+                    throw ProBuilderErrors.OperationFailed("combine-meshes", $"GameObject '{go.name}' does not have a ProBuilderMesh component.");
                 pbMeshes.Add(pbMesh);
             }
 
             if (pbMeshes.Count < 2)
-                return ProBuilderErrors.SchemaInvalid("At least 2 ProBuilder meshes required for combine-meshes.");
+                throw ProBuilderErrors.SchemaInvalid("At least 2 ProBuilder meshes required for combine-meshes.");
 
             Undo.RecordObject(targets[0], "ProBuilder Combine Meshes");
 
@@ -713,7 +713,7 @@ namespace UnityCli.ProBuilder
                     })
                     .Prop("sourceCount", sources.Count)
                     .EndObject().ToString();
-                return ProBuilderErrors.Success("probuilder.combine-meshes", result);
+                return result;
             }
 
             // Success with ProBuilder CombineMeshes
@@ -731,7 +731,7 @@ namespace UnityCli.ProBuilder
                 })
                 .Prop("sourceCount", pbMeshes.Count)
                 .EndObject().ToString();
-            return ProBuilderErrors.Success("probuilder.combine-meshes", combinedResult);
+            return combinedResult;
         }
 
         private static string HierarchyPath(GameObject go)
@@ -765,11 +765,11 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var targets = ProBuilderInput.ResolveTargets(context.InputJson);
             if (targets == null || targets.Length < 2)
-                return ProBuilderErrors.SchemaInvalid("At least 2 targets required for merge-objects.");
+                throw ProBuilderErrors.SchemaInvalid("At least 2 targets required for merge-objects.");
 
             var name = ProBuilderInput.StringArg(context.InputJson, "name") ?? "ProBuilder_Merged";
             var autoConvert = ProBuilderInput.BoolArg(context.InputJson, "autoConvert", true);
@@ -791,7 +791,7 @@ namespace UnityCli.ProBuilder
                 }
                 else
                 {
-                    return ProBuilderErrors.OperationFailed("merge-objects", $"GameObject '{go.name}' does not have a ProBuilderMesh component and autoConvert is disabled.");
+                    throw ProBuilderErrors.OperationFailed("merge-objects", $"GameObject '{go.name}' does not have a ProBuilderMesh component and autoConvert is disabled.");
                 }
             }
 
@@ -800,12 +800,12 @@ namespace UnityCli.ProBuilder
             {
                 var converted = ProBuilderReflection.ConvertToProBuilderMesh(go);
                 if (converted == null)
-                    return ProBuilderErrors.OperationFailed("merge-objects", $"Failed to convert '{go.name}' to ProBuilder mesh.");
+                    throw ProBuilderErrors.OperationFailed("merge-objects", $"Failed to convert '{go.name}' to ProBuilder mesh.");
                 pbMeshes.Add(converted);
             }
 
             if (pbMeshes.Count < 2)
-                return ProBuilderErrors.SchemaInvalid("At least 2 ProBuilder meshes required after conversion.");
+                throw ProBuilderErrors.SchemaInvalid("At least 2 ProBuilder meshes required after conversion.");
 
             Undo.RecordObject(targets[0], "ProBuilder Merge Objects");
 
@@ -842,7 +842,7 @@ namespace UnityCli.ProBuilder
                            .Prop("path", HierarchyPath(mergedGo));
                     })
                     .EndObject().ToString();
-                return ProBuilderErrors.Success("probuilder.merge-objects", fallbackResult);
+                return fallbackResult;
             }
 
             ProBuilderReflection.RefreshMesh(pbMeshes[0]);
@@ -859,7 +859,7 @@ namespace UnityCli.ProBuilder
                 })
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.merge-objects", result);
+            return result;
         }
 
         private static string HierarchyPath(GameObject go)

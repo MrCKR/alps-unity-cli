@@ -37,17 +37,17 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("select-faces", "No ProBuilderMesh on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("select-faces", "No ProBuilderMesh on target.");
 
             var allFaces = ProBuilderReflection.GetAllFaces(mesh);
             if (allFaces == null)
-                return ProBuilderErrors.OperationFailed("select-faces", "Could not read faces from ProBuilderMesh.");
+                throw ProBuilderErrors.OperationFailed("select-faces", "Could not read faces from ProBuilderMesh.");
 
             var direction = ProBuilderInput.StringArg(context.InputJson, "direction");
             var flood = ProBuilderInput.BoolArg(context.InputJson, "flood");
@@ -90,7 +90,7 @@ namespace UnityCli.ProBuilder
                     case "bottom":
                         targetDir = Vector3.down; break;
                     default:
-                        return ProBuilderErrors.SchemaInvalid($"Unknown direction '{direction}'. Valid: north/south/east/west/up/down.");
+                        throw ProBuilderErrors.SchemaInvalid($"Unknown direction '{direction}'. Valid: north/south/east/west/up/down.");
                 }
 
                 var tolerance = 0.7f; // ~45 degrees
@@ -129,7 +129,7 @@ namespace UnityCli.ProBuilder
                 })
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.select-faces", result);
+            return result;
         }
     }
 
@@ -155,22 +155,22 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("set-face-material", "No ProBuilderMesh on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("set-face-material", "No ProBuilderMesh on target.");
 
             var materialPath = ProBuilderInput.StringArg(context.InputJson, "materialPath");
             if (string.IsNullOrEmpty(materialPath))
-                return ProBuilderErrors.SchemaInvalid("materialPath is required for set-face-material.");
+                throw ProBuilderErrors.SchemaInvalid("materialPath is required for set-face-material.");
 
             // Load the material
             var material = UnityEditor.AssetDatabase.LoadAssetAtPath<Material>(materialPath);
             if (material == null)
-                return ProBuilderErrors.OperationFailed("set-face-material", "Material not found at path: " + materialPath);
+                throw ProBuilderErrors.OperationFailed("set-face-material", "Material not found at path: " + materialPath);
 
             var faceIndices = ProBuilderInput.IntArrayArg(context.InputJson, "faceIndices");
             var faceCount = ProBuilderReflection.GetFaceCount(mesh);
@@ -209,7 +209,7 @@ namespace UnityCli.ProBuilder
                 .Prop("assignedFaceCount", assigned)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.set-face-material", result);
+            return result;
         }
     }
 
@@ -235,13 +235,13 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("set-face-color", "No ProBuilderMesh on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("set-face-color", "No ProBuilderMesh on target.");
 
             var r = ProBuilderInput.FloatArg(context.InputJson, "r", 1f);
             var g = ProBuilderInput.FloatArg(context.InputJson, "g", 1f);
@@ -257,7 +257,7 @@ namespace UnityCli.ProBuilder
                 : ProBuilderReflection.GetAllFaces(mesh);
 
             if (faces == null || faces.Length == 0)
-                return ProBuilderErrors.OperationFailed("set-face-color", "No faces found on target.");
+                throw ProBuilderErrors.OperationFailed("set-face-color", "No faces found on target.");
 
             Undo.RecordObject(go, "ProBuilder Set Face Color");
 
@@ -283,7 +283,7 @@ namespace UnityCli.ProBuilder
                 .Prop("coloredFaceCount", coloredCount)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.set-face-color", result);
+            return result;
         }
     }
 
@@ -309,13 +309,13 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("set-face-uvs", "No ProBuilderMesh on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("set-face-uvs", "No ProBuilderMesh on target.");
 
             var faceIndices = ProBuilderInput.IntArrayArg(context.InputJson, "faceIndices");
             var faceCount = ProBuilderReflection.GetFaceCount(mesh);
@@ -325,7 +325,7 @@ namespace UnityCli.ProBuilder
                 : ProBuilderReflection.GetAllFaces(mesh);
 
             if (faces == null || faces.Length == 0)
-                return ProBuilderErrors.OperationFailed("set-face-uvs", "No faces found on target.");
+                throw ProBuilderErrors.OperationFailed("set-face-uvs", "No faces found on target.");
 
             var scaleVal = ProBuilderInput.FloatArg(context.InputJson, "scale");
             var offsetU = ProBuilderInput.FloatArg(context.InputJson, "offsetU");
@@ -403,7 +403,7 @@ namespace UnityCli.ProBuilder
                 .Prop("updatedFaceCount", updated)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.set-face-uvs", result);
+            return result;
         }
     }
 }

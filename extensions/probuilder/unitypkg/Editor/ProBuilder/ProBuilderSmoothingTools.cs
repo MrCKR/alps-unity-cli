@@ -37,21 +37,21 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var existingMesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (existingMesh != null)
-                return ProBuilderErrors.OperationFailed("convert-to-probuilder", "Target already has a ProBuilderMesh component.");
+                throw ProBuilderErrors.OperationFailed("convert-to-probuilder", "Target already has a ProBuilderMesh component.");
 
             Undo.RecordObject(go, "ProBuilder Convert to ProBuilder");
 
             // Add ProBuilderMesh component
             var pbMesh = ProBuilderReflection.AddProBuilderMesh(go);
             if (pbMesh == null)
-                return ProBuilderErrors.OperationFailed("convert-to-probuilder", "Failed to add ProBuilderMesh component.");
+                throw ProBuilderErrors.OperationFailed("convert-to-probuilder", "Failed to add ProBuilderMesh component.");
 
             // Use MeshImporter to properly convert the mesh
             var imported = ProBuilderReflection.ConvertViaMeshImporter(go, pbMesh);
@@ -72,7 +72,7 @@ namespace UnityCli.ProBuilder
                 .Prop("faceCount", faceCount)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.convert-to-probuilder", result);
+            return result;
         }
     }
 
@@ -98,17 +98,17 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("set-smoothing", "No ProBuilderMesh on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("set-smoothing", "No ProBuilderMesh on target.");
 
             var smoothingGroup = ProBuilderInput.IntArg(context.InputJson, "smoothingGroup", -1);
             if (smoothingGroup < 0)
-                return ProBuilderErrors.SchemaInvalid("smoothingGroup must be a non-negative integer.");
+                throw ProBuilderErrors.SchemaInvalid("smoothingGroup must be a non-negative integer.");
 
             var faceIndices = ProBuilderInput.IntArrayArg(context.InputJson, "faceIndices");
             var faceCount = ProBuilderReflection.GetFaceCount(mesh);
@@ -127,7 +127,7 @@ namespace UnityCli.ProBuilder
                 .Prop("modifiedFaceCount", modified)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.set-smoothing", result);
+            return result;
         }
     }
 
@@ -153,13 +153,13 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("auto-smooth", "No ProBuilderMesh on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("auto-smooth", "No ProBuilderMesh on target.");
 
             var angleThreshold = ProBuilderInput.FloatArg(context.InputJson, "angleThreshold", 30f);
             var faceIndices = ProBuilderInput.IntArrayArg(context.InputJson, "faceIndices");
@@ -179,7 +179,7 @@ namespace UnityCli.ProBuilder
                 .Prop("smoothedFaceCount", smoothed)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.auto-smooth", result);
+            return result;
         }
     }
 
@@ -205,13 +205,13 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("center-pivot", "No ProBuilderMesh on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("center-pivot", "No ProBuilderMesh on target.");
 
             var oldPivot = go.transform.position;
             Undo.RecordObject(go.transform, "ProBuilder Center Pivot");
@@ -233,7 +233,7 @@ namespace UnityCli.ProBuilder
                 .PropObject("newPosition", o => o.Prop("x", newPivot.x).Prop("y", newPivot.y).Prop("z", newPivot.z))
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.center-pivot", result);
+            return result;
         }
     }
 
@@ -259,13 +259,13 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("freeze-transform", "No ProBuilderMesh on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("freeze-transform", "No ProBuilderMesh on target.");
 
             var vertexCount = ProBuilderReflection.GetVertexCount(mesh);
             Undo.RecordObject(go, "ProBuilder Freeze Transform");
@@ -309,7 +309,7 @@ namespace UnityCli.ProBuilder
                 .Prop("bakedVertexCount", vertexCount)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.freeze-transform", result);
+            return result;
         }
     }
 
@@ -335,13 +335,13 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("set-pivot", "No ProBuilderMesh on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("set-pivot", "No ProBuilderMesh on target.");
 
             var x = ProBuilderInput.FloatArg(context.InputJson, "x", go.transform.position.x);
             var y = ProBuilderInput.FloatArg(context.InputJson, "y", go.transform.position.y);
@@ -356,7 +356,7 @@ namespace UnityCli.ProBuilder
                 .PropObject("newPivotPosition", o => o.Prop("x", x).Prop("y", y).Prop("z", z))
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.set-pivot", result);
+            return result;
         }
     }
 
@@ -382,13 +382,13 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("repair-mesh", "No ProBuilderMesh on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("repair-mesh", "No ProBuilderMesh on target.");
 
             // Validate first to count issues
             var validationResult = ProBuilderReflection.Validate(mesh);
@@ -454,7 +454,7 @@ namespace UnityCli.ProBuilder
                 .Prop("remainingIssues", remainingIssues)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.repair-mesh", result);
+            return result;
         }
     }
 }

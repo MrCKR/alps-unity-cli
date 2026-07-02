@@ -340,9 +340,23 @@ namespace UnityCli
                     LogPath = LogPath()
                 });
             }
+            catch (BridgeCommandException bce)
+            {
+                // runtime tool handler 主动抛出的结构化错误：直接转成错误 envelope，
+                // 避免被外层 SuccessJson 误包成 ok:true（旧行为会吞掉错误）。
+                WriteLog("runtime_tool_error requestId=" + request.RequestId + " name=" + name + " error=" + bce.Code);
+                return BridgeExceptionErrorJson(bce);
+            }
             catch (TargetInvocationException exception)
             {
+                // 反射调用路径：内层可能是结构化 BridgeCommandException，需正确解包。
                 var inner = exception.InnerException ?? exception;
+                var innerBce = inner as BridgeCommandException;
+                if (innerBce != null)
+                {
+                    WriteLog("runtime_tool_error requestId=" + request.RequestId + " name=" + name + " error=" + innerBce.Code);
+                    return BridgeExceptionErrorJson(innerBce);
+                }
                 return ErrorJson("E_TOOL_EXECUTION_FAILED", inner.GetType().Name + ": " + inner.Message,
                     "Check Unity Console and UnityCliBridge.log with the returned requestId.");
             }

@@ -42,7 +42,7 @@ namespace UnityCli.ProBuilder
                 .Prop("installed", available)
                 .Prop("meshTypeAvailable", meshTypeAvailable)
                 .EndObject().ToString();
-            return ProBuilderErrors.Success("probuilder.ping", result);
+            return result;
         }
     }
 
@@ -68,15 +68,15 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
             if (go == null)
-                return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+                throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null)
-                return ProBuilderErrors.OperationFailed("mesh-info", "GameObject does not have a ProBuilderMesh component.");
+                throw ProBuilderErrors.OperationFailed("mesh-info", "GameObject does not have a ProBuilderMesh component.");
 
             var faceCount = ProBuilderReflection.GetFaceCount(mesh);
             var vertexCount = ProBuilderReflection.GetVertexCount(mesh);
@@ -89,7 +89,7 @@ namespace UnityCli.ProBuilder
                 .PropRaw("materials", MaterialsJson(go))
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.mesh-info", result);
+            return result;
         }
 
         private static string BoundsJson(GameObject go)
@@ -150,15 +150,15 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
             if (go == null)
-                return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+                throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null)
-                return ProBuilderErrors.OperationFailed("validate-mesh", "GameObject does not have a ProBuilderMesh component.");
+                throw ProBuilderErrors.OperationFailed("validate-mesh", "GameObject does not have a ProBuilderMesh component.");
 
             var validationResult = ProBuilderReflection.Validate(mesh);
             var issues = new List<string>();
@@ -196,7 +196,7 @@ namespace UnityCli.ProBuilder
                 })
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.validate-mesh", result);
+            return result;
         }
     }
 }

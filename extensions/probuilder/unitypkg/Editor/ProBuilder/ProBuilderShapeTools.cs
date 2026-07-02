@@ -36,13 +36,13 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var shapeType = ProBuilderInput.StringArg(context.InputJson, "shapeType");
             if (string.IsNullOrEmpty(shapeType))
-                return ProBuilderErrors.SchemaInvalid("shapeType is required for probuilder.create-shape.");
+                throw ProBuilderErrors.SchemaInvalid("shapeType is required for probuilder.create-shape.");
             if (!IsSupportedShape(shapeType))
-                return ProBuilderErrors.SchemaInvalid("Unsupported shapeType for probuilder.create-shape: " + shapeType + ". Supported values: " + SupportedShapeValues + ".");
+                throw ProBuilderErrors.SchemaInvalid("Unsupported shapeType for probuilder.create-shape: " + shapeType + ". Supported values: " + SupportedShapeValues + ".");
 
             var name = ProBuilderInput.StringArg(context.InputJson, "name") ?? ("ProBuilder_" + shapeType);
             var x = ProBuilderInput.FloatArg(context.InputJson, "x", 0f);
@@ -57,7 +57,7 @@ namespace UnityCli.ProBuilder
                 var shape = NormalizeShape(shapeType);
                 var primitive = CreateUnityPrimitive(shape);
                 if (primitive == null)
-                    return ProBuilderErrors.OperationFailed("create-shape", "Failed to create shape: " + shapeType);
+                    throw ProBuilderErrors.OperationFailed("create-shape", "Failed to create shape: " + shapeType);
                 go = primitive;
                 go.transform.position = position;
                 ProBuilderReflection.AddProBuilderMesh(go);
@@ -93,7 +93,7 @@ namespace UnityCli.ProBuilder
                 })
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.create-shape", result);
+            return result;
         }
 
         private const string SupportedShapeValues = "Cube, Cylinder, Sphere, Plane, Cone, Torus, Pipe, Arch, Stair, CurvedStair, Door, Prism";
@@ -179,7 +179,7 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var name = ProBuilderInput.StringArg(context.InputJson, "name") ?? "ProBuilder_PolyShape";
             var height = ProBuilderInput.FloatArg(context.InputJson, "extrudeHeight", 1f);
@@ -187,7 +187,7 @@ namespace UnityCli.ProBuilder
 
             var points = ProBuilderInput.Vector3ListArg(context.InputJson, "points");
             if (points == null || points.Count < 3)
-                return ProBuilderErrors.SchemaInvalid("At least 3 points are required for create-poly-shape.");
+                throw ProBuilderErrors.SchemaInvalid("At least 3 points are required for create-poly-shape.");
 
             // Create a new GameObject with ProBuilderMesh via reflection
             var go = new GameObject(name);
@@ -197,7 +197,7 @@ namespace UnityCli.ProBuilder
             if (pbMesh == null)
             {
                 UnityEngine.Object.DestroyImmediate(go);
-                return ProBuilderErrors.OperationFailed("create-poly-shape", "Failed to add ProBuilderMesh component.");
+                throw ProBuilderErrors.OperationFailed("create-poly-shape", "Failed to add ProBuilderMesh component.");
             }
 
             // Use AppendElements.CreateShapeFromPolygon via reflection
@@ -205,7 +205,7 @@ namespace UnityCli.ProBuilder
             if (!created)
             {
                 UnityEngine.Object.DestroyImmediate(go);
-                return ProBuilderErrors.OperationFailed("create-poly-shape", "CreateShapeFromPolygon method not found or failed in ProBuilder assembly.");
+                throw ProBuilderErrors.OperationFailed("create-poly-shape", "CreateShapeFromPolygon method not found or failed in ProBuilder assembly.");
             }
 
             ProBuilderReflection.RefreshMesh(pbMesh);
@@ -225,7 +225,7 @@ namespace UnityCli.ProBuilder
                 })
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.create-poly-shape", result);
+            return result;
         }
 
         private static string HierarchyPath(GameObject go)

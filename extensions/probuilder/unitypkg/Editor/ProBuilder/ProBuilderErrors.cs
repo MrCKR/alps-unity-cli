@@ -1,9 +1,6 @@
 #if UNITY_EDITOR
-using System;
 using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
-using System.Reflection;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -11,127 +8,72 @@ using UnityEngine;
 namespace UnityCli.ProBuilder
 {
     /// <summary>
-    /// Common error JSON helpers for ProBuilder tool handlers.
-    /// All errors use unified envelope with E_EXTENSION_DEPENDENCY_MISSING,
-    /// E_PROBUILDER_PACKAGE_NOT_FOUND, E_TARGET_NOT_FOUND, E_SCHEMA_INVALID,
-    /// E_PROBUILDER_OPERATION_FAILED and snake_case next_actions.
+    /// ProBuilder 工具 handler 的结构化错误工厂。
+    /// 统一返回 <see cref="UnityCliBridge.BridgeCommandException"/>，由调用处 throw 出去，
+    /// 经 project-tool.run / runtime-tool.run 的 catch 块转成标准错误 envelope。
+    /// 错误码沿用 E_EXTENSION_DEPENDENCY_MISSING / E_PROBUILDER_PACKAGE_NOT_FOUND /
+    /// E_TARGET_NOT_FOUND / E_SCHEMA_INVALID / E_PROBUILDER_OPERATION_FAILED，
+    /// details 与多个 next_actions 通过 exception 字段透传。
     /// </summary>
     internal static class ProBuilderErrors
     {
-        public static string PackageNotAvailable()
+        public static UnityCliBridge.BridgeCommandException PackageNotAvailable()
         {
-            return new UnityCliJsonWriter().BeginObject()
-                .Prop("ok", false)
-                .PropObject("error", error =>
-                {
-                    error.Prop("code", "E_EXTENSION_DEPENDENCY_MISSING")
-                        .Prop("message", "ProBuilder package (com.unity.probuilder) is not installed or not available.")
-                        .PropObject("details", d =>
-                        {
-                            d.Prop("packageName", "com.unity.probuilder")
-                             .Prop("available", false);
-                        });
-                })
-                .PropArray("nextActions", arr =>
-                {
-                    arr.Value("install_com_unity_probuilder_via_package_manager");
-                    arr.Value("run_unity_cli_extensions_doctor_to_verify_setup");
-                })
+            var details = new UnityCliJsonWriter().BeginObject()
+                .Prop("packageName", "com.unity.probuilder")
+                .Prop("available", false)
                 .EndObject().ToString();
+            return new UnityCliBridge.BridgeCommandException(
+                "E_EXTENSION_DEPENDENCY_MISSING",
+                "ProBuilder package (com.unity.probuilder) is not installed or not available.",
+                details,
+                new[] { "install_com_unity_probuilder_via_package_manager", "run_unity_cli_extensions_doctor_to_verify_setup" });
         }
 
-        public static string TargetNotFound(string target)
+        public static UnityCliBridge.BridgeCommandException TargetNotFound(string target)
         {
-            return new UnityCliJsonWriter().BeginObject()
-                .Prop("ok", false)
-                .PropObject("error", error =>
-                {
-                    error.Prop("code", "E_TARGET_NOT_FOUND")
-                        .Prop("message", "ProBuilder target not found: " + (target ?? "(null)"))
-                        .PropObject("details", d =>
-                        {
-                            d.Prop("target", target ?? "");
-                        });
-                })
-                .PropArray("nextActions", arr =>
-                {
-                    arr.Value("verify_target_gameobject_exists_in_active_scene");
-                    arr.Value("use_scene_hierarchy_path_or_instance_id");
-                })
+            var details = new UnityCliJsonWriter().BeginObject()
+                .Prop("target", target ?? "")
                 .EndObject().ToString();
+            return new UnityCliBridge.BridgeCommandException(
+                "E_TARGET_NOT_FOUND",
+                "ProBuilder target not found: " + (target ?? "(null)"),
+                details,
+                new[] { "verify_target_gameobject_exists_in_active_scene", "use_scene_hierarchy_path_or_instance_id" });
         }
 
-        public static string SchemaInvalid(string message)
+        public static UnityCliBridge.BridgeCommandException SchemaInvalid(string message)
         {
-            return new UnityCliJsonWriter().BeginObject()
-                .Prop("ok", false)
-                .PropObject("error", error =>
-                {
-                    error.Prop("code", "E_SCHEMA_INVALID")
-                        .Prop("message", message ?? "Input schema validation failed.")
-                        .PropRaw("details", "{}");
-                })
-                .PropArray("nextActions", arr =>
-                {
-                    arr.Value("check_tool_input_schema_with_tools_describe");
-                    arr.Value("ensure_all_required_properties_are_provided");
-                })
-                .EndObject().ToString();
+            return new UnityCliBridge.BridgeCommandException(
+                "E_SCHEMA_INVALID",
+                message ?? "Input schema validation failed.",
+                "{}",
+                new[] { "check_tool_input_schema_with_tools_describe", "ensure_all_required_properties_are_provided" });
         }
 
-        public static string OperationFailed(string operation, string reason)
+        public static UnityCliBridge.BridgeCommandException OperationFailed(string operation, string reason)
         {
-            return new UnityCliJsonWriter().BeginObject()
-                .Prop("ok", false)
-                .PropObject("error", error =>
-                {
-                    error.Prop("code", "E_PROBUILDER_OPERATION_FAILED")
-                        .Prop("message", "ProBuilder operation '" + (operation ?? "unknown") + "' failed: " + (reason ?? "unknown error"))
-                        .PropObject("details", d =>
-                        {
-                            d.Prop("operation", operation ?? "unknown")
-                             .Prop("reason", reason ?? "unknown");
-                        });
-                })
-                .PropArray("nextActions", arr =>
-                {
-                    arr.Value("check_unity_console_for_errors");
-                    arr.Value("verify_probuilder_mesh_is_valid");
-                    arr.Value("try_repair_mesh_before_operation");
-                })
+            var details = new UnityCliJsonWriter().BeginObject()
+                .Prop("operation", operation ?? "unknown")
+                .Prop("reason", reason ?? "unknown")
                 .EndObject().ToString();
+            return new UnityCliBridge.BridgeCommandException(
+                "E_PROBUILDER_OPERATION_FAILED",
+                "ProBuilder operation '" + (operation ?? "unknown") + "' failed: " + (reason ?? "unknown error"),
+                details,
+                new[] { "check_unity_console_for_errors", "verify_probuilder_mesh_is_valid", "try_repair_mesh_before_operation" });
         }
 
-        public static string PackageNotFound(string message)
+        public static UnityCliBridge.BridgeCommandException PackageNotFound(string message)
         {
-            return new UnityCliJsonWriter().BeginObject()
-                .Prop("ok", false)
-                .PropObject("error", error =>
-                {
-                    error.Prop("code", "E_PROBUILDER_PACKAGE_NOT_FOUND")
-                        .Prop("message", message ?? "Unity ProBuilder package is not installed.")
-                        .PropObject("details", d =>
-                        {
-                            d.Prop("packageName", "com.unity.probuilder");
-                        });
-                })
-                .PropArray("nextActions", arr =>
-                {
-                    arr.Value("install_com_unity_probuilder_with_unity_cli_package_install");
-                })
+            var details = new UnityCliJsonWriter().BeginObject()
+                .Prop("packageName", "com.unity.probuilder")
                 .EndObject().ToString();
-        }
-
-        /// <summary>
-        /// Wrap a successful result in the standard ProBuilder success envelope.
-        /// </summary>
-        public static string Success(string toolName, string resultJson)
-        {
-            return new UnityCliJsonWriter().BeginObject()
-                .Prop("ok", true)
-                .Prop("tool", toolName)
-                .PropRaw("result", string.IsNullOrEmpty(resultJson) ? "{}" : resultJson)
-                .EndObject().ToString();
+            return new UnityCliBridge.BridgeCommandException(
+                "E_PROBUILDER_PACKAGE_NOT_FOUND",
+                message ?? "Unity ProBuilder package is not installed.",
+                details,
+                new[] { "install_com_unity_probuilder_with_unity_cli_package_install" });
         }
     }
 }

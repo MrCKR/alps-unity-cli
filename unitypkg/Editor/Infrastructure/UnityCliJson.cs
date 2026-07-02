@@ -177,6 +177,43 @@ namespace UnityCli
             return UnityCliEnvelope.ErrorWithDetails(code, message, detailsJson, nextAction);
         }
 
+        /// <summary>
+        /// 将 handler 抛出的 BridgeCommandException 转为统一错误 envelope。
+        /// 非 transient 时优先透传 details 与多个 nextActions，保留结构化错误信息；
+        /// transient 时透传 retry_after_ms。project-tool.run / runtime-tool.run 的
+        /// 结构化错误收口统一走这里，避免错误被外层 SuccessJson 误包成 ok:true。
+        /// </summary>
+        private static string BridgeExceptionErrorJson(BridgeCommandException exception)
+        {
+            var nextActions = exception.NextActions;
+            var primaryNextAction = exception.NextAction ?? "Check Unity Console and UnityCliBridge.log with the returned requestId.";
+            if (exception.Transient)
+            {
+                return TransientErrorJson(exception.Code, exception.Message, primaryNextAction, exception.RetryAfterMs > 0 ? exception.RetryAfterMs : 5000);
+            }
+            // 有 details 或多个 nextActions 时，使用完整 envelope 以保留结构化信息。
+            var hasDetails = !string.IsNullOrEmpty(exception.DetailsJson);
+            var hasMultipleActions = nextActions != null && nextActions.Count > 1;
+            if (hasDetails || hasMultipleActions)
+            {
+                IEnumerable<string> actions;
+                if (nextActions != null && nextActions.Count > 0)
+                {
+                    actions = nextActions;
+                }
+                else if (!string.IsNullOrEmpty(exception.NextAction))
+                {
+                    actions = new[] { exception.NextAction };
+                }
+                else
+                {
+                    actions = new[] { primaryNextAction };
+                }
+                return UnityCliEnvelope.Error(null, exception.Code, exception.Message, exception.DetailsJson, actions);
+            }
+            return ErrorJson(exception.Code, exception.Message, primaryNextAction);
+        }
+
         private static string TargetAmbiguousErrorJson(string label, string target, TargetResolution resolution, string nextAction)
         {
             return UnityCliEnvelope.TargetAmbiguous(label, target, resolution.Matches.Count, TargetMatchesJson(resolution.Matches), nextAction);

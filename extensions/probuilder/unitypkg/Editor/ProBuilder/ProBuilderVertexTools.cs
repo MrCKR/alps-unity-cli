@@ -38,17 +38,17 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("merge-vertices", "No ProBuilderMesh on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("merge-vertices", "No ProBuilderMesh on target.");
 
             var vertexIndices = ProBuilderInput.IntArrayArg(context.InputJson, "vertexIndices");
             if (vertexIndices == null || vertexIndices.Length < 2)
-                return ProBuilderErrors.SchemaInvalid("At least 2 vertexIndices required for merge-vertices.");
+                throw ProBuilderErrors.SchemaInvalid("At least 2 vertexIndices required for merge-vertices.");
 
             var collapseToFirst = ProBuilderInput.BoolArg(context.InputJson, "collapseToFirst");
 
@@ -61,7 +61,7 @@ namespace UnityCli.ProBuilder
                 .Prop("mergedVertexCount", merged)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.merge-vertices", result);
+            return result;
         }
     }
 
@@ -87,13 +87,13 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("weld-vertices", "No ProBuilderMesh on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("weld-vertices", "No ProBuilderMesh on target.");
 
             var vertexIndices = ProBuilderInput.IntArrayArg(context.InputJson, "vertexIndices");
             var radius = ProBuilderInput.FloatArg(context.InputJson, "radius", 0.01f);
@@ -107,7 +107,7 @@ namespace UnityCli.ProBuilder
                 .Prop("weldedCount", welded)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.weld-vertices", result);
+            return result;
         }
     }
 
@@ -133,17 +133,17 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("split-vertices", "No ProBuilderMesh on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("split-vertices", "No ProBuilderMesh on target.");
 
             var vertexIndices = ProBuilderInput.IntArrayArg(context.InputJson, "vertexIndices");
             if (vertexIndices == null || vertexIndices.Length == 0)
-                return ProBuilderErrors.SchemaInvalid("vertexIndices is required for split-vertices.");
+                throw ProBuilderErrors.SchemaInvalid("vertexIndices is required for split-vertices.");
 
             Undo.RecordObject(go, "ProBuilder Split Vertices");
             var split = ProBuilderReflection.SplitVerticesWithList(mesh, vertexIndices);
@@ -154,7 +154,7 @@ namespace UnityCli.ProBuilder
                 .Prop("splitCount", split)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.split-vertices", result);
+            return result;
         }
     }
 
@@ -180,17 +180,17 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("move-vertices", "No ProBuilderMesh on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("move-vertices", "No ProBuilderMesh on target.");
 
             var vertexIndices = ProBuilderInput.IntArrayArg(context.InputJson, "vertexIndices");
             if (vertexIndices == null || vertexIndices.Length == 0)
-                return ProBuilderErrors.SchemaInvalid("vertexIndices is required for move-vertices.");
+                throw ProBuilderErrors.SchemaInvalid("vertexIndices is required for move-vertices.");
 
             var x = ProBuilderInput.FloatArg(context.InputJson, "x", 0f);
             var y = ProBuilderInput.FloatArg(context.InputJson, "y", 0f);
@@ -206,7 +206,7 @@ namespace UnityCli.ProBuilder
                 .Prop("movedCount", moved)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.move-vertices", result);
+            return result;
         }
     }
 
@@ -232,13 +232,13 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("insert-vertex", "No ProBuilderMesh on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("insert-vertex", "No ProBuilderMesh on target.");
 
             var x = ProBuilderInput.FloatArg(context.InputJson, "x", 0f);
             var y = ProBuilderInput.FloatArg(context.InputJson, "y", 0f);
@@ -273,7 +273,7 @@ namespace UnityCli.ProBuilder
                 .Prop("insertedVertexIndex", insertedIndex)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.insert-vertex", result);
+            return result;
         }
     }
 
@@ -299,30 +299,30 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("append-vertices-to-edge", "No ProBuilderMesh on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("append-vertices-to-edge", "No ProBuilderMesh on target.");
 
             var count = ProBuilderInput.IntArg(context.InputJson, "count", 1);
             var edgeIndices = ProBuilderInput.IntArrayArg(context.InputJson, "edgeIndices");
             var edgePairs = ProBuilderInput.EdgePairArrayArg(context.InputJson, "edges");
 
             if ((edgeIndices == null || edgeIndices.Length == 0) && (edgePairs == null || edgePairs.Length == 0))
-                return ProBuilderErrors.SchemaInvalid("edgeIndices or edges parameter is required for append-vertices-to-edge.");
+                throw ProBuilderErrors.SchemaInvalid("edgeIndices or edges parameter is required for append-vertices-to-edge.");
 
             Undo.RecordObject(go, "ProBuilder Append Vertices");
 
             var edgeArray = ProBuilderReflection.ResolveEdges(mesh, edgeIndices, edgePairs);
             if (edgeArray == null || edgeArray.Length == 0)
-                return ProBuilderErrors.OperationFailed("append-vertices-to-edge", "Could not resolve edges from input.");
+                throw ProBuilderErrors.OperationFailed("append-vertices-to-edge", "Could not resolve edges from input.");
 
             var appended = ProBuilderReflection.AppendVerticesToEdge(mesh, edgeArray, count);
             if (!appended)
-                return ProBuilderErrors.OperationFailed("append-vertices-to-edge", "AppendElements.AppendVerticesToEdge method not found or failed in ProBuilder assembly.");
+                throw ProBuilderErrors.OperationFailed("append-vertices-to-edge", "AppendElements.AppendVerticesToEdge method not found or failed in ProBuilder assembly.");
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
@@ -331,7 +331,7 @@ namespace UnityCli.ProBuilder
                 .Prop("insertedCount", count * edgeArray.Length)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.append-vertices-to-edge", result);
+            return result;
         }
     }
 
@@ -357,24 +357,24 @@ namespace UnityCli.ProBuilder
         public static string Execute(UnityCliProjectToolContext context)
         {
             if (!ProBuilderReflection.IsAvailable)
-                return ProBuilderErrors.PackageNotAvailable();
+                throw ProBuilderErrors.PackageNotAvailable();
 
             var go = ProBuilderInput.ResolveTarget(context.InputJson);
-            if (go == null) return ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
+            if (go == null) throw ProBuilderErrors.TargetNotFound(ProBuilderInput.StringArg(context.InputJson, "target"));
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
-            if (mesh == null) return ProBuilderErrors.OperationFailed("create-polygon", "No ProBuilderMesh on target.");
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("create-polygon", "No ProBuilderMesh on target.");
 
             var vertexIndices = ProBuilderInput.IntArrayArg(context.InputJson, "vertexIndices");
             if (vertexIndices == null || vertexIndices.Length < 3)
-                return ProBuilderErrors.SchemaInvalid("At least 3 vertexIndices required for create-polygon.");
+                throw ProBuilderErrors.SchemaInvalid("At least 3 vertexIndices required for create-polygon.");
 
             var unordered = ProBuilderInput.BoolArg(context.InputJson, "unordered", true);
 
             Undo.RecordObject(go, "ProBuilder Create Polygon");
             var created = ProBuilderReflection.CreatePolygon(mesh, vertexIndices, unordered);
             if (!created)
-                return ProBuilderErrors.OperationFailed("create-polygon", "AppendElements.CreatePolygon method not found or failed in ProBuilder assembly.");
+                throw ProBuilderErrors.OperationFailed("create-polygon", "AppendElements.CreatePolygon method not found or failed in ProBuilder assembly.");
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
@@ -384,7 +384,7 @@ namespace UnityCli.ProBuilder
                 .Prop("newFaceIndex", faceCount - 1)
                 .EndObject().ToString();
 
-            return ProBuilderErrors.Success("probuilder.create-polygon", result);
+            return result;
         }
     }
 }
