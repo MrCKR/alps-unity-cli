@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System;
 using System.Collections.Generic;
 
 namespace UnityCli
@@ -84,5 +85,13 @@ namespace UnityCli
         public string Description { get; set; }
         public object Input { get; set; }   // 运行时为 TReq 实例;框架用 UnityCliSerializer.Serialize 展示
     }
+
+    /// <summary>
+    /// 标记 Request/Result 属性为 schema 必填。
+    /// Unity 2022.3 默认 C# 9.0,不支持 C# 11 `required` 关键字,改用本特性显式标记。
+    /// 设计依据:.plan/自定义工具定义规范.md(required→schema 必填)。
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Property, AllowMultiple = false, Inherited = true)]
+    public sealed class UnityCliRequiredAttribute : Attribute { }
 }
 #endif

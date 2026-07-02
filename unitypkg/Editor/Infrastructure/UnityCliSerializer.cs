@@ -158,10 +158,16 @@ namespace UnityCli
         /// </summary>
         public static T Deserialize<T>(string json)
         {
-            if (string.IsNullOrEmpty(json)) return default(T);
+            return (T)Deserialize(json, typeof(T));
+        }
+
+        /// <summary>非泛型重载:用运行时 Type 反序列化(供 registry 在泛型类型参数为 Type 变量时使用)。</summary>
+        public static object Deserialize(string json, Type targetType)
+        {
+            if (string.IsNullOrEmpty(json)) return GetDefault(targetType);
             var index = 0;
             var token = ParseToken(json, ref index);
-            return (T)ConvertToken(token, typeof(T));
+            return ConvertToken(token, targetType);
         }
 
         // ─── token tree ───────────────────────────────────────────────────

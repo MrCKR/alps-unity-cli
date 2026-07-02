@@ -11,21 +11,25 @@ namespace UnityCli.Samples
     /// - Describe() 只声明人写字段,schema 由框架从 Request/Result 反射派生
     /// - Execute(Request, ctx): Result,结构体进结构体出,机制消灭手拼
     /// 这是首次真实使用 UnityCliSerializer.Serialize/Deserialize 往返(阶段1遗留验证)。
+    ///
+    /// 注:用 sealed class 而非 record struct(Unity 2022.3 默认 C# 9.0 不支持 record struct)。
+    /// 必填字段用 [UnityCliRequired] 标记(C# 9.0 不支持 required 关键字)。
+    /// 属性用 set 而非 init(Unity 2022.3 缺 IsExternalInit shim)。
     /// </summary>
     public class SampleEchoTool : IUnityCliTool<SampleEchoTool.Request, SampleEchoTool.Result>
     {
         // ── 协议类型:嵌套 ──
-        public readonly record struct Request
+        public sealed class Request
         {
-            public required string Message { get; init; }   // required → schema 必填
-            public string? Note { get; init; }              // 可选 → 无值不发(proto3)
+            [UnityCliRequired] public string Message { get; set; }   // 必填 → schema required
+            public string Note { get; set; }                          // 引用类型默认可空 → 可选,无值不发(proto3)
         }
 
-        public readonly record struct Result
+        public sealed class Result
         {
-            public string RequestId { get; init; }
-            public string Message { get; init; }
-            public string? Note { get; init; }
+            public string RequestId { get; set; }
+            public string Message { get; set; }
+            public string Note { get; set; }
         }
 
         // ── desc:Describe() 方法,只声明人写字段,不含 schema ──

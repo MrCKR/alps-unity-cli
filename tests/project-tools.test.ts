@@ -105,7 +105,7 @@ test("Unity C# custom tool registry supports IUnityCliTool interface descriptors
   assert.match(sample, /class SampleEchoTool : IUnityCliTool</);
   assert.match(sample, /public ToolDescriptor Describe\(\)/);
   assert.match(sample, /public Result Execute\(Request request, UnityCliProjectToolContext ctx\)/);
-  assert.match(sample, /required string Message/);
+  assert.match(sample, /\[UnityCliRequired\] public string Message/);
   assert.doesNotMatch(sample, /\[UnityCliTool\(/);
   assert.doesNotMatch(sample, /InputSchema\s*=\s*"/);
   assert.doesNotMatch(sample, /manifest\.json|config\.json|\.yaml|\.yml/);

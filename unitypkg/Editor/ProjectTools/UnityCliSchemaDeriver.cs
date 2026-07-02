@@ -124,22 +124,15 @@ namespace UnityCli
         // C# required 修饰符(required 关键字)→ schema 必填
         private static bool IsRequired(PropertyInfo prop)
         {
-            // .NET 7+ 的 required 修饰符通过 IsRequiredMetadata 检测;兼容老版本无此 API 时退化为必填判定。
-            var isRequiredProp = prop.GetType().GetProperty("IsRequired");
-            if (isRequiredProp != null)
-            {
-                return (bool)isRequiredProp.GetValue(prop, null);
-            }
-            // 兜底:无 required 修饰时,非可空引用类型视为必填( conservative )
-            return !IsNullable(prop.PropertyType, prop);
+            // Unity 2022.3 默认 C# 9.0 不支持 required 关键字,改用 [UnityCliRequired] 特性显式标记。
+            // 必填判定:属性带 [UnityCliRequired] 特性 → required。
+            return prop.IsDefined(typeof(UnityCliRequiredAttribute), true);
         }
 
-        // 可空:Nullable<T> 或 可空引用类型(NullableAttribute)
+        // 可空:Nullable<T> → 可空。引用类型默认可空(开发者可用 [UnityCliRequired] 标记必填);值类型非 Nullable → 非可空。
         private static bool IsNullable(Type type, PropertyInfo prop)
         {
             if (Nullable.GetUnderlyingType(type) != null) return true;
-            // 可空引用类型通过 NullableAttribute 检测(C# 8+ nullable context)
-            // 简化:属性有 [Nullable] 或类型为引用类型且无 required → 视为可空(保守:引用类型默认可选)
             if (!type.IsValueType) return true;
             return false;
         }

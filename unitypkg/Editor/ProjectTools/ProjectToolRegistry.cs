@@ -272,8 +272,8 @@ namespace UnityCli
                 ExpectedFingerprint = descriptor.Fingerprint,
                 Execute = delegate(UnityCliProjectToolContext context)
                 {
-                    // 输入:JSON → TReq(反序列化,废除 StringArg 正则刮)
-                    var req = UnityCliSerializer.Deserialize<TReq>(context.InputJson);
+                    // 输入:JSON → TReq(反序列化,废除 StringArg 正则刮)。用非泛型重载(运行时 Type)。
+                    var req = UnityCliSerializer.Deserialize(context.InputJson, reqType);
                     // 调 handler(传 ctx)
                     var result = executeMethod.Invoke(instance, new object[] { req, context });
                     // 输出:TRes → JSON(反射序列化)
