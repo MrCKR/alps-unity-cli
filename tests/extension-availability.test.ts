@@ -713,14 +713,13 @@ test("builtinToolGroups does not include probuilder or vfx", () => {
   assert.ok(!groups.includes("vfx"), "vfx should NOT be in core groups");
 });
 
-test("tools group list without --project does not include extension tools", async () => {
-  const result = await handleToolsCommand("group", ["list", "scene"], {}, emptyRuntime, requestId);
+test("tools group list without --project exposes extension descriptors", async () => {
+  const result = await handleToolsCommand("group", ["list", "probuilder"], {}, emptyRuntime, requestId);
   assert.equal(result.ok, true);
-  const data = result.data as { tools: Array<{ name: string; group: string }> };
-  const probuilderTools = data.tools.filter((t) => t.group === "probuilder");
-  const vfxTools = data.tools.filter((t) => t.group === "vfx");
-  assert.equal(probuilderTools.length, 0, "ProBuilder tools should NOT appear without --project");
-  assert.equal(vfxTools.length, 0, "VFX tools should NOT appear without --project");
+  const data = result.data as { tools: Array<{ name: string; group: string; source: string }> };
+  assert.equal(data.tools.length, 36);
+  assert.ok(data.tools.every((t) => t.group === "probuilder"));
+  assert.ok(data.tools.every((t) => t.source === "extension"));
 });
 
 test("tools group list with --project includes extension tools when packages installed", async () => {
@@ -735,39 +734,34 @@ test("tools group list with --project includes extension tools when packages ins
   assert.ok(probuilderTools.length > 0, "ProBuilder tools should appear when package is installed");
 });
 
-test("tools group list with --project excludes package-gated tools but keeps built-in VFX tools", async () => {
+test("tools group list with --project keeps extension descriptors when packages are missing", async () => {
   const projectPath = await makeFakeProject(); // no optional packages
 
   const probuilderResult = await handleToolsCommand("group", ["list", "probuilder"], { project: projectPath }, emptyRuntime, requestId);
-  assert.equal(probuilderResult.ok, false);
-  assert.equal(probuilderResult.error?.code, "E_TOOL_GROUP_NOT_FOUND");
+  assert.equal(probuilderResult.ok, true);
+  const probuilderData = probuilderResult.data as { tools: Array<{ name: string; group: string; requiresPackages?: string[] }> };
+  assert.equal(probuilderData.tools.length, 36);
+  assert.ok(probuilderData.tools.every((t) => t.group === "probuilder"));
+  assert.ok(probuilderData.tools.every((t) => t.requiresPackages?.includes("com.unity.probuilder")));
 
   const vfxResult = await handleToolsCommand("group", ["list", "vfx"], { project: projectPath }, emptyRuntime, requestId);
   assert.equal(vfxResult.ok, true);
   const data = vfxResult.data as { tools: Array<{ name: string; group: string; requiresPackages?: string[] }> };
-  assert.deepEqual(data.tools.map((t) => t.name), [
-    "vfx.particle-create",
-    "vfx.particle-info",
-    "vfx.particle-main",
-    "vfx.particle-emission",
-    "vfx.particle-shape",
-    "vfx.particle-play",
-    "vfx.particle-module",
-    "vfx.line-create",
-    "vfx.line-positions",
-    "vfx.trail"
-  ]);
+  assert.equal(data.tools.length, 16);
   assert.ok(data.tools.every((t) => t.group === "vfx"));
-  assert.ok(data.tools.every((t) => !t.requiresPackages || t.requiresPackages.length === 0));
+  assert.ok(data.tools.some((t) => t.name === "vfx.graph" && t.requiresPackages?.includes("com.unity.visualeffectgraph")));
+  assert.ok(data.tools.some((t) => t.name === "vfx.particle-create" && (!t.requiresPackages || t.requiresPackages.length === 0)));
 });
 
-test("tools group without --project does not include extension groups", async () => {
+test("tools group without --project includes extension groups as discoverable descriptors", async () => {
   const result = await handleToolsCommand("group", [], {}, emptyRuntime, requestId);
   assert.equal(result.ok, true);
-  const data = result.data as { groups: Array<{ name: string }> };
+  const data = result.data as { groups: Array<{ name: string; source: string }> };
   const groupNames = data.groups.map((g) => g.name);
-  assert.ok(!groupNames.includes("probuilder"), "probuilder group should NOT appear without --project");
-  assert.ok(!groupNames.includes("vfx"), "vfx group should NOT appear without --project");
+  assert.ok(groupNames.includes("probuilder"), "probuilder group should appear as an extension descriptor");
+  assert.ok(groupNames.includes("vfx"), "vfx group should appear as an extension descriptor");
+  assert.equal(data.groups.find((g) => g.name === "probuilder")?.source, "extension");
+  assert.equal(data.groups.find((g) => g.name === "vfx")?.source, "extension");
 });
 
 test("tools group with --project includes extension groups when tools are available", async () => {

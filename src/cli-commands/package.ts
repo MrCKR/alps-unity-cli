@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { join, resolve } from "node:path";
 import { getBoolean, getString } from "../args.js";
 import { executeBridgePayload } from "../bridge/index.js";
 import { confirmDestructiveExecution } from "../security.js";
@@ -459,6 +459,14 @@ async function isBridgeReachable(endpoint: string): Promise<boolean> {
 }
 
 async function maybeResolvePackage(command: string, flags: Record<string, string | boolean>, runtime: Runtime, requestId: string, projectPath: string, result: Record<string, unknown>): Promise<CliResult> {
+  const manifestPath = join(projectPath, "Packages", "manifest.json");
+  if (!existsSync(manifestPath)) {
+    return failure(requestId, "MANIFEST_NOT_FOUND", `Unity manifest not found: ${manifestPath}`, [
+      "Run the command from a Unity project root or pass --project <path>.",
+      "package.resolve requires an existing Packages/manifest.json and does not create Unity projects."
+    ], { projectPath, manifestPath, resolve: "blocked_missing_manifest" });
+  }
+
   // If a live Editor is reachable via bridge, trigger an asset refresh so it picks up the manifest change.
   // Skip if caller already performed a bridge refresh (e.g. handleInit).
   let liveRefresh = result.liveRefresh as Record<string, unknown> | undefined;

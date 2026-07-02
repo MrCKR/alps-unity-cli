@@ -190,9 +190,7 @@ export const CINEMACHINE_MANIFEST: ExtensionManifest = {
       { name: "cinemachine.release-override" },
       { name: "cinemachine.extension" }
     ],
-    contexts: [
-      { key: "cinemachine.cameras", description: "Read Cinemachine virtual cameras, Follow/LookAt targets, lens, priority, brain, and composition state in the current scene." }
-    ],
+    contexts: [],
     csharpEntries: [
       { type: "UnityCli.Cinemachine.CinemachineCameraTools", description: "Bridge handlers for Cinemachine ping, create, target, lens, priority, blend, body, aim, noise, brain, force-camera, release-override, and extension operations." }
     ],
@@ -221,9 +219,7 @@ export const URP_MANIFEST: ExtensionManifest = {
       { name: "urp.volume" },
       { name: "urp.settings" }
     ],
-    contexts: [
-      { key: "urp.pipeline", description: "Read URP render pipeline assets, renderer features, quality settings, and shader/pipeline configuration." }
-    ],
+    contexts: [],
     csharpEntries: [
       { type: "UnityCli.URP.UrpRendererFeatureTools", description: "Bridge handlers for URP renderer feature operations." },
       { type: "UnityCli.URP.UrpVolumeTools", description: "Bridge handlers for URP volume operations." },
@@ -253,9 +249,7 @@ export const HDRP_MANIFEST: ExtensionManifest = {
       { name: "hdrp.volume" },
       { name: "hdrp.settings" }
     ],
-    contexts: [
-      { key: "hdrp.pipeline", description: "Read HDRP render pipeline assets, volume profiles, lighting configuration, and pipeline settings." }
-    ],
+    contexts: [],
     csharpEntries: [
       { type: "UnityCli.HDRP.HdrpVolumeTools", description: "Bridge handlers for HDRP volume operations." },
       { type: "UnityCli.HDRP.HdrpSettingsTools", description: "Bridge handlers for HDRP pipeline settings operations." }

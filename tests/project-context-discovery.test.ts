@@ -238,8 +238,8 @@ test("context list --include-custom discovers project custom contexts through th
   assert.equal(requests.length, 1);
   assert.equal(requests[0].command, "context.list");
   const data = result.data as { contexts: ContextDescriptor[]; count: number };
-  // 23 built-in contexts + 1 project custom context
-  assert.equal(data.count, 24);
+  // 23 built-in contexts + 1 extension manifest context + 1 project custom context
+  assert.equal(data.count, 25);
   const projectCtx = data.contexts.find((c) => c.name === "project.scene-list");
   assert.ok(projectCtx, "project.scene-list should be in results");
   assert.equal(projectCtx.source, "project");
@@ -415,15 +415,17 @@ test("context read without name returns E_CONTEXT_NAME_REQUIRED error", async ()
   assert.equal(result.error?.code, "E_CONTEXT_NAME_REQUIRED");
 });
 
-test("context list without --include-custom returns built-in contexts", async () => {
+test("context list without --include-custom returns built-in and extension manifest contexts", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["context", "list"], runtime);
   assert.equal(result.ok, true);
-  const data = result.data as { contexts: ContextDescriptor[]; count: number };
-  // Built-in contexts are always available offline
-  assert.equal(data.count, 23);
+  const data = result.data as { contexts: Array<ContextDescriptor | { name: string; source: "extension" }>; count: number };
+  // Built-in contexts plus extension manifest descriptors are available offline.
+  assert.equal(data.count, 24);
   assert.ok(data.contexts.some((c) => c.name === "project.info"));
   assert.ok(data.contexts.some((c) => c.name === "editor.state"));
+  assert.ok(data.contexts.some((c) => c.name === "probuilder.scene" && c.source === "extension"));
+  assert.ok(!data.contexts.some((c) => c.source === "project"));
 });
 
 // ─── C# registry structural tests ──────────────────────────────────────

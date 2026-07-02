@@ -527,26 +527,18 @@ namespace UnityCli
             {
                 throw new BridgeCommandException("E_PACKAGE_ID_REQUIRED", "package.embed requires --package <id>.", "Pass a package id like com.unity.x.");
             }
+            var info = FindInstalledPackageInfo(packageId);
+            if (info == null)
+            {
+                throw new BridgeCommandException("E_PACKAGE_NOT_FOUND", "Package not found: " + packageId, "Run package list to discover installed packages.");
+            }
             if (request.DryRun)
             {
                 return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "package.embed").Prop("dryRun", true)
                     .Prop("package", packageId)
+                    .Prop("source", info.resolvedPath)
                     .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "package.embed").Prop("sideEffects", "domain-reload|manifest-change|file-copy").EndObject())
                     .Prop("logPath", LogPath()).EndObject().ToString());
-            }
-            var info = UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/" + packageId);
-            if (info == null)
-            {
-                var listRequest = UnityEditor.PackageManager.Client.List(true);
-                while (!listRequest.IsCompleted) System.Threading.Thread.Sleep(50);
-                if (listRequest.Status == UnityEditor.PackageManager.StatusCode.Success)
-                {
-                    info = listRequest.Result.FirstOrDefault(p => p.name == packageId);
-                }
-            }
-            if (info == null)
-            {
-                throw new BridgeCommandException("E_PACKAGE_NOT_FOUND", "Package not found: " + packageId, "Run package list to discover installed packages.");
             }
             var destPath = "Assets/" + packageId;
             CreateAssetDirectory(destPath + "/.");
@@ -557,6 +549,20 @@ namespace UnityCli
                 .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "package.embed").Prop("destination", destPath).EndObject())
                 .Prop("nextActions", "Remove the package from manifest after embedding to avoid duplicate symbols.")
                 .Prop("logPath", LogPath()).EndObject().ToString());
+        }
+
+        /// <summary>查找已安装 Unity package，dry-run 也复用该校验，避免不存在包返回可执行计划。</summary>
+        private static UnityEditor.PackageManager.PackageInfo FindInstalledPackageInfo(string packageId)
+        {
+            var info = UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/" + packageId);
+            if (info != null) return info;
+            var listRequest = UnityEditor.PackageManager.Client.List(true);
+            while (!listRequest.IsCompleted) System.Threading.Thread.Sleep(50);
+            if (listRequest.Status == UnityEditor.PackageManager.StatusCode.Success)
+            {
+                return listRequest.Result.FirstOrDefault(p => p.name == packageId);
+            }
+            return null;
         }
 
         /// <summary>按 newest-first 顺序读取 Console 条目，并在过滤后的集合上应用 cursor 分页。</summary>

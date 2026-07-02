@@ -7,7 +7,7 @@
  */
 
 import { builtinContextMetadata } from "./metadata/index.js";
-import { collectAvailableContexts, ExtensionRegistry, readInstalledUnityPackages } from "../extensions/index.js";
+import { collectAvailableContexts, ExtensionRegistry, loadAllExtensionDescriptors, readInstalledUnityPackages } from "../extensions/index.js";
 import { getString } from "../args.js";
 import { scoreSearch } from "../util.js";
 import type { ContextDescriptor, ContextListEntry, CustomContextDescriptor } from "./types.js";
@@ -56,14 +56,16 @@ export function searchContexts(keyword: string): ContextDescriptor[] {
 
 // ── Extension context contributions ───────────────────────────────────────
 
-/** Collect context descriptors from installed extensions. */
+/** Collect context descriptors from extension manifests; project availability is checked at describe/read time. */
 export async function extensionContextDescriptors(
   flags: Record<string, string | boolean>
 ): Promise<ContextDescriptor[]> {
   const registry = new ExtensionRegistry();
   const projectPath = getString(flags, "project");
   if (!projectPath) {
-    return [];
+    return loadAllExtensionDescriptors(registry).flatMap((desc) =>
+      desc.contexts.map((context) => extensionContributionToDescriptor(context))
+    );
   }
 
   try {
@@ -181,7 +183,7 @@ export function customContextToDescriptor(custom: CustomContextDescriptor): Cont
     availabilityScope: "editorSession",
     playModeSupport: "supported",
     supportStatus: "live-bridge",
-    cliCommand: `context read ${custom.name}`,
+    cliCommand: `context read ${custom.name} --include-custom`,
     inputSchema: custom.inputSchema ?? { type: "object", properties: {} },
     outputSchema: custom.outputSchema ?? { type: "object", properties: {} },
     extensionId: custom.extensionId,

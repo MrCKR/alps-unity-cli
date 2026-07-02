@@ -620,20 +620,23 @@ test("VFX Graph manifest has correct tool contributions", () => {
   assert.deepEqual(graphOnly.map((t) => t.name), ["vfx.graph", "vfx.effect", "vfx.parameter", "vfx.control", "vfx.event", "vfx.template"]);
 });
 
-test("Cinemachine manifest has 13 tools", () => {
+test("Cinemachine manifest has 13 tools and no unimplemented contexts", () => {
   assert.equal(CINEMACHINE_MANIFEST.contributions.tools!.length, 13);
+  assert.equal(CINEMACHINE_MANIFEST.contributions.contexts!.length, 0);
   const toolNames = CINEMACHINE_MANIFEST.contributions.tools!.map((t) => t.name);
   assert.ok(toolNames.includes("cinemachine.ping"));
   assert.ok(toolNames.includes("cinemachine.force-camera"));
   assert.ok(toolNames.includes("cinemachine.release-override"));
 });
 
-test("URP manifest has 3 tools", () => {
+test("URP manifest has 3 tools and no unimplemented contexts", () => {
   assert.equal(URP_MANIFEST.contributions.tools!.length, 3);
+  assert.equal(URP_MANIFEST.contributions.contexts!.length, 0);
 });
 
-test("HDRP manifest has 2 tools", () => {
+test("HDRP manifest has 2 tools and no unimplemented contexts", () => {
   assert.equal(HDRP_MANIFEST.contributions.tools!.length, 2);
+  assert.equal(HDRP_MANIFEST.contributions.contexts!.length, 0);
 });
 
 test("all five manifests have unique IDs", () => {

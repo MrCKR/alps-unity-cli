@@ -613,11 +613,23 @@ namespace UnityCli
             {
                 throw new BridgeCommandException("E_PROFILER_PATH_REQUIRED", "profiler.load requires --path.", "Pass a .raw or .data file path.");
             }
+            var resolvedPath = Path.GetFullPath(path);
+            if (!File.Exists(resolvedPath))
+            {
+                return ErrorJsonWithDetails("E_PROFILER_CAPTURE_NOT_FOUND",
+                    "Profiler capture file not found: " + path,
+                    new UnityCliJsonWriter().BeginObject()
+                        .Prop("command", "profiler.load")
+                        .Prop("path", path)
+                        .Prop("resolvedPath", resolvedPath)
+                        .EndObject().ToString(),
+                    "Use profiler.capture or profiler.export to create a capture file, then pass its path to profiler.load.");
+            }
             var driverType = FindType("UnityEditorInternal.ProfilerDriver");
             var loadMethod = driverType?.GetMethod("LoadProfile", new System.Type[] { typeof(string), typeof(bool) });
-            try { loadMethod?.Invoke(null, new object[] { path, false }); } catch { /* 版本差异 */ }
-            return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "profiler.load").Prop("path", path)
-                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "profiler.load").Prop("path", path).EndObject())
+            try { loadMethod?.Invoke(null, new object[] { resolvedPath, false }); } catch { /* 版本差异 */ }
+            return SuccessJson(new UnityCliJsonWriter().BeginObject().Prop("command", "profiler.load").Prop("path", resolvedPath).Prop("loaded", true)
+                .PropArray("plannedEffects", arr => arr.BeginObject().Prop("type", "profiler.load").Prop("path", resolvedPath).EndObject())
                 .Prop("logPath", LogPath()).EndObject().ToString());
         }
 

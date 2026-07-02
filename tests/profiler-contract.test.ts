@@ -186,6 +186,14 @@ test("profiler.module-enable calls SetAreaEnabled", async () => {
   assert.doesNotMatch(source, /Module enable\/disable uses Editor prefs/, "ProfilerModuleEnable must not return the old note-only stub");
 });
 
+test("profiler.load validates capture path before reporting success", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Commands/ProfilerCommands.cs", import.meta.url), "utf8");
+  const block = source.slice(source.indexOf("ProfilerLoad(BridgeRequest request)"), source.indexOf("private static string ProfilerAreas"));
+  assert.match(block, /File\.Exists\(resolvedPath\)/, "profiler.load should check the capture file exists");
+  assert.match(block, /E_PROFILER_CAPTURE_NOT_FOUND/, "missing capture path should return a stable error code");
+  assert.match(block, /\.Prop\("loaded", true\)/, "successful load should expose loaded=true");
+});
+
 test("profiler memory-snapshot and frame-debugger tools are registered in C#", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Commands/ProfilerCommands.cs", import.meta.url), "utf8");
   for (const command of ["profiler.memory-snapshot.take", "profiler.memory-snapshot.list", "profiler.memory-snapshot.compare", "profiler.frame-debugger.enable", "profiler.frame-debugger.disable", "profiler.frame-debugger.events"]) {

@@ -150,9 +150,20 @@ export const SCREENSHOT_TOOLS: ToolMetadata[] = [
     }, ["target"]),
     outputSchema: objSchema({
       command: { type: "string" },
-      outputDir: { type: "string" },
-      count: { type: "integer" },
-      captured: { type: "array", items: objSchema({ path: { type: "string" }, sizeBytes: { type: "integer" } }) }
+      target: { type: "string", description: "Resolved target GameObject name." },
+      count: { type: "integer", description: "Number of captured orbit images." },
+      artifacts: {
+        type: "array",
+        description: "Saved orbit image artifacts with path, camera label, dimensions, and format.",
+        items: objSchema({
+          source: { type: "string" },
+          path: { type: "string" },
+          camera: { type: "string" },
+          width: { type: "integer" },
+          height: { type: "integer" },
+          format: { type: "string" }
+        })
+      }
     }),
     destructiveHint: false,
     sideEffects: ["asset-write", "asset-import"],

@@ -51,12 +51,7 @@
         "name": "cinemachine.extension"
       }
     ],
-    "contexts": [
-      {
-        "key": "cinemachine.cameras",
-        "description": "Read Cinemachine virtual cameras, Follow/LookAt targets, lens, priority, brain, and composition state in the current scene."
-      }
-    ],
+    "contexts": [],
     "csharpEntries": [
       {
         "type": "UnityCli.Cinemachine.CinemachineCameraTools",

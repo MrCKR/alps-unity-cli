@@ -95,23 +95,24 @@ test("searchContexts returns empty for no match", () => {
 
 // ── context list CLI ──────────────────────────────────────────────────────
 
-test("context list returns all builtin contexts", async () => {
+test("context list returns built-in and extension manifest contexts", async () => {
   const runtime = makeRuntime();
   const result = await handleContextCommand("list", [], {}, runtime, requestId);
   assert.equal(result.ok, true);
 
   const data = result.data as Record<string, unknown>;
   assert.equal(data.command, "context.list");
-  assert.equal(data.count, 23);
+  assert.equal(data.count, 24);
 
   const contexts = data.contexts as Array<Record<string, unknown>>;
-  assert.equal(contexts.length, 23);
+  assert.equal(contexts.length, 24);
   assert.ok(contexts[0].name);
   assert.ok(contexts[0].description);
   assert.equal("title" in contexts[0], false);
   assert.equal("summary" in contexts[0], false);
   assert.ok(contexts[0].category);
   assert.ok(contexts[0].source);
+  assert.ok(contexts.some((context) => context.name === "probuilder.scene" && context.source === "extension"));
 });
 
 test("context list with category filter", async () => {
@@ -200,6 +201,24 @@ test("context describe for unknown context returns error", async () => {
   const result = await handleContextCommand("describe", ["nonexistent.xyz"], {}, runtime, requestId);
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "E_CONTEXT_NOT_FOUND");
+});
+
+test("context describe resolves extension contexts from manifest descriptors without project", async () => {
+  const runtime = makeRuntime();
+
+  const result = await handleContextCommand("describe", ["probuilder.scene"], {}, runtime, requestId);
+
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.command, "context.describe");
+  assert.equal(data.name, "probuilder.scene");
+  assert.equal(data.category, "probuilder");
+  assert.equal(data.source, "extension");
+  assert.equal(data.extensionAvailability, "unknown");
+  assert.equal(data.extensionId, "probuilder");
+  assert.ok((data.inputSchema as { properties: Record<string, unknown> }).properties.pageSize);
+  assert.ok((data.inputSchema as { properties: Record<string, unknown> }).properties.namePattern);
+  assert.ok((data.outputSchema as { properties: Record<string, unknown> }).properties.objects);
 });
 
 test("context describe resolves available extension contexts from manifest descriptors", async () => {
@@ -316,6 +335,38 @@ test("context read supports --input-file", async () => {
 
   assert.equal(result.ok, true);
   assert.deepEqual(payloads[0].args, { name: "editor.menu-items", input: { search: "File" }, search: "File" });
+});
+
+test("context read resolves project contexts when a project or bridge target is provided", async () => {
+  const payloads: Array<{ command: string; args: Record<string, unknown> }> = [];
+  const runtime = makeRuntime(async (payload: { command: string; args: Record<string, unknown> }) => {
+    payloads.push(payload);
+    if (payload.command === "context.list") {
+      return {
+        ok: true,
+        data: {
+          contexts: [
+            {
+              name: "sample.project-summary",
+              description: "Read a sample project summary.",
+              category: "sample",
+              source: "project",
+              inputSchema: { type: "object", properties: {} },
+              outputSchema: { type: "object", properties: { ok: { type: "boolean" } } }
+            }
+          ]
+        }
+      };
+    }
+    return { ok: true, data: { context: "sample.project-summary", ok: true } };
+  });
+
+  const result = await handleContextCommand("read", ["sample.project-summary"], { project: "D:/tmp/UnityProject" }, runtime, requestId);
+
+  assert.equal(result.ok, true);
+  assert.equal(payloads[0].command, "context.list");
+  assert.equal(payloads[1].command, "context.read");
+  assert.deepEqual(payloads[1].args, { input: {}, name: "sample.project-summary" });
 });
 
 test("context read routes available extension contexts through bridge", async () => {

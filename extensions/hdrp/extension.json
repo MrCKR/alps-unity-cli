@@ -18,12 +18,7 @@
         "name": "hdrp.settings"
       }
     ],
-    "contexts": [
-      {
-        "key": "hdrp.pipeline",
-        "description": "Read HDRP render pipeline assets, volume profiles, lighting configuration, and pipeline settings."
-      }
-    ],
+    "contexts": [],
     "csharpEntries": [
       {
         "type": "UnityCli.HDRP.HdrpVolumeTools",

@@ -30,6 +30,7 @@ import {
 import type { ContextDescriptor } from "../context/types.js";
 import { failure, success } from "../output.js";
 import { shouldDiscoverProjectTools, type ProjectToolRuntime } from "../project-tool-discovery.js";
+import { shouldDiscoverContexts } from "../project-context-discovery.js";
 import type { CliResult } from "../types.js";
 import { checkContextExtensionAvailability } from "../extension-availability.js";
 
@@ -118,7 +119,7 @@ async function resolveContextDescriptor(
     return { found: true, descriptor: extension };
   }
 
-  const includeCustom = shouldDiscoverProjectTools(flags, runtime) || getBoolean(flags, "include-custom");
+  const includeCustom = shouldDiscoverContexts(flags, runtime) || shouldDiscoverProjectTools(flags, runtime) || getBoolean(flags, "include-custom");
   if (includeCustom) {
     const customDescs = await discoverCustomContexts(runtime, requestId, flags);
     const custom = customDescs.find((c) => c.name === contextName);
@@ -157,7 +158,7 @@ async function handleContextDescribe(
       data.missingPackageIds = availability.availabilityResult?.missingPackageIds ?? [];
       data.nextActions = availability.nextActions;
     } else if (availability.extensionId) {
-      data.extensionAvailability = availability.availabilityResult?.status ?? "available";
+      data.extensionAvailability = availability.availabilityResult?.status ?? "unknown";
       data.extensionId = availability.extensionId;
     }
     return success(requestId, data);

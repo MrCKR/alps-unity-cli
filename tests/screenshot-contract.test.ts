@@ -75,6 +75,16 @@ test("screenshot tools expose play mode support, side effects and output schema"
   }
 });
 
+test("screenshot.orbit output schema matches artifact-array runtime envelope", () => {
+  const orbit = findToolByName("screenshot.orbit")!;
+  const props = orbit.outputSchema!.properties as Record<string, unknown>;
+  assert.ok(props.target, "orbit output should include resolved target");
+  assert.ok(props.count, "orbit output should include captured count");
+  assert.ok(props.artifacts, "orbit output should expose artifacts array");
+  assert.equal("outputDir" in props, false, "orbit output should not advertise removed outputDir field");
+  assert.equal("captured" in props, false, "orbit output should not advertise removed captured field");
+});
+
 test("screenshot inline base64 and surround fields are self-describing", () => {
   for (const name of ["screenshot.capture", "screenshot.game-view", "screenshot.scene-view", "screenshot.isolated-object"]) {
     const props = findToolByName(name)!.inputSchema.properties as Record<string, unknown>;

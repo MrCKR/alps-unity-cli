@@ -183,6 +183,27 @@ test("tools group list includes tools with short summaries", async () => {
   assert.ok(data.tools.some((t) => t.name === "scene.hierarchy"), "scene.hierarchy should be in scene group");
 });
 
+test("tools group exposes extension groups through the standard discovery path", async () => {
+  const result = await handleToolsCommand("group", [], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as { groups: Array<{ name: string; source: string; toolCount: number }> };
+  const cinemachine = data.groups.find((group) => group.name === "cinemachine");
+  assert.ok(cinemachine, "cinemachine extension group should be discoverable without falling back to search");
+  assert.equal(cinemachine.source, "extension");
+  assert.ok(cinemachine.toolCount > 0);
+});
+
+test("tools group list exposes and de-duplicates extension tools", async () => {
+  const result = await handleToolsCommand("group", ["list", "probuilder"], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as { count: number; tools: Array<{ name: string; source: string }> };
+  const names = data.tools.map((tool) => tool.name);
+  assert.ok(names.includes("probuilder.create-shape"));
+  assert.equal(data.count, new Set(names).size);
+  assert.equal(names.length, new Set(names).size);
+  assert.ok(data.tools.every((tool) => tool.source === "extension"));
+});
+
 test("tools group list includes custom project tools when available", async () => {
   const customTool = {
     name: "custom.my-tool",
@@ -255,6 +276,29 @@ test("tools search without keyword returns error", async () => {
   const result = await handleToolsCommand("search", [], {}, emptyRuntime, requestId);
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "TOOLS_SEARCH_KEYWORD_REQUIRED");
+});
+
+test("tools search de-duplicates extension tools discovered from multiple sources", async () => {
+  const runtime: ToolsRuntime = {
+    projectTools: [
+      {
+        name: "cinemachine.ping",
+        summary: "Duplicate project-discovered Cinemachine ping.",
+        description: "Duplicate project-discovered Cinemachine ping.",
+        group: "cinemachine",
+        inputSchema: { type: "object" },
+        destructiveHint: false
+      }
+    ]
+  };
+
+  const result = await handleToolsCommand("search", ["cinemachine"], {}, runtime, requestId);
+
+  assert.equal(result.ok, true);
+  const data = result.data as { tools: Array<{ name: string }> };
+  const names = data.tools.map((tool) => tool.name);
+  assert.equal(names.filter((name) => name === "cinemachine.ping").length, 1);
+  assert.equal(names.length, new Set(names).size);
 });
 
 test("tools search --format text returns text field", async () => {

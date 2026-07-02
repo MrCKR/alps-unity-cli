@@ -121,6 +121,22 @@ test("package C# error recovery hints use current tools run form, not legacy uni
   assert.match(cliPkg, /tools run package\.list/, "cli package hints should route to tools run package.list");
 });
 
+test("package.embed dry-run validates package existence before returning a plan", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Commands/EditorCommands.cs", import.meta.url), "utf8");
+  const block = source.slice(source.indexOf("PackageEmbed(BridgeRequest request)"), source.indexOf("private static string ConsoleItemsJson"));
+  assert.match(block, /FindInstalledPackageInfo\(packageId\)/, "package.embed should resolve installed package info before dry-run success");
+  assert.match(block, /E_PACKAGE_NOT_FOUND/, "missing package should return a stable package-not-found error");
+  assert.match(block, /\.Prop\("source", info\.resolvedPath\)/, "dry-run should include the resolved package source when available");
+});
+
+test("package.resolve rejects non-Unity project paths before skipped success", async () => {
+  const source = await readFile(new URL("../src/cli-commands/package.js", import.meta.url), "utf8");
+  const block = source.slice(source.indexOf("async function maybeResolvePackage"));
+  assert.match(block, /join\(projectPath, "Packages", "manifest\.json"\)/, "package.resolve should check Packages/manifest.json");
+  assert.match(block, /MANIFEST_NOT_FOUND/, "missing manifest should return a stable error code");
+  assert.match(block, /blocked_missing_manifest/, "error details should expose resolve blocker reason");
+});
+
 test("package.embed bridge spec forwards structured --input fields", async () => {
   const spec = await readFile(new URL("../src/bridge/domains/package.js", import.meta.url), "utf8");
   assert.match(spec, /stringField\(flags, "package"\)/, "bridge should forward structured package");

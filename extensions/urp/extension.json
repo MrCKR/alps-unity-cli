@@ -21,12 +21,7 @@
         "name": "urp.settings"
       }
     ],
-    "contexts": [
-      {
-        "key": "urp.pipeline",
-        "description": "Read URP render pipeline assets, renderer features, quality settings, and shader/pipeline configuration."
-      }
-    ],
+    "contexts": [],
     "csharpEntries": [
       {
         "type": "UnityCli.URP.UrpRendererFeatureTools",
