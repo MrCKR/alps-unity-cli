@@ -115,11 +115,13 @@ test("SampleContext custom context is not registered as a tool", async () => {
   const sampleContext = await readFile(new URL("../../unitypkg/Editor/Samples/SampleContext.cs", import.meta.url), "utf8");
   const registry = await readFile(new URL("../../unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs", import.meta.url), "utf8");
 
-  // SampleContext uses [UnityCliContext], never [UnityCliTool]
+  // SampleContext 仍用 [UnityCliContext](Context attribute 阶段6 才废)
   assert.match(sampleContext, /\[UnityCliContext\(/);
+  // Stage 3 后 [UnityCliTool] attribute 已废除,SampleContext 自然不含
   assert.doesNotMatch(sampleContext, /\[UnityCliTool\(/);
 
-  // The tool registry does not discover UnityCliContextAttribute — only UnityCliToolAttribute
-  assert.match(registry, /typeof\(UnityCliToolAttribute\)/);
+  // 工具注册表不再扫 UnityCliToolAttribute(已删),只扫 IUnityCliTool<,> 接口实现类
+  assert.doesNotMatch(registry, /typeof\(UnityCliToolAttribute\)/);
   assert.doesNotMatch(registry, /typeof\(UnityCliContextAttribute\)/);
+  assert.match(registry, /typeof\(IUnityCliTool<,>\)/);
 });

@@ -11,27 +11,12 @@ namespace UnityCli
     /// duration in seconds while in Play Mode. This is the minimal cross-frame
     /// async primitive required for runtime tool orchestration.
     ///
-    /// Declaration via [UnityCliTool] means it is discoverable through the same
-    /// project-tool discovery mechanism, but with Target=runtime it is routed
-    /// through the RuntimeExecutor and only available in Play Mode.
-    ///
-    /// Multi-frame/duration waits are handled by the RuntimeExecutor as deferred
-    /// waits using EditorApplication.update callbacks — no Thread.Sleep or
-    /// busy-wait that blocks the Unity main thread.
+    /// 特殊处理:本工具不走 IUnityCliTool 泛型接口(同步 Execute(Request):Result 契约),
+    /// 因为它需要返回 deferred-wait marker 字符串,由 RuntimeExecutor 拦截并启动
+    /// EditorApplication.update 回调式非阻塞等待。改用直接注册(RegisterProjectTool),
+    /// 保留 [UnityCliTool] attribute 已移除(Stage 3 零 attribute 残留要求)。
+    /// 设计依据:.plan/自定义工具定义规范.md(例外:deferred 机制不兼容同步契约)。
     /// </summary>
-    [UnityCliTool(
-        "runtime.wait",
-        Summary = "Runtime Wait",
-        Description = "Waits for a specified number of frames or seconds in Play Mode. Returns the actual frames waited and elapsed time. This is a runtime-only cross-frame primitive.",
-        Group = "runtime",
-        Target = "runtime",
-        InputSchema = "{\"type\":\"object\",\"properties\":{\"frames\":{\"type\":\"number\",\"description\":\"Number of frames to wait (default 1)\"},\"seconds\":{\"type\":\"number\",\"description\":\"Seconds to wait (alternative to frames)\"},\"condition\":{\"type\":\"string\",\"description\":\"Wait condition: frame-count, duration, or next-frame (default next-frame)\"}},\"required\":[]}",
-        OutputSchema = "{\"type\":\"object\",\"properties\":{\"framesWaited\":{\"type\":\"number\"},\"elapsedMs\":{\"type\":\"number\"},\"condition\":{\"type\":\"string\"},\"isPlaying\":{\"type\":\"boolean\"},\"frameCount\":{\"type\":\"number\"}}}",
-        DestructiveHint = false,
-        DefaultTimeoutMs = 10000,
-        MaxTimeoutMs = 120000,
-        SupportsJob = false
-)]
     public static class RuntimeWaitTool
     {
         /// <summary>

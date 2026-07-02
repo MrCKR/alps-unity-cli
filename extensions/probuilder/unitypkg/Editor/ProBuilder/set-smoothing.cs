@@ -1,0 +1,78 @@
+#if UNITY_EDITOR
+using System.Collections.Generic;
+using System.Linq;
+using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+
+namespace UnityCli.ProBuilder
+{
+    /// <summary>
+    /// probuilder.set-smoothing — 为选定面设置平滑组。
+    /// </summary>
+    public class SetSmoothingTool : IUnityCliTool<SetSmoothingTool.Request, SetSmoothingTool.Result>
+    {
+        public sealed class Request
+        {
+            [UnityCliRequired] public string Target { get; set; }
+            public List<long> FaceIndices { get; set; }             // 可选,空则作用于全部面
+            [UnityCliRequired] public long SmoothingGroup { get; set; }
+        }
+
+        public sealed class Result
+        {
+            public long ModifiedFaceCount { get; set; }
+        }
+
+        public ToolDescriptor Describe() => new()
+        {
+            Name = "probuilder.set-smoothing",
+            Summary = "Set the smoothing group for selected faces of a ProBuilder mesh.",
+            Description = "Set the smoothing group for selected faces on a ProBuilder mesh. Requires a non-negative smoothingGroup. When faceIndices is omitted, all faces are assigned the smoothing group.",
+            Group = "probuilder",
+            DestructiveHint = false,
+            Target = "editor",
+            PlayModeSupport = "editor-only",
+            DefaultTimeoutMs = 10000,
+            MaxTimeoutMs = 30000,
+            SupportsJob = true,
+            ArtifactKinds = new[] { "json" },
+            Examples = new[]
+            {
+                new ToolExample { Description = "将面 0 设为平滑组 1", Input = new Request { Target = "MyCube", FaceIndices = new List<long> { 0 }, SmoothingGroup = 1 } }
+            }
+        };
+
+        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        {
+            if (!ProBuilderReflection.IsAvailable)
+                throw ProBuilderErrors.PackageNotAvailable();
+
+            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
+
+            var mesh = ProBuilderReflection.GetProBuilderMesh(go);
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("set-smoothing", "No ProBuilderMesh on target.");
+
+            var smoothingGroup = request.SmoothingGroup;
+            if (smoothingGroup < 0)
+                throw ProBuilderErrors.SchemaInvalid("smoothingGroup must be a non-negative integer.");
+
+            int[] faceIndices = request.FaceIndices?.Select(i => (int)i).ToArray();
+            var faceCount = ProBuilderReflection.GetFaceCount(mesh);
+
+            Undo.RecordObject(go, "ProBuilder Set Smoothing");
+            if (faceIndices != null && faceIndices.Length > 0)
+                ProBuilderReflection.ApplySmoothingGroup(mesh, faceIndices, (int)smoothingGroup);
+            else
+                ProBuilderReflection.ApplySmoothingGroup(mesh, Enumerable.Range(0, faceCount).ToArray(), (int)smoothingGroup);
+
+            ProBuilderReflection.RefreshMesh(mesh);
+            EditorSceneManager.MarkSceneDirty(go.scene);
+
+            var modified = faceIndices != null ? faceIndices.Length : faceCount;
+            return new Result { ModifiedFaceCount = modified };
+        }
+    }
+}
+#endif

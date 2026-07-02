@@ -1,0 +1,74 @@
+#if UNITY_EDITOR
+using System.Collections.Generic;
+using System.Linq;
+using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+
+namespace UnityCli.ProBuilder
+{
+    /// <summary>
+    /// probuilder.move-vertices — 按偏移量移动 ProBuilder 网格的选定顶点。
+    /// </summary>
+    public class MoveVerticesTool : IUnityCliTool<MoveVerticesTool.Request, MoveVerticesTool.Result>
+    {
+        public sealed class Request
+        {
+            [UnityCliRequired] public string Target { get; set; }
+            [UnityCliRequired] public List<long> VertexIndices { get; set; }
+            public double X { get; set; }                            // 默认 0
+            public double Y { get; set; }                            // 默认 0
+            public double Z { get; set; }                            // 默认 0
+        }
+
+        public sealed class Result
+        {
+            public long MovedCount { get; set; }
+        }
+
+        public ToolDescriptor Describe() => new()
+        {
+            Name = "probuilder.move-vertices",
+            Summary = "Move selected vertices of a ProBuilder mesh by an offset.",
+            Description = "Move selected vertices on a ProBuilder mesh by an X/Y/Z offset. Requires at least one vertex index.",
+            Group = "probuilder",
+            DestructiveHint = false,
+            Target = "editor",
+            PlayModeSupport = "editor-only",
+            DefaultTimeoutMs = 10000,
+            MaxTimeoutMs = 30000,
+            SupportsJob = true,
+            ArtifactKinds = new[] { "json" },
+            Examples = new[]
+            {
+                new ToolExample { Description = "沿 Y 轴移动顶点 0", Input = new Request { Target = "MyCube", VertexIndices = new List<long> { 0 }, Y = 0.5 } }
+            }
+        };
+
+        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        {
+            if (!ProBuilderReflection.IsAvailable)
+                throw ProBuilderErrors.PackageNotAvailable();
+
+            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
+
+            var mesh = ProBuilderReflection.GetProBuilderMesh(go);
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("move-vertices", "No ProBuilderMesh on target.");
+
+            int[] vertexIndices = request.VertexIndices?.Select(i => (int)i).ToArray();
+            if (vertexIndices == null || vertexIndices.Length == 0)
+                throw ProBuilderErrors.SchemaInvalid("vertexIndices is required for move-vertices.");
+
+            var offset = new Vector3((float)request.X, (float)request.Y, (float)request.Z);
+
+            Undo.RecordObject(go, "ProBuilder Move Vertices");
+            var moved = ProBuilderReflection.MoveVerticesByOffset(mesh, vertexIndices, offset);
+            ProBuilderReflection.RefreshMesh(mesh);
+            EditorSceneManager.MarkSceneDirty(go.scene);
+
+            return new Result { MovedCount = moved };
+        }
+    }
+}
+#endif

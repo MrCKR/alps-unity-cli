@@ -58,11 +58,13 @@ function extractCSharpRegisteredCommands(root: string): string[] {
     for (const match of source.matchAll(/RegisterCommand\(registry, "([^"]+)"/g)) {
       commands.add(match[1]);
     }
-    // Scan for UnityCliTool attributes discovered by ProjectToolRegistry.
-    // These are discovered by ProjectToolRegistry at runtime, not registered via RegisterCommand.
-    // Format: [UnityCliTool( "probuilder.ping", Title = ...
-    for (const match of source.matchAll(/\[UnityCliTool\(\s*"([^"]+)"/g)) {
-      commands.add(match[1]);
+    // Scan for IUnityCliTool<TReq,TRes> implementers (new form, Stage 2+).
+    // These are discovered by ProjectToolRegistry at runtime via interface scan.
+    // Tool name lives in Describe()'s Name = "group.name" (dotted lowercase string literal).
+    if (source.includes("IUnityCliTool<") || source.includes("IUnityCliContext<")) {
+      for (const match of source.matchAll(/Name\s*=\s*"([a-z][a-z0-9]*(?:\.[a-z0-9-]+)+)"/g)) {
+        commands.add(match[1]);
+      }
     }
   }
   return [...commands].sort();

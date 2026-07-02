@@ -17,7 +17,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -34,14 +34,16 @@ const JSON_INFRA = readSrc("unitypkg/Editor/Infrastructure/UnityCliJson.cs");
 const EXCEPTION = readSrc("unitypkg/Editor/Bridge/BridgeCommandException.cs");
 const PB_ERRORS = readSrc("extensions/probuilder/unitypkg/Editor/ProBuilder/ProBuilderErrors.cs");
 
-const PB_TOOL_FILES = [
-  "extensions/probuilder/unitypkg/Editor/ProBuilder/ProBuilderShapeTools.cs",
-  "extensions/probuilder/unitypkg/Editor/ProBuilder/ProBuilderMeshEditTools.cs",
-  "extensions/probuilder/unitypkg/Editor/ProBuilder/ProBuilderSelectionTools.cs",
-  "extensions/probuilder/unitypkg/Editor/ProBuilder/ProBuilderSmoothingTools.cs",
-  "extensions/probuilder/unitypkg/Editor/ProBuilder/ProBuilderUtilityTools.cs",
-  "extensions/probuilder/unitypkg/Editor/ProBuilder/ProBuilderVertexTools.cs"
-].map((rel) => ({ rel, src: readSrc(rel) }));
+// Stage 3 迁移后,每个工具一个文件(IUnityCliTool<,> 泛型接口自包含形态)。
+// 动态读取 ProBuilder 目录下所有非 ProBuilder 前缀的 .cs 文件(即 36 个工具文件,
+// 排除 ProBuilderErrors/Input/Reflection/SceneContext 等辅助文件)。
+const PB_TOOL_DIR = join(ROOT, "extensions", "probuilder", "unitypkg", "Editor", "ProBuilder");
+const PB_TOOL_FILES = readdirSync(PB_TOOL_DIR)
+  .filter((f) => f.endsWith(".cs") && !f.startsWith("ProBuilder"))
+  .map((f) => {
+    const rel = `extensions/probuilder/unitypkg/Editor/ProBuilder/${f}`;
+    return { rel, src: readSrc(rel) };
+  });
 
 // ─── ProjectToolRun 错误收口 ────────────────────────────────────────────
 
@@ -183,9 +185,11 @@ test("ProBuilder tools throw structured errors instead of returning them", () =>
   }
 });
 
-test("ProBuilder tools throw at least one structured error per file", () => {
+test("ProBuilder tools throw at least one structured error per file (except ping)", () => {
   // 每个工具文件都应通过 throw 触发结构化错误路径（反向证明改动落地）。
+  // ping 是探测工具,不抛 PackageNotAvailable(它就是为了检查可用性)。
   for (const { rel, src } of PB_TOOL_FILES) {
+    if (rel.endsWith("ping.cs")) continue;
     assert.match(
       src,
       /throw ProBuilderErrors\./,

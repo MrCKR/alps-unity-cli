@@ -90,98 +90,52 @@ namespace UnityCli
                 {
                     if (type == null) continue;
 
-                    // 新形态:扫描实现 IUnityCliTool<,> 泛型接口的类(与旧 attribute 并存,过渡期)
+                    // 新形态:扫描实现 IUnityCliTool<,> 泛型接口的类(Stage 2+,废除 attribute 后的唯一发现路径)
                     TryRegisterInterfaceProjectTool(assembly, type);
-
-                    var classAttribute = Attribute.GetCustomAttribute(type, typeof(UnityCliToolAttribute)) as UnityCliToolAttribute;
-                    if (classAttribute != null)
-                    {
-                        TryRegisterAttributedProjectTool(assembly, type, null, classAttribute);
-                    }
-
-                    foreach (var method in type.GetMethods(BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic))
-                    {
-                        var toolAttribute = Attribute.GetCustomAttribute(method, typeof(UnityCliToolAttribute)) as UnityCliToolAttribute;
-                        if (toolAttribute != null)
-                        {
-                            TryRegisterAttributedProjectTool(assembly, type, method, toolAttribute);
-                            continue;
-                        }
-
-                    }
                 }
             }
+
+            // 内置 runtime 原语:RuntimeWaitTool 直接注册(deferred-wait 机制不兼容 IUnityCliTool 同步契约,特殊处理)
+            RegisterBuiltInRuntimeTools();
         }
 
-        private static void TryRegisterAttributedProjectTool(Assembly assembly, Type type, MethodInfo method, UnityCliToolAttribute attribute)
+        // ── 内置 runtime 原语直接注册 ──
+        // RuntimeWaitTool 的 deferred-wait 机制(返回 marker 字符串由 RuntimeExecutor 拦截)不兼容
+        // IUnityCliTool 同步 Execute(Request):Result 契约,故不走接口发现,直接注册。
+        private static void RegisterBuiltInRuntimeTools()
         {
-            var executeMethod = method ?? ResolveClassAttributedToolMethod(type, attribute.Name);
-            if (executeMethod == null)
-            {
-                WriteLog("custom_tool_registration_skipped name=" + attribute.Name + " reason=missing_execute_method");
-                return;
-            }
-
-            var parameters = executeMethod.GetParameters();
-            if (executeMethod.ReturnType != typeof(string) || parameters.Length > 1 || (parameters.Length == 1 && parameters[0].ParameterType != typeof(UnityCliProjectToolContext)))
-            {
-                WriteLog("custom_tool_registration_skipped name=" + attribute.Name + " reason=signature");
-                return;
-            }
-
+            if (ProjectTools.ContainsKey("runtime.wait")) return;
             RegisterProjectTool(new UnityCliProjectToolDefinition
             {
-                Name = attribute.Name,
-                Summary = attribute.Summary,
-                Description = attribute.Description,
-                Group = attribute.Group,
-                Version = attribute.Version,
-                InputSchema = attribute.InputSchema,
-                OutputSchema = attribute.OutputSchema,
-                CapabilityType = attribute.CapabilityType,
-                DestructiveHint = attribute.DestructiveHint,
-                Target = attribute.Target ?? "editor",
-                PlayModeSupport = attribute.PlayModeSupport,
-                DefaultTimeoutMs = attribute.DefaultTimeoutMs,
-                MaxTimeoutMs = attribute.MaxTimeoutMs,
-                SupportsJob = attribute.SupportsJob,
-                ArtifactKinds = SplitCsv(attribute.ArtifactKinds).ToArray(),
-                RequiredInput = SplitCsv(attribute.RequiredInput).ToArray(),
+                Name = "runtime.wait",
+                Summary = "Wait for a number of frames or seconds in Play Mode.",
+                Description = "Waits for a specified number of frames or seconds in Play Mode. Returns the actual frames waited and elapsed time. This is a runtime-only cross-frame primitive.",
+                Group = "runtime",
+                Version = "1.0.0",
+                InputSchema = "{\"type\":\"object\",\"properties\":{\"frames\":{\"type\":\"number\",\"description\":\"Number of frames to wait (default 1)\"},\"seconds\":{\"type\":\"number\",\"description\":\"Seconds to wait (alternative to frames)\"},\"condition\":{\"type\":\"string\",\"description\":\"Wait condition: frame-count, duration, or next-frame (default next-frame)\"}}}",
+                OutputSchema = "{\"type\":\"object\",\"properties\":{\"framesWaited\":{\"type\":\"number\"},\"elapsedMs\":{\"type\":\"number\"},\"condition\":{\"type\":\"string\"},\"isPlaying\":{\"type\":\"boolean\"},\"frameCount\":{\"type\":\"number\"}}}",
+                CapabilityType = "project-read",
+                DestructiveHint = false,
+                Target = "runtime",
+                PlayModeSupport = "runtime-only",
+                DefaultTimeoutMs = 10000,
+                MaxTimeoutMs = 120000,
+                SupportsJob = false,
+                ArtifactKinds = new[] { "json" },
+                RequiredInput = new string[0],
                 RegisteredBy = "unity-editor-package",
-                DescriptorSource = "UnityCliToolAttribute",
-                Assembly = assembly.GetName().Name,
-                Method = type.FullName + "." + executeMethod.Name,
-                Fingerprint = attribute.Fingerprint,
-                PinnedFingerprint = attribute.Fingerprint,
-                ExpectedFingerprint = attribute.Fingerprint,
+                DescriptorSource = "built-in-runtime",
+                Assembly = "com.unity_cli",
+                Method = "UnityCli.RuntimeWaitTool.Execute",
                 Execute = delegate(UnityCliProjectToolContext context)
                 {
-                    var result = parameters.Length == 0 ? executeMethod.Invoke(null, null) : executeMethod.Invoke(null, new object[] { context });
-                    return result == null ? "null" : (string)result;
+                    return RuntimeWaitTool.Execute(context);
                 }
             });
         }
 
-
-
-        private static MethodInfo ResolveClassAttributedToolMethod(Type type, string toolName)
-        {
-            // Class-level [UnityCliTool] is intentionally conservative: the class must
-            // expose exactly one static Execute/Run candidate. Put [UnityCliTool] on a
-            // specific method when multiple candidates exist.
-            var flags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
-            var methods = type.GetMethods(flags).Where(m => m.Name == "Execute" || m.Name == "Run").ToArray();
-            if (methods.Length == 1)
-            {
-                return methods[0];
-            }
-            WriteLog("custom_tool_registration_skipped name=" + toolName + " reason=ambiguous_class_level_execute_method type=" + type.FullName + " candidateCount=" + methods.Length.ToString(CultureInfo.InvariantCulture));
-            return null;
-        }
-
         // ── 新形态:IUnityCliTool<TReq,TRes> 泛型接口实现类发现与注册 ──
         // 设计依据:.plan/自定义工具定义规范.md(废除 attribute,实现接口即声明)
-        // 过渡期与旧 attribute 并存;同优先以新形态为准(后注册覆盖旧)。
         private static void TryRegisterInterfaceProjectTool(Assembly assembly, Type type)
         {
             if (type == null || type.IsAbstract || type.IsInterface) return;

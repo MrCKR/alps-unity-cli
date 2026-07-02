@@ -1,0 +1,92 @@
+#if UNITY_EDITOR
+using System.Collections.Generic;
+using System.Linq;
+using UnityEditor;
+using UnityEditor.SceneManagement;
+using UnityEngine;
+
+namespace UnityCli.ProBuilder
+{
+    /// <summary>
+    /// probuilder.append-vertices-to-edge — 沿选定边追加新顶点。
+    /// </summary>
+    public class AppendVerticesToEdgeTool : IUnityCliTool<AppendVerticesToEdgeTool.Request, AppendVerticesToEdgeTool.Result>
+    {
+        // ── 协议类型 ──
+        public sealed class Request
+        {
+            [UnityCliRequired] public string Target { get; set; }
+            public long? Count { get; set; }                       // 可选,默认 1
+            public List<long> EdgeIndices { get; set; }            // 可选,边索引列表
+            public List<EdgeRef> Edges { get; set; }               // 可选,顶点对边列表
+        }
+
+        /// <summary>边引用(顶点索引对)。</summary>
+        public sealed class EdgeRef
+        {
+            public long A { get; set; }
+            public long B { get; set; }
+        }
+
+        public sealed class Result
+        {
+            public long InsertedCount { get; set; }
+        }
+
+        // ── desc ──
+        public ToolDescriptor Describe() => new()
+        {
+            Name = "probuilder.append-vertices-to-edge",
+            Summary = "Append new vertices along selected edges of a ProBuilder mesh.",
+            Description = "Append new vertices along an edge of a ProBuilder mesh. Specify edges by edgeIndices (indices into the unique edge list) or by vertex-pair edges [{a,b}]. Requires at least one edge selection.",
+            Group = "probuilder",
+            DestructiveHint = false,
+            Target = "editor",
+            PlayModeSupport = "editor-only",
+            DefaultTimeoutMs = 10000,
+            MaxTimeoutMs = 30000,
+            SupportsJob = true,
+            ArtifactKinds = new[] { "json" },
+            Examples = new[]
+            {
+                new ToolExample { Description = "沿边 0 追加 1 个顶点", Input = new Request { Target = "MyCube", Count = 1, EdgeIndices = new List<long> { 0 } } }
+            }
+        };
+
+        // ── handler ──
+        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        {
+            if (!ProBuilderReflection.IsAvailable)
+                throw ProBuilderErrors.PackageNotAvailable();
+
+            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
+
+            var mesh = ProBuilderReflection.GetProBuilderMesh(go);
+            if (mesh == null) throw ProBuilderErrors.OperationFailed("append-vertices-to-edge", "No ProBuilderMesh on target.");
+
+            var count = (int)(request.Count ?? 1);
+            int[] edgeIndices = request.EdgeIndices?.Select(i => (int)i).ToArray();
+            ProBuilderInput.EdgePair[] edgePairs = request.Edges?.Select(e => new ProBuilderInput.EdgePair { a = (int)e.A, b = (int)e.B }).ToArray();
+
+            if ((edgeIndices == null || edgeIndices.Length == 0) && (edgePairs == null || edgePairs.Length == 0))
+                throw ProBuilderErrors.SchemaInvalid("edgeIndices or edges parameter is required for append-vertices-to-edge.");
+
+            Undo.RecordObject(go, "ProBuilder Append Vertices");
+
+            var edgeArray = ProBuilderReflection.ResolveEdges(mesh, edgeIndices, edgePairs);
+            if (edgeArray == null || edgeArray.Length == 0)
+                throw ProBuilderErrors.OperationFailed("append-vertices-to-edge", "Could not resolve edges from input.");
+
+            var appended = ProBuilderReflection.AppendVerticesToEdge(mesh, edgeArray, count);
+            if (!appended)
+                throw ProBuilderErrors.OperationFailed("append-vertices-to-edge", "AppendElements.AppendVerticesToEdge method not found or failed in ProBuilder assembly.");
+
+            ProBuilderReflection.RefreshMesh(mesh);
+            EditorSceneManager.MarkSceneDirty(go.scene);
+
+            return new Result { InsertedCount = count * edgeArray.Length };
+        }
+    }
+}
+#endif
