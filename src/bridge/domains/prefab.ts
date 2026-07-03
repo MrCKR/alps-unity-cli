@@ -2,15 +2,15 @@ import { boolFlag, compactArgs, floatFlag, numberFlag, queryArgs, stringFlag } f
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const prefabBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "prefab", command: "info", bridgeCommand: "prefab.info", buildArgs: prefabArgs },
-  { group: "prefab", command: "hierarchy", bridgeCommand: "prefab.hierarchy", buildArgs: prefabArgs },
-  { group: "prefab", command: "create", bridgeCommand: "prefab.create", buildArgs: prefabArgs },
-  { group: "prefab", command: "modify", bridgeCommand: "prefab.modify", buildArgs: prefabArgs },
-  { group: "prefab", command: "stage-open", bridgeCommand: "prefab.stage-open", buildArgs: prefabArgs },
-  { group: "prefab", command: "stage-save", bridgeCommand: "prefab.stage-save", buildArgs: prefabArgs },
-  { group: "prefab", command: "stage-close", bridgeCommand: "prefab.stage-close", buildArgs: prefabArgs },
-  { group: "prefab", command: "instantiate", bridgeCommand: "prefab.instantiate", buildArgs: prefabInstantiateArgs, supportsDryRun: true },
-  { group: "prefab", command: "unpack", bridgeCommand: "prefab.unpack", buildArgs: prefabUnpackArgs }
+  { group: "prefab", command: "info", bridgeCommand: "project-tool.run", toolName: "prefab.info", buildArgs: prefabArgs },
+  { group: "prefab", command: "hierarchy", bridgeCommand: "project-tool.run", toolName: "prefab.hierarchy", buildArgs: prefabArgs },
+  { group: "prefab", command: "create", bridgeCommand: "project-tool.run", toolName: "prefab.create", buildArgs: prefabArgs },
+  { group: "prefab", command: "modify", bridgeCommand: "project-tool.run", toolName: "prefab.modify", buildArgs: prefabArgs },
+  { group: "prefab", command: "stage-open", bridgeCommand: "project-tool.run", toolName: "prefab.stage-open", buildArgs: prefabArgs },
+  { group: "prefab", command: "stage-save", bridgeCommand: "project-tool.run", toolName: "prefab.stage-save", buildArgs: prefabArgs },
+  { group: "prefab", command: "stage-close", bridgeCommand: "project-tool.run", toolName: "prefab.stage-close", buildArgs: prefabArgs },
+  { group: "prefab", command: "instantiate", bridgeCommand: "project-tool.run", toolName: "prefab.instantiate", buildArgs: prefabInstantiateArgs, supportsDryRun: true },
+  { group: "prefab", command: "unpack", bridgeCommand: "project-tool.run", toolName: "prefab.unpack", buildArgs: prefabUnpackArgs }
 ];
 
 // 读取 tools run --input 中无法映射为简单 flag 的结构化字段（path/name/addChild 等）

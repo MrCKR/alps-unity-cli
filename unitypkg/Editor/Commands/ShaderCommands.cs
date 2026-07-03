@@ -30,13 +30,8 @@ namespace UnityCli
     {
         private static void RegisterShaderCommands(BridgeCommandRegistry registry)
         {
-            RegisterCommand(registry, "shader.info", "shader", false, ShaderInfo);
-            RegisterCommand(registry, "shader.read", "shader", false, ShaderRead);
-            RegisterCommand(registry, "shader.create", "shader", true, ShaderCreate);
-            RegisterCommand(registry, "shader.update", "shader", true, ShaderUpdate);
-            RegisterCommand(registry, "shader.delete", "shader", true, ShaderDelete);
-            RegisterCommand(registry, "shader.list", "shader", false, ShaderList);
-            RegisterCommand(registry, "shader.get-data", "shader", false, ShaderGetData);
+            // shader 域工具已全部迁移为 IUnityCliTool 自包含形态(unitypkg/Editor/Tools/shader/*.cs)。
+            // 此处仅保留被其他域复用的私有 helper 与空注册方法。
         }
 
         /// <summary>列出项目中所有 Shader 资产。对齐 Ivan shader list。</summary>

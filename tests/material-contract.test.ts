@@ -64,7 +64,8 @@ test("material.info supports token-safe namePattern and output schema", () => {
 test("bridge specs resolve for material tools", () => {
   for (const command of ["info", "create", "assign", "set", "set-renderer-color"]) {
     const spec = bridgeCommandRegistry.lookup("material", command);
-    assert.equal(spec?.bridgeCommand, `material.${command}`);
+    assert.equal(spec?.bridgeCommand, "project-tool.run", `material ${command} should route via project-tool.run`);
+    assert.equal(spec?.toolName, `material.${command}`, `material ${command} toolName should match`);
   }
 });
 
@@ -76,7 +77,7 @@ test("contract entries exist for material tools with present C# handler", () => 
   }
 });
 
-test("C# RegisterCommand calls exist for material commands", async () => {
+test("C# handlers exist for material commands (RegisterCommand or IUnityCliTool)", async () => {
   const csFiles = await listCsFiles(new URL("../unitypkg/Editor/", import.meta.url));
   const allSource = (
     await Promise.all(
@@ -84,10 +85,10 @@ test("C# RegisterCommand calls exist for material commands", async () => {
     )
   ).join("\n");
   for (const command of ["material.info", "material.create", "material.assign", "material.set", "material.set-renderer-color"]) {
-    assert.ok(
-      allSource.includes(`RegisterCommand(registry, "${command}"`),
-      `${command} should be registered via RegisterCommand in C#`
-    );
+    // 接受 RegisterCommand(旧)或 IUnityCliTool(新,Name="...")两种形态
+    const hasRegisterCommand = allSource.includes(`RegisterCommand(registry, "${command}"`);
+    const hasIUnityCliTool = allSource.includes(`Name = "${command}"`);
+    assert.ok(hasRegisterCommand || hasIUnityCliTool, `${command} should be registered via RegisterCommand or IUnityCliTool`);
   }
 });
 

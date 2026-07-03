@@ -3,11 +3,11 @@ import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const screenshotBridgeSpecs: BridgeCommandSpec[] = [
   { group: "screenshot", command: "capture", bridgeCommand: "project-tool.run", toolName: "screenshot.capture", buildArgs: screenshotArgs },
-  { group: "screenshot", command: "game-view", bridgeCommand: "screenshot.game-view", buildArgs: screenshotArgs },
-  { group: "screenshot", command: "scene-view", bridgeCommand: "screenshot.scene-view", buildArgs: screenshotArgs },
-  { group: "screenshot", command: "isolated-object", bridgeCommand: "screenshot.isolated-object", buildArgs: isolatedArgs },
-  { group: "screenshot", command: "orbit", bridgeCommand: "screenshot.orbit", buildArgs: orbitArgs },
-  { group: "screenshot", command: "surround", bridgeCommand: "screenshot.surround", buildArgs: surroundArgs }
+  { group: "screenshot", command: "game-view", bridgeCommand: "project-tool.run", toolName: "screenshot.game-view", buildArgs: screenshotArgs },
+  { group: "screenshot", command: "scene-view", bridgeCommand: "project-tool.run", toolName: "screenshot.scene-view", buildArgs: screenshotArgs },
+  { group: "screenshot", command: "isolated-object", bridgeCommand: "project-tool.run", toolName: "screenshot.isolated-object", buildArgs: isolatedArgs },
+  { group: "screenshot", command: "orbit", bridgeCommand: "project-tool.run", toolName: "screenshot.orbit", buildArgs: orbitArgs },
+  { group: "screenshot", command: "surround", bridgeCommand: "project-tool.run", toolName: "screenshot.surround", buildArgs: surroundArgs }
 ];
 
 // 读取 tools run --input 中无法映射为简单 flag 的结构化字段（path/width/height/target 等）
@@ -87,6 +87,7 @@ function surroundArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec[
     radius: floatFlag(flags, "radius") ?? numberValue(structured, "radius"),
     fov: floatFlag(flags, "fov") ?? numberValue(structured, "fov"),
     overwrite: boolFlag(flags, "overwrite") ?? boolValue(structured, "overwrite"),
-    inlineBase64: boolFlag(flags, "inline-base64") ?? boolValue(structured, "inlineBase64")
+    inlineBase64: boolFlag(flags, "inline-base64") ?? boolValue(structured, "inlineBase64"),
+    dryRun: boolFlag(flags, "dry-run") ?? boolValue(structured, "dryRun")
   });
 }

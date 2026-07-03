@@ -12,90 +12,13 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
-        private static void RegisterScriptableObjectCommands(BridgeCommandRegistry registry)
-        {
-            RegisterCommand(registry, "scriptable-object.create", "scriptable-object", true, ScriptableObjectCreate);
-            RegisterCommand(registry, "scriptable-object.info", "scriptable-object", false, ScriptableObjectInfo);
-            RegisterCommand(registry, "scriptable-object.list-types", "scriptable-object", false, ScriptableObjectListTypes);
-            RegisterCommand(registry, "scriptable-object.modify", "scriptable-object", true, ScriptableObjectModify);
-        }
-
-        private static string ScriptableObjectCreate(BridgeRequest request)
-        {
-            EnsureEditorNotBusy("scriptable-object.create");
-            var path = RequireScriptableObjectPath(request.StringArg("path"));
-            var type = ResolveScriptableObjectType(request.StringArg("type"));
-            var overwrite = request.BoolArg("overwrite", false);
-            if (AssetDatabase.LoadAssetAtPath<ScriptableObject>(path) != null && !overwrite)
-            {
-                throw new BridgeCommandException("E_SCRIPTABLE_OBJECT_EXISTS", "ScriptableObject asset already exists: " + path, "Pass --overwrite or choose a different Assets/*.asset path.");
-            }
-            if (request.DryRun)
-            {
-                return SuccessJson(new UnityCliJsonWriter().BeginObject()
-                    .Prop("command", "scriptable-object.create")
-                    .Prop("dryRun", true)
-                    .Prop("path", path)
-                    .Prop("type", type.FullName)
-                    .Prop("overwrite", overwrite)
-                    .PropArray("plannedEffects", arr => arr.RawValue(EffectJson("scriptable-object.create", "path", Quote(path))))
-                    .Prop("logPath", LogPath())
-                    .EndObject().ToString());
-            }
-            CreateAssetDirectory(path);
-            if (overwrite && !string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(path)))
-            {
-                AssetDatabase.DeleteAsset(path);
-            }
-            var asset = ScriptableObject.CreateInstance(type);
-            AssetDatabase.CreateAsset(asset, path);
-            AssetDatabase.SaveAssets();
-            return SuccessJson(ScriptableObjectMutationJson("scriptable-object.create", path, asset));
-        }
-
-        private static string ScriptableObjectInfo(BridgeRequest request)
-        {
-            var path = RequireScriptableObjectPath(request.StringArg("path") ?? request.StringArg("target"));
-            var asset = LoadScriptableObject(path);
-            return SuccessJson(new UnityCliJsonWriter().BeginObject()
-                .PropRaw("scriptableObject", ScriptableObjectJson(path, asset))
-                .Prop("logPath", LogPath())
-                .EndObject().ToString());
-        }
-
-        private static string ScriptableObjectModify(BridgeRequest request)
-        {
-            EnsureEditorNotBusy("scriptable-object.modify");
-            var path = RequireScriptableObjectPath(request.StringArg("path") ?? request.StringArg("target"));
-            var asset = LoadScriptableObject(path);
-            var patchesJson = request.RawJsonArg("patches");
-            if (!string.IsNullOrEmpty(patchesJson))
-            {
-                return ScriptableObjectModifyPatches(request, path, asset, patchesJson);
-            }
-            var property = request.StringArg("property");
-            if (string.IsNullOrEmpty(property))
-            {
-                throw new BridgeCommandException("E_SCRIPTABLE_OBJECT_PROPERTY_REQUIRED", "scriptable-object.modify requires --property <name> or patches[].", "Pass a public writable field/property name, or patches with SerializedObject propertyPath/value entries.");
-            }
-            if (request.DryRun)
-            {
-                return SuccessJson(new UnityCliJsonWriter().BeginObject()
-                    .Prop("dryRun", true)
-                    .PropRaw("scriptableObject", ScriptableObjectJson(path, asset))
-                    .PropArray("plannedEffects", arr => arr.RawValue(EffectJson("scriptable-object.modify", property, JsonLiteralOrString(request.StringArg("value")))))
-                    .Prop("logPath", LogPath())
-                    .EndObject().ToString());
-            }
-            Undo.RecordObject(asset, "unity_cli tools run scriptable-object.modify");
-            SetObjectMemberValue(asset, property, request.StringArg("value"));
-            EditorUtility.SetDirty(asset);
-            AssetDatabase.SaveAssets();
-            return SuccessJson(ScriptableObjectMutationJson("scriptable-object.modify", path, asset));
-        }
+        // scriptable-object.* 已迁移为 IUnityCliTool(unitypkg/Editor/Tools/scriptable-object/*.cs),
+        // 不再用 RegisterCommand。以下保留的 helper 供 IUnityCliTool 工具通过 internal 访问复用。
+        // RegisterScriptableObjectCommands 已移除。
 
         // 列出当前 Editor domain 中可创建的 ScriptableObject 类型，供 AI 在 create 前自发现类型名。
-        private static string ScriptableObjectListTypes(BridgeRequest request)
+        // ScriptableObjectListTypes 已迁移为 IUnityCliTool(ScriptableObjectListTypesTool)
+        private static string ScriptableObjectListTypes_Removed(BridgeRequest request)
         {
             var namePattern = request.StringArg("namePattern") ?? request.StringArg("name-pattern") ?? request.StringArg("query");
             var assemblyPattern = request.StringArg("assemblyPattern") ?? request.StringArg("assembly-pattern");
@@ -132,51 +55,11 @@ namespace UnityCli
                 .EndObject().ToString());
         }
 
-        // 通过 Unity SerializedObject 批量验证并应用 patches；任一 patch 失败时不落盘。
-        private static string ScriptableObjectModifyPatches(BridgeRequest request, string path, ScriptableObject asset, string patchesJson)
-        {
-            var patchItems = JsonArrayElements(patchesJson);
-            if (patchItems.Count == 0)
-            {
-                throw new BridgeCommandException("E_SCRIPTABLE_OBJECT_PATCHES_INVALID", "patches must be a non-empty JSON array.", "Pass patches like [{\"propertyPath\":\"fieldName\",\"value\":123}].");
-            }
-            var so = new SerializedObject(asset);
-            so.Update();
-            var results = new List<string>();
-            var hasFailure = false;
-            var changed = false;
-            if (!request.DryRun) Undo.RecordObject(asset, "unity_cli tools run scriptable-object.modify patches");
-            for (var i = 0; i < patchItems.Count; i++)
-            {
-                bool patchOk;
-                bool patchChanged;
-                var result = ApplyScriptableObjectPatch(so, patchItems[i], i, request.DryRun, out patchOk, out patchChanged);
-                results.Add(result);
-                if (!patchOk) hasFailure = true;
-                if (patchChanged) changed = true;
-            }
-            if (hasFailure)
-            {
-                return ErrorJsonWithDetails("E_SCRIPTABLE_OBJECT_PATCH_FAILED", "One or more ScriptableObject patches could not be applied.", new UnityCliJsonWriter().BeginObject().PropArray("patchResults", arr => { foreach (var result in results) arr.RawValue(result); }).EndObject().ToString(), "Fix failed patch propertyPath/value entries and retry; no changes were applied.");
-            }
-            if (!request.DryRun && changed)
-            {
-                so.ApplyModifiedProperties();
-                EditorUtility.SetDirty(asset);
-                AssetDatabase.SaveAssets();
-            }
-            return SuccessJson(new UnityCliJsonWriter().BeginObject()
-                .Prop("command", "scriptable-object.modify")
-                .Prop("dryRun", request.DryRun)
-                .Prop("changed", changed && !request.DryRun)
-                .PropRaw("scriptableObject", ScriptableObjectJson(path, asset))
-                .PropArray("patchResults", arr => { foreach (var result in results) arr.RawValue(result); })
-                .Prop("logPath", LogPath())
-                .EndObject().ToString());
-        }
+        // ScriptableObjectModifyPatches 已迁移至 ScriptableObjectModifyTool(IUnityCliTool)
+        // 保留以下 internal helper 供 IUnityCliTool 工具复用
 
         // 验证或写入单个 SerializedProperty patch，支持基础值、Unity 值类型和资产引用。
-        private static string ApplyScriptableObjectPatch(SerializedObject so, string patchJson, int index, bool dryRun, out bool ok, out bool changed)
+        internal static string ApplyScriptableObjectPatch(SerializedObject so, string patchJson, int index, bool dryRun, out bool ok, out bool changed)
         {
             ok = false;
             changed = false;
@@ -335,7 +218,7 @@ namespace UnityCli
         }
 
         // 解析 patches[]，让 SerializedObject 修改可以接收结构化 JSON 数组。
-        private static List<string> JsonArrayElements(string json)
+        internal static List<string> JsonArrayElements(string json)
         {
             var items = new List<string>();
             if (string.IsNullOrEmpty(json)) return items;
@@ -354,7 +237,7 @@ namespace UnityCli
             return items;
         }
 
-        private static string NormalizeSerializedPropertyPath(string rawPath)
+        internal static string NormalizeSerializedPropertyPath(string rawPath)
         {
             if (string.IsNullOrEmpty(rawPath)) return rawPath;
             var path = rawPath.Trim();
@@ -644,7 +527,7 @@ namespace UnityCli
             return reference != null;
         }
 
-        private static void SetObjectMemberValue(object target, string propertyName, string value)
+        internal static void SetObjectMemberValue(object target, string propertyName, string value)
         {
             var flags = BindingFlags.Instance | BindingFlags.Public;
             var property = target.GetType().GetProperty(propertyName, flags);

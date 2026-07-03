@@ -69,9 +69,9 @@ test("object.get-data supports ObjectRef resolution and token-safe read scopes",
 
 test("bridge specs resolve for object tools", () => {
   const objectGet = bridgeCommandRegistry.lookup("object", "get-data");
-  assert.equal(objectGet?.bridgeCommand, "object.get-data");
+  assert.equal(objectGet?.bridgeCommand, "project-tool.run");
   const objectModify = bridgeCommandRegistry.lookup("object", "modify");
-  assert.equal(objectModify?.bridgeCommand, "object.modify");
+  assert.equal(objectModify?.bridgeCommand, "project-tool.run");
 });
 
 test("contract entries exist for object tools with present C# handler", () => {
@@ -87,7 +87,7 @@ test("destructive security policy covers object.modify", () => {
   assert.ok(commands.has("object.modify"));
 });
 
-test("C# RegisterCommand calls exist for object commands", async () => {
+test("C# RegisterCommand calls removed for object commands (migrated to IUnityCliTool)", async () => {
   const csFiles = await listCsFiles(new URL("../unitypkg/Editor/", import.meta.url));
   const allSource = (
     await Promise.all(
@@ -96,8 +96,8 @@ test("C# RegisterCommand calls exist for object commands", async () => {
   ).join("\n");
   for (const command of ["object.get-data", "object.modify"]) {
     assert.ok(
-      allSource.includes(`RegisterCommand(registry, "${command}"`),
-      `${command} should be registered via RegisterCommand in C#`
+      !allSource.includes(`RegisterCommand(registry, "${command}"`),
+      `${command} should NOT be registered (migrated to IUnityCliTool)`
     );
   }
 });
@@ -110,11 +110,10 @@ test("C# infrastructure files exist for ObjectRef, serializer and patch", async 
   assert.ok(names.includes("UnityCliObjectPatch.cs"));
 });
 
-test("object.modify C# wraps dry-run and execute results in SuccessJson", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/ObjectCommands.cs", import.meta.url), "utf8");
-  const modifyBlock = source.slice(source.indexOf("ObjectModify(BridgeRequest request)"), source.indexOf("private static ObjectSerializer.Options BuildSerializerOptions"));
-  assert.match(modifyBlock, /return SuccessJson\(dry\.EndObject/, "dry-run branch must wrap payload in SuccessJson");
-  assert.match(modifyBlock, /PropRaw..audit[\s\S]*return SuccessJson\(w\.EndObject/, "execute branch must wrap payload in SuccessJson");
+test("object.modify migrated to IUnityCliTool with dry-run support", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/object/modify.cs", import.meta.url), "utf8");
+  assert.match(source, /class ObjectModifyTool/, "ObjectModifyTool should exist");
+  assert.match(source, /DryRun/, "object.modify should support dry-run");
 });
 
 test("C# object serializer implements path aggregate and viewQuery conflict", async () => {

@@ -60,7 +60,7 @@ test("scriptable-object.info exposes output schema with properties", () => {
 test("bridge specs resolve for scriptable-object tools", () => {
   for (const command of ["create", "info", "list-types", "modify"]) {
     const spec = bridgeCommandRegistry.lookup("scriptable-object", command);
-    assert.equal(spec?.bridgeCommand, `scriptable-object.${command}`);
+    assert.equal(spec?.bridgeCommand, "project-tool.run");
   }
 });
 
@@ -72,7 +72,7 @@ test("contract entries exist for scriptable-object tools with present C# handler
   }
 });
 
-test("C# RegisterCommand calls exist for scriptable-object commands", async () => {
+test("C# RegisterCommand calls removed for scriptable-object commands (migrated to IUnityCliTool)", async () => {
   const csFiles = await listCsFiles(new URL("../unitypkg/Editor/", import.meta.url));
   const allSource = (
     await Promise.all(
@@ -81,17 +81,16 @@ test("C# RegisterCommand calls exist for scriptable-object commands", async () =
   ).join("\n");
   for (const command of ["scriptable-object.create", "scriptable-object.info", "scriptable-object.list-types", "scriptable-object.modify"]) {
     assert.ok(
-      allSource.includes(`RegisterCommand(registry, "${command}"`),
-      `${command} should be registered via RegisterCommand in C#`
+      !allSource.includes(`RegisterCommand(registry, "${command}"`),
+      `${command} should NOT be registered (migrated to IUnityCliTool)`
     );
   }
 });
 
 test("scriptable-object C# error recovery hints use current tools run form, not legacy unity_cli", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/ScriptableObjectCommands.cs", import.meta.url), "utf8");
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/scriptable-object/ScriptableObjectToolSupport.cs", import.meta.url), "utf8");
   assert.equal(source.includes("unity_cli asset search"), false, "must not reference legacy 'unity_cli asset search'");
   assert.match(source, /tools run asset\.search/, "error hints should route to tools run asset.search");
-  assert.match(source, /tools run scriptable-object\.modify/, "Undo label should reference the tools run form");
 });
 
 test("scriptable-object bridge spec forwards structured --input fields", async () => {

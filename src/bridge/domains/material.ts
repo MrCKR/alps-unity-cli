@@ -2,11 +2,11 @@ import { boolFlag, compactArgs, numberFlag, stringFlag } from "../args.js";
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const materialBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "material", command: "info", bridgeCommand: "material.info", buildArgs: materialArgs },
-  { group: "material", command: "create", bridgeCommand: "material.create", buildArgs: materialArgs },
-  { group: "material", command: "assign", bridgeCommand: "material.assign", buildArgs: materialArgs },
-  { group: "material", command: "set", bridgeCommand: "material.set", buildArgs: materialArgs },
-  { group: "material", command: "set-renderer-color", bridgeCommand: "material.set-renderer-color", buildArgs: materialArgs, supportsDryRun: true }
+  { group: "material", command: "info", bridgeCommand: "project-tool.run", toolName: "material.info", buildArgs: materialArgs },
+  { group: "material", command: "create", bridgeCommand: "project-tool.run", toolName: "material.create", buildArgs: materialArgs },
+  { group: "material", command: "assign", bridgeCommand: "project-tool.run", toolName: "material.assign", buildArgs: materialArgs },
+  { group: "material", command: "set", bridgeCommand: "project-tool.run", toolName: "material.set", buildArgs: materialArgs },
+  { group: "material", command: "set-renderer-color", bridgeCommand: "project-tool.run", toolName: "material.set-renderer-color", buildArgs: materialArgs, supportsDryRun: true }
 ];
 
 // 读取 tools run --input 中无法映射为简单 flag 的结构化字段（如 namePattern）

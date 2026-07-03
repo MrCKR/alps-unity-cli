@@ -61,11 +61,11 @@ test("reflection.method.call supports instanceRef and dry-run confirmation flow"
 
 test("bridge specs resolve for reflection and type tools", () => {
   const methodFind = bridgeCommandRegistry.lookup("reflection", "method-find");
-  assert.equal(methodFind?.bridgeCommand, "reflection.method.find");
+  assert.equal(methodFind?.bridgeCommand, "project-tool.run");
   const methodCall = bridgeCommandRegistry.lookup("reflection", "method-call");
-  assert.equal(methodCall?.bridgeCommand, "reflection.method.call");
+  assert.equal(methodCall?.bridgeCommand, "project-tool.run");
   const typeSchema = bridgeCommandRegistry.lookup("type", "schema");
-  assert.equal(typeSchema?.bridgeCommand, "type.schema");
+  assert.equal(typeSchema?.bridgeCommand, "project-tool.run");
 });
 
 test("contract entries exist for reflection and type tools with present C# handler", () => {
@@ -81,7 +81,7 @@ test("destructive security policy covers reflection.method.call", () => {
   assert.ok(commands.has("reflection.method.call"));
 });
 
-test("C# RegisterCommand calls exist for reflection and type commands", async () => {
+test("C# RegisterCommand calls removed for reflection and type commands (migrated to IUnityCliTool)", async () => {
   const csFiles = await listCsFiles(new URL("../unitypkg/Editor/", import.meta.url));
   const allSource = (
     await Promise.all(
@@ -90,13 +90,14 @@ test("C# RegisterCommand calls exist for reflection and type commands", async ()
   ).join("\n");
   for (const command of ["reflection.method.find", "reflection.method.call", "type.schema"]) {
     assert.ok(
-      allSource.includes(`RegisterCommand(registry, "${command}"`),
-      `${command} should be registered via RegisterCommand in C#`
+      !allSource.includes(`RegisterCommand(registry, "${command}"`),
+      `${command} should NOT be registered (migrated to IUnityCliTool)`
     );
   }
-  assert.match(allSource, /return SuccessJson\(ReflectionInvoker\.FindMethods\(/, "reflection.method.find should return a bridge success envelope");
-  assert.match(allSource, /return SuccessJson\(result\);/, "reflection.method.call should wrap execution results in a bridge success envelope");
-  assert.match(allSource, /return SuccessJson\(TypeSchemaGenerator\.Generate\(/, "type.schema should return a bridge success envelope");
+  // IUnityCliTool 工具调用内部 ReflectionInvoker/TypeSchemaGenerator
+  assert.match(allSource, /ReflectionInvoker\.FindMethods\(/, "reflection.method.find should call ReflectionInvoker.FindMethods");
+  assert.match(allSource, /ReflectionInvoker\.CallMethod\(/, "reflection.method.call should call ReflectionInvoker.CallMethod");
+  assert.match(allSource, /TypeSchemaGenerator\.Generate\(/, "type.schema should call TypeSchemaGenerator.Generate");
   assert.match(allSource, /PropObject\("\$defs"/, "type.schema should emit $defs for nested complex types");
   assert.match(allSource, /Prop\("\$ref", "#\/\$defs\//, "type.schema should reference nested complex types via $ref");
   assert.match(allSource, /TryGetDictionaryTypes/, "type.schema should handle dictionary-shaped generic types");

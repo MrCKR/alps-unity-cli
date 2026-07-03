@@ -11,16 +11,12 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
-        private static void RegisterReflectionCommands(BridgeCommandRegistry registry)
-        {
-            // live 反射：对齐 IvanMurzak reflection-method-find/call 与 type-get-json-schema
-            RegisterCommand(registry, "reflection.method.find", "reflection", false, ReflectionMethodFind);
-            RegisterCommand(registry, "reflection.method.call", "reflection", true, ReflectionMethodCall);
-            RegisterCommand(registry, "type.schema", "type", false, TypeSchema);
-        }
+        // reflection.* / type.* 已迁移为 IUnityCliTool(unitypkg/Editor/Tools/reflection/*.cs),
+        // 不再用 RegisterCommand。RegisterReflectionCommands 已移除。
+        // ReflectionMethodFind_Removed / ReflectionMethodCall_Removed / TypeSchema_Removed 已迁移。
 
         /// <summary>查找方法：不限制 public/private/static/instance。只读。</summary>
-        private static string ReflectionMethodFind(BridgeRequest request)
+        private static string ReflectionMethodFind_Removed(BridgeRequest request)
         {
             var typeName = request.StringArg("typeName");
             if (string.IsNullOrEmpty(typeName))
@@ -43,7 +39,7 @@ namespace UnityCli
         }
 
         /// <summary>调用方法：不做范围限制，高风险，要求 --yes。返回 audit、异常与结果。</summary>
-        private static string ReflectionMethodCall(BridgeRequest request)
+        private static string ReflectionMethodCall_Removed(BridgeRequest request)
         {
             EnsureEditorNotBusy("reflection.method.call");
             var typeName = request.StringArg("typeName");
@@ -86,7 +82,7 @@ namespace UnityCli
         }
 
         /// <summary>生成类型 JSON Schema。</summary>
-        private static string TypeSchema(BridgeRequest request)
+        private static string TypeSchema_Removed(BridgeRequest request)
         {
             var typeName = request.StringArg("typeName");
             if (string.IsNullOrEmpty(typeName))

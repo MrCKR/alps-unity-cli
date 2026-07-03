@@ -11,7 +11,8 @@ export const extensionBridgeSpecs: BridgeCommandSpec[] = [
   {
     group: "extension",
     command: "status",
-    bridgeCommand: "extension.status",
+    bridgeCommand: "project-tool.run",
+    toolName: "extension.status",
     buildArgs: (ctx) => ({
       extensionId: ctx.flags["id"] ?? ctx.flags["name"] ?? ctx.positionalTarget
     }),

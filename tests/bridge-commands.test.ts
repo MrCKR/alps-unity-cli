@@ -513,10 +513,10 @@ test("tools run forwards structured --input fields with pwsh escaping", async ()
   assert.equal(read.ok, true);
   assert.equal(pwshEscaped.ok, true);
   assert.equal(backslashQuoted.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["material.info", "material.info", "material.info"]);
-  assert.deepEqual(requests[0].args, { path: "Assets/Materials/Probe.mat" });
-  assert.deepEqual(requests[1].args, { path: "Assets/Materials/Probe.mat" });
-  assert.deepEqual(requests[2].args, { path: "Assets/Materials/Probe.mat" });
+  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run"]);
+  assert.deepEqual(requests[0].args, { name: "material.info", input: { path: "Assets/Materials/Probe.mat" } });
+  assert.deepEqual(requests[1].args, { name: "material.info", input: { path: "Assets/Materials/Probe.mat" } });
+  assert.deepEqual(requests[2].args, { name: "material.info", input: { path: "Assets/Materials/Probe.mat" } });
 });
 
 test("tools run rejects invalid --input JSON before bridge execution", async () => {
@@ -559,9 +559,8 @@ test("screenshot commands forward output and surround arguments", async () => {
   assert.equal(requests[0].command, "project-tool.run");
   assert.deepEqual(requests[0].args, { name: "screenshot.capture", input: { path: "Artifacts/after.png", width: 1280, height: 720, inlineBase64: true } });
   assert.equal((result.data as { screenshotPath: string }).screenshotPath, "Artifacts/after.png");
-  assert.equal(requests[1].command, "screenshot.surround");
-  assert.equal(requests[1].dryRun, true);
-  assert.deepEqual(requests[1].args, { target: "Player", "output-dir": "Assets/Shots", contactSheetPath: "Assets/Shots/contact.png", width: 320, height: 240, radius: 6.5, fov: 55, inlineBase64: true });
+  assert.equal(requests[1].command, "project-tool.run");
+  assert.deepEqual(requests[1].args, { name: "screenshot.surround", input: { target: "Player", "output-dir": "Assets/Shots", contactSheetPath: "Assets/Shots/contact.png", width: 320, height: 240, radius: 6.5, fov: 55, inlineBase64: true, dryRun: true } });
 });
 
 test("build commands forward settings and dry-run arguments", async () => {
@@ -581,14 +580,11 @@ test("build commands forward settings and dry-run arguments", async () => {
   assert.equal(platform.ok, true);
   assert.equal(profiles.ok, true);
   assert.equal(settings.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["build.scenes", "build.platform", "build.profiles", "build.settings"]);
-  assert.deepEqual(requests[0].args, { action: "add", path: "Assets/Scenes/Main.unity", dryRun: true });
-  assert.equal(requests[0].dryRun, true);
-  assert.deepEqual(requests[1].args, { action: "set", target: "StandaloneWindows64", dryRun: true });
-  assert.equal(requests[1].dryRun, true);
-  assert.deepEqual(requests[2].args, { action: "create", path: "Assets/BuildProfiles/Windows.asset", name: "Windows", dryRun: true });
-  assert.equal(requests[2].dryRun, true);
-  assert.deepEqual(requests[3].args, {});
+  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
+  assert.deepEqual(requests[0].args, { name: "build.scenes", input: { action: "add", path: "Assets/Scenes/Main.unity", dryRun: true } });
+  assert.deepEqual(requests[1].args, { name: "build.platform", input: { action: "set", target: "StandaloneWindows64", dryRun: true } });
+  assert.deepEqual(requests[2].args, { name: "build.profiles", input: { action: "create", path: "Assets/BuildProfiles/Windows.asset", name: "Windows", dryRun: true } });
+  assert.deepEqual(requests[3].args, { name: "build.settings", input: {} });
 });
 
 test("camera commands forward target and screenshot options", async () => {
@@ -672,7 +668,8 @@ test("prefab commands forward paths, pagination, modify args and planned effects
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
     requests.push(payload);
-    return { ok: true, data: { prefab: { path: payload.args.path }, plannedEffects: payload.command === "prefab.create" ? [{ type: payload.command, path: payload.args.path }] : [] } };
+    const input = (payload.args.input ?? {}) as Record<string, unknown>;
+    return { ok: true, data: { prefab: { path: input.path }, plannedEffects: payload.args.name === "prefab.create" ? [{ type: payload.args.name, path: input.path }] : [] } };
   };
 
   const info = await execute(["tools", "run", "prefab.info", "Assets/Prefabs/Player.prefab"], { ...runtime, bridgeExecute });
@@ -690,13 +687,13 @@ test("prefab commands forward paths, pagination, modify args and planned effects
   assert.equal(hierarchy.ok, true);
   assert.equal(save.ok, true);
   assert.equal(close.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["prefab.info", "prefab.create", "prefab.modify", "prefab.stage-open", "prefab.hierarchy", "prefab.stage-save", "prefab.stage-close"]);
-  assert.deepEqual(requests[0].args, { path: "Assets/Prefabs/Player.prefab" });
-  assert.deepEqual(requests[1].args, { source: "Player", path: "Assets/Prefabs/Player.prefab", overwrite: true });
-  assert.deepEqual(requests[2].args, { path: "Assets/Prefabs/Player.prefab", name: "Hero", addChild: "Socket", removeChild: "OldSocket", overwrite: true });
-  assert.deepEqual(requests[4].args, { pageSize: 25, cursor: "50", path: "Assets/Prefabs/Player.prefab", parent: "Player", query: "Socket", componentType: "Transform" });
-  assert.deepEqual(requests[5].args, {});
-  assert.deepEqual(requests[6].args, { save: true });
+  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
+  assert.deepEqual(requests[0].args, { name: "prefab.info", input: { path: "Assets/Prefabs/Player.prefab" } });
+  assert.deepEqual(requests[1].args, { name: "prefab.create", input: { source: "Player", path: "Assets/Prefabs/Player.prefab", overwrite: true } });
+  assert.deepEqual(requests[2].args, { name: "prefab.modify", input: { path: "Assets/Prefabs/Player.prefab", name: "Hero", addChild: "Socket", removeChild: "OldSocket", overwrite: true } });
+  assert.deepEqual(requests[4].args, { name: "prefab.hierarchy", input: { pageSize: 25, cursor: "50", path: "Assets/Prefabs/Player.prefab", parent: "Player", query: "Socket", componentType: "Transform" } });
+  assert.deepEqual(requests[5].args, { name: "prefab.stage-save", input: {} });
+  assert.deepEqual(requests[6].args, { name: "prefab.stage-close", input: { save: true } });
   assert.deepEqual((create.data as { plannedEffects: unknown[] }).plannedEffects, [{ type: "prefab.create", path: "Assets/Prefabs/Player.prefab" }]);
 });
 
@@ -737,11 +734,17 @@ test("destructive bridge commands pass dryRun and security proof when explicitly
   });
 
   assert.equal(confirmed.ok, true);
+  assert.equal(requests[0].command, "project-tool.run");
+  assert.equal(requests[0].args.name, "asset.delete");
   assert.equal(requests[0].security?.confirmed, true);
   assert.equal(requests[0].security?.destructiveFingerprint, "destructive-safety-v1");
   assert.equal(dryRun.ok, true);
+  assert.equal(requests[1].command, "project-tool.run");
+  assert.equal(requests[1].args.name, "asset.delete");
   assert.equal(requests[1].dryRun, true);
-  assert.equal(requests[1].args.dryRun, true);
+  assert.equal((requests[1].args.input as Record<string, unknown>).dryRun, true);
+  assert.equal(requests[1].security?.confirmed, false);
+  assert.equal(requests[1].security?.destructiveFingerprint, "destructive-safety-v1");
 });
 
  test("asset commands forward CRUD and move-style envelopes", async () => {
@@ -770,19 +773,20 @@ test("destructive bridge commands pass dryRun and security proof when explicitly
   for (const result of [search, info, components, refresh, create, mkdir, imported, modify, duplicate, move, rename, deleted]) {
     assert.equal(result.ok, true);
   }
-  assert.deepEqual(requests.map((request) => request.command), ["asset.search", "asset.info", "asset.get-components", "asset.refresh", "asset.create", "asset.create", "asset.import", "asset.modify", "asset.duplicate", "asset.move", "asset.rename", "asset.delete"]);
-  assert.deepEqual(requests[0].args, { pageSize: 10, target: "Player", query: "Player", type: "Prefab" });
-  assert.deepEqual(requests[2].args, { assetPath: "Assets/Prefabs/Player.prefab", query: "Camera", componentType: "Transform", pageSize: 25 });
-  assert.deepEqual(requests[3].args, { path: "Assets/Generated", forceUpdate: true, dryRun: true });
+  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
+  assert.deepEqual(requests.map((request) => request.args.name), ["asset.search", "asset.info", "asset.get-components", "asset.refresh", "asset.create", "asset.create", "asset.import", "asset.modify", "asset.duplicate", "asset.move", "asset.rename", "asset.delete"]);
+  assert.deepEqual(requests[0].args.input, { pageSize: 10, target: "Player", query: "Player", type: "Prefab" });
+  assert.deepEqual(requests[2].args.input, { assetPath: "Assets/Prefabs/Player.prefab", query: "Camera", componentType: "Transform", pageSize: 25 });
+  assert.deepEqual(requests[3].args.input, { path: "Assets/Generated", forceUpdate: true, dryRun: true });
   assert.equal(requests[3].dryRun, true);
-  assert.deepEqual(requests[4].args, { path: "Assets/Generated/config.json", content: "{}", overwrite: true });
-  assert.deepEqual(requests[5].args, { path: "Assets/Generated" });
-  assert.deepEqual(requests[6].args, { path: "Assets/Generated/asset.txt", source: contentFile, overwrite: true });
-  assert.deepEqual(requests[7].args, { path: "Assets/Generated/config.json", content: "hello" });
-  assert.deepEqual(requests[8].args, { path: "Assets/Generated/config.json", destination: "Assets/Generated/config-copy.json" });
-  assert.deepEqual(requests[9].args, { path: "Assets/Generated/config-copy.json", destination: "Assets/Generated/config-moved.json" });
-  assert.deepEqual(requests[10].args, { path: "Assets/Generated/config-moved.json", name: "config-renamed.json" });
-  assert.deepEqual(requests[11].args, { path: "Assets/Generated/config-renamed.json" });
+  assert.deepEqual(requests[4].args.input, { path: "Assets/Generated/config.json", content: "{}", overwrite: true });
+  assert.deepEqual(requests[5].args.input, { path: "Assets/Generated" });
+  assert.deepEqual(requests[6].args.input, { path: "Assets/Generated/asset.txt", source: contentFile, overwrite: true });
+  assert.deepEqual(requests[7].args.input, { path: "Assets/Generated/config.json", content: "hello" });
+  assert.deepEqual(requests[8].args.input, { path: "Assets/Generated/config.json", destination: "Assets/Generated/config-copy.json" });
+  assert.deepEqual(requests[9].args.input, { path: "Assets/Generated/config-copy.json", destination: "Assets/Generated/config-moved.json" });
+  assert.deepEqual(requests[10].args.input, { path: "Assets/Generated/config-moved.json", name: "config-renamed.json" });
+  assert.deepEqual(requests[11].args.input, { path: "Assets/Generated/config-renamed.json" });
   assert.equal(requests[11].security?.destructiveFingerprint, "destructive-safety-v1");
 });
 
@@ -802,11 +806,12 @@ test("asset mutation tools forward structured --input fields", async () => {
   for (const result of [create, duplicate, rename, deleted]) {
     assert.equal(result.ok, true);
   }
-  assert.deepEqual(requests.map((request) => request.command), ["asset.create", "asset.duplicate", "asset.rename", "asset.delete"]);
-  assert.deepEqual(requests[0].args, { path: "Assets/Generated/config.json", type: "file", content: "{}", overwrite: true });
-  assert.deepEqual(requests[1].args, { path: "Assets/Generated/config.json", source: "Assets/Generated/config.json", destination: "Assets/Generated/config-copy.json" });
-  assert.deepEqual(requests[2].args, { path: "Assets/Generated/config-copy.json", name: "config-renamed.json" });
-  assert.deepEqual(requests[3].args, { path: "Assets/Generated/config-renamed.json", dryRun: true });
+  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
+  assert.deepEqual(requests.map((request) => request.args.name), ["asset.create", "asset.duplicate", "asset.rename", "asset.delete"]);
+  assert.deepEqual(requests[0].args.input, { path: "Assets/Generated/config.json", type: "file", content: "{}", overwrite: true });
+  assert.deepEqual(requests[1].args.input, { path: "Assets/Generated/config.json", source: "Assets/Generated/config.json", destination: "Assets/Generated/config-copy.json" });
+  assert.deepEqual(requests[2].args.input, { path: "Assets/Generated/config-copy.json", name: "config-renamed.json" });
+  assert.deepEqual(requests[3].args.input, { path: "Assets/Generated/config-renamed.json", dryRun: true });
   assert.equal(requests[3].dryRun, true);
 });
 
@@ -815,7 +820,8 @@ test("material commands forward asset paths, target, values and planned effects"
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
     requests.push(payload);
-    return { ok: true, data: { material: { path: payload.args.path ?? payload.args.material }, plannedEffects: payload.command === "material.info" ? [] : [{ type: payload.command, path: payload.args.path ?? payload.args.material }] } };
+    const input = (payload.args.input ?? {}) as Record<string, unknown>;
+    return { ok: true, data: { material: { path: input.path ?? input.material }, plannedEffects: payload.args.name === "material.info" ? [] : [{ type: payload.args.name, path: input.path ?? input.material }] } };
   };
 
   const info = await execute(["tools", "run", "material.info", "Assets/Materials/Player.mat"], { ...runtime, bridgeExecute });
@@ -829,12 +835,12 @@ test("material commands forward asset paths, target, values and planned effects"
   assert.equal(assign.ok, true);
   assert.equal(set.ok, true);
   assert.equal(rendererColor.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["material.info", "material.create", "material.assign", "material.set", "material.set-renderer-color"]);
-  assert.deepEqual(requests[0].args, { path: "Assets/Materials/Player.mat" });
-  assert.deepEqual(requests[1].args, { path: "Assets/Materials/Player.mat", shader: "Standard", overwrite: true });
-  assert.deepEqual(requests[2].args, { target: "Canvas/Button", material: "Assets/Materials/Player.mat", slot: 1 });
-  assert.deepEqual(requests[3].args, { path: "Assets/Materials/Player.mat", property: "_Metallic", floatValue: "0.8", type: "float" });
-  assert.deepEqual(requests[4].args, { target: "Player", color: "#ff00ffff", slot: 0, dryRun: true });
+  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
+  assert.deepEqual(requests[0].args, { name: "material.info", input: { path: "Assets/Materials/Player.mat" } });
+  assert.deepEqual(requests[1].args, { name: "material.create", input: { path: "Assets/Materials/Player.mat", shader: "Standard", overwrite: true } });
+  assert.deepEqual(requests[2].args, { name: "material.assign", input: { target: "Canvas/Button", material: "Assets/Materials/Player.mat", slot: 1 } });
+  assert.deepEqual(requests[3].args, { name: "material.set", input: { path: "Assets/Materials/Player.mat", property: "_Metallic", floatValue: "0.8", type: "float" } });
+  assert.deepEqual(requests[4].args, { name: "material.set-renderer-color", input: { target: "Player", color: "#ff00ffff", slot: 0, dryRun: true } });
   assert.deepEqual((set.data as { plannedEffects: unknown[] }).plannedEffects, [{ type: "material.set", path: "Assets/Materials/Player.mat" }]);
 });
 
@@ -940,14 +946,14 @@ test("profiler commands forward session, counter, memory, frame and export args"
   assert.equal(capture.ok, true);
   assert.equal(exportResult.ok, true);
   assert.equal(stop.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["profiler.status", "profiler.start", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export", "profiler.stop"]);
-  assert.deepEqual(requests[1].args, { deepProfiling: true });
-  assert.deepEqual(requests[2].args, { paused: true });
-  assert.deepEqual(requests[3].args, { counter: "MonoUsedSizeLong", category: "memory" });
-  assert.deepEqual(requests[4].args, {});
-  assert.deepEqual(requests[5].args, { module: "CPU Usage" });
+  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "profiler.capture", "project-tool.run", "project-tool.run"]);
+  assert.deepEqual(requests[1].args, { name: "profiler.start", input: { deepProfiling: true } });
+  assert.deepEqual(requests[2].args, { name: "profiler.pause", input: { paused: true } });
+  assert.deepEqual(requests[3].args, { name: "profiler.counter", input: { counter: "MonoUsedSizeLong", category: "memory" } });
+  assert.deepEqual(requests[4].args, { name: "profiler.memory", input: {} });
+  assert.deepEqual(requests[5].args, { name: "profiler.frame", input: { module: "CPU Usage" } });
   assert.deepEqual(requests[6].args, { path: "Artifacts/profile.json", format: "json", durationMs: 100, frames: 2, overwrite: true });
-  assert.deepEqual(requests[7].args, { path: "Artifacts/profile-export.json", format: "json", overwrite: true });
+  assert.deepEqual(requests[7].args, { name: "profiler.export", input: { path: "Artifacts/profile-export.json", format: "json", overwrite: true } });
 });
 
 test("animation and vfx commands forward Windows paths, targets and effects", async () => {
@@ -1063,14 +1069,15 @@ test("shader commands forward paths, content and overwrite", async () => {
   assert.equal(update.ok, true);
   assert.equal(del.ok, true);
   assert.equal(getData.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["shader.info", "shader.read", "shader.create", "shader.update", "shader.delete", "shader.get-data"]);
-  assert.deepEqual(requests[0].args, { path: "Assets/Shaders/Unlit.shader", target: "Assets/Shaders/Unlit.shader" });
-  assert.deepEqual(requests[1].args, { path: "Assets/Shaders/Unlit.shader", target: "Assets/Shaders/Unlit.shader", offset: 5, maxBytes: 128 });
-  assert.equal(requests[2].args.content, "Shader \"UnityCli/Test\" {}\n");
-  assert.equal(requests[2].args.overwrite, true);
-  assert.equal(requests[3].args.content, "Shader X {}");
+  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
+  assert.deepEqual(requests.map((request) => request.args.name), ["shader.info", "shader.read", "shader.create", "shader.update", "shader.delete", "shader.get-data"]);
+  assert.deepEqual(requests[0].args.input, { path: "Assets/Shaders/Unlit.shader", target: "Assets/Shaders/Unlit.shader" });
+  assert.deepEqual(requests[1].args.input, { path: "Assets/Shaders/Unlit.shader", target: "Assets/Shaders/Unlit.shader", offset: 5, maxBytes: 128 });
+  assert.equal((requests[2].args.input as Record<string, unknown>).content, "Shader \"UnityCli/Test\" {}\n");
+  assert.equal((requests[2].args.input as Record<string, unknown>).overwrite, true);
+  assert.equal((requests[3].args.input as Record<string, unknown>).content, "Shader X {}");
   assert.equal(requests[4].dryRun, true);
-  assert.deepEqual(requests[5].args, { path: "Assets/Shaders/Unlit.shader", assetPath: "Assets/Shaders/Unlit.shader", target: "Assets/Shaders/Unlit.shader", includeSubshaders: true, includeSourceCode: false, maxPasses: 4 });
+  assert.deepEqual(requests[5].args.input, { path: "Assets/Shaders/Unlit.shader", assetPath: "Assets/Shaders/Unlit.shader", target: "Assets/Shaders/Unlit.shader", includeSubshaders: true, includeSourceCode: false, maxPasses: 4 });
 });
 
 test("texture commands forward importer, sprite and creation options", async () => {
@@ -1094,16 +1101,17 @@ test("texture commands forward importer, sprite and creation options", async () 
   assert.equal(modify.ok, true);
   assert.equal(del.ok, true);
   assert.equal(importSettings.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["texture.info", "texture.create", "texture.sprite", "texture.modify", "texture.delete", "texture.import-settings"]);
-  assert.deepEqual(requests[1].args, { path: "Assets/Textures/Icon.png", target: "Assets/Textures/Icon.png", source: "C:/tmp/icon.png", overwrite: true, textureType: "Sprite" });
-  assert.deepEqual(requests[2].args, { path: "Assets/Textures/Icon.png", target: "Assets/Textures/Icon.png", spriteMode: "Multiple", pixelsPerUnit: 128, pivotX: "0.25", pivotY: "0.75", slices: [{ name: "left", x: 0, y: 0, width: 16, height: 16 }] });
-  assert.deepEqual(requests[3].args, { path: "Assets/Textures/Icon.png", target: "Assets/Textures/Icon.png", width: 3, height: 4, fillColor: "#ff0000", x: 1, y: 2, dryRun: true });
+  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
+  assert.deepEqual(requests.map((request) => request.args.name), ["texture.info", "texture.create", "texture.sprite", "texture.modify", "texture.delete", "texture.import-settings"]);
+  assert.deepEqual(requests[1].args.input, { path: "Assets/Textures/Icon.png", target: "Assets/Textures/Icon.png", source: "C:/tmp/icon.png", overwrite: true, textureType: "Sprite" });
+  assert.deepEqual(requests[2].args.input, { path: "Assets/Textures/Icon.png", target: "Assets/Textures/Icon.png", spriteMode: "Multiple", pixelsPerUnit: 128, pivotX: "0.25", pivotY: "0.75", slices: [{ name: "left", x: 0, y: 0, width: 16, height: 16 }] });
+  assert.deepEqual(requests[3].args.input, { path: "Assets/Textures/Icon.png", target: "Assets/Textures/Icon.png", width: 3, height: 4, fillColor: "#ff0000", x: 1, y: 2, dryRun: true });
   assert.equal(requests[4].dryRun, true);
-  assert.equal(requests[5].args.readable, false);
-  assert.equal(requests[5].args.mipmap, false);
-  assert.equal(requests[5].args.sRGB, true);
-  assert.equal(requests[5].args.alphaIsTransparency, true);
-  assert.equal(requests[5].args.maxTextureSize, 512);
+  assert.equal((requests[5].args.input as Record<string, unknown>).readable, false);
+  assert.equal((requests[5].args.input as Record<string, unknown>).mipmap, false);
+  assert.equal((requests[5].args.input as Record<string, unknown>).sRGB, true);
+  assert.equal((requests[5].args.input as Record<string, unknown>).alphaIsTransparency, true);
+  assert.equal((requests[5].args.input as Record<string, unknown>).maxTextureSize, 512);
 });
 
 test("shader and texture bridge errors preserve structured diagnostics", async () => {

@@ -2,21 +2,21 @@ import { assetArgs, boolFlag, compactArgs, numberFlag, queryArgs, stringFlag } f
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const assetBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "asset", command: "search", bridgeCommand: "asset.search", buildArgs: assetQueryArgs },
-  { group: "asset", command: "info", bridgeCommand: "asset.info", buildArgs: assetQueryArgs },
-  { group: "asset", command: "create", bridgeCommand: "asset.create", buildArgs: assetMutationArgs },
-  { group: "asset", command: "mkdir", bridgeCommand: "asset.create", buildArgs: assetMutationArgs },
-  { group: "asset", command: "import", bridgeCommand: "asset.import", buildArgs: assetMutationArgs },
-  { group: "asset", command: "modify", bridgeCommand: "asset.modify", buildArgs: assetMutationArgs },
-  { group: "asset", command: "delete", bridgeCommand: "asset.delete", buildArgs: assetMutationArgs },
-  { group: "asset", command: "duplicate", bridgeCommand: "asset.duplicate", buildArgs: assetMutationArgs },
-  { group: "asset", command: "move", bridgeCommand: "asset.move", buildArgs: assetMutationArgs },
-  { group: "asset", command: "rename", bridgeCommand: "asset.rename", buildArgs: assetMutationArgs },
-  { group: "asset", command: "search-built-in", bridgeCommand: "asset.search-built-in", buildArgs: assetSearchBuiltInArgs },
-  { group: "asset", command: "get-data", bridgeCommand: "asset.get-data", buildArgs: assetGetDataArgs },
-  { group: "asset", command: "get-components", bridgeCommand: "asset.get-components", buildArgs: assetGetComponentsArgs },
-  { group: "asset", command: "preview", bridgeCommand: "asset.preview", buildArgs: assetPreviewArgs },
-  { group: "asset", command: "refresh", bridgeCommand: "asset.refresh", buildArgs: assetRefreshArgs, supportsDryRun: true, supportsJob: true }
+  { group: "asset", command: "search", bridgeCommand: "project-tool.run", toolName: "asset.search", buildArgs: assetQueryArgs },
+  { group: "asset", command: "info", bridgeCommand: "project-tool.run", toolName: "asset.info", buildArgs: assetQueryArgs },
+  { group: "asset", command: "create", bridgeCommand: "project-tool.run", toolName: "asset.create", buildArgs: assetMutationArgs },
+  { group: "asset", command: "mkdir", bridgeCommand: "project-tool.run", toolName: "asset.create", buildArgs: assetMutationArgs },
+  { group: "asset", command: "import", bridgeCommand: "project-tool.run", toolName: "asset.import", buildArgs: assetMutationArgs },
+  { group: "asset", command: "modify", bridgeCommand: "project-tool.run", toolName: "asset.modify", buildArgs: assetMutationArgs },
+  { group: "asset", command: "delete", bridgeCommand: "project-tool.run", toolName: "asset.delete", buildArgs: assetMutationArgs },
+  { group: "asset", command: "duplicate", bridgeCommand: "project-tool.run", toolName: "asset.duplicate", buildArgs: assetMutationArgs },
+  { group: "asset", command: "move", bridgeCommand: "project-tool.run", toolName: "asset.move", buildArgs: assetMutationArgs },
+  { group: "asset", command: "rename", bridgeCommand: "project-tool.run", toolName: "asset.rename", buildArgs: assetMutationArgs },
+  { group: "asset", command: "search-built-in", bridgeCommand: "project-tool.run", toolName: "asset.search-built-in", buildArgs: assetSearchBuiltInArgs },
+  { group: "asset", command: "get-data", bridgeCommand: "project-tool.run", toolName: "asset.get-data", buildArgs: assetGetDataArgs },
+  { group: "asset", command: "get-components", bridgeCommand: "project-tool.run", toolName: "asset.get-components", buildArgs: assetGetComponentsArgs },
+  { group: "asset", command: "preview", bridgeCommand: "project-tool.run", toolName: "asset.preview", buildArgs: assetPreviewArgs },
+  { group: "asset", command: "refresh", bridgeCommand: "project-tool.run", toolName: "asset.refresh", buildArgs: assetRefreshArgs, supportsDryRun: true, supportsJob: true }
 ];
 
 /** 读取 tools run --input 中无法映射为简单 flag 的结构化字段。 */

@@ -30,11 +30,8 @@ namespace UnityCli
     {
         private static void RegisterMaterialCommands(BridgeCommandRegistry registry)
         {
-            RegisterCommand(registry, "material.info", "material", false, MaterialInfo);
-            RegisterCommand(registry, "material.create", "material", true, MaterialCreate);
-            RegisterCommand(registry, "material.assign", "material", true, MaterialAssign);
-            RegisterCommand(registry, "material.set", "material", true, MaterialSet);
-            RegisterCommand(registry, "material.set-renderer-color", "material", false, MaterialSetRendererColor);
+            // material 域工具已全部迁移为 IUnityCliTool 自包含形态(unitypkg/Editor/Tools/material/*.cs)。
+            // 此处仅保留被其他域复用的私有 helper 与空注册方法。
         }
 
         private static string MaterialInfo(BridgeRequest request)

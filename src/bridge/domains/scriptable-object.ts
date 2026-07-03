@@ -2,10 +2,10 @@ import { boolFlag, compactArgs, stringFlag } from "../args.js";
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const scriptableObjectBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "scriptable-object", command: "create", bridgeCommand: "scriptable-object.create", buildArgs: scriptableObjectArgs },
-  { group: "scriptable-object", command: "info", bridgeCommand: "scriptable-object.info", buildArgs: scriptableObjectArgs },
-  { group: "scriptable-object", command: "list-types", bridgeCommand: "scriptable-object.list-types", buildArgs: scriptableObjectArgs },
-  { group: "scriptable-object", command: "modify", bridgeCommand: "scriptable-object.modify", buildArgs: scriptableObjectArgs }
+  { group: "scriptable-object", command: "create", bridgeCommand: "project-tool.run", toolName: "scriptable-object.create", buildArgs: scriptableObjectArgs },
+  { group: "scriptable-object", command: "info", bridgeCommand: "project-tool.run", toolName: "scriptable-object.info", buildArgs: scriptableObjectArgs },
+  { group: "scriptable-object", command: "list-types", bridgeCommand: "project-tool.run", toolName: "scriptable-object.list-types", buildArgs: scriptableObjectArgs },
+  { group: "scriptable-object", command: "modify", bridgeCommand: "project-tool.run", toolName: "scriptable-object.modify", buildArgs: scriptableObjectArgs }
 ];
 
 // 读取 tools run --input 中无法映射为简单 flag 的结构化字段（type/property/value 等）

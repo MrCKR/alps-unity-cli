@@ -11,15 +11,10 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
-        private static void RegisterObjectCommands(BridgeCommandRegistry registry)
-        {
-            // 通用 Object 深读写：对齐 IvanMurzak object-get-data/object-modify
-            RegisterCommand(registry, "object.get-data", "object", false, ObjectGetData);
-            RegisterCommand(registry, "object.modify", "object", true, ObjectModify);
-        }
+        // object.* 已迁移为 IUnityCliTool(unitypkg/Editor/Tools/object/*.cs),
+        // 不再用 RegisterCommand。RegisterObjectCommands 已移除。
 
-        /// <summary>读取任意 UnityEngine.Object 的深序列化数据。</summary>
-        private static string ObjectGetData(BridgeRequest request)
+        private static string ObjectGetData_Removed(BridgeRequest request)
         {
             var target = ObjectRefResolver.ResolveObject(request);
             var options = BuildSerializerOptions(request);
@@ -33,8 +28,7 @@ namespace UnityCli
             return w.EndObject().ToString();
         }
 
-        /// <summary>修改任意 Unity Object：支持 pathPatches 与 jsonPatch (Merge Patch)。</summary>
-        private static string ObjectModify(BridgeRequest request)
+        private static string ObjectModify_Removed(BridgeRequest request)
         {
             EnsureEditorNotBusy("object.modify");
             var target = ObjectRefResolver.ResolveObject(request);

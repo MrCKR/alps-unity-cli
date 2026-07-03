@@ -30,13 +30,8 @@ namespace UnityCli
     {
         private static void RegisterTextureCommands(BridgeCommandRegistry registry)
         {
-            RegisterCommand(registry, "texture.info", "texture", false, TextureInfo);
-            RegisterCommand(registry, "texture.create", "texture", true, TextureCreate);
-            RegisterCommand(registry, "texture.sprite", "texture", true, TextureSprite);
-            RegisterCommand(registry, "texture.modify", "texture", true, TextureModify);
-            RegisterCommand(registry, "texture.delete", "texture", true, TextureDelete);
-            RegisterCommand(registry, "texture.import-settings", "texture", true, TextureImportSettings);
-            RegisterCommand(registry, "texture.generate", "texture", true, TextureGenerate);
+            // texture 域工具已全部迁移为 IUnityCliTool 自包含形态(unitypkg/Editor/Tools/texture/*.cs)。
+            // 此处仅保留被其他域复用的私有 helper 与空注册方法。
         }
 
         /// <summary>生成程序化纹理：pattern/gradient/noise。对齐 CoplayDev texture generate。</summary>

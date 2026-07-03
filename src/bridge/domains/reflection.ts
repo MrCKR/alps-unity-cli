@@ -44,7 +44,7 @@ function typeSchemaArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]
 }
 
 export const reflectionBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "reflection", command: "method-find", bridgeCommand: "reflection.method.find", buildArgs: reflectionFindArgs },
-  { group: "reflection", command: "method-call", bridgeCommand: "reflection.method.call", buildArgs: reflectionCallArgs, supportsDryRun: true },
-  { group: "type", command: "schema", bridgeCommand: "type.schema", buildArgs: typeSchemaArgs }
+  { group: "reflection", command: "method-find", bridgeCommand: "project-tool.run", toolName: "reflection.method.find", buildArgs: reflectionFindArgs },
+  { group: "reflection", command: "method-call", bridgeCommand: "project-tool.run", toolName: "reflection.method.call", buildArgs: reflectionCallArgs, supportsDryRun: true },
+  { group: "type", command: "schema", bridgeCommand: "project-tool.run", toolName: "type.schema", buildArgs: typeSchemaArgs }
 ];

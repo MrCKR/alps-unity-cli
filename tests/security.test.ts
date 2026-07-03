@@ -78,8 +78,10 @@ test("destructive dry-run forwards envelope preview without --yes", async () => 
   });
 
   assert.equal(result.ok, true);
+  assert.equal(requests[0].command, "project-tool.run");
+  assert.equal(requests[0].args.name, "asset.delete");
   assert.equal(requests[0].dryRun, true);
-  assert.equal(requests[0].args.dryRun, true);
+  assert.equal((requests[0].args.input as Record<string, unknown>).dryRun, true);
   assert.equal(requests[0].security?.confirmed, false);
   assert.equal(requests[0].security?.destructiveFingerprint, "destructive-safety-v1");
 });

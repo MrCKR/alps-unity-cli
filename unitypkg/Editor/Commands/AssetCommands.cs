@@ -30,20 +30,8 @@ namespace UnityCli
     {
         private static void RegisterAssetCommands(BridgeCommandRegistry registry)
         {
-            RegisterCommand(registry, "asset.search", "asset", false, AssetSearch);
-            RegisterCommand(registry, "asset.info", "asset", false, AssetInfo);
-            RegisterCommand(registry, "asset.create", "asset", false, AssetCreate);
-            RegisterCommand(registry, "asset.import", "asset", false, AssetImport);
-            RegisterCommand(registry, "asset.modify", "asset", false, AssetModify);
-            RegisterCommand(registry, "asset.delete", "asset", false, AssetDelete);
-            RegisterCommand(registry, "asset.duplicate", "asset", false, AssetDuplicate);
-            RegisterCommand(registry, "asset.move", "asset", false, AssetMove);
-            RegisterCommand(registry, "asset.rename", "asset", false, AssetRename);
-            RegisterCommand(registry, "asset.search-built-in", "asset", false, AssetSearchBuiltIn);
-            RegisterCommand(registry, "asset.get-data", "asset", false, AssetGetData);
-            RegisterCommand(registry, "asset.get-components", "asset", false, AssetGetComponents);
-            RegisterCommand(registry, "asset.preview", "asset", false, AssetPreview);
-            RegisterCommand(registry, "asset.refresh", "asset", false, AssetRefresh);
+            // asset 域工具已全部迁移为 IUnityCliTool 自包含形态(unitypkg/Editor/Tools/asset/*.cs)。
+            // 此处仅保留被其他域复用的私有 helper 与空注册方法。
         }
 
         private static bool AssetExists(string assetPath)

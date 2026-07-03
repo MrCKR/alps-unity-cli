@@ -111,7 +111,7 @@ async function registeredCsharpCommands(directory: URL): Promise<Set<string>> {
     }
     // IUnityCliTool 形态(新,Stage 2+):文件含 IUnityCliTool< 则提取 Name="..."
     if (source.includes(": IUnityCliTool<") || source.includes(": IUnityCliContext<")) {
-      for (const match of source.matchAll(/Name\s*=\s*"([a-z][a-z0-9]*(?:\.[a-z0-9-]+)+)"/g)) {
+      for (const match of source.matchAll(/Name\s*=\s*"([a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+)"/g)) {
         commands.add(match[1]);
       }
     }

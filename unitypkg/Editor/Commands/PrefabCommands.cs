@@ -30,15 +30,8 @@ namespace UnityCli
     {
         private static void RegisterPrefabCommands(BridgeCommandRegistry registry)
         {
-            RegisterCommand(registry, "prefab.info", "prefab", false, PrefabInfo);
-            RegisterCommand(registry, "prefab.create", "prefab", true, PrefabCreate);
-            RegisterCommand(registry, "prefab.modify", "prefab", false, PrefabModify);
-            RegisterCommand(registry, "prefab.stage-open", "prefab", true, PrefabStageOpen);
-            RegisterCommand(registry, "prefab.stage-save", "prefab", true, PrefabStageSave);
-            RegisterCommand(registry, "prefab.stage-close", "prefab", true, PrefabStageClose);
-            RegisterCommand(registry, "prefab.hierarchy", "prefab", false, PrefabHierarchy);
-            RegisterCommand(registry, "prefab.instantiate", "prefab", false, PrefabInstantiate);
-            RegisterCommand(registry, "prefab.unpack", "prefab", false, PrefabUnpack);
+            // prefab 域工具已全部迁移为 IUnityCliTool 自包含形态(unitypkg/Editor/Tools/prefab/*.cs)。
+            // 此处仅保留被其他域复用的私有 helper 与空注册方法。
         }
 
         private static string PrefabInfo(BridgeRequest request)

@@ -62,7 +62,7 @@ function extractCSharpRegisteredCommands(root: string): string[] {
     // These are discovered by ProjectToolRegistry at runtime via interface scan.
     // Tool name lives in Describe()'s Name = "group.name" (dotted lowercase string literal).
     if (source.includes(": IUnityCliTool<") || source.includes(": IUnityCliContext<")) {
-      for (const match of source.matchAll(/Name\s*=\s*"([a-z][a-z0-9]*(?:\.[a-z0-9-]+)+)"/g)) {
+      for (const match of source.matchAll(/Name\s*=\s*"([a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+)"/g)) {
         commands.add(match[1]);
       }
     }

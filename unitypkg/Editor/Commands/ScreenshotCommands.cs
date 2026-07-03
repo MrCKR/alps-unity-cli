@@ -12,18 +12,10 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
-        private static void RegisterScreenshotCommands(BridgeCommandRegistry registry)
-        {
-            // 对齐 Ivan screenshot game-view/scene-view/isolated + CoplayDev orbit/surround
-            RegisterCommand(registry, "screenshot.game-view", "screenshot", true, ScreenshotGameView);
-            RegisterCommand(registry, "screenshot.scene-view", "screenshot", true, ScreenshotSceneView);
-            RegisterCommand(registry, "screenshot.isolated-object", "screenshot", true, ScreenshotIsolatedObject);
-            RegisterCommand(registry, "screenshot.orbit", "screenshot", true, ScreenshotOrbit);
-            RegisterCommand(registry, "screenshot.surround", "screenshot", true, ScreenshotSurround);
-        }
+        // screenshot.* 已迁移为 IUnityCliTool(unitypkg/Editor/Tools/screenshot/*.cs),
+        // 不再用 RegisterCommand。RegisterScreenshotCommands 已移除。
 
-        /// <summary>Game View 截图：对齐 Ivan game-view。可带 diagnostics。</summary>
-        private static string ScreenshotGameView(BridgeRequest request)
+        private static string ScreenshotGameView_Removed(BridgeRequest request)
         {
             var outputPath = ResolveScreenshotOutputPath(request.StringArg("path"));
             var overwrite = request.BoolArg("overwrite", false);
@@ -88,8 +80,7 @@ namespace UnityCli
             return SuccessJson(w.EndObject().ToString());
         }
 
-        /// <summary>SceneView 截图：对齐 Ivan scene-view。</summary>
-        private static string ScreenshotSceneView(BridgeRequest request)
+        private static string ScreenshotSceneView_Removed(BridgeRequest request)
         {
             var sceneView = SceneView.lastActiveSceneView;
             if (sceneView == null || sceneView.camera == null)
@@ -115,8 +106,7 @@ namespace UnityCli
             return SuccessJson(w.EndObject().ToString());
         }
 
-        /// <summary>隔离对象截图：对齐 Ivan isolated。在临时场景渲染单个对象。</summary>
-        private static string ScreenshotIsolatedObject(BridgeRequest request)
+        private static string ScreenshotIsolatedObject_Removed(BridgeRequest request)
         {
             var target = request.StringArg("target") ?? request.StringArg("path");
             var go = string.IsNullOrEmpty(target) ? null : ObjectRefResolver.FindGameObjectByPath(target);
@@ -187,8 +177,7 @@ namespace UnityCli
             return SuccessJson(w.EndObject().ToString());
         }
 
-        /// <summary>环绕截图：对齐 CoplayDev orbit/surround。从多个角度截图同一对象。</summary>
-        private static string ScreenshotOrbit(BridgeRequest request)
+        private static string ScreenshotOrbit_Removed(BridgeRequest request)
         {
             var target = request.StringArg("target") ?? request.StringArg("path");
             var go = string.IsNullOrEmpty(target) ? null : ObjectRefResolver.FindGameObjectByPath(target);
@@ -252,8 +241,7 @@ namespace UnityCli
             return SuccessJson(w.EndObject().ToString());
         }
 
-        /// <summary>6 角度环绕截图并生成 contact sheet。用于 AI 快速检查对象外观。</summary>
-        private static string ScreenshotSurround(BridgeRequest request)
+        private static string ScreenshotSurround_Removed(BridgeRequest request)
         {
             var target = request.StringArg("target") ?? request.StringArg("path");
             var go = string.IsNullOrEmpty(target) ? null : ObjectRefResolver.FindGameObjectByPath(target);

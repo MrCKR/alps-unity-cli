@@ -12,17 +12,10 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
-        private static void RegisterBuildCommands(BridgeCommandRegistry registry)
-        {
-            // 对齐 CoplayDev manage_build：BuildTarget/PlayerSettings/Build Settings scenes
-            RegisterCommand(registry, "build.scenes", "build", false, BuildScenes);
-            RegisterCommand(registry, "build.platform", "build", false, BuildPlatform);
-            RegisterCommand(registry, "build.settings", "build", false, BuildSettings);
-            RegisterCommand(registry, "build.profiles", "build", false, BuildProfiles);
-        }
+        // build.* 已迁移为 IUnityCliTool(unitypkg/Editor/Tools/build/*.cs),
+        // 不再用 RegisterCommand。RegisterBuildCommands 已移除。
 
-        /// <summary>读取/修改 Build Settings scenes 列表。</summary>
-        private static string BuildScenes(BridgeRequest request)
+        private static string BuildScenes_Removed(BridgeRequest request)
         {
             var action = request.StringArg("action") ?? "get";
             if (action == "get")
@@ -69,8 +62,7 @@ namespace UnityCli
             return ErrorJson("E_BUILD_SCENES_ACTION", "Unknown action: " + action, "Use get, add, remove, enable, disable.");
         }
 
-        /// <summary>读取/设置构建平台 (BuildTarget)。</summary>
-        private static string BuildPlatform(BridgeRequest request)
+        private static string BuildPlatform_Removed(BridgeRequest request)
         {
             var action = request.StringArg("action") ?? "get";
             if (action == "get")
@@ -106,8 +98,7 @@ namespace UnityCli
             return ErrorJson("E_BUILD_PLATFORM_ACTION", "Unknown action: " + action, "Use get or set.");
         }
 
-        /// <summary>通过反射读取/创建/切换 Unity Build Profile，避免对不同 Unity 版本建立编译期依赖。</summary>
-        private static string BuildProfiles(BridgeRequest request)
+        private static string BuildProfiles_Removed(BridgeRequest request)
         {
             var action = request.StringArg("action") ?? "list";
             var profileType = FindUnityType("UnityEditor.Build.Profile.BuildProfile") ?? FindUnityType("UnityEditor.BuildProfile");
@@ -235,8 +226,7 @@ namespace UnityCli
             prop.SetValue(null, profile, null);
         }
 
-        /// <summary>读取/修改 PlayerSettings 关键构建配置。对齐 CoplayDev manage_build settings。</summary>
-        private static string BuildSettings(BridgeRequest request)
+        private static string BuildSettings_Removed(BridgeRequest request)
         {
             var action = request.StringArg("action") ?? "get";
             if (action == "get")

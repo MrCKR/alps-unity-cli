@@ -96,7 +96,7 @@ export async function executeBridgePayload(
 
   const result = await withRetry(async () => {
     try {
-      const security = bridgeSecurity(command, flags);
+      const security = bridgeSecurity(command, flags, args);
       const payload: BridgeRequest = {
         requestId,
         command,
@@ -169,7 +169,7 @@ export async function startBridgeCommandJob(
       args,
       ...(isDryRunRequested(flags) ? { dryRun: true } : {})
     };
-    const security = bridgeSecurity(bridgeCommand, flags);
+    const security = bridgeSecurity(bridgeCommand, flags, args);
     if (security) {
       envelopeArgs.security = security;
     }
@@ -196,9 +196,15 @@ export async function startBridgeCommandJob(
   }
 }
 
-function bridgeSecurity(command: string, flags: BridgeFlags): Record<string, unknown> | undefined {
+function bridgeSecurity(command: string, flags: BridgeFlags, args?: Record<string, unknown>): Record<string, unknown> | undefined {
   const spec = bridgeCommandRegistry.lookupBridgeCommand(command);
-  return spec?.destructiveHint ? destructiveSecurityProof(flags) : undefined;
+  if (spec?.destructiveHint) return destructiveSecurityProof(flags);
+  // project-tool.run 路由:实际工具在 args.name,按工具 spec 判定破坏性并附加安全凭证
+  if (command === "project-tool.run" && args && typeof args.name === "string") {
+    const toolSpec = bridgeCommandRegistry.specs().find((s) => s.toolName === args.name);
+    if (toolSpec?.destructiveHint) return destructiveSecurityProof(flags);
+  }
+  return undefined;
 }
 
 function bridgeEndpoint(flags: BridgeFlags, runtime: BridgeRuntime, selectedInstance?: InstanceSelection): string | undefined {

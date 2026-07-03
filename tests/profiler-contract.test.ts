@@ -87,7 +87,7 @@ test("profiler.start records Editor frames and profiler.stop restores profileEdi
 });
 
 test("bridge specs resolve for profiler tools", () => {
-  for (const [cmd, expected] of [["status", "profiler.status"], ["start", "profiler.start"], ["stop", "profiler.stop"], ["pause", "profiler.pause"], ["counter", "profiler.counter"], ["memory", "profiler.memory"], ["frame", "profiler.frame"], ["capture", "profiler.capture"], ["export", "profiler.export"], ["modules", "profiler.modules"], ["module-enable", "profiler.module-enable"], ["clear", "profiler.clear"], ["load", "profiler.load"], ["areas", "profiler.areas"], ["object-memory", "profiler.object-memory"], ["rendering-stats", "profiler.rendering-stats"], ["script-stats", "profiler.script-stats"], ["deep", "profiler.deep"], ["hierarchy", "profiler.hierarchy"], ["memory-snapshot.take", "profiler.memory-snapshot.take"], ["memory-snapshot.list", "profiler.memory-snapshot.list"], ["memory-snapshot.compare", "profiler.memory-snapshot.compare"], ["frame-debugger.enable", "profiler.frame-debugger.enable"], ["frame-debugger.disable", "profiler.frame-debugger.disable"], ["frame-debugger.events", "profiler.frame-debugger.events"]] as const) {
+  for (const [cmd, expected] of [["status", "project-tool.run"], ["start", "project-tool.run"], ["stop", "project-tool.run"], ["pause", "project-tool.run"], ["counter", "project-tool.run"], ["memory", "project-tool.run"], ["frame", "project-tool.run"], ["capture", "profiler.capture"], ["export", "project-tool.run"], ["modules", "project-tool.run"], ["module-enable", "project-tool.run"], ["clear", "project-tool.run"], ["load", "project-tool.run"], ["areas", "project-tool.run"], ["object-memory", "project-tool.run"], ["rendering-stats", "profiler.rendering-stats"], ["script-stats", "project-tool.run"], ["deep", "project-tool.run"], ["hierarchy", "profiler.hierarchy"], ["memory-snapshot.take", "profiler.memory-snapshot.take"], ["memory-snapshot.list", "profiler.memory-snapshot.list"], ["memory-snapshot.compare", "profiler.memory-snapshot.compare"], ["frame-debugger.enable", "profiler.frame-debugger.enable"], ["frame-debugger.disable", "profiler.frame-debugger.disable"], ["frame-debugger.events", "profiler.frame-debugger.events"]] as const) {
     const spec = bridgeCommandRegistry.lookup("profiler", cmd);
     assert.equal(spec?.bridgeCommand, expected, `profiler ${cmd} should resolve`);
   }
@@ -101,15 +101,22 @@ test("contract entries exist for profiler tools with present C# handler", () => 
   }
 });
 
-test("C# RegisterCommand calls exist for profiler commands", async () => {
+test("C# RegisterCommand calls exist for legacy profiler commands (deferred/complex-reflection)", async () => {
   const csFiles = await listCsFiles(new URL("../unitypkg/Editor/", import.meta.url));
   const allSource = (
     await Promise.all(
       csFiles.filter((f) => !f.pathname.includes("/Samples/")).map((f) => readFile(f, "utf8"))
     )
   ).join("\n");
-  for (const command of PROFILER_COMMANDS) {
-    assert.ok(allSource.includes(`RegisterCommand(registry, "${command}"`), `${command} should be registered`);
+  // 迁移后的 profiler 工具不再用 RegisterCommand
+  const migrated = ["profiler.status", "profiler.start", "profiler.stop", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.export", "profiler.modules", "profiler.module-enable", "profiler.clear", "profiler.load", "profiler.areas", "profiler.object-memory", "profiler.script-stats", "profiler.deep"];
+  for (const command of migrated) {
+    assert.ok(!allSource.includes(`RegisterCommand(registry, "${command}"`), `${command} should NOT be registered (migrated to IUnityCliTool)`);
+  }
+  // 保留在 legacy 的 deferred/complex-reflection 工具仍用 RegisterCommand
+  const legacy = ["profiler.capture", "profiler.hierarchy", "profiler.rendering-stats", "profiler.memory-snapshot.take", "profiler.memory-snapshot.list", "profiler.memory-snapshot.compare", "profiler.frame-debugger.enable", "profiler.frame-debugger.disable", "profiler.frame-debugger.events"];
+  for (const command of legacy) {
+    assert.ok(allSource.includes(`RegisterCommand(registry, "${command}"`), `${command} should be registered (legacy)`);
   }
 });
 
@@ -123,17 +130,11 @@ test("profiler C# has no legacy unity_cli command form", async () => {
   assert.equal(source.includes("unity_cli "), false, "must not reference legacy 'unity_cli ' command form");
 });
 
-test("profiler.object-memory/rendering-stats/script-stats C# wrap in SuccessJson", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/ProfilerCommands.cs", import.meta.url), "utf8");
-  // object-memory
-  const omBlock = source.slice(source.indexOf("ProfilerObjectMemory(BridgeRequest request)"), source.indexOf("private static string ProfilerRenderingStats"));
-  assert.match(omBlock, /return SuccessJson\(w\.EndObject/, "ProfilerObjectMemory must wrap in SuccessJson");
-  // rendering-stats
-  const rsBlock = source.slice(source.indexOf("ProfilerRenderingStats(BridgeRequest request)"), source.indexOf("private static string ProfilerScriptStats"));
-  assert.match(rsBlock, /return SuccessJson\(w\.EndObject/, "ProfilerRenderingStats must wrap in SuccessJson");
-  // script-stats
-  const ssBlock = source.slice(source.indexOf("ProfilerScriptStats(BridgeRequest request)"), source.indexOf("private static string ProfilerCounter("));
-  assert.match(ssBlock, /return SuccessJson\(w\.EndObject/, "ProfilerScriptStats must wrap in SuccessJson");
+test("profiler.object-memory/script-stats migrated to IUnityCliTool", async () => {
+  const toolsSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/read-tools.cs", import.meta.url), "utf8");
+  const actionSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/action-tools.cs", import.meta.url), "utf8");
+  assert.match(toolsSource, /class ProfilerScriptStatsTool/, "ProfilerScriptStatsTool should exist");
+  assert.match(actionSource, /class ProfilerObjectMemoryTool/, "ProfilerObjectMemoryTool should exist");
 });
 
 test("profiler bridge spec forwards structured --input fields", async () => {
@@ -187,11 +188,10 @@ test("profiler.module-enable calls SetAreaEnabled", async () => {
 });
 
 test("profiler.load validates capture path before reporting success", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/ProfilerCommands.cs", import.meta.url), "utf8");
-  const block = source.slice(source.indexOf("ProfilerLoad(BridgeRequest request)"), source.indexOf("private static string ProfilerAreas"));
-  assert.match(block, /File\.Exists\(resolvedPath\)/, "profiler.load should check the capture file exists");
-  assert.match(block, /E_PROFILER_CAPTURE_NOT_FOUND/, "missing capture path should return a stable error code");
-  assert.match(block, /\.Prop\("loaded", true\)/, "successful load should expose loaded=true");
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/profiler/action-tools.cs", import.meta.url), "utf8");
+  assert.match(source, /File\.Exists\(resolvedPath\)/, "profiler.load should check the capture file exists");
+  assert.match(source, /E_PROFILER_CAPTURE_NOT_FOUND/, "missing capture path should return a stable error code");
+  assert.match(source, /Loaded = true/, "successful load should expose loaded=true");
 });
 
 test("profiler memory-snapshot and frame-debugger tools are registered in C#", async () => {

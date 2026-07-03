@@ -79,7 +79,10 @@ export class BridgeCommandRegistry {
    */
   public registerSpecs(specs: BridgeCommandSpec[]): void {
     for (const spec of specs) {
-      const policy = securityPolicyForCommand(spec.bridgeCommand);
+      // 破坏性/ dry-run 策略:优先按 bridgeCommand 匹配;project-tool.run 路由的工具按 toolName(原始工具名)回退匹配,
+      // 确保 asset.delete / scene.save 等迁移为 project-tool.run 后仍能从 security-policy 取得 destructiveHint/supportsDryRun。
+      const policy = securityPolicyForCommand(spec.bridgeCommand)
+        ?? (spec.toolName ? securityPolicyForCommand(spec.toolName) : undefined);
       if (policy) {
         spec.destructiveHint = policy.destructiveHint;
         spec.supportsDryRun = policy.supportsDryRun;

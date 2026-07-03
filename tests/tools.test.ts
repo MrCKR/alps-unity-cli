@@ -1689,12 +1689,13 @@ test("tools run built-in hybrid tool routes to native bridge command", async () 
     }
   };
 
-  // profiler.start is a hybrid handler tool with bridgeCommand "profiler.start".
-  // --input is merged into flags and buildArgs translates deepProfiling → deepProfiling.
+  // profiler.start migrated to IUnityCliTool, routes via project-tool.run.
+  // --input is merged into flags and buildArgs translates deepProfiling → input.deepProfiling.
   const result = await handleToolsCommand("run", ["profiler.start"], { input: '{"deepProfiling":true}' }, runtime, requestId);
   assert.equal(result.ok, true);
-  assert.equal(requests[0].command, "profiler.start");
-  assert.deepEqual((requests[0].args as Record<string, unknown>).deepProfiling, true);
+  assert.equal(requests[0].command, "project-tool.run");
+  assert.deepEqual((requests[0].args as Record<string, unknown>).name, "profiler.start");
+  assert.deepEqual(((requests[0].args as Record<string, unknown>).input as Record<string, unknown>).deepProfiling, true);
 });
 
 test("tools run ProBuilder extension tools forward structured --input arrays", async () => {

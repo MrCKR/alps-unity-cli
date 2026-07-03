@@ -21,10 +21,10 @@ function boolValue(value: unknown): boolean | undefined {
 }
 
 export const buildBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "build", command: "scenes", bridgeCommand: "build.scenes", buildArgs: buildScenesArgs },
-  { group: "build", command: "platform", bridgeCommand: "build.platform", buildArgs: buildPlatformArgs },
-  { group: "build", command: "settings", bridgeCommand: "build.settings", buildArgs: buildSettingsArgs },
-  { group: "build", command: "profiles", bridgeCommand: "build.profiles", buildArgs: buildProfilesArgs, supportsDryRun: true }
+  { group: "build", command: "scenes", bridgeCommand: "project-tool.run", toolName: "build.scenes", buildArgs: buildScenesArgs },
+  { group: "build", command: "platform", bridgeCommand: "project-tool.run", toolName: "build.platform", buildArgs: buildPlatformArgs },
+  { group: "build", command: "settings", bridgeCommand: "project-tool.run", toolName: "build.settings", buildArgs: buildSettingsArgs },
+  { group: "build", command: "profiles", bridgeCommand: "project-tool.run", toolName: "build.profiles", buildArgs: buildProfilesArgs, supportsDryRun: true }
 ];
 
 function buildProfilesArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {

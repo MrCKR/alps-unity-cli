@@ -85,7 +85,8 @@ test("shader.read, shader.list and shader.get-data expose bounded output schemas
 test("bridge specs resolve for shader tools", () => {
   for (const command of ["info", "read", "create", "update", "delete", "list", "get-data"]) {
     const spec = bridgeCommandRegistry.lookup("shader", command);
-    assert.equal(spec?.bridgeCommand, `shader.${command}`);
+    assert.equal(spec?.bridgeCommand, "project-tool.run", `shader ${command} should route via project-tool.run`);
+    assert.equal(spec?.toolName, `shader.${command}`, `shader ${command} toolName should match`);
   }
 });
 
@@ -97,7 +98,7 @@ test("contract entries exist for shader tools with present C# handler", () => {
   }
 });
 
-test("C# RegisterCommand calls exist for shader commands", async () => {
+test("C# handlers exist for shader commands (RegisterCommand or IUnityCliTool)", async () => {
   const csFiles = await listCsFiles(new URL("../unitypkg/Editor/", import.meta.url));
   const allSource = (
     await Promise.all(
@@ -105,10 +106,10 @@ test("C# RegisterCommand calls exist for shader commands", async () => {
     )
   ).join("\n");
   for (const command of ["shader.info", "shader.read", "shader.create", "shader.update", "shader.delete", "shader.list", "shader.get-data"]) {
-    assert.ok(
-      allSource.includes(`RegisterCommand(registry, "${command}"`),
-      `${command} should be registered via RegisterCommand in C#`
-    );
+    // 接受 RegisterCommand(旧)或 IUnityCliTool(新,Name="...")两种形态
+    const hasRegisterCommand = allSource.includes(`RegisterCommand(registry, "${command}"`);
+    const hasIUnityCliTool = allSource.includes(`Name = "${command}"`);
+    assert.ok(hasRegisterCommand || hasIUnityCliTool, `${command} should be registered via RegisterCommand or IUnityCliTool`);
   }
 });
 

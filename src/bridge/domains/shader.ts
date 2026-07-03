@@ -2,13 +2,13 @@ import { boolFlag, compactArgs, contentFlag, numberFlag, stringFlag } from "../a
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const shaderBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "shader", command: "info", bridgeCommand: "shader.info", buildArgs: shaderArgs },
-  { group: "shader", command: "read", bridgeCommand: "shader.read", buildArgs: shaderArgs },
-  { group: "shader", command: "create", bridgeCommand: "shader.create", buildArgs: shaderArgs },
-  { group: "shader", command: "update", bridgeCommand: "shader.update", buildArgs: shaderArgs },
-  { group: "shader", command: "delete", bridgeCommand: "shader.delete", buildArgs: shaderArgs, supportsDryRun: true },
-  { group: "shader", command: "list", bridgeCommand: "shader.list", buildArgs: shaderListArgs },
-  { group: "shader", command: "get-data", bridgeCommand: "shader.get-data", buildArgs: shaderArgs }
+  { group: "shader", command: "info", bridgeCommand: "project-tool.run", toolName: "shader.info", buildArgs: shaderArgs },
+  { group: "shader", command: "read", bridgeCommand: "project-tool.run", toolName: "shader.read", buildArgs: shaderArgs },
+  { group: "shader", command: "create", bridgeCommand: "project-tool.run", toolName: "shader.create", buildArgs: shaderArgs },
+  { group: "shader", command: "update", bridgeCommand: "project-tool.run", toolName: "shader.update", buildArgs: shaderArgs },
+  { group: "shader", command: "delete", bridgeCommand: "project-tool.run", toolName: "shader.delete", buildArgs: shaderArgs, supportsDryRun: true },
+  { group: "shader", command: "list", bridgeCommand: "project-tool.run", toolName: "shader.list", buildArgs: shaderListArgs },
+  { group: "shader", command: "get-data", bridgeCommand: "project-tool.run", toolName: "shader.get-data", buildArgs: shaderArgs }
 ];
 
 // 读取 tools run --input 中无法映射为简单 flag 的结构化字段（content/source/name 等）

@@ -927,7 +927,7 @@
       "bridgeCommand": "extension.status",
       "group": "extension",
       "command": "status",
-      "handler_type": "hybrid",
+      "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000

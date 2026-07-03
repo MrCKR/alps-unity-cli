@@ -86,7 +86,8 @@ test("texture.sprite and texture.modify expose structured mutation inputs", () =
 test("bridge specs resolve for texture tools", () => {
   for (const command of ["info", "create", "sprite", "modify", "delete", "import-settings", "generate"]) {
     const spec = bridgeCommandRegistry.lookup("texture", command);
-    assert.equal(spec?.bridgeCommand, `texture.${command}`);
+    assert.equal(spec?.bridgeCommand, "project-tool.run", `texture ${command} should route via project-tool.run`);
+    assert.equal(spec?.toolName, `texture.${command}`, `texture ${command} toolName should match`);
   }
 });
 
@@ -98,7 +99,7 @@ test("contract entries exist for texture tools with present C# handler", () => {
   }
 });
 
-test("C# RegisterCommand calls exist for texture commands", async () => {
+test("C# handlers exist for texture commands (RegisterCommand or IUnityCliTool)", async () => {
   const csFiles = await listCsFiles(new URL("../unitypkg/Editor/", import.meta.url));
   const allSource = (
     await Promise.all(
@@ -106,10 +107,10 @@ test("C# RegisterCommand calls exist for texture commands", async () => {
     )
   ).join("\n");
   for (const command of ["texture.info", "texture.create", "texture.sprite", "texture.modify", "texture.delete", "texture.import-settings", "texture.generate"]) {
-    assert.ok(
-      allSource.includes(`RegisterCommand(registry, "${command}"`),
-      `${command} should be registered via RegisterCommand in C#`
-    );
+    // 接受 RegisterCommand(旧)或 IUnityCliTool(新,Name="...")两种形态
+    const hasRegisterCommand = allSource.includes(`RegisterCommand(registry, "${command}"`);
+    const hasIUnityCliTool = allSource.includes(`Name = "${command}"`);
+    assert.ok(hasRegisterCommand || hasIUnityCliTool, `${command} should be registered via RegisterCommand or IUnityCliTool`);
   }
 });
 

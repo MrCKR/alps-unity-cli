@@ -27,27 +27,15 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
+        // profiler.* 部分已迁移为 IUnityCliTool(unitypkg/Editor/Tools/profiler/*.cs):
+        // status/counter/memory/frame/modules/areas/script-stats/start/stop/pause/deep/
+        // module-enable/clear/load/object-memory/export — 不再用 RegisterCommand。
+        // 以下保留 deferred/complex-reflection 工具的 RegisterCommand:
         private static void RegisterProfilerCommands(BridgeCommandRegistry registry)
         {
-            RegisterCommand(registry, "profiler.start", "profiler", true, ProfilerStart);
-            RegisterCommand(registry, "profiler.stop", "profiler", true, ProfilerStop);
-            RegisterCommand(registry, "profiler.pause", "profiler", true, ProfilerPause);
-            RegisterCommand(registry, "profiler.counter", "profiler", false, ProfilerCounter);
-            RegisterCommand(registry, "profiler.memory", "profiler", false, ProfilerMemory);
-            RegisterCommand(registry, "profiler.frame", "profiler", false, ProfilerFrame);
             RegisterCommand(registry, "profiler.capture", "profiler", true, ProfilerCapture);
-            RegisterCommand(registry, "profiler.export", "profiler", true, ProfilerExport);
-            RegisterCommand(registry, "profiler.status", "profiler", false, ProfilerStatus);
-            RegisterCommand(registry, "profiler.modules", "profiler", false, ProfilerModules);
-            RegisterCommand(registry, "profiler.module-enable", "profiler", true, ProfilerModuleEnable);
-            RegisterCommand(registry, "profiler.clear", "profiler", false, ProfilerClear);
-            RegisterCommand(registry, "profiler.load", "profiler", true, ProfilerLoad);
-            RegisterCommand(registry, "profiler.areas", "profiler", false, ProfilerAreas);
-            RegisterCommand(registry, "profiler.object-memory", "profiler", false, ProfilerObjectMemory);
-            RegisterCommand(registry, "profiler.rendering-stats", "profiler", false, ProfilerRenderingStats);
-            RegisterCommand(registry, "profiler.script-stats", "profiler", false, ProfilerScriptStats);
-            RegisterCommand(registry, "profiler.deep", "profiler", false, ProfilerDeep);
             RegisterCommand(registry, "profiler.hierarchy", "profiler", false, ProfilerHierarchy);
+            RegisterCommand(registry, "profiler.rendering-stats", "profiler", false, ProfilerRenderingStats);
             RegisterCommand(registry, "profiler.memory-snapshot.take", "profiler", true, ProfilerMemorySnapshotTake);
             RegisterCommand(registry, "profiler.memory-snapshot.list", "profiler", false, ProfilerMemorySnapshotList);
             RegisterCommand(registry, "profiler.memory-snapshot.compare", "profiler", false, ProfilerMemorySnapshotCompare);
@@ -446,7 +434,7 @@ namespace UnityCli
                 .EndObject().ToString();
         }
 
-        private static string ProfilerStart(BridgeRequest request)
+        private static string ProfilerStart_Removed(BridgeRequest request)
         {
             var deepProfiling = request.BoolArg("deepProfiling", false);
             var logFile = request.StringArg("logFile");
@@ -480,7 +468,7 @@ namespace UnityCli
                 .EndObject().ToString());
         }
 
-        private static string ProfilerStop(BridgeRequest request)
+        private static string ProfilerStop_Removed(BridgeRequest request)
         {
             SetProfilerSessionEnabled(false);
             if (previousProfilerEditorRecording.HasValue)
@@ -500,7 +488,7 @@ namespace UnityCli
                 .EndObject().ToString());
         }
 
-        private static string ProfilerPause(BridgeRequest request)
+        private static string ProfilerPause_Removed(BridgeRequest request)
         {
             var wasEnabled = GetProfilerSessionEnabled();
             var paused = request.BoolArg("paused", wasEnabled);
@@ -518,7 +506,7 @@ namespace UnityCli
                 .EndObject().ToString());
         }
 
-        private static string ProfilerStatus(BridgeRequest request)
+        private static string ProfilerStatus_Removed(BridgeRequest request)
         {
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropRaw("profiler", ProfilerStateJson())
@@ -540,8 +528,7 @@ namespace UnityCli
 #endif
         }
 
-        /// <summary>列出 Profiler 模块。对齐 Ivan modules。</summary>
-        private static string ProfilerModules(BridgeRequest request)
+        private static string ProfilerModules_Removed(BridgeRequest request)
         {
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .Prop("command", "profiler.modules")
@@ -550,8 +537,7 @@ namespace UnityCli
                 .EndObject().ToString());
         }
 
-        /// <summary>启用/禁用 Profiler 模块（area）。对齐 CoplayDev profiler_set_areas，通过反射调用 Profiler.SetAreaEnabled。</summary>
-        private static string ProfilerModuleEnable(BridgeRequest request)
+        private static string ProfilerModuleEnable_Removed(BridgeRequest request)
         {
             var moduleName = request.StringArg("module") ?? request.StringArg("name");
             var enabled = request.BoolArg("enabled", true);
@@ -588,8 +574,7 @@ namespace UnityCli
                 .Prop("logPath", LogPath()).EndObject().ToString());
         }
 
-        /// <summary>清除 Profiler 数据。高风险。</summary>
-        private static string ProfilerClear(BridgeRequest request)
+        private static string ProfilerClear_Removed(BridgeRequest request)
         {
             if (request.DryRun)
             {
@@ -605,8 +590,7 @@ namespace UnityCli
                 .Prop("logPath", LogPath()).EndObject().ToString());
         }
 
-        /// <summary>加载 Profiler 数据文件。对齐配套 export。</summary>
-        private static string ProfilerLoad(BridgeRequest request)
+        private static string ProfilerLoad_Removed(BridgeRequest request)
         {
             var path = request.StringArg("path");
             if (string.IsNullOrEmpty(path))
@@ -633,8 +617,7 @@ namespace UnityCli
                 .Prop("logPath", LogPath()).EndObject().ToString());
         }
 
-        /// <summary>列出 Profiler area。对齐 CoplayDev profiler areas。</summary>
-        private static string ProfilerAreas(BridgeRequest request)
+        private static string ProfilerAreas_Removed(BridgeRequest request)
         {
             var areaType = FindProfilerAreaType();
             if (areaType == null || !areaType.IsEnum)
@@ -655,8 +638,7 @@ namespace UnityCli
             return FindType("UnityEngine.Profiling.ProfilerArea") ?? FindType("UnityEditorInternal.ProfilerArea");
         }
 
-        /// <summary>查询指定对象内存。对齐 CoplayDev object-memory。</summary>
-        private static string ProfilerObjectMemory(BridgeRequest request)
+        private static string ProfilerObjectMemory_Removed(BridgeRequest request)
         {
             var target = request.StringArg("target") ?? request.StringArg("path");
             var go = string.IsNullOrEmpty(target) ? null : ObjectRefResolver.FindGameObjectByPath(target);
@@ -729,8 +711,7 @@ namespace UnityCli
             return SuccessJson(w.EndObject().ToString());
         }
 
-        /// <summary>脚本采样统计。对齐 Ivan script stats。</summary>
-        private static string ProfilerScriptStats(BridgeRequest request)
+        private static string ProfilerScriptStats_Removed(BridgeRequest request)
         {
             var w = new UnityCliJsonWriter().BeginObject();
             w.Prop("command", "profiler.script-stats");
@@ -741,10 +722,7 @@ namespace UnityCli
             return SuccessJson(w.EndObject().ToString());
         }
 
-        // C1: 运行时切换/读取深度分析（Deep Profiling）。
-        // Unity 机制约束：deep profiling 只能在 Profiler 会话停止时变更。若请求变更但 Profiler 正在记录，
-        // 返回结构化错误并提示先 stop，避免静默失败。enabled 缺省时为只读查询。
-        private static string ProfilerDeep(BridgeRequest request)
+        private static string ProfilerDeep_Removed(BridgeRequest request)
         {
             var previous = GetProfilerDeepProfiling();
             var hasEnabled = request.OptionalBoolArg("enabled").HasValue;
@@ -912,7 +890,7 @@ namespace UnityCli
             }
         }
 
-        private static string ProfilerCounter(BridgeRequest request)
+        private static string ProfilerCounter_Removed(BridgeRequest request)
         {
             var category = request.StringArg("category");
             var counter = request.StringArg("counter");
@@ -927,7 +905,7 @@ namespace UnityCli
                 .EndObject().ToString());
         }
 
-        private static string ProfilerMemory(BridgeRequest request)
+        private static string ProfilerMemory_Removed(BridgeRequest request)
         {
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
                 .PropRaw("profiler", ProfilerStateJson())
@@ -936,7 +914,7 @@ namespace UnityCli
                 .EndObject().ToString());
         }
 
-        private static string ProfilerFrame(BridgeRequest request)
+        private static string ProfilerFrame_Removed(BridgeRequest request)
         {
             var module = request.StringArg("module") ?? "CPU Usage";
             return SuccessJson(new UnityCliJsonWriter().BeginObject()
@@ -946,7 +924,7 @@ namespace UnityCli
                 .EndObject().ToString());
         }
 
-        private static string ProfilerExport(BridgeRequest request)
+        private static string ProfilerExport_Removed(BridgeRequest request)
         {
             return ProfilerWriteArtifact(request, "profiler.export", 0, 1);
         }

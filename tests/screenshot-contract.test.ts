@@ -36,11 +36,11 @@ test("screenshot tools have correct safety hints", () => {
 
 test("bridge specs resolve for screenshot tools", () => {
   const checks = [
-    ["screenshot", "game-view", "screenshot.game-view"],
-    ["screenshot", "scene-view", "screenshot.scene-view"],
-    ["screenshot", "isolated-object", "screenshot.isolated-object"],
-    ["screenshot", "orbit", "screenshot.orbit"],
-    ["screenshot", "surround", "screenshot.surround"]
+    ["screenshot", "game-view", "project-tool.run"],
+    ["screenshot", "scene-view", "project-tool.run"],
+    ["screenshot", "isolated-object", "project-tool.run"],
+    ["screenshot", "orbit", "project-tool.run"],
+    ["screenshot", "surround", "project-tool.run"]
   ] as const;
   for (const [group, command, bridgeCommand] of checks) {
     const spec = bridgeCommandRegistry.lookup(group, command);

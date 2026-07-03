@@ -61,7 +61,8 @@ test("bridge specs resolve for prefab tools", () => {
   const lookups: Record<string, string> = { info: "prefab.info", create: "prefab.create", modify: "prefab.modify", "stage-open": "prefab.stage-open", "stage-save": "prefab.stage-save", "stage-close": "prefab.stage-close", hierarchy: "prefab.hierarchy", instantiate: "prefab.instantiate", unpack: "prefab.unpack" };
   for (const [cmd, expected] of Object.entries(lookups)) {
     const spec = bridgeCommandRegistry.lookup("prefab", cmd);
-    assert.equal(spec?.bridgeCommand, expected, `prefab ${cmd} should resolve`);
+    assert.equal(spec?.bridgeCommand, "project-tool.run", `prefab ${cmd} should route via project-tool.run`);
+    assert.equal(spec?.toolName, expected, `prefab ${cmd} toolName should match`);
   }
 });
 
@@ -73,7 +74,7 @@ test("contract entries exist for prefab tools with present C# handler", () => {
   }
 });
 
-test("C# RegisterCommand calls exist for prefab commands", async () => {
+test("C# handlers exist for prefab commands (RegisterCommand or IUnityCliTool)", async () => {
   const csFiles = await listCsFiles(new URL("../unitypkg/Editor/", import.meta.url));
   const allSource = (
     await Promise.all(
@@ -81,10 +82,10 @@ test("C# RegisterCommand calls exist for prefab commands", async () => {
     )
   ).join("\n");
   for (const command of PREFAB_COMMANDS) {
-    assert.ok(
-      allSource.includes(`RegisterCommand(registry, "${command}"`),
-      `${command} should be registered via RegisterCommand in C#`
-    );
+    // 接受 RegisterCommand(旧)或 IUnityCliTool(新,Name="...")两种形态
+    const hasRegisterCommand = allSource.includes(`RegisterCommand(registry, "${command}"`);
+    const hasIUnityCliTool = allSource.includes(`Name = "${command}"`);
+    assert.ok(hasRegisterCommand || hasIUnityCliTool, `${command} should be registered via RegisterCommand or IUnityCliTool`);
   }
 });
 

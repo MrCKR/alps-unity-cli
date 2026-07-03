@@ -28,62 +28,8 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
-        /// <summary>
-        /// Register extension.* internal bridge commands.
-        ///
-        /// extension.status provides read-only diagnostic of extension availability
-        /// based on Unity packages installed in the project. Install/remove are
-        /// handled by the CLI command layer and are not exposed as bridge commands.
-        /// </summary>
-        private static void RegisterExtensionCommands(BridgeCommandRegistry registry)
-        {
-            RegisterCommand(registry, "extension.status", "extension", false, ExtensionStatus);
-        }
-
-        private static string ExtensionStatus(BridgeRequest request)
-        {
-            // Return basic package availability status for CLI-side extension flows.
-            var extensionId = request.StringArg("extensionId") ?? request.StringArg("id");
-            var installed = new List<string>();
-            var packageAvailability = new Dictionary<string, bool>();
-
-            // Check known optional packages
-            var optionalPackages = new[]
-            {
-                "com.unity.probuilder",
-                "com.unity.cinemachine",
-                "com.unity.visualeffectgraph",
-                "com.unity.render-pipelines.universal",
-                "com.unity.render-pipelines.high-definition"
-            };
-
-            foreach (var pkg in optionalPackages)
-            {
-                try
-                {
-                    var fileInfo = System.IO.Directory.GetFiles("Library/PackageCache", pkg + "@*", System.IO.SearchOption.TopDirectoryOnly);
-                    packageAvailability[pkg] = fileInfo.Length > 0;
-                }
-                catch
-                {
-                    packageAvailability[pkg] = false;
-                }
-            }
-
-            var pkgItems = new List<string>();
-            foreach (var kv in packageAvailability.OrderBy(kv => kv.Key, StringComparer.Ordinal))
-            {
-                pkgItems.Add(new UnityCliJsonWriter().BeginObject()
-                    .Prop("name", kv.Key)
-                    .Prop("available", kv.Value)
-                    .EndObject().ToString());
-            }
-            return SuccessJson(new UnityCliJsonWriter().BeginObject()
-                .Prop("ok", true)
-                .PropArray("installed", arr => { foreach (var i in installed) arr.Value(i); })
-                .PropArray("packages", arr => { foreach (var item in pkgItems) arr.RawValue(item); })
-                .EndObject().ToString());
-        }
+        // extension.* 已迁移为 IUnityCliTool(unitypkg/Editor/Tools/extension/status.cs),
+        // 不再用 RegisterCommand。RegisterExtensionCommands 已移除。
     }
 }
 #endif
