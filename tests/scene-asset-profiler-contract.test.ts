@@ -111,11 +111,14 @@ test("camera commands no longer advertise legacy top-level camera CLI", async ()
 });
 
 test("scene.hierarchy C# handler supports parent/depth/filter/component preview controls", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/SceneCommands.cs", import.meta.url), "utf8");
-  assert.match(source, /private static string SceneHierarchy[\s\S]*request\.StringArg\("parent"\)[\s\S]*query[\s\S]*componentType[\s\S]*includeComponents/, "scene.hierarchy should parse parent/query/componentType/includeComponents");
+  // scene.hierarchy 已迁移为 IUnityCliTool(unitypkg/Editor/Tools/scene/hierarchy.cs)。
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/scene/hierarchy.cs", import.meta.url), "utf8");
+  assert.match(source, /class SceneHierarchyTool : IUnityCliTool</, "scene.hierarchy should be an IUnityCliTool");
+  assert.match(source, /public string Parent[\s\S]*public string Query[\s\S]*public string ComponentType[\s\S]*IncludeComponents/, "scene.hierarchy should parse parent/query/componentType/includeComponents");
+  assert.match(source, /CollectHierarchy\(Transform transform, List<HierarchyItem> items, int depth, int maxDepth, string query, bool includeInactive, bool includeComponents, string componentType\)/, "hierarchy collection should be bounded and filterable");
   const goSource = await readFile(new URL("../unitypkg/Editor/Commands/GameObjectCommands.cs", import.meta.url), "utf8");
-  assert.match(goSource, /CollectHierarchy\(Transform transform, List<string> items, int depth, int maxDepth, string nameFilter, bool includeInactive, bool includeComponents\)/, "hierarchy collection should be bounded and filterable");
-  assert.match(goSource, /HierarchyItemJson\(transform, depth, includeComponents\)/, "hierarchy items should optionally include components");
+  assert.match(goSource, /CollectHierarchy\(Transform transform, List<string> items, int depth, int maxDepth, string nameFilter, bool includeInactive, bool includeComponents\)/, "go/prefab hierarchy collection should stay bounded and filterable");
+  assert.match(goSource, /HierarchyItemJson\(transform, depth, includeComponents\)/, "go/prefab hierarchy items should optionally include components");
 });
 
 test("go domain exposes paged find and prevalidated mutations", async () => {
@@ -307,8 +310,8 @@ test("physics domain exposes raycast-all/linecast/shapecast/validate", () => {
 
 test("bridge specs resolve for all new domain 4-8 tools", () => {
   const checks = [
-    ["scene", "unload", "scene.unload"],
-    ["scene", "data", "scene.data"],
+    ["scene", "unload", "project-tool.run"],
+    ["scene", "data", "project-tool.run"],
     ["go", "set-parent", "go.set-parent"],
     ["prefab", "instantiate", "prefab.instantiate"],
     ["prefab", "unpack", "prefab.unpack"],

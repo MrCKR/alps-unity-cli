@@ -2,7 +2,7 @@ import { boolFlag, compactArgs, floatFlag, numberFlag, stringFlag } from "../arg
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const screenshotBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "screenshot", command: "capture", bridgeCommand: "screenshot.capture", buildArgs: screenshotArgs },
+  { group: "screenshot", command: "capture", bridgeCommand: "project-tool.run", toolName: "screenshot.capture", buildArgs: screenshotArgs },
   { group: "screenshot", command: "game-view", bridgeCommand: "screenshot.game-view", buildArgs: screenshotArgs },
   { group: "screenshot", command: "scene-view", bridgeCommand: "screenshot.scene-view", buildArgs: screenshotArgs },
   { group: "screenshot", command: "isolated-object", bridgeCommand: "screenshot.isolated-object", buildArgs: isolatedArgs },

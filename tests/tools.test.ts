@@ -1179,9 +1179,10 @@ test("tools run built-in bridge tool routes to native bridge command", async () 
     }
   };
 
+  // scene.hierarchy 已迁移为 IUnityCliTool → 路由 project-tool.run(仍走 bridgeExecute)
   const result = await handleToolsCommand("run", ["scene.hierarchy"], {}, runtime, requestId);
   assert.equal(result.ok, true);
-  assert.equal(requests[0].command, "scene.hierarchy");
+  assert.equal(requests[0].command, "project-tool.run");
 });
 
 test("tools run with target=runtime project tool routes to runtime-tool.run", async () => {
@@ -1391,8 +1392,8 @@ test("tools run scene.hierarchy passes --input as bridge args", async () => {
 
   const result = await handleToolsCommand("run", ["scene.hierarchy"], { input: '{"pageSize":1}' }, runtime, requestId);
   assert.equal(result.ok, true);
-  assert.equal(requests[0].command, "scene.hierarchy");
-  assert.deepEqual((requests[0].args as Record<string, unknown>).pageSize, 1);
+  assert.equal(requests[0].command, "project-tool.run");
+  assert.deepEqual(requests[0].args, { name: "scene.hierarchy", input: { pageSize: 1 } });
 });
 
 test("tools run validates required input fields before bridge execution", async () => {
@@ -1446,11 +1447,11 @@ test("tools run built-in bridge tool without --input sends empty args", async ()
     }
   };
 
-  // scene.active 已迁移为 IUnityCliTool(project-tool.run 路由),用 scene.build-settings 测试直连 bridge command
+  // scene.* 全部迁移为 IUnityCliTool(project-tool.run 路由);无 --input 时 input 为空对象
   const result = await handleToolsCommand("run", ["scene.build-settings"], {}, runtime, requestId);
   assert.equal(result.ok, true);
-  assert.equal(requests[0].command, "scene.build-settings");
-  assert.deepEqual(requests[0].args, {});
+  assert.equal(requests[0].command, "project-tool.run");
+  assert.deepEqual(requests[0].args, { name: "scene.build-settings", input: {} });
 });
 
 test("tools run preserves boolean false from --input", async () => {

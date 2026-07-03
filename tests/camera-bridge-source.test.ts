@@ -92,14 +92,14 @@ test("Unity Bridge exposes documented core camera, screenshot, prefab, UI, mater
   assert.match(source, /RegisterCommand\(registry, "camera\.target", "camera", true/);
   assert.match(source, /RegisterCommand\(registry, "camera\.lens", "camera", true/);
   assert.match(source, /RegisterCommand\(registry, "camera\.multiview", "camera", true/);
-  // scene.active 已迁移为 IUnityCliTool(unitypkg/Editor/Tools/scene/active.cs),不再用 RegisterCommand
+  // scene.* 已迁移为 IUnityCliTool(unitypkg/Editor/Tools/scene/*.cs),不再用 RegisterCommand
   assert.doesNotMatch(source, /RegisterCommand\(registry, "scene\.active"/);
-  assert.match(source, /RegisterCommand\(registry, "scene\.build-settings", "scene", false/);
-  assert.match(source, /RegisterCommand\(registry, "scene\.screenshot", "scene", true/);
-  assert.match(source, /RegisterCommand\(registry, "scene\.create", "scene", true/);
-  assert.match(source, /RegisterCommand\(registry, "scene\.load", "scene", true/);
-  assert.match(source, /RegisterCommand\(registry, "scene\.save", "scene", true/);
-  assert.match(source, /RegisterCommand\(registry, "screenshot\.capture", "scene", true/);
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "scene\.build-settings"/);
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "scene\.screenshot"/);
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "scene\.create"/);
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "scene\.load"/);
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "scene\.save"/);
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "screenshot\.capture"/);
   assert.match(source, /RegisterCommand\(registry, "prefab\.info", "prefab", false/);
   assert.match(source, /RegisterCommand\(registry, "prefab\.create", "prefab", true/);
   assert.match(source, /RegisterCommand\(registry, "prefab\.modify", "prefab", false/);
@@ -199,7 +199,7 @@ test("Unity Bridge exposes documented core camera, screenshot, prefab, UI, mater
   assert.match(source, /RegisterCommand\(registry, "texture\.create", "texture", true/);
   assert.match(source, /RegisterCommand\(registry, "texture\.sprite", "texture", true/);
   assert.match(source, /RegisterCommand\(registry, "texture\.import-settings", "texture", true/);
-  assert.match(source, /RegisterCommand\(registry, "scene\.hierarchy", "scene", false/);
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "scene\.hierarchy"/);
   assert.match(source, /RegisterCommand\(registry, "go\.find", "go", false/);
   assert.match(source, /RegisterCommand\(registry, "go\.inspect", "go", false/);
   assert.match(source, /RegisterCommand\(registry, "go\.create", "go", true/);

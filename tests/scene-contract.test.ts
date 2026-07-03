@@ -66,12 +66,11 @@ test("scene editor-only tools (screenshot/view-frame)", () => {
 });
 
 test("bridge specs resolve for scene tools", () => {
-  // scene.active 已迁移为 IUnityCliTool → 路由 project-tool.run;其余仍直连 bridge command
-  const MIGRATED = new Set(["active"]);
-  for (const [cmd, expected] of [["active", "scene.active"], ["build-settings", "scene.build-settings"], ["screenshot", "scene.screenshot"], ["create", "scene.create"], ["load", "scene.load"], ["save", "scene.save"], ["unload", "scene.unload"], ["set-active", "scene.set-active"], ["list-opened", "scene.list-opened"], ["data", "scene.data"], ["view-frame", "scene.view-frame"]] as const) {
+  // scene.* 全部迁移为 IUnityCliTool → 路由 project-tool.run,toolName=scene.<cmd>
+  for (const [cmd, toolName] of [["active", "scene.active"], ["build-settings", "scene.build-settings"], ["screenshot", "scene.screenshot"], ["create", "scene.create"], ["load", "scene.load"], ["save", "scene.save"], ["unload", "scene.unload"], ["set-active", "scene.set-active"], ["list-opened", "scene.list-opened"], ["data", "scene.data"], ["view-frame", "scene.view-frame"]] as const) {
     const spec = bridgeCommandRegistry.lookup("scene", cmd);
-    const expectedBridge = MIGRATED.has(cmd) ? "project-tool.run" : expected;
-    assert.equal(spec?.bridgeCommand, expectedBridge, `scene ${cmd} should resolve`);
+    assert.equal(spec?.bridgeCommand, "project-tool.run", `scene ${cmd} should route via project-tool.run`);
+    assert.equal(spec?.toolName, toolName, `scene ${cmd} toolName should match`);
   }
 });
 
@@ -99,19 +98,23 @@ test("C# handlers exist for scene commands (RegisterCommand or IUnityCliTool)", 
 });
 
 test("scene C# error recovery hints use current tools run form, not legacy unity_cli", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/SceneCommands.cs", import.meta.url), "utf8");
+  // scene.* 已迁移为 IUnityCliTool(unitypkg/Editor/Tools/scene/*.cs);错误提示在工具文件内。
+  const csFiles = await listCsFiles(new URL("../unitypkg/Editor/Tools/scene/", import.meta.url));
+  const source = (await Promise.all(csFiles.map((f) => readFile(f, "utf8")))).join("\n");
   assert.equal(source.includes("unity_cli scene"), false, "must not reference legacy 'unity_cli scene'");
   assert.equal(source.includes("unity_cli asset search"), false, "must not reference legacy 'unity_cli asset search'");
   assert.match(source, /tools run scene\.save/, "error hints should route to tools run scene.save");
   assert.match(source, /tools run asset\.search/, "error hints should route to tools run asset.search");
 });
 
-test("scene.list-opened and scene.data C# wrap results in SuccessJson", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/SceneCommands.cs", import.meta.url), "utf8");
-  const listBlock = source.slice(source.indexOf("SceneListOpened(BridgeRequest request)"), source.indexOf("private static string SceneData"));
-  assert.match(listBlock, /return SuccessJson\(w\.EndObject/, "SceneListOpened must wrap payload in SuccessJson");
-  const dataBlock = source.slice(source.indexOf("SceneData(BridgeRequest request)"), source.indexOf("private static string SceneViewFrame"));
-  assert.match(dataBlock, /return SuccessJson\(w\.EndObject/, "SceneData must wrap payload in SuccessJson");
+test("scene.list-opened and scene.data are IUnityCliTool returning typed Result", async () => {
+  // scene.* 已迁移为 IUnityCliTool:工具返回 typed Result(框架序列化),不再手拼 SuccessJson。
+  const listSource = await readFile(new URL("../unitypkg/Editor/Tools/scene/list-opened.cs", import.meta.url), "utf8");
+  assert.match(listSource, /class SceneListOpenedTool : IUnityCliTool</, "SceneListOpened should be an IUnityCliTool");
+  assert.match(listSource, /Name = "scene\.list-opened"/, "list-opened tool name");
+  const dataSource = await readFile(new URL("../unitypkg/Editor/Tools/scene/data.cs", import.meta.url), "utf8");
+  assert.match(dataSource, /class SceneDataTool : IUnityCliTool</, "SceneData should be an IUnityCliTool");
+  assert.match(dataSource, /Name = "scene\.data"/, "data tool name");
 });
 
 test("scene bridge spec forwards structured --input fields for file ops and data", async () => {

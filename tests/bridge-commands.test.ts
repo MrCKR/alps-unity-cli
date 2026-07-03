@@ -160,7 +160,7 @@ test("bridge command routes --instance to the matching ready endpoint", async ()
   assert.equal((result.data as { bridgeEndpoint: string }).bridgeEndpoint, healthEndpoint2);
   assert.equal("selectedInstance" in (result.data as Record<string, unknown>), false);
   assert.equal("target" in (result.data as Record<string, unknown>), false);
-  assert.equal(requests[0].command, "scene.hierarchy");
+  assert.equal(requests[0].command, "project-tool.run");
 });
 
 test("tools run go.inspect keeps --target for instance selection and input target for GameObject", async () => {
@@ -310,8 +310,8 @@ test("query command forwards stable bridge envelope", async () => {
   });
 
   assert.equal(result.ok, true);
-  assert.deepEqual(requests[0].command, "scene.hierarchy");
-  assert.deepEqual(requests[0].args, { pageSize: 50 });
+  assert.deepEqual(requests[0].command, "project-tool.run");
+  assert.deepEqual(requests[0].args, { name: "scene.hierarchy", input: { pageSize: 50 } });
   assert.equal(((result.data as { items: Array<{ path: string }> }).items[0]).path, "Main Camera");
 });
 
@@ -542,7 +542,7 @@ test("screenshot commands forward output and surround arguments", async () => {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: { screenshotPath: payload.args.path, plannedEffects: [{ type: payload.command, path: payload.args.path }] } };
+      return { ok: true, data: { screenshotPath: "Artifacts/after.png", plannedEffects: [{ type: payload.command, path: "Artifacts/after.png" }] } };
     }
   });
   const surround = await execute(["tools", "run", "screenshot.surround", "Player", "--output-dir", "Assets/Shots", "--contact-sheet", "Assets/Shots/contact.png", "--width", "320", "--height", "240", "--radius", "6.5", "--fov", "55", "--inline-base64", "--dry-run"], {
@@ -555,8 +555,8 @@ test("screenshot commands forward output and surround arguments", async () => {
 
   assert.equal(result.ok, true);
   assert.equal(surround.ok, true);
-  assert.equal(requests[0].command, "screenshot.capture");
-  assert.deepEqual(requests[0].args, { path: "Artifacts/after.png", width: 1280, height: 720, inlineBase64: true });
+  assert.equal(requests[0].command, "project-tool.run");
+  assert.deepEqual(requests[0].args, { name: "screenshot.capture", input: { path: "Artifacts/after.png", width: 1280, height: 720, inlineBase64: true } });
   assert.equal((result.data as { screenshotPath: string }).screenshotPath, "Artifacts/after.png");
   assert.equal(requests[1].command, "screenshot.surround");
   assert.equal(requests[1].dryRun, true);
@@ -662,8 +662,8 @@ test("scene screenshot forwards output path and overwrite", async () => {
   });
 
   assert.equal(result.ok, true);
-  assert.equal(requests[0].command, "scene.screenshot");
-  assert.deepEqual(requests[0].args, { path: "Artifacts/scene.jpg", format: "jpg", width: 800, height: 600, overwrite: true });
+  assert.equal(requests[0].command, "project-tool.run");
+  assert.deepEqual(requests[0].args, { name: "scene.screenshot", input: { path: "Artifacts/scene.jpg", format: "jpg", width: 800, height: 600, overwrite: true } });
 });
 
 test("prefab commands forward paths, pagination, modify args and planned effects", async () => {
