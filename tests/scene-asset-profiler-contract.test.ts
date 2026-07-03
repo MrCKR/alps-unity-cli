@@ -133,16 +133,20 @@ test("go domain exposes paged find and prevalidated mutations", async () => {
   }
 
   const source = await readFile(new URL("../unitypkg/Editor/Commands/GameObjectCommands.cs", import.meta.url), "utf8");
-  assert.match(source, /private static string GameObjectFind[\s\S]*SearchGameObjects\(searchMethod, searchTerm, includeInactive\)[\s\S]*PropObject\("pageInfo"/, "go.find should search with paging");
+  const findSource = await readFile(new URL("../unitypkg/Editor/Tools/go/find.cs", import.meta.url), "utf8");
+  const createSource = await readFile(new URL("../unitypkg/Editor/Tools/go/create.cs", import.meta.url), "utf8");
+  const modifySource = await readFile(new URL("../unitypkg/Editor/Tools/go/modify.cs", import.meta.url), "utf8");
+  const lookAtSource = await readFile(new URL("../unitypkg/Editor/Tools/go/look-at.cs", import.meta.url), "utf8");
+  assert.match(findSource, /SearchGameObjects\(searchMethod, searchTerm, includeInactive\)[\s\S]*PageInfo/, "go.find should search with paging");
   assert.match(source, /private static List<GameObject> SearchGameObjects[\s\S]*by_component[\s\S]*ResolveComponentType/, "go.find should support component search");
   assert.match(source, /ResolveUniqueTarget[\s\S]*FindObjectsOfType<GameObject>\(true\)/, "go tools should resolve inactive targets after active=false changes");
-  assert.match(source, /GameObjectCreate[\s\S]*var parentTransform[\s\S]*ParsePrimitiveType\(primitive\)[\s\S]*ValidateGameObjectMutationInputs\(request\)[\s\S]*new GameObject/, "go.create should validate parent/primitive/tag/layer before mutating");
-  assert.match(source, /GameObjectModify[\s\S]*ValidateGameObjectMutationInputs\(request\)[\s\S]*ResolveModifyTargets\(request\)[\s\S]*Undo\.RecordObject/, "go.modify should validate tag/layer and resolve all targets before recording changes");
+  assert.match(createSource, /ResolveUniqueTarget\(request\.Parent[\s\S]*ParsePrimitiveType\(request\.Primitive\)[\s\S]*ValidateMutationInputs\(request\.TagValue, request\.LayerValue\)[\s\S]*new GameObject/, "go.create should validate parent/primitive/tag/layer before mutating");
+  assert.match(modifySource, /ValidateMutationInputs[\s\S]*ResolveModifyTargets\(request\)[\s\S]*Undo\.RecordObject/, "go.modify should validate tag/layer and resolve all targets before recording changes");
   assert.match(source, /ResolveModifyTargets[\s\S]*RawJsonArg\("targets"\)[\s\S]*JsonStringArray[\s\S]*ResolveUniqueTarget/, "go.modify should support targets[] batch resolution");
   assert.match(source, /GameObjectBatchMutationJson[\s\S]*modifiedCount[\s\S]*gameObjects/, "go.modify batch output should expose modifiedCount and gameObjects");
   assert.match(source, /ParsePrimitiveType[\s\S]*E_PRIMITIVE_TYPE_INVALID/, "invalid primitive types should be recoverable errors");
   assert.doesNotMatch(source, /unity_cli scene hierarchy/, "go errors must not use removed top-level scene commands");
-  assert.match(source, /GameObject look-at requires a lookAt target[\s\S]*tools run/, "go.look-at missing target guidance should use current tools run input shape");
+  assert.match(lookAtSource, /GameObject look-at requires a lookAt target[\s\S]*tools run/, "go.look-at missing target guidance should use current tools run input shape");
 });
 
 test("prefab domain exposes instantiate/unpack", () => {
@@ -312,7 +316,7 @@ test("bridge specs resolve for all new domain 4-8 tools", () => {
   const checks = [
     ["scene", "unload", "project-tool.run"],
     ["scene", "data", "project-tool.run"],
-    ["go", "set-parent", "go.set-parent"],
+    ["go", "set-parent", "project-tool.run"],
     ["prefab", "instantiate", "prefab.instantiate"],
     ["prefab", "unpack", "prefab.unpack"],
     ["asset", "get-data", "asset.get-data"],

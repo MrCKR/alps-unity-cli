@@ -1423,7 +1423,9 @@ test("tools run required field validation accepts explicit CLI flags", async () 
   const result = await handleToolsCommand("run", ["go.modify"], { target: "Player" }, runtime, requestId);
   assert.equal(result.ok, true);
   assert.equal(requests.length, 1);
-  assert.equal((requests[0].args as Record<string, unknown>).target, "Player");
+  assert.equal(requests[0].command, "project-tool.run");
+  assert.equal((requests[0].args as Record<string, unknown>).name, "go.modify");
+  assert.equal(((requests[0].args as Record<string, unknown>).input as Record<string, unknown>).target, "Player");
 });
 
 test("tools run --stdin reads JSON input for offline tools", () => {

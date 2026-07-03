@@ -179,8 +179,8 @@ test("tools run go.inspect keeps --target for instance selection and input targe
   assert.equal(result.ok, true);
   assert.equal((result.data as { bridgeEndpoint: string }).bridgeEndpoint, healthEndpoint2);
   assert.equal("selectedInstance" in (result.data as Record<string, unknown>), false);
-  assert.equal(requests[0].command, "go.inspect");
-  assert.deepEqual(requests[0].args, { target: "Main Camera" });
+  assert.equal(requests[0].command, "project-tool.run");
+  assert.deepEqual(requests[0].args, { name: "go.inspect", input: { target: "Main Camera" } });
 });
 
 test("tools run go.find keeps --target for instance selection and input target as search term", async () => {
@@ -199,8 +199,8 @@ test("tools run go.find keeps --target for instance selection and input target a
   assert.equal(result.ok, true);
   assert.equal((result.data as { bridgeEndpoint: string }).bridgeEndpoint, healthEndpoint2);
   assert.equal("selectedInstance" in (result.data as Record<string, unknown>), false);
-  assert.equal(requests[0].command, "go.find");
-  assert.deepEqual(requests[0].args, { searchTerm: "Main Camera", target: "Main Camera", pageSize: 5 });
+  assert.equal(requests[0].command, "project-tool.run");
+  assert.deepEqual(requests[0].args, { name: "go.find", input: { searchTerm: "Main Camera", target: "Main Camera", pageSize: 5 } });
 });
 
 
@@ -403,13 +403,14 @@ test("edit command forwards target and plannedEffects", async () => {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: { plannedEffects: [{ type: payload.command, property: payload.args.property }] } };
+      const input = (payload.args.input ?? {}) as Record<string, unknown>;
+      return { ok: true, data: { plannedEffects: [{ type: payload.args.name, property: input.property }] } };
     }
   });
 
   assert.equal(result.ok, true);
-  assert.equal(requests[0].command, "component.set");
-  assert.deepEqual(requests[0].args, { target: "Player", component: "Camera", property: "enabled", value: "false" });
+  assert.equal(requests[0].command, "project-tool.run");
+  assert.deepEqual(requests[0].args, { name: "component.set", input: { target: "Player", component: "Camera", property: "enabled", value: "false" } });
   assert.deepEqual((result.data as { plannedEffects: unknown[] }).plannedEffects, [{ type: "component.set", property: "enabled" }]);
 });
 
@@ -426,8 +427,8 @@ test("component lifecycle tools forward structured --input fields", async () => 
     }
   });
   assert.equal(addResult.ok, true);
-  assert.equal(requests[0].command, "component.add");
-  assert.deepEqual(requests[0].args, addInput);
+  assert.equal(requests[0].command, "project-tool.run");
+  assert.deepEqual(requests[0].args, { name: "component.add", input: addInput });
 
   const setInput = { target: "UnityCliAlignmentProbe", component: "Rigidbody", componentIndex: 1, properties: { mass: 5, useGravity: false } };
   const setResult = await execute(["tools", "run", "component.set", "--input", JSON.stringify(setInput)], {
@@ -438,8 +439,8 @@ test("component lifecycle tools forward structured --input fields", async () => 
     }
   });
   assert.equal(setResult.ok, true);
-  assert.equal(requests[1].command, "component.set");
-  assert.deepEqual(requests[1].args, setInput);
+  assert.equal(requests[1].command, "project-tool.run");
+  assert.deepEqual(requests[1].args, { name: "component.set", input: setInput });
 
   const singleInput = { target: "Main Camera", component: "Camera", property: "enabled", value: false };
   const singleResult = await execute(["tools", "run", "component.set", "--input", JSON.stringify(singleInput)], {
@@ -450,8 +451,8 @@ test("component lifecycle tools forward structured --input fields", async () => 
     }
   });
   assert.equal(singleResult.ok, true);
-  assert.equal(requests[2].command, "component.set");
-  assert.deepEqual(requests[2].args, singleInput);
+  assert.equal(requests[2].command, "project-tool.run");
+  assert.deepEqual(requests[2].args, { name: "component.set", input: singleInput });
 
   const getInput = { target: "Main Camera", component: "Camera", paths: ["layerCullDistances"], maxArrayItems: 5 };
   const getResult = await execute(["tools", "run", "component.get", "--input", JSON.stringify(getInput)], {
@@ -462,8 +463,8 @@ test("component lifecycle tools forward structured --input fields", async () => 
     }
   });
   assert.equal(getResult.ok, true);
-  assert.equal(requests[3].command, "component.get");
-  assert.deepEqual(requests[3].args, { path: "Main Camera", component: "Camera", paths: ["layerCullDistances"], maxArrayItems: 5 });
+  assert.equal(requests[3].command, "project-tool.run");
+  assert.deepEqual(requests[3].args, { name: "component.get", input: { path: "Main Camera", component: "Camera", paths: ["layerCullDistances"], maxArrayItems: 5 } });
 
   const removeInput = { target: "UnityCliAlignmentProbe", component: "BoxCollider", componentIndex: 0 };
   const removeResult = await execute(["tools", "run", "component.remove", "--input", JSON.stringify(removeInput)], {
@@ -474,8 +475,8 @@ test("component lifecycle tools forward structured --input fields", async () => 
     }
   });
   assert.equal(removeResult.ok, true);
-  assert.equal(requests[4].command, "component.remove");
-  assert.deepEqual(requests[4].args, removeInput);
+  assert.equal(requests[4].command, "project-tool.run");
+  assert.deepEqual(requests[4].args, { name: "component.remove", input: removeInput });
 
   const batchRemoveInput = { target: "UnityCliAlignmentProbe", components: ["BoxCollider", "Rigidbody"] };
   const batchRemoveResult = await execute(["tools", "run", "component.remove", "--input", JSON.stringify(batchRemoveInput)], {
@@ -486,8 +487,8 @@ test("component lifecycle tools forward structured --input fields", async () => 
     }
   });
   assert.equal(batchRemoveResult.ok, true);
-  assert.equal(requests[5].command, "component.remove");
-  assert.deepEqual(requests[5].args, batchRemoveInput);
+  assert.equal(requests[5].command, "project-tool.run");
+  assert.deepEqual(requests[5].args, { name: "component.remove", input: batchRemoveInput });
 });
 
 test("tools run forwards structured --input fields with pwsh escaping", async () => {
@@ -621,9 +622,9 @@ test("camera commands forward target and screenshot options", async () => {
   assert.equal(list.ok, true);
   assert.equal(info.ok, true);
   assert.equal(screenshot.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["camera.list", "camera.info", "camera.screenshot"]);
-  assert.deepEqual(requests[1].args, { target: "Main Camera" });
-  assert.deepEqual(requests[2].args, { path: "Artifacts/camera.png", format: "png", width: 1920, height: 1080, transparent: true, quality: 90, overwrite: true, target: "Main Camera" });
+  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run"]);
+  assert.deepEqual(requests[1].args, { name: "camera.info", input: { target: "Main Camera" } });
+  assert.deepEqual(requests[2].args, { name: "camera.screenshot", input: { path: "Artifacts/camera.png", format: "png", width: 1920, height: 1080, transparent: true, quality: 90, overwrite: true, target: "Main Camera" } });
 });
 
 test("camera mutation tools forward structured --input fields", async () => {
@@ -642,11 +643,11 @@ test("camera mutation tools forward structured --input fields", async () => {
   for (const result of [create, target, lens, multiview]) {
     assert.equal(result.ok, true);
   }
-  assert.deepEqual(requests.map((request) => request.command), ["camera.create", "camera.target", "camera.lens", "camera.multiview"]);
-  assert.deepEqual(requests[0].args, { name: "AlignmentCam", position: "0,2,-6", rotation: "15,0,0", fieldOfView: 60, orthographic: false, orthographicSize: 5, clearFlags: "SolidColor", depth: 2, tag: "MainCamera" });
-  assert.deepEqual(requests[1].args, { target: "AlignmentCam", lookAt: "UnityCliAlignmentProbe", position: "0,3,-8", rotation: "20,0,0" });
-  assert.deepEqual(requests[2].args, { target: "AlignmentCam", fieldOfView: 45, orthographic: true, orthographicSize: 10, nearClipPlane: 0.1, farClipPlane: 500, clearFlags: "Skybox", depth: 3 });
-  assert.deepEqual(requests[3].args, { targets: "Main Camera,AlignmentCam", output: "Artifacts/cameras", width: 320, height: 180, format: "png" });
+  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
+  assert.deepEqual(requests[0].args, { name: "camera.create", input: { name: "AlignmentCam", position: "0,2,-6", rotation: "15,0,0", fieldOfView: 60, orthographic: false, orthographicSize: 5, clearFlags: "SolidColor", depth: 2, tag: "MainCamera" } });
+  assert.deepEqual(requests[1].args, { name: "camera.target", input: { target: "AlignmentCam", lookAt: "UnityCliAlignmentProbe", position: "0,3,-8", rotation: "20,0,0" } });
+  assert.deepEqual(requests[2].args, { name: "camera.lens", input: { target: "AlignmentCam", fieldOfView: 45, orthographic: true, orthographicSize: 10, nearClipPlane: 0.1, farClipPlane: 500, clearFlags: "Skybox", depth: 3 } });
+  assert.deepEqual(requests[3].args, { name: "camera.multiview", input: { targets: "Main Camera,AlignmentCam", output: "Artifacts/cameras", width: 320, height: 180, format: "png" } });
 });
 
 test("scene screenshot forwards output path and overwrite", async () => {
@@ -1288,13 +1289,13 @@ test("go commands forward structured search and transform inputs", async () => {
   for (const result of [find, create, modify, batchModify, move, parent]) {
     assert.equal(result.ok, true);
   }
-  assert.deepEqual(requests.map((request) => request.command), ["go.find", "go.create", "go.modify", "go.modify", "go.move-relative", "go.set-parent"]);
-  assert.deepEqual(requests[0].args, { pageSize: 10, cursor: 20, searchTerm: "Camera", searchMethod: "by_component", includeInactive: true });
-  assert.deepEqual(requests[1].args, { name: "AlignmentCube", active: false, primitive: "cube", x: 1, y: 2, z: 3, rotationX: 0, rotationY: 45, rotationZ: 0, scaleX: 2, scaleY: 2, scaleZ: 2 });
-  assert.deepEqual(requests[2].args, { target: "AlignmentCube", newName: "AlignmentCubeRenamed", active: false, layerValue: "Default", tagValue: "Untagged" });
-  assert.deepEqual(requests[3].args, { targets: ["Batch/A", "Batch/B"], active: true, x: 4, y: 5, z: 6 });
-  assert.deepEqual(requests[4].args, { target: "AlignmentCubeRenamed", offsetX: 0, offsetY: 1, offsetZ: -2 });
-  assert.deepEqual(requests[5].args, { target: "AlignmentCubeRenamed", parent: "Parent", worldPositionStays: false, dryRun: true });
+  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
+  assert.deepEqual(requests[0].args, { name: "go.find", input: { pageSize: 10, cursor: 20, searchTerm: "Camera", searchMethod: "by_component", includeInactive: true } });
+  assert.deepEqual(requests[1].args, { name: "go.create", input: { name: "AlignmentCube", active: false, primitive: "cube", x: 1, y: 2, z: 3, rotationX: 0, rotationY: 45, rotationZ: 0, scaleX: 2, scaleY: 2, scaleZ: 2 } });
+  assert.deepEqual(requests[2].args, { name: "go.modify", input: { target: "AlignmentCube", newName: "AlignmentCubeRenamed", active: false, layerValue: "Default", tagValue: "Untagged" } });
+  assert.deepEqual(requests[3].args, { name: "go.modify", input: { targets: ["Batch/A", "Batch/B"], active: true, x: 4, y: 5, z: 6 } });
+  assert.deepEqual(requests[4].args, { name: "go.move-relative", input: { target: "AlignmentCubeRenamed", offsetX: 0, offsetY: 1, offsetZ: -2 } });
+  assert.deepEqual(requests[5].args, { name: "go.set-parent", input: { target: "AlignmentCubeRenamed", parent: "Parent", worldPositionStays: false, dryRun: true } });
   assert.equal(requests[5].dryRun, true);
 });
 

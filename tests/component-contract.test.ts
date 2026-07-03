@@ -104,11 +104,14 @@ test("component.get supports ObjectRef resolution and token-safe read scopes", (
 
 test("bridge specs resolve for component deep tools", () => {
   const componentGet = bridgeCommandRegistry.lookup("component", "get");
-  assert.equal(componentGet?.bridgeCommand, "component.get");
+  assert.equal(componentGet?.bridgeCommand, "project-tool.run");
+  assert.equal(componentGet?.toolName, "component.get");
   const componentModify = bridgeCommandRegistry.lookup("component", "modify");
-  assert.equal(componentModify?.bridgeCommand, "component.modify");
+  assert.equal(componentModify?.bridgeCommand, "project-tool.run");
+  assert.equal(componentModify?.toolName, "component.modify");
   const componentListTypes = bridgeCommandRegistry.lookup("component", "list-types");
-  assert.equal(componentListTypes?.bridgeCommand, "component.list-types");
+  assert.equal(componentListTypes?.bridgeCommand, "project-tool.run");
+  assert.equal(componentListTypes?.toolName, "component.list-types");
 });
 
 test("contract entries exist for component tools with present C# handler", () => {
@@ -124,7 +127,7 @@ test("component.modify is not in the destructive security policy", () => {
   assert.equal(commands.has("component.modify"), false);
 });
 
-test("C# RegisterCommand calls exist for component deep commands", async () => {
+test("C# handlers exist for component deep commands (RegisterCommand or IUnityCliTool)", async () => {
   const csFiles = await listCsFiles(new URL("../unitypkg/Editor/", import.meta.url));
   const allSource = (
     await Promise.all(
@@ -132,32 +135,42 @@ test("C# RegisterCommand calls exist for component deep commands", async () => {
     )
   ).join("\n");
   for (const command of ["component.get", "component.modify", "component.list-types"]) {
-    assert.ok(
-      allSource.includes(`RegisterCommand(registry, "${command}"`),
-      `${command} should be registered via RegisterCommand in C#`
-    );
+    const hasRegisterCommand = allSource.includes(`RegisterCommand(registry, "${command}"`);
+    const hasIUnityCliTool = allSource.includes(`Name = "${command}"`);
+    assert.ok(hasRegisterCommand || hasIUnityCliTool, `${command} should be registered via RegisterCommand or IUnityCliTool`);
   }
 });
 
 test("C# component lifecycle handlers support properties and indexed duplicate components", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/GameObjectCommands.cs", import.meta.url), "utf8");
-  assert.match(source, /ComponentPropertiesJson\(request\)/);
-  assert.match(source, /BuildComponentPropertyChanges\(type, ComponentPropertiesJson\(request\)\)/);
-  assert.match(source, /request\.OptionalIntArg\("componentIndex"\)/);
-  assert.match(source, /ResolveComponent\(gameObject, componentName, componentIndex\)/);
-  assert.match(source, /AllowsMultipleComponents\(type\)/);
-  assert.match(source, /DisallowMultipleComponent/);
-  assert.match(source, /type\.IsInstanceOfType\(component\)/);
-  assert.match(source, /E_COMPONENT_ADD_FAILED/);
-  assert.match(source, /E_COMPONENT_INDEX_OUT_OF_RANGE/);
-  assert.match(source, /changedProperties/);
+  // component.add/set/remove 已迁移为 IUnityCliTool(unitypkg/Editor/Tools/component/*.cs);
+  // helper 仍保留在 GameObjectCommands.cs 供其他域复用。
+  const toolSource = await readFile(new URL("../unitypkg/Editor/Tools/component/add.cs", import.meta.url), "utf8");
+  const supportSource = await readFile(new URL("../unitypkg/Editor/Tools/go/GameObjectToolSupport.cs", import.meta.url), "utf8");
+  assert.match(supportSource, /ComponentPropertiesJson/);
+  assert.match(supportSource, /BuildComponentPropertyChanges/);
+  const setSource = await readFile(new URL("../unitypkg/Editor/Tools/component/set.cs", import.meta.url), "utf8");
+  assert.match(supportSource, /ComponentPropertiesJson/);
+  assert.match(supportSource, /BuildComponentPropertyChanges/);
+  assert.match(setSource, /ComponentIndex/);
+  assert.match(supportSource, /ResolveComponent\(GameObject gameObject, string componentName, int\? componentIndex\)/);
+  assert.match(supportSource, /AllowsMultipleComponents/);
+  assert.match(supportSource, /DisallowMultipleComponent/);
+  assert.match(toolSource, /type\.IsInstanceOfType\(component\)/);
+  assert.match(toolSource, /E_COMPONENT_ADD_FAILED/);
+  assert.match(supportSource, /E_COMPONENT_INDEX_OUT_OF_RANGE/);
+  assert.match(toolSource, /ChangedProperties/);
 });
 
-test("C# component deep handlers return bridge success envelopes", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/GameObjectCommands.cs", import.meta.url), "utf8");
-  assert.match(source, /ComponentGet[\s\S]*BuildSerializerOptions\(request\)[\s\S]*ObjectSerializer\.Serialize\(component, options\)[\s\S]*return SuccessJson\(w\.EndObject\(\)\.ToString\(\)\);/, "component.get should support shared paths/viewQuery serializer options and bridge success envelope");
-  assert.match(source, /ComponentModify[\s\S]*return SuccessJson\(dry\.EndObject\(\)\.ToString\(\)\);[\s\S]*return SuccessJson\(w\.EndObject\(\)\.ToString\(\)\);/, "component.modify dry-run and execution should return bridge success envelopes");
-  assert.match(source, /ComponentListTypes[\s\S]*return SuccessJson\(w\.EndObject\(\)\.ToString\(\)\);/, "component.list-types should return a bridge success envelope");
-  const objectSource = await readFile(new URL("../unitypkg/Editor/Commands/ObjectCommands.cs", import.meta.url), "utf8");
-  assert.match(objectSource, /E_OBJECT_READ_SCOPE_CONFLICT[\s\S]*paths and viewQuery are mutually exclusive/, "component.get should inherit shared read-scope conflict behavior");
+test("C# component deep handlers return typed Result via IUnityCliTool", async () => {
+  // component.get/modify/list-types 已迁移为 IUnityCliTool,返回 typed Result(框架序列化)。
+  const getSource = await readFile(new URL("../unitypkg/Editor/Tools/component/get.cs", import.meta.url), "utf8");
+  assert.match(getSource, /BuildSerializerOptions\(bridgeRequest\)/, "component.get should build shared serializer options");
+  assert.match(getSource, /ObjectSerializer\.Serialize\(component, options\)/, "component.get should serialize the component");
+  const modifySource = await readFile(new URL("../unitypkg/Editor/Tools/component/modify.cs", import.meta.url), "utf8");
+  assert.match(modifySource, /DryRun/, "component.modify should support dry-run");
+  assert.match(modifySource, /ObjectPatch\.ApplyMergePatch/, "component.modify should apply merge patches");
+  const listSource = await readFile(new URL("../unitypkg/Editor/Tools/component/list-types.cs", import.meta.url), "utf8");
+  assert.match(listSource, /Name = "component\.list-types"/, "component.list-types should be an IUnityCliTool");
+  const supportSource = await readFile(new URL("../unitypkg/Editor/Tools/go/GameObjectToolSupport.cs", import.meta.url), "utf8");
+  assert.match(supportSource, /E_OBJECT_READ_SCOPE_CONFLICT[\s\S]*paths and viewQuery are mutually exclusive/, "component.get should inherit shared read-scope conflict behavior");
 });

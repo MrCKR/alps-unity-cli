@@ -68,6 +68,24 @@ namespace UnityCli
                 return;
             }
 
+            // 字典:按 key-value 对输出(供工具 Result 嵌入已解析的任意 JSON 结构)
+            if (value is IDictionary dict)
+            {
+                builder.Append('{');
+                var firstEntry = true;
+                foreach (DictionaryEntry entry in dict)
+                {
+                    if (entry.Value == null) continue;
+                    if (!firstEntry) builder.Append(',');
+                    firstEntry = false;
+                    WriteString(builder, Convert.ToString(entry.Key, CultureInfo.InvariantCulture));
+                    builder.Append(':');
+                    WriteValue(builder, entry.Value, false);
+                }
+                builder.Append('}');
+                return;
+            }
+
             // DTO/POCO:反射属性
             WriteObject(builder, value, type);
         }

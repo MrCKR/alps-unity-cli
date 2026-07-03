@@ -1,0 +1,52 @@
+#if UNITY_EDITOR
+using UnityEngine;
+
+namespace UnityCli
+{
+    /// <summary>
+    /// go.inspect — 查看单个 GameObject 的摘要(id/name/path/active/tag/layer/transform/components/children)。
+    /// 对齐旧 GameObjectInspect handler;只读。
+    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
+    /// </summary>
+    public class GameObjectInspectTool : IUnityCliTool<GameObjectInspectTool.Request, GameObjectInspectTool.Result>
+    {
+        public sealed class Request
+        {
+            public string Target { get; set; }
+            public string Name { get; set; }
+            public string Path { get; set; }
+            public string Id { get; set; }
+        }
+
+        public sealed class Result
+        {
+            public GameObjectDetail GameObject { get; set; }
+        }
+
+        public ToolDescriptor Describe() => new()
+        {
+            Name = "go.inspect",
+            Summary = "Inspect one GameObject summary by name/path/id; use component.get for deep component fields.",
+            Description = "Inspect one GameObject by name, hierarchy path, or instance id. Returns transform, components and direct children; use object.get-data or component.get for deeper serialized data and keep go.find/scene.hierarchy for discovery.",
+            Group = "go",
+            Version = "1.0.0",
+            DestructiveHint = false,
+            Target = "editor",
+            PlayModeSupport = "supported",
+            DefaultTimeoutMs = 30000,
+            MaxTimeoutMs = 600000,
+            Examples = new[]
+            {
+                new ToolExample { Description = "Inspect by hierarchy path", Input = new Request { Target = "Player/CameraRig" } }
+            }
+        };
+
+        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        {
+            var target = request.Target ?? request.Name ?? request.Path ?? request.Id;
+            var gameObject = GameObjectToolSupport.ResolveUniqueTarget(target, "GameObject inspect requires a target.");
+            return new Result { GameObject = GameObjectToolSupport.BuildGameObjectDetail(gameObject) };
+        }
+    }
+}
+#endif

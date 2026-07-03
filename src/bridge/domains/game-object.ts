@@ -2,21 +2,21 @@ import { boolFlag, compactArgs, numberFlag, stringFlag, targetArgs } from "../ar
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const gameObjectBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "go", command: "find", bridgeCommand: "go.find", buildArgs: findArgs },
-  { group: "go", command: "inspect", bridgeCommand: "go.inspect", buildArgs: inspectArgs },
-  { group: "go", command: "create", bridgeCommand: "go.create", buildArgs: gameObjectArgs },
-  { group: "go", command: "modify", bridgeCommand: "go.modify", buildArgs: gameObjectArgs },
-  { group: "go", command: "duplicate", bridgeCommand: "go.duplicate", buildArgs: gameObjectArgs },
-  { group: "go", command: "move-relative", bridgeCommand: "go.move-relative", buildArgs: gameObjectArgs },
-  { group: "go", command: "look-at", bridgeCommand: "go.look-at", buildArgs: gameObjectArgs },
-  { group: "go", command: "delete", bridgeCommand: "go.delete", buildArgs: gameObjectArgs },
-  { group: "go", command: "set-parent", bridgeCommand: "go.set-parent", buildArgs: gameObjectArgs },
-  { group: "component", command: "add", bridgeCommand: "component.add", buildArgs: componentArgs },
-  { group: "component", command: "remove", bridgeCommand: "component.remove", buildArgs: componentArgs },
-  { group: "component", command: "set", bridgeCommand: "component.set", buildArgs: componentArgs },
-  { group: "component", command: "get", bridgeCommand: "component.get", buildArgs: componentDeepArgs },
-  { group: "component", command: "modify", bridgeCommand: "component.modify", buildArgs: componentDeepArgs },
-  { group: "component", command: "list-types", bridgeCommand: "component.list-types", buildArgs: componentListTypesArgs }
+  { group: "go", command: "find", bridgeCommand: "project-tool.run", toolName: "go.find", buildArgs: findArgs },
+  { group: "go", command: "inspect", bridgeCommand: "project-tool.run", toolName: "go.inspect", buildArgs: inspectArgs },
+  { group: "go", command: "create", bridgeCommand: "project-tool.run", toolName: "go.create", buildArgs: gameObjectArgs },
+  { group: "go", command: "modify", bridgeCommand: "project-tool.run", toolName: "go.modify", buildArgs: gameObjectArgs },
+  { group: "go", command: "duplicate", bridgeCommand: "project-tool.run", toolName: "go.duplicate", buildArgs: gameObjectArgs },
+  { group: "go", command: "move-relative", bridgeCommand: "project-tool.run", toolName: "go.move-relative", buildArgs: gameObjectArgs },
+  { group: "go", command: "look-at", bridgeCommand: "project-tool.run", toolName: "go.look-at", buildArgs: gameObjectArgs },
+  { group: "go", command: "delete", bridgeCommand: "project-tool.run", toolName: "go.delete", buildArgs: gameObjectArgs },
+  { group: "go", command: "set-parent", bridgeCommand: "project-tool.run", toolName: "go.set-parent", buildArgs: gameObjectArgs },
+  { group: "component", command: "add", bridgeCommand: "project-tool.run", toolName: "component.add", buildArgs: componentArgs },
+  { group: "component", command: "remove", bridgeCommand: "project-tool.run", toolName: "component.remove", buildArgs: componentArgs },
+  { group: "component", command: "set", bridgeCommand: "project-tool.run", toolName: "component.set", buildArgs: componentArgs },
+  { group: "component", command: "get", bridgeCommand: "project-tool.run", toolName: "component.get", buildArgs: componentDeepArgs },
+  { group: "component", command: "modify", bridgeCommand: "project-tool.run", toolName: "component.modify", buildArgs: componentDeepArgs },
+  { group: "component", command: "list-types", bridgeCommand: "project-tool.run", toolName: "component.list-types", buildArgs: componentListTypesArgs }
 ];
 
 /** go.find 的搜索参数解析：支持 describe 中公开的 searchTerm/name/target 等字段，并避免实例 --target 泄漏。 */

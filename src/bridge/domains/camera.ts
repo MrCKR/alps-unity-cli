@@ -2,13 +2,13 @@ import { boolFlag, compactArgs, floatFlag, numberFlag, queryArgs, screenshotArgs
 import type { BridgeCommandSpec } from "../types.js";
 
 export const cameraBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "camera", command: "list", bridgeCommand: "camera.list", buildArgs: ({ flags }) => queryArgs(flags) },
-  { group: "camera", command: "info", bridgeCommand: "camera.info", buildArgs: ({ flags, positionalTarget }) => compactArgs({ target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") }) },
-  { group: "camera", command: "screenshot", bridgeCommand: "camera.screenshot", buildArgs: ({ flags, positionalTarget }) => compactArgs({ ...screenshotArgs(flags, undefined), target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") }) },
-  { group: "camera", command: "create", bridgeCommand: "camera.create", buildArgs: cameraCreateArgs },
-  { group: "camera", command: "target", bridgeCommand: "camera.target", buildArgs: cameraTargetArgs },
-  { group: "camera", command: "lens", bridgeCommand: "camera.lens", buildArgs: cameraLensArgs },
-  { group: "camera", command: "multiview", bridgeCommand: "camera.multiview", buildArgs: cameraMultiviewArgs }
+  { group: "camera", command: "list", bridgeCommand: "project-tool.run", toolName: "camera.list", buildArgs: ({ flags }) => queryArgs(flags) },
+  { group: "camera", command: "info", bridgeCommand: "project-tool.run", toolName: "camera.info", buildArgs: ({ flags, positionalTarget }) => compactArgs({ target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") }) },
+  { group: "camera", command: "screenshot", bridgeCommand: "project-tool.run", toolName: "camera.screenshot", buildArgs: ({ flags, positionalTarget }) => compactArgs({ ...screenshotArgs(flags, undefined), target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") }) },
+  { group: "camera", command: "create", bridgeCommand: "project-tool.run", toolName: "camera.create", buildArgs: cameraCreateArgs },
+  { group: "camera", command: "target", bridgeCommand: "project-tool.run", toolName: "camera.target", buildArgs: cameraTargetArgs },
+  { group: "camera", command: "lens", bridgeCommand: "project-tool.run", toolName: "camera.lens", buildArgs: cameraLensArgs },
+  { group: "camera", command: "multiview", bridgeCommand: "project-tool.run", toolName: "camera.multiview", buildArgs: cameraMultiviewArgs }
 ];
 
 function cameraCreateArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {

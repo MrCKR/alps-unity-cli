@@ -85,13 +85,14 @@ test("Unity Bridge exposes documented core camera, screenshot, prefab, UI, mater
   assert.match(source, /private static string JsonLiteralOrString\(string value\)/);
   assert.doesNotMatch(source, /new\[\] \{ \(object\)/);
   assert.doesNotMatch(source, /private static readonly string\[\] (ProBuilder|Cinemachine|Vfx|Urp|Hdrp)Commands/);
-  assert.match(source, /RegisterCommand\(registry, "camera\.list", "camera", false/);
-  assert.match(source, /RegisterCommand\(registry, "camera\.info", "camera", false/);
-  assert.match(source, /RegisterCommand\(registry, "camera\.screenshot", "camera", true/);
-  assert.match(source, /RegisterCommand\(registry, "camera\.create", "camera", true/);
-  assert.match(source, /RegisterCommand\(registry, "camera\.target", "camera", true/);
-  assert.match(source, /RegisterCommand\(registry, "camera\.lens", "camera", true/);
-  assert.match(source, /RegisterCommand\(registry, "camera\.multiview", "camera", true/);
+  // camera.* 已迁移为 IUnityCliTool(unitypkg/Editor/Tools/camera/*.cs),不再用 RegisterCommand
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "camera\.list"/);
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "camera\.info"/);
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "camera\.screenshot"/);
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "camera\.create"/);
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "camera\.target"/);
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "camera\.lens"/);
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "camera\.multiview"/);
   // scene.* 已迁移为 IUnityCliTool(unitypkg/Editor/Tools/scene/*.cs),不再用 RegisterCommand
   assert.doesNotMatch(source, /RegisterCommand\(registry, "scene\.active"/);
   assert.doesNotMatch(source, /RegisterCommand\(registry, "scene\.build-settings"/);
@@ -200,17 +201,18 @@ test("Unity Bridge exposes documented core camera, screenshot, prefab, UI, mater
   assert.match(source, /RegisterCommand\(registry, "texture\.sprite", "texture", true/);
   assert.match(source, /RegisterCommand\(registry, "texture\.import-settings", "texture", true/);
   assert.doesNotMatch(source, /RegisterCommand\(registry, "scene\.hierarchy"/);
-  assert.match(source, /RegisterCommand\(registry, "go\.find", "go", false/);
-  assert.match(source, /RegisterCommand\(registry, "go\.inspect", "go", false/);
-  assert.match(source, /RegisterCommand\(registry, "go\.create", "go", true/);
-  assert.match(source, /RegisterCommand\(registry, "go\.modify", "go", true/);
-  assert.match(source, /RegisterCommand\(registry, "go\.duplicate", "go", true/);
-  assert.match(source, /RegisterCommand\(registry, "go\.move-relative", "go", true/);
-  assert.match(source, /RegisterCommand\(registry, "go\.look-at", "go", true/);
-  assert.match(source, /RegisterCommand\(registry, "go\.delete", "go", false/);
-  assert.match(source, /RegisterCommand\(registry, "component\.add", "component", true/);
-  assert.match(source, /RegisterCommand\(registry, "component\.remove", "component", false/);
-  assert.match(source, /RegisterCommand\(registry, "component\.set", "component", true/);
+  // go.* / component.* 已迁移为 IUnityCliTool(unitypkg/Editor/Tools/go/*.cs、component/*.cs),不再用 RegisterCommand
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "go\.find"/);
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "go\.inspect"/);
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "go\.create"/);
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "go\.modify"/);
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "go\.duplicate"/);
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "go\.move-relative"/);
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "go\.look-at"/);
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "go\.delete"/);
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "component\.add"/);
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "component\.remove"/);
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "component\.set"/);
   assert.match(source, /RegisterCommand\(registry, "asset\.search", "asset", false/);
   assert.match(source, /RegisterCommand\(registry, "asset\.info", "asset", false/);
   assert.match(source, /RegisterCommand\(registry, "asset\.create", "asset", false/);
@@ -747,23 +749,24 @@ test("Unity Bridge screenshot validates path, format, overwrite and busy diagnos
 
 test("Unity Bridge camera creation validates inputs before scene mutation", async () => {
   const source = await readUnityBridgeSources();
-  const createStart = source.indexOf("private static string CameraCreate");
-  const createEnd = source.indexOf("private static string CameraTarget", createStart);
-  const createBlock = source.slice(createStart, createEnd);
-  const lensStart = source.indexOf("private static string CameraLens");
-  const lensEnd = source.indexOf("private static int ClampScreenshotDimension", lensStart);
-  const lensBlock = source.slice(lensStart, lensEnd);
+  // camera.create 已迁移为 IUnityCliTool(unitypkg/Editor/Tools/camera/create.cs)
+  const createStart = source.indexOf("class CameraCreateTool");
+  const createEnd = source.indexOf("class CameraTargetTool", createStart);
+  const createBlock = source.slice(createStart, createEnd > createStart ? createEnd : source.length);
+  const lensStart = source.indexOf("class CameraLensTool");
+  const lensEnd = source.indexOf("class CameraMultiviewTool", lensStart);
+  const lensBlock = source.slice(lensStart, lensEnd > lensStart ? lensEnd : source.length);
 
-  assert.ok(createStart > -1, "CameraCreate should exist");
-  assert.ok(createEnd > createStart, "CameraCreate block should be bounded");
-  assert.match(source, /private static CameraClearFlags ParseCameraClearFlags/);
+  assert.ok(createStart > -1, "CameraCreateTool should exist");
+  assert.ok(createEnd > createStart, "CameraCreateTool block should be bounded");
+  assert.match(source, /ParseCameraClearFlags/);
   assert.match(source, /E_CAMERA_CLEAR_FLAGS_INVALID/);
-  assert.match(createBlock, /ResolveUniqueTarget\(parent, "camera\.create --parent <go> not found\."\)/);
-  assert.match(createBlock, /ParseCameraClearFlags\(request\.StringArg\("clearFlags"\)\)/);
+  assert.match(createBlock, /ResolveUniqueTarget\(request\.Parent, "camera\.create --parent <go> not found\."\)/);
+  assert.match(createBlock, /ParseCameraClearFlags\(request\.ClearFlags\)/);
   assert.match(createBlock, /var gameObject = new GameObject\(name\)/);
-  assert.ok(createBlock.indexOf("ResolveUniqueTarget(parent") < createBlock.indexOf("new GameObject(name)"), "camera.create must validate parent before creating a GameObject");
+  assert.ok(createBlock.indexOf("ResolveUniqueTarget(request.Parent") < createBlock.indexOf("new GameObject(name)"), "camera.create must validate parent before creating a GameObject");
   assert.ok(createBlock.indexOf("ParseCameraClearFlags") < createBlock.indexOf("new GameObject(name)"), "camera.create must validate clearFlags before creating a GameObject");
-  assert.match(lensBlock, /ParseCameraClearFlags\(request\.StringArg\("clearFlags"\)\)/);
+  assert.match(lensBlock, /ParseCameraClearFlags\(request\.ClearFlags\)/);
 });
 
 test("Unity Bridge editor commands expose state, play/pause/stop, menu execution and busy diagnostics", async () => {

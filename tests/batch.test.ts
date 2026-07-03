@@ -206,13 +206,15 @@ test("batch runs query edit test and screenshot commands from one TS registry", 
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       bridgeRequests.push(payload);
+      const toolName = payload.args.name as string;
+      const input = (payload.args.input ?? {}) as Record<string, unknown>;
       return {
         ok: true,
         data: {
-          plannedEffects: payload.command.includes("set") || payload.command.includes("screenshot") ? [{ type: payload.command, args: payload.args }] : [],
-          items: payload.command === "go.find" ? [{ name: "Player" }] : undefined,
-          cameras: payload.command === "camera.list" ? [{ name: "Main Camera" }] : undefined,
-          screenshotPath: payload.command === "camera.screenshot" ? payload.args.path : undefined
+          plannedEffects: toolName.includes("set") || toolName.includes("screenshot") ? [{ type: toolName, args: input }] : [],
+          items: toolName === "go.find" ? [{ name: "Player" }] : undefined,
+          cameras: toolName === "camera.list" ? [{ name: "Main Camera" }] : undefined,
+          screenshotPath: toolName === "camera.screenshot" ? input.path : undefined
         }
       };
     }
@@ -223,8 +225,8 @@ test("batch runs query edit test and screenshot commands from one TS registry", 
   assert.equal(result.ok, true);
   const data = result.data as { summary: { succeeded: number }; plannedEffects: Array<{ type: string }>; steps: Array<{ id: string; jobId?: string; envelope: { data: { command?: string } } }> };
   assert.equal(data.summary.succeeded, 5);
-  assert.deepEqual(bridgeRequests.map((request) => request.command), ["go.find", "component.set", "camera.list", "camera.screenshot"]);
-  assert.deepEqual(bridgeRequests[1].args, { target: "Player", component: "Camera", property: "enabled", value: "false" });
+  assert.deepEqual(bridgeRequests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
+  assert.deepEqual(bridgeRequests[1].args, { name: "component.set", input: { target: "Player", component: "Camera", property: "enabled", value: "false" } });
   assert.ok(typeof data.steps.find((step) => step.id === "run-tests")?.jobId === "string");
   assert.deepEqual(data.plannedEffects.map((effect) => effect.type), ["component.set", "camera.screenshot"]);
 });
