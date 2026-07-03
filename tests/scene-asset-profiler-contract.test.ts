@@ -220,9 +220,9 @@ test("animation.clip exposes full clip properties and create settings", async ()
   assert.ok(modifyProps.wrapMode, "animation.clip.modify should expose wrapMode");
   assert.ok(modifyProps.loopTime, "animation.clip.modify should expose loopTime");
   const source = await readFile(new URL("../unitypkg/Editor/Commands/AnimationCommands.cs", import.meta.url), "utf8");
-  assert.match(source, /RegisterCommand\(registry, "animation\.clip", "animation", false, AnimationClipCommand\)/, "animation.clip should be read-only at bridge registration");
-  assert.match(source, /RegisterCommand\(registry, "animation\.clip\.create", "animation", true, AnimationClipCreate\)/, "animation.clip.create should be mutating at bridge registration");
-  assert.match(source, /RegisterCommand\(registry, "animation\.clip\.modify", "animation", true, AnimationClipModify\)/, "animation.clip.modify should be mutating at bridge registration");
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "animation\.clip", "animation", false, AnimationClipCommand\)/, "animation.clip should be read-only at bridge registration");
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "animation\.clip\.create", "animation", true, AnimationClipCreate\)/, "animation.clip.create should be mutating at bridge registration");
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "animation\.clip\.modify", "animation", true, AnimationClipModify\)/, "animation.clip.modify should be mutating at bridge registration");
   assert.match(source, /AnimationUtility\.GetAnimationEvents\(clip\)/, "clip info should expose AnimationEvents");
   assert.match(source, /AnimationUtility\.GetObjectReferenceCurveBindings\(clip\)/, "clip info should expose object-reference curves");
   assert.match(source, /AnimationUtility\.GetAnimationClipSettings\(clip\)/, "clip info should expose AnimationClipSettings");
@@ -324,18 +324,21 @@ test("bridge specs resolve for all new domain 4-8 tools", () => {
     ["asset", "refresh", "project-tool.run"],
     ["shader", "list", "project-tool.run"],
     ["texture", "generate", "project-tool.run"],
-    ["console", "get", "console.get"],
+    ["console", "get", "project-tool.run", "console.get"],
     ["package", "embed", "package.embed"],
-    ["editor", "selection-set", "editor.selection.set"],
+    ["editor", "selection-set", "project-tool.run", "editor.selection.set"],
     ["build", "scenes", "project-tool.run"],
     ["build", "profiles", "project-tool.run"],
-    ["physics", "validate", "physics.validate"],
-    ["physics", "assign-material", "physics.assign-material"]
+    ["physics", "validate", "project-tool.run", "physics.validate"],
+    ["physics", "assign-material", "project-tool.run", "physics.assign-material"]
   ] as const;
-  for (const [group, command, bridgeCommand] of checks) {
+  for (const [group, command, bridgeCommand, toolName] of checks) {
     const spec = bridgeCommandRegistry.lookup(group, command);
     assert.ok(spec, `${group} ${command} should resolve in bridge registry`);
     assert.equal(spec.bridgeCommand, bridgeCommand);
+    if (toolName) {
+      assert.equal(spec.toolName, toolName, `${group} ${command} toolName should match`);
+    }
   }
 });
 

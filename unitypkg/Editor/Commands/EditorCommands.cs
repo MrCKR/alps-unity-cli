@@ -31,23 +31,6 @@ namespace UnityCli
     {
         private static void RegisterEditorCommands(BridgeCommandRegistry registry)
         {
-            RegisterCommand(registry, "editor.state", "editor", false, delegate(BridgeRequest request) { return SuccessJson(EditorStateJson()); });
-            RegisterCommand(registry, "editor.play", "editor", false, delegate(BridgeRequest request) { return SuccessJson(EditorPlayJson(request)); });
-            RegisterCommand(registry, "editor.pause", "editor", false, delegate(BridgeRequest request) { return SuccessJson(EditorPauseJson(request)); });
-            RegisterCommand(registry, "editor.stop", "editor", false, delegate(BridgeRequest request) { return SuccessJson(EditorStopJson(request)); });
-            RegisterCommand(registry, "editor.undo", "editor", false, delegate(BridgeRequest request) { return SuccessJson(EditorUndoRedoJson("editor.undo")); });
-            RegisterCommand(registry, "editor.redo", "editor", false, delegate(BridgeRequest request) { return SuccessJson(EditorUndoRedoJson("editor.redo")); });
-            RegisterCommand(registry, "editor.resolution", "editor", false, delegate(BridgeRequest request) { return SuccessJson(EditorResolutionJson(request)); });
-            RegisterCommand(registry, "editor.menu", "editor", false, delegate(BridgeRequest request) { return SuccessJson(EditorMenuJson(request)); });
-            RegisterCommand(registry, "editor.compile", "editor", false, EditorCompile);
-            RegisterCommand(registry, "editor.console", "editor", false, EditorConsole);
-            RegisterCommand(registry, "console.get", "console", false, ConsoleGet);
-            RegisterCommand(registry, "console.clear", "console", false, ConsoleClear);
-            RegisterCommand(registry, "editor.selection.set", "editor", false, EditorSelectionSet);
-            RegisterCommand(registry, "editor.active-tool.set", "editor", false, EditorActiveToolSet);
-            RegisterCommand(registry, "project.tag", "project", false, delegate(BridgeRequest request) { return SuccessJson(ProjectTagLayerJson(request, false)); });
-            RegisterCommand(registry, "project.layer", "project", false, delegate(BridgeRequest request) { return SuccessJson(ProjectTagLayerJson(request, true)); });
-            RegisterCommand(registry, "package.embed", "package", true, PackageEmbed);
         }
 
         private static string EditorStateJson()

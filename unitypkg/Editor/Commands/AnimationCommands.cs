@@ -31,31 +31,6 @@ namespace UnityCli
     {
         private static void RegisterAnimationCommands(BridgeCommandRegistry registry)
         {
-            RegisterCommand(registry, "animation.clip", "animation", false, AnimationClipCommand);
-            RegisterCommand(registry, "animation.clip.create", "animation", true, AnimationClipCreate);
-            RegisterCommand(registry, "animation.clip.modify", "animation", true, AnimationClipModify);
-            RegisterCommand(registry, "animation.state", "animation", false, AnimationState);
-            RegisterCommand(registry, "animation.play", "animation", true, AnimationPlay);
-            RegisterCommand(registry, "animation.stop", "animation", true, AnimationStop);
-            RegisterCommand(registry, "animator.get-info", "animation", false, AnimatorGetInfo);
-            RegisterCommand(registry, "animator.get-parameter", "animation", false, AnimatorGetParameter);
-            RegisterCommand(registry, "animator.set-parameter", "animation", true, AnimatorSetParameter);
-            RegisterCommand(registry, "animator.crossfade", "animation", true, AnimatorCrossfade);
-            RegisterCommand(registry, "animator.set-speed", "animation", true, AnimatorSetSpeed);
-            RegisterCommand(registry, "animator.set-enabled", "animation", true, AnimatorSetEnabled);
-            // ── controller.* AnimatorController editing tools ───
-            RegisterCommand(registry, "controller.create", "animation", true, ControllerCreate);
-            RegisterCommand(registry, "controller.add-state", "animation", true, ControllerAddState);
-            RegisterCommand(registry, "controller.add-transition", "animation", true, ControllerAddTransition);
-            RegisterCommand(registry, "controller.add-parameter", "animation", true, ControllerAddParameter);
-            RegisterCommand(registry, "controller.get-info", "animation", false, ControllerGetInfo);
-            RegisterCommand(registry, "controller.assign", "animation", true, ControllerAssign);
-            RegisterCommand(registry, "controller.add-layer", "animation", true, ControllerAddLayer);
-            RegisterCommand(registry, "controller.remove-layer", "animation", true, ControllerRemoveLayer);
-            RegisterCommand(registry, "controller.set-layer-weight", "animation", true, ControllerSetLayerWeight);
-            RegisterCommand(registry, "controller.create-blend-tree-1d", "animation", true, ControllerCreateBlendTree1D);
-            RegisterCommand(registry, "controller.create-blend-tree-2d", "animation", true, ControllerCreateBlendTree2D);
-            RegisterCommand(registry, "controller.add-blend-tree-child", "animation", true, ControllerAddBlendTreeChild);
         }
 
         private static string AnimationClipCommand(BridgeRequest request)

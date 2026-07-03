@@ -2,20 +2,20 @@ import { boolFlag, compactArgs, numberFlag, queryArgs, stringFlag } from "../arg
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const editorBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "editor", command: "console", bridgeCommand: "editor.console", buildArgs: editorArgs },
-  { group: "editor", command: "state", bridgeCommand: "editor.state", buildArgs: editorArgs },
-  { group: "editor", command: "play", bridgeCommand: "editor.play", buildArgs: editorArgs },
-  { group: "editor", command: "pause", bridgeCommand: "editor.pause", buildArgs: editorArgs },
-  { group: "editor", command: "stop", bridgeCommand: "editor.stop", buildArgs: editorArgs },
-  { group: "editor", command: "undo", bridgeCommand: "editor.undo", buildArgs: editorArgs },
-  { group: "editor", command: "redo", bridgeCommand: "editor.redo", buildArgs: editorArgs },
-  { group: "editor", command: "resolution", bridgeCommand: "editor.resolution", buildArgs: editorArgs },
-  { group: "editor", command: "menu", bridgeCommand: "editor.menu", buildArgs: editorArgs },
-  { group: "editor", command: "compile", bridgeCommand: "editor.compile", buildArgs: editorCompileArgs, supportsDryRun: true },
-  { group: "editor", command: "selection-set", bridgeCommand: "editor.selection.set", buildArgs: selectionSetArgs },
-  { group: "editor", command: "active-tool-set", bridgeCommand: "editor.active-tool.set", buildArgs: activeToolSetArgs },
-  { group: "project", command: "tag", bridgeCommand: "project.tag", buildArgs: editorArgs },
-  { group: "project", command: "layer", bridgeCommand: "project.layer", buildArgs: editorArgs }
+  { group: "editor", command: "console", bridgeCommand: "project-tool.run", toolName: "editor.console", buildArgs: editorArgs },
+  { group: "editor", command: "state", bridgeCommand: "project-tool.run", toolName: "editor.state", buildArgs: editorArgs },
+  { group: "editor", command: "play", bridgeCommand: "project-tool.run", toolName: "editor.play", buildArgs: editorArgs },
+  { group: "editor", command: "pause", bridgeCommand: "project-tool.run", toolName: "editor.pause", buildArgs: editorArgs },
+  { group: "editor", command: "stop", bridgeCommand: "project-tool.run", toolName: "editor.stop", buildArgs: editorArgs },
+  { group: "editor", command: "undo", bridgeCommand: "project-tool.run", toolName: "editor.undo", buildArgs: editorArgs },
+  { group: "editor", command: "redo", bridgeCommand: "project-tool.run", toolName: "editor.redo", buildArgs: editorArgs },
+  { group: "editor", command: "resolution", bridgeCommand: "project-tool.run", toolName: "editor.resolution", buildArgs: editorArgs },
+  { group: "editor", command: "menu", bridgeCommand: "project-tool.run", toolName: "editor.menu", buildArgs: editorArgs },
+  { group: "editor", command: "compile", bridgeCommand: "project-tool.run", toolName: "editor.compile", buildArgs: editorCompileArgs, supportsDryRun: true },
+  { group: "editor", command: "selection-set", bridgeCommand: "project-tool.run", toolName: "editor.selection.set", buildArgs: selectionSetArgs },
+  { group: "editor", command: "active-tool-set", bridgeCommand: "project-tool.run", toolName: "editor.active-tool.set", buildArgs: activeToolSetArgs },
+  { group: "project", command: "tag", bridgeCommand: "project-tool.run", toolName: "project.tag", buildArgs: editorArgs },
+  { group: "project", command: "layer", bridgeCommand: "project-tool.run", toolName: "project.layer", buildArgs: editorArgs }
 ];
 
 // 读取 tools run --input 中无法映射为简单 flag 的结构化字段（project.tag/layer 的 action/name/index）

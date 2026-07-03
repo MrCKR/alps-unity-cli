@@ -47,9 +47,11 @@ test("project.tag/layer expose output schema with changed flag", () => {
 
 test("bridge specs resolve for project tools", () => {
   const tag = bridgeCommandRegistry.lookup("project", "tag");
-  assert.equal(tag?.bridgeCommand, "project.tag");
+  assert.equal(tag?.bridgeCommand, "project-tool.run");
+  assert.equal(tag?.toolName, "project.tag");
   const layer = bridgeCommandRegistry.lookup("project", "layer");
-  assert.equal(layer?.bridgeCommand, "project.layer");
+  assert.equal(layer?.bridgeCommand, "project-tool.run");
+  assert.equal(layer?.toolName, "project.layer");
 });
 
 test("contract entries exist for project tools with present C# handler", () => {
@@ -60,7 +62,7 @@ test("contract entries exist for project tools with present C# handler", () => {
   }
 });
 
-test("C# RegisterCommand calls exist for project.tag/layer", async () => {
+test("C# handlers exist for project.tag/layer (RegisterCommand or IUnityCliTool)", async () => {
   const csFiles = await listCsFiles(new URL("../unitypkg/Editor/", import.meta.url));
   const allSource = (
     await Promise.all(
@@ -68,9 +70,11 @@ test("C# RegisterCommand calls exist for project.tag/layer", async () => {
     )
   ).join("\n");
   for (const command of ["project.tag", "project.layer"]) {
+    const hasRegisterCommand = allSource.includes(`RegisterCommand(registry, "${command}"`);
+    const hasIUnityCliTool = allSource.includes(`Name = "${command}"`);
     assert.ok(
-      allSource.includes(`RegisterCommand(registry, "${command}"`),
-      `${command} should be registered via RegisterCommand in C#`
+      hasRegisterCommand || hasIUnityCliTool,
+      `${command} should be registered via RegisterCommand or IUnityCliTool in C#`
     );
   }
 });

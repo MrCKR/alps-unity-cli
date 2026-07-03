@@ -327,8 +327,8 @@ test("console get forwards filter and cursor pagination", async () => {
   });
 
   assert.equal(result.ok, true);
-  assert.equal(requests[0].command, "console.get");
-  assert.deepEqual(requests[0].args, { type: "error", filter: "AlignmentProbe", count: 2, cursor: 4 });
+  assert.equal(requests[0].command, "project-tool.run");
+  assert.deepEqual(requests[0].args, { name: "console.get", input: { type: "error", filter: "AlignmentProbe", count: 2, cursor: 4 } });
 });
 
 test("console.get forwards structured --input fields", async () => {
@@ -344,8 +344,8 @@ test("console.get forwards structured --input fields", async () => {
   });
 
   assert.equal(result.ok, true);
-  assert.equal(requests[0].command, "console.get");
-  assert.deepEqual(requests[0].args, { type: "warning", filter: "CS", count: 3, cursor: 6 });
+  assert.equal(requests[0].command, "project-tool.run");
+  assert.deepEqual(requests[0].args, { name: "console.get", input: { type: "warning", filter: "CS", count: 3, cursor: 6 } });
 });
 
 test("controller transition forwards structured conditions from --input", async () => {
@@ -368,8 +368,8 @@ test("controller transition forwards structured conditions from --input", async 
   });
 
   assert.equal(result.ok, true);
-  assert.equal(requests[0].command, "controller.add-transition");
-  assert.deepEqual(requests[0].args, { ...input, layerIndex: 0 });
+  assert.equal(requests[0].command, "project-tool.run");
+  assert.deepEqual(requests[0].args, { name: "controller.add-transition", input: { ...input, layerIndex: 0 } });
 });
 
 test("controller transition recovers PowerShell-escaped nested condition arrays", async () => {
@@ -386,13 +386,17 @@ test("controller transition recovers PowerShell-escaped nested condition arrays"
   });
 
   assert.equal(result.ok, true);
+  assert.equal(requests[0].command, "project-tool.run");
   assert.deepEqual(requests[0].args, {
-    controllerPath: "Assets/UnityCliAlignmentFixtures/Alignment.controller",
-    fromState: "Idle",
-    toState: "Run",
-    layerIndex: 0,
-    hasExitTime: false,
-    conditions: [{ parameter: "Speed", mode: "greater", threshold: 0.1 }]
+    name: "controller.add-transition",
+    input: {
+      controllerPath: "Assets/UnityCliAlignmentFixtures/Alignment.controller",
+      fromState: "Idle",
+      toState: "Run",
+      layerIndex: 0,
+      hasExitTime: false,
+      conditions: [{ parameter: "Speed", mode: "greater", threshold: 0.1 }]
+    }
   });
 });
 
@@ -877,15 +881,15 @@ test("graphics commands forward settings and screenshot diagnostics", async () =
   for (const result of [quality, settings, pipeline, pipelineQuality, pipelineSettings, pipelineInfo, volume, screenshot]) {
     assert.equal(result.ok, true);
   }
-  assert.deepEqual(requests.map((request) => request.command), ["graphics.quality", "graphics.settings", "graphics.pipeline", "graphics.pipeline-quality", "graphics.pipeline-settings", "graphics.pipeline-info", "graphics.volume", "graphics.screenshot"]);
-  assert.deepEqual(requests[0].args, { qualityLevel: "High", vSyncCount: 1, shadowDistance: 75.5, softParticles: false });
-  assert.deepEqual(requests[1].args, { antiAliasing: 4, renderPipeline: "Assets/Settings/URP.asset" });
-  assert.deepEqual(requests[2].args, {});
-  assert.deepEqual(requests[3].args, { qualityLevel: "Medium" });
-  assert.deepEqual(requests[4].args, { renderPipeline: "built-in" });
-  assert.deepEqual(requests[5].args, {});
-  assert.deepEqual(requests[6].args, { target: "Global Volume" });
-  assert.deepEqual(requests[7].args, { path: "Artifacts/graphics.png", width: 1024, height: 768, overwrite: true, includeDiagnostics: true });
+  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
+  assert.deepEqual(requests[0].args, { name: "graphics.quality", input: { qualityLevel: "High", vSyncCount: 1, shadowDistance: 75.5, softParticles: false } });
+  assert.deepEqual(requests[1].args, { name: "graphics.settings", input: { antiAliasing: 4, renderPipeline: "Assets/Settings/URP.asset" } });
+  assert.deepEqual(requests[2].args, { name: "graphics.pipeline", input: {} });
+  assert.deepEqual(requests[3].args, { name: "graphics.pipeline-quality", input: { qualityLevel: "Medium" } });
+  assert.deepEqual(requests[4].args, { name: "graphics.pipeline-settings", input: { renderPipeline: "built-in" } });
+  assert.deepEqual(requests[5].args, { name: "graphics.pipeline-info", input: {} });
+  assert.deepEqual(requests[6].args, { name: "graphics.volume", input: { target: "Global Volume" } });
+  assert.deepEqual(requests[7].args, { name: "graphics.screenshot", input: { path: "Artifacts/graphics.png", width: 1024, height: 768, overwrite: true, includeDiagnostics: true } });
 });
 
 test("physics commands forward settings, queries, joint and material assignment inputs", async () => {
@@ -893,7 +897,7 @@ test("physics commands forward settings, queries, joint and material assignment 
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
     requests.push(payload);
-    return { ok: true, data: { physics: {}, plannedEffects: payload.command === "physics.raycast" ? [] : [{ type: payload.command }] } };
+    return { ok: true, data: { physics: {}, plannedEffects: payload.args.name === "physics.raycast" ? [] : [{ type: payload.args.name ?? payload.command }] } };
   };
 
   const settings = await execute(["tools", "run", "physics.settings", "--gravity-y", "-9.81", "--gravity2d-y", "-12.5", "--queries-hit-triggers", "false", "--default-solver-iterations", "8"], { ...runtime, bridgeExecute });
@@ -909,14 +913,14 @@ test("physics commands forward settings, queries, joint and material assignment 
   assert.equal(assign.ok, true);
   assert.equal(joint.ok, true);
   assert.equal(simulation.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["physics.settings", "physics.raycast", "physics.shapecast", "physics.assign-material", "physics.joint", "physics.simulation"]);
-  assert.deepEqual(requests[0].args, { gravityY: -9.81, gravity2dY: -12.5, defaultSolverIterations: 8, queriesHitTriggers: false });
-  assert.deepEqual(requests[1].args, { mode: "2d", originX: 1, originY: 2, directionX: 0, directionY: -1, distance: 50, layerMask: 5, all: true });
-  assert.deepEqual(requests[2].args, { shape: "capsule", radius: 0.5, height: 2, capsuleDirection: "horizontal", angle: 15, mode: "2d", originX: 1, originY: 2, directionX: 1, directionY: 0, distance: 3.5 });
-  assert.deepEqual(requests[3].args, { target: "Ball", materialPath: "Assets/Physics/Bouncy.physicMaterial", path: "Assets/Physics/Bouncy.physicMaterial", collider: "BoxCollider", colliderIndex: 1 });
+  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
+  assert.deepEqual(requests[0].args, { name: "physics.settings", input: { gravityY: -9.81, gravity2dY: -12.5, defaultSolverIterations: 8, queriesHitTriggers: false } });
+  assert.deepEqual(requests[1].args, { name: "physics.raycast", input: { mode: "2d", originX: 1, originY: 2, directionX: 0, directionY: -1, distance: 50, layerMask: 5, all: true } });
+  assert.deepEqual(requests[2].args, { name: "physics.shapecast", input: { shape: "capsule", radius: 0.5, height: 2, capsuleDirection: "horizontal", angle: 15, mode: "2d", originX: 1, originY: 2, directionX: 1, directionY: 0, distance: 3.5 } });
+  assert.deepEqual(requests[3].args, { name: "physics.assign-material", input: { target: "Ball", materialPath: "Assets/Physics/Bouncy.physicMaterial", path: "Assets/Physics/Bouncy.physicMaterial", collider: "BoxCollider", colliderIndex: 1 } });
   assert.equal(requests[3].dryRun, true);
-  assert.deepEqual(requests[4].args, { target: "Ball", type: "FixedJoint", action: "remove", componentIndex: 0 });
-  assert.deepEqual(requests[5].args, { steps: 3, deltaTime: 0.016, simulate: true });
+  assert.deepEqual(requests[4].args, { name: "physics.joint", input: { target: "Ball", type: "FixedJoint", action: "remove", componentIndex: 0 } });
+  assert.deepEqual(requests[5].args, { name: "physics.simulation", input: { steps: 3, deltaTime: 0.016, simulate: true } });
 });
 
 test("profiler commands forward session, counter, memory, frame and export args", async () => {
@@ -1008,13 +1012,13 @@ test("animation and vfx commands forward Windows paths, targets and effects", as
   assert.equal(lineCreate.ok, true);
   assert.equal(linePositions.ok, true);
   assert.equal(trail.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["animation.clip", "animation.clip.create", "animation.clip.modify", "animation.state", "animation.play", "animation.stop", "vfx.graph", "vfx.effect", "vfx.particle-module", "vfx.line-create", "vfx.line-positions", "vfx.trail"]);
-  assert.deepEqual(requests[0].args, { path: "Assets\\Animations\\Idle.anim", maxCurveKeys: 2 });
-  assert.deepEqual(requests[1].args, { path: "Assets\\Animations\\Run.anim", overwrite: true, frameRate: 30, legacy: false, wrapMode: "Loop", loopTime: true, length: 1, maxCurveKeys: 2 });
-  assert.deepEqual(requests[2].args, { path: "Assets\\Animations\\Run.anim", frameRate: 24, wrapMode: "ClampForever", loopTime: false });
-  assert.deepEqual(requests[3].args, { target: "Rig/Player", layer: 1 });
-  assert.deepEqual(requests[4].args, { target: "Rig/Player", state: "Base Layer.Run", layer: 0, normalizedTime: 0.25 });
-  assert.deepEqual(requests[5].args, { target: "Rig/Player" });
+  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "vfx.graph", "vfx.effect", "vfx.particle-module", "vfx.line-create", "vfx.line-positions", "vfx.trail"]);
+  assert.deepEqual(requests[0].args, { name: "animation.clip", input: { path: "Assets\\Animations\\Idle.anim", maxCurveKeys: 2 } });
+  assert.deepEqual(requests[1].args, { name: "animation.clip.create", input: { path: "Assets\\Animations\\Run.anim", overwrite: true, frameRate: 30, legacy: false, wrapMode: "Loop", loopTime: true, length: 1, maxCurveKeys: 2 } });
+  assert.deepEqual(requests[2].args, { name: "animation.clip.modify", input: { path: "Assets\\Animations\\Run.anim", frameRate: 24, wrapMode: "ClampForever", loopTime: false } });
+  assert.deepEqual(requests[3].args, { name: "animation.state", input: { target: "Rig/Player", layer: 1 } });
+  assert.deepEqual(requests[4].args, { name: "animation.play", input: { target: "Rig/Player", state: "Base Layer.Run", layer: 0, normalizedTime: 0.25 } });
+  assert.deepEqual(requests[5].args, { name: "animation.stop", input: { target: "Rig/Player" } });
   assert.deepEqual(requests[6].args, { action: "create", path: "Assets\\VFX\\Explosion.vfx", overwrite: true });
   assert.deepEqual(requests[7].args, { target: "Effects/Emitter", graph: "Assets\\VFX\\Explosion.vfx", add: true });
   assert.deepEqual(requests[8].args, particleModuleInput);
@@ -1180,26 +1184,26 @@ test("ui commands forward creation, document and hierarchy arguments", async () 
   assert.equal(linkStylesheet.ok, true);
   assert.equal(listDocuments.ok, true);
   assert.equal(renderPreview.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["ui.canvas.create", "ui.text.create", "ui.button.create", "ui.image.create", "ui.document.create", "ui.document.info", "ui.document.update", "ui.document.delete", "ui.hierarchy", "ui.attach-document", "ui.detach-document", "ui.create-panel-settings", "ui.update-panel-settings", "ui.get-visual-tree", "ui.modify-visual-element", "ui.link-stylesheet", "ui.list-documents", "ui.render-preview"]);
-  assert.deepEqual(requests[0].args, { name: "HUD" });
-  assert.deepEqual(requests[1].args, { name: "Title", parent: "HUD", text: "Start", width: 320, height: 80, x: 10, y: 20, fontSize: 32 });
-  assert.deepEqual(requests[2].args, { name: "PlayButton", parent: "HUD", text: "Play" });
-  assert.deepEqual(requests[3].args, { name: "Logo", parent: "HUD", sprite: "Assets/UI/logo.png", color: "#ffffff" });
-  assert.deepEqual(requests[4].args, { name: "MainUIDocument", path: "Assets/UI/Main.uxml", uxml: "Assets/UI/Main.uxml", uss: "Assets/UI/Main.uss", panelSettings: "Assets/UI/Panel.asset", overwrite: true });
-  assert.deepEqual(requests[5].args, { target: "MainUIDocument", uss: "Assets/UI/Main.uss" });
-  assert.equal(requests[6].args.content, "<ui:UXML xmlns:ui=\"UnityEngine.UIElements\" />\n");
-  assert.equal(requests[6].args.dryRun, true);
+  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
+  assert.deepEqual(requests[0].args, { name: "ui.canvas.create", input: { name: "HUD" } });
+  assert.deepEqual(requests[1].args, { name: "ui.text.create", input: { name: "Title", parent: "HUD", text: "Start", width: 320, height: 80, x: 10, y: 20, fontSize: 32 } });
+  assert.deepEqual(requests[2].args, { name: "ui.button.create", input: { name: "PlayButton", parent: "HUD", text: "Play" } });
+  assert.deepEqual(requests[3].args, { name: "ui.image.create", input: { name: "Logo", parent: "HUD", sprite: "Assets/UI/logo.png", color: "#ffffff" } });
+  assert.deepEqual(requests[4].args, { name: "ui.document.create", input: { name: "MainUIDocument", path: "Assets/UI/Main.uxml", uxml: "Assets/UI/Main.uxml", uss: "Assets/UI/Main.uss", panelSettings: "Assets/UI/Panel.asset", overwrite: true } });
+  assert.deepEqual(requests[5].args, { name: "ui.document.info", input: { target: "MainUIDocument", uss: "Assets/UI/Main.uss" } });
+  assert.equal((requests[6].args.input as Record<string, unknown>).content, "<ui:UXML xmlns:ui=\"UnityEngine.UIElements\" />\n");
+  assert.equal((requests[6].args.input as Record<string, unknown>).dryRun, true);
   assert.equal(requests[7].dryRun, true);
-  assert.deepEqual(requests[8].args, { pageSize: 25, cursor: "50", target: "HUD", query: "Canvas", type: "RectTransform", className: "screen" });
-  assert.deepEqual(requests[9].args, { target: "UIDoc", sourceAsset: "Assets/UI/Main.uxml", panelSettings: "Assets/UI/Panel.asset", sortOrder: 5 });
-  assert.deepEqual(requests[10].args, { target: "UIDoc", dryRun: true });
-  assert.deepEqual(requests[11].args, { path: "Assets/UI/Panel.asset", referenceWidth: 1920, referenceHeight: 1080, sortingOrder: 3, targetTexture: "Assets/UI/Target.renderTexture" });
-  assert.deepEqual(requests[12].args, { path: "Assets/UI/Panel.asset", scaleMode: "ScaleWithScreenSize", referenceWidth: 1280, referenceHeight: 720, sortingLayerName: "UI", match: 0.5, dryRun: true });
-  assert.deepEqual(requests[13].args, { target: "UIDoc", parent: "root", query: "button", type: "Button", className: "primary", pageSize: 10, cursor: "20", maxDepth: 4 });
-  assert.deepEqual(requests[14].args, { target: "UIDoc", elementName: "Root", addClass: "selected", backgroundColor: "#ff0000", dryRun: true });
-  assert.deepEqual(requests[15].args, { target: "Assets/UI/Main.uxml", path: "Assets/UI/Main.uxml", uxml: "Assets/UI/Main.uxml", uss: "Assets/UI/Main.uss", dryRun: true });
-  assert.deepEqual(requests[16].args, { kind: "uxml", pageSize: 20 });
-  assert.deepEqual(requests[17].args, { target: "Assets/UI/Main.uxml", path: "Assets/UI/Main.uxml", uxml: "Assets/UI/Main.uxml", output: "Assets/UI/preview.png", dryRun: true });
+  assert.deepEqual(requests[8].args, { name: "ui.hierarchy", input: { pageSize: 25, cursor: "50", target: "HUD", query: "Canvas", type: "RectTransform", className: "screen" } });
+  assert.deepEqual(requests[9].args, { name: "ui.attach-document", input: { target: "UIDoc", sourceAsset: "Assets/UI/Main.uxml", panelSettings: "Assets/UI/Panel.asset", sortOrder: 5 } });
+  assert.deepEqual(requests[10].args, { name: "ui.detach-document", input: { target: "UIDoc", dryRun: true } });
+  assert.deepEqual(requests[11].args, { name: "ui.create-panel-settings", input: { path: "Assets/UI/Panel.asset", referenceWidth: 1920, referenceHeight: 1080, sortingOrder: 3, targetTexture: "Assets/UI/Target.renderTexture" } });
+  assert.deepEqual(requests[12].args, { name: "ui.update-panel-settings", input: { path: "Assets/UI/Panel.asset", scaleMode: "ScaleWithScreenSize", referenceWidth: 1280, referenceHeight: 720, sortingLayerName: "UI", match: 0.5, dryRun: true } });
+  assert.deepEqual(requests[13].args, { name: "ui.get-visual-tree", input: { target: "UIDoc", parent: "root", query: "button", type: "Button", className: "primary", pageSize: 10, cursor: "20", maxDepth: 4 } });
+  assert.deepEqual(requests[14].args, { name: "ui.modify-visual-element", input: { target: "UIDoc", elementName: "Root", addClass: "selected", backgroundColor: "#ff0000", dryRun: true } });
+  assert.deepEqual(requests[15].args, { name: "ui.link-stylesheet", input: { target: "Assets/UI/Main.uxml", path: "Assets/UI/Main.uxml", uxml: "Assets/UI/Main.uxml", uss: "Assets/UI/Main.uss", dryRun: true } });
+  assert.deepEqual(requests[16].args, { name: "ui.list-documents", input: { kind: "uxml", pageSize: 20 } });
+  assert.deepEqual(requests[17].args, { name: "ui.render-preview", input: { target: "Assets/UI/Main.uxml", path: "Assets/UI/Main.uxml", uxml: "Assets/UI/Main.uxml", output: "Assets/UI/preview.png", dryRun: true } });
 });
 
 test("ui document info reads UXML offline when bridge endpoint is absent", async () => {
@@ -1345,13 +1349,15 @@ test("editor state/play/pause/stop/menu commands forward args and return envelop
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
     requests.push(payload);
-    if (payload.command === "editor.state") {
-      return { ok: true, data: { command: payload.command, playMode: { isPlaying: false, isPaused: false }, activeScene: { path: "Assets/Scenes/Main.unity" } } };
+    const name = (payload.args.name as string) ?? payload.command;
+    if (name === "editor.state") {
+      return { ok: true, data: { command: name, playMode: { isPlaying: false, isPaused: false }, activeScene: { path: "Assets/Scenes/Main.unity" } } };
     }
-    if (payload.command === "editor.menu") {
-      return { ok: true, data: { command: payload.command, plannedEffects: [{ type: "editor.menu", path: payload.args.path }], result: { path: payload.args.path, executed: true } } };
+    if (name === "editor.menu") {
+      const input = (payload.args.input ?? {}) as Record<string, unknown>;
+      return { ok: true, data: { command: name, plannedEffects: [{ type: "editor.menu", path: input.path }], result: { path: input.path, executed: true } } };
     }
-    return { ok: true, data: { command: payload.command, plannedEffects: [{ type: payload.command }], result: { requested: payload.command.split(".")[1] } } };
+    return { ok: true, data: { command: name, plannedEffects: [{ type: name }], result: { requested: name.split(".")[1] } } };
   };
 
   const state = await execute(["tools", "run", "editor.state"], { ...runtime, bridgeExecute });
@@ -1365,11 +1371,11 @@ test("editor state/play/pause/stop/menu commands forward args and return envelop
   assert.equal(pause.ok, true);
   assert.equal(stop.ok, true);
   assert.equal(menu.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["editor.state", "editor.play", "editor.pause", "editor.stop", "editor.menu"]);
-  assert.deepEqual(requests[1].args, { timeoutMs: 2500 });
-  assert.deepEqual(requests[2].args, {});
-  assert.deepEqual(requests[3].args, { timeoutMs: 3000 });
-  assert.deepEqual(requests[4].args, { path: "File/Save", timeoutMs: 7000 });
+  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
+  assert.deepEqual(requests[1].args, { name: "editor.play", input: { timeoutMs: 2500 } });
+  assert.deepEqual(requests[2].args, { name: "editor.pause", input: {} });
+  assert.deepEqual(requests[3].args, { name: "editor.stop", input: { timeoutMs: 3000 } });
+  assert.deepEqual(requests[4].args, { name: "editor.menu", input: { path: "File/Save", timeoutMs: 7000 } });
 });
 
 test("editor bridge errors preserve structured diagnostics", async () => {

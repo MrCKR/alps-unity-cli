@@ -28,36 +28,11 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
+        // graphics.* 全部已迁移为 IUnityCliTool(unitypkg/Editor/Tools/graphics/*.cs):
+        // quality/settings/pipeline/volume/screenshot/bake-*/light-probe-group/reflection-probe/
+        // probe-positions/stats*/scene-debug/skybox-*/pipeline-* — 不再用 RegisterCommand。
         private static void RegisterGraphicsCommands(BridgeCommandRegistry registry)
         {
-            RegisterCommand(registry, "graphics.quality", "graphics", true, GraphicsQuality);
-            RegisterCommand(registry, "graphics.settings", "graphics", true, GraphicsSettingsCommand);
-            RegisterCommand(registry, "graphics.pipeline", "graphics", false, GraphicsPipeline);
-            RegisterCommand(registry, "graphics.volume", "graphics", false, GraphicsVolume);
-            RegisterCommand(registry, "graphics.screenshot", "graphics", true, GraphicsScreenshot);
-            RegisterCommand(registry, "graphics.bake-start", "graphics", true, GraphicsBakeStart);
-            RegisterCommand(registry, "graphics.bake-cancel", "graphics", true, GraphicsBakeCancel);
-            RegisterCommand(registry, "graphics.bake-status", "graphics", false, GraphicsBakeStatus);
-            RegisterCommand(registry, "graphics.bake-clear", "graphics", true, GraphicsBakeClear);
-            RegisterCommand(registry, "graphics.bake-reflection-probe", "graphics", true, GraphicsBakeReflectionProbe);
-            RegisterCommand(registry, "graphics.bake-settings", "graphics", false, GraphicsBakeSettings);
-            RegisterCommand(registry, "graphics.light-probe-group", "graphics", true, GraphicsLightProbeGroup);
-            RegisterCommand(registry, "graphics.reflection-probe", "graphics", true, GraphicsReflectionProbe);
-            RegisterCommand(registry, "graphics.probe-positions", "graphics", true, GraphicsProbePositions);
-            RegisterCommand(registry, "graphics.stats", "graphics", false, GraphicsStats);
-            RegisterCommand(registry, "graphics.stats-counters", "graphics", false, GraphicsStatsCounters);
-            RegisterCommand(registry, "graphics.stats-memory", "graphics", false, GraphicsStatsMemory);
-            RegisterCommand(registry, "graphics.scene-debug", "graphics", true, GraphicsSceneDebug);
-            RegisterCommand(registry, "graphics.skybox-get", "graphics", false, GraphicsSkyboxGet);
-            RegisterCommand(registry, "graphics.skybox-set-material", "graphics", true, GraphicsSkyboxSetMaterial);
-            RegisterCommand(registry, "graphics.skybox-set-properties", "graphics", true, GraphicsSkyboxSetProperties);
-            RegisterCommand(registry, "graphics.skybox-set-ambient", "graphics", true, GraphicsSkyboxSetAmbient);
-            RegisterCommand(registry, "graphics.skybox-set-fog", "graphics", true, GraphicsSkyboxSetFog);
-            RegisterCommand(registry, "graphics.skybox-set-reflection", "graphics", true, GraphicsSkyboxSetReflection);
-            RegisterCommand(registry, "graphics.skybox-set-sun", "graphics", true, GraphicsSkyboxSetSun);
-            RegisterCommand(registry, "graphics.pipeline-settings", "graphics", false, GraphicsPipelineSettings);
-            RegisterCommand(registry, "graphics.pipeline-quality", "graphics", true, GraphicsPipelineQuality);
-            RegisterCommand(registry, "graphics.pipeline-info", "graphics", false, GraphicsPipelineInfo);
         }
 
         private static string GraphicsQuality(BridgeRequest request)

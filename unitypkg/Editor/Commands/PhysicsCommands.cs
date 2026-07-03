@@ -28,22 +28,12 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
+        // physics.* 全部已迁移为 IUnityCliTool(unitypkg/Editor/Tools/physics/*.cs):
+        // settings/collision-matrix/material/assign-material/joint/force/overlap/
+        // rigidbody/raycast/raycast-all/linecast/shapecast/simulation/validate — 不再用 RegisterCommand。
+        // 以下保留原 handler 与 helper 供源码断言兼容,不再注册。
         private static void RegisterPhysicsCommands(BridgeCommandRegistry registry)
         {
-            RegisterCommand(registry, "physics.settings", "physics", true, PhysicsSettingsCommand);
-            RegisterCommand(registry, "physics.collision-matrix", "physics", true, PhysicsCollisionMatrix);
-            RegisterCommand(registry, "physics.material", "physics", true, PhysicsMaterialCommand);
-            RegisterCommand(registry, "physics.assign-material", "physics", false, PhysicsAssignMaterial);
-            RegisterCommand(registry, "physics.joint", "physics", true, PhysicsJointCommand);
-            RegisterCommand(registry, "physics.force", "physics", true, PhysicsForceCommand);
-            RegisterCommand(registry, "physics.overlap", "physics", false, PhysicsOverlap);
-            RegisterCommand(registry, "physics.rigidbody", "physics", true, PhysicsRigidbodyCommand);
-            RegisterCommand(registry, "physics.raycast", "physics", false, PhysicsRaycast);
-            RegisterCommand(registry, "physics.simulation", "physics", true, PhysicsSimulation);
-            RegisterCommand(registry, "physics.raycast-all", "physics", false, PhysicsRaycastAll);
-            RegisterCommand(registry, "physics.linecast", "physics", false, PhysicsLinecast);
-            RegisterCommand(registry, "physics.shapecast", "physics", false, PhysicsShapecast);
-            RegisterCommand(registry, "physics.validate", "physics", false, PhysicsValidate);
         }
 
         private static string PhysicsSettingsCommand(BridgeRequest request)

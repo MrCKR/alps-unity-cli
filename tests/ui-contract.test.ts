@@ -81,7 +81,8 @@ test("bridge specs resolve for ui tools", () => {
   const lookups: Record<string, string> = { "canvas/create": "ui.canvas.create", "text/create": "ui.text.create", "button/create": "ui.button.create", "image/create": "ui.image.create", "document/info": "ui.document.info", "document/create": "ui.document.create", "document/update": "ui.document.update", "document/delete": "ui.document.delete", "hierarchy": "ui.hierarchy", "attach-document": "ui.attach-document", "detach-document": "ui.detach-document", "create-panel-settings": "ui.create-panel-settings", "update-panel-settings": "ui.update-panel-settings", "get-visual-tree": "ui.get-visual-tree", "modify-visual-element": "ui.modify-visual-element", "link-stylesheet": "ui.link-stylesheet", "list-documents": "ui.list-documents", "render-preview": "ui.render-preview" };
   for (const [cmd, expected] of Object.entries(lookups)) {
     const spec = bridgeCommandRegistry.lookup("ui", cmd);
-    assert.equal(spec?.bridgeCommand, expected, `ui ${cmd} should resolve`);
+    assert.equal(spec?.bridgeCommand, "project-tool.run", `ui ${cmd} should route via project-tool.run`);
+    assert.equal(spec?.toolName, expected, `ui ${cmd} toolName should match`);
   }
 });
 
@@ -101,7 +102,9 @@ test("C# RegisterCommand calls exist for ui commands", async () => {
     )
   ).join("\n");
   for (const command of UI_COMMANDS) {
-    assert.ok(allSource.includes(`RegisterCommand(registry, "${command}"`), `${command} should be registered`);
+    const hasRegisterCommand = allSource.includes(`RegisterCommand(registry, "${command}"`);
+    const hasIUnityCliTool = allSource.includes(`Name = "${command}"`);
+    assert.ok(hasRegisterCommand || hasIUnityCliTool, `${command} should be registered via RegisterCommand or IUnityCliTool`);
   }
 });
 

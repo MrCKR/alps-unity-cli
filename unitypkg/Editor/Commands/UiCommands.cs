@@ -30,24 +30,6 @@ namespace UnityCli
     {
         private static void RegisterUiCommands(BridgeCommandRegistry registry)
         {
-            RegisterCommand(registry, "ui.canvas.create", "ui", true, UiCanvasCreate);
-            RegisterCommand(registry, "ui.text.create", "ui", true, delegate(BridgeRequest request) { return UiElementCreate(request, "Text"); });
-            RegisterCommand(registry, "ui.button.create", "ui", true, delegate(BridgeRequest request) { return UiElementCreate(request, "Button"); });
-            RegisterCommand(registry, "ui.image.create", "ui", true, delegate(BridgeRequest request) { return UiElementCreate(request, "Image"); });
-            RegisterCommand(registry, "ui.document.info", "ui", false, UiDocumentInfo);
-            RegisterCommand(registry, "ui.document.create", "ui", true, UiDocumentCreate);
-            RegisterCommand(registry, "ui.document.update", "ui", true, UiDocumentUpdate);
-            RegisterCommand(registry, "ui.document.delete", "ui", true, UiDocumentDelete);
-            RegisterCommand(registry, "ui.hierarchy", "ui", false, UiHierarchy);
-            RegisterCommand(registry, "ui.attach-document", "ui", false, UiAttachDocument);
-            RegisterCommand(registry, "ui.detach-document", "ui", false, UiDetachDocument);
-            RegisterCommand(registry, "ui.create-panel-settings", "ui", true, UiCreatePanelSettings);
-            RegisterCommand(registry, "ui.update-panel-settings", "ui", true, UiUpdatePanelSettings);
-            RegisterCommand(registry, "ui.get-visual-tree", "ui", false, UiGetVisualTree);
-            RegisterCommand(registry, "ui.modify-visual-element", "ui", false, UiModifyVisualElement);
-            RegisterCommand(registry, "ui.link-stylesheet", "ui", true, UiLinkStylesheet);
-            RegisterCommand(registry, "ui.list-documents", "ui", false, UiListDocuments);
-            RegisterCommand(registry, "ui.render-preview", "ui", true, UiRenderPreview);
         }
 
         private static string UiCanvasCreate(BridgeRequest request)

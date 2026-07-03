@@ -1467,8 +1467,8 @@ test("tools run preserves boolean false from --input", async () => {
 
   const result = await handleToolsCommand("run", ["animator.set-enabled"], { input: '{"target":"Probe","value":false}' }, runtime, requestId);
   assert.equal(result.ok, true);
-  assert.equal(requests[0].command, "animator.set-enabled");
-  assert.deepEqual(requests[0].args, { target: "Probe", value: false });
+  assert.equal(requests[0].command, "project-tool.run");
+  assert.deepEqual(requests[0].args, { name: "animator.set-enabled", input: { target: "Probe", value: false } });
 });
 
 test("tools run built-in job-handler tool with empty runtime returns E_TOOL_HANDLER_UNSUPPORTED", async () => {
@@ -1488,8 +1488,8 @@ test("tools run editor.compile forwards live compile request", async () => {
 
   const result = await handleToolsCommand("run", ["editor.compile"], { input: '{"refresh":false,"waitReady":true,"timeoutMs":5000}' }, runtime, requestId);
   assert.equal(result.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["editor.compile"]);
-  assert.deepEqual(requests[0].args, { refresh: false, waitReady: true, timeoutMs: 5000 });
+  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run"]);
+  assert.deepEqual(requests[0].args, { name: "editor.compile", input: { refresh: false, waitReady: true, timeoutMs: 5000 } });
 });
 
 test("tools run editor.compile-diagnostics orchestrates refresh wait and console", async () => {

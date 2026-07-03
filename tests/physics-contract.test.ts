@@ -62,7 +62,8 @@ test("physics write tools are session-affecting", () => {
 test("bridge specs resolve for physics tools", () => {
   for (const [cmd, expected] of [["settings", "physics.settings"], ["collision-matrix", "physics.collision-matrix"], ["material", "physics.material"], ["assign-material", "physics.assign-material"], ["joint", "physics.joint"], ["force", "physics.force"], ["overlap", "physics.overlap"], ["rigidbody", "physics.rigidbody"], ["raycast", "physics.raycast"], ["simulation", "physics.simulation"], ["raycast-all", "physics.raycast-all"], ["linecast", "physics.linecast"], ["shapecast", "physics.shapecast"], ["validate", "physics.validate"]] as const) {
     const spec = bridgeCommandRegistry.lookup("physics", cmd);
-    assert.equal(spec?.bridgeCommand, expected, `physics ${cmd} should resolve`);
+    assert.equal(spec?.bridgeCommand, "project-tool.run", `physics ${cmd} should route via project-tool.run`);
+    assert.equal(spec?.toolName, expected, `physics ${cmd} toolName should match`);
   }
 });
 
@@ -82,7 +83,9 @@ test("C# RegisterCommand calls exist for physics commands", async () => {
     )
   ).join("\n");
   for (const command of PHYSICS_COMMANDS) {
-    assert.ok(allSource.includes(`RegisterCommand(registry, "${command}"`), `${command} should be registered`);
+    const hasRegisterCommand = allSource.includes(`RegisterCommand(registry, "${command}"`);
+    const hasIUnityCliTool = allSource.includes(`Name = "${command}"`);
+    assert.ok(hasRegisterCommand || hasIUnityCliTool, `${command} should be registered via RegisterCommand or IUnityCliTool`);
   }
 });
 

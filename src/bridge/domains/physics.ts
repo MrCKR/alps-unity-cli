@@ -2,20 +2,20 @@ import { boolFlag, compactArgs, floatFlag, numberFlag, stringFlag } from "../arg
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const physicsBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "physics", command: "settings", bridgeCommand: "physics.settings", buildArgs: physicsArgs },
-  { group: "physics", command: "collision-matrix", bridgeCommand: "physics.collision-matrix", buildArgs: physicsArgs },
-  { group: "physics", command: "material", bridgeCommand: "physics.material", buildArgs: physicsArgs },
-  { group: "physics", command: "assign-material", bridgeCommand: "physics.assign-material", buildArgs: physicsArgs },
-  { group: "physics", command: "joint", bridgeCommand: "physics.joint", buildArgs: physicsArgs },
-  { group: "physics", command: "force", bridgeCommand: "physics.force", buildArgs: physicsArgs },
-  { group: "physics", command: "overlap", bridgeCommand: "physics.overlap", buildArgs: physicsArgs },
-  { group: "physics", command: "rigidbody", bridgeCommand: "physics.rigidbody", buildArgs: physicsArgs },
-  { group: "physics", command: "raycast", bridgeCommand: "physics.raycast", buildArgs: physicsArgs },
-  { group: "physics", command: "raycast-all", bridgeCommand: "physics.raycast-all", buildArgs: physicsArgs },
-  { group: "physics", command: "linecast", bridgeCommand: "physics.linecast", buildArgs: physicsArgs },
-  { group: "physics", command: "shapecast", bridgeCommand: "physics.shapecast", buildArgs: physicsArgs },
-  { group: "physics", command: "validate", bridgeCommand: "physics.validate", buildArgs: physicsValidateArgs },
-  { group: "physics", command: "simulation", bridgeCommand: "physics.simulation", buildArgs: physicsArgs }
+  { group: "physics", command: "settings", bridgeCommand: "project-tool.run", toolName: "physics.settings", buildArgs: physicsArgs },
+  { group: "physics", command: "collision-matrix", bridgeCommand: "project-tool.run", toolName: "physics.collision-matrix", buildArgs: physicsArgs },
+  { group: "physics", command: "material", bridgeCommand: "project-tool.run", toolName: "physics.material", buildArgs: physicsArgs },
+  { group: "physics", command: "assign-material", bridgeCommand: "project-tool.run", toolName: "physics.assign-material", buildArgs: physicsArgs },
+  { group: "physics", command: "joint", bridgeCommand: "project-tool.run", toolName: "physics.joint", buildArgs: physicsArgs },
+  { group: "physics", command: "force", bridgeCommand: "project-tool.run", toolName: "physics.force", buildArgs: physicsArgs },
+  { group: "physics", command: "overlap", bridgeCommand: "project-tool.run", toolName: "physics.overlap", buildArgs: physicsArgs },
+  { group: "physics", command: "rigidbody", bridgeCommand: "project-tool.run", toolName: "physics.rigidbody", buildArgs: physicsArgs },
+  { group: "physics", command: "raycast", bridgeCommand: "project-tool.run", toolName: "physics.raycast", buildArgs: physicsArgs },
+  { group: "physics", command: "raycast-all", bridgeCommand: "project-tool.run", toolName: "physics.raycast-all", buildArgs: physicsArgs },
+  { group: "physics", command: "linecast", bridgeCommand: "project-tool.run", toolName: "physics.linecast", buildArgs: physicsArgs },
+  { group: "physics", command: "shapecast", bridgeCommand: "project-tool.run", toolName: "physics.shapecast", buildArgs: physicsArgs },
+  { group: "physics", command: "validate", bridgeCommand: "project-tool.run", toolName: "physics.validate", buildArgs: physicsValidateArgs },
+  { group: "physics", command: "simulation", bridgeCommand: "project-tool.run", toolName: "physics.simulation", buildArgs: physicsArgs }
 ];
 
 // 读取 tools run --input 中无法映射为简单 flag 的结构化字段

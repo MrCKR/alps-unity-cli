@@ -83,6 +83,13 @@ export async function executeBridgePayload(
     if (command === "ui.document.info" && typeof args.path === "string") {
       return readUiDocumentOffline(requestId, command, args.path);
     }
+    // project-tool.run 路由:ui.document.info 离线读取回退(args.name/input.path)
+    if (command === "project-tool.run" && args.name === "ui.document.info") {
+      const offlineInput = (args.input ?? {}) as Record<string, unknown>;
+      if (typeof offlineInput.path === "string") {
+        return readUiDocumentOffline(requestId, "ui.document.info", offlineInput.path);
+      }
+    }
     return failure(requestId, "BRIDGE_ENDPOINT_REQUIRED", "Pass --bridge-endpoint <url> or set UNITY_CLI_BRIDGE_ENDPOINT for live query/edit/screenshot/code commands.", [
       "Open Unity with the Unity CLI Bridge package installed.",
       "Pass --bridge-endpoint http://127.0.0.1:<port>."

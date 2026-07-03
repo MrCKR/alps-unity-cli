@@ -61,7 +61,8 @@ test("bridge specs resolve for all graphics tools", () => {
     const cmd = name.replace("graphics.", "");
     const spec = bridgeCommandRegistry.lookup("graphics", cmd);
     assert.ok(spec, `graphics ${cmd} should resolve`);
-    assert.equal(spec.bridgeCommand, name);
+    assert.equal(spec.bridgeCommand, "project-tool.run", `graphics ${cmd} should route via project-tool.run`);
+    assert.equal(spec.toolName, name, `graphics ${cmd} toolName should match`);
   }
 });
 
@@ -81,7 +82,9 @@ test("C# RegisterCommand calls exist for graphics commands", async () => {
     )
   ).join("\n");
   for (const command of GRAPHICS_COMMANDS) {
-    assert.ok(allSource.includes(`RegisterCommand(registry, "${command}"`), `${command} should be registered`);
+    const hasRegisterCommand = allSource.includes(`RegisterCommand(registry, "${command}"`);
+    const hasIUnityCliTool = allSource.includes(`Name = "${command}"`);
+    assert.ok(hasRegisterCommand || hasIUnityCliTool, `${command} should be registered via RegisterCommand or IUnityCliTool`);
   }
 });
 
