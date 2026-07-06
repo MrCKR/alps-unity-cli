@@ -12,6 +12,7 @@ import { tmpdir } from "node:os";
 import { bridgeCommandRegistry, type BridgeRequest } from "../src/bridge/index.js";
 import { handleToolsCommand, type ToolsRuntime } from "../src/tools.js";
 import { builtinToolMetadata, builtinToolGroups, findToolByName, filterToolsByGroup, searchTools, allRegisteredToolMetadata, extensionToolMetadata, allRegisteredToolGroups, EXTENSION_GROUPS, supportStatusForTool, normalizeToolMetadata, toolDocsTopic } from "../src/tools/metadata/index.js";
+import { findDefineTool, defineToolMetadata } from "../src/tools/registry.js";
 import "../src/extensions/index.js";
 
 const requestId = "test_req_tools_001";
@@ -1709,6 +1710,62 @@ test("mergeInputToFlags converts camelCase to kebab-case", async () => {
   } finally {
     await new Promise(r => setTimeout(r, 200));
     rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("Stage 5 defineTool registry exposes package.list execution slice", () => {
+  const definition = findDefineTool("package.list");
+  assert.ok(definition, "package.list should be registered as a defineTool");
+  assert.equal(definition.group, "package");
+  assert.equal(definition.destructiveHint, false);
+  const metadata = defineToolMetadata().find((tool) => tool.name === "package.list");
+  assert.ok(metadata, "package.list defineTool metadata should be available");
+  const inputProperties = metadata.inputSchema.properties as Record<string, { type?: string }>;
+  const outputProperties = metadata.outputSchema?.properties as Record<string, { type?: string }>;
+  assert.equal(inputProperties.project?.type, "string");
+  assert.equal(outputProperties.packages?.type, "array");
+});
+
+test("Stage 5 migrated defineTools stay aligned with static discovery metadata", () => {
+  for (const migrated of defineToolMetadata()) {
+    const discovery = findToolByName(migrated.name);
+    assert.ok(discovery, `${migrated.name} should stay discoverable through static metadata`);
+    assert.equal(migrated.group, discovery.group, `${migrated.name} group drifted`);
+    assert.equal(migrated.summary, discovery.summary, `${migrated.name} summary drifted`);
+    assert.equal(migrated.description, discovery.description, `${migrated.name} description drifted`);
+    assert.equal(migrated.destructiveHint, discovery.destructiveHint, `${migrated.name} destructiveHint drifted`);
+    assert.equal(migrated.playModeSupport, discovery.playModeSupport, `${migrated.name} playModeSupport drifted`);
+    assert.equal(migrated.handler, discovery.handler, `${migrated.name} handler drifted`);
+    assert.equal(migrated.supportStatus, discovery.supportStatus, `${migrated.name} supportStatus drifted`);
+    for (const key of Object.keys((migrated.outputSchema?.properties ?? {}) as Record<string, unknown>)) {
+      assert.ok((discovery.outputSchema?.properties as Record<string, unknown> | undefined)?.[key], `${migrated.name} outputSchema.${key} is missing from static describe metadata`);
+    }
+  }
+});
+
+test("tools run package.list executes through defineTool with --project flag", async () => {
+  const root = makeTempDir("tools-package-list-define");
+  try {
+    const project = makeUnityProject(root, { "com.example.tool": "1.2.3" });
+    const result = await handleToolsCommand("run", ["package.list"], { project }, emptyRuntime, requestId);
+    assert.equal(result.ok, true);
+    const data = result.data as { packages: Array<{ name: string; requestedVersion?: string }> };
+    assert.deepEqual(data.packages.map((entry) => entry.name), ["com.example.tool"]);
+    assert.equal(data.packages[0].requestedVersion, "1.2.3");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.list defineTool path converts PackageManagerError", async () => {
+  const root = makeTempDir("tools-package-list-missing-define");
+  try {
+    const result = await handleToolsCommand("run", ["package.list"], { project: root }, emptyRuntime, requestId);
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "MANIFEST_NOT_FOUND");
+    assert.ok(result.error?.nextActions?.some((action) => action.includes("--project")));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
   }
 });
 

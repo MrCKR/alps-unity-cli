@@ -36,6 +36,8 @@ import { handlePackage } from "./cli-commands/package.js";
 import { handleCapabilitiesCommand } from "./capabilities.js";
 import { handleDocsCommand, handleReflectCommand } from "./docs-reflect.js";
 import { handleCode } from "./runtime-code.js";
+import { findDefineTool } from "./tools/registry.js";
+import { PackageManagerError } from "./package-manager.js";
 import type { Runtime } from "./cli-commands/types.js";
 
 export type ToolsRuntime = ProjectToolRuntime;
@@ -880,6 +882,9 @@ async function dispatchOfflineHandler(
     if (confirmation) return confirmation;
   }
 
+  const defineToolResult = await dispatchDefineTool(tool, defineToolRequest(parsedInput.input, mergedFlags), fullRuntime, requestId);
+  if (defineToolResult) return defineToolResult;
+
   // tools 发现工具(tools.group/group-list/search/describe/run)
   if (group === "tools") {
     return handleToolsCommand(sub === "group-list" ? "group" : sub, [], mergedFlags, runtime, requestId);
@@ -908,6 +913,46 @@ async function dispatchOfflineHandler(
   }
 }
 
+/** 执行已迁移到 defineTool 的 TS 工具；未迁移工具返回 undefined 交给旧分发路径。 */
+async function dispatchDefineTool(
+  tool: ToolMetadata,
+  input: Record<string, unknown>,
+  runtime: Runtime,
+  requestId: string
+): Promise<CliResult | undefined> {
+  const definition = findDefineTool(tool.name);
+  if (!definition) return undefined;
+  try {
+    const data = await definition.execute(input, {
+      requestId,
+      projectPath: getString(input as Record<string, string | boolean>, "project") ?? process.cwd(),
+      artifactDir: getString(input as Record<string, string | boolean>, "artifactDir") ?? runtime.dataDir ?? process.cwd(),
+      logPath: getString(input as Record<string, string | boolean>, "logPath")
+    });
+    return success(requestId, data);
+  } catch (error) {
+    if (error instanceof PackageManagerError) {
+      return failure(requestId, error.code, error.message, error.nextActions);
+    }
+    return failure(requestId, "COMMAND_FAILED", error instanceof Error ? error.message : String(error), [
+      `Run unity_cli tools describe ${tool.name} for input requirements and examples.`
+    ]);
+  }
+}
+
+/** 将传统 CLI flags 合并为 defineTool request；显式 flag 优先于 --input 字段。 */
+function defineToolRequest(input: Record<string, unknown>, flags: Record<string, string | boolean>): Record<string, unknown> {
+  const request: Record<string, unknown> = { ...input };
+  for (const [key, value] of Object.entries(flags)) {
+    if (key.startsWith("__") || ["input", "input-file", "stdin", "yes", "raw", "format"].includes(key)) continue;
+    request[kebabToCamel(key)] = value;
+  }
+  return request;
+}
+
+function kebabToCamel(key: string): string {
+  return key.replace(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase());
+}
 
 async function findProjectToolByName(
   name: string,

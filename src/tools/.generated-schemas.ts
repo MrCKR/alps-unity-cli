@@ -3,4 +3,4 @@
 // 运行时 import 本模块即注入 schema 到 defineTool registry。禁止手改。
 import { injectToolSchema } from "./define.js";
 
-
+injectToolSchema("package.list", {"type":"object","properties":{"project":{"type":"string"}}}, {"type":"object","properties":{"projectPath":{"type":"string"},"manifestPath":{"type":"string"},"lockPath":{"type":"string"},"registry":{"type":"string"},"scopedRegistries":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"url":{"type":"string"},"scopes":{"type":"array","items":{"type":"string"}}},"required":["name","url","scopes"]}},"packages":{"type":"array","items":{"type":"object","properties":{"name":{"type":"string"},"requestedVersion":{"type":"string"},"lockedVersion":{"type":"string"},"source":{"type":"string"},"url":{"type":"string"},"hash":{"type":"string"},"dependencies":{}},"required":["name"]}}},"required":["projectPath","manifestPath","lockPath","scopedRegistries","packages"]});

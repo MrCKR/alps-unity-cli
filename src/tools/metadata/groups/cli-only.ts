@@ -13,7 +13,25 @@ export const CLI_ONLY_TOOLS: ToolMetadata[] = [
     description: "List installed packages and their requested/locked versions in the project manifest. Offline (reads manifest directly, no Unity needed). Use package.status for a manifest+lock summary or package.info for one package.",
     group: "package",
     inputSchema: objSchema({ project: { type: "string", description: "Unity project path. Defaults to the current target project." } }),
-    outputSchema: objSchema({ manifestPath: { type: "string" }, lockPath: { type: "string" }, registry: { type: "string" }, packages: { type: "array", items: { type: "object" } } }),
+    outputSchema: objSchema({
+      projectPath: { type: "string" },
+      manifestPath: { type: "string" },
+      lockPath: { type: "string" },
+      registry: { type: "string" },
+      scopedRegistries: { type: "array", items: objSchema({ name: { type: "string" }, url: { type: "string" }, scopes: { type: "array", items: { type: "string" } } }) },
+      packages: {
+        type: "array",
+        items: objSchema({
+          name: { type: "string" },
+          requestedVersion: { type: "string" },
+          lockedVersion: { type: "string" },
+          source: { type: "string" },
+          url: { type: "string" },
+          hash: { type: "string" },
+          dependencies: { type: "object" }
+        })
+      }
+    }),
     destructiveHint: false,
     playModeSupport: "supported",
     examples: [
