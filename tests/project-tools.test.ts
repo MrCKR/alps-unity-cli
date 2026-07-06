@@ -86,6 +86,37 @@ test("tools describe resolves custom descriptor without hand-written CLI metadat
   assert.equal(data.playModeSupport, "editor-only");
 });
 
+test("tools describe infers runtime route for target=runtime project descriptors", async () => {
+  const runtime = await makeRuntime();
+  const result = await execute(["tools", "describe", "runtime.wait"], {
+    ...runtime,
+    bridgeExecute: async () => ({
+      ok: true,
+      data: {
+        tools: [{
+          name: "runtime.wait",
+          summary: "Wait for Play Mode frames.",
+          description: "Waits in Play Mode and returns elapsed frame data.",
+          group: "runtime",
+          inputSchema: { type: "object" },
+          destructiveHint: false,
+          target: "runtime",
+          playModeSupport: "runtime-only"
+        }]
+      }
+    })
+  });
+
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.name, "runtime.wait");
+  assert.equal(data.source, "project");
+  assert.equal(data.target, "runtime");
+  assert.equal(data.playModeSupport, "runtime-only");
+  assert.equal(data.supportStatus, "live-bridge-runtime");
+  assert.equal(data.availabilityScope, "playModeSession");
+});
+
 test("Unity C# custom tool registry supports IUnityCliTool interface descriptors and sample Editor tool", async () => {
   const registry = await readFile(new URL("../../unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs", import.meta.url), "utf8");
   const interfaceFile = await readFile(new URL("../../unitypkg/Editor/ProjectTools/IUnityCliTool.cs", import.meta.url), "utf8");

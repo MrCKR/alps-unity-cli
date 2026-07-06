@@ -30,7 +30,7 @@ namespace UnityCli
             public string SceneName { get; set; }
             public bool? IsDirty { get; set; }
             public bool? WillSave { get; set; }
-            public List<PlannedEffect> PlannedEffects { get; set; }
+            public List<ScenePlannedEffect> PlannedEffects { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -79,9 +79,9 @@ namespace UnityCli
                             SceneName = scene.name,
                             IsDirty = scene.isDirty,
                             WillSave = saveDirty && scene.isDirty,
-                            PlannedEffects = new List<PlannedEffect>
+                            PlannedEffects = new List<ScenePlannedEffect>
                             {
-                                new PlannedEffect { Type = "scene.unload", Path = path }
+                                new ScenePlannedEffect { Type = "scene.unload", Path = path }
                             }
                         };
                     }
@@ -95,9 +95,9 @@ namespace UnityCli
                     {
                         Scene = SceneToolSupport.BuildSceneInfo(SceneManager.GetActiveScene()),
                         RequestedPath = path,
-                        PlannedEffects = new List<PlannedEffect>
+                        PlannedEffects = new List<ScenePlannedEffect>
                         {
-                            new PlannedEffect { Type = "scene.unload", Path = path }
+                            new ScenePlannedEffect { Type = "scene.unload", Path = path }
                         }
                     };
                 }

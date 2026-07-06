@@ -85,8 +85,8 @@ CLI 输出统一是 JSON envelope。
 - `error.code`：稳定错误码。
 - `error.message`：人类可读错误。
 - `error.transient`：是否适合等待后重试。
-- `error.retry_after_ms`：建议等待时间。
-- `error.next_actions`：下一步操作；优先按它处理，不要猜补救方案。
+- `error.retryAfterMs`：建议等待时间。
+- `error.nextActions`：下一步操作；优先按它处理，不要猜补救方案。
 
 Descriptor 常用字段：
 
@@ -114,7 +114,7 @@ Descriptor 常用字段：
 - 不要手动读取 Bridge 注册文件，不要直接 ping endpoint；用 `instances`、`target`、`doctor` 和 `editor.state`。
 - Unity 正在 compile/import/build、PlayMode 切换或 domain reload 时，先用 `tools run editor.state --input '{"waitReady":true}'` 等待 `busy.isBusy=false`。
 - `destructiveHint:true` 的 Tool 先 `--dry-run`（如果支持），确认计划输出后再加 `--yes`。
-- `playModeSupport:"editor-only"` 不要在 PlayMode 下运行；`runtime-only` 通常需要先进入 PlayMode；遇到 `E_RUNTIME_NOT_READY` 按 `next_actions` 处理。
+- `playModeSupport:"editor-only"` 不要在 PlayMode 下运行；`runtime-only` 通常需要先进入 PlayMode；遇到 `E_RUNTIME_NOT_READY` 按 `nextActions` 处理。
 - 缺少必填输入会返回 `E_SCHEMA_INVALID`；回到 `describe` 修正 schema，而不是猜字段名。
 - 能用内置 Tool 或 Context 解决时，不要绕过 CLI；一次性 Unity 侧代码执行才考虑 `code.exec --yes`。
 - 长任务返回 `jobId` 时，用 `unity_cli jobs status <jobId>`、`unity_cli jobs logs <jobId>`、`unity_cli jobs cancel <jobId> --yes` 管理。

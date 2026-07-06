@@ -100,7 +100,7 @@ unity_cli extensions list --project /path/to/unity/project
 
 - ProBuilder 工具在 `tools group list probuilder` 中标记为 `available=false`
 - `tools describe probuilder.*` 会显示 `requiresPackages: ["com.unity.probuilder"]`
-- `tools run probuilder.*` 返回 `E_EXTENSION_UNAVAILABLE` 错误，附带 `next_actions` 提示手动安装依赖并复制 extension bundle
+- `tools run probuilder.*` 返回 `E_EXTENSION_UNAVAILABLE` 错误，附带 `nextActions` 提示手动安装依赖并复制 extension bundle
 
 ### 恢复路径
 

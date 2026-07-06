@@ -129,7 +129,7 @@ namespace UnityCli
     }
 
     /// <summary>计划副作用项,scene 域 mutation 工具 dryRun/成功结果共享。</summary>
-    public sealed class PlannedEffect
+    public sealed class ScenePlannedEffect
     {
         public string Type { get; set; }
         public string Path { get; set; }

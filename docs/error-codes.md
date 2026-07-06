@@ -1,6 +1,6 @@
 # 错误码（Error Codes）
 
-alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transient` 标记、`retry_after_ms` 和 `next_actions` 自动恢复指引。
+alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transient` 标记、`retryAfterMs` 和 `nextActions` 自动恢复指引。
 
 ## 错误格式
 
@@ -12,12 +12,12 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
     "code": "E_TARGET_AMBIGUOUS",
     "message": "Multiple ready instances found.",
     "details": "...",
-    "next_actions": [
+    "nextActions": [
       "Run unity_cli instances list to discover targets.",
       "Run unity_cli target set <id|alias> to select a target."
     ],
     "transient": false,
-    "retry_after_ms": 0
+    "retryAfterMs": 0
   }
 }
 ```
@@ -89,19 +89,19 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 ## AI Agent 错误处理流程
 
 1. 读取 `error.code` 确定错误类别
-2. 检查 `transient` — 若为 true，等待 `retry_after_ms` 后重试
-3. 遵循 `next_actions` 的建议恢复
+2. 检查 `transient` — 若为 true，等待 `retryAfterMs` 后重试
+3. 遵循 `nextActions` 的建议恢复
 4. 不要猜测恢复方式，使用建议的命令
 
-### next_actions 规则
+### nextActions 规则
 
-- Target 错误的 `next_actions` 必须指向 `instances list` 或 `target set`
-- Runtime 错误的 `next_actions` 必须指向 `tools run editor.play` 或 Play Mode 相关操作
-- Discovery 错误的 `next_actions` 必须指向 `tools group`、`tools group list`、`tools search` 或 `tools describe`
-- 诊断错误的 `next_actions` 必须指向 `doctor` 或 `tools run diagnose.preflight`
+- Target 错误的 `nextActions` 必须指向 `instances list` 或 `target set`
+- Runtime 错误的 `nextActions` 必须指向 `tools run editor.play` 或 Play Mode 相关操作
+- Discovery 错误的 `nextActions` 必须指向 `tools group`、`tools group list`、`tools search` 或 `tools describe`
+- 诊断错误的 `nextActions` 必须指向 `doctor` 或 `tools run diagnose.preflight`
 
 ## JSON 字段命名
 
 所有错误响应使用 snake_case：
-- `next_actions`（不是 `nextActions`）
-- `retry_after_ms`（不是 `retryAfterMs`）
+- `nextActions`（不是 `nextActions`）
+- `retryAfterMs`（不是 `retryAfterMs`）

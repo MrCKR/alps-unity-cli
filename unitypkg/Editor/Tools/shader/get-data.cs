@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace UnityCli
 {
@@ -94,10 +95,10 @@ namespace UnityCli
                         Type = propType.ToString(),
                         Flags = shader.GetPropertyFlags(i).ToString(),
                         NameId = shader.GetPropertyNameId(i),
-                        DefaultTextureName = propType == ShaderPropertyType.Texture ? shader.GetPropertyTextureDefaultName(i) : null,
+                        DefaultTextureName = propType == UnityEngine.Rendering.ShaderPropertyType.Texture ? shader.GetPropertyTextureDefaultName(i) : null,
                         Attributes = new List<string>(shader.GetPropertyAttributes(i))
                     };
-                    if (propType == ShaderPropertyType.Range)
+                    if (propType == UnityEngine.Rendering.ShaderPropertyType.Range)
                     {
                         var range = shader.GetPropertyRangeLimits(i);
                         prop.Range = new ShaderPropertyRange { Min = range.x, Max = range.y };

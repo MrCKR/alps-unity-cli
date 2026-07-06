@@ -5,7 +5,7 @@
  * Key behaviors:
  * - Per-request timeout via --timeout-ms or command default.
  * - Transient errors (E_UNITY_COMPILING, E_UNITY_DOMAIN_RELOAD, etc.) can be retried automatically.
- * - retry_after_ms from the error response is honored; if absent, uses DEFAULT_RETRY_AFTER_MS.
+ * - retryAfterMs from the error response is honored; if absent, uses DEFAULT_RETRY_AFTER_MS.
  * - Non-transient errors and timeout errors are NOT retried automatically.
  */
 
@@ -49,7 +49,7 @@ export async function withRetry(
       return lastResult;
     }
 
-    const retryAfterMs = lastResult.error.retry_after_ms ?? DEFAULT_RETRY_AFTER_MS[lastResult.error.code] ?? 5000;
+    const retryAfterMs = lastResult.error.retryAfterMs ?? DEFAULT_RETRY_AFTER_MS[lastResult.error.code] ?? 5000;
 
     if (onRetry) {
       onRetry(attempt + 1, lastResult, retryAfterMs);
@@ -71,7 +71,7 @@ export function isTransientError(code: string): boolean {
 
 /**
  * Determine if a CliResult represents a transient state that can be retried.
- * Also returns the recommended retry_after_ms.
+ * Also returns the recommended retryAfterMs.
  */
 export function transientRetryInfo(result: CliResult): { isTransient: true; retryAfterMs: number; code: string } | { isTransient: false } {
   if (result.ok || !result.error) {
@@ -83,7 +83,7 @@ export function transientRetryInfo(result: CliResult): { isTransient: true; retr
   }
   return {
     isTransient: true,
-    retryAfterMs: result.error.retry_after_ms ?? DEFAULT_RETRY_AFTER_MS[code] ?? 5000,
+    retryAfterMs: result.error.retryAfterMs ?? DEFAULT_RETRY_AFTER_MS[code] ?? 5000,
     code,
   };
 }

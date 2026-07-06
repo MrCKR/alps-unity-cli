@@ -16,7 +16,7 @@ import { objSchema } from "../schemas.js";
  * - Adapted to alps-unity-cli: optional package detection uses FindType("Unity.Cinemachine.CinemachineCamera")
  *   + FindType("Unity.Cinemachine.CinemachineBrain") reflection (no #if UNITY_CINEMACHINE conditional
  *   compile), matching ProBuilder's runtime detection pattern. When missing, tools return
- *   E_CINEMACHINE_PACKAGE_NOT_FOUND with unavailable + next_actions.
+ *   E_CINEMACHINE_PACKAGE_NOT_FOUND with unavailable + nextActions.
  * - SerializedObject is used for nested struct writes (Lens, PrioritySettings, DefaultBlend) to
  *   stay robust across Cinemachine internal field renames, mirroring unity-mcp's defensive path.
  */

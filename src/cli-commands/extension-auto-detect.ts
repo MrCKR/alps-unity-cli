@@ -10,7 +10,7 @@
  * - Does NOT guess based on file names, directories, or assembly names.
  * - Already-enabled extensions are not re-installed.
  * - In --check / dry-run mode, shows what would be installed without writing.
- * - On detection failure (missing manifest, etc.), returns clear next_actions.
+ * - On detection failure (missing manifest, etc.), returns clear nextActions.
  */
 
 import { ExtensionRegistry } from "../extensions/registry.js";

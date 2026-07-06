@@ -675,7 +675,7 @@ namespace UnityCli
                 // UnityStats 是 internal Editor 类型，不同 Unity 版本/反射策略下可能取不到。
                 w.Prop("available", false);
                 w.Prop("diagnostics", "UnityStats type is not available in this Unity version.");
-                w.PropArray("next_actions", arr =>
+                w.PropArray("nextActions", arr =>
                 {
                     arr.Value("Use a Unity 2022.x Editor where UnityEditor.UnityStats is reachable via reflection.");
                     arr.Value("For per-frame GPU/render counts prefer profiler.frame or profiler.hierarchy while the Profiler is recording.");
@@ -700,7 +700,7 @@ namespace UnityCli
                 if (!anyValue)
                 {
                     w.Prop("diagnostics", "UnityStats fields are null for the sampled frame. Rendering statistics are only populated while the Game View is actively rendering (enter Play Mode or focus the Game View and retry).");
-                    w.PropArray("next_actions", arr =>
+                    w.PropArray("nextActions", arr =>
                     {
                         arr.Value("Enter Play Mode or make the Game View render at least one frame, then retry.");
                         arr.Value("For stable per-frame timings use profiler.frame (FrameTimingManager) or profiler.hierarchy.");

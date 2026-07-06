@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
 using UiButton = UnityEngine.UI.Button;
@@ -115,13 +116,13 @@ namespace UnityCli
     // ── uGUI helper ──
     internal static class UiRectHelper
     {
-        public static void UiRectHelper.ApplyRect(RectTransform rt, float? width, float? height, float? x, float? y)
+        public static void ApplyRect(RectTransform rt, float? width, float? height, float? x, float? y)
         {
             if (width.HasValue) rt.sizeDelta = new Vector2(width.Value, rt.sizeDelta.y);
             if (height.HasValue) rt.sizeDelta = new Vector2(rt.sizeDelta.x, height.Value);
             if (x.HasValue || y.HasValue) rt.anchoredPosition = new Vector2(x ?? rt.anchoredPosition.x, y ?? rt.anchoredPosition.y);
         }
-        public static void UiRectHelper.StretchRect(RectTransform rt) { rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one; rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero; }
+        public static void StretchRect(RectTransform rt) { rt.anchorMin = Vector2.zero; rt.anchorMax = Vector2.one; rt.offsetMin = Vector2.zero; rt.offsetMax = Vector2.zero; }
     }
 }
 #endif

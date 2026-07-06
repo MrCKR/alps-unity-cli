@@ -174,7 +174,7 @@ export const SCENE_TOOLS: ToolMetadata[] = [
   {
     name: "scene.validate",
     summary: "Validate a scene for missing scripts, null references, and Build Settings inclusion.",
-    description: "Validate the active scene (or --path scene) for common issues: missing script components (null components from missing assemblies), null references, and whether the scene is included in Editor Build Settings scenes. Returns valid flag, issue counts, and next_actions to fix.",
+    description: "Validate the active scene (or --path scene) for common issues: missing script components (null components from missing assemblies), null references, and whether the scene is included in Editor Build Settings scenes. Returns valid flag, issue counts, and nextActions to fix.",
     group: "scene",
     inputSchema: objSchema({ path: { type: "string", description: "Scene asset path to validate; defaults to the active scene." } }),
     destructiveHint: false,

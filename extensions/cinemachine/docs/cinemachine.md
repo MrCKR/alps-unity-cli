@@ -23,7 +23,7 @@ Unity Cinemachine 智能相机系统的 CLI 工具集。提供可用性检测、
 ## 前置条件
 
 - Unity 项目需安装 `com.unity.cinemachine` 包
-- 缺少依赖时工具返回 `unavailable` + `next_actions`
+- 缺少依赖时工具返回 `unavailable` + `nextActions`
 
 ## 发现与使用
 
@@ -55,4 +55,4 @@ unity-cli tools run cinemachine.body PlayerCam --body CinemachineFollow
 当目标 Unity 项目未安装 Cinemachine 包时：
 - 工具标记为 `unavailable`
 - 返回 `E_CINEMACHINE_PACKAGE_NOT_FOUND` 错误码
-- `next_actions` 提示安装 `com.unity.cinemachine`
+- `nextActions` 提示安装 `com.unity.cinemachine`

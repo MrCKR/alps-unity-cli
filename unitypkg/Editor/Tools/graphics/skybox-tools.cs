@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace UnityCli
 {
@@ -86,7 +87,7 @@ namespace UnityCli
         public Result Execute(Request r, UnityCliProjectToolContext ctx)
         {
             var effects = new List<GraphicsPlannedEffect>();
-            if (!string.IsNullOrEmpty(r.Mode) && System.Enum.TryParse<AmbientMode>(r.Mode, true, out var mode)) { RenderSettings.ambientMode = mode; effects.Add(new GraphicsPlannedEffect { Type = "graphics.skybox-set-ambient", Property = "ambientMode", Value = r.Mode }); }
+            if (!string.IsNullOrEmpty(r.Mode) && System.Enum.TryParse<UnityEngine.Rendering.AmbientMode>(r.Mode, true, out var mode)) { RenderSettings.ambientMode = mode; effects.Add(new GraphicsPlannedEffect { Type = "graphics.skybox-set-ambient", Property = "ambientMode", Value = r.Mode }); }
             if (r.Intensity.HasValue) { RenderSettings.ambientIntensity = r.Intensity.Value; effects.Add(new GraphicsPlannedEffect { Type = "graphics.skybox-set-ambient", Property = "ambientIntensity", Value = r.Intensity.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) }); }
             if (!string.IsNullOrEmpty(r.Color)) { var c = GraphicsToolSupport.ParseColor(r.Color); RenderSettings.ambientLight = c; effects.Add(new GraphicsPlannedEffect { Type = "graphics.skybox-set-ambient", Property = "ambientLight", Value = GraphicsToolSupport.ColorHtml(c) }); }
             if (!string.IsNullOrEmpty(r.AmbientEquatorColor)) RenderSettings.ambientEquatorColor = GraphicsToolSupport.ParseColor(r.AmbientEquatorColor);
@@ -124,7 +125,7 @@ namespace UnityCli
         public Result Execute(Request r, UnityCliProjectToolContext ctx)
         {
             var effects = new List<GraphicsPlannedEffect>();
-            if (!string.IsNullOrEmpty(r.Mode) && System.Enum.TryParse<DefaultReflectionMode>(r.Mode, true, out var drm)) { RenderSettings.defaultReflectionMode = drm; effects.Add(new GraphicsPlannedEffect { Type = "graphics.skybox-set-reflection", Property = "defaultReflectionMode", Value = r.Mode }); }
+            if (!string.IsNullOrEmpty(r.Mode) && System.Enum.TryParse<UnityEngine.Rendering.DefaultReflectionMode>(r.Mode, true, out var drm)) { RenderSettings.defaultReflectionMode = drm; effects.Add(new GraphicsPlannedEffect { Type = "graphics.skybox-set-reflection", Property = "defaultReflectionMode", Value = r.Mode }); }
             if (r.Bounces.HasValue) { RenderSettings.reflectionBounces = r.Bounces.Value; effects.Add(new GraphicsPlannedEffect { Type = "graphics.skybox-set-reflection", Property = "reflectionBounces", Value = r.Bounces.Value.ToString() }); }
             if (r.Intensity.HasValue) { RenderSettings.reflectionIntensity = r.Intensity.Value; effects.Add(new GraphicsPlannedEffect { Type = "graphics.skybox-set-reflection", Property = "reflectionIntensity", Value = r.Intensity.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) }); }
             if (!string.IsNullOrEmpty(r.Resolution))

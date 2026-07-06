@@ -2,7 +2,7 @@
  * Tests for extension unavailability graceful degradation.
  *
  * Covers:
- * 1. tools describe returns unavailable + next_actions when extension deps missing
+ * 1. tools describe returns unavailable + nextActions when extension deps missing
  * 2. tools run returns E_EXTENSION_UNAVAILABLE when extension deps missing
  * 3. tools describe returns available when extension deps present
  * 4. tools describe works without --project (graceful degradation)
@@ -103,7 +103,7 @@ function fakeInstance(projectPath: string, bridgeEndpoint: string, overrides: Pa
   };
 }
 
-// ── 1. tools describe: unavailable + next_actions ──────────────────────────
+// ── 1. tools describe: unavailable + nextActions ──────────────────────────
 
 test("tools describe returns unavailable when extension deps are missing", async () => {
   const projectPath = await makeFakeProject(); // no packages
@@ -142,9 +142,9 @@ test("tools describe returns E_EXTENSION_UNAVAILABLE for tools run when deps mis
   assert.equal(result.error?.code, "E_EXTENSION_UNAVAILABLE");
   assert.ok(result.error?.message?.includes("probuilder"));
   assert.ok(result.error?.message?.includes("com.unity.probuilder"));
-  assert.ok(Array.isArray(result.error?.next_actions));
-  assert.ok((result.error?.next_actions ?? []).some((a) => a.includes("Unity Package Manager")));
-  assert.ok((result.error?.next_actions ?? []).some((a) => a.includes("extensions doctor")));
+  assert.ok(Array.isArray(result.error?.nextActions));
+  assert.ok((result.error?.nextActions ?? []).some((a) => a.includes("Unity Package Manager")));
+  assert.ok((result.error?.nextActions ?? []).some((a) => a.includes("extensions doctor")));
 });
 
 // ── 2. tools describe: available when deps present ─────────────────────────
@@ -488,10 +488,10 @@ test("tools describe error messages include group-first discovery hints", async 
   );
 
   assert.equal(result.ok, false);
-  const nextActions = result.error?.next_actions ?? [];
+  const nextActions = result.error?.nextActions ?? [];
   assert.ok(
     nextActions.some((a) => a.includes("tools group") || a.includes("tools search")),
-    "Error next_actions should reference group or search"
+    "Error nextActions should reference group or search"
   );
 });
 
@@ -508,7 +508,7 @@ test("tools run error for unavailable extension mentions extensions doctor", asy
 
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "E_EXTENSION_UNAVAILABLE");
-  const nextActions = result.error?.next_actions ?? [];
+  const nextActions = result.error?.nextActions ?? [];
   assert.ok(nextActions.some((a) => a.includes("extensions doctor")));
   assert.ok(nextActions.some((a) => a.includes("Unity Package Manager")));
 });

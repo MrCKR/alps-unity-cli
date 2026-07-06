@@ -240,7 +240,15 @@ namespace UnityCli
             if (element == null) throw new UnityCliBridge.BridgeCommandException("E_UI_ELEMENT_NOT_FOUND", "VisualElement not found: " + r.ElementName, "Pass a valid element name.");
             if (!dryRun)
             {
-                if (!string.IsNullOrEmpty(r.Text)) element.text = r.Text;
+                if (!string.IsNullOrEmpty(r.Text))
+                {
+                    var textElement = element as TextElement;
+                    if (textElement == null)
+                    {
+                        throw new UnityCliBridge.BridgeCommandException("E_UI_ELEMENT_TEXT_UNSUPPORTED", "VisualElement does not support text: " + r.ElementName, "Target a Label/TextElement or omit the text field.");
+                    }
+                    textElement.text = r.Text;
+                }
                 if (!string.IsNullOrEmpty(r.Display)) if (System.Enum.TryParse<DisplayStyle>(r.Display, true, out var ds)) element.style.display = ds;
                 if (r.Width.HasValue) element.style.width = r.Width.Value;
                 if (r.Height.HasValue) element.style.height = r.Height.Value;

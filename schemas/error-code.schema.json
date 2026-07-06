@@ -20,7 +20,7 @@
       "type": "object",
       "description": "Additional structured context about the error (e.g. jobId, timeoutMs, bridgeEndpoint)."
     },
-    "next_actions": {
+    "nextActions": {
       "type": "array",
       "items": { "type": "string" },
       "default": [],
@@ -30,7 +30,7 @@
       "type": "string",
       "description": "Request identifier echoed in the error, for audit correlation."
     },
-    "retry_after_ms": {
+    "retryAfterMs": {
       "type": "integer",
       "minimum": 0,
       "description": "When the error is transient (e.g. E_UNITY_BUSY), suggested minimum retry delay in milliseconds. 0 = no specific recommendation."

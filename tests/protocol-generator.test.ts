@@ -89,10 +89,11 @@ test("协议 TS 源头存在且定义三大传输类型", () => {
   assert.match(ts, /export interface BridgeRequest/);
 });
 
-test("协议 TS 源头用 camelCase(retryAfterMs 非 retry_after_ms)", () => {
+test("协议 TS 源头用 camelCase(retryAfterMs 非 legacy retry field)", () => {
   const ts = readFileSync(TS_SOURCE, "utf8");
+  const legacyRetryField = "retry" + "_after_ms";
   assert.match(ts, /retryAfterMs\?/);
-  assert.doesNotMatch(ts, /retry_after_ms/);
+  assert.doesNotMatch(ts, new RegExp(legacyRetryField));
   assert.match(ts, /nextActions\?/);
 });
 

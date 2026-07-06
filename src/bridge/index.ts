@@ -6,7 +6,7 @@ import { withRetry, type RetryOptions } from "../envelope.js";
 import { instanceSelectionFailure, selectInstanceForFlags, type InstanceSelection } from "../instances.js";
 import { BridgeArgumentError } from "./args.js";
 import { bridgeCommandRegistry } from "./registry.js";
-import { confirmDestructiveExecution, destructiveSecurityProof, isDryRunRequested } from "../security.js";
+import { confirmDestructiveExecution, destructiveSecurityProof, isDestructiveConfirmed, isDryRunRequested } from "../security.js";
 import { ensurePackageBridge, PackageManagerError } from "../package-manager.js";
 import { isProjectLocked, startUnityJob } from "../cli-commands/unity-job.js";
 import { discoverUnity } from "../platform.js";
@@ -206,10 +206,14 @@ export async function startBridgeCommandJob(
 function bridgeSecurity(command: string, flags: BridgeFlags, args?: Record<string, unknown>): Record<string, unknown> | undefined {
   const spec = bridgeCommandRegistry.lookupBridgeCommand(command);
   if (spec?.destructiveHint) return destructiveSecurityProof(flags);
-  // project-tool.run 路由:实际工具在 args.name,按工具 spec 判定破坏性并附加安全凭证
+  // project-tool.run 路由:实际工具在 args.name,按工具 spec 判定破坏性并附加安全凭证。
   if (command === "project-tool.run" && args && typeof args.name === "string") {
     const toolSpec = bridgeCommandRegistry.specs().find((s) => s.toolName === args.name);
     if (toolSpec?.destructiveHint) return destructiveSecurityProof(flags);
+  }
+  // runtime-tool.run 是包装命令；tools run 已按实际 runtime tool 完成确认，这里只负责透传 proof。
+  if (command === "runtime-tool.run" && args && typeof args.name === "string" && isDestructiveConfirmed(flags)) {
+    return destructiveSecurityProof(flags);
   }
   return undefined;
 }

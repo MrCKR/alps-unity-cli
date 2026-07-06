@@ -139,7 +139,7 @@ namespace UnityCli
     }
 
     /// <summary>screenshot 域截图捕获结果 DTO。</summary>
-    public sealed class ScreenshotCaptureResult
+    public class ScreenshotCaptureResult
     {
         public string ScreenshotPath { get; set; }
         public string ArtifactPath { get; set; }

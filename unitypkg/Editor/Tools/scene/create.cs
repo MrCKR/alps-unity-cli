@@ -23,7 +23,7 @@ namespace UnityCli
         {
             public SceneInfo Scene { get; set; }
             public string RequestedPath { get; set; }
-            public List<PlannedEffect> PlannedEffects { get; set; }
+            public List<ScenePlannedEffect> PlannedEffects { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -66,9 +66,9 @@ namespace UnityCli
             {
                 Scene = SceneToolSupport.BuildSceneInfo(SceneManager.GetActiveScene()),
                 RequestedPath = path,
-                PlannedEffects = new List<PlannedEffect>
+                PlannedEffects = new List<ScenePlannedEffect>
                 {
-                    new PlannedEffect { Type = "scene.create", Path = path }
+                    new ScenePlannedEffect { Type = "scene.create", Path = path }
                 }
             };
         }

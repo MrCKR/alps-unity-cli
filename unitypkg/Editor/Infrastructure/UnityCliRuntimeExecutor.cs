@@ -278,6 +278,14 @@ namespace UnityCli
                     "Use tools run <name> without --target runtime for editor-domain tools, or use a tool declared with Target=runtime.");
             }
 
+            // runtime-tool.run 是内部包装命令，破坏性必须按实际 runtime tool descriptor 校验。
+            if (definition.DestructiveHint && !request.DryRun && !request.SecurityConfirmed(DestructiveCommandFingerprint))
+            {
+                return ErrorJson("E_DESTRUCTIVE_CONFIRMATION_REQUIRED",
+                    "Destructive runtime tool requires CLI confirmation and fingerprint proof: " + name,
+                    "Rerun through unity_cli tools run " + name + " with --yes so the request includes destructive security proof.");
+            }
+
             // Fingerprint check
             var fingerprintCheck = RefreshProjectToolFingerprint(definition, request.StringArg("fingerprintMode"));
             if (fingerprintCheck.Blocked)

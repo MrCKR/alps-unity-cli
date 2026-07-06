@@ -96,4 +96,4 @@ unity_cli target alias unset <alias>                  # 删除别名
 
 ## 核心原则
 
-**CLI 绝不猜测目标。** 多个就绪实例时返回 `E_TARGET_AMBIGUOUS`，附带可操作的 `next_actions`。调用者必须显式选择目标。
+**CLI 绝不猜测目标。** 多个就绪实例时返回 `E_TARGET_AMBIGUOUS`，附带可操作的 `nextActions`。调用者必须显式选择目标。

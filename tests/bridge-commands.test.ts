@@ -7,7 +7,7 @@ import test from "node:test";
 import { execute } from "../src/cli.js";
 import { JobRunner } from "../src/job-runner.js";
 import { JobStore } from "../src/job-store.js";
-import { bridgeCommandRegistry, bridgeHttpTimeoutMs, type BridgeRequest } from "../src/bridge/index.js";
+import { bridgeCommandRegistry, bridgeHttpTimeoutMs, executeBridgeCommand, type BridgeRequest } from "../src/bridge/index.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
@@ -858,7 +858,7 @@ test("material bridge errors preserve structured diagnostics", async () => {
 
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "E_MATERIAL_PROPERTY_NOT_FOUND");
-  assert.deepEqual(result.error?.next_actions, ["Run unity_cli tools run material.info --input '{\"path\":\"<path>\"}' to inspect shader properties."]);
+  assert.deepEqual(result.error?.nextActions, ["Run unity_cli tools run material.info --input '{\"path\":\"<path>\"}' to inspect shader properties."]);
 });
 
 test("graphics commands forward settings and screenshot diagnostics", async () => {
@@ -1046,7 +1046,7 @@ test("animation and vfx bridge errors preserve diagnostics", async () => {
     assert.equal(result.ok, false, item.code);
     assert.equal(result.error?.code, item.code, item.code);
     assert.equal(result.error?.message, item.message, item.code);
-    assert.deepEqual(result.error?.next_actions, item.nextActions, item.code);
+    assert.deepEqual(result.error?.nextActions, item.nextActions, item.code);
   }
 });
 
@@ -1131,10 +1131,10 @@ test("shader and texture bridge errors preserve structured diagnostics", async (
 
   assert.equal(shader.ok, false);
   assert.equal(shader.error?.code, "E_SHADER_NOT_FOUND");
-  assert.deepEqual(shader.error?.next_actions, ["Check the path."]);
+  assert.deepEqual(shader.error?.nextActions, ["Check the path."]);
   assert.equal(texture.ok, false);
   assert.equal(texture.error?.code, "E_IMPORT_FAILED");
-  assert.deepEqual(texture.error?.next_actions, ["Check Unity Console."]);
+  assert.deepEqual(texture.error?.nextActions, ["Check Unity Console."]);
 });
 
 test("ui commands forward creation, document and hierarchy arguments", async () => {
@@ -1228,7 +1228,7 @@ test("ui bridge errors preserve structured diagnostics", async () => {
 
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "E_UI_PANEL_SETTINGS_NOT_FOUND");
-  assert.deepEqual(result.error?.next_actions, ["Create a PanelSettings asset in Unity."]);
+  assert.deepEqual(result.error?.nextActions, ["Create a PanelSettings asset in Unity."]);
 });
 
 test("ui target ambiguity diagnostics are preserved for parent, document and hierarchy", async () => {
@@ -1267,7 +1267,7 @@ test("ui target ambiguity diagnostics are preserved for parent, document and hie
       { id: 101, name: "HUD", path: "Canvas/HUD", components: ["RectTransform"] },
       { id: 202, name: "HUD", path: "Overlay/HUD", components: ["UIDocument"] }
     ], item.name);
-    assert.deepEqual(result.error?.next_actions, [item.nextAction], item.name);
+    assert.deepEqual(result.error?.nextActions, [item.nextAction], item.name);
   }
 });
 
@@ -1280,7 +1280,7 @@ test("prefab bridge errors preserve structured diagnostics", async () => {
 
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "E_PREFAB_DIRTY_CONFLICT");
-  assert.deepEqual(result.error?.next_actions, ["Run unity_cli tools run prefab.stage-close --save."]);
+  assert.deepEqual(result.error?.nextActions, ["Run unity_cli tools run prefab.stage-close --save."]);
 });
 
 test("go commands forward structured search and transform inputs", async () => {
@@ -1320,7 +1320,7 @@ test("bridge errors return CLI failure envelope", async () => {
 
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "E_TARGET_AMBIGUOUS");
-  assert.deepEqual(result.error?.next_actions, ["Pass --path or --id."]);
+  assert.deepEqual(result.error?.nextActions, ["Pass --path or --id."]);
 });
 
 test("camera screenshot bridge target and IO errors preserve protocol envelopes", async () => {
@@ -1340,7 +1340,7 @@ test("camera screenshot bridge target and IO errors preserve protocol envelopes"
     assert.equal(result.ok, false, item.name);
     assert.equal(result.error?.code, item.response.code, item.name);
     assert.equal(result.error?.message, item.response.message, item.name);
-    assert.deepEqual(result.error?.next_actions, item.nextActions, item.name);
+    assert.deepEqual(result.error?.nextActions, item.nextActions, item.name);
   }
 });
 
@@ -1395,7 +1395,7 @@ test("editor bridge errors preserve structured diagnostics", async () => {
 
     assert.equal(result.ok, false, item.name);
     assert.equal(result.error?.code, item.response.code, item.name);
-    assert.deepEqual(result.error?.next_actions, item.nextActions, item.name);
+    assert.deepEqual(result.error?.nextActions, item.nextActions, item.name);
   }
 });
 
@@ -1413,6 +1413,23 @@ test("runtime-tool run is blocked from CLI as internal command", async () => {
   assert.equal(result.error?.code, "E_TOOL_NOT_FOUND_FOR_TARGET");
 });
 
+test("runtime-tool run direct bridge command does not require confirmation before reaching bridge", async () => {
+  const runtime = await makeRuntime();
+  const requests: BridgeRequest[] = [];
+  const result = await executeBridgeCommand("req_runtime", "runtime-tool.run", {}, "sample.runtime-echo", {
+    ...runtime,
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: false, error: { code: "E_RUNTIME_NOT_READY", message: "not ready", transient: true, retryAfterMs: 3000 }, nextActions: ["Enter Play Mode first."] };
+    }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_RUNTIME_NOT_READY");
+  assert.equal(requests[0].command, "runtime-tool.run");
+  assert.equal(requests[0].security, undefined);
+});
+
 test("runtime-tool list is registered in bridge command registry as internal", () => {
   const spec = bridgeCommandRegistry.lookup("runtime-tool", "list");
   assert.ok(spec, "runtime-tool list should be registered");
@@ -1424,6 +1441,6 @@ test("runtime-tool run is registered in bridge command registry as internal", ()
   const spec = bridgeCommandRegistry.lookup("runtime-tool", "run");
   assert.ok(spec, "runtime-tool run should be registered");
   assert.equal(spec.bridgeCommand, "runtime-tool.run");
-  assert.equal(spec.destructiveHint, true);
+  assert.equal(spec.destructiveHint, undefined);
   assert.equal(spec.internal, true);
 });

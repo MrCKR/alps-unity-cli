@@ -62,7 +62,7 @@ namespace UnityCli
                     error.Prop("code", code)
                         .Prop("message", message)
                         .Prop("transient", true)
-                        .Prop("retry_after_ms", retryAfterMs)
+                        .Prop("retryAfterMs", retryAfterMs)
                         .PropRaw("details", "{}");
                 })
                 .PropArray("nextActions", array =>

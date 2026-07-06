@@ -35,12 +35,12 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   "availability-differences": {
     title: "Availability Differences",
     summary: "Why different Unity instances return different tool availability: package dependencies, project tool registration, Bridge reachability, PlayMode state, and domain reload timing.",
-    guide: "Always resolve target first. Use `tools group` then `tools group list <group> --include-custom` against the specific instance. After package installs or domain reload, re-discover tools. Handle package-not-found and E_RUNTIME_NOT_READY errors using `next_actions`."
+    guide: "Always resolve target first. Use `tools group` then `tools group list <group> --include-custom` against the specific instance. After package installs or domain reload, re-discover tools. Handle package-not-found and E_RUNTIME_NOT_READY errors using `nextActions`."
   },
   "error-codes": {
-    title: "Error Codes and next_actions",
-    summary: "Structured error taxonomy with machine-readable codes, transient hints, `retry_after_ms`, and `next_actions` for automated recovery. JSON fields are `next_actions` and `retry_after_ms` (snake_case, matching error-code.schema.json). Every error follows the unified response envelope.",
-    guide: "Read `error.code` for the error category. Check `transient` — if true, retry after `retry_after_ms`. Follow `next_actions` for recovery. Never guess; use the suggested commands."
+    title: "Error Codes and nextActions",
+    summary: "Structured error taxonomy with machine-readable codes, transient hints, `retryAfterMs`, and `nextActions` for automated recovery. JSON fields are `nextActions` and `retryAfterMs` (snake_case, matching error-code.schema.json). Every error follows the unified response envelope.",
+    guide: "Read `error.code` for the error category. Check `transient` — if true, retry after `retryAfterMs`. Follow `nextActions` for recovery. Never guess; use the suggested commands."
   },
   "risk-and-side-effects": {
     title: "Risk and Side Effects",

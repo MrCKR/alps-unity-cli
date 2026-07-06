@@ -3,7 +3,7 @@
  * Covers:
  * - Envelope serialization/deserialization (success and error)
  * - Error code taxonomy validation
- * - Transient error detection and retry_after_ms
+ * - Transient error detection and retryAfterMs
  * - Duration tracking
  * - Timeout clamping
  * - Retry mechanism (withRetry)
@@ -90,51 +90,51 @@ describe("failure envelope", () => {
     assert.equal(result.requestId, requestId);
     assert.equal(result.error?.code, "UNKNOWN_COMMAND");
     assert.equal(result.error?.message, "Unknown command: foo");
-    assert.deepEqual(result.error?.next_actions, ["Run unity_cli --help."]);
+    assert.deepEqual(result.error?.nextActions, ["Run unity_cli --help."]);
   });
 
-  it("transient errors are marked with transient=true and retry_after_ms", () => {
+  it("transient errors are marked with transient=true and retryAfterMs", () => {
     const requestId = createRequestId();
     const result = failure(requestId, "E_UNITY_COMPILING", "Unity Editor is compiling scripts.", ["Wait for Unity to finish compiling and retry."]);
     assert.equal(result.ok, false);
     assert.equal(result.error?.transient, true);
-    assert.equal(result.error?.retry_after_ms, 5000);
+    assert.equal(result.error?.retryAfterMs, 5000);
     assert.equal(result.error?.code, "E_UNITY_COMPILING");
   });
 
-  it("E_UNITY_DOMAIN_RELOAD transient error has retry_after_ms=10000", () => {
+  it("E_UNITY_DOMAIN_RELOAD transient error has retryAfterMs=10000", () => {
     const requestId = createRequestId();
     const result = failure(requestId, "E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies.");
     assert.equal(result.error?.transient, true);
-    assert.equal(result.error?.retry_after_ms, 10000);
+    assert.equal(result.error?.retryAfterMs, 10000);
   });
 
-  it("E_UNITY_PLAY_MODE transient error has retry_after_ms=3000", () => {
+  it("E_UNITY_PLAY_MODE transient error has retryAfterMs=3000", () => {
     const requestId = createRequestId();
     const result = failure(requestId, "E_UNITY_PLAY_MODE", "Unity Editor is entering Play mode.");
     assert.equal(result.error?.transient, true);
-    assert.equal(result.error?.retry_after_ms, 3000);
+    assert.equal(result.error?.retryAfterMs, 3000);
   });
 
-  it("E_UNITY_IMPORTING transient error has retry_after_ms=5000", () => {
+  it("E_UNITY_IMPORTING transient error has retryAfterMs=5000", () => {
     const requestId = createRequestId();
     const result = failure(requestId, "E_UNITY_IMPORTING", "Unity Editor is importing assets.");
     assert.equal(result.error?.transient, true);
-    assert.equal(result.error?.retry_after_ms, 5000);
+    assert.equal(result.error?.retryAfterMs, 5000);
   });
 
-  it("E_UNITY_BUSY transient error has retry_after_ms=5000", () => {
+  it("E_UNITY_BUSY transient error has retryAfterMs=5000", () => {
     const requestId = createRequestId();
     const result = failure(requestId, "E_UNITY_BUSY", "Unity Editor is busy.");
     assert.equal(result.error?.transient, true);
-    assert.equal(result.error?.retry_after_ms, 5000);
+    assert.equal(result.error?.retryAfterMs, 5000);
   });
 
-  it("non-transient errors have transient=undefined and no retry_after_ms", () => {
+  it("non-transient errors have transient=undefined and no retryAfterMs", () => {
     const requestId = createRequestId();
     const result = failure(requestId, "UNKNOWN_COMMAND", "Unknown command.");
     assert.equal(result.error?.transient, undefined);
-    assert.equal(result.error?.retry_after_ms, undefined);
+    assert.equal(result.error?.retryAfterMs, undefined);
   });
 
   it("timeout error E_EXECUTION_TIMEOUT is NOT transient", () => {
@@ -283,7 +283,7 @@ describe("envelope serialization round-trip", () => {
     assert.equal(parsed.error?.code, "E_UNITY_COMPILING");
     assert.equal(parsed.error?.message, "Unity is compiling.");
     assert.equal(parsed.error?.transient, true);
-    assert.equal(parsed.error?.retry_after_ms, 5000);
+    assert.equal(parsed.error?.retryAfterMs, 5000);
     assert.equal(parsed.durationMs, 100);
   });
 
@@ -426,13 +426,13 @@ describe("transientRetryInfo", () => {
     assert.equal(info.isTransient, false);
   });
 
-  it("uses retry_after_ms from error if present", () => {
+  it("uses retryAfterMs from error if present", () => {
     const error: CliError = {
       code: "E_UNITY_COMPILING",
       message: "Compiling.",
       requestId: "req_1",
       transient: true,
-      retry_after_ms: 8000,
+      retryAfterMs: 8000,
     };
     const result: CliResult = { ok: false, requestId: "req_1", error };
     const info = transientRetryInfo(result);
@@ -474,17 +474,17 @@ describe("DEFAULT_RETRY_AFTER_MS", () => {
 });
 // ─── Runtime Error Codes ───
 
-describe("E_RUNTIME_NOT_READY is transient with retry_after_ms=3000", () => {
+describe("E_RUNTIME_NOT_READY is transient with retryAfterMs=3000", () => {
   it("E_RUNTIME_NOT_READY is in TRANSIENT_ERROR_CODES", () => {
     assert.ok(TRANSIENT_ERROR_CODES.has(ERROR_CODES.E_RUNTIME_NOT_READY), "E_RUNTIME_NOT_READY should be transient");
   });
 
-  it("E_RUNTIME_NOT_READY failure envelope has transient=true and retry_after_ms=3000", () => {
+  it("E_RUNTIME_NOT_READY failure envelope has transient=true and retryAfterMs=3000", () => {
     const requestId = createRequestId();
     const result = failure(requestId, "E_RUNTIME_NOT_READY", "Runtime is not ready (Play Mode not active).", ["Wait for Play Mode to become active and retry."]);
     assert.equal(result.ok, false);
     assert.equal(result.error?.transient, true);
-    assert.equal(result.error?.retry_after_ms, 3000);
+    assert.equal(result.error?.retryAfterMs, 3000);
     assert.equal(result.error?.code, "E_RUNTIME_NOT_READY");
   });
 
@@ -516,7 +516,7 @@ describe("E_RUNTIME_TIMEOUT is non-transient", () => {
     const result = failure(requestId, "E_RUNTIME_TIMEOUT", "Runtime tool execution timed out.", ["Increase --timeout-ms or check runtime session state."]);
     assert.equal(result.ok, false);
     assert.equal(result.error?.transient, undefined);
-    assert.equal(result.error?.retry_after_ms, undefined);
+    assert.equal(result.error?.retryAfterMs, undefined);
     assert.equal(result.error?.code, "E_RUNTIME_TIMEOUT");
   });
 
@@ -542,7 +542,7 @@ describe("E_RUNTIME_TOOL_TARGET_MISMATCH is non-transient", () => {
     const result = failure(requestId, "E_RUNTIME_TOOL_TARGET_MISMATCH", "Tool target mismatch: runtime tool called with editor target.", ["Use --runtime flag or ensure the tool's target matches the execution context."]);
     assert.equal(result.ok, false);
     assert.equal(result.error?.transient, undefined);
-    assert.equal(result.error?.retry_after_ms, undefined);
+    assert.equal(result.error?.retryAfterMs, undefined);
     assert.equal(result.error?.code, "E_RUNTIME_TOOL_TARGET_MISMATCH");
   });
 

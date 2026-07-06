@@ -130,7 +130,7 @@ test("Context availability-sensitive handlers return available=false with diagno
   // renderer-features, rendering-stats, tests.list should have available=false fallback
   assert.match(source, /Prop\("available", false\)/, "Availability-sensitive contexts must return available=false when unavailable");
   assert.match(source, /Prop\("diagnostics",/, "Availability-sensitive contexts must include diagnostics");
-  assert.match(source, /PropArray\("next_actions"/, "Availability-sensitive contexts must include next_actions");
+  assert.match(source, /PropArray\("nextActions"/, "Availability-sensitive contexts must include nextActions");
 });
 
 test("tools and tests Context handlers expose stable count fields", async () => {

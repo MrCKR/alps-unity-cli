@@ -232,14 +232,14 @@ const SCENE_VOLUMES: ContextMetadata = {
 
 const SCENE_RENDERER_FEATURES: ContextMetadata = {
   name: "scene.renderer-features",
-  description: "Read URP renderer feature availability and configured feature names for the active/default render pipeline. If URP or a pipeline asset is unavailable, returns available=false with diagnostics and next_actions.",
+  description: "Read URP renderer feature availability and configured feature names for the active/default render pipeline. If URP or a pipeline asset is unavailable, returns available=false with diagnostics and nextActions.",
   source: "built-in",
   category: "scene",
   inputSchema: {},
   refreshBehavior: "static",
   target: "editor",
   availabilityScope: "editorSession",
-  outputSchema: { type: "object", properties: { available: { type: "boolean" }, renderer: { type: "string" }, features: { type: "array", items: { type: "string" } }, count: { type: "integer" }, diagnostics: { type: "string" }, next_actions: { type: "array", items: { type: "string" } } } },
+  outputSchema: { type: "object", properties: { available: { type: "boolean" }, renderer: { type: "string" }, features: { type: "array", items: { type: "string" } }, count: { type: "integer" }, diagnostics: { type: "string" }, nextActions: { type: "array", items: { type: "string" } } } },
   requiresPackages: ["com.unity.render-pipelines.universal"],
   handler: "bridge",
   cliCommand: "context read scene.renderer-features"
@@ -247,14 +247,14 @@ const SCENE_RENDERER_FEATURES: ContextMetadata = {
 
 const SCENE_RENDERING_STATS: ContextMetadata = {
   name: "scene.rendering-stats",
-  description: "Read current rendering statistics from UnityStats when available. If Unity's internal stats API is unavailable, returns available=false with diagnostics and next_actions.",
+  description: "Read current rendering statistics from UnityStats when available. If Unity's internal stats API is unavailable, returns available=false with diagnostics and nextActions.",
   source: "built-in",
   category: "scene",
   inputSchema: {},
   refreshBehavior: "live",
   target: "editor",
   availabilityScope: "editorSession",
-  outputSchema: { type: "object", properties: { available: { type: "boolean" }, stats: { type: "object", properties: { batches: { type: "string" }, triangles: { type: "string" }, vertices: { type: "string" }, screenResolution: { type: "string" } } }, diagnostics: { type: "string" }, next_actions: { type: "array", items: { type: "string" } } } },
+  outputSchema: { type: "object", properties: { available: { type: "boolean" }, stats: { type: "object", properties: { batches: { type: "string" }, triangles: { type: "string" }, vertices: { type: "string" }, screenResolution: { type: "string" } } }, diagnostics: { type: "string" }, nextActions: { type: "array", items: { type: "string" } } } },
   handler: "bridge",
   cliCommand: "context read scene.rendering-stats"
 };

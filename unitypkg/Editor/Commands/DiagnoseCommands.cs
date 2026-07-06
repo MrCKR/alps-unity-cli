@@ -141,7 +141,7 @@ namespace UnityCli
             w.Prop("compiling", compiling);
             w.Prop("hasCompileErrors", hasCompileErrors);
             w.PropArray("compileErrors", arr => { foreach (var e in errors) arr.Value(e); });
-            w.PropArray("next_actions", arr =>
+            w.PropArray("nextActions", arr =>
             {
                 if (hasCompileErrors) arr.Value("Review the listed compile errors (often from a broken extension under Packages/com.unity_cli/Extensions). Fix or remove the offending extension, then let Unity recompile.");
                 if (compiling) arr.Value("Wait for Unity to finish compiling, then re-run doctor.");

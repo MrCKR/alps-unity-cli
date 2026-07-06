@@ -122,7 +122,7 @@ namespace UnityCli
                 Diagnostics = GraphicsToolSupport.BuildGraphicsSummary(), QualitySettings = GraphicsToolSupport.BuildQualitySettings(),
                 Screenshot = new ScreenshotData { ScreenshotPath = capture.ScreenshotPath, ArtifactPath = capture.ArtifactPath, Format = capture.Format, Width = capture.Width, Height = capture.Height },
                 ScreenshotPath = capture.ScreenshotPath, ArtifactPath = capture.ArtifactPath,
-                PlannedEffects = new List<GraphicsPlannedEffect> { new GraphicsPlannedEffect { Type = "graphics.screenshot", Property = "path", Value = capture.Path } }
+                PlannedEffects = new List<GraphicsPlannedEffect> { new GraphicsPlannedEffect { Type = "graphics.screenshot", Property = "path", Value = capture.ArtifactPath } }
             };
         }
     }

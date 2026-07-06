@@ -51,7 +51,7 @@ namespace UnityCli
     public class ProfilerClearTool : IUnityCliTool<ProfilerClearTool.Request, ProfilerClearTool.Result>
     {
         public sealed class Request { public bool DryRun { get; set; } }
-        public sealed class Result { public string Command { get; set; } public bool DryRun { get; set; } public bool Cleared { get; set; } public List<PlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public string Command { get; set; } public bool DryRun { get; set; } public bool Cleared { get; set; } public List<ProfilerPlannedEffect> PlannedEffects { get; set; } }
 
         public ToolDescriptor Describe() => new()
         {
@@ -65,11 +65,11 @@ namespace UnityCli
         public Result Execute(Request request, UnityCliProjectToolContext ctx)
         {
             if (request.DryRun)
-                return new Result { Command = "profiler.clear", DryRun = true, PlannedEffects = new List<PlannedEffect> { new PlannedEffect { Type = "profiler.clear", SideEffects = "clears-profiler-data" } } };
+                return new Result { Command = "profiler.clear", DryRun = true, PlannedEffects = new List<ProfilerPlannedEffect> { new ProfilerPlannedEffect { Type = "profiler.clear", SideEffects = "clears-profiler-data" } } };
             // 反射调用 ProfilerDriver.Clear()
             var clearMethod = FindType("UnityEditorInternal.ProfilerDriver")?.GetMethod("Clear", BindingFlags.Static | BindingFlags.Public);
             try { clearMethod?.Invoke(null, null); } catch { }
-            return new Result { Command = "profiler.clear", Cleared = true, PlannedEffects = new List<PlannedEffect> { new PlannedEffect { Type = "profiler.clear" } } };
+            return new Result { Command = "profiler.clear", Cleared = true, PlannedEffects = new List<ProfilerPlannedEffect> { new ProfilerPlannedEffect { Type = "profiler.clear" } } };
         }
 
         private static Type FindType(string fullName)
@@ -87,7 +87,7 @@ namespace UnityCli
     public class ProfilerLoadTool : IUnityCliTool<ProfilerLoadTool.Request, ProfilerLoadTool.Result>
     {
         public sealed class Request { [UnityCliRequired] public string Path { get; set; } }
-        public sealed class Result { public string Command { get; set; } public string Path { get; set; } public bool Loaded { get; set; } public List<PlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public string Command { get; set; } public string Path { get; set; } public bool Loaded { get; set; } public List<ProfilerPlannedEffect> PlannedEffects { get; set; } }
 
         public ToolDescriptor Describe() => new()
         {
@@ -108,7 +108,7 @@ namespace UnityCli
             var driverType = FindType("UnityEditorInternal.ProfilerDriver");
             var loadMethod = driverType?.GetMethod("LoadProfile", new Type[] { typeof(string), typeof(bool) });
             try { loadMethod?.Invoke(null, new object[] { resolvedPath, false }); } catch { }
-            return new Result { Command = "profiler.load", Path = resolvedPath, Loaded = true, PlannedEffects = new List<PlannedEffect> { new PlannedEffect { Type = "profiler.load", Path = resolvedPath } } };
+            return new Result { Command = "profiler.load", Path = resolvedPath, Loaded = true, PlannedEffects = new List<ProfilerPlannedEffect> { new ProfilerPlannedEffect { Type = "profiler.load", Path = resolvedPath } } };
         }
 
         private static Type FindType(string fullName)
@@ -162,7 +162,7 @@ namespace UnityCli
     public class ProfilerExportTool : IUnityCliTool<ProfilerExportTool.Request, ProfilerExportTool.Result>
     {
         public sealed class Request { [UnityCliRequired] public string Path { get; set; } public string Format { get; set; } public bool Overwrite { get; set; } public string CaptureTag { get; set; } }
-        public sealed class Result { public string ArtifactPath { get; set; } public string ProfilerPath { get; set; } public string Format { get; set; } public long DurationMs { get; set; } public long Frames { get; set; } public long StartFrame { get; set; } public long EndFrame { get; set; } public string CaptureTag { get; set; } public string MetadataSidecar { get; set; } public ProfilerState Profiler { get; set; } public List<PlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public string ArtifactPath { get; set; } public string ProfilerPath { get; set; } public string Format { get; set; } public long DurationMs { get; set; } public long Frames { get; set; } public long StartFrame { get; set; } public long EndFrame { get; set; } public string CaptureTag { get; set; } public string MetadataSidecar { get; set; } public ProfilerState Profiler { get; set; } public List<ProfilerPlannedEffect> PlannedEffects { get; set; } }
 
         public ToolDescriptor Describe() => new()
         {
@@ -204,7 +204,7 @@ namespace UnityCli
                 Frames = 1, StartFrame = startFrame, EndFrame = endFrame, CaptureTag = captureTag,
                 MetadataSidecar = string.IsNullOrEmpty(captureTag) ? null : outputPath + ".metadata.json",
                 Profiler = ProfilerToolSupport.BuildProfilerState(),
-                PlannedEffects = new List<PlannedEffect> { new PlannedEffect { Type = "profiler.export", Path = outputPath } }
+                PlannedEffects = new List<ProfilerPlannedEffect> { new ProfilerPlannedEffect { Type = "profiler.export", Path = outputPath } }
             };
         }
 

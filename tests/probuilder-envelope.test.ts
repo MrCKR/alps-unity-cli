@@ -95,7 +95,7 @@ test("runtime-tool.run catches BridgeCommandException and converts to error enve
 // ─── 统一错误 envelope 辅助方法 ─────────────────────────────────────────
 
 test("BridgeExceptionErrorJson transparently forwards details and multiple nextActions", () => {
-  // 富错误信息（details、多个 next_actions）必须透传到错误 envelope，
+  // 富错误信息（details、多个 nextActions）必须透传到错误 envelope，
   // 而不是只保留单个 nextAction（会丢失 ProBuilder 的结构化 details）。
   assert.match(
     JSON_INFRA,
@@ -124,10 +124,10 @@ test("BridgeCommandException is internal so project-local handlers can throw it"
     /internal sealed class BridgeCommandException/,
     "BridgeCommandException must be internal (not private) for cross-namespace handlers"
   );
-  // 富错误字段必须存在，供 handler 表达 details 与多个 next_actions。
+  // 富错误字段必须存在，供 handler 表达 details 与多个 nextActions。
   assert.match(EXCEPTION, /public string DetailsJson/, "must expose DetailsJson field");
   assert.match(EXCEPTION, /public IReadOnlyList<string> NextActions/, "must expose NextActions field");
-  // 新构造重载：支持 details + 多个 next_actions。
+  // 新构造重载：支持 details + 多个 nextActions。
   assert.match(
     EXCEPTION,
     /IEnumerable<string> nextActions, bool transient = false, int retryAfterMs = 0\)/,
@@ -163,7 +163,7 @@ test("ProBuilderErrors no longer wraps success results in a double envelope", ()
 });
 
 test("ProBuilderErrors forwards structured details and nextActions via exception fields", () => {
-  // details（如 target / operation / reason / packageName）与多个 next_actions
+  // details（如 target / operation / reason / packageName）与多个 nextActions
   // 通过新构造重载透传，保证 AI 拿到可机器解析的错误细节。
   assert.match(PB_ERRORS, /E_TARGET_NOT_FOUND[\s\S]*?details[\s\S]*?new\[\]/, "TargetNotFound must attach details + nextActions");
   assert.match(PB_ERRORS, /E_PROBUILDER_OPERATION_FAILED[\s\S]*?details[\s\S]*?new\[\]/, "OperationFailed must attach details + nextActions");

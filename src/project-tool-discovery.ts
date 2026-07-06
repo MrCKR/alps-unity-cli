@@ -1,6 +1,6 @@
 import { getBoolean, getString } from "./args.js";
 import { executeBridgeCommand, type BridgeRuntime } from "./bridge/index.js";
-import { inferPlayModeSupport, normalizeToolMetadata, type PlayModeSupport, type ResolvedToolMetadata, type ToolMetadata } from "./tools/metadata/index.js";
+import { inferPlayModeSupport, normalizeToolMetadata, type PlayModeSupport, type ResolvedToolMetadata, type ToolHandler, type ToolMetadata, type ToolSupportStatus } from "./tools/metadata/index.js";
 import type { CliResult } from "./types.js";
 
 export interface ProjectToolRuntime extends Partial<BridgeRuntime> {
@@ -73,17 +73,23 @@ export function projectDescriptorToToolMetadata(value: unknown): ResolvedToolMet
     playModeSupport: playModeSupportProp(descriptor, "playModeSupport"),
     timeoutMs: numberProp(descriptor, "defaultTimeoutMs") ?? numberProp(descriptor, "timeoutMs"),
     permissions: stringArrayProp(descriptor, "permissions"),
-    handler: "bridge",
+    handler: toolHandlerProp(descriptor, "handler"),
+    supportStatus: toolSupportStatusProp(descriptor, "supportStatus"),
     target,
     available: booleanProp(descriptor, "available") ?? undefined
   });
 }
 
 function ensureProjectToolDefaults(tool: ToolMetadata): ResolvedToolMetadata {
+  const target = tool.target ?? "editor";
+  // target=runtime 是公开契约不变量；即使旧桥返回 bridge/live-bridge，也必须按 runtime 路由归一化。
+  const handler = target === "runtime" ? "bridge-runtime" : tool.handler ?? "bridge";
+  const supportStatus = target === "runtime" ? "live-bridge-runtime" : tool.supportStatus;
   return normalizeToolMetadata({
     ...tool,
-    handler: tool.handler ?? (tool.target === "runtime" ? "bridge-runtime" : "bridge"),
-    target: tool.target ?? "editor",
+    handler,
+    supportStatus,
+    target,
     playModeSupport: tool.playModeSupport ?? inferPlayModeSupport(tool)
   }, "project");
 }
@@ -109,6 +115,18 @@ function numberProp(record: Record<string, unknown>, key: string): number | unde
 function playModeSupportProp(record: Record<string, unknown>, key: string): PlayModeSupport | undefined {
   const value = record[key];
   return value === "supported" || value === "runtime-only" || value === "session-affecting" || value === "editor-only" || value === "unknown" ? value : undefined;
+}
+
+/** 读取 Unity descriptor 已给出的执行路由，避免 runtime 工具被误归类为普通 bridge。 */
+function toolHandlerProp(record: Record<string, unknown>, key: string): ToolHandler | undefined {
+  const value = record[key];
+  return value === "bridge" || value === "bridge-runtime" || value === "job" || value === "offline" || value === "hybrid" ? value : undefined;
+}
+
+/** 读取 Unity descriptor 已给出的支持状态，保持 describe/group list 与 runtime discovery 一致。 */
+function toolSupportStatusProp(record: Record<string, unknown>, key: string): ToolSupportStatus | undefined {
+  const value = record[key];
+  return value === "live-bridge" || value === "live-bridge-runtime" || value === "bridge-job" || value === "batch-job" || value === "cli-only" || value === "planned" ? value : undefined;
 }
 
 function objectProp(record: Record<string, unknown>, key: string): Record<string, unknown> | undefined {

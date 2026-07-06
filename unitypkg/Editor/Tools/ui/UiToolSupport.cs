@@ -97,7 +97,7 @@ namespace UnityCli
 
     public sealed class UiElementRef { public long Id { get; set; } public string Name { get; set; } public string Path { get; set; } public string Kind { get; set; } }
     public sealed class UiDocumentAssetInfo { public string Path { get; set; } public string Name { get; set; } public bool Exists { get; set; } public string VisualTreeName { get; set; } public string StyleSheetName { get; set; } }
-    public sealed class UiDocumentLiveInfo { public string VisualTreeAsset { get; set; } public string PanelSettings { get; set; } public long SortingOrder { get; set; } }
+    public sealed class UiDocumentLiveInfo { public string VisualTreeAsset { get; set; } public string PanelSettings { get; set; } public double SortingOrder { get; set; } }
     public sealed class UiPlannedEffect { public string Type { get; set; } public string Target { get; set; } public string Path { get; set; } public string Uxml { get; set; } public string Uss { get; set; } }
     public sealed class UiHierarchyItem { public string Name { get; set; } public string Path { get; set; } public string Type { get; set; } public long ChildCount { get; set; } }
 }

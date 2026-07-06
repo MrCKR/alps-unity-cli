@@ -463,7 +463,7 @@ const SCENE_VOLUMES: ContextDescriptor = {
 
 const SCENE_RENDERER_FEATURES: ContextDescriptor = {
   name: "scene.renderer-features",
-  description: "Read URP renderer feature availability and configured feature names for the active/default render pipeline. If URP or a pipeline asset is unavailable, returns available=false with diagnostics and next_actions.",
+  description: "Read URP renderer feature availability and configured feature names for the active/default render pipeline. If URP or a pipeline asset is unavailable, returns available=false with diagnostics and nextActions.",
   category: "scene",
   cliCommand: "context read scene.renderer-features",
   inputSchema: { type: "object", properties: {} },
@@ -475,7 +475,7 @@ const SCENE_RENDERER_FEATURES: ContextDescriptor = {
       features: { type: "array", items: { type: "string" }, description: "List of renderer feature or renderer data names." },
       count: { type: "integer", description: "Number of returned feature entries." },
       diagnostics: { type: "string", description: "Unavailable reason when available=false." },
-      next_actions: { type: "array", items: { type: "string" }, description: "Suggested recovery actions when unavailable." }
+      nextActions: { type: "array", items: { type: "string" }, description: "Suggested recovery actions when unavailable." }
     },
     required: ["available", "features"]
   },
@@ -484,7 +484,7 @@ const SCENE_RENDERER_FEATURES: ContextDescriptor = {
 
 const SCENE_RENDERING_STATS: ContextDescriptor = {
   name: "scene.rendering-stats",
-  description: "Read current rendering statistics from UnityStats when available. If Unity's internal stats API is unavailable, returns available=false with diagnostics and next_actions.",
+  description: "Read current rendering statistics from UnityStats when available. If Unity's internal stats API is unavailable, returns available=false with diagnostics and nextActions.",
   category: "scene",
   cliCommand: "context read scene.rendering-stats",
   inputSchema: { type: "object", properties: {} },
@@ -494,7 +494,7 @@ const SCENE_RENDERING_STATS: ContextDescriptor = {
       available: { type: "boolean", description: "Whether UnityStats was available." },
       stats: { type: "object", properties: { batches: { type: "string" }, triangles: { type: "string" }, vertices: { type: "string" }, screenResolution: { type: "string" } }, description: "Rendering stats strings from UnityStats." },
       diagnostics: { type: "string", description: "Unavailable reason when available=false." },
-      next_actions: { type: "array", items: { type: "string" }, description: "Suggested recovery actions when unavailable." }
+      nextActions: { type: "array", items: { type: "string" }, description: "Suggested recovery actions when unavailable." }
     },
     required: ["available"]
   },
@@ -611,7 +611,7 @@ const TESTS_LIST: ContextDescriptor = {
       count: { type: "integer", description: "Number of returned tests." },
       pageInfo: { type: "object", description: "Pagination metadata when available." },
       diagnostics: { type: "string", description: "Availability or enumeration diagnostics." },
-      next_actions: { type: "array", items: { type: "string" }, description: "Suggested actions when unavailable." }
+      nextActions: { type: "array", items: { type: "string" }, description: "Suggested actions when unavailable." }
     },
     required: ["available", "tests", "count"]
   },

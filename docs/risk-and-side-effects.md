@@ -50,7 +50,7 @@ The `reflection.method.call` tool is classified `riskLevel: critical`. It perfor
 
 1. **Call with `--dry-run`** (if `supportsDryRun: true`) — preview effects without execution.
 2. **Call with `--yes`** — execute the command with explicit confirmation.
-3. **Without `--yes` or `--dry-run`** — the CLI returns `E_DESTRUCTIVE_CONFIRMATION_REQUIRED` with `next_actions` suggesting how to proceed.
+3. **Without `--yes` or `--dry-run`** — the CLI returns `E_DESTRUCTIVE_CONFIRMATION_REQUIRED` with `nextActions` suggesting how to proceed.
 
 In a TTY environment, the CLI also offers an interactive confirmation prompt. In non-TTY or CI environments, only `--yes` or `--dry-run` bypass the gate.
 

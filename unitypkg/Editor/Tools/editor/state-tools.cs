@@ -17,49 +17,49 @@ namespace UnityCli
     }
 
     /// <summary>editor.play — 进入 Play Mode。</summary>
-    public class EditorPlayTool : IUnityCliTool<EditorPlayTool.Request, EditorPlayTool.Result>
+    public class EditorPlayTool : IUnityCliTool<EditorPlayTool.Request, EditorPlayTool.Response>
     {
         public sealed class Request { public int? TimeoutMs { get; set; } }
-        public sealed class Result { public PlayModeResult Result { get; set; } public EditorStateInfo State { get; set; } public List<EditorPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Response { public PlayModeResult Result { get; set; } public EditorStateInfo State { get; set; } public List<EditorPlannedEffect> PlannedEffects { get; set; } }
         public ToolDescriptor Describe() => new() { Name = "editor.play", Summary = "Enter Unity Play Mode.", Description = "Set EditorApplication.isPlaying=true. Returns immediately; poll editor.state to confirm.", Group = "editor", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "session-affecting" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Enter play mode", Input = new Request { } } } };
-        public Result Execute(Request r, UnityCliProjectToolContext ctx)
+        public Response Execute(Request r, UnityCliProjectToolContext ctx)
         {
             EditorToolSupport.EnsureEditorNotBusy("editor.play");
             var before = EditorApplication.isPlaying;
             EditorApplication.isPaused = false;
             EditorApplication.isPlaying = true;
-            return new Result { Result = new PlayModeResult { Requested = "play", Changed = before != EditorApplication.isPlaying, IsPlaying = EditorApplication.isPlaying, IsPaused = EditorApplication.isPaused }, State = EditorToolSupport.BuildEditorState(), PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "editor.play" } } };
+            return new Response { Result = new PlayModeResult { Requested = "play", Changed = before != EditorApplication.isPlaying, IsPlaying = EditorApplication.isPlaying, IsPaused = EditorApplication.isPaused }, State = EditorToolSupport.BuildEditorState(), PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "editor.play" } } };
         }
     }
 
     /// <summary>editor.pause — 切换暂停状态。</summary>
-    public class EditorPauseTool : IUnityCliTool<EditorPauseTool.Request, EditorPauseTool.Result>
+    public class EditorPauseTool : IUnityCliTool<EditorPauseTool.Request, EditorPauseTool.Response>
     {
         public sealed class Request { public int? TimeoutMs { get; set; } }
-        public sealed class Result { public PlayModeResult Result { get; set; } public EditorStateInfo State { get; set; } public List<EditorPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Response { public PlayModeResult Result { get; set; } public EditorStateInfo State { get; set; } public List<EditorPlannedEffect> PlannedEffects { get; set; } }
         public ToolDescriptor Describe() => new() { Name = "editor.pause", Summary = "Toggle Play Mode pause state.", Description = "Toggle EditorApplication.isPaused.", Group = "editor", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "session-affecting" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Toggle pause", Input = new Request { } } } };
-        public Result Execute(Request r, UnityCliProjectToolContext ctx)
+        public Response Execute(Request r, UnityCliProjectToolContext ctx)
         {
             EditorToolSupport.EnsureEditorNotBusy("editor.pause");
             var before = EditorApplication.isPaused;
             EditorApplication.isPaused = !EditorApplication.isPaused;
-            return new Result { Result = new PlayModeResult { Requested = "pause", Changed = before != EditorApplication.isPaused, IsPlaying = EditorApplication.isPlaying, IsPaused = EditorApplication.isPaused }, State = EditorToolSupport.BuildEditorState(), PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "editor.pause" } } };
+            return new Response { Result = new PlayModeResult { Requested = "pause", Changed = before != EditorApplication.isPaused, IsPlaying = EditorApplication.isPlaying, IsPaused = EditorApplication.isPaused }, State = EditorToolSupport.BuildEditorState(), PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "editor.pause" } } };
         }
     }
 
     /// <summary>editor.stop — 退出 Play Mode。</summary>
-    public class EditorStopTool : IUnityCliTool<EditorStopTool.Request, EditorStopTool.Result>
+    public class EditorStopTool : IUnityCliTool<EditorStopTool.Request, EditorStopTool.Response>
     {
         public sealed class Request { public int? TimeoutMs { get; set; } }
-        public sealed class Result { public PlayModeResult Result { get; set; } public EditorStateInfo State { get; set; } public List<EditorPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Response { public PlayModeResult Result { get; set; } public EditorStateInfo State { get; set; } public List<EditorPlannedEffect> PlannedEffects { get; set; } }
         public ToolDescriptor Describe() => new() { Name = "editor.stop", Summary = "Exit Unity Play Mode.", Description = "Set EditorApplication.isPlaying=false. Returns immediately; poll editor.state to confirm.", Group = "editor", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "session-affecting" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Exit play mode", Input = new Request { } } } };
-        public Result Execute(Request r, UnityCliProjectToolContext ctx)
+        public Response Execute(Request r, UnityCliProjectToolContext ctx)
         {
             EditorToolSupport.EnsureEditorNotBusy("editor.stop");
             var before = EditorApplication.isPlaying;
             EditorApplication.isPaused = false;
             EditorApplication.isPlaying = false;
-            return new Result { Result = new PlayModeResult { Requested = "stop", Changed = before != EditorApplication.isPlaying, IsPlaying = EditorApplication.isPlaying, IsPaused = EditorApplication.isPaused }, State = EditorToolSupport.BuildEditorState(), PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "editor.stop" } } };
+            return new Response { Result = new PlayModeResult { Requested = "stop", Changed = before != EditorApplication.isPlaying, IsPlaying = EditorApplication.isPlaying, IsPaused = EditorApplication.isPaused }, State = EditorToolSupport.BuildEditorState(), PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "editor.stop" } } };
         }
     }
 

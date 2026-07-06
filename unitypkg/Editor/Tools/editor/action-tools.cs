@@ -4,17 +4,18 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
 using UnityEditor;
+using UnityEditor.Compilation;
 using UnityEngine;
 
 namespace UnityCli
 {
     /// <summary>editor.menu — 执行 Unity Editor 菜单项。</summary>
-    public class EditorMenuTool : IUnityCliTool<EditorMenuTool.Request, EditorMenuTool.Result>
+    public class EditorMenuTool : IUnityCliTool<EditorMenuTool.Request, EditorMenuTool.Response>
     {
         public sealed class Request { public string Path { get; set; } public int? TimeoutMs { get; set; } }
-        public sealed class Result { public MenuResult Result { get; set; } public EditorStateInfo State { get; set; } public List<EditorPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Response { public MenuResult Result { get; set; } public EditorStateInfo State { get; set; } public List<EditorPlannedEffect> PlannedEffects { get; set; } }
         public ToolDescriptor Describe() => new() { Name = "editor.menu", Summary = "Execute a Unity Editor menu item by path.", Description = "Call EditorApplication.ExecuteMenuItem(path). Pass exact menu path like File/Save.", Group = "editor", Version = "1.0.0", DestructiveHint = false, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Save scene", Input = new Request { Path = "File/Save" } } } };
-        public Result Execute(Request r, UnityCliProjectToolContext ctx)
+        public Response Execute(Request r, UnityCliProjectToolContext ctx)
         {
             EditorToolSupport.EnsureEditorNotBusy("editor.menu");
             if (string.IsNullOrWhiteSpace(r.Path)) throw new UnityCliBridge.BridgeCommandException("E_SCHEMA_INVALID", "Editor menu path is required.", "Pass an exact Unity menu path like File/Save.");
@@ -22,7 +23,7 @@ namespace UnityCli
             var executed = EditorApplication.ExecuteMenuItem(r.Path);
             if (!executed) throw new UnityCliBridge.BridgeCommandException("E_MENU_NOT_FOUND", "Unity menu item was not found or could not be executed.", "Use the exact Unity Editor menu path.");
             var elapsedMs = (long)Math.Round((DateTime.UtcNow - startedAt).TotalMilliseconds);
-            return new Result { Result = new MenuResult { Path = r.Path, Executed = true, ElapsedMs = elapsedMs }, State = EditorToolSupport.BuildEditorState(), PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "editor.menu", Path = r.Path } } };
+            return new Response { Result = new MenuResult { Path = r.Path, Executed = true, ElapsedMs = elapsedMs }, State = EditorToolSupport.BuildEditorState(), PlannedEffects = new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "editor.menu", Path = r.Path } } };
         }
     }
 
@@ -137,16 +138,16 @@ namespace UnityCli
     }
 
     /// <summary>project.tag — 添加/移除 Unity Tag。</summary>
-    public class ProjectTagTool : IUnityCliTool<ProjectTagTool.Request, ProjectTagTool.Result>
+    public class ProjectTagTool : IUnityCliTool<ProjectTagTool.Request, ProjectTagTool.Response>
     {
         public sealed class Request { public string Action { get; set; } public string Name { get; set; } }
-        public sealed class Result { public TagLayerResult Result { get; set; } public List<EditorPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Response { public TagLayerResult Result { get; set; } public List<EditorPlannedEffect> PlannedEffects { get; set; } }
         public ToolDescriptor Describe() => new() { Name = "project.tag", Summary = "Add or remove a Unity project tag.", Description = "Modify ProjectSettings/TagManager.asset tags. action=add (default) or remove.", Group = "project", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "settings-write" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Add tag", Input = new Request { Action = "add", Name = "Enemy" } } } };
-        public Result Execute(Request r, UnityCliProjectToolContext ctx)
+        public Response Execute(Request r, UnityCliProjectToolContext ctx)
         {
             EditorToolSupport.EnsureEditorNotBusy("project.tag");
             var (changed, _) = ApplyTagLayerChange(false, r.Action ?? "add", r.Name, null);
-            return new Result { Result = new TagLayerResult { Action = r.Action ?? "add", Name = r.Name, Changed = changed }, PlannedEffects = changed ? new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "project.tag", Action = r.Action, Name = r.Name } } : new List<EditorPlannedEffect>() };
+            return new Response { Result = new TagLayerResult { Action = r.Action ?? "add", Name = r.Name, Changed = changed }, PlannedEffects = changed ? new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "project.tag", Action = r.Action, Name = r.Name } } : new List<EditorPlannedEffect>() };
         }
         internal static (bool, int) ApplyTagLayerChange(bool layer, string action, string name, int? index)
         {
@@ -181,16 +182,16 @@ namespace UnityCli
     }
 
     /// <summary>project.layer — 添加/移除 Unity Layer。</summary>
-    public class ProjectLayerTool : IUnityCliTool<ProjectLayerTool.Request, ProjectLayerTool.Result>
+    public class ProjectLayerTool : IUnityCliTool<ProjectLayerTool.Request, ProjectLayerTool.Response>
     {
         public sealed class Request { public string Action { get; set; } public string Name { get; set; } public int? Index { get; set; } }
-        public sealed class Result { public TagLayerResult Result { get; set; } public long? LayerIndex { get; set; } public List<EditorPlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Response { public TagLayerResult Result { get; set; } public long? LayerIndex { get; set; } public List<EditorPlannedEffect> PlannedEffects { get; set; } }
         public ToolDescriptor Describe() => new() { Name = "project.layer", Summary = "Add or remove a Unity project user layer.", Description = "Modify ProjectSettings/TagManager.asset layers (index 8-31). action=add (default) or remove.", Group = "project", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "settings-write" }, Target = "editor", PlayModeSupport = "supported", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000, Examples = new[] { new ToolExample { Description = "Add layer", Input = new Request { Action = "add", Name = "Water" } } } };
-        public Result Execute(Request r, UnityCliProjectToolContext ctx)
+        public Response Execute(Request r, UnityCliProjectToolContext ctx)
         {
             EditorToolSupport.EnsureEditorNotBusy("project.layer");
             var (changed, index) = ProjectTagTool.ApplyTagLayerChange(true, r.Action ?? "add", r.Name, r.Index);
-            return new Result { Result = new TagLayerResult { Action = r.Action ?? "add", Name = r.Name, Changed = changed }, LayerIndex = index >= 0 ? index : (long?)null, PlannedEffects = changed ? new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "project.layer", Action = r.Action, Name = r.Name } } : new List<EditorPlannedEffect>() };
+            return new Response { Result = new TagLayerResult { Action = r.Action ?? "add", Name = r.Name, Changed = changed }, LayerIndex = index >= 0 ? index : (long?)null, PlannedEffects = changed ? new List<EditorPlannedEffect> { new EditorPlannedEffect { Type = "project.layer", Action = r.Action, Name = r.Name } } : new List<EditorPlannedEffect>() };
         }
     }
 

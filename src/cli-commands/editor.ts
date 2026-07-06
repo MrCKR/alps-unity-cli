@@ -1,5 +1,5 @@
 import { getBoolean, getNumber, getString } from "../args.js";
-import { executeBridgePayload } from "../bridge/index.js";
+import { bridgeCommandRegistry, executeBridgePayload } from "../bridge/index.js";
 import { dismissUnityLaunchDialog, DISMISS_BUTTON_LABEL, LAUNCH_DIALOG_TITLE_FRAGMENTS } from "../launch-dialog-dismiss.js";
 import { durationMsFrom, failure, success } from "../output.js";
 import type { CliResult } from "../types.js";
@@ -112,11 +112,11 @@ async function handleCompileDiagnostics(flags: Record<string, string | boolean>,
     return compileDiagnosticsStepFailure(requestId, "console", consoleStep.result, { refresh: summarizeResult(refreshStep?.result), wait: summarizeResult(waitStep?.result), attempts: { refresh: refreshStep?.attempts ?? 0, wait: waitStep?.attempts ?? 0, console: consoleStep.attempts } });
   }
 
-  const consoleData = recordData(consoleStep.result.data);
+  const consoleData = bridgeStepData(consoleStep.result.data);
   const items = consoleItems(consoleData.items);
   const compileDiagnostics = items.filter(isCompileDiagnostic).map(normalizeConsoleItem);
   const consoleErrorCount = items.filter((item) => stringValue(item.type).toLowerCase() === "error").length;
-  const waitTimedOut = recordData(waitStep?.result.data).timedOut === true;
+  const waitTimedOut = bridgeStepData(waitStep?.result.data).timedOut === true;
   const total = numberValue(consoleData.total) ?? numberValue(recordData(consoleData.pageInfo).total) ?? items.length;
   const status = compileDiagnostics.length > 0 ? "compile_errors" : waitTimedOut ? "wait_timeout" : consoleErrorCount > 0 ? "console_errors" : "clean";
 
@@ -153,7 +153,8 @@ async function executeBridgeWithTransientRetry(label: string, command: string, a
   let lastResult: CliResult | undefined;
   do {
     attempts += 1;
-    lastResult = await executeBridgePayload(`${requestId}_${label}_${attempts}`, command, args, flags, runtime);
+    const routed = routeBridgeStep(command, args);
+    lastResult = await executeBridgePayload(`${requestId}_${label}_${attempts}`, routed.command, routed.args, flags, runtime);
     if (lastResult.ok || lastResult.error?.transient !== true || timeoutMs === 0) {
       return { result: lastResult, attempts };
     }
@@ -163,6 +164,19 @@ async function executeBridgeWithTransientRetry(label: string, command: string, a
     }
     await sleep(Math.min(pollIntervalMs, remainingMs));
   } while (true);
+}
+
+/** 将已迁移的子步骤桥接命令转为 project-tool.run 包装，保持 hybrid 编排与 tools run 主路由一致。 */
+function routeBridgeStep(command: string, args: Record<string, unknown>): { command: string; args: Record<string, unknown> } {
+  const spec = bridgeCommandRegistry.specs().find((entry) => entry.toolName === command || entry.bridgeCommand === command);
+  if (!spec?.toolName) return { command, args };
+  return { command: spec.bridgeCommand, args: { name: spec.toolName, input: args } };
+}
+
+/** 解包 project-tool.run 子步骤的业务结果，兼容未迁移的直接 bridge data。 */
+function bridgeStepData(value: unknown): Record<string, unknown> {
+  const data = recordData(value);
+  return data.command === "project-tool.run" ? recordData(data.result) : data;
 }
 
 /** 将子步骤失败包装为 editor.compile-diagnostics 的结构化失败。 */

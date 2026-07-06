@@ -198,18 +198,18 @@ namespace UnityCli
                 },
                 new BuiltInContextDefinition
                 {
-                    Name = "scene.renderer-features", Description = "Read URP renderer feature availability and configured feature names for the active/default render pipeline. If URP or a pipeline asset is unavailable, returns available=false with diagnostics and next_actions.",
+                    Name = "scene.renderer-features", Description = "Read URP renderer feature availability and configured feature names for the active/default render pipeline. If URP or a pipeline asset is unavailable, returns available=false with diagnostics and nextActions.",
                     Category = "scene", Source = "built-in", RefreshBehavior = "static", Target = "editor", AvailabilityScope = "editorSession", Handler = "bridge",
                     InputSchema = "{}",
-                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"available\":{\"type\":\"boolean\"},\"renderer\":{\"type\":\"string\"},\"features\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"count\":{\"type\":\"integer\"},\"diagnostics\":{\"type\":\"string\"},\"next_actions\":{\"type\":\"array\"}}}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"available\":{\"type\":\"boolean\"},\"renderer\":{\"type\":\"string\"},\"features\":{\"type\":\"array\",\"items\":{\"type\":\"string\"}},\"count\":{\"type\":\"integer\"},\"diagnostics\":{\"type\":\"string\"},\"nextActions\":{\"type\":\"array\"}}}",
                     RequiresPackages = new[] { "com.unity.render-pipelines.universal" }, ReadHandler = ReadSceneRendererFeatures
                 },
                 new BuiltInContextDefinition
                 {
-                    Name = "scene.rendering-stats", Description = "Read current rendering statistics from UnityStats when available. If Unity's internal stats API is unavailable, returns available=false with diagnostics and next_actions.",
+                    Name = "scene.rendering-stats", Description = "Read current rendering statistics from UnityStats when available. If Unity's internal stats API is unavailable, returns available=false with diagnostics and nextActions.",
                     Category = "scene", Source = "built-in", RefreshBehavior = "live", Target = "editor", AvailabilityScope = "editorSession", Handler = "bridge",
                     InputSchema = "{}",
-                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"available\":{\"type\":\"boolean\"},\"stats\":{\"type\":\"object\",\"properties\":{\"batches\":{\"type\":\"string\"},\"triangles\":{\"type\":\"string\"},\"vertices\":{\"type\":\"string\"},\"screenResolution\":{\"type\":\"string\"}}},\"diagnostics\":{\"type\":\"string\"},\"next_actions\":{\"type\":\"array\"}}}",
+                    OutputSchema = "{\"type\":\"object\",\"properties\":{\"available\":{\"type\":\"boolean\"},\"stats\":{\"type\":\"object\",\"properties\":{\"batches\":{\"type\":\"string\"},\"triangles\":{\"type\":\"string\"},\"vertices\":{\"type\":\"string\"},\"screenResolution\":{\"type\":\"string\"}}},\"diagnostics\":{\"type\":\"string\"},\"nextActions\":{\"type\":\"array\"}}}",
                     RequiresPackages = null, ReadHandler = ReadSceneRenderingStats
                 },
                 new BuiltInContextDefinition
@@ -740,7 +740,7 @@ namespace UnityCli
                     .Prop("available", false)
                     .PropArray("features", arr => { })
                     .Prop("diagnostics", "URP package (com.unity.render-pipelines.universal) is not installed. Renderer features context requires URP.")
-                    .PropArray("next_actions", arr => arr.Value("Install the URP package via Package Manager."))
+                    .PropArray("nextActions", arr => arr.Value("Install the URP package via Package Manager."))
                     .EndObject()
                     .ToString());
             }
@@ -753,7 +753,7 @@ namespace UnityCli
                     .Prop("available", false)
                     .PropArray("features", arr => { })
                     .Prop("diagnostics", "No URP render pipeline asset is assigned in Graphics Settings.")
-                    .PropArray("next_actions", arr => arr.Value("Assign a UniversalRenderPipelineAsset in Graphics Settings."))
+                    .PropArray("nextActions", arr => arr.Value("Assign a UniversalRenderPipelineAsset in Graphics Settings."))
                     .EndObject()
                     .ToString());
             }
@@ -791,7 +791,7 @@ namespace UnityCli
                 return SuccessJson(new UnityCliJsonWriter().BeginObject()
                     .Prop("available", false)
                     .Prop("diagnostics", "UnityStats internal API not available in this Unity version. Rendering stats cannot be read.")
-                    .PropArray("next_actions", arr => arr.Value("Rendering stats may be available through the Stats overlay window in the Game view."))
+                    .PropArray("nextActions", arr => arr.Value("Rendering stats may be available through the Stats overlay window in the Game view."))
                     .EndObject()
                     .ToString());
             }
@@ -911,7 +911,7 @@ namespace UnityCli
                     .PropArray("tests", arr => { })
                     .Prop("count", (long)0)
                     .Prop("diagnostics", "Unity Test Framework is not installed or not available. Test enumeration requires the Test Runner package.")
-                    .PropArray("next_actions", arr =>
+                    .PropArray("nextActions", arr =>
                     {
                         arr.Value("Install the Unity Test Framework package via Package Manager.");
                         arr.Value("Enable the Test Runner window: Window > General > Test Runner.");

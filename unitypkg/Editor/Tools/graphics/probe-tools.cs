@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using UnityEditor;
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace UnityCli
 {
@@ -37,7 +38,7 @@ namespace UnityCli
             var effects = new List<GraphicsPlannedEffect>();
             if (probe == null && r.Create == true) { probe = go.AddComponent<ReflectionProbe>(); effects.Add(new GraphicsPlannedEffect { Type = "graphics.reflection-probe", Property = "component", Value = "added" }); }
             if (probe == null) throw new UnityCliBridge.BridgeCommandException("E_REFLECTION_PROBE_NOT_FOUND", "ReflectionProbe component not found on target: " + GameObjectToolSupport.HierarchyPath(go), "Pass --create to add one or choose a target with ReflectionProbe.");
-            if (!string.IsNullOrEmpty(r.Mode) && System.Enum.TryParse<ReflectionProbeMode>(r.Mode, true, out var mode)) { probe.mode = mode; effects.Add(new GraphicsPlannedEffect { Type = "graphics.reflection-probe", Property = "mode", Value = r.Mode }); }
+            if (!string.IsNullOrEmpty(r.Mode) && System.Enum.TryParse<UnityEngine.Rendering.ReflectionProbeMode>(r.Mode, true, out var mode)) { probe.mode = mode; effects.Add(new GraphicsPlannedEffect { Type = "graphics.reflection-probe", Property = "mode", Value = r.Mode }); }
             if (r.Resolution.HasValue) { probe.resolution = r.Resolution.Value; effects.Add(new GraphicsPlannedEffect { Type = "graphics.reflection-probe", Property = "resolution", Value = r.Resolution.Value.ToString() }); }
             if (r.Bounces.HasValue) { SetBounces(probe, r.Bounces.Value); effects.Add(new GraphicsPlannedEffect { Type = "graphics.reflection-probe", Property = "bounces", Value = r.Bounces.Value.ToString() }); }
             if (r.Hdr.HasValue) { probe.hdr = r.Hdr.Value; effects.Add(new GraphicsPlannedEffect { Type = "graphics.reflection-probe", Property = "hdr", Value = r.Hdr.Value.ToString().ToLowerInvariant() }); }

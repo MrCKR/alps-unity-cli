@@ -795,7 +795,7 @@ function batchFailure(requestId: string, code: string, message: string, data: un
       code,
       message,
       requestId,
-      next_actions: ["Fix the batch file and rerun unity_cli batch run <file> --preflight."]
+      nextActions: ["Fix the batch file and rerun unity_cli batch run <file> --preflight."]
     }
   };
 }

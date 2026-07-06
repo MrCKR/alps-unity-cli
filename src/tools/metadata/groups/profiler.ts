@@ -199,7 +199,7 @@ export const PROFILER_TOOLS: ToolMetadata[] = [
   {
     name: "profiler.deep",
     summary: "Read or toggle Unity Deep Profiling at runtime (must be stopped to change).",
-    description: "Read or toggle Unity Deep Profiling (per-function call profiling). Pass enabled=true/false to change; omit enabled to read the current state. Unity only allows Deep Profiling to change while the Profiler is not recording, so changing it during an active session returns E_PROFILER_DEEP_REQUIRES_STOP with next_actions pointing at profiler.stop. Typical flow: profiler.stop, profiler.deep --enabled true, profiler.start.",
+    description: "Read or toggle Unity Deep Profiling (per-function call profiling). Pass enabled=true/false to change; omit enabled to read the current state. Unity only allows Deep Profiling to change while the Profiler is not recording, so changing it during an active session returns E_PROFILER_DEEP_REQUIRES_STOP with nextActions pointing at profiler.stop. Typical flow: profiler.stop, profiler.deep --enabled true, profiler.start.",
     group: "profiler",
     inputSchema: objSchema({ enabled: { type: "boolean", description: "Omit to read the current Deep Profiling state; set true/false to toggle. Toggling requires the Profiler to be stopped." } }),
     outputSchema: objSchema({ command: { type: "string" }, deepProfiling: { type: "boolean" }, previous: { type: "boolean" }, changed: { type: "boolean" }, profiler: { type: "object" }, logPath: { type: "string" } }),

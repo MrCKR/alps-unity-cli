@@ -12,7 +12,7 @@ namespace UnityCli
     /// 仅供 object 域自包含工具复用;不实现 IUnityCliTool,不参与工具发现。
     /// 设计依据:.plan/工具统一形态.md(自包含工具共享只读 helper)。
     /// </summary>
-    public static class ObjectToolSupport
+    internal static class ObjectToolSupport
     {
         /// <summary>拦截编译/导入/构建/PlayMode 过渡期的写入请求,避免脏状态写入。</summary>
         public static void EnsureEditorNotBusy(string command)
@@ -45,7 +45,7 @@ namespace UnityCli
         /// 从 BridgeRequest 构造 ObjectSerializer.Options,复刻旧 BuildSerializerOptions 逻辑。
         /// 支持 paths/viewQuery 局部读取、namePattern 过滤。
         /// </summary>
-        public static UnityCliBridge.ObjectSerializer.Options BuildSerializerOptions(UnityCliBridge.BridgeRequest request)
+        internal static UnityCliBridge.ObjectSerializer.Options BuildSerializerOptions(UnityCliBridge.BridgeRequest request)
         {
             var options = new UnityCliBridge.ObjectSerializer.Options
             {

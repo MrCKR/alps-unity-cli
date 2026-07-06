@@ -175,7 +175,7 @@
       },
       {
         "name": "scene.renderer-features",
-        "description": "Read URP renderer feature availability and configured feature names for the active/default render pipeline. If URP or a pipeline asset is unavailable, returns available=false with diagnostics and next_actions.",
+        "description": "Read URP renderer feature availability and configured feature names for the active/default render pipeline. If URP or a pipeline asset is unavailable, returns available=false with diagnostics and nextActions.",
         "category": "scene",
         "source": "built-in",
         "target": "editor",
@@ -188,7 +188,7 @@
       },
       {
         "name": "scene.rendering-stats",
-        "description": "Read current rendering statistics from UnityStats when available. If Unity's internal stats API is unavailable, returns available=false with diagnostics and next_actions.",
+        "description": "Read current rendering statistics from UnityStats when available. If Unity's internal stats API is unavailable, returns available=false with diagnostics and nextActions.",
         "category": "scene",
         "source": "built-in",
         "target": "editor",

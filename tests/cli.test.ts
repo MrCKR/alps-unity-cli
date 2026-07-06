@@ -133,7 +133,7 @@ test("final CLI failure envelope preserves structured error details", () => {
     process.stdout.write = originalWrite;
   }
 
-  const payload = JSON.parse(output) as { ok: boolean; error: { code: string; target: string; matchCount: number; matches: unknown[]; next_actions: string[] } };
+  const payload = JSON.parse(output) as { ok: boolean; error: { code: string; target: string; matchCount: number; matches: unknown[]; nextActions: string[] } };
   assert.equal(payload.ok, false);
   assert.equal(payload.error.code, "E_TARGET_AMBIGUOUS");
   assert.equal(payload.error.target, "HUD");
@@ -142,7 +142,7 @@ test("final CLI failure envelope preserves structured error details", () => {
     { id: 101, name: "HUD", path: "Canvas/HUD", components: ["RectTransform"] },
     { id: 202, name: "HUD", path: "Overlay/HUD", components: ["UIDocument"] }
   ]);
-  assert.deepEqual(payload.error.next_actions, ["Pass a hierarchy path or instance id."]);
+  assert.deepEqual(payload.error.nextActions, ["Pass a hierarchy path or instance id."]);
 });
 
 test("printResult raw mode keeps envelope fields and removes pretty spacing", () => {
@@ -671,7 +671,7 @@ test("package install requires an explicit manifest version", async () => {
   const installed = await execute(["tools", "run", "package.install", "com.acme.lib", "--project", project, "--yes"], runtime);
   assert.equal(installed.ok, false);
   assert.equal(installed.error?.code, "PACKAGE_VERSION_REQUIRED");
-  assert.equal(installed.error?.next_actions?.[0].includes("@<version>"), true);
+  assert.equal(installed.error?.nextActions?.[0].includes("@<version>"), true);
 });
 
 test("package install blocks numeric version downgrades", async () => {
@@ -692,7 +692,7 @@ test("package remove returns structured diagnostic for missing package", async (
   const removed = await execute(["tools", "run", "package.remove", "com.missing", "--project", project, "--yes"], runtime);
   assert.equal(removed.ok, false);
   assert.equal(removed.error?.code, "PACKAGE_NOT_FOUND");
-  assert.equal(removed.error?.next_actions?.[0].includes("tools run package.list"), true);
+  assert.equal(removed.error?.nextActions?.[0].includes("tools run package.list"), true);
 });
 
 test("package remove blocks dependents unless forced and supports dry-run preview", async () => {
@@ -915,14 +915,14 @@ test("job-routing: test run returns UNITY_BUSY when project is locked by open Ed
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "UNITY_BUSY");
   assert.equal(result.error?.transient, true);
-  assert.equal(result.error?.retry_after_ms, 15000);
+  assert.equal(result.error?.retryAfterMs, 15000);
   assert.deepEqual(result.error?.details, {
     projectPath: runtime.dataDir,
     kind: "test",
     lockFilePath: join(runtime.dataDir, "Temp", "UnityLockfile")
   });
-  assert.ok((result.error?.next_actions ?? []).length > 0);
-  assert.ok((result.error?.next_actions ?? []).some((action) => action.includes("UnityLockfile")));
+  assert.ok((result.error?.nextActions ?? []).length > 0);
+  assert.ok((result.error?.nextActions ?? []).some((action) => action.includes("UnityLockfile")));
 });
 
 test("job-routing: build run returns UNITY_BUSY when project is locked by open Editor", async () => {

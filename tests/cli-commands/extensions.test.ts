@@ -221,8 +221,8 @@ test("extensions install with missing Unity dep fails without copying bundle", a
     const result = await handleExtensionsCommand("install", ["cinemachine"], { project }, emptyRuntime, requestId);
     assert.equal(result.ok, false);
     assert.equal(result.error?.code, "E_EXTENSION_DEPENDENCY_MISSING");
-    assert.ok((result.error?.next_actions ?? []).some((a) => a.includes("Unity Package Manager")));
-    assert.ok((result.error?.next_actions ?? []).some((a) => a.includes("extensions install cinemachine")));
+    assert.ok((result.error?.nextActions ?? []).some((a) => a.includes("Unity Package Manager")));
+    assert.ok((result.error?.nextActions ?? []).some((a) => a.includes("extensions install cinemachine")));
   } finally {
     await rm(project, { recursive: true, force: true });
   }

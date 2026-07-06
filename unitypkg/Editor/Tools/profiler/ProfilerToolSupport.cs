@@ -343,10 +343,10 @@ namespace UnityCli
 
     public sealed class ProfilerCounterEntry
     {
-        public ProfilerCounterEntry(string category, string name, long value, string unit) { Category = category; Name = name; Value = value; Unit = unit; }
+        public ProfilerCounterEntry(string category, string name, double value, string unit) { Category = category; Name = name; Value = value; Unit = unit; }
         public string Category { get; set; }
         public string Name { get; set; }
-        public long Value { get; set; }
+        public double Value { get; set; }
         public string Unit { get; set; }
     }
 
@@ -379,7 +379,7 @@ namespace UnityCli
         public FrameTimingInfo FrameTiming { get; set; }
     }
 
-    public sealed class PlannedEffect
+    public sealed class ProfilerPlannedEffect
     {
         public string Type { get; set; }
         public string Path { get; set; }

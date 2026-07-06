@@ -4,7 +4,7 @@
  * When a tool declares `requiresPackages` (indicating it depends on an
  * optional Unity package), this module resolves whether the extension
  * is available against a target project. If not, it returns a structured
- * unavailable result with next_actions instead of attempting execution.
+ * unavailable result with nextActions instead of attempting execution.
  */
 
 import { ExtensionRegistry } from "./extensions/index.js";

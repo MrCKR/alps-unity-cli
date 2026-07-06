@@ -112,7 +112,7 @@ namespace UnityCli
                         .Prop("action", action)
                         .PropArray("profiles", arr => { })
                         .PropArray("diagnostics", arr => arr.BeginObject().Prop("code", "BUILD_PROFILE_API_UNAVAILABLE").Prop("message", "Unity Build Profile API is not available in this Editor version.").EndObject())
-                        .PropArray("next_actions", arr => arr.Value("Use build.settings/build.scenes/build.platform, or upgrade to a Unity version that exposes Build Profiles."))
+                        .PropArray("nextActions", arr => arr.Value("Use build.settings/build.scenes/build.platform, or upgrade to a Unity version that exposes Build Profiles."))
                         .Prop("logPath", LogPath()).EndObject().ToString());
                 }
                 throw new BridgeCommandException("E_BUILD_PROFILE_API_UNAVAILABLE", "Unity Build Profile API is not available in this Editor version.", "Use build.settings/build.scenes/build.platform, or upgrade Unity.");

@@ -13,7 +13,7 @@ namespace UnityCli.ProBuilder
     /// 经 project-tool.run / runtime-tool.run 的 catch 块转成标准错误 envelope。
     /// 错误码沿用 E_EXTENSION_DEPENDENCY_MISSING / E_PROBUILDER_PACKAGE_NOT_FOUND /
     /// E_TARGET_NOT_FOUND / E_SCHEMA_INVALID / E_PROBUILDER_OPERATION_FAILED，
-    /// details 与多个 next_actions 通过 exception 字段透传。
+    /// details 与多个 nextActions 通过 exception 字段透传。
     /// </summary>
     internal static class ProBuilderErrors
     {

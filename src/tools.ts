@@ -319,7 +319,7 @@ async function handleToolsDescribe(
   // ── Extension availability check ──
   // If the tool requires optional Unity packages, check whether they are
   // installed in the target project. If unavailable, return the descriptor
-  // with an explicit unavailable status + next_actions rather than pretending
+  // with an explicit unavailable status + nextActions rather than pretending
   // the tool is usable.
   const extensionCheck = await checkToolExtensionAvailability(tool, flags);
 
@@ -419,7 +419,7 @@ async function handleToolsRun(
 
   // ── Extension availability guard ──
   // If the tool requires optional Unity packages that are not installed,
-  // block execution and return E_EXTENSION_UNAVAILABLE with next_actions.
+  // block execution and return E_EXTENSION_UNAVAILABLE with nextActions.
   const extensionCheck = await checkToolExtensionAvailability(tool, flags);
   if (!extensionCheck.available) {
     return failure(
@@ -439,7 +439,17 @@ async function handleToolsRun(
   const isRuntime = target === "runtime" || (target === "both" && getBoolean(flags, "runtime"));
 
   if (isRuntime) {
-    // Route through RuntimeExecutor via runtime-tool.run bridge command
+    // runtime-tool.run 是内部包装命令；确认策略必须按实际 runtime tool descriptor 判定。
+    if (tool.destructiveHint) {
+      const confirmation = await confirmDestructiveExecution(flags, {
+        command: toolName,
+        summary: tool.summary,
+        destructiveHint: true,
+        supportsDryRun: tool.supportsDryRun,
+        requestId
+      });
+      if (confirmation) return confirmation;
+    }
     return executeBridgeCommand(requestId, "runtime-tool.run", flags, toolName, runtime);
   }
 

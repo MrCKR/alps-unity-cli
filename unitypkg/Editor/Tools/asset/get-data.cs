@@ -1,4 +1,6 @@
 #if UNITY_EDITOR
+using UnityEditor;
+
 namespace UnityCli
 {
     /// <summary>

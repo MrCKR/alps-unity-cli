@@ -34,7 +34,7 @@ namespace UnityCli
         {
             Name = "scene.validate",
             Summary = "Validate a scene for missing scripts, null references, and Build Settings inclusion.",
-            Description = "Validate the active scene (or --path scene) for common issues: missing script components (null components from missing assemblies), null references, and whether the scene is included in Editor Build Settings scenes. Returns valid flag, issue counts, and next_actions to fix.",
+            Description = "Validate the active scene (or --path scene) for common issues: missing script components (null components from missing assemblies), null references, and whether the scene is included in Editor Build Settings scenes. Returns valid flag, issue counts, and nextActions to fix.",
             Group = "scene",
             Version = "1.0.0",
             DestructiveHint = false,

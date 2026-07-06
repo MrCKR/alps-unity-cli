@@ -214,7 +214,7 @@ namespace UnityCli
     {
         public string TextureType { get; set; }
         public string SpriteImportMode { get; set; }
-        public long PixelsPerUnit { get; set; }
+        public double PixelsPerUnit { get; set; }
         public TexturePivot Pivot { get; set; }
         public bool Readable { get; set; }
         public bool Mipmap { get; set; }

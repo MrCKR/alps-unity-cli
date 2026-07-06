@@ -286,7 +286,7 @@ function checkCompileStatus(checks: DoctorCheck[]): DoctorCheck | undefined {
     name: "compile_status",
     status,
     message,
-    details: { compiling, hasCompileErrors: hasErrors, compileErrors: errors.slice(0, 10), nextActions: compile.next_actions }
+    details: { compiling, hasCompileErrors: hasErrors, compileErrors: errors.slice(0, 10), nextActions: compile.nextActions }
   };
 }
 

@@ -242,7 +242,7 @@ function requiredUnityPackagesForManifest(manifest: ExtensionManifest): UnityPac
 }
 
 /**
- * Build next_actions for an unavailable extension.
+ * Build nextActions for an unavailable extension.
  */
 function buildNextActions(
   manifest: ExtensionManifest,

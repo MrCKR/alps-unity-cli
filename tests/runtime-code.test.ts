@@ -117,7 +117,7 @@ test("code exec maps live timeout and busy bridge responses to structured envelo
   assert.equal((running.error?.details as { logPath: string }).logPath, "Logs/UnityCliBridge.log");
   assert.deepEqual((running.error?.details as { audit: { command: string; channel: string; timeoutMs: number } }).audit, { requestId: running.requestId, command: "code.exec", channel: "live", timeoutMs: 1000 });
   assert.deepEqual((running.error?.details as { logs: { bridge: string } }).logs, { bridge: "Logs/UnityCliBridge.log" });
-  assert.match(running.error?.next_actions?.join("\n") ?? "", /UnityCliBridge\.log/);
+  assert.match(running.error?.nextActions?.join("\n") ?? "", /UnityCliBridge\.log/);
   assert.equal(busy.ok, false);
   assert.equal(busy.error?.code, "E_UNITY_BUSY");
   assert.equal((busy.error?.details as { requestId: string }).requestId, busy.requestId);

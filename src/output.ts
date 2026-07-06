@@ -129,7 +129,7 @@ export const ERROR_CODES = {
 export type ErrorCode = typeof ERROR_CODES[keyof typeof ERROR_CODES];
 
 /** Transient error codes – these indicate Unity is temporarily unavailable (compiling, importing, domain reload, play mode).
- * The CLI should return these with transient=true and a retry_after_ms hint rather than generic timeout. */
+ * The CLI should return these with transient=true and a retryAfterMs hint rather than generic timeout. */
 export const TRANSIENT_ERROR_CODES: ReadonlySet<string> = new Set([
   ERROR_CODES.E_UNITY_BUSY,
   ERROR_CODES.E_UNITY_COMPILING,
@@ -140,7 +140,7 @@ export const TRANSIENT_ERROR_CODES: ReadonlySet<string> = new Set([
   ERROR_CODES.UNITY_BUSY,
 ]);
 
-/** Default retry_after_ms values for transient errors. */
+/** Default retryAfterMs values for transient errors. */
 export const DEFAULT_RETRY_AFTER_MS: Record<string, number> = {
   [ERROR_CODES.E_UNITY_COMPILING]: 5000,
   [ERROR_CODES.E_UNITY_IMPORTING]: 5000,
@@ -176,9 +176,9 @@ export interface CliError {
   message: string;
   requestId: string;
   details?: unknown;
-  next_actions?: string[];
+  nextActions?: string[];
   transient?: boolean;
-  retry_after_ms?: number;
+  retryAfterMs?: number;
   [key: string]: unknown;
 }
 
@@ -203,7 +203,7 @@ export function success<T>(requestId: string, data: T, options?: { warnings?: st
 }
 
 /** Create a failure envelope with structured error code.
- * Automatically marks transient errors with transient=true and retry_after_ms. */
+ * Automatically marks transient errors with transient=true and retryAfterMs. */
 export function failure(
   requestId: string,
   code: ErrorCode | string,
@@ -217,13 +217,13 @@ export function failure(
 
   // Flatten details into the error object (excluding reserved keys)
   const safeDetails = details && typeof details === "object" && !Array.isArray(details) ? details as Record<string, unknown> : undefined;
-  const { code: _code, message: _message, requestId: _requestId, next_actions: _nextActions, transient: _transient, retry_after_ms: _retryAfterMs, ...flatDetails } = safeDetails ?? {};
+  const { code: _code, message: _message, requestId: _requestId, nextActions: _nextActions, transient: _transient, retryAfterMs: _retryAfterMs, ...flatDetails } = safeDetails ?? {};
 
   const error: CliError = {
     code,
     message,
     requestId,
-    ...(isTransient ? { transient: true, retry_after_ms: retryAfterMs } : {}),
+    ...(isTransient ? { transient: true, retryAfterMs: retryAfterMs } : {}),
     ...flatDetails,
   };
 
@@ -231,7 +231,7 @@ export function failure(
     error.details = details;
   }
   if (nextActions.length > 0) {
-    error.next_actions = nextActions;
+    error.nextActions = nextActions;
   }
 
   return {

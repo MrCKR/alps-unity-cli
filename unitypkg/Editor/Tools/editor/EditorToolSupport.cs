@@ -3,6 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Reflection;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
@@ -44,25 +45,61 @@ namespace UnityCli
             };
         }
 
-        /// <summary>读取 Console 日志条目。</summary>
+        /// <summary>读取 Console 日志条目;Unity 2022 通过内部 LogEntries 反射读取。</summary>
         public static List<ConsoleEntry> ReadConsoleEntries(string typeFilter, string textFilter, int count)
         {
             var entries = new List<ConsoleEntry>();
-            var logs = InternalEditorUtility.GetConsoleEntries();
-            var max = Math.Max(1, Math.Min(count > 0 ? count : 50, 1000));
-            for (var i = logs.Length - 1; i >= 0 && entries.Count < max; i--)
+            var entryType = FindType("UnityEditor.LogEntry");
+            var logEntries = FindType("UnityEditor.LogEntries");
+            var getEntry = logEntries == null ? null : logEntries.GetMethod("GetEntryInternal", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            if (entryType == null || getEntry == null)
             {
-                var log = logs[i];
-                var mode = (int)log.mode;
-                var logType = "log";
-                if ((mode & (int)LogType.Error) != 0 || (mode & (int)LogType.Exception) != 0 || (mode & (int)LogType.Assert) != 0) logType = "error";
-                else if ((mode & (int)LogType.Warning) != 0) logType = "warning";
-                if (!string.IsNullOrEmpty(typeFilter) && !string.Equals(logType, typeFilter, StringComparison.OrdinalIgnoreCase)) continue;
-                var text = log.condition ?? "";
-                if (!string.IsNullOrEmpty(textFilter) && text.IndexOf(textFilter, StringComparison.OrdinalIgnoreCase) < 0) continue;
-                entries.Add(new ConsoleEntry { Type = logType, Message = text, Count = log.instanceCount });
+                return entries;
+            }
+
+            var entry = Activator.CreateInstance(entryType);
+            var total = ConsoleEntryCount(logEntries);
+            var max = Math.Max(1, Math.Min(count > 0 ? count : 50, 1000));
+            var includeAllTypes = string.IsNullOrEmpty(typeFilter) || string.Equals(typeFilter, "all", StringComparison.OrdinalIgnoreCase);
+            for (var i = total - 1; i >= 0 && entries.Count < max; i--)
+            {
+                getEntry.Invoke(null, new object[] { i, entry });
+                var mode = Convert.ToInt32(entryType.GetField("mode", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(entry), CultureInfo.InvariantCulture);
+                var logType = ConsoleLevel(mode);
+                if (!includeAllTypes && !string.Equals(logType, typeFilter, StringComparison.OrdinalIgnoreCase)) continue;
+                var message = Convert.ToString(entryType.GetField("message", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(entry), CultureInfo.InvariantCulture) ?? "";
+                var file = Convert.ToString(entryType.GetField("file", BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic).GetValue(entry), CultureInfo.InvariantCulture) ?? "";
+                if (!string.IsNullOrEmpty(textFilter)
+                    && message.IndexOf(textFilter, StringComparison.OrdinalIgnoreCase) < 0
+                    && file.IndexOf(textFilter, StringComparison.OrdinalIgnoreCase) < 0) continue;
+                entries.Add(new ConsoleEntry { Type = logType, Message = message, Count = 1 });
             }
             return entries;
+        }
+
+        private static int ConsoleEntryCount(Type logEntries)
+        {
+            var method = logEntries == null ? null : logEntries.GetMethod("GetCount", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            return method == null ? 0 : Convert.ToInt32(method.Invoke(null, null), CultureInfo.InvariantCulture);
+        }
+
+        private static Type FindType(string fullName)
+        {
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                Type type = null;
+                try { type = assembly.GetType(fullName, false); } catch { }
+                if (type != null) return type;
+            }
+            return null;
+        }
+
+        private static string ConsoleLevel(int mode)
+        {
+            if ((mode & 1) != 0) return "error";
+            if ((mode & 2) != 0) return "assert";
+            if ((mode & 4) != 0) return "warning";
+            return "log";
         }
     }
 

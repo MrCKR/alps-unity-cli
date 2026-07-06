@@ -24,7 +24,7 @@ namespace UnityCli
             public SceneInfo Scene { get; set; }
             public string RequestedPath { get; set; }
             public bool? DryRun { get; set; }
-            public List<PlannedEffect> PlannedEffects { get; set; }
+            public List<ScenePlannedEffect> PlannedEffects { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -68,9 +68,9 @@ namespace UnityCli
                     Scene = SceneToolSupport.BuildSceneInfo(scene),
                     RequestedPath = path,
                     DryRun = true,
-                    PlannedEffects = new List<PlannedEffect>
+                    PlannedEffects = new List<ScenePlannedEffect>
                     {
-                        new PlannedEffect { Type = "scene.save", Path = path, SideEffects = "none" }
+                        new ScenePlannedEffect { Type = "scene.save", Path = path, SideEffects = "none" }
                     }
                 };
             }
@@ -83,9 +83,9 @@ namespace UnityCli
             {
                 Scene = SceneToolSupport.BuildSceneInfo(SceneManager.GetActiveScene()),
                 RequestedPath = path,
-                PlannedEffects = new List<PlannedEffect>
+                PlannedEffects = new List<ScenePlannedEffect>
                 {
-                    new PlannedEffect { Type = "scene.save", Path = path }
+                    new ScenePlannedEffect { Type = "scene.save", Path = path }
                 }
             };
         }

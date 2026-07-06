@@ -1039,7 +1039,7 @@ namespace UnityCli
                 { "soft_out",      8 }
             };
             int idx;
-            return map.TryGetValue(normalized, out idx) ? idx : null;
+            return map.TryGetValue(normalized, out idx) ? (int?)idx : null;
         }
 
         private static void SetSubFloat(SerializedProperty parent, string subPropName, float value)

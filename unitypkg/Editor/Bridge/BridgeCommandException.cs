@@ -41,7 +41,7 @@ namespace UnityCli
                 RetryAfterMs = retryAfterMs;
             }
 
-            // 新增重载：支持机器可读 details 与多个 next_actions，供需要富错误信息的 handler 使用。
+            // 新增重载：支持机器可读 details 与多个 nextActions，供需要富错误信息的 handler 使用。
             // NextAction 取首个 action，保证旧的 envelope 逻辑兼容。
             public BridgeCommandException(string code, string message, string detailsJson, IEnumerable<string> nextActions, bool transient = false, int retryAfterMs = 0) : base(message)
             {
@@ -55,7 +55,7 @@ namespace UnityCli
 
             public string Code { get; private set; }
             public string NextAction { get; private set; }
-            // 多个 next_actions，优先于 NextAction 的单值表示。
+            // 多个 nextActions，优先于 NextAction 的单值表示。
             public IReadOnlyList<string> NextActions { get; private set; }
             // 结构化错误 details（对象 JSON），由错误 envelope 透传到 error.details。
             public string DetailsJson { get; private set; }

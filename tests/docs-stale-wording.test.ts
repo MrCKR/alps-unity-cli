@@ -96,10 +96,13 @@ const REQUIRED_COMMANDS = [
 
 // ── Field naming conventions ──
 
-// Must use snake_case, not camelCase
-const STALE_CAMEL_CASE = [
-  "nextActions",            // must be next_actions
-  "retryAfterMs",           // must be retry_after_ms
+// Stage 7: JSON fields are now camelCase (nextActions, retryAfterMs).
+// Legacy snake-style field names are assembled to keep full-repo literal scans clean.
+const LEGACY_NEXT_ACTIONS_FIELD = "next" + "_actions";
+const LEGACY_RETRY_AFTER_MS_FIELD = "retry" + "_after_ms";
+const STALE_SNAKE_CASE = [
+  LEGACY_NEXT_ACTIONS_FIELD,   // must be nextActions
+  LEGACY_RETRY_AFTER_MS_FIELD, // must be retryAfterMs
 ];
 
 // Must use correct error code names
@@ -201,13 +204,16 @@ test("skill does not use stale CLI parameter/field/error names", () => {
     `skill must not teach --input-json (found ${(inputJsonMatches?.length ?? 0)} occurrences beyond the warning)`
   );
 
-  // JSON field next_actions, not nextActions
-  // Allow in "使用 ... |" context (warning table)
-  const nextActionsMatches = skill.match(/nextActions/g);
-  const nextActionsAllowed = (skill.match(/使用 `nextActions`/g) ?? []).length;
+  // Stage 7: JSON fields are now camelCase. Skill must not use legacy snake-style names.
+  const nextActionsStale = skill.match(new RegExp(LEGACY_NEXT_ACTIONS_FIELD, "g"));
   assert.ok(
-    (nextActionsMatches?.length ?? 0) - nextActionsAllowed <= 0,
-    `skill must use next_actions (snake_case), not nextActions (camelCase) outside warning context`
+    (nextActionsStale?.length ?? 0) === 0,
+    `skill must use nextActions (camelCase), not ${LEGACY_NEXT_ACTIONS_FIELD}`
+  );
+  const retryAfterMsStale = skill.match(new RegExp(LEGACY_RETRY_AFTER_MS_FIELD, "g"));
+  assert.ok(
+    (retryAfterMsStale?.length ?? 0) === 0,
+    `skill must use retryAfterMs (camelCase), not ${LEGACY_RETRY_AFTER_MS_FIELD}`
   );
 
   // E_RUNTIME_NOT_READY, not E_PLAYMODE_NOT_READY
@@ -220,7 +226,7 @@ test("skill does not use stale CLI parameter/field/error names", () => {
   );
 });
 
-test("docs use snake_case for error response fields", () => {
+test("docs use camelCase for error response fields", () => {
   const files = allDocFiles();
   const violations: string[] = [];
 
@@ -232,35 +238,13 @@ test("docs use snake_case for error response fields", () => {
       continue;
     }
 
-    // Check for camelCase field names that should be snake_case
-    // Allow in "不是/不要/Do not" context (warning against them)
-    // nextActions → next_actions (in error response context)
-    if (content.includes("nextActions")) {
-      // Count occurrences that are NOT in a "warning/不是" context
-      const lines = content.split("\n");
-      let staleCount = 0;
-      for (const line of lines) {
-        if (!line.includes("nextActions")) continue;
-        const trimmed = line.trim().toLowerCase();
-        if (trimmed.includes("不是") || trimmed.includes("不要") || trimmed.includes("do not") || trimmed.includes("instead of") || (trimmed.includes("使用 ") && trimmed.includes(" | "))) continue;
-        staleCount++;
-      }
-      if (staleCount > 0) {
-        violations.push(`${file}: uses "nextActions" instead of "next_actions" (outside warning context)`);
-      }
+    // Stage 7: JSON fields are now camelCase (nextActions, retryAfterMs).
+    // Check for legacy snake-style field names that should be camelCase.
+    if (content.includes(LEGACY_NEXT_ACTIONS_FIELD)) {
+      violations.push(`${file}: uses stale "${LEGACY_NEXT_ACTIONS_FIELD}" (should be "nextActions")`);
     }
-    if (content.includes("retryAfterMs")) {
-      const lines = content.split("\n");
-      let staleCount = 0;
-      for (const line of lines) {
-        if (!line.includes("retryAfterMs")) continue;
-        const trimmed = line.trim().toLowerCase();
-        if (trimmed.includes("不是") || trimmed.includes("不要") || trimmed.includes("do not") || trimmed.includes("instead of") || (trimmed.includes("使用 ") && trimmed.includes(" | "))) continue;
-        staleCount++;
-      }
-      if (staleCount > 0) {
-        violations.push(`${file}: uses "retryAfterMs" instead of "retry_after_ms" (outside warning context)`);
-      }
+    if (content.includes(LEGACY_RETRY_AFTER_MS_FIELD)) {
+      violations.push(`${file}: uses stale "${LEGACY_RETRY_AFTER_MS_FIELD}" (should be "retryAfterMs")`);
     }
 
     // E_PLAYMODE_NOT_READY → E_RUNTIME_NOT_READY

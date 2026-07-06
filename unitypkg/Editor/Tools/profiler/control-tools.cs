@@ -13,7 +13,7 @@ namespace UnityCli
     public class ProfilerStartTool : IUnityCliTool<ProfilerStartTool.Request, ProfilerStartTool.Result>
     {
         public sealed class Request { public bool DeepProfiling { get; set; } public string LogFile { get; set; } public bool EnableCallstacks { get; set; } }
-        public sealed class Result { public ProfilerState Profiler { get; set; } public List<PlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public ProfilerState Profiler { get; set; } public List<ProfilerPlannedEffect> PlannedEffects { get; set; } }
 
         public ToolDescriptor Describe() => new()
         {
@@ -36,7 +36,7 @@ namespace UnityCli
             return new Result
             {
                 Profiler = ProfilerToolSupport.BuildProfilerState(),
-                PlannedEffects = new List<PlannedEffect> { new PlannedEffect { Type = "profiler.start" } }
+                PlannedEffects = new List<ProfilerPlannedEffect> { new ProfilerPlannedEffect { Type = "profiler.start" } }
             };
         }
     }
@@ -44,7 +44,7 @@ namespace UnityCli
     public class ProfilerStopTool : IUnityCliTool<ProfilerStopTool.Request, ProfilerStopTool.Result>
     {
         public sealed class Request { }
-        public sealed class Result { public ProfilerState Profiler { get; set; } public List<PlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public ProfilerState Profiler { get; set; } public List<ProfilerPlannedEffect> PlannedEffects { get; set; } }
 
         public ToolDescriptor Describe() => new()
         {
@@ -67,7 +67,7 @@ namespace UnityCli
             return new Result
             {
                 Profiler = ProfilerToolSupport.BuildProfilerState(),
-                PlannedEffects = new List<PlannedEffect> { new PlannedEffect { Type = "profiler.stop" } }
+                PlannedEffects = new List<ProfilerPlannedEffect> { new ProfilerPlannedEffect { Type = "profiler.stop" } }
             };
         }
     }
@@ -75,7 +75,7 @@ namespace UnityCli
     public class ProfilerPauseTool : IUnityCliTool<ProfilerPauseTool.Request, ProfilerPauseTool.Result>
     {
         public sealed class Request { public bool? Paused { get; set; } }
-        public sealed class Result { public ProfilerState Profiler { get; set; } public bool Paused { get; set; } public List<PlannedEffect> PlannedEffects { get; set; } }
+        public sealed class Result { public ProfilerState Profiler { get; set; } public bool Paused { get; set; } public List<ProfilerPlannedEffect> PlannedEffects { get; set; } }
 
         public ToolDescriptor Describe() => new()
         {
@@ -96,7 +96,7 @@ namespace UnityCli
             {
                 Profiler = ProfilerToolSupport.BuildProfilerState(),
                 Paused = paused,
-                PlannedEffects = new List<PlannedEffect> { new PlannedEffect { Type = "profiler.pause", SideEffects = "profilerEnabledFrom=" + wasEnabled + ",profilerEnabledTo=" + isEnabled } }
+                PlannedEffects = new List<ProfilerPlannedEffect> { new ProfilerPlannedEffect { Type = "profiler.pause", SideEffects = "profilerEnabledFrom=" + wasEnabled + ",profilerEnabledTo=" + isEnabled } }
             };
         }
     }

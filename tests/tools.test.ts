@@ -1204,9 +1204,60 @@ test("tools run with target=runtime project tool routes to runtime-tool.run", as
     }
   };
 
-  const result = await handleToolsCommand("run", ["sample.runtime-echo"], { "include-custom": true, yes: true }, runtime, requestId);
+  const result = await handleToolsCommand("run", ["sample.runtime-echo"], { "include-custom": true }, runtime, requestId);
   assert.equal(result.ok, true);
   assert.equal(requests[0].command, "runtime-tool.run");
+});
+
+test("tools run destructive runtime project tool requires confirmation", async () => {
+  const requests: BridgeRequest[] = [];
+  const runtime: ToolsRuntime = {
+    projectTools: [{
+      name: "sample.runtime-delete",
+      summary: "Sample Runtime Delete",
+      description: "Deletes runtime state",
+      group: "sample",
+      inputSchema: { type: "object" },
+      destructiveHint: true,
+      handler: "bridge-runtime",
+      target: "runtime"
+    }],
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { result: "ok" } };
+    }
+  };
+
+  const result = await handleToolsCommand("run", ["sample.runtime-delete"], { "include-custom": true }, runtime, requestId);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_DESTRUCTIVE_CONFIRMATION_REQUIRED");
+  assert.equal(requests.length, 0);
+});
+
+test("tools run destructive runtime project tool sends security proof after confirmation", async () => {
+  const requests: BridgeRequest[] = [];
+  const runtime: ToolsRuntime = {
+    projectTools: [{
+      name: "sample.runtime-delete",
+      summary: "Sample Runtime Delete",
+      description: "Deletes runtime state",
+      group: "sample",
+      inputSchema: { type: "object" },
+      destructiveHint: true,
+      handler: "bridge-runtime",
+      target: "runtime"
+    }],
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { result: "ok" } };
+    }
+  };
+
+  const result = await handleToolsCommand("run", ["sample.runtime-delete"], { "include-custom": true, yes: true }, runtime, requestId);
+  assert.equal(result.ok, true);
+  assert.equal(requests[0].command, "runtime-tool.run");
+  assert.equal(requests[0].security?.confirmed, true);
+  assert.equal(requests[0].security?.destructiveFingerprint, "destructive-safety-v1");
 });
 
 test("tools run target=both with --runtime flag routes to runtime-tool.run", async () => {
@@ -1228,7 +1279,7 @@ test("tools run target=both with --runtime flag routes to runtime-tool.run", asy
     }
   };
 
-  const result = await handleToolsCommand("run", ["dual.tool"], { "include-custom": true, runtime: true, yes: true }, runtime, requestId);
+  const result = await handleToolsCommand("run", ["dual.tool"], { "include-custom": true, runtime: true }, runtime, requestId);
   assert.equal(result.ok, true);
   assert.equal(requests[0].command, "runtime-tool.run");
 });
@@ -1305,7 +1356,7 @@ test("tools run runtime tool discovery uses runtime-tool.list (not project-tool.
     }
   };
 
-  const result = await handleToolsCommand("run", ["sample.runtime-echo"], { "include-custom": true, yes: true }, runtime, requestId);
+  const result = await handleToolsCommand("run", ["sample.runtime-echo"], { "include-custom": true }, runtime, requestId);
   assert.equal(result.ok, true);
   // Discovery should use runtime-tool.list, then execution uses runtime-tool.run
   assert.equal(requests[0].command, "runtime-tool.list");
@@ -1362,12 +1413,18 @@ test("skill does not use stale CLI parameter/field/error names", () => {
     `skill must not teach --input-json (found ${(inputJsonMatches?.length ?? 0)} occurrences beyond the warning)`
   );
 
-  // JSON field next_actions, not nextActions (except in warning table)
-  const nextActionsMatches = skill.match(/nextActions/g);
-  const nextActionsAllowed = (skill.match(/使用 `nextActions`/g) ?? []).length;
+  // Stage 7: JSON error fields are camelCase; legacy snake-style names must not be taught.
+  const legacyNextActionsField = "next" + "_actions";
+  const legacyRetryAfterMsField = "retry" + "_after_ms";
+  const nextActionsStale = skill.match(new RegExp(legacyNextActionsField, "g"));
   assert.ok(
-    (nextActionsMatches?.length ?? 0) - nextActionsAllowed <= 0,
-    "skill must use next_actions (snake_case), not nextActions (camelCase) outside warning context"
+    (nextActionsStale?.length ?? 0) === 0,
+    `skill must use nextActions (camelCase), not ${legacyNextActionsField}`
+  );
+  const retryAfterMsStale = skill.match(new RegExp(legacyRetryAfterMsField, "g"));
+  assert.ok(
+    (retryAfterMsStale?.length ?? 0) === 0,
+    `skill must use retryAfterMs (camelCase), not ${legacyRetryAfterMsField}`
   );
 
   // E_RUNTIME_NOT_READY, not E_PLAYMODE_NOT_READY (except in warning table)
@@ -1497,14 +1554,15 @@ test("tools run editor.compile-diagnostics orchestrates refresh wait and console
   const runtime: ToolsRuntime = {
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      if (payload.command === "asset.refresh") {
-        return { ok: true, data: { command: "asset.refresh", refreshed: true, path: payload.args.path } };
+      if (payload.command === "project-tool.run" && payload.args.name === "asset.refresh") {
+        const input = payload.args.input as Record<string, unknown>;
+        return { ok: true, data: { command: "project-tool.run", result: { command: "asset.refresh", refreshed: true, path: input.path } } };
       }
       if (payload.command === "context.read") {
         return { ok: true, data: { schemaVersion: "1.0", state: { busy: { isBusy: false } } } };
       }
-      if (payload.command === "console.get") {
-        return { ok: true, data: { command: "console.get", total: 1, items: [{ index: 4, type: "error", message: "Assets/Scripts/Broken.cs(3,9): error CS0103: The name 'missing' does not exist", file: "Assets/Scripts/Broken.cs", line: 3 }], pageInfo: { total: 1 } } };
+      if (payload.command === "project-tool.run" && payload.args.name === "console.get") {
+        return { ok: true, data: { command: "project-tool.run", result: { command: "console.get", total: 1, items: [{ index: 4, type: "error", message: "Assets/Scripts/Broken.cs(3,9): error CS0103: The name 'missing' does not exist", file: "Assets/Scripts/Broken.cs", line: 3 }], pageInfo: { total: 1 } } } };
       }
       return { ok: false, error: { code: "UNEXPECTED", message: String(payload.command) } };
     }
@@ -1512,10 +1570,10 @@ test("tools run editor.compile-diagnostics orchestrates refresh wait and console
 
   const result = await handleToolsCommand("run", ["editor.compile-diagnostics"], { input: '{"path":"Assets/Scripts/Broken.cs","waitTimeoutMs":100,"pollIntervalMs":1}' }, runtime, requestId);
   assert.equal(result.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["asset.refresh", "context.read", "console.get"]);
-  assert.deepEqual(requests[0].args, { path: "Assets/Scripts/Broken.cs" });
+  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "context.read", "project-tool.run"]);
+  assert.deepEqual(requests[0].args, { name: "asset.refresh", input: { path: "Assets/Scripts/Broken.cs" } });
   assert.equal((requests[1].args.input as Record<string, unknown>).waitReady, true);
-  assert.deepEqual(requests[2].args, { type: "error", count: 100, cursor: 0 });
+  assert.deepEqual(requests[2].args, { name: "console.get", input: { type: "error", count: 100, cursor: 0 } });
   const data = result.data as Record<string, unknown>;
   assert.equal(data.status, "compile_errors");
   const compile = data.compile as { hasErrors: boolean; errorCount: number; diagnostics: Array<{ id?: string }> };
@@ -1908,7 +1966,7 @@ test("tools run discovers runtime tools when --target flag is provided without -
     }
   };
 
-  const result = await handleToolsCommand("run", ["runtime.wait"], { target: "da1e42fad0da", runtime: true, yes: true }, runtime, requestId);
+  const result = await handleToolsCommand("run", ["runtime.wait"], { target: "da1e42fad0da", runtime: true }, runtime, requestId);
   assert.equal(result.ok, true, `Expected ok=true, got error: ${result.error?.code} ${result.error?.message}`);
   assert.equal(requests[0].command, "runtime-tool.list");
   assert.equal(requests[1].command, "runtime-tool.run");
@@ -1927,7 +1985,7 @@ test("tools run discovers runtime tools when --runtime flag is provided", async 
     }
   };
 
-  const result = await handleToolsCommand("run", ["sample.runtime-echo"], { runtime: true, "bridge-endpoint": "http://127.0.0.1:47392", yes: true }, runtime, requestId);
+  const result = await handleToolsCommand("run", ["sample.runtime-echo"], { runtime: true, "bridge-endpoint": "http://127.0.0.1:47392" }, runtime, requestId);
   assert.equal(result.ok, true, `Expected ok=true, got error: ${result.error?.code} ${result.error?.message}`);
   assert.equal(requests[0].command, "runtime-tool.list");
   assert.equal(requests[1].command, "runtime-tool.run");

@@ -208,8 +208,8 @@ npm link
     "code": "E_TARGET_AMBIGUOUS",
     "message": "...",
     "transient": false,
-    "next_actions": ["Run unity_cli instances list to discover targets."],
-    "retry_after_ms": 0
+    "nextActions": ["Run unity_cli instances list to discover targets."],
+    "retryAfterMs": 0
   }
 }
 ```
@@ -748,7 +748,7 @@ unity_cli tools run my.editor-tool --input '{"key":"value"}'
 
 所有能力都以 Tool 呈现。`target: "editor" | "runtime" | "both"` 只是可用性与路由约束，不是两套用户入口。
 
-`runtime` 表示 Unity gameplay/runtime layer；具体 tool 是否需要 Play Mode，由 `availabilityScope` 和 `next_actions` 说明。
+`runtime` 表示 Unity gameplay/runtime layer；具体 tool 是否需要 Play Mode，由 `availabilityScope` 和 `nextActions` 说明。
 
 ### 安全机制
 
@@ -803,7 +803,7 @@ unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --yes
 - [工具执行](docs/tool-execution.md) — tools run 执行通道详解
 - [安全边界](docs/safety-boundaries.md) — 风险模型与破坏性确认
 - [风险与副作用](docs/risk-and-side-effects.md) — destructive/dry-run 规则
-- [错误码](docs/error-codes.md) — 结构化错误与 next_actions
+- [错误码](docs/error-codes.md) — 结构化错误与 nextActions
 - [可用性差异](docs/availability-differences.md) — 不同实例的工具有效性
 - [扩展包](docs/extensions.md) — 可选扩展安装、卸载与诊断
 - [自定义 Tool](docs/custom-tools.md) — 项目侧 Tool 注册开发

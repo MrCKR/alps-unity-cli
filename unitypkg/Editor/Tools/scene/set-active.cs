@@ -23,7 +23,7 @@ namespace UnityCli
         {
             public SceneInfo Scene { get; set; }
             public string RequestedPath { get; set; }
-            public List<PlannedEffect> PlannedEffects { get; set; }
+            public List<ScenePlannedEffect> PlannedEffects { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -59,9 +59,9 @@ namespace UnityCli
                     {
                         Scene = SceneToolSupport.BuildSceneInfo(scene),
                         RequestedPath = path,
-                        PlannedEffects = new List<PlannedEffect>
+                        PlannedEffects = new List<ScenePlannedEffect>
                         {
-                            new PlannedEffect { Type = "scene.set-active", Path = SceneToolSupport.NormalizeAssetPath(scene.path) ?? path }
+                            new ScenePlannedEffect { Type = "scene.set-active", Path = SceneToolSupport.NormalizeAssetPath(scene.path) ?? path }
                         }
                     };
                 }

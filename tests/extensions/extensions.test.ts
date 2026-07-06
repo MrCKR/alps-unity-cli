@@ -261,7 +261,7 @@ test("resolveAvailability next actions suggest manual package install and extens
   assert.ok(result.nextActions.some((a) => a.includes("Unity Package Manager")));
   assert.ok(result.nextActions.some((a) => a.includes("manifest.json")));
   assert.ok(result.nextActions.some((a) => a.includes("explicit package versions")));
-  assert.equal(result.nextActions.some((a) => a.includes('"latest"')), true, "next_actions should warn against writing latest");
+  assert.equal(result.nextActions.some((a) => a.includes('"latest"')), true, "nextActions should warn against writing latest");
   assert.ok(result.nextActions.some((a) => a.includes("unity_cli extensions install probuilder")));
 });
 
@@ -709,9 +709,9 @@ test("core package extension types do not reference optional Unity packages at c
   assert.ok(!typesModule.includes("cinemachine"));
 });
 
-// ── Missing dependency state and next_actions ──────────────────────────────
+// ── Missing dependency state and nextActions ──────────────────────────────
 
-test("unavailable extension expresses missing state with next_actions", () => {
+test("unavailable extension expresses missing state with nextActions", () => {
   const registry = new ExtensionRegistry();
   const result = registry.resolveAvailability("cinemachine", {});
 

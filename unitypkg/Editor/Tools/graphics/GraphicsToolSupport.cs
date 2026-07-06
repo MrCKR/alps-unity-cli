@@ -274,7 +274,7 @@ namespace UnityCli
         public long EnvironmentSamples { get; set; }
         public long Bounces { get; set; }
         public string Filtering { get; set; }
-        public long IndirectResolution { get; set; }
+        public double IndirectResolution { get; set; }
     }
 
     public sealed class BakeModeInfo

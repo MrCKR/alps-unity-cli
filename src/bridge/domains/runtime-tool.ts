@@ -5,7 +5,7 @@ import type { BridgeCommandSpec } from "../types.js";
 
 export const runtimeToolBridgeSpecs: BridgeCommandSpec[] = [
   { group: "runtime-tool", command: "list", bridgeCommand: "runtime-tool.list", buildArgs: runtimeToolListArgs, internal: true },
-  { group: "runtime-tool", command: "run", bridgeCommand: "runtime-tool.run", buildArgs: runtimeToolRunArgs, destructiveHint: true, internal: true }
+  { group: "runtime-tool", command: "run", bridgeCommand: "runtime-tool.run", buildArgs: runtimeToolRunArgs, internal: true }
 ];
 
 function runtimeToolListArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {

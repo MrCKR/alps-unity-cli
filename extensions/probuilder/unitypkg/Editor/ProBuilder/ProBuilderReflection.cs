@@ -14,7 +14,7 @@ namespace UnityCli.ProBuilder
     /// Reflection-based optional dependency helper for the ProBuilder package.
     /// All ProBuilder types are resolved via reflection so the CLI extension
     /// compiles and runs even when com.unity.probuilder is not installed.
-    /// When the package is absent, tools report unavailable with next_actions.
+    /// When the package is absent, tools report unavailable with nextActions.
     /// </summary>
     internal static class ProBuilderReflection
     {

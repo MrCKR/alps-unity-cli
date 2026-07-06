@@ -158,7 +158,7 @@ namespace UnityCli
         }
 
         /// <summary>
-        /// Transient error JSON with transient=true and retry_after_ms.
+        /// Transient error JSON with transient=true and retryAfterMs.
         /// Used for compile, import, domain reload, and play mode states.
         /// Documents transient response state.
         /// </summary>
@@ -180,7 +180,7 @@ namespace UnityCli
         /// <summary>
         /// 将 handler 抛出的 BridgeCommandException 转为统一错误 envelope。
         /// 非 transient 时优先透传 details 与多个 nextActions，保留结构化错误信息；
-        /// transient 时透传 retry_after_ms。project-tool.run / runtime-tool.run 的
+        /// transient 时透传 retryAfterMs。project-tool.run / runtime-tool.run 的
         /// 结构化错误收口统一走这里，避免错误被外层 SuccessJson 误包成 ok:true。
         /// </summary>
         private static string BridgeExceptionErrorJson(BridgeCommandException exception)

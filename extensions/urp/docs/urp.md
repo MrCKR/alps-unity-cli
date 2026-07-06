@@ -36,4 +36,4 @@ unity-cli urp settings
 当目标 Unity 项目未使用 URP 时：
 - 工具标记为 `unavailable`
 - 返回 `E_URP_PACKAGE_NOT_FOUND` 错误码
-- `next_actions` 提示安装 `com.unity.render-pipelines.universal`
+- `nextActions` 提示安装 `com.unity.render-pipelines.universal`

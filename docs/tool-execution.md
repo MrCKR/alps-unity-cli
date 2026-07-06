@@ -37,7 +37,7 @@ echo '{"target":"Main Camera"}' | unity_cli tools run camera.screenshot --stdin
 
 ## 输入校验
 
-`tools run` 会用 `inputSchema.required` 做执行前必填字段校验。校验失败返回 `E_SCHEMA_INVALID`，`next_actions` 指向 `tools describe <tool>`。
+`tools run` 会用 `inputSchema.required` 做执行前必填字段校验。校验失败返回 `E_SCHEMA_INVALID`，`nextActions` 指向 `tools describe <tool>`。
 
 ```powershell
 # 正确：提供 inputSchema 要求的字段
@@ -45,7 +45,7 @@ unity_cli tools run camera.screenshot --input '{"target":"Main Camera","output":
 
 # 错误：缺少必需字段
 unity_cli tools run camera.screenshot --input '{}'
-# → E_SCHEMA_INVALID, next_actions 指向 tools describe
+# → E_SCHEMA_INVALID, nextActions 指向 tools describe
 ```
 
 ## Bridge 执行约束

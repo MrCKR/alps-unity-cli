@@ -444,6 +444,7 @@ namespace UnityCli
 
         private static string ProjectToolDefinitionJson(UnityCliProjectToolDefinition definition)
         {
+            var runtimeTarget = string.Equals(definition.Target, "runtime", StringComparison.OrdinalIgnoreCase);
             return new UnityCliJsonWriter().BeginObject()
                 .Prop("name", definition.Name)
                 .Prop("summary", definition.Summary)
@@ -461,10 +462,10 @@ namespace UnityCli
                 .Prop("maxTimeoutMs", definition.MaxTimeoutMs)
                 .Prop("supportsJob", definition.SupportsJob)
                 .PropRaw("artifactKinds", StringArrayJson(definition.ArtifactKinds))
-                .Prop("handler", "bridge")
-                .Prop("supportStatus", "live-bridge")
+                .Prop("handler", runtimeTarget ? "bridge-runtime" : "bridge")
+                .Prop("supportStatus", runtimeTarget ? "live-bridge-runtime" : "live-bridge")
                 .Prop("cliCommand", "tools run " + definition.Name)
-                .Prop("docsTopic", "project-tool")
+                .Prop("docsTopic", runtimeTarget ? "runtime-tool" : "project-tool")
                 .Prop("descriptorSource", definition.DescriptorSource)
                 .Prop("registeredBy", definition.RegisteredBy)
                 .Prop("assembly", definition.Assembly)
@@ -479,6 +480,7 @@ namespace UnityCli
         /// </summary>
         private static string ProjectToolPublicDefinitionJson(UnityCliProjectToolDefinition definition)
         {
+            var runtimeTarget = string.Equals(definition.Target, "runtime", StringComparison.OrdinalIgnoreCase);
             return new UnityCliJsonWriter().BeginObject()
                 .Prop("name", definition.Name)
                 .Prop("summary", definition.Summary)
@@ -489,7 +491,7 @@ namespace UnityCli
                 .Prop("target", definition.Target)
                 .Prop("availabilityScope", definition.AvailabilityScope)
                 .Prop("playModeSupport", definition.PlayModeSupport)
-                .Prop("supportStatus", "live-bridge")
+                .Prop("supportStatus", runtimeTarget ? "live-bridge-runtime" : "live-bridge")
                 .Prop("cliCommand", "tools run " + definition.Name)
                 .PropRaw("inputSchema", definition.InputSchema)
                 .PropRaw("outputSchema", definition.OutputSchema)

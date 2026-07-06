@@ -93,7 +93,7 @@ Tool 规则：
 - 任何可能修改 Unity 状态、项目文件、资源、Package、场景、GameObject、Component、PlayMode 状态或产生 artifact 的能力，必须是 Tool。
 - Tool 必须通过 descriptor 暴露 AI 调用所需信息，包括 `name`、`summary`、`description`、`group`、`inputSchema`、`outputSchema`、`destructiveHint`、`supportStatus`、`target`、`availabilityScope`、`playModeSupport`；内部路由字段不得混入公开 descriptor。
 - Tool 输出必须机器可读，返回稳定字段；禁止只返回自然语言说明。
-- Tool 的错误必须结构化，包含稳定 `error.code`、`message`、`transient`、`retry_after_ms`、`next_actions`。
+- Tool 的错误必须结构化，包含稳定 `error.code`、`message`、`transient`、`retryAfterMs`、`nextActions`。
 
 Context 规则：
 
@@ -111,7 +111,7 @@ Context 规则：
 - 只要不是 Unity 机制上理论无法实现，就必须考虑并尽量支持 Editor 与 PlayMode 两种使用场景。
 - 不得为了省事把能力标成 `editor-only`。
 - 如果某状态无法支持，必须在 descriptor、文档、错误码和测试中说明原因。
-- PlayMode 不可用不是失败；如果 Unity 机制确实不支持，必须返回稳定错误码和 `next_actions`，而不是硬凑实现。
+- PlayMode 不可用不是失败；如果 Unity 机制确实不支持，必须返回稳定错误码和 `nextActions`，而不是硬凑实现。
 - Runtime-only 行为必须明确标记为 `runtime-only`，并说明结果是否只影响当前 PlayMode 会话。
 - 可能触发 import、compile、domain reload、PlayMode 状态变化的能力，必须标记为 `session-affecting`。
 
@@ -121,7 +121,7 @@ Context 规则：
 - PlayMode 下是否可用？成功输出是什么？
 - 结果是否持久化到项目或场景？
 - 不可用时返回什么错误码？
-- AI 看到 `next_actions` 后能否知道下一步怎么做？
+- AI 看到 `nextActions` 后能否知道下一步怎么做？
 
 ## Descriptor 质量门槛
 
@@ -137,7 +137,7 @@ Context 规则：
 - 示例能直接指导 AI 构造调用参数。
 - 风险字段准确，包括 `destructiveHint`、`supportsDryRun`、`sideEffects`、`riskLevel`、`permissions`。
 - 执行状态字段准确，包括 `handler`、`supportStatus`、`target`、`availabilityScope`、`playModeSupport`、`requiresPackages`。
-- 错误路径有明确 `next_actions`，不能让 AI 猜。
+- 错误路径有明确 `nextActions`，不能让 AI 猜。
 
 ### Summary 路由字段规范
 
@@ -300,8 +300,8 @@ Packages/com.unity_cli/Extensions/<id>/
 - `error.code`
 - `error.message`
 - `error.transient`
-- `error.retry_after_ms`
-- `error.next_actions`
+- `error.retryAfterMs`
+- `error.nextActions`
 
 禁止：
 
@@ -324,7 +324,7 @@ Packages/com.unity_cli/Extensions/<id>/
 - 相关测试覆盖成功路径、错误路径、Editor/PlayMode 差异、extension availability。
 - 凡新增或修改 Tool / Context / Extension 能力，必须建立真实调用测试矩阵；单元测试、契约测试、源码断言只能作为补充，不能替代 Unity 实例上的真实调用。
 - 真实调用矩阵必须覆盖每个受影响能力的每类公开用法：默认调用、主要可选参数、筛选/分页/精读/续读等新增能力、边界值、错误路径、权限/`--yes`/`--dry-run` 行为，以及 Editor/PlayMode 差异。组合爆炸时可以按等价类压缩，但不得跳过任何公开行为类别。
-- 正向用例必须验证输出 envelope 的关键业务字段，不只检查 `ok:true`；反向用例必须验证稳定 `error.code`、`message`、`transient`、`retry_after_ms`、`next_actions`。
+- 正向用例必须验证输出 envelope 的关键业务字段，不只检查 `ok:true`；反向用例必须验证稳定 `error.code`、`message`、`transient`、`retryAfterMs`、`nextActions`。
 - 每个真实调用证据必须记录完整命令、输入 JSON、输出 envelope、前置状态、测试夹具、目标 Unity instance/endpoint 和是否产生持久化副作用。
 
 不得为了让测试通过而降低 descriptor 质量或放宽契约。

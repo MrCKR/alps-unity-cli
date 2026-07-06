@@ -35,4 +35,4 @@ unity-cli hdrp settings
 当目标 Unity 项目未使用 HDRP 时：
 - 工具标记为 `unavailable`
 - 返回 `E_HDRP_PACKAGE_NOT_FOUND` 错误码
-- `next_actions` 提示安装 `com.unity.render-pipelines.high-definition`
+- `nextActions` 提示安装 `com.unity.render-pipelines.high-definition`

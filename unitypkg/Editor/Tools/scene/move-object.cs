@@ -31,7 +31,7 @@ namespace UnityCli
             public bool? Moved { get; set; }
             public string Reason { get; set; }
             public bool? DryRun { get; set; }
-            public List<PlannedEffect> PlannedEffects { get; set; }
+            public List<ScenePlannedEffect> PlannedEffects { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -99,9 +99,9 @@ namespace UnityCli
                     FromScene = go.scene.path,
                     ToScene = destScenePath,
                     DryRun = true,
-                    PlannedEffects = new List<PlannedEffect>
+                    PlannedEffects = new List<ScenePlannedEffect>
                     {
-                        new PlannedEffect { Type = "scene.move-object", Target = go.name }
+                        new ScenePlannedEffect { Type = "scene.move-object", Target = go.name }
                     }
                 };
             }

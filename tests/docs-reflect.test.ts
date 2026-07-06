@@ -146,7 +146,7 @@ test("docs cache missing returns structured diagnostic", async () => {
 
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "DOCS_CACHE_MISSING");
-  assert.equal(result.error?.next_actions?.[0].includes("--docs-dir"), true);
+  assert.equal(result.error?.nextActions?.[0].includes("--docs-dir"), true);
 });
 
 test("docs get falls back online when default cache is missing", async () => {
@@ -230,7 +230,7 @@ test("reflect ambiguous type returns structured diagnostic", async () => {
 
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "REFLECT_TYPE_AMBIGUOUS");
-  assert.match(result.error?.next_actions?.[0] ?? "", /UnityEngine.Camera/);
+  assert.match(result.error?.nextActions?.[0] ?? "", /UnityEngine.Camera/);
 });
 
 test("reflect assembly load failure is surfaced before query", async () => {
@@ -241,7 +241,7 @@ test("reflect assembly load failure is surfaced before query", async () => {
 
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "REFLECT_ASSEMBLY_LOAD_FAILED");
-  assert.equal(result.error?.next_actions?.[0].includes("Regenerate"), true);
+  assert.equal(result.error?.nextActions?.[0].includes("Regenerate"), true);
 });
 
 test("reflect cache missing returns structured diagnostic", async () => {
@@ -250,7 +250,7 @@ test("reflect cache missing returns structured diagnostic", async () => {
 
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "REFLECT_CACHE_MISSING");
-  assert.equal(result.error?.next_actions?.[0].includes("--reflect-dir"), true);
+  assert.equal(result.error?.nextActions?.[0].includes("--reflect-dir"), true);
 });
 
 async function makeMarkdownDocsCache(): Promise<string> {
