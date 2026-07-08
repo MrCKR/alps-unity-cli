@@ -118,7 +118,6 @@ test("old ProBuilder tool names no longer exist in extension manifests", () => {
 });
 
 test("ProBuilder C# extension source contains representative public tool names", async () => {
-  const commandsSource = await readFile(new URL("../extensions/probuilder/unitypkg/Editor/Commands/ProBuilderCommands.cs", import.meta.url), "utf8");
   const toolFiles = await Promise.all([
     "ping.cs",
     "create-shape.cs",
@@ -126,10 +125,10 @@ test("ProBuilder C# extension source contains representative public tool names",
     "set-face-material.cs",
     "repair-mesh.cs"
   ].map(async (file) => readFile(new URL(`../extensions/probuilder/unitypkg/Editor/ProBuilder/${file}`, import.meta.url), "utf8")));
-  const allSource = `${commandsSource}\n${toolFiles.join("\n")}`;
+  const allSource = toolFiles.join("\n");
 
   for (const name of ["probuilder.ping", "probuilder.create-shape", "probuilder.extrude-faces", "probuilder.set-face-material", "probuilder.repair-mesh"]) {
-    assert.ok(allSource.includes(name) || commandsSource.includes(name), `${name}: public tool name should appear in extension source`);
+    assert.ok(allSource.includes(name), `${name}: public tool name should appear in extension source`);
   }
 });
 

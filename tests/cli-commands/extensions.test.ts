@@ -167,8 +167,9 @@ test("extensions install creates a Unity extension directory package", async () 
     assert.ok(installedManifest.contributions.tools.some((tool) => tool.name === "probuilder.create-shape"));
     assert.equal(installedManifest.unityInstall.layout, "directory");
 
-    const commandSource = await readFile(join(extensionRoot, "Editor", "Commands", "ProBuilderCommands.cs"), "utf8");
-    assert.match(commandSource, /RegisterProBuilderCommands/);
+    const pingSource = await readFile(join(extensionRoot, "Editor", "ProBuilder", "ping.cs"), "utf8");
+    assert.match(pingSource, /class .*: IUnityCliTool/);
+    assert.match(pingSource, /Name = "probuilder\.ping"/);
     await stat(join(extensionRoot, "docs", "probuilder.md"));
     await assert.rejects(() => stat(join(extensionRoot, "bridge")), { code: "ENOENT" });
     await assert.rejects(() => stat(join(extensionRoot, "tools")), { code: "ENOENT" });
@@ -180,7 +181,7 @@ test("extensions install creates a Unity extension directory package", async () 
     assert.equal(entry.copyRoot, "extension-directory");
     assert.equal(entry.layout, "directory");
     assert.ok(entry.files.some((file) => file.path === "extension.json"));
-    assert.ok(entry.files.some((file) => file.path === "Editor/Commands/ProBuilderCommands.cs"));
+    assert.ok(entry.files.some((file) => file.path === "Editor/ProBuilder/ping.cs"));
     assert.ok(entry.files.some((file) => file.path === "docs/probuilder.md"));
     assert.ok(!entry.files.some((file) => file.path.startsWith("unitypkg/")));
   } finally {
