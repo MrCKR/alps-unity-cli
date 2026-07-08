@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import test from "node:test";
 import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { findCommandContract } from "../src/contracts/command-contract.js";
@@ -22,11 +22,6 @@ const EXPECTED_CINEMACHINE_TOOLS = [
   "cinemachine.release-override",
   "cinemachine.extension"
 ] as const;
-
-const SESSION_OVERRIDE_TOOLS = new Set([
-  "cinemachine.force-camera",
-  "cinemachine.release-override"
-]);
 
 test("Cinemachine extension manifest exposes exactly 13 single-action tools", () => {
   const contributionNames = builtinExtensionToolContributions()
@@ -51,21 +46,18 @@ test("Cinemachine manifest contributions document package gate and extension own
   }
 });
 
-test("Cinemachine bridge specs match extension tool names", () => {
+test("Cinemachine bridge specs route through project-tool.run with toolName", () => {
   const specs = bridgeCommandRegistry.specs().filter((spec) => spec.group === "cinemachine");
   assert.equal(specs.length, 13);
-  const specNames = specs.map((spec) => spec.bridgeCommand).sort();
-  assert.deepEqual(specNames, [...EXPECTED_CINEMACHINE_TOOLS].sort());
+  assert.ok(specs.every((spec) => spec.bridgeCommand === "project-tool.run"));
+  assert.ok(specs.every((spec) => spec.toolsOnly === true));
+  assert.deepEqual(specs.map((spec) => spec.toolName).sort(), [...EXPECTED_CINEMACHINE_TOOLS].sort());
 
-  const forceSpec = specs.find((spec) => spec.bridgeCommand === "cinemachine.force-camera");
-  assert.ok(forceSpec);
-  assert.equal(forceSpec?.command, "force-camera");
-  assert.equal(forceSpec?.toolsOnly, true);
+  const forceSpec = specs.find((spec) => spec.command === "force-camera");
+  assert.equal(forceSpec?.toolName, "cinemachine.force-camera");
 
-  const releaseSpec = specs.find((spec) => spec.bridgeCommand === "cinemachine.release-override");
-  assert.ok(releaseSpec);
-  assert.equal(releaseSpec?.command, "release-override");
-  assert.equal(releaseSpec?.toolsOnly, true);
+  const releaseSpec = specs.find((spec) => spec.command === "release-override");
+  assert.equal(releaseSpec?.toolName, "cinemachine.release-override");
 });
 
 test("Cinemachine tools have matching command contracts", () => {
@@ -79,22 +71,35 @@ test("Cinemachine tools have matching command contracts", () => {
   }
 });
 
-test("Cinemachine C# extension registers ping and Brain override commands", () => {
-  const source = readFileSync("extensions/cinemachine/unitypkg/Editor/Commands/CinemachineCommands.cs", "utf8");
-  assert.match(source, /RegisterCommand\(registry, "cinemachine\.ping",\s+"cinemachine", false, CinemachinePing\)/);
-  assert.match(source, /RegisterCommand\(registry, "cinemachine\.force-camera",\s+"cinemachine", false, CinemachineForceCamera\)/);
-  assert.match(source, /RegisterCommand\(registry, "cinemachine\.release-override",\s+"cinemachine", false, CinemachineReleaseOverride\)/);
-  assert.match(source, /FindSetCameraOverrideMethod\(brain\.GetType\(\)\)/);
-  assert.match(source, /FindReleaseCameraOverrideMethod\(brain\.GetType\(\)\)/);
-  assert.match(source, /FindPublicInstanceMethod\(_cmCameraType, "GetCinemachineComponent", stageEnumType\)/);
-  assert.match(source, /Prop\("overrideId", \(long\)newOverrideId\)/);
-  assert.match(source, /forceOverrideAvailable/);
+test("Cinemachine C# extension is self-contained and no longer uses legacy Commands registration", () => {
+  assert.equal(existsSync("extensions/cinemachine/unitypkg/Editor/Commands/CinemachineCommands.cs"), false);
 
-  for (const name of EXPECTED_CINEMACHINE_TOOLS) {
-    assert.ok(source.includes(`RegisterCommand(registry, "${name}"`) || source.includes(`"${name}"`), `${name} should appear in extension source`);
-  }
+  const registrySource = readFileSync("unitypkg/Editor/Bridge/BridgeCommandRegistry.cs", "utf8");
+  assert.doesNotMatch(registrySource, /RegisterCinemachineCommands/);
 
-  for (const name of SESSION_OVERRIDE_TOOLS) {
-    assert.ok(source.includes(name), `${name} should keep session override implementation in source`);
+  const supportSource = readFileSync("extensions/cinemachine/unitypkg/Editor/Cinemachine/CinemachineToolSupport.cs", "utf8");
+  assert.match(supportSource, /FindSetCameraOverrideMethod/);
+  assert.match(supportSource, /FindReleaseCameraOverrideMethod/);
+  assert.match(supportSource, /FindPublicInstanceMethod\(Type ownerType, string methodName, params Type\[] parameterTypes\)/);
+  assert.match(supportSource, /GetPipelineComponent\(Component camera, string stage\)/);
+  assert.match(supportSource, /ForceOverrideAvailable/);
+
+  const expectedFiles = [
+    "ping.cs",
+    "create.cs",
+    "target.cs",
+    "lens.cs",
+    "priority.cs",
+    "blend.cs",
+    "body.cs",
+    "aim.cs",
+    "noise.cs",
+    "brain.cs",
+    "extension.cs",
+    "force-camera.cs",
+    "release-override.cs"
+  ];
+  for (const file of expectedFiles) {
+    assert.equal(existsSync(`extensions/cinemachine/unitypkg/Editor/Cinemachine/${file}`), true, `${file} should exist`);
   }
 });

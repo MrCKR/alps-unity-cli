@@ -1,20 +1,20 @@
-import { boolFlag, compactArgs, floatFlag, numberFlag, queryArgs, stringFlag, targetArgs } from "../args.js";
+import { boolFlag, compactArgs, floatFlag, numberFlag, stringFlag, targetArgs } from "../args.js";
 import type { BridgeCommandSpec } from "../types.js";
 
 export const cinemachineBridgeSpecs: BridgeCommandSpec[] = markToolsOnly([
-  { group: "cinemachine", command: "ping", bridgeCommand: "cinemachine.ping", buildArgs: cinemachinePingArgs },
-  { group: "cinemachine", command: "create", bridgeCommand: "cinemachine.create", buildArgs: cinemachineCreateArgs, supportsJob: true },
-  { group: "cinemachine", command: "target", bridgeCommand: "cinemachine.target", buildArgs: cinemachineTargetArgs },
-  { group: "cinemachine", command: "lens", bridgeCommand: "cinemachine.lens", buildArgs: cinemachineLensArgs },
-  { group: "cinemachine", command: "priority", bridgeCommand: "cinemachine.priority", buildArgs: cinemachinePriorityArgs },
-  { group: "cinemachine", command: "blend", bridgeCommand: "cinemachine.blend", buildArgs: cinemachineBlendArgs },
-  { group: "cinemachine", command: "body", bridgeCommand: "cinemachine.body", buildArgs: cinemachineBodyArgs },
-  { group: "cinemachine", command: "aim", bridgeCommand: "cinemachine.aim", buildArgs: cinemachineAimArgs },
-  { group: "cinemachine", command: "noise", bridgeCommand: "cinemachine.noise", buildArgs: cinemachineNoiseArgs },
-  { group: "cinemachine", command: "brain", bridgeCommand: "cinemachine.brain", buildArgs: cinemachineBrainArgs },
-  { group: "cinemachine", command: "force-camera", bridgeCommand: "cinemachine.force-camera", buildArgs: cinemachineForceCameraArgs },
-  { group: "cinemachine", command: "release-override", bridgeCommand: "cinemachine.release-override", buildArgs: cinemachineReleaseOverrideArgs },
-  { group: "cinemachine", command: "extension", bridgeCommand: "cinemachine.extension", buildArgs: cinemachineExtensionArgs }
+  { group: "cinemachine", command: "ping", bridgeCommand: "project-tool.run", toolName: "cinemachine.ping", buildArgs: cinemachinePingArgs },
+  { group: "cinemachine", command: "create", bridgeCommand: "project-tool.run", toolName: "cinemachine.create", buildArgs: cinemachineCreateArgs, supportsJob: true },
+  { group: "cinemachine", command: "target", bridgeCommand: "project-tool.run", toolName: "cinemachine.target", buildArgs: cinemachineTargetArgs },
+  { group: "cinemachine", command: "lens", bridgeCommand: "project-tool.run", toolName: "cinemachine.lens", buildArgs: cinemachineLensArgs },
+  { group: "cinemachine", command: "priority", bridgeCommand: "project-tool.run", toolName: "cinemachine.priority", buildArgs: cinemachinePriorityArgs },
+  { group: "cinemachine", command: "blend", bridgeCommand: "project-tool.run", toolName: "cinemachine.blend", buildArgs: cinemachineBlendArgs },
+  { group: "cinemachine", command: "body", bridgeCommand: "project-tool.run", toolName: "cinemachine.body", buildArgs: cinemachineBodyArgs },
+  { group: "cinemachine", command: "aim", bridgeCommand: "project-tool.run", toolName: "cinemachine.aim", buildArgs: cinemachineAimArgs },
+  { group: "cinemachine", command: "noise", bridgeCommand: "project-tool.run", toolName: "cinemachine.noise", buildArgs: cinemachineNoiseArgs },
+  { group: "cinemachine", command: "brain", bridgeCommand: "project-tool.run", toolName: "cinemachine.brain", buildArgs: cinemachineBrainArgs },
+  { group: "cinemachine", command: "force-camera", bridgeCommand: "project-tool.run", toolName: "cinemachine.force-camera", buildArgs: cinemachineForceCameraArgs },
+  { group: "cinemachine", command: "release-override", bridgeCommand: "project-tool.run", toolName: "cinemachine.release-override", buildArgs: cinemachineReleaseOverrideArgs },
+  { group: "cinemachine", command: "extension", bridgeCommand: "project-tool.run", toolName: "cinemachine.extension", buildArgs: cinemachineExtensionArgs, destructiveHint: true }
 ]);
 
 function markToolsOnly(specs: BridgeCommandSpec[]): BridgeCommandSpec[] {

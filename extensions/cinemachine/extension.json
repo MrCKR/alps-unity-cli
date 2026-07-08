@@ -54,8 +54,56 @@
     "contexts": [],
     "csharpEntries": [
       {
-        "type": "UnityCli.Cinemachine.CinemachineCameraTools",
-        "description": "Bridge handlers for Cinemachine ping, create, target, lens, priority, blend, body, aim, noise, brain, force-camera, release-override, and extension operations."
+        "type": "UnityCli.Cinemachine.PingTool",
+        "description": "Self-contained Cinemachine ping tool."
+      },
+      {
+        "type": "UnityCli.Cinemachine.CreateTool",
+        "description": "Self-contained Cinemachine create tool."
+      },
+      {
+        "type": "UnityCli.Cinemachine.TargetTool",
+        "description": "Self-contained Cinemachine target tool."
+      },
+      {
+        "type": "UnityCli.Cinemachine.LensTool",
+        "description": "Self-contained Cinemachine lens tool."
+      },
+      {
+        "type": "UnityCli.Cinemachine.PriorityTool",
+        "description": "Self-contained Cinemachine priority tool."
+      },
+      {
+        "type": "UnityCli.Cinemachine.BlendTool",
+        "description": "Self-contained Cinemachine blend tool."
+      },
+      {
+        "type": "UnityCli.Cinemachine.BodyTool",
+        "description": "Self-contained Cinemachine body tool."
+      },
+      {
+        "type": "UnityCli.Cinemachine.AimTool",
+        "description": "Self-contained Cinemachine aim tool."
+      },
+      {
+        "type": "UnityCli.Cinemachine.NoiseTool",
+        "description": "Self-contained Cinemachine noise tool."
+      },
+      {
+        "type": "UnityCli.Cinemachine.BrainTool",
+        "description": "Self-contained Cinemachine brain tool."
+      },
+      {
+        "type": "UnityCli.Cinemachine.ForceCameraTool",
+        "description": "Self-contained Cinemachine force-camera tool."
+      },
+      {
+        "type": "UnityCli.Cinemachine.ReleaseOverrideTool",
+        "description": "Self-contained Cinemachine release-override tool."
+      },
+      {
+        "type": "UnityCli.Cinemachine.ExtensionTool",
+        "description": "Self-contained Cinemachine extension tool."
       }
     ]
   },

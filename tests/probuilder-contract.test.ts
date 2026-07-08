@@ -89,11 +89,14 @@ test("every ProBuilder tool has a matching bridge spec", () => {
 });
 
 test("every ProBuilder tool has a matching command contract", () => {
+  const probuilderSpecs = bridgeCommandRegistry.specs().filter((spec) => spec.group === "probuilder");
+  const handlerByTool = new Map(probuilderSpecs.map((spec) => [spec.toolName!, spec.supportsJob ? "hybrid" : "bridge"] as const));
+
   for (const name of EXPECTED_PROBUILDER_TOOLS) {
     const contract = findCommandContract(name);
     assert.ok(contract, `${name}: contract not found`);
     assert.equal(contract?.group, "probuilder", `${name}: contract group must be probuilder`);
-    assert.equal(contract?.handler_type, "bridge", `${name}: contract handler_type must be bridge`);
+    assert.equal(contract?.handler_type, handlerByTool.get(name), `${name}: contract handler_type mismatch`);
     assert.equal(contract?.csharp_handler, "present", `${name}: contract csharp_handler must be present`);
     assert.equal(typeof contract?.destructive, "boolean", `${name}: contract destructive flag should stay boolean`);
   }

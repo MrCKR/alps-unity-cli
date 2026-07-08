@@ -102,7 +102,7 @@ namespace UnityCli
         private static void RegisterInstalledExtensionCommands(BridgeCommandRegistry registry)
         {
             var methodNames = new[]
-            {                "RegisterCinemachineCommands",
+            {
                 "RegisterVfxCommands"
             };
             foreach (var methodName in methodNames)

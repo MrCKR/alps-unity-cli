@@ -157,12 +157,15 @@ test("validateExtensionManifestContracts validates manifests against bridge rout
   );
 });
 
-test("URP and HDRP extension bridge specs route through project-tool.run", () => {
+test("URP, HDRP, and Cinemachine extension bridge specs route through project-tool.run", () => {
   const urpFeature = bridgeCommandRegistry.lookup("urp", "feature");
   const urpVolume = bridgeCommandRegistry.lookup("urp", "volume");
   const urpSettings = bridgeCommandRegistry.lookup("urp", "settings");
   const hdrpVolume = bridgeCommandRegistry.lookup("hdrp", "volume");
   const hdrpSettings = bridgeCommandRegistry.lookup("hdrp", "settings");
+  const cmPing = bridgeCommandRegistry.lookup("cinemachine", "ping");
+  const cmForce = bridgeCommandRegistry.lookup("cinemachine", "force-camera");
+  const cmRelease = bridgeCommandRegistry.lookup("cinemachine", "release-override");
 
   assert.equal(urpFeature?.bridgeCommand, "project-tool.run");
   assert.equal(urpFeature?.toolName, "urp.feature");
@@ -174,6 +177,12 @@ test("URP and HDRP extension bridge specs route through project-tool.run", () =>
   assert.equal(hdrpVolume?.toolName, "hdrp.volume");
   assert.equal(hdrpSettings?.bridgeCommand, "project-tool.run");
   assert.equal(hdrpSettings?.toolName, "hdrp.settings");
+  assert.equal(cmPing?.bridgeCommand, "project-tool.run");
+  assert.equal(cmPing?.toolName, "cinemachine.ping");
+  assert.equal(cmForce?.bridgeCommand, "project-tool.run");
+  assert.equal(cmForce?.toolName, "cinemachine.force-camera");
+  assert.equal(cmRelease?.bridgeCommand, "project-tool.run");
+  assert.equal(cmRelease?.toolName, "cinemachine.release-override");
 });
 
 test("extension registry helpers still expose contribution counts", async () => {

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { commandContracts, findCommandContract } from "../src/contracts/command-contract.js";
 import { builtinExtensionToolContributions } from "../src/extensions/tool-manifest.js";
 import { probuilderDeleteFacesTool, probuilderPingTool } from "./helpers/live-tool-fixtures.js";
@@ -71,11 +72,17 @@ test("all 36 ProBuilder tools are discoverable through extension manifest contri
 });
 
 test("representative chains keep contract routing with present C# handlers", () => {
+  const handlerByTool = new Map(
+    bridgeCommandRegistry.specs()
+      .filter((spec) => spec.group === "probuilder")
+      .map((spec) => [spec.toolName!, spec.supportsJob ? "hybrid" : "bridge"] as const)
+  );
+
   for (const name of REPRESENTATIVE_CHAINS) {
     const contract = findCommandContract(name);
     assert.ok(contract, `${name}: contract must exist`);
     assert.equal(contract?.csharp_handler, "present");
-    assert.equal(contract?.handler_type, "bridge");
+    assert.equal(contract?.handler_type, handlerByTool.get(name));
   }
 });
 

@@ -17,7 +17,7 @@
       "command": "clip.create",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -26,7 +26,7 @@
       "command": "clip.modify",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -125,7 +125,7 @@
       "command": "delete",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -683,7 +683,7 @@
       "command": "remove-layer",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -800,7 +800,7 @@
       "command": "menu",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -989,7 +989,7 @@
       "command": "bake-clear",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -998,7 +998,7 @@
       "command": "bake-reflection-probe",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -1016,7 +1016,7 @@
       "command": "bake-start",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -1304,7 +1304,7 @@
       "command": "modify",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -1635,7 +1635,7 @@
       "bridgeCommand": "probuilder.append-vertices-to-edge",
       "group": "probuilder",
       "command": "append-vertices-to-edge",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1644,7 +1644,7 @@
       "bridgeCommand": "probuilder.auto-smooth",
       "group": "probuilder",
       "command": "auto-smooth",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1653,7 +1653,7 @@
       "bridgeCommand": "probuilder.bevel-edges",
       "group": "probuilder",
       "command": "bevel-edges",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1662,7 +1662,7 @@
       "bridgeCommand": "probuilder.bridge-edges",
       "group": "probuilder",
       "command": "bridge-edges",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1671,7 +1671,7 @@
       "bridgeCommand": "probuilder.center-pivot",
       "group": "probuilder",
       "command": "center-pivot",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1680,16 +1680,16 @@
       "bridgeCommand": "probuilder.combine-meshes",
       "group": "probuilder",
       "command": "combine-meshes",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
       "bridgeCommand": "probuilder.connect-elements",
       "group": "probuilder",
       "command": "connect-elements",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1698,7 +1698,7 @@
       "bridgeCommand": "probuilder.convert-to-probuilder",
       "group": "probuilder",
       "command": "convert-to-probuilder",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1707,7 +1707,7 @@
       "bridgeCommand": "probuilder.create-poly-shape",
       "group": "probuilder",
       "command": "create-poly-shape",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1716,7 +1716,7 @@
       "bridgeCommand": "probuilder.create-polygon",
       "group": "probuilder",
       "command": "create-polygon",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1725,7 +1725,7 @@
       "bridgeCommand": "probuilder.create-shape",
       "group": "probuilder",
       "command": "create-shape",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1734,25 +1734,25 @@
       "bridgeCommand": "probuilder.delete-faces",
       "group": "probuilder",
       "command": "delete-faces",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
       "bridgeCommand": "probuilder.detach-faces",
       "group": "probuilder",
       "command": "detach-faces",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
       "bridgeCommand": "probuilder.duplicate-and-flip",
       "group": "probuilder",
       "command": "duplicate-and-flip",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1761,7 +1761,7 @@
       "bridgeCommand": "probuilder.extrude-edges",
       "group": "probuilder",
       "command": "extrude-edges",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1770,7 +1770,7 @@
       "bridgeCommand": "probuilder.extrude-faces",
       "group": "probuilder",
       "command": "extrude-faces",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1779,16 +1779,16 @@
       "bridgeCommand": "probuilder.flip-normals",
       "group": "probuilder",
       "command": "flip-normals",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
       "bridgeCommand": "probuilder.freeze-transform",
       "group": "probuilder",
       "command": "freeze-transform",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1797,7 +1797,7 @@
       "bridgeCommand": "probuilder.insert-vertex",
       "group": "probuilder",
       "command": "insert-vertex",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1806,7 +1806,7 @@
       "bridgeCommand": "probuilder.merge-faces",
       "group": "probuilder",
       "command": "merge-faces",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1815,16 +1815,16 @@
       "bridgeCommand": "probuilder.merge-objects",
       "group": "probuilder",
       "command": "merge-objects",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
       "bridgeCommand": "probuilder.merge-vertices",
       "group": "probuilder",
       "command": "merge-vertices",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1842,7 +1842,7 @@
       "bridgeCommand": "probuilder.move-vertices",
       "group": "probuilder",
       "command": "move-vertices",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1860,7 +1860,7 @@
       "bridgeCommand": "probuilder.repair-mesh",
       "group": "probuilder",
       "command": "repair-mesh",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1878,7 +1878,7 @@
       "bridgeCommand": "probuilder.set-face-color",
       "group": "probuilder",
       "command": "set-face-color",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1887,7 +1887,7 @@
       "bridgeCommand": "probuilder.set-face-material",
       "group": "probuilder",
       "command": "set-face-material",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1896,7 +1896,7 @@
       "bridgeCommand": "probuilder.set-face-uvs",
       "group": "probuilder",
       "command": "set-face-uvs",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1905,7 +1905,7 @@
       "bridgeCommand": "probuilder.set-pivot",
       "group": "probuilder",
       "command": "set-pivot",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1914,7 +1914,7 @@
       "bridgeCommand": "probuilder.set-smoothing",
       "group": "probuilder",
       "command": "set-smoothing",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1923,7 +1923,7 @@
       "bridgeCommand": "probuilder.split-vertices",
       "group": "probuilder",
       "command": "split-vertices",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1932,7 +1932,7 @@
       "bridgeCommand": "probuilder.subdivide",
       "group": "probuilder",
       "command": "subdivide",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1950,7 +1950,7 @@
       "bridgeCommand": "probuilder.weld-vertices",
       "group": "probuilder",
       "command": "weld-vertices",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -1968,7 +1968,7 @@
       "bridgeCommand": "profiler.capture",
       "group": "profiler",
       "command": "capture",
-      "handler_type": "bridge",
+      "handler_type": "hybrid",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
@@ -2249,7 +2249,7 @@
       "command": "method-call",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2357,7 +2357,7 @@
       "command": "save",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2456,7 +2456,7 @@
       "command": "surround",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2465,7 +2465,7 @@
       "command": "create",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2492,7 +2492,7 @@
       "command": "modify",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2510,7 +2510,7 @@
       "command": "delete",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2582,7 +2582,7 @@
       "command": "delete",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2591,7 +2591,7 @@
       "command": "generate",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2618,7 +2618,7 @@
       "command": "modify",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2717,7 +2717,7 @@
       "command": "create-panel-settings",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2744,7 +2744,7 @@
       "command": "document/delete",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2762,7 +2762,7 @@
       "command": "document/update",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2798,7 +2798,7 @@
       "command": "link-stylesheet",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2825,7 +2825,7 @@
       "command": "render-preview",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2843,7 +2843,7 @@
       "command": "update-panel-settings",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2852,7 +2852,7 @@
       "command": "feature",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
