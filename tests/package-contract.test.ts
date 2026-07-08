@@ -8,7 +8,7 @@ import { readFile } from "node:fs/promises";
 const PACKAGE_COMMANDS = ["package.list", "package.status", "package.info", "package.search", "package.install", "package.remove", "package.bridge-remove", "package.deploy", "package.restore", "package.resolve", "package.registry", "package.scoped-registry", "package.embed"];
 
 /**
- * Package 域契约测试：list/status/info/search/install/remove/bridge-remove/resolve/registry/scoped-registry (offline/hybrid) + embed (bridge)。
+ * Package 域契约测试：list/status/info/search/install/remove/bridge-remove/deploy/restore/resolve/registry/scoped-registry (offline/hybrid) + embed (bridge)。
  * 对齐 CoplayDev manage_packages，验证 metadata/bridge/contract 一致，错误恢复提示迁移到 `tools run` 形态。
  * C# RegisterCommand 守卫不适用：除 embed 外的 package.* 经 offline/hybrid handlePackage 路由（非 bridge RegisterCommand）。
  */
@@ -59,7 +59,8 @@ test("package install/remove/resolve expose play mode + risk metadata", () => {
   const deploy = findToolByName("package.deploy")!;
   assert.equal(deploy.destructiveHint, true);
   assert.equal(deploy.supportsDryRun, true);
-  assert.equal(deploy.handler, "offline");
+  assert.equal(deploy.handler, "hybrid");
+  assert.equal(deploy.supportStatus, "bridge-job");
   assert.equal(deploy.riskLevel, "high");
   assert.equal(deploy.playModeSupport, "session-affecting");
   assert.match(deploy.description, /package\.json/, "package.deploy should explain source package requirement");
@@ -69,7 +70,8 @@ test("package install/remove/resolve expose play mode + risk metadata", () => {
   const restore = findToolByName("package.restore")!;
   assert.equal(restore.destructiveHint, true);
   assert.equal(restore.supportsDryRun, true);
-  assert.equal(restore.handler, "offline");
+  assert.equal(restore.handler, "hybrid");
+  assert.equal(restore.supportStatus, "bridge-job");
   assert.equal(restore.riskLevel, "high");
   assert.equal(restore.playModeSupport, "session-affecting");
   assert.match(restore.description, /package\.deploy/, "package.restore should explain deploy metadata dependency");

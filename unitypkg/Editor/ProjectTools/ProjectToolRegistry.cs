@@ -91,47 +91,11 @@ namespace UnityCli
                     if (type == null) continue;
 
                     // 新形态:扫描实现 IUnityCliTool<,> 泛型接口的类(Stage 2+,废除 attribute 后的唯一发现路径)
+                    // IUnityCliDeferredTool<,> 是 IUnityCliTool<,> 的子接口,实现它的工具(含 runtime.wait)
+                    // 由 TryRegisterInterfaceProjectTool 统一发现,不再需要特殊直接注册。
                     TryRegisterInterfaceProjectTool(assembly, type);
                 }
             }
-
-            // 内置 runtime 原语:RuntimeWaitTool 直接注册(deferred-wait 机制不兼容 IUnityCliTool 同步契约,特殊处理)
-            RegisterBuiltInRuntimeTools();
-        }
-
-        // ── 内置 runtime 原语直接注册 ──
-        // RuntimeWaitTool 的 deferred-wait 机制(返回 marker 字符串由 RuntimeExecutor 拦截)不兼容
-        // IUnityCliTool 同步 Execute(Request):Result 契约,故不走接口发现,直接注册。
-        private static void RegisterBuiltInRuntimeTools()
-        {
-            if (ProjectTools.ContainsKey("runtime.wait")) return;
-            RegisterProjectTool(new UnityCliProjectToolDefinition
-            {
-                Name = "runtime.wait",
-                Summary = "Wait for a number of frames or seconds in Play Mode.",
-                Description = "Waits for a specified number of frames or seconds in Play Mode. Returns the actual frames waited and elapsed time. This is a runtime-only cross-frame primitive.",
-                Group = "runtime",
-                Version = "1.0.0",
-                InputSchema = "{\"type\":\"object\",\"properties\":{\"frames\":{\"type\":\"number\",\"description\":\"Number of frames to wait (default 1)\"},\"seconds\":{\"type\":\"number\",\"description\":\"Seconds to wait (alternative to frames)\"},\"condition\":{\"type\":\"string\",\"description\":\"Wait condition: frame-count, duration, or next-frame (default next-frame)\"}}}",
-                OutputSchema = "{\"type\":\"object\",\"properties\":{\"framesWaited\":{\"type\":\"number\"},\"elapsedMs\":{\"type\":\"number\"},\"condition\":{\"type\":\"string\"},\"isPlaying\":{\"type\":\"boolean\"},\"frameCount\":{\"type\":\"number\"}}}",
-                CapabilityType = "project-read",
-                DestructiveHint = false,
-                Target = "runtime",
-                PlayModeSupport = "runtime-only",
-                DefaultTimeoutMs = 10000,
-                MaxTimeoutMs = 120000,
-                SupportsJob = false,
-                ArtifactKinds = new[] { "json" },
-                RequiredInput = new string[0],
-                RegisteredBy = "unity-editor-package",
-                DescriptorSource = "built-in-runtime",
-                Assembly = "com.unity_cli",
-                Method = "UnityCli.RuntimeWaitTool.Execute",
-                Execute = delegate(UnityCliProjectToolContext context)
-                {
-                    return RuntimeWaitTool.Execute(context);
-                }
-            });
         }
 
         // ── 新形态:IUnityCliTool<TReq,TRes> 泛型接口实现类发现与注册 ──
@@ -156,6 +120,33 @@ namespace UnityCli
                 }
             }
             if (toolInterface == null) return;
+
+            // deferred 检测:若同时实现 IUnityCliDeferredTool<,>,缓存反射元数据供 Execute 委托使用。
+            // 不实现则 tryDeferMethod 为 null,Execute 委托走原同步路径(零影响)。
+            Type deferredInterface = null;
+            foreach (var iface in type.GetInterfaces())
+            {
+                if (iface.IsGenericType && iface.GetGenericTypeDefinition() == typeof(IUnityCliDeferredTool<,>))
+                {
+                    deferredInterface = iface;
+                    break;
+                }
+            }
+            MethodInfo tryDeferMethod = null;
+            FieldInfo fiIsComplete = null, fiOnComplete = null, fiTimeoutMs = null;
+            FieldInfo fiTimeoutErrorCode = null, fiTimeoutErrorMessage = null, fiTimeoutNextAction = null;
+            if (deferredInterface != null)
+            {
+                tryDeferMethod = deferredInterface.GetMethod("TryDefer");
+                // DeferredCompletion<TRes> 的字段经构造泛型类型预缓存,避免每帧反射。
+                var completionType = typeof(DeferredCompletion<>).MakeGenericType(resType);
+                fiIsComplete = completionType.GetField("IsComplete");
+                fiOnComplete = completionType.GetField("OnComplete");
+                fiTimeoutMs = completionType.GetField("TimeoutMs");
+                fiTimeoutErrorCode = completionType.GetField("TimeoutErrorCode");
+                fiTimeoutErrorMessage = completionType.GetField("TimeoutErrorMessage");
+                fiTimeoutNextAction = completionType.GetField("TimeoutNextAction");
+            }
 
             // 实例化工具类(要求无参构造)
             object instance;
@@ -228,14 +219,87 @@ namespace UnityCli
                 {
                     // 输入:JSON → TReq(反序列化,废除 StringArg 正则刮)。用非泛型重载(运行时 Type)。
                     var req = UnityCliSerializer.Deserialize(context.InputJson, reqType);
-                    // 调 handler(传 ctx)
+                    // deferred 路径:若实现 IUnityCliDeferredTool,反射调 TryDefer(out completion)。
+                    // 返回 true 则校验 completion 并启动 StartDeferredWait(返回 marker);false 走同步 Execute。
+                    if (tryDeferMethod != null)
+                    {
+                        // out 参数反射:Invoke 传 object[]{req, ctx, null},Invoke 后 args[2] 为 completion。
+                        var deferArgs = new object[] { req, context, null };
+                        var deferred = (bool)tryDeferMethod.Invoke(instance, deferArgs);
+                        if (deferred)
+                        {
+                            return StartDeferredFromCompletion(
+                                deferArgs[2], currentWorkItem,
+                                fiIsComplete, fiOnComplete, fiTimeoutMs,
+                                fiTimeoutErrorCode, fiTimeoutErrorMessage, fiTimeoutNextAction);
+                        }
+                    }
+                    // 同步路径:调 handler(传 ctx)
                     var result = executeMethod.Invoke(instance, new object[] { req, context });
                     // 输出:TRes → JSON(反射序列化)
                     return result == null ? "null" : UnityCliSerializer.Serialize(result);
                 }
             };
             RegisterProjectTool(definition);
-            WriteLog("custom_tool_registered name=" + descriptor.Name + " source=IUnityCliTool type=" + type.FullName);
+            WriteLog("custom_tool_registered name=" + descriptor.Name + " source=IUnityCliTool type=" + type.FullName
+                + (deferredInterface != null ? " deferred=true" : ""));
+        }
+
+        /// <summary>
+        /// 用预缓存 FieldInfo 读取 DeferredCompletion&lt;TRes&gt; 字段并启动 StartDeferredWait。
+        /// completion 为 DeferredCompletion&lt;TRes&gt;(TRes 运行时已知);IsComplete/OnComplete 非空校验失败抛 E_SCHEMA_INVALID。
+        /// onSuccess 序列化 OnComplete 返回的 TRes 为 SuccessJson envelope(与旧 deferred profiler 响应形态一致)。
+        /// currentWorkItem 由 ProcessQueuedWork 在 Execute 调用链内设置,此处直接取用。
+        /// </summary>
+        private static string StartDeferredFromCompletion(
+            object completion,
+            BridgeWorkItem item,
+            FieldInfo isCompleteField,
+            FieldInfo onCompleteField,
+            FieldInfo timeoutMsField,
+            FieldInfo timeoutErrorCodeField,
+            FieldInfo timeoutErrorMessageField,
+            FieldInfo timeoutNextActionField)
+        {
+            if (completion == null)
+            {
+                throw new BridgeCommandException("E_SCHEMA_INVALID",
+                    "Deferred tool TryDefer returned true but completion is null.",
+                    "Fix the tool implementation: populate the out completion parameter.");
+            }
+            var isComplete = (Func<bool>)isCompleteField.GetValue(completion);
+            var onComplete = (Delegate)onCompleteField.GetValue(completion);
+            if (isComplete == null || onComplete == null)
+            {
+                throw new BridgeCommandException("E_SCHEMA_INVALID",
+                    "Deferred tool completion requires non-null IsComplete and OnComplete.",
+                    "Fix the tool implementation: set IsComplete and OnComplete on the DeferredCompletion.");
+            }
+            var timeoutMs = (int)timeoutMsField.GetValue(completion);
+            var timeoutErrorCode = (string)timeoutErrorCodeField.GetValue(completion);
+            var timeoutErrorMessage = (string)timeoutErrorMessageField.GetValue(completion);
+            var timeoutNextAction = (string)timeoutNextActionField.GetValue(completion);
+            return StartDeferredWait(
+                item,
+                isComplete,
+                timeoutMs,
+                () =>
+                {
+                    // DynamicInvoke 会把 OnComplete 抛出的 BridgeCommandException 包装成 TargetInvocationException,
+                    // 这里解包以让 StartDeferredWait 的 catch(BridgeCommandException) 捕获原始结构化错误码。
+                    try
+                    {
+                        var res = onComplete.DynamicInvoke();
+                        return res == null ? SuccessJson("null") : SuccessJson(UnityCliSerializer.Serialize(res));
+                    }
+                    catch (TargetInvocationException tie)
+                    {
+                        throw tie.InnerException ?? tie;
+                    }
+                },
+                timeoutErrorCode,
+                timeoutErrorMessage,
+                timeoutNextAction);
         }
 
         private static string ProjectToolGroupFromName(string name)
@@ -391,6 +455,13 @@ namespace UnityCli
             catch (Exception exception)
             {
                 return ErrorJson("E_TOOL_EXECUTION_FAILED", exception.GetType().Name + ": " + exception.Message, "Check Unity Console and UnityCliBridge.log with the returned requestId.");
+            }
+
+            // deferred: Execute 委托已启动 StartDeferredWait 并返回 marker。直接透传给 ProcessQueuedWork
+            // (IsDeferred 已标记,不 Completed.Set;真实响应由 deferred 回调异步填入)。跳过 manifest/envelope 包装。
+            if (resultJson == DeferredResponseMarker)
+            {
+                return resultJson;
             }
 
             var endedAt = DateTime.UtcNow;

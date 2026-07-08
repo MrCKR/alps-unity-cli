@@ -197,16 +197,17 @@ test("target-scoped ProBuilder tools require target in inputSchema", () => {
   }
 });
 
-test("ProBuilder scene context is implemented as read-only UnityCliContext", async () => {
+test("ProBuilder scene context is implemented as read-only IUnityCliContext", async () => {
   const { readFile } = await import("node:fs/promises");
   const contextSource = await readFile(new URL("../extensions/probuilder/unitypkg/Editor/ProBuilder/ProBuilderSceneContext.cs", import.meta.url), "utf8");
 
-  assert.match(contextSource, /UnityCliContext\(/);
+  assert.match(contextSource, /class ProBuilderSceneContext : IUnityCliContext<ProBuilderSceneContext\.Request, ProBuilderSceneContext\.Result>/);
   assert.match(contextSource, /"probuilder\.scene"/);
   assert.match(contextSource, /Category\s*=\s*"probuilder"/);
-  assert.match(contextSource, /RequiresPackages\s*=\s*"com\.unity\.probuilder"/);
-  assert.match(contextSource, /public static string Provide\(UnityCliContextRequest/);
+  assert.match(contextSource, /RequiresPackages\s*=\s*new\[\] \{ "com\.unity\.probuilder" \}/);
+  assert.match(contextSource, /public Result Read\(Request request, UnityCliProjectToolContext ctx\)/);
   assert.doesNotMatch(contextSource, /\[UnityCliTool\(/);
+  assert.doesNotMatch(contextSource, /\[UnityCliContext\(/);
   assert.doesNotMatch(contextSource, /public static string Execute\(/);
   assert.doesNotMatch(contextSource, /public static string Run\(/);
 

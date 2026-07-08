@@ -128,7 +128,7 @@ test("descriptions are call guidance, not duplicated summaries or embedded comma
   }
 });
 
-test("context describe entries disclose read-only observation boundaries", () => {
+test("local context describe entries disclose read-only observation boundaries", () => {
   for (const context of builtinContextDescriptors()) {
     assert.ok(context.description.trim(), `${context.name} context description must not be empty`);
     const text = context.description.toLowerCase();
@@ -143,12 +143,9 @@ test("context describe entries disclose read-only observation boundaries", () =>
       const sentence = context.description.slice(sentenceStart, sentenceEnd === -1 ? undefined : sentenceEnd + 1);
       const previousChar = match.index > 0 ? context.description[match.index - 1] : "";
       if (previousChar === ".") continue;
-      if (word === "open" && /currently open|open Unity EditorWindow|open editor windows/i.test(sentence)) continue;
       assert.match(sentence, /without|does not|not|no stable public API/i, `${context.name} mutation-like word '${word}' must be in an explicit no-side-effect sentence`);
     }
   }
-
-  assert.match(builtinContextDescriptors().find((context) => context.name === "prefab.stage")!.description, /does not open, save, close, or modify/i);
 });
 
 test("large-output describe descriptors disclose output controls", () => {

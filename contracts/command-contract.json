@@ -1365,7 +1365,7 @@
       "bridgeCommand": "package.deploy",
       "group": "package",
       "command": "deploy",
-      "handler_type": "offline",
+      "handler_type": "hybrid",
       "csharp_handler": "none",
       "destructive": true,
       "timeout": 30000
@@ -1437,7 +1437,7 @@
       "bridgeCommand": "package.restore",
       "group": "package",
       "command": "restore",
-      "handler_type": "offline",
+      "handler_type": "hybrid",
       "csharp_handler": "none",
       "destructive": true,
       "timeout": 30000

@@ -24,8 +24,8 @@
 | 文档 | 内容 |
 |------|------|
 | [扩展包](extensions.md) | bundled optional extensions 的安装、卸载、诊断和依赖边界 |
-| [自定义 Tool](custom-tools.md) | 项目侧 `[UnityCliTool]` 注册、发现与执行 |
-| [自定义 Context](custom-contexts.md) | 项目侧 `[UnityCliContext]` 只读状态注册 |
+| [自定义 Tool](custom-tools.md) | 项目侧 `IUnityCliTool<TReq,TRes>` 注册、发现与执行 |
+| [自定义 Context](custom-contexts.md) | 项目侧 `IUnityCliContext<TReq,TRes>` 只读状态注册 |
 
 ## AI Agent 阅读顺序
 

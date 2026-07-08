@@ -109,8 +109,9 @@ async function registeredCsharpCommands(directory: URL): Promise<Set<string>> {
     for (const match of source.matchAll(/RegisterCommand\(registry, "([^"]+)"/g)) {
       commands.add(match[1]);
     }
-    // IUnityCliTool 形态(新,Stage 2+):文件含 IUnityCliTool< 则提取 Name="..."
-    if (source.includes(": IUnityCliTool<") || source.includes(": IUnityCliContext<")) {
+    // IUnityCliTool/IUnityCliDeferredTool 形态(新,Stage 2+):文件含接口声明则提取 Name="..."。
+    // Context 名不属于 command-contract；context 契约由 context tests 覆盖。
+    if (source.includes(": IUnityCliTool<") || source.includes(": IUnityCliDeferredTool<")) {
       for (const match of source.matchAll(/Name\s*=\s*"([a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+)"/g)) {
         commands.add(match[1]);
       }

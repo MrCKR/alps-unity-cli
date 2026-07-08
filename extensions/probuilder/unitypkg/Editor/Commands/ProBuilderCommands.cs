@@ -31,7 +31,7 @@ namespace UnityCli
         private static void RegisterProBuilderCommands(BridgeCommandRegistry registry)
         {
             // ProBuilder bridge commands are served by single-action extension tools
-            // discovered via [UnityCliTool] attributes in the UnityCli.ProBuilder namespace.
+            // discovered as IUnityCliTool implementations in the UnityCli.ProBuilder namespace.
             // ProjectToolRegistry.DiscoverProjectTools() scans loaded assemblies, so no
             // manual registration is needed here.
         }

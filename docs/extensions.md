@@ -30,7 +30,7 @@ unity_cli init --check --project C:\path\MyProject
 
 ### 项目自定义工具发现
 
-Bridge 包安装后，项目可以通过 `[UnityCliTool]` 注册自定义工具，通过 `--include-custom` 标志发现：
+Bridge 包安装后，项目可以通过 `IUnityCliTool<TReq,TRes>` 注册自定义工具，通过 `--include-custom` 标志发现：
 
 ```powershell
 unity_cli tools group list custom --include-custom
@@ -82,8 +82,8 @@ unity_cli extensions doctor --project <path>         # 扩展诊断
 | 组件 | 说明 |
 |------|------|
 | Manifest | 扩展元数据（名称、版本、依赖） |
-| Descriptor | 工具/Context 的 JSON Schema |
-| C# Bridge 实现 | `unitypkg/Editor` 下的 `[UnityCliTool]` / `[UnityCliContext]` handler，安装后位于 `Packages/com.unity_cli/Extensions/<id>/Editor` |
+| Descriptor | 工具/Context 的 descriptor 与派生 JSON Schema |
+| C# Bridge 实现 | `unitypkg/Editor` 下的 `IUnityCliTool<TReq,TRes>` / `IUnityCliContext<TReq,TRes>` 实现，安装后位于 `Packages/com.unity_cli/Extensions/<id>/Editor` |
 | 测试 | 单元测试和集成测试 |
 | 文档片段 | 扩展使用说明 |
 

@@ -61,7 +61,7 @@ function extractCSharpRegisteredCommands(root: string): string[] {
     // Scan for IUnityCliTool<TReq,TRes> implementers (new form, Stage 2+).
     // These are discovered by ProjectToolRegistry at runtime via interface scan.
     // Tool name lives in Describe()'s Name = "group.name" (dotted lowercase string literal).
-    if (source.includes(": IUnityCliTool<") || source.includes(": IUnityCliContext<")) {
+    if (source.includes(": IUnityCliTool<")) {
       for (const match of source.matchAll(/Name\s*=\s*"([a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+)"/g)) {
         commands.add(match[1]);
       }

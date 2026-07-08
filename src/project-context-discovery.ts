@@ -25,6 +25,7 @@ export interface ContextFingerprint {
 /** Unified context descriptor — the TS-side representation of a context. */
 export interface ContextDescriptor {
   name: string;
+  summary?: string;
   description: string;
   category: string;
   version?: string;
@@ -123,6 +124,7 @@ export function rawDescriptorToContextDescriptor(value: unknown): ContextDescrip
 
   return ensureContextDefaults({
     name,
+    summary: stringProp(d, "summary") ?? description,
     description,
     category: stringProp(d, "category") ?? (isProject ? "custom" : "built-in"),
     version: stringProp(d, "version"),
@@ -163,6 +165,7 @@ function ensureContextDefaults(context: ContextDescriptor): ContextDescriptor {
     target: context.target ?? "editor",
     availabilityScope: context.availabilityScope ?? "editorSession",
     playModeSupport: context.playModeSupport ?? (context.target === "runtime" ? "runtime-only" : "supported"),
+    summary: context.summary ?? context.description,
     supportStatus: context.supportStatus ?? (context.target === "runtime" ? "live-bridge-runtime" : "live-bridge"),
     cliCommand: context.cliCommand ?? `context read ${context.name}`
   };

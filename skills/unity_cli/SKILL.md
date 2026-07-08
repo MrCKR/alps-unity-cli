@@ -124,10 +124,10 @@ Descriptor 常用字段：
 当内置能力不够时，按这个顺序决策：
 
 1. 一次性 Unity 侧操作：使用 `tools run code.exec --yes` 动态执行 C#。
-2. 反复需要的只读信息：创建自定义 Context，使用 `[UnityCliContext]`，必须声明 `Description`。
-3. 反复需要的操作能力：创建自定义 Tool，使用 `[UnityCliTool]`，必须声明 `Summary`。
+2. 反复需要的只读信息：创建自定义 Context，实现 `IUnityCliContext<TReq,TRes>`，必须声明 `Description` 和只读边界。
+3. 反复需要的操作能力：创建自定义 Tool，实现 `IUnityCliTool<TReq,TRes>`，必须声明 `Summary`、风险和 Play Mode 语义。
 
-自定义 C# 文件必须放在名为 `UnityCLI/` 的目录下， `UnityCLI ` 必须包含 `RunTime` 和 `Editor`，例如：
+自定义 C# 文件必须放在名为 `UnityCLI/` 的目录下，目录位置不限，例如：
 
 - `Assets/UnityCLI/`
 - `Assets/Editor/UnityCLI/`

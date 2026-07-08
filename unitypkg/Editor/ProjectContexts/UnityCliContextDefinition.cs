@@ -5,8 +5,8 @@ namespace UnityCli
 {
     /// <summary>
     /// Runtime definition for a project custom context. Created by
-    /// ProjectContextRegistry during discovery from [UnityCliContext] attributed
-    /// methods, and stored in the registry for lookup by context.list/describe/read.
+    /// ProjectContextRegistry during discovery from IUnityCliContext<TReq,TRes>
+    /// implementations, and stored in the registry for lookup by context.list/describe/read.
     ///
     /// Custom contexts are always Source=project and must not declare
     /// DestructiveHint, SupportsJob, or artifact kinds.
@@ -15,6 +15,7 @@ namespace UnityCli
     {
         // --- Core identity ---
         public string Name { get; set; }
+        public string Summary { get; set; }
         public string Description { get; set; }
         public string Category { get; set; }
         public string Version { get; set; }
@@ -56,11 +57,11 @@ namespace UnityCli
 
         // --- Handler ---
         /// <summary>
-        /// Read handler delegate. Takes a UnityCliContextRequest (or null if
-        /// no input), returns a JSON string. The registry enforces that this
-        /// does not use Execute/Run method names and does not perform writes.
+        /// Read handler delegate. Takes the shared project context carrying
+        /// requestId/projectPath/inputJson/logPath, returns a JSON string. The
+        /// registry enforces that handlers do not perform writes.
         /// </summary>
-        public Func<UnityCliContextRequest, string> Read { get; set; }
+        public Func<UnityCliProjectToolContext, string> Read { get; set; }
     }
 }
 #endif

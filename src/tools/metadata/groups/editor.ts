@@ -173,10 +173,30 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
       compile: { type: "boolean", default: false, description: "Request script compilation after refresh." },
       project: { type: "string", description: "Unity project path to open in batchmode." },
       unity: { type: "string", description: "Path to Unity executable for batchmode refresh." },
-      wait: { type: "boolean", default: true, description: "Wait for the refresh job to complete before returning final status." },
-      waitTimeoutMs: { type: "integer", description: "Maximum wait time for job completion." }
+      wait: { type: "boolean", default: false, description: "Wait for the refresh job to complete before returning final status; otherwise returns the queued job immediately." },
+      timeoutMs: { type: "integer", description: "Maximum Unity batchmode process lifetime in milliseconds." },
+      waitTimeoutMs: { type: "integer", description: "Maximum wait time for job completion when wait=true." }
     }),
-    outputSchema: objSchema({ jobId: { type: "string" }, status: { type: "string" }, command: { type: "string" }, logPath: { type: "string" } }),
+    outputSchema: objSchema({
+      jobId: { type: "string" },
+      kind: { type: "string" },
+      status: { type: "string" },
+      requestId: { type: "string" },
+      projectPath: { type: "string" },
+      unityPath: { type: "string" },
+      logPath: { type: "string" },
+      pid: { type: "integer" },
+      exitCode: { type: "integer" },
+      createdAt: { type: "string" },
+      updatedAt: { type: "string" },
+      startedAt: { type: "string" },
+      finishedAt: { type: "string" },
+      command: { type: "array", items: { type: "string" } },
+      result: { type: "object" },
+      error: { type: "object" },
+      cancellation: { type: "object" },
+      logTail: { type: "array", items: { type: "string" } }
+    }),
     destructiveHint: false,
     playModeSupport: "editor-only",
     sideEffects: ["asset-refresh", "script-compile", "domain-reload"],
@@ -220,7 +240,7 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
   {
     name: "editor.compile-diagnostics",
     summary: "Refresh/wait live Editor, then return Console compile diagnostics for C# edit loops.",
-    description: "Refresh the live Unity Editor AssetDatabase, wait for the Editor to become idle, and read recent Console errors in one call. This is the live-bridge compile diagnostics loop for AI workflows after editing C# files: it does not clear Console entries, does not save project files, and does not start a batchmode Editor. The CLI orchestrates existing live Bridge calls (asset.refresh, context read editor.state, console.get), retrying transient compile/import/domain-reload states within waitTimeoutMs. Use refresh=false to only wait/read Console, or pass path/assetPath to import a specific Assets/* path before collecting diagnostics.",
+    description: "Refresh the live Unity Editor AssetDatabase, wait for the Editor to become idle, and read recent Console errors in one call. This is the live-bridge compile diagnostics loop for AI workflows after editing C# files: it does not clear Console entries, does not save project files, and does not start a batchmode Editor. The CLI orchestrates existing live Bridge calls (asset.refresh, context read editor.state, console.get), retrying transient compile/import/domain-reload states within waitTimeoutMs. Use refresh=false to only wait/read Console, or pass path/assetPath to import a specific Assets/* path before collecting diagnostics. Use dryRun=true or --dry-run to preview the planned refresh/wait/console steps without calling the Bridge. job=true/--job is rejected with E_TOOL_JOB_UNSUPPORTED because live Console diagnostics require a live Editor; use editor.refresh for batchmode refresh jobs.",
     group: "editor",
     inputSchema: objSchema({
       refresh: { type: "boolean", default: true, description: "Whether to trigger a live asset.refresh before waiting and reading Console." },
@@ -234,10 +254,13 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
       type: { type: "string", enum: ["error", "warning", "log", "assert", "all"], default: "error", description: "Console entry type to read after compile settles." },
       filter: { type: "string", description: "Optional message/path substring filter forwarded to console.get." },
       search: { type: "string", description: "Alias of filter." },
-      count: { type: "integer", default: 100, maximum: 500, description: "Maximum Console entries returned newest-first." }
+      count: { type: "integer", default: 100, maximum: 500, description: "Maximum Console entries returned newest-first." },
+      dryRun: { type: "boolean", default: false, description: "Preview planned refresh/wait/console-read steps without calling the live Bridge." },
+      job: { type: "boolean", default: false, description: "Unsupported for this live diagnostics loop; true returns E_TOOL_JOB_UNSUPPORTED. Use editor.refresh for batchmode refresh jobs." }
     }),
     outputSchema: objSchema({
       command: { type: "string" },
+      dryRun: { type: "boolean", description: "True only when dryRun/--dry-run was requested." },
       status: { type: "string", enum: ["clean", "compile_errors", "console_errors", "wait_timeout", "dry_run"] },
       refresh: { type: "object" },
       wait: { type: "object" },
@@ -255,7 +278,8 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
     examples: [
       { description: "Refresh, wait, and read recent compiler diagnostics", argv: ["tools", "run", "editor.compile-diagnostics", "--input", "{\"waitTimeoutMs\":45000,\"count\":100}"] },
       { description: "Import one changed script before reading diagnostics", argv: ["tools", "run", "editor.compile-diagnostics", "--input", "{\"path\":\"Assets/Scripts/Player.cs\",\"forceUpdate\":true}"] },
-      { description: "Only wait and read Console without triggering refresh", argv: ["tools", "run", "editor.compile-diagnostics", "--input", "{\"refresh\":false,\"count\":50}"] }
+      { description: "Only wait and read Console without triggering refresh", argv: ["tools", "run", "editor.compile-diagnostics", "--input", "{\"refresh\":false,\"count\":50}"] },
+      { description: "Preview planned refresh/wait/console steps", argv: ["tools", "run", "editor.compile-diagnostics", "--dry-run", "--input", "{\"path\":\"Assets/Scripts/Player.cs\"}"] }
     ],
   },
   {
@@ -275,11 +299,16 @@ export const EDITOR_TOOLS: ToolMetadata[] = [
       supported: { type: "boolean" },
       status: { type: "string", enum: ["dismissed", "not_found", "unsupported", "error", "dry_run"] },
       dismissed: { type: "boolean" },
+      dryRun: { type: "boolean" },
       attempts: { type: "integer" },
+      timeoutMs: { type: "integer" },
+      intervalMs: { type: "integer" },
       processId: { type: "integer" },
       title: { type: "string" },
       button: { type: "string" },
       lastError: { type: "string" },
+      titleFragments: { type: "array", items: { type: "string" } },
+      durationMs: { type: "integer" },
       plannedEffects: { type: "array", items: { type: "object" } },
       nextActions: { type: "array", items: { type: "string" } }
     }),

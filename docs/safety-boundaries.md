@@ -84,7 +84,7 @@ Context 不得：
 
 | 规则 | 说明 |
 |------|------|
-| 必须有 descriptor | 通过 `[UnityCliTool]` 特性自动生成，不可省略 |
+| 必须有 descriptor | 通过 `IUnityCliTool<TReq,TRes>.Describe()` 提供人工字段，schema 由 Request/Result 派生，不可省略 |
 | 必须通过 envelope | 输入输出必须遵循统一 JSON envelope 格式 |
 | Fingerprint 校验 | handler 代码变更时默认阻止执行 |
 | 不可绕过 registry | 不允许直接调用未注册的方法 |

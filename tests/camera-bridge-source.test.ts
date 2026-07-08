@@ -147,7 +147,7 @@ test("Unity Bridge exposes documented core camera, screenshot, prefab, UI, mater
   assert.doesNotMatch(source, /RegisterCommand\(registry, "profiler\.counter"/);
   assert.doesNotMatch(source, /RegisterCommand\(registry, "profiler\.memory"/);
   assert.doesNotMatch(source, /RegisterCommand\(registry, "profiler\.frame"/);
-  assert.match(source, /RegisterCommand\(registry, "profiler\.capture", "profiler", true/);
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "profiler\.capture"/);
   assert.doesNotMatch(source, /RegisterCommand\(registry, "profiler\.export"/);
   assert.doesNotMatch(source, /RegisterCommand\(registry, "profiler\.status"/);
   assert.doesNotMatch(source, /ProfilerFrozenDecision|ProfilerCoverageScopeJson/);
@@ -227,7 +227,8 @@ test("Unity Bridge exposes documented core camera, screenshot, prefab, UI, mater
   assert.doesNotMatch(source, /RegisterCommand\(registry, "asset\.move", "asset", false/);
   assert.doesNotMatch(source, /RegisterCommand\(registry, "asset\.rename", "asset", false/);
   assert.doesNotMatch(source, /RegisterCommand\(registry, "asset\.refresh", "asset", false/);
-  assert.match(source, /RegisterCommand\(registry, "diagnose\.preflight", "diagnose", false/);
+  // diagnose.preflight 已迁移为 IUnityCliTool(unitypkg/Editor/Tools/diagnose/preflight.cs),不再用 RegisterCommand
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "diagnose\.preflight", "diagnose", false/);
   assert.doesNotMatch(source, /RegisterCommand\(registry, "editor\.state", "editor", false/);
   assert.doesNotMatch(source, /RegisterCommand\(registry, "editor\.play", "editor", false/);
   assert.doesNotMatch(source, /RegisterCommand\(registry, "editor\.pause", "editor", false/);

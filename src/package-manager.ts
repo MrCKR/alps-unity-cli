@@ -636,7 +636,9 @@ export function validatePackageName(name: string | undefined): string {
 
 export function validateRegistryUrl(url: string | undefined): string {
   if (!url) {
-    throw new PackageManagerError("REGISTRY_URL_REQUIRED", "Pass --url <registryUrl>.");
+    throw new PackageManagerError("REGISTRY_URL_REQUIRED", "Pass --url <registryUrl>.", [
+      "Pass an http(s) registry URL, for example https://package.openupm.com."
+    ]);
   }
   try {
     const parsed = new URL(url);
@@ -645,7 +647,10 @@ export function validateRegistryUrl(url: string | undefined): string {
     }
     return url;
   } catch {
-    throw new PackageManagerError("REGISTRY_URL_INVALID", `Registry URL is invalid: ${url}`);
+    throw new PackageManagerError("REGISTRY_URL_INVALID", `Registry URL is invalid: ${url}`, [
+      "Use an http(s) registry URL, for example https://package.openupm.com.",
+      "Run unity_cli tools describe package.search or package.registry for accepted registry inputs."
+    ]);
   }
 }
 

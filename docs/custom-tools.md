@@ -1,166 +1,132 @@
-# 自定义工具（Custom Tools）
+# 自定义 Tool
 
-项目侧通过 C# `[UnityCliTool]` 特性注册统一 Tool，并用 `target` / `availabilityScope` / `playModeSupport` 描述运行约束；自定义 Tool 与内置工具共享同一发现链和执行入口。
+项目侧通过 C# `IUnityCliTool<TReq,TRes>` 泛型接口声明自定义 Tool。Tool 是动作入口：可以读取，也可以修改 Unity Editor、Play Mode 会话、场景或资产；任何可能有副作用的能力都应设计为 Tool，而不是 Context。
 
-## 概述
+自定义 Tool 与内置工具共享同一公开链路：
 
-| `target` | 说明 |
-|----------|------|
-| `editor` | 编辑器主线程执行，适合资产/场景/配置修改 |
-| `runtime` | gameplay/runtime layer 工具；通常需要 Play Mode 才可用 |
+- `tools group` / `tools group list <group> --include-custom` 发现
+- `tools describe <name> --include-custom` 学习输入、输出、风险和状态
+- `tools run <name> --include-custom --input '<json>'` 执行
+- 成功/失败都返回统一 JSON envelope
 
-项目自定义工具：
-- 通过 `tools group list custom --include-custom` 发现
-- 通过 `tools describe <name>` 查看完整描述
-- 通过 `tools run <name>` 执行
-- 与内置工具使用相同的 descriptor schema 和 envelope 格式
+C# 文件必须放在项目内名为 `UnityCLI` 的目录下，例如 `Assets/UnityCLI/` 或 `Assets/Editor/UnityCLI/`。
 
-## `target: editor` 注册
-
-使用 `[UnityCliTool]` 特性标记静态类或静态方法：
-
-### 类级别注册
+## 最小示例
 
 ```csharp
+#if UNITY_EDITOR
 using UnityCli;
 
-[UnityCliTool("sample.editor-tool",
-    Title = "Sample Editor-targeted Tool",
-    Group = "custom",
-    Description = "A minimal editor-targeted tool.",
-    DestructiveHint = false,
-    PlayModeSupport = "editor-only")]
-public static class SampleEditorTool
+namespace MyProject.UnityCLI
 {
-    // 类级别注册需要恰好一个 static Execute 或 Run 方法
-    public static object Execute(Dictionary<string, object> input)
+    public sealed class SampleEchoTool : IUnityCliTool<SampleEchoTool.Request, SampleEchoTool.Result>
     {
-        var message = input.TryGetValue("message", out var msg) ? msg?.ToString() : "hello";
-        return new { greeting = $"Editor says: {message}" };
+        public sealed class Request
+        {
+            [UnityCliRequired]
+            public string Message { get; set; }
+            public string Note { get; set; }
+        }
+
+        public sealed class Result
+        {
+            public string RequestId { get; set; }
+            public string Message { get; set; }
+            public string Note { get; set; }
+        }
+
+        public ToolDescriptor Describe() => new ToolDescriptor
+        {
+            Name = "sample.echo",
+            Summary = "Echo a required message from a project-local Editor tool.",
+            Description = "Echoes a message from a Unity project Editor C# tool. Optional note is returned when present.",
+            Group = "sample",
+            Version = "1.0.0",
+            DestructiveHint = false,
+            Target = "editor",
+            PlayModeSupport = "editor-only",
+            DefaultTimeoutMs = 30000,
+            MaxTimeoutMs = 600000,
+            Examples = new[]
+            {
+                new ToolExample
+                {
+                    Description = "回显消息",
+                    Input = new Request { Message = "hello" }
+                }
+            }
+        };
+
+        /// <summary>
+        /// 执行项目侧回显工具。输入和输出均为强类型 DTO，schema 由框架从类型派生。
+        /// </summary>
+        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        {
+            return new Result
+            {
+                RequestId = ctx.RequestId ?? string.Empty,
+                Message = request.Message,
+                Note = request.Note
+            };
+        }
     }
 }
+#endif
 ```
 
-### 方法级别注册
+## 结构要求
 
-```csharp
-using UnityCli;
+每个 Tool 类自包含三部分：
 
-public static class MyTools
-{
-    [UnityCliTool("my.tool-a",
-        Title = "Tool A",
-        Group = "custom")]
-    public static object ToolA(Dictionary<string, object> input)
-    {
-        return new { result = "tool-a output" };
-    }
+- `Request`：输入 DTO。public 属性会派生为 `inputSchema`。
+- `Result`：成功输出 DTO。public 属性会派生为 `outputSchema`。
+- `Describe()`：人工编写 descriptor 字段。不要在这里手写 schema。
+- `Execute(Request, ctx)`：真正执行逻辑，结构体进、结构体出。
 
-    [UnityCliTool("my.tool-b",
-        Title = "Tool B",
-        Group = "custom",
-        DestructiveHint = true,
-        PlayModeSupport = "session-affecting")]
-    public static object ToolB(Dictionary<string, object> input)
-    {
-        return new { result = "tool-b output" };
-    }
-}
-```
+`[UnityCliRequired]` 标记必填输入字段。未标记的引用类型字段可省略；无值字段按 proto3 风格不发送。Unity 2022.3 默认 C# 版本不支持 C# 11 `required`，因此必填语义使用 `[UnityCliRequired]`。
 
-## `target: runtime` 注册
+## Descriptor 字段
 
-Runtime target 与 editor target 使用相同的注册方式，只是通过 descriptor 标记 `target` 和可用性范围：
+`Describe()` 只写 AI 需要理解的稳定语义：
 
-```csharp
-using UnityCli;
+| 字段 | 说明 |
+|---|---|
+| `Name` | 唯一 Tool 名，使用 dotted/kebab 风格，例如 `sample.echo`。 |
+| `Summary` | 发现阶段路由字段，短句说明动作对象和结果。 |
+| `Description` | 调用阶段说明边界、默认行为、副作用、Play Mode 语义和错误恢复。 |
+| `Group` | 发现分组；项目工具可使用项目域名或功能域名，不要求都叫 `custom`。 |
+| `DestructiveHint` | 真实持久化写入、删除、ProjectSettings/manifest 修改或任意代码执行时为 `true`。 |
+| `Target` | `editor`、`runtime` 或 `both`。 |
+| `PlayModeSupport` | `supported`、`runtime-only`、`session-affecting`、`editor-only` 或 `unknown`。 |
+| `SupportsDryRun` | 支持预览时设为 `true`。 |
+| `DefaultTimeoutMs` / `MaxTimeoutMs` | 控制默认与最大执行时间。 |
+| `RequiresPackages` | 依赖 Unity package 时声明，例如 `com.unity.probuilder`。 |
+| `Examples` | 用强类型 `Request` 实例给出可照抄的典型输入。 |
 
-[UnityCliTool("sample.runtime-echo",
-    Title = "Runtime Echo",
-    Group = "custom",
-    Description = "Echoes input during Play Mode.",
-    Target = "runtime",
-    PlayModeSupport = "runtime-only")]
-public static class SampleRuntimeTool
-{
-    public static object Execute(Dictionary<string, object> input)
-    {
-        var message = input.TryGetValue("message", out var msg) ? msg?.ToString() : "ping";
-        return new { echo = message, timestamp = DateTime.Now.ToString("o") };
-    }
-}
-```
+`inputSchema` / `outputSchema` 由框架从 `Request` / `Result` 派生并注入 describe 输出；不要手写 JSON Schema 字符串。
 
-Runtime target 行为：
-- 仅在 Play Mode 活跃时可用
-- 非 Play Mode 时返回 `E_RUNTIME_NOT_READY`（transient error）
-- 通过 `tools group list custom --include-custom` 发现；非 Play Mode 执行 runtime 工具会返回 `E_RUNTIME_NOT_READY`
-- Runtime 工具通常声明 `PlayModeSupport = "runtime-only"`，提示 AI 不要把运行时结果当作持久资产修改
+## Editor 与 Runtime
 
-## 特性参数
+`Target = "editor"` 的工具运行在 Editor 侧，适合场景、资产、项目设置或 Editor 会话操作。
 
-| 参数 | 类型 | 必填 | 说明 |
-|------|------|------|------|
-| `name` | string | ✅ | 工具唯一标识（如 `my.editor-tool`） |
-| `Title` | string | ✅ | 人类可读标题 |
-| `Group` | string | ✅ | 工具分组名 |
-| `Description` | string | ❌ | 工具描述 |
-| `DestructiveHint` | bool | ❌ | 是否有破坏性（默认 false） |
-| `Target` | string | ❌ | 目标类型：`editor`（默认）/ `runtime` / `both` |
-| `PlayModeSupport` | string | ❌ | Play Mode 行为：`supported` / `runtime-only` / `session-affecting` / `editor-only` / `unknown` |
+`Target = "runtime"` 的工具通过 runtime bridge 在 Play Mode 会话中运行。非 Play Mode 时应返回稳定 runtime 错误，AI 根据 `error.transient`、`error.retryAfterMs` 和 `error.nextActions` 决定下一步。
 
-## Descriptor 自动生成
+`Target = "both"` 只在同一个能力确实有 Editor/Runtime 双态语义时使用；descriptor 必须解释两种状态下的结果差异。
 
-Bridge 扫描已加载的 Unity Editor 程序集，自动从 `[UnityCliTool]` 特性推导：
-- `inputSchema` / `outputSchema` — 基于 Execute 方法签名
-- `fingerprint` — `sha256(handler-code + descriptor-v1)`
-- `handler` / `supportStatus` / `target` / `availabilityScope` / `playModeSupport`
+## 安全规则
 
-零手写配置，Class/Attribute-first 注册。
+- 真实持久化写入或删除必须设置 `DestructiveHint = true`，CLI 执行时需要 `--yes`。
+- 能 dry-run 的写操作应设置 `SupportsDryRun = true`，并在 `Result` 中返回 planned effects。
+- 只改场景内存或会话状态通常不算 destructive，但仍要在 `SideEffects` / `Description` 里写清楚。
+- 只读能力必须保持只读；如果未来可能写入，应拆成单独 Tool。
+- 失败应让框架返回结构化错误 envelope；不要把 `{ ok:false }` 作为成功 Result 返回。
 
-## 安全边界
-
-### 必须遵守
-
-- 每个工具必须有完整 descriptor（由特性自动生成）
-- 所有输入输出必须通过统一 envelope 格式
-- Fingerprint 校验保护，handler 代码变更时默认阻止执行
-- 破坏性工具（`DestructiveHint: true`）执行前需要 `--yes` 确认
-- `PlayModeSupport = "editor-only"` 的工具在 Play Mode 下返回 `E_TOOL_PLAYMODE_UNAVAILABLE`
-
-### 禁止项
-
-| 禁止 | 说明 |
-|------|------|
-| 任意方法调用 | 只能通过 `tools run <registered-name>` 执行已注册工具 |
-| 反射 escape hatch | 不可通过自定义工具绕过安全检查 |
-| 绕过 registry 直接执行 | 不允许跳过 descriptor 校验和 fingerprint 检查 |
-| 修改 Context 约定 | 有副作用的能力必须注册为 Tool，不得注册为 Context |
-
-## 发现与执行
+## 发现与验证
 
 ```powershell
-# 发现所有自定义工具（需要 Bridge 连接）
-unity_cli tools group list custom --include-custom
-
-# 查看自定义工具完整描述
-unity_cli tools describe my.editor-tool
-
-# 执行自定义工具
-unity_cli tools run my.editor-tool --input '{"message":"hello"}'
-
-# target=runtime 的工具（通常需要 Play Mode）
-unity_cli tools run editor.play
-unity_cli tools run sample.runtime-echo --input '{"message":"ping"}'
+unity_cli tools group list <group> --include-custom
+unity_cli tools describe <tool-name> --include-custom
+unity_cli tools run <tool-name> --include-custom --input '{"message":"hello"}'
 ```
 
-## 当前状态与规划
-
-| 能力 | 状态 |
-|------|------|
-| `target=editor` Tool 注册与执行 | ✅ 已实现 |
-| `target=runtime` Tool 注册与执行 | ✅ 已实现 |
-| `tools group list custom --include-custom` 发现 | ✅ 已实现 |
-| Fingerprint 校验 | ✅ 已实现 |
-| `--dry-run` 支持 | ✅ 已实现（descriptor 级别控制） |
-| 独立 `extensions` 命令组 | ✅ 已实现 |
+`<group>` 必须来自真实 discovery 输出；不要假设项目工具一定在 `custom` 组。执行前始终先看 `tools describe`，确认 schema、risk、target、availabilityScope 和 playModeSupport。

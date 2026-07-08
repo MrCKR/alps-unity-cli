@@ -8,7 +8,7 @@ export const profilerBridgeSpecs: BridgeCommandSpec[] = [
   { group: "profiler", command: "counter", bridgeCommand: "project-tool.run", toolName: "profiler.counter", buildArgs: profilerArgs },
   { group: "profiler", command: "memory", bridgeCommand: "project-tool.run", toolName: "profiler.memory", buildArgs: profilerArgs },
   { group: "profiler", command: "frame", bridgeCommand: "project-tool.run", toolName: "profiler.frame", buildArgs: profilerArgs },
-  { group: "profiler", command: "capture", bridgeCommand: "profiler.capture", buildArgs: profilerArgs, supportsJob: true },
+  { group: "profiler", command: "capture", bridgeCommand: "project-tool.run", toolName: "profiler.capture", buildArgs: profilerArgs, supportsJob: true },
   { group: "profiler", command: "export", bridgeCommand: "project-tool.run", toolName: "profiler.export", buildArgs: profilerArgs },
   { group: "profiler", command: "status", bridgeCommand: "project-tool.run", toolName: "profiler.status", buildArgs: profilerArgs },
   { group: "profiler", command: "modules", bridgeCommand: "project-tool.run", toolName: "profiler.modules", buildArgs: profilerArgs },
@@ -18,15 +18,15 @@ export const profilerBridgeSpecs: BridgeCommandSpec[] = [
   { group: "profiler", command: "areas", bridgeCommand: "project-tool.run", toolName: "profiler.areas", buildArgs: profilerArgs },
   { group: "profiler", command: "object-memory", bridgeCommand: "project-tool.run", toolName: "profiler.object-memory", buildArgs: profilerObjectMemoryArgs },
   { group: "profiler", command: "deep", bridgeCommand: "project-tool.run", toolName: "profiler.deep", buildArgs: ({ flags }) => compactArgs({ enabled: boolFlag(flags, "enabled") ?? boolField(flags, "enabled") }) },
-  { group: "profiler", command: "hierarchy", bridgeCommand: "profiler.hierarchy", buildArgs: profilerHierarchyArgs },
-  { group: "profiler", command: "rendering-stats", bridgeCommand: "profiler.rendering-stats", buildArgs: profilerArgs },
+  { group: "profiler", command: "hierarchy", bridgeCommand: "project-tool.run", toolName: "profiler.hierarchy", buildArgs: profilerHierarchyArgs },
+  { group: "profiler", command: "rendering-stats", bridgeCommand: "project-tool.run", toolName: "profiler.rendering-stats", buildArgs: profilerArgs },
   { group: "profiler", command: "script-stats", bridgeCommand: "project-tool.run", toolName: "profiler.script-stats", buildArgs: profilerArgs },
-  { group: "profiler", command: "memory-snapshot.take", bridgeCommand: "profiler.memory-snapshot.take", buildArgs: profilerMemorySnapshotArgs },
-  { group: "profiler", command: "memory-snapshot.list", bridgeCommand: "profiler.memory-snapshot.list", buildArgs: profilerMemorySnapshotArgs },
-  { group: "profiler", command: "memory-snapshot.compare", bridgeCommand: "profiler.memory-snapshot.compare", buildArgs: profilerMemorySnapshotCompareArgs },
-  { group: "profiler", command: "frame-debugger.enable", bridgeCommand: "profiler.frame-debugger.enable", buildArgs: ({ flags }) => compactArgs({}) },
-  { group: "profiler", command: "frame-debugger.disable", bridgeCommand: "profiler.frame-debugger.disable", buildArgs: ({ flags }) => compactArgs({}) },
-  { group: "profiler", command: "frame-debugger.events", bridgeCommand: "profiler.frame-debugger.events", buildArgs: profilerFrameDebuggerEventsArgs }
+  { group: "profiler", command: "memory-snapshot.take", bridgeCommand: "project-tool.run", toolName: "profiler.memory-snapshot.take", buildArgs: profilerMemorySnapshotArgs },
+  { group: "profiler", command: "memory-snapshot.list", bridgeCommand: "project-tool.run", toolName: "profiler.memory-snapshot.list", buildArgs: profilerMemorySnapshotArgs },
+  { group: "profiler", command: "memory-snapshot.compare", bridgeCommand: "project-tool.run", toolName: "profiler.memory-snapshot.compare", buildArgs: profilerMemorySnapshotCompareArgs },
+  { group: "profiler", command: "frame-debugger.enable", bridgeCommand: "project-tool.run", toolName: "profiler.frame-debugger.enable", buildArgs: ({ flags }) => compactArgs({}) },
+  { group: "profiler", command: "frame-debugger.disable", bridgeCommand: "project-tool.run", toolName: "profiler.frame-debugger.disable", buildArgs: ({ flags }) => compactArgs({}) },
+  { group: "profiler", command: "frame-debugger.events", bridgeCommand: "project-tool.run", toolName: "profiler.frame-debugger.events", buildArgs: profilerFrameDebuggerEventsArgs }
 ];
 
 // 读取 tools run --input 中无法映射为简单 flag 的结构化字段

@@ -100,8 +100,8 @@ unity_cli tools describe camera.screenshot
 | `description` | 详细说明 |
 | `group` | 所属分组 |
 | `source` | 来源：`built-in` / `extension` / `project` |
-| `inputSchema` | 输入参数 JSON Schema |
-| `outputSchema` | 输出格式 JSON Schema |
+| `inputSchema` | 输入参数 JSON Schema；TS Tool 来自 `defineTool`，C# Tool 来自 Request DTO 派生 |
+| `outputSchema` | 输出格式 JSON Schema；TS Tool 来自 `defineTool`，C# Tool 来自 Result DTO 派生 |
 | `destructiveHint` | 是否有破坏性 |
 | `supportsDryRun` | 是否支持 `--dry-run` |
 | `riskLevel` | 根据权限和副作用推导的风险等级 |
@@ -118,10 +118,11 @@ unity_cli tools describe camera.screenshot
 
 ### 自定义工具描述
 
-当工具名不在内置列表中时，`tools describe` 会自动查询项目自定义工具：
+当工具名不在内置列表中时，先通过 `--include-custom` 让 CLI 查询目标 Unity Bridge 中的项目自定义工具：
 
 ```powershell
-unity_cli tools describe my.custom-tool --bridge-endpoint http://127.0.0.1:47392
+unity_cli tools group list <real-group> --include-custom
+unity_cli tools describe my.custom-tool --include-custom
 ```
 
 ## Descriptor 字段用途

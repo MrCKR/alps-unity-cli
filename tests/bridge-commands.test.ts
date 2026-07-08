@@ -950,13 +950,13 @@ test("profiler commands forward session, counter, memory, frame and export args"
   assert.equal(capture.ok, true);
   assert.equal(exportResult.ok, true);
   assert.equal(stop.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "profiler.capture", "project-tool.run", "project-tool.run"]);
+  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
   assert.deepEqual(requests[1].args, { name: "profiler.start", input: { deepProfiling: true } });
   assert.deepEqual(requests[2].args, { name: "profiler.pause", input: { paused: true } });
   assert.deepEqual(requests[3].args, { name: "profiler.counter", input: { counter: "MonoUsedSizeLong", category: "memory" } });
   assert.deepEqual(requests[4].args, { name: "profiler.memory", input: {} });
   assert.deepEqual(requests[5].args, { name: "profiler.frame", input: { module: "CPU Usage" } });
-  assert.deepEqual(requests[6].args, { path: "Artifacts/profile.json", format: "json", durationMs: 100, frames: 2, overwrite: true });
+  assert.deepEqual(requests[6].args, { name: "profiler.capture", input: { path: "Artifacts/profile.json", format: "json", durationMs: 100, frames: 2, overwrite: true } });
   assert.deepEqual(requests[7].args, { name: "profiler.export", input: { path: "Artifacts/profile-export.json", format: "json", overwrite: true } });
 });
 

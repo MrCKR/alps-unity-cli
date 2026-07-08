@@ -232,7 +232,7 @@ export async function handlePackage(command: string | undefined, args: string[],
 
   if (command === "search") {
     const query = validatePackageName(args[0] ?? getString(flags, "query"));
-    const registry = validateRegistryUrl(getString(flags, "registry") ?? (await readSnapshot(projectPath)).registry ?? "https://packages.unity.com");
+    const registry = validateRegistryUrl(getString(flags, "registry") ?? (await readSnapshot(projectPath)).registry ?? "https://package.openupm.com");
     return success(requestId, { registry, query, packages: await searchRegistry(registry, query) });
   }
 
@@ -423,7 +423,7 @@ function confirmManifestEdit(flags: Record<string, string | boolean>, requestId:
   });
 }
 
-async function refreshOpenEditor(requestId: string, flags: Record<string, string | boolean>, runtime: Runtime): Promise<Record<string, unknown>> {
+export async function refreshOpenEditor(requestId: string, flags: Record<string, string | boolean>, runtime: Runtime): Promise<Record<string, unknown>> {
   const endpoint = getString(flags, "bridge-endpoint") ?? runtime.bridgeEndpoint ?? process.env.UNITY_CLI_BRIDGE_ENDPOINT;
   // 只对显式配置的 bridge endpoint 或测试注入的 bridgeExecute 做 live refresh。
   // 避免盲探默认端口导致无关已打开 Editor 改变 package job 路由。
@@ -458,7 +458,7 @@ async function isBridgeReachable(endpoint: string): Promise<boolean> {
   }
 }
 
-async function maybeResolvePackage(command: string, flags: Record<string, string | boolean>, runtime: Runtime, requestId: string, projectPath: string, result: Record<string, unknown>): Promise<CliResult> {
+export async function maybeResolvePackage(command: string, flags: Record<string, string | boolean>, runtime: Runtime, requestId: string, projectPath: string, result: Record<string, unknown>): Promise<CliResult> {
   const manifestPath = join(projectPath, "Packages", "manifest.json");
   if (!existsSync(manifestPath)) {
     return failure(requestId, "MANIFEST_NOT_FOUND", `Unity manifest not found: ${manifestPath}`, [

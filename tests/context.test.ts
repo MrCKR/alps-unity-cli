@@ -9,7 +9,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { handleContextCommand } from "../src/context/commands.js";
 import { builtinContextDescriptors, builtinContextCategories, findBuiltinContextByName, filterContextsByCategory, searchContexts } from "../src/context/registry.js";
-import { BUILTIN_CONTEXTS } from "../src/context/builtin.js";
+import { defineContextMetadata, findDefineContext } from "../src/contexts/registry.js";
 import type { ContextDescriptor } from "../src/context/types.js";
 import type { BridgeRuntime } from "../src/bridge/index.js";
 
@@ -19,19 +19,57 @@ function makeRuntime(bridgeExecute?: BridgeRuntime["bridgeExecute"]): BridgeRunt
   return { bridgeExecute };
 }
 
+function bridgeContextDescriptor(name: string, overrides: Partial<ContextDescriptor> = {}): ContextDescriptor {
+  const category = name.split(".")[0] || "custom";
+  return {
+    name,
+    summary: `Read ${name}.`,
+    description: `Read ${name} from the live Unity Bridge without modifying state.`,
+    category,
+    source: "built-in",
+    target: "editor",
+    availabilityScope: "editorSession",
+    playModeSupport: "supported",
+    inputSchema: { type: "object", properties: {} },
+    outputSchema: { type: "object", properties: {} },
+    cliCommand: `context read ${name}`,
+    supportStatus: "live-bridge",
+    ...overrides,
+  };
+}
+
 // ── Built-in context descriptors ──────────────────────────────────────────
 
-test("builtin context descriptors cover all required contexts", () => {
+test("builtin context descriptors cover local TS-owned contexts", () => {
   const contexts = builtinContextDescriptors();
-  assert.equal(contexts.length, 23, `Expected 23 built-in contexts, got ${contexts.length}`);
+  assert.deepEqual(contexts.map((context) => context.name).sort(), ["tools.custom", "tools.groups"]);
+});
+
+test("Stage 6 defineContext registry exposes TS-owned tools contexts", () => {
+  const groupsDefinition = findDefineContext("tools.groups");
+  const customDefinition = findDefineContext("tools.custom");
+  assert.ok(groupsDefinition, "tools.groups should be registered as a defineContext");
+  assert.ok(customDefinition, "tools.custom should be registered as a defineContext");
+
+  const groupsMetadata = defineContextMetadata().find((context) => context.name === "tools.groups");
+  const customMetadata = defineContextMetadata().find((context) => context.name === "tools.custom");
+  assert.equal(groupsMetadata?.supportStatus, "cli-only");
+  assert.equal(groupsMetadata?.availabilityScope, "always");
+  assert.equal((groupsMetadata?.outputSchema.properties as Record<string, { type?: string }>).groups?.type, "array");
+  assert.equal(customMetadata?.supportStatus, "live-bridge");
+  assert.equal(customMetadata?.refreshBehavior, "on-demand");
+  assert.equal((customMetadata?.outputSchema.properties as Record<string, { type?: string }>).tools?.type, "array");
+
+  const resolvedGroups = findBuiltinContextByName("tools.groups");
+  assert.equal(resolvedGroups?.supportStatus, "cli-only", "local context discovery should expose defineContext metadata");
 });
 
 test("all builtin contexts have required fields", () => {
   for (const ctx of builtinContextDescriptors()) {
     assert.ok(ctx.name, "name required");
+    assert.ok(ctx.summary, "summary required");
     assert.ok(ctx.description, "description required");
     assert.equal("title" in ctx, false, `${ctx.name} should not expose title`);
-    assert.equal("summary" in ctx, false, `${ctx.name} should not expose summary`);
     assert.ok(ctx.category, "category required");
     assert.ok(ctx.inputSchema, "inputSchema required");
     assert.ok(ctx.outputSchema, "outputSchema required");
@@ -41,29 +79,18 @@ test("all builtin contexts have required fields", () => {
   }
 });
 
-test("builtin contexts cover required categories", () => {
+test("builtin contexts cover local TS-owned categories", () => {
   const categories = builtinContextCategories();
-  assert.ok(categories.includes("project"), "project category required");
-  assert.ok(categories.includes("editor"), "editor category required");
-  assert.ok(categories.includes("scene"), "scene category required");
-  assert.ok(categories.includes("tests"), "tests category required");
+  assert.deepEqual(categories, ["tools"]);
 });
 
-test("specific required contexts exist", () => {
-  const required = [
-    "project.info", "project.tags", "project.layers",
-    "editor.state", "editor.selection", "editor.active-tool",
-    "editor.windows", "editor.tool-states", "editor.menu-items",
-    "prefab.stage", "scene.gameobject", "scene.gameobject.components",
-    "scene.gameobject.component", "scene.cameras", "scene.volumes",
-    "scene.renderer-features", "scene.rendering-stats", "prefab.info",
-    "prefab.hierarchy", "tests.list",
-    "tools.groups", "tools.custom",
-  ];
+test("specific local TS-owned contexts exist", () => {
+  const required = ["tools.groups", "tools.custom"];
   for (const name of required) {
     const ctx = findBuiltinContextByName(name);
-    assert.ok(ctx, `Missing required context: ${name}`);
+    assert.ok(ctx, `Missing required local context: ${name}`);
   }
+  assert.equal(findBuiltinContextByName("project.info"), undefined, "C# built-in contexts must not be duplicated in TS metadata");
 });
 
 test("no duplicate context names", () => {
@@ -74,18 +101,19 @@ test("no duplicate context names", () => {
 
 // ── Category filter ───────────────────────────────────────────────────────
 
-test("filterContextsByCategory returns correct subset", () => {
-  const projectContexts = filterContextsByCategory("project");
-  assert.equal(projectContexts.length, 3);
-  assert.ok(projectContexts.every((c) => c.category === "project"));
+test("filterContextsByCategory returns local TS-owned subset", () => {
+  const toolsContexts = filterContextsByCategory("tools");
+  assert.deepEqual(toolsContexts.map((context) => context.name).sort(), ["tools.custom", "tools.groups"]);
+  assert.deepEqual(filterContextsByCategory("project"), []);
 });
 
 // ── Search ────────────────────────────────────────────────────────────────
 
-test("searchContexts finds matching contexts", () => {
-  const results = searchContexts("camera");
-  assert.ok(results.length > 0, "Should find camera-related contexts");
-  assert.ok(results.some((c) => c.name === "scene.cameras"));
+test("searchContexts finds matching local contexts", () => {
+  const results = searchContexts("custom");
+  assert.ok(results.length > 0, "Should find tools.custom");
+  assert.ok(results.some((c) => c.name === "tools.custom"));
+  assert.equal(searchContexts("camera").length, 0, "C# built-in contexts are only discoverable from live Bridge descriptors");
 });
 
 test("searchContexts returns empty for no match", () => {
@@ -95,34 +123,36 @@ test("searchContexts returns empty for no match", () => {
 
 // ── context list CLI ──────────────────────────────────────────────────────
 
-test("context list returns built-in and extension manifest contexts", async () => {
+test("context list returns local TS-owned and extension manifest contexts offline", async () => {
   const runtime = makeRuntime();
   const result = await handleContextCommand("list", [], {}, runtime, requestId);
   assert.equal(result.ok, true);
 
   const data = result.data as Record<string, unknown>;
   assert.equal(data.command, "context.list");
-  assert.equal(data.count, 24);
+  assert.equal(data.count, 3);
 
   const contexts = data.contexts as Array<Record<string, unknown>>;
-  assert.equal(contexts.length, 24);
+  assert.equal(contexts.length, 3);
   assert.ok(contexts[0].name);
+  assert.ok(contexts[0].summary);
   assert.ok(contexts[0].description);
   assert.equal("title" in contexts[0], false);
-  assert.equal("summary" in contexts[0], false);
   assert.ok(contexts[0].category);
   assert.ok(contexts[0].source);
+  assert.ok(contexts.some((context) => context.name === "tools.groups" && context.source === "built-in"));
   assert.ok(contexts.some((context) => context.name === "probuilder.scene" && context.source === "extension"));
 });
 
 test("context list with category filter", async () => {
   const runtime = makeRuntime();
-  const result = await handleContextCommand("list", [], { category: "editor" }, runtime, requestId);
+  const result = await handleContextCommand("list", [], { category: "tools" }, runtime, requestId);
   assert.equal(result.ok, true);
 
   const data = result.data as Record<string, unknown>;
   const contexts = data.contexts as Array<Record<string, unknown>>;
-  assert.ok(contexts.every((c) => c.category === "editor"));
+  assert.ok(contexts.length > 0);
+  assert.ok(contexts.every((c) => c.category === "tools"));
 });
 
 test("context list with text format", async () => {
@@ -161,18 +191,18 @@ test("context list (no command) defaults to list", async () => {
 
 // ── context describe CLI ──────────────────────────────────────────────────
 
-test("context describe returns full descriptor for builtin context", async () => {
+test("context describe returns full descriptor for local builtin context", async () => {
   const runtime = makeRuntime();
-  const result = await handleContextCommand("describe", ["project.info"], {}, runtime, requestId);
+  const result = await handleContextCommand("describe", ["tools.groups"], {}, runtime, requestId);
   assert.equal(result.ok, true);
 
   const data = result.data as Record<string, unknown>;
   assert.equal(data.command, "context.describe");
-  assert.equal(data.name, "project.info");
+  assert.equal(data.name, "tools.groups");
   assert.equal("destructiveHint" in data, false);
   assert.equal("bridgeCommand" in data, false);
   assert.equal("title" in data, false);
-  assert.equal("summary" in data, false);
+  assert.ok(data.summary);
   assert.ok(data.inputSchema);
   assert.ok(data.outputSchema);
 });
@@ -184,12 +214,22 @@ test("context describe without name returns error", async () => {
   assert.equal(result.error?.code, "CONTEXT_DESCRIBE_NAME_REQUIRED");
 });
 
-test("context describe editor.selection documents detail fields", async () => {
-  const runtime = makeRuntime();
+test("context describe resolves C# built-in descriptors from live Bridge discovery", async () => {
+  const runtime = makeRuntime(async (payload) => {
+    if (payload.command === "context.list") {
+      return { ok: true, data: { contexts: [bridgeContextDescriptor("editor.selection", {
+        description: "Read current Editor selection with reusable object details without changing selection.",
+        category: "editor",
+        outputSchema: { type: "object", properties: { activeObjectDetail: {}, objectDetails: {}, gameObjectDetails: {} } }
+      })] } };
+    }
+    return { ok: true, data: {} };
+  });
   const result = await handleContextCommand("describe", ["editor.selection"], {}, runtime, requestId);
   assert.equal(result.ok, true);
 
-  const data = result.data as { outputSchema: { properties: Record<string, unknown> }; description: string };
+  const data = result.data as { outputSchema: { properties: Record<string, unknown> }; description: string; source: string };
+  assert.equal(data.source, "built-in");
   assert.match(data.description, /reusable object details/i);
   assert.ok(data.outputSchema.properties.activeObjectDetail);
   assert.ok(data.outputSchema.properties.objectDetails);
@@ -256,15 +296,20 @@ test("context read for unknown context returns error", async () => {
   assert.equal(result.error?.code, "E_CONTEXT_NOT_FOUND");
 });
 
-test("context read routes through bridge command", async () => {
-  const bridgeExecute = async () => ({
-    ok: true,
-    data: {
-      context: "project.info",
-      data: { projectRoot: "/path/to/project", projectName: "TestProject", unityVersion: "2022.3" },
-      readAt: new Date().toISOString(),
-    },
-  });
+test("context read routes C# built-in contexts through bridge command after live descriptor discovery", async () => {
+  const bridgeExecute = async (payload: { command: string }) => {
+    if (payload.command === "context.list") {
+      return { ok: true, data: { contexts: [bridgeContextDescriptor("project.info", { category: "project" })] } };
+    }
+    return {
+      ok: true,
+      data: {
+        context: "project.info",
+        data: { projectRoot: "/path/to/project", projectName: "TestProject", unityVersion: "2022.3" },
+        readAt: new Date().toISOString(),
+      },
+    };
+  };
   const runtime = makeRuntime(bridgeExecute);
   const result = await handleContextCommand("read", ["project.info"], {}, runtime, requestId);
   assert.equal(result.ok, true);
@@ -287,10 +332,36 @@ test("context read tools.groups uses offline CLI registry", async () => {
   assert.deepEqual(payloads, [], "tools.groups must not call the Unity bridge");
 });
 
+test("context read tools.custom uses TS defineContext project tool discovery", async () => {
+  const runtime = {
+    projectTools: [{
+      name: "sample.echo",
+      summary: "Echo a message.",
+      description: "Echo a message from a project custom tool.",
+      group: "sample",
+      inputSchema: {},
+      destructiveHint: false,
+      playModeSupport: "supported"
+    }]
+  } as unknown as BridgeRuntime;
+
+  const result = await handleContextCommand("read", ["tools.custom"], {}, runtime, requestId);
+
+  assert.equal(result.ok, true);
+  const data = result.data as { context: string; count: number; tools: Array<{ name: string }>; mode: string };
+  assert.equal(data.context, "tools.custom");
+  assert.equal(data.count, 1);
+  assert.equal(data.mode, "runtime");
+  assert.equal(data.tools[0].name, "sample.echo");
+});
+
 test("context read forwards structured input and recovers PowerShell escaped JSON", async () => {
-  const payloads: Array<{ args: Record<string, unknown> }> = [];
-  const bridgeExecute = async (payload: { args: Record<string, unknown> }) => {
+  const payloads: Array<{ command: string; args: Record<string, unknown> }> = [];
+  const bridgeExecute = async (payload: { command: string; args: Record<string, unknown> }) => {
     payloads.push(payload);
+    if (payload.command === "context.list") {
+      return { ok: true, data: { contexts: [bridgeContextDescriptor("scene.gameobject", { category: "scene" })] } };
+    }
     return { ok: true, data: { context: "scene.gameobject", gameObject: { name: "Main Camera" } } };
   };
   const runtime = makeRuntime(bridgeExecute);
@@ -302,15 +373,41 @@ test("context read forwards structured input and recovers PowerShell escaped JSO
   assert.equal(regular.ok, true);
   assert.equal(pwshEscaped.ok, true);
   assert.equal(backslashQuoted.ok, true);
-  assert.deepEqual(payloads[0].args, { name: "scene.gameobject", input: { target: "Main Camera", includeComponents: false }, target: "Main Camera", includeComponents: false });
-  assert.deepEqual(payloads[1].args, { name: "scene.gameobject", input: { target: "Main Camera", includeComponents: false }, target: "Main Camera", includeComponents: false });
-  assert.deepEqual(payloads[2].args, { name: "scene.gameobject", input: { target: "Main Camera", includeComponents: false }, target: "Main Camera", includeComponents: false });
+  const readPayloads = payloads.filter((payload) => payload.command === "context.read");
+  assert.deepEqual(readPayloads[0].args, { name: "scene.gameobject", input: { target: "Main Camera", includeComponents: false }, target: "Main Camera", includeComponents: false });
+  assert.deepEqual(readPayloads[1].args, { name: "scene.gameobject", input: { target: "Main Camera", includeComponents: false }, target: "Main Camera", includeComponents: false });
+  assert.deepEqual(readPayloads[2].args, { name: "scene.gameobject", input: { target: "Main Camera", includeComponents: false }, target: "Main Camera", includeComponents: false });
 });
 
-test("context read rejects invalid --input JSON before bridge execution", async () => {
-  const payloads: unknown[] = [];
-  const runtime = makeRuntime(async (payload) => {
+test("context read keeps descriptor name when structured input uses a name field", async () => {
+  const payloads: Array<{ command: string; args: Record<string, unknown> }> = [];
+  const bridgeExecute = async (payload: { command: string; args: Record<string, unknown> }) => {
     payloads.push(payload);
+    if (payload.command === "context.list") {
+      return { ok: true, data: { contexts: [bridgeContextDescriptor("scene.gameobject.component", { category: "scene" })] } };
+    }
+    return { ok: true, data: { context: "scene.gameobject.component", component: { type: "Transform" } } };
+  };
+  const runtime = makeRuntime(bridgeExecute);
+
+  const result = await handleContextCommand("read", ["scene.gameobject.component"], { input: JSON.stringify({ target: "Main Camera", name: "Transform" }) }, runtime, requestId);
+
+  assert.equal(result.ok, true);
+  const readPayload = payloads.find((payload) => payload.command === "context.read")!;
+  assert.deepEqual(readPayload.args, {
+    name: "scene.gameobject.component",
+    input: { target: "Main Camera", name: "Transform" },
+    target: "Main Camera"
+  });
+});
+
+test("context read rejects invalid --input JSON after descriptor resolution but before bridge read execution", async () => {
+  const payloads: Array<{ command: string }> = [];
+  const runtime = makeRuntime(async (payload: { command: string }) => {
+    payloads.push(payload);
+    if (payload.command === "context.list") {
+      return { ok: true, data: { contexts: [bridgeContextDescriptor("scene.gameobject", { category: "scene" })] } };
+    }
     return { ok: true, data: {} };
   });
 
@@ -318,23 +415,27 @@ test("context read rejects invalid --input JSON before bridge execution", async 
 
   assert.equal(result.ok, false);
   assert.equal(result.error?.code, "E_CONTEXT_INPUT_JSON_INVALID");
-  assert.deepEqual(payloads, []);
+  assert.deepEqual(payloads.map((payload) => payload.command), ["context.list"]);
 });
 
 test("context read supports --input-file", async () => {
   const tempDir = await mkdtemp(join(tmpdir(), "unity-cli-context-"));
   const inputPath = join(tempDir, "input.json");
   await writeFile(inputPath, JSON.stringify({ search: "File" }), "utf8");
-  const payloads: Array<{ args: Record<string, unknown> }> = [];
-  const runtime = makeRuntime(async (payload: { args: Record<string, unknown> }) => {
+  const payloads: Array<{ command: string; args: Record<string, unknown> }> = [];
+  const runtime = makeRuntime(async (payload: { command: string; args: Record<string, unknown> }) => {
     payloads.push(payload);
+    if (payload.command === "context.list") {
+      return { ok: true, data: { contexts: [bridgeContextDescriptor("editor.menu-items", { category: "editor" })] } };
+    }
     return { ok: true, data: { items: [], count: 0 } };
   });
 
   const result = await handleContextCommand("read", ["editor.menu-items"], { "input-file": inputPath }, runtime, requestId);
 
   assert.equal(result.ok, true);
-  assert.deepEqual(payloads[0].args, { name: "editor.menu-items", input: { search: "File" }, search: "File" });
+  const readPayload = payloads.find((payload) => payload.command === "context.read")!;
+  assert.deepEqual(readPayload.args, { name: "editor.menu-items", input: { search: "File" }, search: "File" });
 });
 
 test("context read resolves project contexts when a project or bridge target is provided", async () => {

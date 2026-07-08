@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://unity-cli.local/schemas/request-envelope.schema.json",
   "title": "Unity CLI Request Envelope",
-  "description": "Unified request envelope for all CLI→UnityPkg bridge commands. Defines the unified request envelope.",
+  "description": "Unified request envelope for CLI to Unity Bridge commands. Field names are camelCase. Command-specific args omit null/default values where the proto3-style bridge serializer would omit them.",
   "type": "object",
   "required": ["requestId", "command"],
   "properties": {
@@ -23,7 +23,7 @@
     "args": {
       "type": "object",
       "default": {},
-      "description": "Command-specific arguments."
+      "description": "Command-specific arguments. For C# tools these are deserialized into the Request DTO; null/default values may be omitted."
     },
     "dryRun": {
       "type": "boolean",

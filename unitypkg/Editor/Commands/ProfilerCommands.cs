@@ -27,21 +27,15 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
-        // profiler.* 部分已迁移为 IUnityCliTool(unitypkg/Editor/Tools/profiler/*.cs):
+        // profiler.* 全部已迁移为 IUnityCliTool(unitypkg/Editor/Tools/profiler/*.cs):
         // status/counter/memory/frame/modules/areas/script-stats/start/stop/pause/deep/
         // module-enable/clear/load/object-memory/export — 不再用 RegisterCommand。
-        // 以下保留 deferred/complex-reflection 工具的 RegisterCommand:
+        // profiler.capture / profiler.memory-snapshot.take 迁移为 IUnityCliDeferredTool
+        // (capture.cs / memory-snapshot-take.cs),deferred 由 TryRegisterInterfaceProjectTool 统一桥接。
         private static void RegisterProfilerCommands(BridgeCommandRegistry registry)
         {
-            RegisterCommand(registry, "profiler.capture", "profiler", true, ProfilerCapture);
-            RegisterCommand(registry, "profiler.hierarchy", "profiler", false, ProfilerHierarchy);
-            RegisterCommand(registry, "profiler.rendering-stats", "profiler", false, ProfilerRenderingStats);
-            RegisterCommand(registry, "profiler.memory-snapshot.take", "profiler", true, ProfilerMemorySnapshotTake);
-            RegisterCommand(registry, "profiler.memory-snapshot.list", "profiler", false, ProfilerMemorySnapshotList);
-            RegisterCommand(registry, "profiler.memory-snapshot.compare", "profiler", false, ProfilerMemorySnapshotCompare);
-            RegisterCommand(registry, "profiler.frame-debugger.enable", "profiler", false, ProfilerFrameDebuggerEnable);
-            RegisterCommand(registry, "profiler.frame-debugger.disable", "profiler", false, ProfilerFrameDebuggerDisable);
-            RegisterCommand(registry, "profiler.frame-debugger.events", "profiler", false, ProfilerFrameDebuggerEvents);
+            // 所有 profiler 工具已迁移为 IUnityCliTool/IUnityCliDeferredTool,不再用 RegisterCommand。
+            // 保留空函数体供 CreateCommandRegistry 调用;旧 deferred handler 方法可后续清理。
         }
 
         private static void SetProfilerDeepProfiling(bool enabled)

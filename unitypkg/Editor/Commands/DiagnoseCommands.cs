@@ -30,7 +30,8 @@ namespace UnityCli
     {
         private static void RegisterDiagnoseCommands(BridgeCommandRegistry registry)
         {
-            RegisterCommand(registry, "diagnose.preflight", "diagnose", false, delegate(BridgeRequest request) { return SuccessJson(DiagnosePreflightJson(request)); });
+            // diagnose.preflight 已迁移为 IUnityCliTool(unitypkg/Editor/Tools/diagnose/preflight.cs),不再用 RegisterCommand。
+            // 旧 DiagnosePreflightJson/CompileStatusJson/DiagnoseCheckJson 保留为 dead code,留给后续清理。
         }
 
         private static string DiagnosePreflightJson(BridgeRequest request)

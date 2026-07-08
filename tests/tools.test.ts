@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { join } from "node:path";
@@ -30,6 +30,64 @@ function makeUnityProject(root: string, packages: Record<string, string> = {}): 
   writeFileSync(join(project, "Packages", "manifest.json"), JSON.stringify({ dependencies: packages }, null, 2), "utf8");
   writeFileSync(join(project, "Packages", "packages-lock.json"), JSON.stringify({ dependencies: Object.fromEntries(Object.entries(packages).map(([name, version]) => [name, { version }])) }, null, 2), "utf8");
   return project;
+}
+
+function addLegacyBridgeManifestDependency(project: string): void {
+  const manifestPath = join(project, "Packages", "manifest.json");
+  const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { dependencies?: Record<string, string> };
+  manifest.dependencies ??= {};
+  manifest.dependencies["com.unity_cli"] = "file:com.unity_cli";
+  writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), "utf8");
+}
+
+function makeLocalUnityPackage(root: string, folder: string, packageName: string, version: string): string {
+  const source = join(root, folder);
+  mkdirSync(source, { recursive: true });
+  writeFileSync(join(source, "package.json"), JSON.stringify({ name: packageName, version }, null, 2), "utf8");
+  writeFileSync(join(source, "README.md"), `# ${packageName}\n`, "utf8");
+  return source;
+}
+
+function readPackageVersion(packagePath: string): string {
+  const manifest = JSON.parse(readFileSync(join(packagePath, "package.json"), "utf8")) as { version: string };
+  return manifest.version;
+}
+
+function makeDocsCache(root: string): string {
+  const dir = join(root, "DocsCache");
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, "docs-index.json"), JSON.stringify({
+    unityVersion: "2022.3",
+    entries: [
+      {
+        name: "UnityEngine.Camera",
+        title: "Camera",
+        summary: "A component which creates an image of a particular viewpoint.",
+        content: "# Camera\n\nCamera renders scenes for display.",
+        url: "https://docs.unity3d.com/ScriptReference/Camera.html",
+        kind: "class",
+        namespace: "UnityEngine",
+        version: "2022.3"
+      },
+      {
+        name: "UnityEngine.Camera.Render",
+        title: "Camera.Render",
+        summary: "Manually render the camera.",
+        kind: "method",
+        namespace: "UnityEngine",
+        version: "2022.3"
+      },
+      {
+        name: "UnityEngine.Canvas",
+        title: "Canvas",
+        summary: "Element for UI rendering.",
+        kind: "class",
+        namespace: "UnityEngine",
+        version: "2022.3"
+      }
+    ]
+  }, null, 2), "utf8");
+  return dir;
 }
 
 function makeFakeUnity(root: string, body: string): string {
@@ -361,6 +419,8 @@ test("editor.refresh metadata exists with job handler and longRunning", () => {
   assert.equal(tool.handler, "job");
   assert.equal(tool.longRunning, true);
   assert.equal(tool.destructiveHint, false);
+  assert.equal((tool.inputSchema.properties as Record<string, { default?: boolean }>).wait?.default, false);
+  assert.equal((tool.outputSchema?.properties as Record<string, { type?: string }>).command?.type, "array");
   assert.ok(tool.examples && tool.examples.length > 0);
 });
 
@@ -1612,9 +1672,227 @@ test("tools run editor.launch-dialog.dismiss supports no-op probe through --inpu
   assert.equal(data.processId, 44960);
 });
 
+test("tools run editor.launch-dialog.dismiss dry-run returns planned desktop click", async () => {
+  const result = await handleToolsCommand("run", ["editor.launch-dialog.dismiss"], { "dry-run": true, input: '{"pid":44960}' }, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as { command: string; dryRun: boolean; status: string; processId: number; plannedEffects: Array<Record<string, unknown>> };
+  assert.equal(data.command, "editor.launch-dialog.dismiss");
+  assert.equal(data.dryRun, true);
+  assert.equal(data.status, "dry_run");
+  assert.equal(data.processId, 44960);
+  assert.equal(data.plannedEffects[0].type, "desktop-dialog-click");
+});
+
+test("tools run diagnose.capabilities executes through defineTool offline", async () => {
+  const result = await handleToolsCommand("run", ["diagnose.capabilities"], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as { command: string; mode: string; requiresUnity: boolean; static: { toolCount: number }; contextDiscovery: Record<string, unknown> };
+  assert.equal(data.command, "diagnose.capabilities");
+  assert.equal(data.mode, "offline");
+  assert.equal(data.requiresUnity, false);
+  assert.ok(data.static.toolCount > 0);
+  assert.ok(data.contextDiscovery);
+});
+
+test("tools run diagnose.capabilities keeps runtime project tool diagnostics", async () => {
+  const runtime: ToolsRuntime = {
+    projectTools: [{
+      name: "project.audit",
+      summary: "Project Audit",
+      description: "Audits project state.",
+      group: "project",
+      inputSchema: { type: "object" },
+      destructiveHint: false
+    }]
+  };
+  const result = await handleToolsCommand("run", ["diagnose.capabilities"], {}, runtime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as { projectTools?: { count?: number }; static: { groups?: Record<string, number> } };
+  assert.equal(data.projectTools?.count, 1);
+  assert.equal(data.static.groups?.project, 3);
+});
+
+test("tools run test.run executes through defineTool job runtime", async () => {
+  const { JobStore } = await import("../src/job-store.js");
+  const { JobRunner } = await import("../src/job-runner.js");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { mkdirSync, rmSync } = await import("node:fs");
+  const dataDir = join(tmpdir(), `tools-test-run-define-${Date.now()}`);
+  const projectDir = join(dataDir, "Project");
+  mkdirSync(projectDir, { recursive: true });
+  try {
+    const store = new JobStore(dataDir);
+    const runner = new JobRunner(store, dataDir);
+    const runtime: ToolsRuntime = { dataDir, store, runner } as ToolsRuntime;
+    const result = await handleToolsCommand("run", ["test.run"], { input: JSON.stringify({ unity: "/nonexistent/Unity.exe", project: projectDir, platform: "PlayMode", wait: false }) }, runtime, requestId);
+    assert.equal(result.ok, true);
+    const data = result.data as { jobId: string; kind: string; command: string[]; result: { action?: string; platform?: string; resultPath?: string } };
+    assert.ok(data.jobId);
+    assert.equal(data.kind, "test");
+    assert.ok(data.command.includes("-runTests"));
+    assert.ok(data.command.includes("-testPlatform"));
+    assert.ok(data.command.includes("PlayMode"));
+    assert.equal(data.result.action, "test");
+    assert.equal(data.result.platform, "PlayMode");
+    assert.match(data.result.resultPath ?? "", /test-results\.xml$/);
+  } finally {
+    await new Promise(r => setTimeout(r, 200));
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("tools run build.run executes through defineTool job runtime", async () => {
+  const { JobStore } = await import("../src/job-store.js");
+  const { JobRunner } = await import("../src/job-runner.js");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { mkdirSync, rmSync } = await import("node:fs");
+  const dataDir = join(tmpdir(), `tools-build-run-define-${Date.now()}`);
+  const projectDir = join(dataDir, "Project");
+  mkdirSync(projectDir, { recursive: true });
+  try {
+    const unity = makeFakeUnity(dataDir, "process.exit(0);");
+    const store = new JobStore(dataDir);
+    const runner = new JobRunner(store, dataDir);
+    const runtime: ToolsRuntime = { dataDir, store, runner } as ToolsRuntime;
+
+    const single = await handleToolsCommand("run", ["build.run"], { input: JSON.stringify({ unity, project: projectDir, target: "StandaloneWindows64", output: "Builds/App.exe", wait: false }) }, runtime, requestId);
+    assert.equal(single.ok, true);
+    const singleData = single.data as { jobId: string; kind: string; command: string[]; result: { action?: string; target?: string; outputPath?: string } };
+    assert.ok(singleData.jobId);
+    assert.equal(singleData.kind, "build");
+    assert.ok(singleData.command.includes("-unityCliBuildOutput"));
+    assert.equal(singleData.result.action, "build");
+    assert.equal(singleData.result.target, "StandaloneWindows64");
+    assert.equal(singleData.result.outputPath?.replace(/\\/g, "/").endsWith("Builds/App.exe"), true);
+
+    const batch = await handleToolsCommand("run", ["build.run"], { input: JSON.stringify({ unity, project: projectDir, targets: "StandaloneWindows64,WebGL", output: "Builds/{target}/Player", wait: false }) }, runtime, requestId);
+    assert.equal(batch.ok, true);
+    const batchData = batch.data as { command: string; mode: string; targetCount: number; jobs: Array<{ jobId: string; result: { target?: string; outputPath?: string } }> };
+    assert.equal(batchData.command, "build.run");
+    assert.equal(batchData.mode, "batch");
+    assert.equal(batchData.targetCount, 2);
+    assert.deepEqual(batchData.jobs.map((job) => job.result.target), ["StandaloneWindows64", "WebGL"]);
+    assert.ok(batchData.jobs[0].result.outputPath?.replace(/\\/g, "/").includes("Builds/StandaloneWindows64/Player"));
+    assert.ok(batchData.jobs[1].result.outputPath?.replace(/\\/g, "/").includes("Builds/WebGL/Player"));
+  } finally {
+    await new Promise(r => setTimeout(r, 200));
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("tools run build.run rejects values outside schema enum", async () => {
+  const { JobStore } = await import("../src/job-store.js");
+  const { JobRunner } = await import("../src/job-runner.js");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { mkdirSync, rmSync } = await import("node:fs");
+  const dataDir = join(tmpdir(), `tools-build-run-enum-${Date.now()}`);
+  mkdirSync(dataDir, { recursive: true });
+  try {
+    const store = new JobStore(dataDir);
+    const runner = new JobRunner(store, dataDir);
+    const runtime: ToolsRuntime = { dataDir, store, runner } as ToolsRuntime;
+    const result = await handleToolsCommand("run", ["build.run"], { input: JSON.stringify({ target: "BadTarget" }) }, runtime, requestId);
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "E_SCHEMA_INVALID");
+
+    const multiTarget = await handleToolsCommand("run", ["build.run"], { input: JSON.stringify({ targets: "StandaloneWindows64,BadTarget" }) }, runtime, requestId);
+    assert.equal(multiTarget.ok, false);
+    assert.equal(multiTarget.error?.code, "E_SCHEMA_INVALID");
+    assert.match(multiTarget.error?.message ?? "", /targets entries/);
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("tools run build.status and build.cancel execute through defineTool job runtime", async () => {
+  const { JobStore } = await import("../src/job-store.js");
+  const { JobRunner } = await import("../src/job-runner.js");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { mkdirSync, rmSync } = await import("node:fs");
+  const dataDir = join(tmpdir(), `tools-build-define-${Date.now()}`);
+  mkdirSync(dataDir, { recursive: true });
+  try {
+    const store = new JobStore(dataDir);
+    const runner = new JobRunner(store, dataDir);
+    const runtime: ToolsRuntime = { dataDir, store, runner } as ToolsRuntime;
+    const now = new Date().toISOString();
+    await store.create({
+      id: "job_build_define",
+      kind: "build",
+      status: "queued",
+      requestId: "req_build_define",
+      createdAt: now,
+      updatedAt: now,
+      projectPath: dataDir,
+      unityPath: "Unity.exe",
+      logPath: join(dataDir, "build.log"),
+      command: ["Unity.exe", "-batchmode"],
+      result: { target: "StandaloneWindows64", outputPath: "Builds/App.exe" }
+    });
+
+    const status = await handleToolsCommand("run", ["build.status"], { input: JSON.stringify({ jobId: "job_build_define" }) }, runtime, requestId);
+    assert.equal(status.ok, true);
+    const statusData = status.data as { command: string; kind: string; jobCommand: string[]; result: { target?: string } };
+    assert.equal(statusData.command, "build.status");
+    assert.equal(statusData.kind, "build");
+    assert.deepEqual(statusData.jobCommand, ["Unity.exe", "-batchmode"]);
+    assert.equal(statusData.result.target, "StandaloneWindows64");
+
+    const cancelled = await handleToolsCommand("run", ["build.cancel"], { input: JSON.stringify({ jobId: "job_build_define" }) }, runtime, requestId);
+    assert.equal(cancelled.ok, true);
+    const cancelData = cancelled.data as { command: string; status: string; error: { code?: string } };
+    assert.equal(cancelData.command, "build.cancel");
+    assert.equal(cancelData.status, "cancelled");
+    assert.equal(cancelData.error.code, "JOB_CANCELLED");
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("tools run build.status returns stable defineTool job errors", async () => {
+  const { JobStore } = await import("../src/job-store.js");
+  const { JobRunner } = await import("../src/job-runner.js");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { mkdirSync, rmSync } = await import("node:fs");
+  const dataDir = join(tmpdir(), `tools-build-errors-${Date.now()}`);
+  mkdirSync(dataDir, { recursive: true });
+  try {
+    const store = new JobStore(dataDir);
+    const runner = new JobRunner(store, dataDir);
+    const runtime: ToolsRuntime = { dataDir, store, runner } as ToolsRuntime;
+    const missing = await handleToolsCommand("run", ["build.status"], { input: JSON.stringify({ jobId: "job_missing" }) }, runtime, requestId);
+    assert.equal(missing.ok, false);
+    assert.equal(missing.error?.code, "BUILD_JOB_NOT_FOUND");
+
+    const now = new Date().toISOString();
+    await store.create({
+      id: "job_test_define",
+      kind: "test",
+      status: "queued",
+      requestId: "req_test_define",
+      createdAt: now,
+      updatedAt: now,
+      projectPath: dataDir,
+      unityPath: "Unity.exe",
+      logPath: join(dataDir, "test.log"),
+      command: ["Unity.exe", "-runTests"]
+    });
+    const wrongKind = await handleToolsCommand("run", ["build.status"], { input: JSON.stringify({ jobId: "job_test_define" }) }, runtime, requestId);
+    assert.equal(wrongKind.ok, false);
+    assert.equal(wrongKind.error?.code, "BUILD_JOB_KIND_MISMATCH");
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
 // ── job-routing: job-handler routing via dispatchJobHandler ──────────
 
-test("tools run test.run routes to handleTest with --input merged", async () => {
+test("tools run test.run returns UNITY_NOT_FOUND without a discoverable Unity", async () => {
   const { JobStore } = await import("../src/job-store.js");
   const { JobRunner } = await import("../src/job-runner.js");
   const { tmpdir } = await import("node:os");
@@ -1626,8 +1904,7 @@ test("tools run test.run routes to handleTest with --input merged", async () => 
     const store = new JobStore(dataDir);
     const runner = new JobRunner(store, dataDir);
     const runtime: ToolsRuntime = { dataDir, store, runner } as ToolsRuntime;
-    // test.run without --unity will fail with UNITY_NOT_FOUND, but the routing
-    // should reach handleTest (not E_TOOL_HANDLER_UNSUPPORTED)
+    // test.run without --unity still reaches the job startup path, not E_TOOL_HANDLER_UNSUPPORTED.
     const result = await handleToolsCommand("run", ["test.run"], { input: '{"platform":"EditMode"}' }, runtime, requestId);
     assert.equal(result.ok, false);
     assert.equal(result.error?.code, "UNITY_NOT_FOUND");
@@ -1636,7 +1913,7 @@ test("tools run test.run routes to handleTest with --input merged", async () => 
   }
 });
 
-test("tools run build.run routes to handleBuild with --input merged", async () => {
+test("tools run build.run reaches defineTool job path with --input merged", async () => {
   const { JobStore } = await import("../src/job-store.js");
   const { JobRunner } = await import("../src/job-runner.js");
   const { tmpdir } = await import("node:os");
@@ -1648,7 +1925,7 @@ test("tools run build.run routes to handleBuild with --input merged", async () =
     const store = new JobStore(dataDir);
     const runner = new JobRunner(store, dataDir);
     const runtime: ToolsRuntime = { dataDir, store, runner } as ToolsRuntime;
-    // build.run without --unity will fail with UNITY_NOT_FOUND
+    // build.run without --unity still reaches the job startup path, not E_TOOL_HANDLER_UNSUPPORTED.
     const result = await handleToolsCommand("run", ["build.run"], { input: '{"target":"StandaloneWindows64"}' }, runtime, requestId);
     assert.equal(result.ok, false);
     assert.equal(result.error?.code, "UNITY_NOT_FOUND");
@@ -1657,19 +1934,53 @@ test("tools run build.run routes to handleBuild with --input merged", async () =
   }
 });
 
-test("tools run editor.refresh routes to handleEditor with --input merged", async () => {
+test("tools run editor.refresh executes through defineTool job runtime", async () => {
   const { JobStore } = await import("../src/job-store.js");
   const { JobRunner } = await import("../src/job-runner.js");
   const { tmpdir } = await import("node:os");
   const { join } = await import("node:path");
   const { mkdirSync, rmSync } = await import("node:fs");
-  const dataDir = join(tmpdir(), `tools-run-editor-${Date.now()}`);
+  const dataDir = join(tmpdir(), `tools-editor-refresh-define-${Date.now()}`);
+  const projectDir = join(dataDir, "Project");
+  mkdirSync(projectDir, { recursive: true });
+  try {
+    const unity = makeFakeUnity(dataDir, "process.exit(0);");
+    const store = new JobStore(dataDir);
+    const runner = new JobRunner(store, dataDir);
+    const runtime: ToolsRuntime = { dataDir, store, runner } as ToolsRuntime;
+
+    const compile = await handleToolsCommand("run", ["editor.refresh"], { input: JSON.stringify({ unity, project: projectDir, compile: true, wait: false }) }, runtime, requestId);
+    assert.equal(compile.ok, true);
+    const compileData = compile.data as { jobId: string; kind: string; command: string[]; result: { action?: string; compile?: boolean } };
+    assert.ok(compileData.jobId);
+    assert.equal(compileData.kind, "refresh");
+    assert.equal(compileData.result.action, "refresh");
+    assert.equal(compileData.result.compile, true);
+    assert.equal(compileData.command[compileData.command.indexOf("-executeMethod") + 1], "UnityCli.UnityCliBatch.RefreshAndCompile");
+
+    const refresh = await handleToolsCommand("run", ["editor.refresh"], { input: JSON.stringify({ unity, project: projectDir, wait: false }) }, runtime, requestId);
+    assert.equal(refresh.ok, true);
+    const refreshData = refresh.data as { command: string[]; result: { compile?: boolean } };
+    assert.equal(refreshData.result.compile, false);
+    assert.equal(refreshData.command[refreshData.command.indexOf("-executeMethod") + 1], "UnityCli.UnityCliBatch.Refresh");
+  } finally {
+    await new Promise(r => setTimeout(r, 200));
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("tools run editor.refresh returns UNITY_NOT_FOUND without a discoverable Unity", async () => {
+  const { JobStore } = await import("../src/job-store.js");
+  const { JobRunner } = await import("../src/job-runner.js");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { mkdirSync, rmSync } = await import("node:fs");
+  const dataDir = join(tmpdir(), `tools-editor-refresh-unity-${Date.now()}`);
   mkdirSync(dataDir, { recursive: true });
   try {
     const store = new JobStore(dataDir);
     const runner = new JobRunner(store, dataDir);
     const runtime: ToolsRuntime = { dataDir, store, runner } as ToolsRuntime;
-    // editor.refresh without --unity will fail with UNITY_NOT_FOUND
     const result = await handleToolsCommand("run", ["editor.refresh"], { input: '{"compile":true}' }, runtime, requestId);
     assert.equal(result.ok, false);
     assert.equal(result.error?.code, "UNITY_NOT_FOUND");
@@ -1713,17 +2024,402 @@ test("mergeInputToFlags converts camelCase to kebab-case", async () => {
   }
 });
 
-test("Stage 5 defineTool registry exposes package.list execution slice", () => {
-  const definition = findDefineTool("package.list");
-  assert.ok(definition, "package.list should be registered as a defineTool");
-  assert.equal(definition.group, "package");
-  assert.equal(definition.destructiveHint, false);
-  const metadata = defineToolMetadata().find((tool) => tool.name === "package.list");
-  assert.ok(metadata, "package.list defineTool metadata should be available");
-  const inputProperties = metadata.inputSchema.properties as Record<string, { type?: string }>;
-  const outputProperties = metadata.outputSchema?.properties as Record<string, { type?: string }>;
-  assert.equal(inputProperties.project?.type, "string");
-  assert.equal(outputProperties.packages?.type, "array");
+test("tools run tools.group executes through defineTool", async () => {
+  const result = await handleToolsCommand("run", ["tools.group"], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as { command: string; count: number; groups: Array<{ name: string; toolCount: number }> };
+  assert.equal(data.command, "tools.group");
+  assert.ok(data.count > 0);
+  assert.ok(data.groups.some((group) => group.name === "tools" && group.toolCount >= 5));
+});
+
+test("tools run tools.group keeps project custom groups", async () => {
+  const runtime: ToolsRuntime = {
+    projectTools: [{
+      name: "terrain.paint",
+      summary: "Paint terrain using a project custom tool.",
+      description: "Paint terrain using a project custom tool.",
+      group: "terrain",
+      inputSchema: { type: "object" },
+      destructiveHint: false
+    }]
+  };
+
+  const result = await handleToolsCommand("run", ["tools.group"], { input: '{"includeCustom":true}' }, runtime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as { groups: Array<{ name: string; source: string; toolCount: number }> };
+  assert.ok(data.groups.some((group) => group.name === "terrain" && group.source === "project" && group.toolCount === 1));
+});
+
+test("tools run tools.group-list executes through defineTool", async () => {
+  const result = await handleToolsCommand("run", ["tools.group-list"], { input: '{"group":"camera"}' }, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as { command: string; group: string; count: number; tools: Array<{ name: string; cliCommand: string }> };
+  assert.equal(data.command, "tools.group.list");
+  assert.equal(data.group, "camera");
+  assert.ok(data.count > 0);
+  assert.ok(data.tools.some((tool) => tool.name === "camera.list" && tool.cliCommand === "tools run camera.list"));
+});
+
+test("tools run tools.group-list returns stable unknown group error", async () => {
+  const result = await handleToolsCommand("run", ["tools.group-list"], { input: '{"group":"missing-group"}' }, emptyRuntime, requestId);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_TOOL_GROUP_NOT_FOUND");
+  assert.ok(result.error?.nextActions?.some((action) => action.includes("tools group")));
+});
+
+test("tools run tools.search executes through defineTool", async () => {
+  const result = await handleToolsCommand("run", ["tools.search"], { input: '{"keyword":"hierarchy"}' }, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as { command: string; keyword: string; count: number; tools: Array<{ name: string; group: string }> };
+  assert.equal(data.command, "tools.search");
+  assert.equal(data.keyword, "hierarchy");
+  assert.ok(data.count > 0);
+  assert.ok(data.tools.some((tool) => tool.name === "scene.hierarchy"));
+});
+
+test("tools run tools.search preserves text format and project tool discovery", async () => {
+  const runtime: ToolsRuntime = {
+    projectTools: [{
+      name: "terrain.paint",
+      summary: "Paint terrain using a project custom tool.",
+      description: "Paint terrain using a project custom tool.",
+      group: "terrain",
+      inputSchema: { type: "object" },
+      destructiveHint: false
+    }]
+  };
+
+  const result = await handleToolsCommand("run", ["tools.search"], { input: '{"keyword":"terrain","format":"text","includeCustom":true}' }, runtime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as { text: string; tools: Array<{ name: string; source: string }> };
+  assert.ok(data.tools.some((tool) => tool.name === "terrain.paint" && tool.source === "project"));
+  assert.match(data.text, /terrain\.paint/);
+});
+
+test("tools run tools.search rejects values outside schema enum", async () => {
+  const result = await handleToolsCommand("run", ["tools.search"], { input: '{"keyword":"scene","format":"xml"}' }, emptyRuntime, requestId);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_SCHEMA_INVALID");
+  assert.ok(result.error?.message.includes("format"));
+});
+
+test("tools run tools.describe executes through defineTool", async () => {
+  const result = await handleToolsCommand("run", ["tools.describe"], { input: '{"name":"scene.hierarchy"}' }, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.command, "tools.describe");
+  assert.equal(data.name, "scene.hierarchy");
+  assert.equal(data.group, "scene");
+  assert.equal(data.cliCommand, "tools run scene.hierarchy");
+  assert.equal(data.supportStatus, "live-bridge");
+  assert.equal("handler" in data, false);
+  assert.equal("timeoutMs" in data, false);
+});
+
+test("tools run tools.describe keeps project custom descriptor discovery", async () => {
+  const runtime: ToolsRuntime = {
+    projectTools: [{
+      name: "terrain.paint",
+      summary: "Paint terrain using a project custom tool.",
+      description: "Paint terrain using a project custom tool.",
+      group: "terrain",
+      inputSchema: { type: "object" },
+      destructiveHint: false,
+      playModeSupport: "editor-only"
+    }]
+  };
+
+  const result = await handleToolsCommand("run", ["tools.describe"], { input: '{"name":"terrain.paint","includeCustom":true}' }, runtime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.name, "terrain.paint");
+  assert.equal(data.source, "project");
+  assert.equal(data.supportStatus, "live-bridge");
+  assert.equal(data.playModeSupport, "editor-only");
+});
+
+test("tools run tools.describe returns stable unknown tool error", async () => {
+  const result = await handleToolsCommand("run", ["tools.describe"], { input: '{"name":"missing.tool"}' }, emptyRuntime, requestId);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_TOOL_NOT_FOUND_FOR_TARGET");
+  assert.ok(result.error?.nextActions?.some((action) => action.includes("tools search")));
+});
+
+test("tools run tools.run executes migrated offline target through defineTool wrapper", async () => {
+  const result = await handleToolsCommand("run", ["tools.run"], { input: '{"name":"docs.topic","input":{"topic":"scene"}}' }, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as Record<string, unknown>;
+  assert.equal(data.command, "docs.topic");
+  assert.equal(data.topic, "scene");
+});
+
+test("tools run tools.run forwards bridge target input without leaking outer name", async () => {
+  const requests: BridgeRequest[] = [];
+  const runtime: ToolsRuntime = {
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { command: "project-tool.run", result: { command: "camera.info", target: "Main Camera" } } };
+    }
+  };
+
+  const result = await handleToolsCommand("run", ["tools.run"], { input: '{"name":"camera.info","input":{"target":"Main Camera"}}' }, runtime, requestId);
+  assert.equal(result.ok, true);
+  assert.equal(requests[0].command, "project-tool.run");
+  assert.deepEqual(requests[0].args, { name: "camera.info", input: { target: "Main Camera" } });
+});
+
+test("tools run tools.run returns nested errors as the public envelope", async () => {
+  const result = await handleToolsCommand("run", ["tools.run"], { input: '{"name":"missing.tool"}' }, emptyRuntime, requestId);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_TOOL_NOT_FOUND_FOR_TARGET");
+  assert.ok(result.error?.nextActions?.some((action) => action.includes("tools search")));
+});
+
+test("tools run asset.refresh executes through defineTool wrapper and existing bridge spec", async () => {
+  const requests: BridgeRequest[] = [];
+  const runtime: ToolsRuntime = {
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true, data: { command: "project-tool.run", result: { command: "asset.refresh", dryRun: true, path: (payload.args.input as Record<string, unknown>).path } } };
+    }
+  };
+
+  const result = await handleToolsCommand("run", ["asset.refresh", "Assets/Generated"], { "force-update": true, "dry-run": true }, runtime, requestId);
+  assert.equal(result.ok, true);
+  assert.equal(requests[0].command, "project-tool.run");
+  assert.deepEqual(requests[0].args, { name: "asset.refresh", input: { path: "Assets/Generated", forceUpdate: true, dryRun: true } });
+  assert.equal(requests[0].dryRun, true);
+});
+
+test("tools run asset.refresh job mode reaches bridge-job routing through defineTool wrapper", async () => {
+  const { JobStore } = await import("../src/job-store.js");
+  const { JobRunner } = await import("../src/job-runner.js");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { mkdirSync, rmSync } = await import("node:fs");
+  const dataDir = join(tmpdir(), `tools-asset-refresh-define-${Date.now()}`);
+  mkdirSync(dataDir, { recursive: true });
+  try {
+    const store = new JobStore(dataDir);
+    const runner = new JobRunner(store, dataDir);
+    const runtime: ToolsRuntime = { dataDir, store, runner } as ToolsRuntime;
+
+    const result = await handleToolsCommand("run", ["asset.refresh"], { input: JSON.stringify({ job: true, project: dataDir, wait: false }) }, runtime, requestId);
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "UNITY_NOT_FOUND");
+  } finally {
+    rmSync(dataDir, { recursive: true, force: true });
+  }
+});
+
+test("Stage 5 defineTool registry exposes migrated read slices", () => {
+  const expectedGroups = new Map([
+    ["package.list", "package"],
+    ["package.status", "package"],
+    ["package.info", "package"],
+    ["package.search", "package"],
+    ["package.resolve", "package"],
+    ["asset.refresh", "asset"],
+    ["docs.list", "docs"],
+    ["docs.topic", "docs"],
+    ["docs.get", "docs"],
+    ["docs.search", "docs"],
+    ["reflect.type", "reflect"],
+    ["reflect.member", "reflect"],
+    ["reflect.search", "reflect"],
+    ["editor.launch-dialog.dismiss", "editor"],
+    ["editor.refresh", "editor"],
+    ["editor.compile-diagnostics", "editor"],
+    ["diagnose.capabilities", "diagnose"],
+    ["test.run", "test"],
+    ["build.run", "build"],
+    ["build.status", "build"],
+    ["build.cancel", "build"],
+    ["tools.group", "tools"],
+    ["tools.group-list", "tools"],
+    ["tools.search", "tools"],
+    ["tools.describe", "tools"],
+    ["tools.run", "tools"]
+  ]);
+  for (const [name, group] of expectedGroups) {
+    const definition = findDefineTool(name);
+    assert.ok(definition, `${name} should be registered as a defineTool`);
+    assert.equal(definition.group, group);
+    assert.equal(definition.destructiveHint, false);
+    const metadata = defineToolMetadata().find((tool) => tool.name === name);
+    assert.ok(metadata, `${name} defineTool metadata should be available`);
+  }
+  const listMetadata = defineToolMetadata().find((tool) => tool.name === "package.list");
+  const infoMetadata = defineToolMetadata().find((tool) => tool.name === "package.info");
+  const packageSearchMetadata = defineToolMetadata().find((tool) => tool.name === "package.search");
+  const packageResolveMetadata = defineToolMetadata().find((tool) => tool.name === "package.resolve");
+  const assetRefreshMetadata = defineToolMetadata().find((tool) => tool.name === "asset.refresh");
+  const docsListMetadata = defineToolMetadata().find((tool) => tool.name === "docs.list");
+  const docsTopicMetadata = defineToolMetadata().find((tool) => tool.name === "docs.topic");
+  const docsGetMetadata = defineToolMetadata().find((tool) => tool.name === "docs.get");
+  const docsSearchMetadata = defineToolMetadata().find((tool) => tool.name === "docs.search");
+  const reflectTypeMetadata = defineToolMetadata().find((tool) => tool.name === "reflect.type");
+  const reflectSearchMetadata = defineToolMetadata().find((tool) => tool.name === "reflect.search");
+  const launchDialogMetadata = defineToolMetadata().find((tool) => tool.name === "editor.launch-dialog.dismiss");
+  const editorRefreshMetadata = defineToolMetadata().find((tool) => tool.name === "editor.refresh");
+  const compileDiagnosticsMetadata = defineToolMetadata().find((tool) => tool.name === "editor.compile-diagnostics");
+  const capabilitiesMetadata = defineToolMetadata().find((tool) => tool.name === "diagnose.capabilities");
+  const testRunMetadata = defineToolMetadata().find((tool) => tool.name === "test.run");
+  const buildRunMetadata = defineToolMetadata().find((tool) => tool.name === "build.run");
+  const buildStatusMetadata = defineToolMetadata().find((tool) => tool.name === "build.status");
+  const buildCancelMetadata = defineToolMetadata().find((tool) => tool.name === "build.cancel");
+  const toolsGroupMetadata = defineToolMetadata().find((tool) => tool.name === "tools.group");
+  const toolsGroupListMetadata = defineToolMetadata().find((tool) => tool.name === "tools.group-list");
+  const toolsSearchMetadata = defineToolMetadata().find((tool) => tool.name === "tools.search");
+  const toolsDescribeMetadata = defineToolMetadata().find((tool) => tool.name === "tools.describe");
+  const toolsRunMetadata = defineToolMetadata().find((tool) => tool.name === "tools.run");
+  assert.equal((listMetadata?.outputSchema?.properties as Record<string, { type?: string }>).packages?.type, "array");
+  assert.equal((infoMetadata?.inputSchema.required as string[])[0], "name");
+  assert.equal((packageSearchMetadata?.outputSchema?.properties as Record<string, { type?: string }>).packages?.type, "array");
+  assert.equal((packageResolveMetadata?.outputSchema?.properties as Record<string, { type?: string }>).command?.type, "array");
+  assert.equal((packageResolveMetadata?.inputSchema?.properties as Record<string, { type?: string }>).job?.type, "boolean");
+  assert.equal(assetRefreshMetadata?.handler, "hybrid");
+  assert.equal(assetRefreshMetadata?.supportStatus, "bridge-job");
+  assert.equal(assetRefreshMetadata?.supportsDryRun, true);
+  assert.equal((assetRefreshMetadata?.inputSchema?.properties as Record<string, { type?: string }>).job?.type, "boolean");
+  assert.equal((assetRefreshMetadata?.inputSchema?.properties as Record<string, { type?: string }>).dryRun?.type, "boolean");
+  assert.equal((assetRefreshMetadata?.outputSchema?.properties as Record<string, { type?: string }>).plannedEffects?.type, "array");
+  assert.equal((docsListMetadata?.outputSchema?.properties as Record<string, { type?: string }>).topics?.type, "array");
+  assert.equal((docsTopicMetadata?.inputSchema.required as string[])[0], "topic");
+  assert.equal((docsGetMetadata?.inputSchema.required as string[])[0], "api");
+  assert.equal((docsSearchMetadata?.outputSchema?.properties as Record<string, { type?: string }>).items?.type, "array");
+  assert.equal((reflectTypeMetadata?.inputSchema.required as string[])[0], "name");
+  assert.equal((reflectSearchMetadata?.outputSchema?.properties as Record<string, { type?: string }>).items?.type, "array");
+  assert.equal((launchDialogMetadata?.outputSchema?.properties as Record<string, { type?: string }>).plannedEffects?.type, "array");
+  assert.equal((editorRefreshMetadata?.outputSchema?.properties as Record<string, { type?: string }>).command?.type, "array");
+  assert.equal((compileDiagnosticsMetadata?.outputSchema?.properties as Record<string, { type?: string }>).command?.type, "string");
+  assert.equal((capabilitiesMetadata?.outputSchema?.properties as Record<string, { type?: string }>).contextDiscovery?.type, "object");
+  assert.equal((testRunMetadata?.outputSchema?.properties as Record<string, { type?: string }>).command?.type, "array");
+  assert.equal((findToolByName("build.run")?.inputSchema?.properties as Record<string, { enum?: string[] }>).target?.enum?.includes("WebGL"), true);
+  assert.equal((buildRunMetadata?.outputSchema?.properties as Record<string, { type?: string }>).jobs?.type, "array");
+  assert.equal((buildStatusMetadata?.inputSchema.required as string[])[0], "jobId");
+  assert.equal((buildStatusMetadata?.outputSchema?.properties as Record<string, { type?: string }>).jobCommand?.type, "array");
+  assert.equal((buildCancelMetadata?.outputSchema?.properties as Record<string, { type?: string }>).error?.type, "object");
+  assert.equal((toolsGroupMetadata?.outputSchema?.properties as Record<string, { type?: string }>).groups?.type, "array");
+  assert.equal((toolsGroupListMetadata?.outputSchema?.properties as Record<string, { type?: string }>).tools?.type, "array");
+  assert.equal((toolsSearchMetadata?.outputSchema?.properties as Record<string, { type?: string }>).tools?.type, "array");
+  assert.equal((toolsDescribeMetadata?.inputSchema.required as string[])[0], "name");
+  assert.equal((toolsDescribeMetadata?.outputSchema?.properties as Record<string, { type?: string }>).inputSchema?.type, "object");
+  assert.equal((toolsRunMetadata?.inputSchema.required as string[])[0], "name");
+  assert.equal((toolsRunMetadata?.inputSchema?.properties as Record<string, { type?: string }>).timeoutMs?.type, "number");
+  assert.equal((toolsRunMetadata?.inputSchema?.properties as Record<string, { type?: string }>).dryRun?.type, "boolean");
+  assert.equal((toolsRunMetadata?.outputSchema?.properties as Record<string, { type?: string }>).command?.type, "string");
+});
+
+test("Stage 5 defineTool registry exposes migrated destructive package slices", () => {
+  const installDefinition = findDefineTool("package.install");
+  assert.ok(installDefinition, "package.install should be registered as a defineTool");
+  assert.equal(installDefinition.group, "package");
+  assert.equal(installDefinition.destructiveHint, true);
+  assert.equal(installDefinition.supportsDryRun, undefined);
+  assert.equal(installDefinition.handler, "hybrid");
+
+  const removeDefinition = findDefineTool("package.remove");
+  assert.ok(removeDefinition, "package.remove should be registered as a defineTool");
+  assert.equal(removeDefinition.group, "package");
+  assert.equal(removeDefinition.destructiveHint, true);
+  assert.equal(removeDefinition.supportsDryRun, true);
+  assert.equal(removeDefinition.handler, "hybrid");
+
+  const bridgeRemoveDefinition = findDefineTool("package.bridge-remove");
+  assert.ok(bridgeRemoveDefinition, "package.bridge-remove should be registered as a defineTool");
+  assert.equal(bridgeRemoveDefinition.group, "package");
+  assert.equal(bridgeRemoveDefinition.destructiveHint, true);
+  assert.equal(bridgeRemoveDefinition.supportsDryRun, true);
+  assert.equal(bridgeRemoveDefinition.handler, "offline");
+
+  const deployDefinition = findDefineTool("package.deploy");
+  assert.ok(deployDefinition, "package.deploy should be registered as a defineTool");
+  assert.equal(deployDefinition.group, "package");
+  assert.equal(deployDefinition.destructiveHint, true);
+  assert.equal(deployDefinition.supportsDryRun, true);
+  assert.equal(deployDefinition.handler, "hybrid");
+
+  const restoreDefinition = findDefineTool("package.restore");
+  assert.ok(restoreDefinition, "package.restore should be registered as a defineTool");
+  assert.equal(restoreDefinition.group, "package");
+  assert.equal(restoreDefinition.destructiveHint, true);
+  assert.equal(restoreDefinition.supportsDryRun, true);
+  assert.equal(restoreDefinition.handler, "hybrid");
+
+  const installMetadata = defineToolMetadata().find((tool) => tool.name === "package.install");
+  assert.equal((installMetadata?.inputSchema?.properties as Record<string, { type?: string }>).job?.type, "boolean");
+  assert.equal((installMetadata?.outputSchema?.properties as Record<string, { type?: string }>).installedVersion?.type, "string");
+  assert.equal((installMetadata?.outputSchema?.properties as Record<string, { type?: string }>).command?.type, "array");
+
+  const removeMetadata = defineToolMetadata().find((tool) => tool.name === "package.remove");
+  assert.equal((removeMetadata?.inputSchema?.properties as Record<string, { type?: string }>).dryRun?.type, "boolean");
+  assert.equal((removeMetadata?.inputSchema?.properties as Record<string, { type?: string }>).job?.type, "boolean");
+  assert.equal((removeMetadata?.outputSchema?.properties as Record<string, { type?: string }>).dependents?.type, "array");
+  assert.equal((removeMetadata?.outputSchema?.properties as Record<string, { type?: string }>).plannedEffects?.type, "array");
+  assert.equal((removeMetadata?.outputSchema?.properties as Record<string, { type?: string }>).command?.type, "array");
+
+  const bridgeRemoveMetadata = defineToolMetadata().find((tool) => tool.name === "package.bridge-remove");
+  assert.equal((bridgeRemoveMetadata?.inputSchema?.properties as Record<string, { type?: string }>).dryRun?.type, "boolean");
+  assert.equal((bridgeRemoveMetadata?.outputSchema?.properties as Record<string, { type?: string }>).plannedEffects?.type, "array");
+  assert.equal((bridgeRemoveMetadata?.outputSchema?.properties as Record<string, { type?: string }>).fileManifestPath?.type, "string");
+
+  const deployMetadata = defineToolMetadata().find((tool) => tool.name === "package.deploy");
+  assert.equal((deployMetadata?.inputSchema?.properties as Record<string, { type?: string }>).source?.type, "string");
+  assert.equal((deployMetadata?.inputSchema?.properties as Record<string, { type?: string }>).dryRun?.type, "boolean");
+  assert.equal((deployMetadata?.inputSchema?.properties as Record<string, { type?: string }>).bridgeEndpoint?.type, "string");
+  assert.equal((deployMetadata?.outputSchema?.properties as Record<string, { type?: string }>).plannedEffects?.type, "array");
+  assert.equal((deployMetadata?.outputSchema?.properties as Record<string, { type?: string }>).metadataPath?.type, "string");
+  assert.equal((deployMetadata?.outputSchema?.properties as Record<string, { type?: string }>).liveRefresh?.type, "object");
+
+  const restoreMetadata = defineToolMetadata().find((tool) => tool.name === "package.restore");
+  assert.equal((restoreMetadata?.inputSchema?.properties as Record<string, { type?: string }>).packageName?.type, "string");
+  assert.equal((restoreMetadata?.inputSchema?.properties as Record<string, { type?: string }>).dryRun?.type, "boolean");
+  assert.equal((restoreMetadata?.inputSchema?.properties as Record<string, { type?: string }>).bridgeEndpoint?.type, "string");
+  assert.equal((restoreMetadata?.outputSchema?.properties as Record<string, { type?: string }>).plannedEffects?.type, "array");
+  assert.equal((restoreMetadata?.outputSchema?.properties as Record<string, { type?: string }>).metadataPath?.type, "string");
+  assert.equal((restoreMetadata?.outputSchema?.properties as Record<string, { type?: string }>).liveRefresh?.type, "object");
+});
+
+test("Stage 5 defineTool registry exposes action-style package registry slices", () => {
+  const registryDefinition = findDefineTool("package.registry");
+  assert.ok(registryDefinition, "package.registry should be registered as a defineTool");
+  assert.equal(registryDefinition.group, "package");
+  assert.equal(registryDefinition.destructiveHint, false);
+  assert.equal(registryDefinition.handler, "offline");
+
+  const scopedRegistryDefinition = findDefineTool("package.scoped-registry");
+  assert.ok(scopedRegistryDefinition, "package.scoped-registry should be registered as a defineTool");
+  assert.equal(scopedRegistryDefinition.group, "package");
+  assert.equal(scopedRegistryDefinition.destructiveHint, false);
+  assert.equal(scopedRegistryDefinition.supportsDryRun, true);
+  assert.equal(scopedRegistryDefinition.handler, "offline");
+
+  const registryMetadata = defineToolMetadata().find((tool) => tool.name === "package.registry");
+  assert.equal((registryMetadata?.inputSchema?.properties as Record<string, { type?: string }>).dryRun?.type, "boolean");
+  assert.equal((registryMetadata?.outputSchema?.properties as Record<string, { type?: string }>).previousRegistry?.type, "string");
+
+  const scopedRegistryMetadata = defineToolMetadata().find((tool) => tool.name === "package.scoped-registry");
+  assert.equal((scopedRegistryMetadata?.inputSchema?.properties as Record<string, { type?: string }>).dryRun?.type, "boolean");
+  assert.equal((scopedRegistryMetadata?.outputSchema?.properties as Record<string, { type?: string }>).replaced?.type, "boolean");
+  assert.equal((scopedRegistryMetadata?.outputSchema?.properties as Record<string, { type?: string }>).plannedEffects?.type, "array");
+});
+
+test("Stage 5 defineTool registry exposes runtime code slice", () => {
+  const codeExecDefinition = findDefineTool("code.exec");
+  assert.ok(codeExecDefinition, "code.exec should be registered as a defineTool");
+  assert.equal(codeExecDefinition.group, "code");
+  assert.equal(codeExecDefinition.destructiveHint, true);
+  assert.equal(codeExecDefinition.supportsDryRun, true);
+  assert.equal(codeExecDefinition.handler, "hybrid");
+  assert.equal(codeExecDefinition.supportStatus, "bridge-job");
+
+  const codeExecMetadata = defineToolMetadata().find((tool) => tool.name === "code.exec");
+  assert.equal((codeExecMetadata?.inputSchema?.properties as Record<string, { type?: string }>).refs?.type, "array");
+  assert.equal((codeExecMetadata?.inputSchema?.properties as Record<string, { type?: string }>).args?.type, "object");
+  assert.equal((codeExecMetadata?.outputSchema?.properties as Record<string, { type?: string }>).plannedEffects?.type, "array");
+  assert.equal((codeExecMetadata?.outputSchema?.properties as Record<string, { type?: string }>).preview?.type, "object");
 });
 
 test("Stage 5 migrated defineTools stay aligned with static discovery metadata", () => {
@@ -1767,6 +2463,751 @@ test("tools run package.list defineTool path converts PackageManagerError", asyn
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
+});
+
+test("tools run package.status executes through defineTool", async () => {
+  const root = makeTempDir("tools-package-status-define");
+  try {
+    const project = makeUnityProject(root, { "com.example.tool": "1.2.3" });
+    const result = await handleToolsCommand("run", ["package.status"], { project }, emptyRuntime, requestId);
+    assert.equal(result.ok, true);
+    const data = result.data as { packageCount: number; packages: Array<{ name: string; resolved: boolean }> };
+    assert.equal(data.packageCount, 1);
+    assert.deepEqual(data.packages, [{ name: "com.example.tool", requestedVersion: "1.2.3", lockedVersion: "1.2.3", source: null, resolved: true }]);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.info executes through defineTool with positional package name", async () => {
+  const root = makeTempDir("tools-package-info-define");
+  try {
+    const project = makeUnityProject(root, { "com.example.tool": "1.2.3" });
+    const result = await handleToolsCommand("run", ["package.info", "com.example.tool"], { project }, emptyRuntime, requestId);
+    assert.equal(result.ok, true);
+    const data = result.data as { package: { name: string; requestedVersion?: string } };
+    assert.equal(data.package.name, "com.example.tool");
+    assert.equal(data.package.requestedVersion, "1.2.3");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.info defineTool path returns PACKAGE_NOT_FOUND", async () => {
+  const root = makeTempDir("tools-package-info-missing-define");
+  try {
+    const project = makeUnityProject(root, { "com.example.tool": "1.2.3" });
+    const result = await handleToolsCommand("run", ["package.info"], { project, input: '{"name":"com.missing.tool"}' }, emptyRuntime, requestId);
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "PACKAGE_NOT_FOUND");
+    assert.ok(result.error?.nextActions?.some((action) => action.includes("package.list")));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.search executes through defineTool with explicit registry", async () => {
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+  globalThis.fetch = (async (url: string | URL | Request) => {
+    requestedUrls.push(String(url));
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({ objects: [{ package: { name: "com.unity.textmeshpro", version: "3.0.7", description: "TextMesh Pro" } }] })
+    } as Response;
+  }) as typeof fetch;
+  try {
+    const result = await handleToolsCommand("run", ["package.search", "textmeshpro"], { registry: "https://registry.example.com" }, emptyRuntime, requestId);
+    assert.equal(result.ok, true);
+    const data = result.data as { registry: string; query: string; packages: Array<{ name: string; version?: string; description?: string }> };
+    assert.equal(data.registry, "https://registry.example.com");
+    assert.equal(data.query, "textmeshpro");
+    assert.deepEqual(data.packages, [{ name: "com.unity.textmeshpro", version: "3.0.7", description: "TextMesh Pro" }]);
+    assert.equal(requestedUrls[0], "https://registry.example.com/-/v1/search?text=textmeshpro");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("tools run package.search defaults to public registry when cwd has no manifest", async () => {
+  const originalFetch = globalThis.fetch;
+  const requestedUrls: string[] = [];
+  globalThis.fetch = (async (url: string | URL | Request) => {
+    requestedUrls.push(String(url));
+    return { ok: true, status: 200, json: async () => ({ objects: [] }) } as Response;
+  }) as typeof fetch;
+  try {
+    const result = await handleToolsCommand("run", ["package.search", "textmeshpro"], {}, emptyRuntime, requestId);
+    assert.equal(result.ok, true);
+    const data = result.data as { registry: string; query: string; packages: unknown[] };
+    assert.equal(data.registry, "https://package.openupm.com");
+    assert.equal(data.query, "textmeshpro");
+    assert.deepEqual(data.packages, []);
+    assert.equal(requestedUrls[0], "https://package.openupm.com/-/v1/search?text=textmeshpro");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("tools run package.search defineTool path converts registry errors", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = (async () => ({ ok: false, status: 503, json: async () => ({}) } as Response)) as typeof fetch;
+  try {
+    const result = await handleToolsCommand("run", ["package.search"], { input: '{"query":"textmeshpro","registry":"https://registry.example.com"}' }, emptyRuntime, requestId);
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "REGISTRY_UNREACHABLE");
+    assert.ok(result.error?.nextActions?.some((action) => action.includes("registry URL")));
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test("tools run package.search rejects missing query before registry lookup", async () => {
+  const result = await handleToolsCommand("run", ["package.search"], { input: '{"registry":"https://registry.example.com"}' }, emptyRuntime, requestId);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_SCHEMA_INVALID");
+  assert.ok(result.error?.message.includes("query"));
+});
+
+test("tools run package.search invalid registry returns nextActions", async () => {
+  const result = await handleToolsCommand("run", ["package.search"], { input: '{"query":"textmeshpro","registry":"file://bad"}' }, emptyRuntime, requestId);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "REGISTRY_URL_INVALID");
+  assert.ok(result.error?.nextActions?.some((action) => action.includes("http(s) registry URL")));
+});
+
+test("tools run package.resolve executes through defineTool and skips when Unity is unavailable", async () => {
+  const root = makeTempDir("tools-package-resolve-skip-define");
+  try {
+    const project = makeUnityProject(root, { "com.example.tool": "1.2.3" });
+    const result = await handleToolsCommand("run", ["package.resolve"], { input: JSON.stringify({ project }) }, emptyRuntime, requestId);
+    assert.equal(result.ok, true);
+    const data = result.data as { action: string; projectPath: string; status: string; resolve: string; nextActions: string[] };
+    assert.equal(data.action, "resolve");
+    assert.equal(data.projectPath, project);
+    assert.equal(data.status, "manifest_updated");
+    assert.equal(data.resolve, "skipped");
+    assert.ok(data.nextActions.some((action) => action.includes("UNITY_EXE")));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.resolve starts batch job through defineTool", async () => {
+  const { JobStore } = await import("../src/job-store.js");
+  const { JobRunner } = await import("../src/job-runner.js");
+  const root = makeTempDir("tools-package-resolve-job-define");
+  try {
+    const project = makeUnityProject(root, { "com.example.tool": "1.2.3" });
+    const unity = makeFakeUnity(root, "process.exit(0);");
+    const store = new JobStore(root);
+    const runner = new JobRunner(store, root);
+    const runtime: ToolsRuntime = { dataDir: root, store, runner } as ToolsRuntime;
+
+    const result = await handleToolsCommand("run", ["package.resolve"], { input: JSON.stringify({ project, unity, wait: false }) }, runtime, requestId);
+    assert.equal(result.ok, true);
+    const data = result.data as { jobId: string; kind: string; command: string[]; result: { action?: string; bridge?: object } };
+    assert.ok(data.jobId);
+    assert.equal(data.kind, "package");
+    assert.equal(data.result.action, "resolve");
+    assert.ok(data.result.bridge);
+    assert.equal(data.command[data.command.indexOf("-executeMethod") + 1], "UnityCli.UnityCliBatch.ResolvePackages");
+    assert.equal(data.command[data.command.indexOf("-unityCliPackageAction") + 1], "resolve");
+  } finally {
+    await new Promise(r => setTimeout(r, 200));
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.resolve job=true returns UNITY_NOT_FOUND through defineTool", async () => {
+  const root = makeTempDir("tools-package-resolve-unity-define");
+  try {
+    const project = makeUnityProject(root, { "com.example.tool": "1.2.3" });
+    const result = await handleToolsCommand("run", ["package.resolve"], { input: JSON.stringify({ project, job: true }) }, emptyRuntime, requestId);
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "UNITY_NOT_FOUND");
+    assert.ok(result.error?.nextActions?.some((action) => action.includes("UNITY_EXE")));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.resolve returns MANIFEST_NOT_FOUND through defineTool", async () => {
+  const root = makeTempDir("tools-package-resolve-missing-define");
+  try {
+    const result = await handleToolsCommand("run", ["package.resolve"], { input: JSON.stringify({ project: root }) }, emptyRuntime, requestId);
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "MANIFEST_NOT_FOUND");
+    assert.equal((result.error as Record<string, unknown> | undefined)?.resolve, "blocked_missing_manifest");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.install requires confirmation before defineTool execution", async () => {
+  const root = makeTempDir("tools-package-install-confirm-define");
+  try {
+    const project = makeUnityProject(root, {});
+    const result = await handleToolsCommand("run", ["package.install"], { input: JSON.stringify({ project, name: "com.example.tool", version: "1.2.3" }) }, emptyRuntime, requestId);
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "E_DESTRUCTIVE_CONFIRMATION_REQUIRED");
+    const manifest = JSON.parse(readFileSync(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies?: Record<string, string> };
+    assert.equal(manifest.dependencies?.["com.example.tool"], undefined);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.install writes manifest through defineTool with confirmation", async () => {
+  const root = makeTempDir("tools-package-install-live-define");
+  try {
+    const project = makeUnityProject(root, {});
+    const result = await handleToolsCommand("run", ["package.install"], { input: JSON.stringify({ project, name: "com.example.tool", version: "1.2.3" }), yes: true }, emptyRuntime, requestId);
+    assert.equal(result.ok, true);
+    const data = result.data as { action: string; package: string; installedVersion: string; changed: boolean; status: string; resolve: string; nextActions: string[] };
+    assert.equal(data.action, "install");
+    assert.equal(data.package, "com.example.tool");
+    assert.equal(data.installedVersion, "1.2.3");
+    assert.equal(data.changed, true);
+    assert.equal(data.status, "manifest_updated");
+    assert.equal(data.resolve, "skipped");
+    assert.ok(data.nextActions.some((action) => action.includes("UNITY_EXE")));
+    const manifest = JSON.parse(readFileSync(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies?: Record<string, string> };
+    assert.equal(manifest.dependencies?.["com.example.tool"], "1.2.3");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.install returns version and downgrade errors through defineTool", async () => {
+  const root = makeTempDir("tools-package-install-errors-define");
+  try {
+    const project = makeUnityProject(root, { "com.example.tool": "2.0.0" });
+
+    const missingVersion = await handleToolsCommand("run", ["package.install"], { input: JSON.stringify({ project, name: "com.new.tool" }), yes: true }, emptyRuntime, requestId);
+    assert.equal(missingVersion.ok, false);
+    assert.equal(missingVersion.error?.code, "PACKAGE_VERSION_REQUIRED");
+
+    const downgrade = await handleToolsCommand("run", ["package.install"], { input: JSON.stringify({ project, name: "com.example.tool", version: "1.0.0" }), yes: true }, emptyRuntime, requestId);
+    assert.equal(downgrade.ok, false);
+    assert.equal(downgrade.error?.code, "PACKAGE_DOWNGRADE_BLOCKED");
+
+    const manifest = JSON.parse(readFileSync(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies?: Record<string, string> };
+    assert.equal(manifest.dependencies?.["com.example.tool"], "2.0.0");
+    assert.equal(manifest.dependencies?.["com.new.tool"], undefined);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.install job=true returns UNITY_NOT_FOUND after manifest write through defineTool", async () => {
+  const root = makeTempDir("tools-package-install-unity-define");
+  try {
+    const project = makeUnityProject(root, {});
+    const result = await handleToolsCommand("run", ["package.install"], { input: JSON.stringify({ project, name: "com.example.tool", version: "1.2.3", job: true }), yes: true }, emptyRuntime, requestId);
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "UNITY_NOT_FOUND");
+    assert.ok(result.error?.nextActions?.some((action) => action.includes("UNITY_EXE")));
+    const manifest = JSON.parse(readFileSync(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies?: Record<string, string> };
+    assert.equal(manifest.dependencies?.["com.example.tool"], "1.2.3");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.deploy requires confirmation before defineTool execution", async () => {
+  const root = makeTempDir("tools-package-deploy-confirm-define");
+  try {
+    const project = makeUnityProject(root, {});
+    const source = makeLocalUnityPackage(root, "SourcePackage", "com.example.tool", "1.2.3");
+    const result = await handleToolsCommand("run", ["package.deploy"], { input: JSON.stringify({ project, source }) }, emptyRuntime, requestId);
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "E_DESTRUCTIVE_CONFIRMATION_REQUIRED");
+    assert.equal(existsSync(join(project, "Packages", "com.example.tool")), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.deploy dry-run previews copy without writing project files", async () => {
+  const root = makeTempDir("tools-package-deploy-dry-define");
+  try {
+    const project = makeUnityProject(root, {});
+    const source = makeLocalUnityPackage(root, "SourcePackage", "com.example.tool", "1.2.3");
+    const result = await handleToolsCommand("run", ["package.deploy"], { input: JSON.stringify({ project, source }), "dry-run": true }, emptyRuntime, requestId);
+    assert.equal(result.ok, true);
+    const data = result.data as { action: string; status: string; dryRun: boolean; plannedEffects: Array<{ type?: string; package?: string }>; targetPath: string; metadataPath: string };
+    assert.equal(data.action, "deploy");
+    assert.equal(data.status, "dry_run");
+    assert.equal(data.dryRun, true);
+    assert.ok(data.plannedEffects.some((effect) => effect.type === "package.deploy.copy" && effect.package === "com.example.tool"));
+    assert.equal(existsSync(data.targetPath), false);
+    assert.equal(existsSync(data.metadataPath), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.deploy writes package and package.restore removes a new deployment", async () => {
+  const root = makeTempDir("tools-package-deploy-restore-new-define");
+  try {
+    const project = makeUnityProject(root, {});
+    const source = makeLocalUnityPackage(root, "SourcePackage", "com.example.tool", "1.2.3");
+    const deploy = await handleToolsCommand("run", ["package.deploy"], { input: JSON.stringify({ project, source }), yes: true }, emptyRuntime, requestId);
+    assert.equal(deploy.ok, true);
+    const deployed = deploy.data as { action: string; status: string; dryRun: boolean; packageName: string; targetPath: string; backupCreated: boolean; liveRefresh: { status?: string }; nextActions: string[] };
+    assert.equal(deployed.action, "deploy");
+    assert.equal(deployed.status, "deployed");
+    assert.equal(deployed.dryRun, false);
+    assert.equal(deployed.packageName, "com.example.tool");
+    assert.equal(deployed.backupCreated, false);
+    assert.equal(deployed.liveRefresh.status, "skipped");
+    assert.ok(deployed.nextActions.some((action) => action.includes("Open or refresh")));
+    assert.equal(readPackageVersion(deployed.targetPath), "1.2.3");
+
+    const restoreDryRun = await handleToolsCommand("run", ["package.restore"], { input: JSON.stringify({ project, packageName: "com.example.tool" }), "dry-run": true }, emptyRuntime, requestId);
+    assert.equal(restoreDryRun.ok, true);
+    const preview = restoreDryRun.data as { action: string; status: string; dryRun: boolean; removedDeployedPackage: boolean; plannedEffects: Array<{ type?: string }> };
+    assert.equal(preview.action, "restore");
+    assert.equal(preview.status, "dry_run");
+    assert.equal(preview.dryRun, true);
+    assert.equal(preview.removedDeployedPackage, true);
+    assert.ok(preview.plannedEffects.some((effect) => effect.type === "package.restore.remove-deployed"));
+    assert.equal(existsSync(deployed.targetPath), true);
+
+    const restore = await handleToolsCommand("run", ["package.restore"], { input: JSON.stringify({ project, packageName: "com.example.tool" }), yes: true }, emptyRuntime, requestId);
+    assert.equal(restore.ok, true);
+    const restored = restore.data as { action: string; status: string; removedDeployedPackage: boolean; restoredFromBackup: boolean; liveRefresh: { status?: string } };
+    assert.equal(restored.action, "restore");
+    assert.equal(restored.status, "restored");
+    assert.equal(restored.removedDeployedPackage, true);
+    assert.equal(restored.restoredFromBackup, false);
+    assert.equal(restored.liveRefresh.status, "skipped");
+    assert.equal(existsSync(deployed.targetPath), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.deploy backs up existing package and package.restore restores backup", async () => {
+  const root = makeTempDir("tools-package-deploy-restore-backup-define");
+  try {
+    const project = makeUnityProject(root, {});
+    const existingTarget = makeLocalUnityPackage(join(project, "Packages"), "com.example.tool", "com.example.tool", "0.1.0");
+    const source = makeLocalUnityPackage(root, "SourcePackage", "com.example.tool", "2.0.0");
+
+    const deploy = await handleToolsCommand("run", ["package.deploy"], { input: JSON.stringify({ project, source, packageName: "com.example.tool" }), yes: true }, emptyRuntime, requestId);
+    assert.equal(deploy.ok, true);
+    const deployed = deploy.data as { backupCreated: boolean; backupPath?: string; backupPackageVersion?: string; targetPath: string; repeatedDeployment: boolean };
+    assert.equal(deployed.backupCreated, true);
+    assert.equal(deployed.backupPackageVersion, "0.1.0");
+    assert.equal(deployed.repeatedDeployment, false);
+    assert.ok(deployed.backupPath);
+    assert.equal(readPackageVersion(existingTarget), "2.0.0");
+
+    const restore = await handleToolsCommand("run", ["package.restore"], { input: JSON.stringify({ project, packageName: "com.example.tool" }), yes: true }, emptyRuntime, requestId);
+    assert.equal(restore.ok, true);
+    const restored = restore.data as { restoredFromBackup: boolean; removedDeployedPackage: boolean; copiedFileCount: number; backupPath?: string };
+    assert.equal(restored.restoredFromBackup, true);
+    assert.equal(restored.removedDeployedPackage, false);
+    assert.ok(restored.copiedFileCount > 0);
+    assert.equal(readPackageVersion(existingTarget), "0.1.0");
+    if (restored.backupPath) assert.equal(existsSync(restored.backupPath), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.deploy and package.restore return stable errors through defineTool", async () => {
+  const root = makeTempDir("tools-package-deploy-restore-errors-define");
+  try {
+    const project = makeUnityProject(root, {});
+    const source = makeLocalUnityPackage(root, "SourcePackage", "com.example.tool", "1.2.3");
+    const missingSource = await handleToolsCommand("run", ["package.deploy"], { input: JSON.stringify({ project }), "dry-run": true }, emptyRuntime, requestId);
+    assert.equal(missingSource.ok, false);
+    assert.equal(missingSource.error?.code, "E_SCHEMA_INVALID");
+
+    const mismatch = await handleToolsCommand("run", ["package.deploy"], { input: JSON.stringify({ project, source, packageName: "com.other.tool" }), "dry-run": true }, emptyRuntime, requestId);
+    assert.equal(mismatch.ok, false);
+    assert.equal(mismatch.error?.code, "PACKAGE_DEPLOY_NAME_MISMATCH");
+
+    const sourceInsideProject = makeLocalUnityPackage(join(project, "Packages"), "com.inside.tool", "com.inside.tool", "1.0.0");
+    const unsafeSource = await handleToolsCommand("run", ["package.deploy"], { input: JSON.stringify({ project, source: sourceInsideProject }), yes: true }, emptyRuntime, requestId);
+    assert.equal(unsafeSource.ok, false);
+    assert.equal(unsafeSource.error?.code, "PACKAGE_DEPLOY_SOURCE_INSIDE_PROJECT");
+
+    const missingDeployment = await handleToolsCommand("run", ["package.restore"], { input: JSON.stringify({ project, packageName: "com.missing.tool" }), "dry-run": true }, emptyRuntime, requestId);
+    assert.equal(missingDeployment.ok, false);
+    assert.equal(missingDeployment.error?.code, "PACKAGE_DEPLOYMENT_NOT_FOUND");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.registry action writes require confirmation and preserve read action", async () => {
+  const root = makeTempDir("tools-package-registry-define");
+  try {
+    const project = makeUnityProject(root, {});
+    const manifestPath = join(project, "Packages", "manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { registry?: string };
+    manifest.registry = "https://initial.example.com";
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), "utf8");
+
+    const get = await handleToolsCommand("run", ["package.registry", "get"], { project }, emptyRuntime, requestId);
+    assert.equal(get.ok, true);
+    assert.equal((get.data as { registry?: string }).registry, "https://initial.example.com");
+
+    const blocked = await handleToolsCommand("run", ["package.registry", "set"], { project, url: "https://registry.example.com" }, emptyRuntime, requestId);
+    assert.equal(blocked.ok, false);
+    assert.equal(blocked.error?.code, "E_DESTRUCTIVE_CONFIRMATION_REQUIRED");
+
+    const set = await handleToolsCommand("run", ["package.registry", "set"], { project, url: "https://registry.example.com", yes: true }, emptyRuntime, requestId);
+    assert.equal(set.ok, true);
+    assert.equal((set.data as { registry?: string }).registry, "https://registry.example.com");
+
+    const dryRunClear = await handleToolsCommand("run", ["package.registry", "clear"], { project, "dry-run": true }, emptyRuntime, requestId);
+    assert.equal(dryRunClear.ok, false);
+    assert.equal(dryRunClear.error?.code, "E_DRY_RUN_UNSUPPORTED");
+    assert.equal((JSON.parse(readFileSync(manifestPath, "utf8")) as { registry?: string }).registry, "https://registry.example.com");
+
+    const clear = await handleToolsCommand("run", ["package.registry", "clear"], { project, yes: true }, emptyRuntime, requestId);
+    assert.equal(clear.ok, true);
+    assert.equal((clear.data as { previousRegistry?: string }).previousRegistry, "https://registry.example.com");
+    assert.equal((JSON.parse(readFileSync(manifestPath, "utf8")) as { registry?: string }).registry, undefined);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.scoped-registry action writes require confirmation and remove supports dry-run", async () => {
+  const root = makeTempDir("tools-package-scoped-registry-define");
+  try {
+    const project = makeUnityProject(root, { "com.example.tool": "1.0.0" });
+    const manifestPath = join(project, "Packages", "manifest.json");
+    const manifest = JSON.parse(readFileSync(manifestPath, "utf8")) as { scopedRegistries?: Array<{ name: string; url: string; scopes: string[] }> };
+    manifest.scopedRegistries = [{ name: "Example", url: "https://registry.example.com", scopes: ["com.example"] }];
+    writeFileSync(manifestPath, JSON.stringify(manifest, null, 2), "utf8");
+
+    const list = await handleToolsCommand("run", ["package.scoped-registry", "list"], { project }, emptyRuntime, requestId);
+    assert.equal(list.ok, true);
+    assert.deepEqual((list.data as { scopedRegistries: Array<{ name: string }> }).scopedRegistries.map((entry) => entry.name), ["Example"]);
+
+    const blockedAdd = await handleToolsCommand("run", ["package.scoped-registry", "add"], { project, name: "Acme", url: "https://registry.acme.test", scope: "com.acme" }, emptyRuntime, requestId);
+    assert.equal(blockedAdd.ok, false);
+    assert.equal(blockedAdd.error?.code, "E_DESTRUCTIVE_CONFIRMATION_REQUIRED");
+
+    const add = await handleToolsCommand("run", ["package.scoped-registry", "add"], { project, name: "Acme", url: "https://registry.acme.test", scope: "com.acme,com.acme.tools", yes: true }, emptyRuntime, requestId);
+    assert.equal(add.ok, true);
+    assert.deepEqual((add.data as { registry: { scopes: string[] }; replaced: boolean }).registry.scopes, ["com.acme", "com.acme.tools"]);
+    assert.equal((add.data as { replaced: boolean }).replaced, false);
+
+    const addDryRun = await handleToolsCommand("run", ["package.scoped-registry", "add"], { project, name: "Dry", url: "https://registry.dry.test", scope: "com.dry", "dry-run": true }, emptyRuntime, requestId);
+    assert.equal(addDryRun.ok, false);
+    assert.equal(addDryRun.error?.code, "E_DRY_RUN_UNSUPPORTED");
+
+    const removeDryRun = await handleToolsCommand("run", ["package.scoped-registry", "remove"], { project, name: "Example", "dry-run": true }, emptyRuntime, requestId);
+    assert.equal(removeDryRun.ok, true);
+    assert.equal((removeDryRun.data as { dryRun: boolean; blocked: boolean }).dryRun, true);
+    assert.equal((removeDryRun.data as { dryRun: boolean; blocked: boolean }).blocked, true);
+    assert.deepEqual((removeDryRun.data as { matchedPackages: string[] }).matchedPackages, ["com.example.tool"]);
+
+    const blockedRemove = await handleToolsCommand("run", ["package.scoped-registry", "remove"], { project, name: "Example", yes: true }, emptyRuntime, requestId);
+    assert.equal(blockedRemove.ok, false);
+    assert.equal(blockedRemove.error?.code, "SCOPED_REGISTRY_IN_USE");
+
+    const forcedRemove = await handleToolsCommand("run", ["package.scoped-registry", "remove"], { project, name: "Example", force: true, yes: true }, emptyRuntime, requestId);
+    assert.equal(forcedRemove.ok, true);
+    assert.equal((forcedRemove.data as { forced: boolean; blocked: boolean }).forced, true);
+    assert.equal((forcedRemove.data as { forced: boolean; blocked: boolean }).blocked, false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.remove requires confirmation before defineTool execution", async () => {
+  const root = makeTempDir("tools-package-remove-confirm-define");
+  try {
+    const project = makeUnityProject(root, { "com.example.tool": "1.2.3" });
+    const result = await handleToolsCommand("run", ["package.remove"], { input: JSON.stringify({ project, name: "com.example.tool" }) }, emptyRuntime, requestId);
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "E_DESTRUCTIVE_CONFIRMATION_REQUIRED");
+    const manifest = JSON.parse(readFileSync(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies?: Record<string, string> };
+    assert.equal(manifest.dependencies?.["com.example.tool"], "1.2.3");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.remove dry-run reports dependent block through defineTool", async () => {
+  const root = makeTempDir("tools-package-remove-dry-define");
+  try {
+    const project = makeUnityProject(root, { "com.unity.textmeshpro": "3.0.7", "com.example.tool": "1.2.3" });
+    writeFileSync(join(project, "Packages", "packages-lock.json"), JSON.stringify({
+      dependencies: {
+        "com.unity.textmeshpro": { version: "3.0.7" },
+        "com.example.tool": { version: "1.2.3", dependencies: { "com.unity.textmeshpro": "3.0.7" } }
+      }
+    }, null, 2), "utf8");
+
+    const result = await handleToolsCommand("run", ["package.remove"], { input: JSON.stringify({ project, name: "com.unity.textmeshpro" }), "dry-run": true }, emptyRuntime, requestId);
+    assert.equal(result.ok, true);
+    const data = result.data as { action: string; dryRun: boolean; blocked: boolean; status: string; dependents: Array<{ name: string }>; plannedEffects: Array<{ type?: string }> };
+    assert.equal(data.action, "remove");
+    assert.equal(data.dryRun, true);
+    assert.equal(data.blocked, true);
+    assert.equal(data.status, "blocked");
+    assert.deepEqual(data.dependents.map((entry) => entry.name), ["com.example.tool"]);
+    assert.equal(data.plannedEffects[0].type, "package.remove");
+    const manifest = JSON.parse(readFileSync(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies?: Record<string, string> };
+    assert.equal(manifest.dependencies?.["com.unity.textmeshpro"], "3.0.7");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.remove --yes force removes manifest dependency through defineTool", async () => {
+  const root = makeTempDir("tools-package-remove-force-define");
+  try {
+    const project = makeUnityProject(root, { "com.unity.textmeshpro": "3.0.7", "com.example.tool": "1.2.3" });
+    writeFileSync(join(project, "Packages", "packages-lock.json"), JSON.stringify({
+      dependencies: {
+        "com.unity.textmeshpro": { version: "3.0.7" },
+        "com.example.tool": { version: "1.2.3", dependencies: { "com.unity.textmeshpro": "3.0.7" } }
+      }
+    }, null, 2), "utf8");
+
+    const result = await handleToolsCommand("run", ["package.remove"], { input: JSON.stringify({ project, name: "com.unity.textmeshpro", force: true }), yes: true }, emptyRuntime, requestId);
+    assert.equal(result.ok, true);
+    const data = result.data as { action: string; package: string; forced: boolean; status: string; resolve: string; dependents: Array<{ name: string }> };
+    assert.equal(data.action, "remove");
+    assert.equal(data.package, "com.unity.textmeshpro");
+    assert.equal(data.forced, true);
+    assert.equal(data.status, "manifest_updated");
+    assert.equal(data.resolve, "skipped");
+    assert.deepEqual(data.dependents.map((entry) => entry.name), ["com.example.tool"]);
+    const manifest = JSON.parse(readFileSync(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies?: Record<string, string> };
+    assert.equal(manifest.dependencies?.["com.unity.textmeshpro"], undefined);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.remove returns missing package error through defineTool", async () => {
+  const root = makeTempDir("tools-package-remove-missing-define");
+  try {
+    const project = makeUnityProject(root, { "com.example.tool": "1.2.3" });
+    const result = await handleToolsCommand("run", ["package.remove"], { input: JSON.stringify({ project, name: "com.missing" }), yes: true }, emptyRuntime, requestId);
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "PACKAGE_NOT_FOUND");
+    assert.ok(result.error?.nextActions?.some((action) => action.includes("package.list")));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.bridge-remove requires confirmation before defineTool execution", async () => {
+  const { ensurePackageBridge } = await import("../src/package-manager.js");
+  const root = makeTempDir("tools-package-bridge-remove-confirm-define");
+  try {
+    const project = makeUnityProject(root, { "com.unity_cli": "file:com.unity_cli" });
+    await ensurePackageBridge(project);
+    addLegacyBridgeManifestDependency(project);
+    const result = await handleToolsCommand("run", ["package.bridge-remove"], { input: JSON.stringify({ project }) }, emptyRuntime, requestId);
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "E_DESTRUCTIVE_CONFIRMATION_REQUIRED");
+    assert.ok(existsSync(join(project, "Packages", "com.unity_cli")));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.bridge-remove dry-run executes through defineTool without deleting Bridge", async () => {
+  const { ensurePackageBridge } = await import("../src/package-manager.js");
+  const root = makeTempDir("tools-package-bridge-remove-dry-define");
+  try {
+    const project = makeUnityProject(root, { "com.unity_cli": "file:com.unity_cli" });
+    await ensurePackageBridge(project);
+    addLegacyBridgeManifestDependency(project);
+    const result = await handleToolsCommand("run", ["package.bridge-remove"], { input: JSON.stringify({ project }), "dry-run": true }, emptyRuntime, requestId);
+    assert.equal(result.ok, true);
+    const data = result.data as { action: string; dryRun: boolean; plannedEffects: Array<{ type?: string }>; removedManifestDependency: boolean; fileManifestPath: string };
+    assert.equal(data.action, "bridge-remove");
+    assert.equal(data.dryRun, true);
+    assert.equal(data.removedManifestDependency, true);
+    assert.equal(data.plannedEffects[0].type, "package.bridge-remove");
+    assert.ok(data.fileManifestPath.endsWith("unity_cli.files.json"));
+    assert.ok(existsSync(join(project, "Packages", "com.unity_cli")));
+    const manifest = JSON.parse(readFileSync(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies?: Record<string, string> };
+    assert.equal(manifest.dependencies?.["com.unity_cli"], "file:com.unity_cli");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.bridge-remove --yes executes through defineTool on a temp fixture", async () => {
+  const { ensurePackageBridge } = await import("../src/package-manager.js");
+  const root = makeTempDir("tools-package-bridge-remove-live-define");
+  try {
+    const project = makeUnityProject(root, { "com.unity_cli": "file:com.unity_cli" });
+    await ensurePackageBridge(project);
+    addLegacyBridgeManifestDependency(project);
+    const result = await handleToolsCommand("run", ["package.bridge-remove"], { input: JSON.stringify({ project }), yes: true }, emptyRuntime, requestId);
+    assert.equal(result.ok, true);
+    const data = result.data as { action: string; dryRun: boolean; removedManifestDependency: boolean; plannedEffects: Array<{ type?: string }> };
+    assert.equal(data.action, "bridge-remove");
+    assert.equal(data.dryRun, false);
+    assert.equal(data.removedManifestDependency, true);
+    assert.ok(data.plannedEffects.some((effect) => effect.type === "manifest.dependency.remove"));
+    assert.equal(existsSync(join(project, "Packages", "com.unity_cli")), false);
+    assert.equal(existsSync(join(project, "Packages", "unity_cli.install.json")), false);
+    const manifest = JSON.parse(readFileSync(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies?: Record<string, string> };
+    assert.equal(manifest.dependencies?.["com.unity_cli"], undefined);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run package.bridge-remove dry-run reports missing Bridge through defineTool", async () => {
+  const root = makeTempDir("tools-package-bridge-remove-missing-define");
+  try {
+    const project = makeUnityProject(root, {});
+    const result = await handleToolsCommand("run", ["package.bridge-remove"], { input: JSON.stringify({ project }), "dry-run": true }, emptyRuntime, requestId);
+    assert.equal(result.ok, false);
+    assert.equal(result.error?.code, "BRIDGE_PACKAGE_NOT_INSTALLED");
+    assert.ok(result.error?.nextActions?.some((action) => action.includes("unity_cli init")));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run docs.list executes through defineTool and preserves text format", async () => {
+  const result = await handleToolsCommand("run", ["docs.list"], { format: "text" }, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as { command: string; mode: string; requiresUnity: boolean; count: number; topics: Array<{ key: string }>; text?: string };
+  assert.equal(data.command, "docs.list");
+  assert.equal(data.mode, "builtin");
+  assert.equal(data.requiresUnity, false);
+  assert.ok(data.count > 0);
+  assert.ok(data.topics.some((topic) => topic.key === "scene"));
+  assert.match(data.text ?? "", /scene/);
+});
+
+test("tools run docs.list rejects values outside schema enum", async () => {
+  const result = await handleToolsCommand("run", ["docs.list"], { input: '{"format":"xml"}' }, emptyRuntime, requestId);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_SCHEMA_INVALID");
+  assert.ok(result.error?.message.includes("format"));
+});
+
+test("tools run docs.topic executes through defineTool with positional topic", async () => {
+  const result = await handleToolsCommand("run", ["docs.topic", "scene"], {}, emptyRuntime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as { command: string; topic: string; title: string; tools: string[] };
+  assert.equal(data.command, "docs.topic");
+  assert.equal(data.topic, "scene");
+  assert.ok(data.title.length > 0);
+  assert.ok(Array.isArray(data.tools));
+});
+
+test("tools run docs.topic keeps project tool topics in defineTool context", async () => {
+  const runtime: ToolsRuntime = {
+    projectTools: [{
+      name: "terrain.paint",
+      summary: "Paint Terrain",
+      description: "Paints terrain.",
+      group: "terrain-tools",
+      inputSchema: { type: "object", properties: {} },
+      destructiveHint: false,
+      handler: "bridge",
+      target: "editor"
+    }]
+  };
+  const result = await handleToolsCommand("run", ["docs.topic", "terrain-tools"], {}, runtime, requestId);
+  assert.equal(result.ok, true);
+  const data = result.data as { topic: string; tools: string[] };
+  assert.equal(data.topic, "terrain-tools");
+  assert.ok(data.tools.some((line) => line.includes("terrain.paint")));
+});
+
+test("tools run docs.topic defineTool path returns DOCS_TOPIC_NOT_FOUND", async () => {
+  const result = await handleToolsCommand("run", ["docs.topic"], { input: '{"topic":"missing-topic"}' }, emptyRuntime, requestId);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "DOCS_TOPIC_NOT_FOUND");
+  assert.ok(result.error?.nextActions?.some((action) => action.includes("Available topics")));
+});
+
+test("tools run docs.topic rejects values outside schema enum", async () => {
+  const result = await handleToolsCommand("run", ["docs.topic"], { input: '{"topic":"scene","format":"xml"}' }, emptyRuntime, requestId);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_SCHEMA_INVALID");
+  assert.ok(result.error?.nextActions?.some((action) => action.includes("json, text")));
+});
+
+test("tools run docs.get executes through defineTool with offline cache", async () => {
+  const root = makeTempDir("tools-docs-get-define");
+  try {
+    const docsDir = makeDocsCache(root);
+    const result = await handleToolsCommand("run", ["docs.get", "UnityEngine.Camera"], { "docs-dir": docsDir, format: "text" }, { dataDir: root } as ToolsRuntime, requestId);
+    assert.equal(result.ok, true);
+    const data = result.data as { command: string; mode: string; requiresUnity: boolean; doc: { name: string }; text?: string };
+    assert.equal(data.command, "docs.get");
+    assert.equal(data.mode, "offline");
+    assert.equal(data.requiresUnity, false);
+    assert.equal(data.doc.name, "UnityEngine.Camera");
+    assert.match(data.text ?? "", /Camera renders scenes/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run docs.search executes through defineTool with pagination", async () => {
+  const root = makeTempDir("tools-docs-search-define");
+  try {
+    const docsDir = makeDocsCache(root);
+    const result = await handleToolsCommand("run", ["docs.search"], { input: JSON.stringify({ query: "UnityEngine", docsDir, pageSize: 1, cursor: "1" }) }, { dataDir: root } as ToolsRuntime, requestId);
+    assert.equal(result.ok, true);
+    const data = result.data as { command: string; items: Array<{ name: string }>; pageInfo: { pageSize: number; cursor: string; nextCursor?: string; total: number } };
+    assert.equal(data.command, "docs.search");
+    assert.equal(data.items.length, 1);
+    assert.equal(data.pageInfo.pageSize, 1);
+    assert.equal(data.pageInfo.cursor, "1");
+    assert.equal(data.pageInfo.nextCursor, "2");
+    assert.equal(data.pageInfo.total, 3);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run docs.get defineTool path preserves injected online fallback fetch", async () => {
+  const root = makeTempDir("tools-docs-get-online-define");
+  try {
+    const urls: string[] = [];
+    const runtime = {
+      dataDir: root,
+      fetch: async (url: string) => {
+        urls.push(url);
+        return { ok: url.endsWith("Camera.html"), status: url.endsWith("Camera.html") ? 200 : 404, text: async () => "<html><title>Camera - Unity</title><body>Camera renders scenes.</body></html>" };
+      }
+    } as ToolsRuntime;
+    const result = await handleToolsCommand("run", ["docs.get", "UnityEngine.Camera"], {}, runtime, requestId);
+    assert.equal(result.ok, true);
+    const data = result.data as { mode: string; source: { kind: string; offlineFallbackFrom?: string }; diagnostics?: Array<{ code: string }> };
+    assert.equal(data.mode, "online");
+    assert.equal(data.source.kind, "online");
+    assert.equal(data.source.offlineFallbackFrom, "DOCS_CACHE_MISSING");
+    assert.equal(data.diagnostics?.[0].code, "DOCS_ONLINE_FALLBACK");
+    assert.ok(urls.some((url) => url.endsWith("Camera.html")));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("tools run docs.search rejects values outside schema enum", async () => {
+  const result = await handleToolsCommand("run", ["docs.search"], { input: '{"query":"Camera","format":"xml"}' }, emptyRuntime, requestId);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "E_SCHEMA_INVALID");
+  assert.ok(result.error?.message.includes("format"));
 });
 
 test("tools run custom project tool passes name and input to project-tool.run", async () => {
@@ -1863,18 +3304,19 @@ test("tools run supported bridge --job queues batchmode without live bridge endp
     const result = await handleToolsCommand("run", ["profiler.capture", "profile.json"], { job: true, unity, project, "timeout-ms": "1234" }, runtime, requestId);
 
     assert.equal(result.ok, true);
-    const data = result.data as { kind: string; command: string[]; result: { command: string; bridgeCommand: string; mode: string; args: { path: string }; bridge: { dependencyName: string } } };
+    const data = result.data as { kind: string; command: string[]; result: { command: string; bridgeCommand: string; mode: string; args: { name: string; input: { path: string } }; bridge: { dependencyName: string } } };
     assert.equal(data.kind, "bridge");
     assert.equal(data.result.command, "profiler.capture");
-    assert.equal(data.result.bridgeCommand, "profiler.capture");
+    assert.equal(data.result.bridgeCommand, "project-tool.run");
     assert.equal(data.result.mode, "bridge-job");
-    assert.equal(data.result.args.path, "profile.json");
+    assert.equal(data.result.args.name, "profiler.capture");
+    assert.equal(data.result.args.input.path, "profile.json");
     assert.equal(data.result.bridge.dependencyName, "com.unity_cli");
     assert.ok(data.command.includes("UnityCli.UnityCliBatch.RunBridgeCommand"));
     const argsJson = data.command[data.command.indexOf("-unityCliBridgeArgs") + 1];
-    const envelope = JSON.parse(argsJson) as { __unityCliBridgeEnvelope: boolean; args: { path: string } };
+    const envelope = JSON.parse(argsJson) as { __unityCliBridgeEnvelope: boolean; args: { name: string; input: { path: string } } };
     assert.equal(envelope.__unityCliBridgeEnvelope, true);
-    assert.deepEqual(envelope.args, { path: "profile.json" });
+    assert.deepEqual(envelope.args, { name: "profiler.capture", input: { path: "profile.json" } });
 
     await runner.wait((result.data as { jobId: string }).jobId, 3000);
   } finally {

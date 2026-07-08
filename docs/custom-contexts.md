@@ -1,135 +1,123 @@
-# 自定义 Context（Custom Contexts）
+# 自定义 Context
 
-项目侧只读 Context 注册规范。Context 是只读、结构化、target-scoped 的项目状态快照。
+自定义 Context 是项目侧只读数据源，用于让 AI 观察 Unity Editor、场景、资源索引或项目约定。Context 不是动作入口，不能修改 Unity 状态、资产、场景、Package、ProjectSettings，也不能触发导入、编译或 Play Mode 切换。
 
-## 概述
+如果能力需要执行、生成、修改、修复、删除、导入或设置，应设计为自定义 Tool。
 
-Context 是 alps-unity-cli 中获取只读项目状态的核心机制。与 Tool（可有副作用）不同，Context 必须保证只读：
+C# 文件必须放在项目内名为 `UnityCLI` 的目录下，例如 `Assets/UnityCLI/` 或 `Assets/Editor/UnityCLI/`。
 
-| 特性 | Context | Tool |
-|------|---------|------|
-| 副作用 | ❌ 绝对禁止 | ✅ 可有 |
-| 只读保证 | ✅ 硬边界 | Context API 只允许观察语义 |
-| 修改 Unity 状态 | ❌ 禁止 | ✅ 可有 |
-| 执行前确认 | 不需要 | 破坏性需 `--yes` |
+## 发现与读取
 
-## 当前状态：已实现
+```powershell
+unity_cli context list --include-custom
+unity_cli context describe <context-name> --include-custom
+unity_cli context read <context-name> --include-custom --input '{}'
+```
 
-`context list` / `context describe` / `context read` 命令已实现。可通过 CLI 直接获取只读项目状态。
+按分类浏览：
 
-当前可通过以下方式获取只读项目状态：
+```powershell
+unity_cli context list --category <category> --include-custom
+```
 
-| 方式 | 命令 | 说明 |
-|------|------|------|
-| 内置 Context | `context list` / `context read <name>` | 23 个只读 Context，覆盖 editor、project、scene、prefab、tools 等状态 |
-| 项目 Context | `[UnityCliContext]` + `context list --include-custom` | Unity 项目侧自定义只读状态快照 |
-| 观察型能力 | `context list` / `context describe` / `context read` | project.info、editor.state、scene.cameras 等 |
-| 离线文档 | `docs get/search` | Unity API 文档缓存 |
-| 类型反射 | `reflect type/member/search` | C# 类型信息缓存 |
-| 诊断预检 | `tools run diagnose.preflight` | 项目、编辑器、Bridge 状态快照 |
-
-## 注册方式
-
-Custom Context 通过 `[UnityCliContext]` 特性注册：
+## 最小示例
 
 ```csharp
+#if UNITY_EDITOR
 using UnityCli;
+using UnityEditor;
+using UnityEngine;
+using UnityEngine.Rendering;
+using UnityEngine.SceneManagement;
 
-// Custom Context 注册 API
-[UnityCliContext("sample.project-summary",
-    Title = "Project Summary",
-    Description = "Read-only project overview.",
-    Source = "project",
-    Category = "project",
-public static class SampleProjectSummaryContext
+namespace MyProject.UnityCLI
 {
-    // 只读读取，不得修改任何状态
-    public static object Read(Dictionary<string, object> input)
+    public sealed class ProjectSummaryContext : IUnityCliContext<ProjectSummaryContext.Request, ProjectSummaryContext.Result>
     {
-        return new
+        public sealed class Request
         {
-            projectName = "...",
-            unityVersion = "...",
-            sceneCount = 0,
-            packageCount = 0
+            public bool IncludeDisabled { get; set; }
+        }
+
+        public sealed class Result
+        {
+            public string UnityVersion { get; set; }
+            public string ActiveScene { get; set; }
+            public string RenderPipeline { get; set; }
+            public string BuildTarget { get; set; }
+            public bool IncludeDisabled { get; set; }
+        }
+
+        public ContextDescriptor Describe() => new ContextDescriptor
+        {
+            Name = "sample.project-summary",
+            Summary = "Read project version, active scene, render pipeline, and build target.",
+            Description = "Returns a read-only project summary without modifying scenes, assets, packages, ProjectSettings, imports, compilation, or Play Mode.",
+            Category = "sample",
+            Version = "1.0.0",
+            Target = "editor",
+            AvailabilityScope = "editorSession",
+            PlayModeSupport = "supported",
+            RefreshBehavior = "onDemand"
         };
+
+        /// <summary>
+        /// 读取项目状态摘要。只读访问 Editor 状态，不写文件、不改场景、不触发导入或 Play Mode。
+        /// </summary>
+        public Result Read(Request request, UnityCliProjectToolContext ctx)
+        {
+            var activeScene = SceneManager.GetActiveScene();
+            var renderPipeline = GraphicsSettings.currentRenderPipeline != null
+                ? GraphicsSettings.currentRenderPipeline.name
+                : "Built-in";
+
+            return new Result
+            {
+                UnityVersion = Application.unityVersion,
+                ActiveScene = activeScene.path ?? string.Empty,
+                RenderPipeline = renderPipeline,
+                BuildTarget = EditorUserBuildSettings.activeBuildTarget.ToString(),
+                IncludeDisabled = request != null && request.IncludeDisabled
+            };
+        }
     }
 }
+#endif
 ```
+
+## 结构要求
+
+每个 Context 类自包含三部分：
+
+- `Request`：读取参数 DTO。public 属性会派生为 `inputSchema`。
+- `Result`：读取输出 DTO。public 属性会派生为 `outputSchema`。
+- `Describe()`：人工编写 name、summary、description、category、target、availability、refresh 等字段。
+- `Read(Request, ctx)`：只读 handler，返回 Result DTO。
+
+Context 不写 `DestructiveHint`、`SideEffects`、`SupportsDryRun`、artifact 或 job 字段。schema 由框架派生，`Describe()` 不手写 JSON Schema。
+
+## Descriptor 字段
+
+| 字段 | 说明 |
+|---|---|
+| `Name` | 唯一 Context 名，例如 `sample.project-summary`。 |
+| `Summary` | 发现阶段路由字段，短句说明读取对象和主要结果。 |
+| `Description` | 说明只读范围、输出边界、分页/筛选、Play Mode 语义和不可用条件。 |
+| `Category` | 分类，例如 `project`、`scene`、`sample` 或项目域名。 |
+| `Target` | `editor`、`runtime` 或 `both`。 |
+| `AvailabilityScope` | `editorSession`、`playModeSession` 或 `always`。 |
+| `PlayModeSupport` | `supported`、`runtime-only`、`session-affecting`、`editor-only` 或 `unknown`。 |
+| `RefreshBehavior` | `static`、`onDemand` 或 `live`。 |
+| `RequiresPackages` | 依赖 Unity package 时声明。 |
 
 ## 只读硬边界
 
-Custom Context 实现必须严格遵守：
+Context 必须满足：
 
-### 不得修改
+- 不创建、修改、删除 GameObject、Component、Prefab、Asset、ProjectSettings 或 Package manifest。
+- 不写文件、不调用 `AssetDatabase.Refresh()`、不触发导入、编译或 domain reload。
+- 不进入、暂停或退出 Play Mode。
+- 不调用会产生副作用的 Editor API。
+- 输出结构化 JSON，字段稳定，必要时提供分页、筛选或截断标记。
 
-| 禁止修改项 | 说明 |
-|------------|------|
-| Unity 状态 | 场景、GameObject、Component |
-| 文件系统 | 资产、脚本、配置文件 |
-| Package 依赖 | manifest.json |
-| Play Mode 状态 | 不得触发 play/pause/stop |
-| Editor 设置 | 任何编辑器配置 |
-
-### 必须保证
-
-- 输出为结构化 JSON
-- 可重复调用产生一致结果（幂等）
-- 不产生副作用
-- 不触发资源导入或编译
-
-## 发现路径
-
-Context 发现路径：
-
-```
-context list                    → 列出所有可用 Context
-       ↓
-context describe <name>         → 查看 Context schema 和来源
-       ↓
-context read <name>             → 读取 Context 数据
-```
-
-替代方案（也可通过只读工具获取）：
-
-```
-tools group list <read-only-group>   → 查看只读工具
-       ↓
-context describe <context>                → 确认 Context 描述
-       ↓
-tools run <tool>                        → 执行只读读取
-```
-
-## Built-in Context
-
-当前内置 23 个只读 Context，并通过 `context describe <name>` 暴露 input/output schema、只读边界和 Play Mode 语义。
-
-| Context 概念 | Context 名称示例 | unity-mcp Resource |
-|--------------|------------------|---------------------|
-| 编辑器状态 | `editor.state` | `editor/state` |
-| 项目信息 | `project.info` | `project/info` |
-| 相机列表 | `scene.cameras` | `scene/cameras` |
-| 已打开场景 | `scene.opened` | `scene/opened` |
-| 场景对象与组件（轻量） | `scene.gameobject.components` / `scene.gameobject.component` | `scene/gameobjects/*` |
-| Prefab 信息 | `prefab.info` / `prefab.hierarchy` | `prefabs/*` |
-| 工具发现 | `tools.groups` / `tools.custom` | `tools/*` |
-
-### 轻量 Context 与深读 Tool 的分层
-
-`scene.gameobject.components` 与 `scene.gameobject.component` 是**轻量预览** Context：仅返回组件类型名、enabled 状态与短摘要，不承诺完整 fields/props。深度读取走 `tools run component.get`（对齐 IvanMurzak `gameobject-component-get`）。这是去重规则的要求：Context 只观察，Tool 才深读。
-
-## 诊断与 doctor
-
-`doctor` 命令检查 Context 相关健康状态：
-- `project_tool_fingerprint` — 自定义工具指纹一致性
-- `unified_tool_discovery` — 内置 + 项目工具发现
-
-doctor 将额外检查 `customContexts.fingerprint`。
-
-## 取证与依赖
-
-本文档内容来源：
-- 总架构：Context 只读硬边界
-- 项目自定义 Context 设计
-- 内置 Context 等价映射
-- `doctor` 与 `customContexts.fingerprint` 诊断闭环
+如果读取逻辑需要缓存或生成 artifact，这通常已经越过 Context 边界，应改为 Tool。

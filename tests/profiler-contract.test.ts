@@ -72,7 +72,7 @@ test("profiler.hierarchy exposes bounded defaults and truncation summaries", () 
 });
 
 test("profiler.hierarchy C# supports current hierarchy API and latest-frame default", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/ProfilerCommands.cs", import.meta.url), "utf8");
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/profiler/hierarchy.cs", import.meta.url), "utf8");
   assert.match(source, /UnityEditor\.Profiling\.HierarchyFrameDataView[\s\S]*UnityEditorInternal\.HierarchyFrameDataView[\s\S]*UnityEngine\.Profiling\.HierarchyFrameDataView/, "profiler.hierarchy should try UnityEditor.Profiling first, then compatibility type names");
   assert.match(source, /typeof\(bool\)/, "Unity 2022.3 GetHierarchyFrameDataView sortAscending parameter should be bool");
   assert.match(source, /ProfilerDriverIntProperty\("lastFrameIndex", -1\)/, "omitted frame should resolve to ProfilerDriver.lastFrameIndex");
@@ -87,7 +87,7 @@ test("profiler.start records Editor frames and profiler.stop restores profileEdi
 });
 
 test("bridge specs resolve for profiler tools", () => {
-  for (const [cmd, expected] of [["status", "project-tool.run"], ["start", "project-tool.run"], ["stop", "project-tool.run"], ["pause", "project-tool.run"], ["counter", "project-tool.run"], ["memory", "project-tool.run"], ["frame", "project-tool.run"], ["capture", "profiler.capture"], ["export", "project-tool.run"], ["modules", "project-tool.run"], ["module-enable", "project-tool.run"], ["clear", "project-tool.run"], ["load", "project-tool.run"], ["areas", "project-tool.run"], ["object-memory", "project-tool.run"], ["rendering-stats", "profiler.rendering-stats"], ["script-stats", "project-tool.run"], ["deep", "project-tool.run"], ["hierarchy", "profiler.hierarchy"], ["memory-snapshot.take", "profiler.memory-snapshot.take"], ["memory-snapshot.list", "profiler.memory-snapshot.list"], ["memory-snapshot.compare", "profiler.memory-snapshot.compare"], ["frame-debugger.enable", "profiler.frame-debugger.enable"], ["frame-debugger.disable", "profiler.frame-debugger.disable"], ["frame-debugger.events", "profiler.frame-debugger.events"]] as const) {
+  for (const [cmd, expected] of [["status", "project-tool.run"], ["start", "project-tool.run"], ["stop", "project-tool.run"], ["pause", "project-tool.run"], ["counter", "project-tool.run"], ["memory", "project-tool.run"], ["frame", "project-tool.run"], ["capture", "project-tool.run"], ["export", "project-tool.run"], ["modules", "project-tool.run"], ["module-enable", "project-tool.run"], ["clear", "project-tool.run"], ["load", "project-tool.run"], ["areas", "project-tool.run"], ["object-memory", "project-tool.run"], ["rendering-stats", "project-tool.run"], ["script-stats", "project-tool.run"], ["deep", "project-tool.run"], ["hierarchy", "project-tool.run"], ["memory-snapshot.take", "project-tool.run"], ["memory-snapshot.list", "project-tool.run"], ["memory-snapshot.compare", "project-tool.run"], ["frame-debugger.enable", "project-tool.run"], ["frame-debugger.disable", "project-tool.run"], ["frame-debugger.events", "project-tool.run"]] as const) {
     const spec = bridgeCommandRegistry.lookup("profiler", cmd);
     assert.equal(spec?.bridgeCommand, expected, `profiler ${cmd} should resolve`);
   }
@@ -108,15 +108,10 @@ test("C# RegisterCommand calls exist for legacy profiler commands (deferred/comp
       csFiles.filter((f) => !f.pathname.includes("/Samples/")).map((f) => readFile(f, "utf8"))
     )
   ).join("\n");
-  // 迁移后的 profiler 工具不再用 RegisterCommand
-  const migrated = ["profiler.status", "profiler.start", "profiler.stop", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.export", "profiler.modules", "profiler.module-enable", "profiler.clear", "profiler.load", "profiler.areas", "profiler.object-memory", "profiler.script-stats", "profiler.deep"];
+  // 迁移后的 profiler 工具不再用 RegisterCommand(含 capture/memory-snapshot.take 迁为 IUnityCliDeferredTool)
+  const migrated = ["profiler.status", "profiler.start", "profiler.stop", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export", "profiler.modules", "profiler.module-enable", "profiler.clear", "profiler.load", "profiler.areas", "profiler.object-memory", "profiler.script-stats", "profiler.deep", "profiler.hierarchy", "profiler.rendering-stats", "profiler.memory-snapshot.take", "profiler.memory-snapshot.list", "profiler.memory-snapshot.compare", "profiler.frame-debugger.enable", "profiler.frame-debugger.disable", "profiler.frame-debugger.events"];
   for (const command of migrated) {
-    assert.ok(!allSource.includes(`RegisterCommand(registry, "${command}"`), `${command} should NOT be registered (migrated to IUnityCliTool)`);
-  }
-  // 保留在 legacy 的 deferred/complex-reflection 工具仍用 RegisterCommand
-  const legacy = ["profiler.capture", "profiler.hierarchy", "profiler.rendering-stats", "profiler.memory-snapshot.take", "profiler.memory-snapshot.list", "profiler.memory-snapshot.compare", "profiler.frame-debugger.enable", "profiler.frame-debugger.disable", "profiler.frame-debugger.events"];
-  for (const command of legacy) {
-    assert.ok(allSource.includes(`RegisterCommand(registry, "${command}"`), `${command} should be registered (legacy)`);
+    assert.ok(!allSource.includes(`RegisterCommand(registry, "${command}"`), `${command} should NOT be registered (migrated to IUnityCliTool/IUnityCliDeferredTool)`);
   }
 });
 
@@ -194,15 +189,29 @@ test("profiler.load validates capture path before reporting success", async () =
   assert.match(source, /Loaded = true/, "successful load should expose loaded=true");
 });
 
-test("profiler memory-snapshot and frame-debugger tools are registered in C#", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/ProfilerCommands.cs", import.meta.url), "utf8");
-  for (const command of ["profiler.memory-snapshot.take", "profiler.memory-snapshot.list", "profiler.memory-snapshot.compare", "profiler.frame-debugger.enable", "profiler.frame-debugger.disable", "profiler.frame-debugger.events"]) {
-    assert.ok(source.includes(`RegisterCommand(registry, "${command}"`), `${command} should be registered`);
-  }
-  // memory-snapshot.take 使用 deferred wait 等待回调
-  assert.match(source, /StartDeferredWait\(item,/, "memory-snapshot.take should use deferred wait for the async callback");
+test("profiler memory-snapshot and frame-debugger tools migrated to IUnityCliTool", async () => {
+  // memory-snapshot.take 迁移为 IUnityCliDeferredTool(不再用 RegisterCommand + StartDeferredWait)
+  const commandsSource = await readFile(new URL("../unitypkg/Editor/Commands/ProfilerCommands.cs", import.meta.url), "utf8");
+  assert.ok(!commandsSource.includes(`RegisterCommand(registry, "profiler.memory-snapshot.take"`), "profiler.memory-snapshot.take should NOT be registered (migrated to IUnityCliDeferredTool)");
+  // list/compare/frame-debugger.* 迁移为 IUnityCliTool
+  const memorySource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/memory-snapshot-tools.cs", import.meta.url), "utf8");
+  assert.match(memorySource, /class ProfilerMemorySnapshotListTool/, "ProfilerMemorySnapshotListTool should exist");
+  assert.match(memorySource, /class ProfilerMemorySnapshotCompareTool/, "ProfilerMemorySnapshotCompareTool should exist");
+  const frameSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/frame-debugger-tools.cs", import.meta.url), "utf8");
+  assert.match(frameSource, /class ProfilerFrameDebuggerEnableTool/, "ProfilerFrameDebuggerEnableTool should exist");
+  assert.match(frameSource, /class ProfilerFrameDebuggerDisableTool/, "ProfilerFrameDebuggerDisableTool should exist");
+  assert.match(frameSource, /class ProfilerFrameDebuggerEventsTool/, "ProfilerFrameDebuggerEventsTool should exist");
   // frame-debugger 反射 FrameDebuggerUtility
-  assert.match(source, /FrameDebuggerUtility/, "frame-debugger should reflect FrameDebuggerUtility");
+  assert.match(frameSource, /FrameDebuggerUtility/, "frame-debugger should reflect FrameDebuggerUtility");
+});
+
+test("profiler.capture and memory-snapshot.take migrated to IUnityCliDeferredTool", async () => {
+  const captureSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/capture.cs", import.meta.url), "utf8");
+  assert.match(captureSource, /class ProfilerCaptureTool : IUnityCliDeferredTool</, "ProfilerCaptureTool should implement IUnityCliDeferredTool");
+  assert.match(captureSource, /bool TryDefer\(Request request, UnityCliProjectToolContext ctx, out DeferredCompletion<Result> completion\)/, "ProfilerCaptureTool should declare TryDefer");
+  const snapshotSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/memory-snapshot-take.cs", import.meta.url), "utf8");
+  assert.match(snapshotSource, /class ProfilerMemorySnapshotTakeTool : IUnityCliDeferredTool</, "ProfilerMemorySnapshotTakeTool should implement IUnityCliDeferredTool");
+  assert.match(snapshotSource, /bool TryDefer\(Request request, UnityCliProjectToolContext ctx, out DeferredCompletion<Result> completion\)/, "ProfilerMemorySnapshotTakeTool should declare TryDefer");
 });
 
 test("profiler memory-snapshot tools declare requiresPackages", () => {

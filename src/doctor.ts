@@ -13,17 +13,15 @@
  * 6. Data directory exists
  */
 
-import { builtinContextDescriptors, builtinContextCategories, discoverCustomContexts, type ContextBridgeRuntime } from "./context/index.js";
+import { builtinContextDescriptors } from "./context/index.js";
 import { getString, getBoolean } from "./args.js";
 import { access, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
-import { shouldDiscoverContexts as shouldDiscoverBuiltInContexts } from "./context-discovery.js";
 import { discoverProjectContexts, shouldDiscoverContexts as shouldDiscoverProjectContexts, type ProjectContextRuntime, type ContextDescriptor } from "./project-context-discovery.js";
 import { readInstances, type UnityInstance } from "./instances.js";
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
 import { builtinToolMetadata, filterToolsByGroup } from "./tools/metadata/index.js";
-import { builtinContextMetadata } from "./context/metadata/index.js";
 import { builtinExtensionMetadata } from "./extensions/metadata/index.js";
 import { ExtensionRegistry, loadExtensionDescriptor, extensionAvailabilitySummary } from "./extensions/index.js";
 import { readInstalledUnityPackages } from "./extensions/project-resolver.js";
@@ -586,19 +584,19 @@ async function checkExtensionAvailability(flags: Record<string, string | boolean
 }
 
 function checkContextDiscovery(flags: Record<string, string | boolean>, runtime: DoctorRuntime): DoctorCheck {
-  const contexts = builtinContextMetadata();
-  const builtinCount = contexts.length;
-  const includeCustom = shouldDiscoverBuiltInContexts(flags, runtime as unknown as Parameters<typeof shouldDiscoverBuiltInContexts>[1]);
-  if (builtinCount === 0) {
+  const contexts = builtinContextDescriptors();
+  const localCount = contexts.length;
+  const liveDiscoveryEnabled = shouldDiscoverProjectContexts(flags, runtime);
+  if (localCount === 0) {
     return {
       name: "context_discovery",
       status: "warn",
-      message: "No built-in context descriptors registered.",
-      details: { builtinCount }
+      message: "No local TS-owned context descriptors registered.",
+      details: { localCount, liveDiscoveryEnabled }
     };
   }
 
-  // Verify all contexts have the public descriptor fields required for discovery.
+  // Verify all local TS-owned contexts have the public descriptor fields required for discovery.
   const missingDescription = contexts.filter((c) => !c.description);
   const missingOutputSchema = contexts.filter((c) => !c.outputSchema);
 
@@ -610,16 +608,16 @@ function checkContextDiscovery(flags: Record<string, string | boolean>, runtime:
     return {
       name: "context_discovery",
       status: "warn",
-      message: `Context discovery available: ${builtinCount} built-in context(s), but ${warnings.join("; ")}.`,
-      details: { builtinCount, customDiscoveryEnabled: includeCustom, warnings }
+      message: `Local context discovery available: ${localCount} TS-owned context(s), but ${warnings.join("; ")}.`,
+      details: { localCount, liveDiscoveryEnabled, warnings }
     };
   }
 
   return {
     name: "context_discovery",
     status: "pass",
-    message: `Context discovery is available: ${builtinCount} built-in context(s)${includeCustom ? ", custom context discovery enabled" : ""}.`,
-    details: { builtinCount, customDiscoveryEnabled: includeCustom }
+    message: `Local context discovery is available: ${localCount} TS-owned context(s)${liveDiscoveryEnabled ? ", live Bridge context discovery enabled" : ""}.`,
+    details: { localCount, liveDiscoveryEnabled }
   };
 }
 

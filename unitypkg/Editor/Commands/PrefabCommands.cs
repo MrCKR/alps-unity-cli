@@ -385,7 +385,7 @@ namespace UnityCli
             var path = NormalizeAssetPath(rawPath);
             if (string.IsNullOrEmpty(path))
             {
-                throw new BridgeCommandException("E_PREFAB_PATH_REQUIRED", "Pass an Assets/*.prefab path.", "Use tools run prefab.info --input '{\"path\":\"<path>\"}' or pass an Assets/*.prefab path.");
+                throw new BridgeCommandException("E_PREFAB_PATH_REQUIRED", "Pass an Assets/*.prefab path.", "Pass a concrete Assets/*.prefab path discovered from project assets.");
             }
             if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || !path.EndsWith(".prefab", StringComparison.OrdinalIgnoreCase))
             {
@@ -404,7 +404,7 @@ namespace UnityCli
             var prefab = AssetDatabase.LoadAssetAtPath<GameObject>(path);
             if (prefab == null)
             {
-                throw new BridgeCommandException("E_PREFAB_NOT_FOUND", "Prefab asset not found: " + path, "Check the path or run tools run asset.search --input '{\"filter\":\"t:Prefab\"}' to discover the path.");
+                throw new BridgeCommandException("E_PREFAB_NOT_FOUND", "Prefab asset not found: " + path, "Check the path or discover existing Prefab assets before retrying.");
             }
             if (PrefabUtility.GetPrefabAssetType(prefab) == PrefabAssetType.NotAPrefab)
             {

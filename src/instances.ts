@@ -388,10 +388,13 @@ async function readInstanceFiles(dataDir: string): Promise<UnityInstance[]> {
 async function readRegistryFileInstances(dataDir: string): Promise<UnityInstance[]> {
   try {
     const raw = await readFile(registryPath(dataDir), "utf8");
+    if (raw.trim().length === 0) return [];
     const parsed = JSON.parse(stripBom(raw)) as RegistryFile;
     return Array.isArray(parsed.instances) ? parsed.instances : [];
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
+    // 并发测试或外部进程可能读到旧聚合 registry 的半写 JSON；逐实例文件仍是权威来源。
+    if (error instanceof SyntaxError) return [];
     throw error;
   }
 }

@@ -2,23 +2,22 @@
  * Context registry: manages built-in and custom context descriptors.
  *
  * Provides lookup, listing, search, and discovery functions for the context
- * command family. Built-in contexts are static; custom contexts are discovered
- * at runtime from the Unity Bridge and from installed extensions.
+ * command family. TS-owned contexts are local descriptors; C# built-in and
+ * project custom contexts are discovered at runtime from the Unity Bridge.
  */
 
-import { builtinContextMetadata } from "./metadata/index.js";
+import { defineContextMetadata } from "../contexts/registry.js";
 import { collectAvailableContexts, ExtensionRegistry, loadAllExtensionDescriptors, readInstalledUnityPackages } from "../extensions/index.js";
 import { getString } from "../args.js";
 import { scoreSearch } from "../util.js";
 import type { ContextDescriptor, ContextListEntry, CustomContextDescriptor } from "./types.js";
-import type { ContextMetadata } from "./metadata/types.js";
 import type { ExtensionContextContribution } from "../extensions/types.js";
 
-// ── Built-in query functions ──────────────────────────────────────────────
+// ── Local built-in query functions ────────────────────────────────────────
 
-/** Return all built-in context descriptors from the canonical metadata registry. */
+/** Return CLI-owned local context descriptors; C# built-ins come from live Bridge discovery. */
 export function builtinContextDescriptors(): ContextDescriptor[] {
-  return builtinContextMetadata().map(contextMetadataToDescriptor);
+  return defineContextMetadata();
 }
 
 /** Return distinct category names from built-in contexts. */
@@ -76,28 +75,10 @@ export async function extensionContextDescriptors(
   }
 }
 
-function contextMetadataToDescriptor(metadata: ContextMetadata): ContextDescriptor {
-  return {
-    name: metadata.name,
-    description: metadata.description,
-    category: metadata.category,
-    source: metadata.source,
-    target: metadata.target ?? "editor",
-    availabilityScope: metadata.availabilityScope === "playModeSession" || metadata.availabilityScope === "always" ? metadata.availabilityScope : "editorSession",
-    playModeSupport: metadata.playModeSupport ?? "supported",
-    available: metadata.available,
-    inputSchema: metadata.inputSchema,
-    outputSchema: metadata.outputSchema ?? { type: "object", properties: {} },
-    cliCommand: metadata.cliCommand ?? `context read ${metadata.name}`,
-    supportStatus: metadata.handler === "bridge-runtime" ? "live-bridge-runtime" : metadata.handler === "offline" ? "cli-only" : "live-bridge",
-    requiresPackages: metadata.requiresPackages,
-    refreshBehavior: metadata.refreshBehavior
-  };
-}
-
 function extensionContributionToDescriptor(ec: ExtensionContextContribution): ContextDescriptor {
   return {
     name: ec.key,
+    summary: ec.description,
     description: ec.description,
     category: ec.category ?? extensionContextCategory(ec.key),
     source: "extension",
@@ -159,10 +140,20 @@ export async function discoverCustomContexts(
       }
       contexts.push({
         name,
+        summary: typeof c.summary === "string" && c.summary ? c.summary : description,
         description,
         category: String(c.category ?? "custom"),
+        source: contextSource(c.source),
+        target: contextTarget(c.target),
+        availabilityScope: contextAvailabilityScope(c.availabilityScope),
+        playModeSupport: contextPlayModeSupport(c.playModeSupport),
+        supportStatus: typeof c.supportStatus === "string" ? c.supportStatus : undefined,
+        cliCommand: typeof c.cliCommand === "string" ? c.cliCommand : undefined,
         inputSchema: typeof c.inputSchema === "object" && c.inputSchema !== null ? c.inputSchema as Record<string, unknown> : undefined,
         outputSchema: typeof c.outputSchema === "object" && c.outputSchema !== null ? c.outputSchema as Record<string, unknown> : undefined,
+        requiresPackages: stringArray(c.requiresPackages),
+        refreshBehavior: typeof c.refreshBehavior === "string" ? c.refreshBehavior : undefined,
+        available: typeof c.available === "boolean" ? c.available : undefined,
         extensionId: c.extensionId ? String(c.extensionId) : undefined,
       });
     }
@@ -174,20 +165,46 @@ export async function discoverCustomContexts(
 
 /** Convert a CustomContextDescriptor into a ContextDescriptor for uniform handling. */
 export function customContextToDescriptor(custom: CustomContextDescriptor): ContextDescriptor {
+  const source = custom.source ?? "project";
+  const target = custom.target ?? "editor";
   return {
     name: custom.name,
+    summary: custom.summary ?? custom.description,
     description: custom.description,
     category: custom.category,
-    source: "project",
-    target: "editor",
-    availabilityScope: "editorSession",
-    playModeSupport: "supported",
-    supportStatus: "live-bridge",
-    cliCommand: `context read ${custom.name} --include-custom`,
+    source,
+    target,
+    availabilityScope: custom.availabilityScope ?? (target === "runtime" ? "playModeSession" : "editorSession"),
+    playModeSupport: custom.playModeSupport ?? (target === "runtime" ? "runtime-only" : "supported"),
+    supportStatus: custom.supportStatus ?? (target === "runtime" ? "live-bridge-runtime" : "live-bridge"),
+    cliCommand: custom.cliCommand ?? `context read ${custom.name}${source === "project" ? " --include-custom" : ""}`,
     inputSchema: custom.inputSchema ?? { type: "object", properties: {} },
     outputSchema: custom.outputSchema ?? { type: "object", properties: {} },
+    requiresPackages: custom.requiresPackages,
+    refreshBehavior: custom.refreshBehavior,
+    available: custom.available,
     extensionId: custom.extensionId,
   };
+}
+
+function contextSource(value: unknown): CustomContextDescriptor["source"] {
+  return value === "built-in" || value === "extension" || value === "project" ? value : undefined;
+}
+
+function contextTarget(value: unknown): CustomContextDescriptor["target"] {
+  return value === "editor" || value === "runtime" || value === "both" ? value : undefined;
+}
+
+function contextAvailabilityScope(value: unknown): CustomContextDescriptor["availabilityScope"] {
+  return value === "editorSession" || value === "playModeSession" || value === "always" ? value : undefined;
+}
+
+function contextPlayModeSupport(value: unknown): CustomContextDescriptor["playModeSupport"] {
+  return value === "supported" || value === "runtime-only" || value === "session-affecting" || value === "editor-only" || value === "unknown" ? value : undefined;
+}
+
+function stringArray(value: unknown): string[] | undefined {
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : undefined;
 }
 
 // ── Unified query ─────────────────────────────────────────────────────────
@@ -226,6 +243,7 @@ export async function allContextDescriptors(
 export function toListEntry(ctx: ContextDescriptor): ContextListEntry {
   return {
     name: ctx.name,
+    summary: ctx.summary ?? ctx.description,
     description: ctx.description,
     category: ctx.category,
     source: ctx.source,

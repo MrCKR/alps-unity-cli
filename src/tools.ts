@@ -13,6 +13,7 @@ import { getBoolean, getString } from "./args.js";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { discoverProjectTools, discoverRuntimeTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
+import type { ProjectContextRuntime } from "./project-context-discovery.js";
 import { bridgeCommandRegistry, executeBridgeCommand, executeBridgePayload, startBridgeCommandJob } from "./bridge/index.js";
 import { checkToolExtensionAvailability } from "./extension-availability.js";
 import {
@@ -27,20 +28,21 @@ import {
 import { failure, success } from "./output.js";
 
 import { confirmDestructiveExecution } from "./security.js";
-import { inferToolRiskLevel, isLongRunningTool, supportStatusForTool, toolAvailabilityScope, toolCancellation, toolCliCommand, toolHandler, toolSource } from "./tools/metadata/index.js";
+import { supportStatusForTool, toolAvailabilityScope, toolCliCommand, toolHandler, toolSource } from "./tools/metadata/index.js";
 import type { CliResult } from "./types.js";
 import { handleBuild } from "./cli-commands/build.js";
 import { handleEditor } from "./cli-commands/editor.js";
 import { handleTest } from "./cli-commands/test.js";
 import { handlePackage } from "./cli-commands/package.js";
 import { handleCapabilitiesCommand } from "./capabilities.js";
+import type { BuiltinDocsRuntime } from "./builtin-docs.js";
 import { handleDocsCommand, handleReflectCommand } from "./docs-reflect.js";
-import { handleCode } from "./runtime-code.js";
 import { findDefineTool } from "./tools/registry.js";
+import { StructuredToolError } from "./tools/errors.js";
 import { PackageManagerError } from "./package-manager.js";
 import type { Runtime } from "./cli-commands/types.js";
 
-export type ToolsRuntime = ProjectToolRuntime;
+export type ToolsRuntime = ProjectToolRuntime & ProjectContextRuntime;
 
 export async function handleToolsCommand(
   command: string | undefined,
@@ -305,42 +307,45 @@ async function handleToolsDescribe(
     ]);
   }
 
-  const builtinTool = findToolByName(toolName);
-  const tool = builtinTool ?? await findProjectToolByName(toolName, flags, runtime, requestId);
-  if (!tool) {
-    return failure(requestId, "E_TOOL_NOT_FOUND_FOR_TARGET", `Tool not found for target: ${toolName}.`, [
-      "Run unity_cli tools group to see tool groups.",
-      "Run unity_cli tools group list <group> to see tools in a group.",
-      "Run unity_cli tools group to see all tool groups.",
-      "Run unity_cli context read tools.custom to inspect Unity project custom tools and their groups.",
-      "Run unity_cli tools group list <group> --include-custom for the custom tool's actual group.",
-      "Run unity_cli tools search <keyword> --include-custom to find related custom tools."
+  const describeTool = findToolByName("tools.describe");
+  if (!describeTool) {
+    return failure(requestId, "E_TOOL_HANDLER_UNSUPPORTED", "tools.describe is not registered.", [
+      "Run unity_cli tools group list tools to inspect tool discovery metadata."
     ]);
   }
 
-  // ── Extension availability check ──
-  // If the tool requires optional Unity packages, check whether they are
-  // installed in the target project. If unavailable, return the descriptor
-  // with an explicit unavailable status + nextActions rather than pretending
-  // the tool is usable.
-  const extensionCheck = await checkToolExtensionAvailability(tool, flags);
-
-  const supportStatus = supportStatusForTool(tool);
-  const data: Record<string, unknown> = publicToolDescriptor(tool, supportStatus, {
-    command: "tools.describe"
-  });
-
-  if (!extensionCheck.available) {
-    data.extensionAvailability = "unavailable";
-    data.extensionId = extensionCheck.extensionId;
-    data.missingPackageIds = extensionCheck.availabilityResult?.missingPackageIds ?? tool.requiresPackages ?? [];
-    data.nextActions = extensionCheck.nextActions;
-  } else if (extensionCheck.extensionId) {
-    data.extensionAvailability = extensionCheck.availabilityResult?.status ?? "available";
-    data.extensionId = extensionCheck.extensionId;
+  let describeRuntime: ToolsRuntime = runtime;
+  if (!findToolByName(toolName) && shouldDiscoverProjectTools(flags, runtime)) {
+    const discoveredTools: ToolMetadata[] = [];
+    const projectDiscovery = await discoverProjectTools(flags, runtime, requestId, { requireBridge: getBoolean(flags, "include-custom") });
+    if (projectDiscovery.ok === false) return projectDiscovery;
+    discoveredTools.push(...projectDiscovery.tools);
+    const runtimeDiscovery = await discoverRuntimeTools(flags, runtime, requestId);
+    if (runtimeDiscovery.ok === true) discoveredTools.push(...runtimeDiscovery.tools);
+    if (discoveredTools.length > 0) describeRuntime = { ...runtime, projectTools: uniqueToolsByName(discoveredTools) };
   }
 
-  return success(requestId, data);
+  const result = await dispatchDefineTool(describeTool, buildToolsDescribeRequest(toolName, flags), describeRuntime as Runtime, requestId, flags);
+  if (result) return result;
+  return failure(requestId, "E_TOOL_HANDLER_UNSUPPORTED", "tools.describe defineTool handler is not registered.", [
+    "Run unity_cli doctor to inspect the CLI installation."
+  ]);
+}
+
+// 将直连 tools describe flags 映射到 defineTool request；位置参数仍是 name 的主入口。
+function buildToolsDescribeRequest(toolName: string, flags: Record<string, string | boolean>): Record<string, unknown> {
+  const request: Record<string, unknown> = { name: toolName };
+  if (flags["include-custom"] !== undefined) request.includeCustom = getBoolean(flags, "include-custom");
+  if (flags.runtime !== undefined) request.runtime = getBoolean(flags, "runtime");
+  const bridgeEndpoint = getString(flags, "bridge-endpoint");
+  const target = getString(flags, "target");
+  const instance = getString(flags, "instance");
+  const project = getString(flags, "project");
+  if (bridgeEndpoint !== undefined) request.bridgeEndpoint = bridgeEndpoint;
+  if (target !== undefined) request.target = target;
+  if (instance !== undefined) request.instance = instance;
+  if (project !== undefined) request.project = project;
+  return request;
 }
 
 function uniqueToolsByName(tools: ToolMetadata[]): ToolMetadata[] {
@@ -352,29 +357,6 @@ function uniqueToolsByName(tools: ToolMetadata[]): ToolMetadata[] {
     unique.push(tool);
   }
   return unique;
-}
-
-function publicToolDescriptor(tool: ToolMetadata, supportStatus: ReturnType<typeof supportStatusForTool>, extra: Record<string, unknown> = {}): Record<string, unknown> {
-  const {
-    handler: _handler,
-    timeoutMs: _timeoutMs,
-    available: _available,
-    ...publicTool
-  } = tool;
-  const longRunning = isLongRunningTool(tool);
-  const cancellation = toolCancellation(tool);
-  return {
-    ...extra,
-    ...publicTool,
-    riskLevel: inferToolRiskLevel(tool),
-    ...(tool.permissions?.length ? { permissions: tool.permissions } : {}),
-    ...(longRunning ? { longRunning } : {}),
-    ...(cancellation !== "none" ? { cancellation } : {}),
-    cliCommand: toolCliCommand(tool),
-    target: tool.target ?? "editor",
-    availabilityScope: toolAvailabilityScope(tool),
-    supportStatus
-  };
 }
 
 async function handleToolsRun(
@@ -439,6 +421,7 @@ async function handleToolsRun(
   // Determine the execution target and route accordingly
   const target = tool.target ?? "editor";
   const isRuntime = target === "runtime" || (target === "both" && getBoolean(flags, "runtime"));
+  const bypassDefineTool = getBoolean(flags, "__bypassDefineTool");
 
   if (isRuntime) {
     // runtime-tool.run 是内部包装命令；确认策略必须按实际 runtime tool descriptor 判定。
@@ -455,14 +438,47 @@ async function handleToolsRun(
     return executeBridgeCommand(requestId, "runtime-tool.run", flags, toolName, runtime);
   }
 
-  // code.exec 是 hybrid，但需要先经过原生 handler 完成本地校验、dry-run、artifact 与 batchmode job 逻辑。
-  if (builtinTool && toolName === "code.exec") {
+  // tools.run 是统一执行入口本身；defineTool wrapper 只规范化嵌套请求，再调回本 router。
+  if (!bypassDefineTool && builtinTool && toolName === "tools.run") {
+    const parsedInput = await parseToolInput(flags, requestId);
+    if (!parsedInput.ok) return parsedInput.error!;
+    const mergedFlags = mergeInputToFlags(parsedInput.input, flags);
+    const request = defineToolRequest(builtinTool, parsedInput.input, mergedFlags, positional[1]);
+    if (positional[2] !== undefined) request.positionalTarget ??= positional[2];
+    const defineToolResult = await dispatchDefineTool(builtinTool, request, runtime as Runtime, requestId, mergedFlags);
+    if (defineToolResult) return defineToolResult;
+    return failure(requestId, "E_TOOL_HANDLER_UNSUPPORTED", "tools.run defineTool handler is not registered.", [
+      "Run unity_cli doctor to inspect the CLI installation."
+    ]);
+  }
+
+  // code.exec 是 hybrid，但需要先经过 TS defineTool 包装，再复用原生 handler 完成本地校验、dry-run、artifact 与 batchmode job 逻辑。
+  if (!bypassDefineTool && builtinTool && toolName === "code.exec") {
     // code.exec 既支持 tools 通用 --stdin，也保留历史的“代码源来自 stdin”语义；
-    // 当没有 --input/--input-file 时，--stdin 交给 handleCode 作为代码源处理。
+    // 当没有 --input/--input-file 时，--stdin 交给 Runtime Code 作为代码源处理。
     const usesCodeSourceStdin = getBoolean(flags, "stdin") && getString(flags, "input") === undefined && getString(flags, "input-file") === undefined;
     const parsedInput = usesCodeSourceStdin ? { ok: true, input: {} } as ParsedToolInput : await parseToolInput(flags, requestId);
     if (!parsedInput.ok) return parsedInput.error!;
-    return handleCode("exec", mergeInputToFlags(parsedInput.input, flags), runtime as Runtime, requestId);
+    const mergedFlags = mergeInputToFlags(parsedInput.input, flags);
+    const defineToolResult = await dispatchDefineTool(builtinTool, defineToolRequest(builtinTool, parsedInput.input, mergedFlags, positional[1]), runtime as Runtime, requestId, mergedFlags);
+    if (defineToolResult) return defineToolResult;
+    return failure(requestId, "E_TOOL_HANDLER_UNSUPPORTED", "code.exec defineTool handler is not registered.", [
+      "Run unity_cli doctor to inspect the CLI installation."
+    ]);
+  }
+
+  // asset.refresh 是 bridge-job 工具；defineTool wrapper 只规范化输入,再用 bypass 回到现有 bridge/job spec。
+  if (!bypassDefineTool && builtinTool && toolName === "asset.refresh") {
+    const parsedInput = await parseToolInput(flags, requestId);
+    if (!parsedInput.ok) return parsedInput.error!;
+    const mergedFlags = mergeInputToFlags(parsedInput.input, flags);
+    const request = defineToolRequest(builtinTool, parsedInput.input, mergedFlags, positional[1]);
+    if (positional[1] !== undefined) request.positionalTarget ??= positional[1];
+    const defineToolResult = await dispatchDefineTool(builtinTool, request, runtime as Runtime, requestId, mergedFlags);
+    if (defineToolResult) return defineToolResult;
+    return failure(requestId, "E_TOOL_HANDLER_UNSUPPORTED", "asset.refresh defineTool handler is not registered.", [
+      "Run unity_cli doctor to inspect the CLI installation."
+    ]);
   }
 
   // ── Built-in bridge/hybrid tools WITH bridge spec: route through Unity Bridge ──
@@ -637,6 +653,28 @@ function validateRequiredInputFields(
   return failure(requestId, "E_SCHEMA_INVALID", `Missing required field(s): ${missing.join(", ")}`, [
     `Run unity_cli tools describe ${tool.name} to see the required input fields.`,
     `Required: ${required.join(", ")}.`
+  ]);
+}
+
+/** defineTool 执行前校验公开 schema 中已支持的约束，避免 describe 与真实执行漂移。 */
+function validateDefineToolInputSchema(tool: ToolMetadata, input: Record<string, unknown>, requestId: string): CliResult | undefined {
+  const properties = tool.inputSchema?.properties;
+  if (!properties || typeof properties !== "object" || Array.isArray(properties)) return undefined;
+
+  const enumFailures: string[] = [];
+  for (const [field, rawSchema] of Object.entries(properties as Record<string, unknown>)) {
+    if (input[field] === undefined) continue;
+    if (!rawSchema || typeof rawSchema !== "object" || Array.isArray(rawSchema)) continue;
+    const enumValues = (rawSchema as { enum?: unknown[] }).enum;
+    if (Array.isArray(enumValues) && !enumValues.some((candidate) => Object.is(candidate, input[field]))) {
+      enumFailures.push(`${field} must be one of ${enumValues.map(String).join(", ")}.`);
+    }
+  }
+
+  if (enumFailures.length === 0) return undefined;
+  return failure(requestId, "E_SCHEMA_INVALID", `Invalid input value(s): ${enumFailures.join(" ")}`, [
+    `Run unity_cli tools describe ${tool.name} to see allowed input values.`,
+    ...enumFailures
   ]);
 }
 
@@ -824,6 +862,9 @@ async function dispatchJobHandler(
   if (validationError) return validationError;
   const mergedFlags = mergeInputToFlags(parsedInput.input, flags);
 
+  const defineToolResult = await dispatchDefineTool(tool, defineToolRequest(tool, parsedInput.input, mergedFlags, undefined), fullRuntime, requestId, mergedFlags);
+  if (defineToolResult) return defineToolResult;
+
   let result: CliResult | undefined;
 
   switch (group) {
@@ -882,7 +923,7 @@ async function dispatchOfflineHandler(
     if (confirmation) return confirmation;
   }
 
-  const defineToolResult = await dispatchDefineTool(tool, defineToolRequest(parsedInput.input, mergedFlags), fullRuntime, requestId);
+  const defineToolResult = await dispatchDefineTool(tool, defineToolRequest(tool, parsedInput.input, mergedFlags, positional[1]), fullRuntime, requestId, mergedFlags);
   if (defineToolResult) return defineToolResult;
 
   // tools 发现工具(tools.group/group-list/search/describe/run)
@@ -918,21 +959,41 @@ async function dispatchDefineTool(
   tool: ToolMetadata,
   input: Record<string, unknown>,
   runtime: Runtime,
-  requestId: string
+  requestId: string,
+  flags: Record<string, string | boolean> = {}
 ): Promise<CliResult | undefined> {
   const definition = findDefineTool(tool.name);
   if (!definition) return undefined;
+  const validationError = validateDefineToolInputSchema(tool, input, requestId);
+  if (validationError) return validationError;
   try {
     const data = await definition.execute(input, {
       requestId,
       projectPath: getString(input as Record<string, string | boolean>, "project") ?? process.cwd(),
+      dataDir: runtime.dataDir,
       artifactDir: getString(input as Record<string, string | boolean>, "artifactDir") ?? runtime.dataDir ?? process.cwd(),
-      logPath: getString(input as Record<string, string | boolean>, "logPath")
+      logPath: getString(input as Record<string, string | boolean>, "logPath"),
+      flags,
+      projectTools: runtime.projectTools,
+      projectContexts: runtime.projectContexts,
+      bridgeExecute: runtime.bridgeExecute,
+      bridgeEndpoint: runtime.bridgeEndpoint,
+      fetch: (runtime as Runtime & BuiltinDocsRuntime).fetch,
+      jobStore: runtime.store,
+      jobRunner: runtime.runner,
+      runTool: (invocation) => {
+        const nestedPositional = invocation.positionalTarget !== undefined ? [invocation.name, invocation.positionalTarget] : [invocation.name];
+        const nestedFlags = invocation.bypassDefineTool ? { ...(invocation.flags ?? {}), __bypassDefineTool: true } : invocation.flags ?? {};
+        return handleToolsRun(nestedPositional, nestedFlags, runtime, requestId);
+      }
     });
     return success(requestId, data);
   } catch (error) {
     if (error instanceof PackageManagerError) {
       return failure(requestId, error.code, error.message, error.nextActions);
+    }
+    if (error instanceof StructuredToolError) {
+      return failure(requestId, error.code, error.message, error.nextActions, error.details);
     }
     return failure(requestId, "COMMAND_FAILED", error instanceof Error ? error.message : String(error), [
       `Run unity_cli tools describe ${tool.name} for input requirements and examples.`
@@ -940,11 +1001,21 @@ async function dispatchDefineTool(
   }
 }
 
-/** 将传统 CLI flags 合并为 defineTool request；显式 flag 优先于 --input 字段。 */
-function defineToolRequest(input: Record<string, unknown>, flags: Record<string, string | boolean>): Record<string, unknown> {
+/** 将传统 CLI flags 和位置参数合并为 defineTool request；显式 flag 优先于 --input 字段。 */
+function defineToolRequest(
+  tool: ToolMetadata,
+  input: Record<string, unknown>,
+  flags: Record<string, string | boolean>,
+  positionalTarget: string | undefined
+): Record<string, unknown> {
   const request: Record<string, unknown> = { ...input };
+  const required = tool.inputSchema?.required;
+  if (positionalTarget !== undefined && Array.isArray(required) && required.length === 1) {
+    const field = String(required[0]);
+    request[field] ??= positionalTarget;
+  }
   for (const [key, value] of Object.entries(flags)) {
-    if (key.startsWith("__") || ["input", "input-file", "stdin", "yes", "raw", "format"].includes(key)) continue;
+    if (key.startsWith("__") || ["input", "input-file", "stdin", "yes", "raw"].includes(key)) continue;
     request[kebabToCamel(key)] = value;
   }
   return request;
@@ -953,25 +1024,4 @@ function defineToolRequest(input: Record<string, unknown>, flags: Record<string,
 function kebabToCamel(key: string): string {
   return key.replace(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase());
 }
-
-async function findProjectToolByName(
-  name: string,
-  flags: Record<string, string | boolean>,
-  runtime: ToolsRuntime,
-  requestId: string
-): Promise<ToolMetadata | undefined> {
-  const customTools = await discoverProjectTools(flags, runtime, requestId);
-  if (customTools.ok === false) {
-    return undefined;
-  }
-  return customTools.tools.find((tool: ToolMetadata) => tool.name === name);
-}
-
-/**
- * Resolve which extension tools are available for the target project.
- *
- * Extension tools are shown only when their required Unity packages are installed
- * in the target project. With no explicit --project, a selected live instance can
- * provide the project path for discovery commands that use --instance/--target.
- */
 

@@ -1,136 +1,125 @@
 #if UNITY_EDITOR
 using System;
-using System.Globalization;
 using UnityEditor;
 using UnityEngine;
 
 namespace UnityCli
 {
     /// <summary>
-    /// Built-in runtime wait tool. Waits for a specified number of frames or a
-    /// duration in seconds while in Play Mode. This is the minimal cross-frame
-    /// async primitive required for runtime tool orchestration.
-    ///
-    /// 特殊处理:本工具不走 IUnityCliTool 泛型接口(同步 Execute(Request):Result 契约),
-    /// 因为它需要返回 deferred-wait marker 字符串,由 RuntimeExecutor 拦截并启动
-    /// EditorApplication.update 回调式非阻塞等待。改用直接注册(RegisterProjectTool),
-    /// 保留 [UnityCliTool] attribute 已移除(Stage 3 零 attribute 残留要求)。
-    /// 设计依据:.plan/自定义工具定义规范.md(例外:deferred 机制不兼容同步契约)。
+    /// runtime.wait — Play Mode 下等待若干帧或若干秒的跨帧原语。
+    /// 实现 IUnityCliDeferredTool&lt;,&gt;:frame-count/duration 走 deferred(每帧轮询),next-frame 走同步 Execute。
+    /// 设计依据:.plan/重构设计总文档.md "异步工具:deferred 子接口" 节(废除旧 marker 特殊处理,统一接口)。
     /// </summary>
-    public static class RuntimeWaitTool
+    public class RuntimeWaitTool : IUnityCliDeferredTool<RuntimeWaitTool.Request, RuntimeWaitTool.Result>
     {
-        /// <summary>
-        /// Marker returned by Execute when a multi-frame or duration wait is needed.
-        /// The RuntimeExecutor recognizes this and initiates a deferred EditorApplication.update
-        /// callback-based wait that does not block the Unity main thread.
-        /// </summary>
-        public static readonly string DeferredWaitMarker = "\0RUNTIME_WAIT_DEFERRED";
-
-        /// <summary>
-        /// Deserialized wait parameters, passed from Execute to RuntimeExecutor
-        /// so the deferred wait can be configured without blocking the main thread.
-        /// </summary>
-        public sealed class WaitRequest
+        /// <summary>等待参数。condition 默认 next-frame;frames/seconds 二选一。</summary>
+        public sealed class Request
         {
-            public string Condition;
-            public int RequestedFrames;
-            public int FramesToWait;
-            public long RequestedDurationMs;
-            public int StartFrame;
-            public DateTime StartedAt;
+            /// <summary>等待帧数(默认 1,condition=frame-count 时生效)。</summary>
+            public int? Frames { get; set; }
+
+            /// <summary>等待秒数(condition=duration 时生效)。</summary>
+            public double? Seconds { get; set; }
+
+            /// <summary>等待条件:frame-count / duration / next-frame(默认 next-frame)。</summary>
+            public string Condition { get; set; }
         }
 
-        public static string Execute(UnityCliProjectToolContext context)
+        /// <summary>等待结果:实际等待帧数、耗时、当前帧与 Play Mode 状态。</summary>
+        public sealed class Result
         {
-            var inputJson = context.InputJson ?? "{}";
-            var condition = ExtractString(inputJson, "condition") ?? "next-frame";
-            var requestedFrames = ExtractInt(inputJson, "frames") ?? 1;
-            var requestedSeconds = ExtractDouble(inputJson, "seconds");
+            public long FramesWaited { get; set; }
+            public long ElapsedMs { get; set; }
+            public string Condition { get; set; }
+            public long RequestedFrames { get; set; }
+            public bool IsPlaying { get; set; }
+            public long FrameCount { get; set; }
+        }
 
-            // Determine actual wait parameters
-            int framesToWait;
-            long requestedDurationMs = 0;
-            if (condition == "duration" && requestedSeconds.HasValue && requestedSeconds.Value > 0)
+        public ToolDescriptor Describe() => new()
+        {
+            Name = "runtime.wait",
+            Summary = "Wait for a number of frames or seconds in Play Mode (cross-frame deferred primitive).",
+            Description = "Waits for a specified number of frames (condition=frame-count) or seconds (condition=duration) in Play Mode via non-blocking frame polling; condition=next-frame returns immediately. Returns the actual frames waited and elapsed time. runtime-only: requires an active Play Mode session.",
+            Group = "runtime", Version = "1.0.0", DestructiveHint = false, Target = "runtime", PlayModeSupport = "runtime-only",
+            CapabilityType = "project-read",
+            DefaultTimeoutMs = 10000, MaxTimeoutMs = 120000,
+            Examples = new[] { new ToolExample { Description = "Wait 60 frames", Input = new Request { Frames = 60, Condition = "frame-count" } } }
+        };
+
+        /// <summary>
+        /// 尝试挂起为跨帧等待。frame-count/duration 返回 true + completion(next-frame 返回 false 走同步 Execute)。
+        /// completion.IsComplete 同时处理 Play Mode 结束(立即完成,停止等待)。
+        /// </summary>
+        public bool TryDefer(Request request, UnityCliProjectToolContext ctx, out DeferredCompletion<Result> completion)
+        {
+            var condition = string.IsNullOrEmpty(request.Condition) ? "next-frame" : request.Condition;
+            var requestedFrames = request.Frames ?? 1;
+            var requestedSeconds = request.Seconds;
+
+            if (condition == "frame-count" && requestedFrames > 0)
             {
-                // Convert seconds to approximate frame count (assume 60fps as baseline)
-                framesToWait = Math.Max(1, (int)(requestedSeconds.Value * 60));
-                requestedDurationMs = Math.Min((long)(requestedSeconds.Value * 1000), 120000);
-            }
-            else if (condition == "frame-count" && requestedFrames > 0)
-            {
-                framesToWait = requestedFrames;
-                requestedDurationMs = framesToWait * 17; // approximate at ~60fps
-            }
-            else
-            {
-                // next-frame: just return immediately — no blocking wait needed
+                // 帧数等待:上限 7200 帧(~2 分钟 @60fps)
+                var framesToWait = Math.Min(requestedFrames, 7200);
                 var startFrame = Time.frameCount;
                 var startedAt = DateTime.UtcNow;
-                var elapsedMs = (long)(DateTime.UtcNow - startedAt).TotalMilliseconds;
-                return new UnityCliJsonWriter().BeginObject()
-                    .Prop("framesWaited", 1)
-                    .Prop("elapsedMs", elapsedMs)
-                    .Prop("condition", condition)
-                    .Prop("requestedFrames", requestedFrames)
-                    .Prop("isPlaying", EditorApplication.isPlaying)
-                    .Prop("frameCount", Time.frameCount)
-                    .EndObject()
-                    .ToString();
+                completion = new DeferredCompletion<Result>
+                {
+                    TimeoutMs = 120000,
+                    IsComplete = () => !EditorApplication.isPlaying || (Time.frameCount - startFrame) >= framesToWait,
+                    OnComplete = () => BuildResult(condition, requestedFrames, startFrame, startedAt),
+                    TimeoutErrorCode = "E_RUNTIME_TIMEOUT",
+                    TimeoutErrorMessage = "Runtime wait did not complete before the timeout.",
+                    TimeoutNextAction = "Reduce the requested frames or seconds, or increase the timeout."
+                };
+                return true;
             }
 
-            // Clamp to reasonable maximum
-            framesToWait = Math.Min(framesToWait, 7200); // ~2 minutes at 60fps
-
-            // Multi-frame or duration wait: return a deferred marker so the
-            // RuntimeExecutor can initiate a non-blocking EditorApplication.update
-            // callback-based wait. This replaces the previous Thread.Sleep
-            // busy-wait which blocked the Unity editor main thread.
-            LastWaitRequest = new WaitRequest
+            if (condition == "duration" && requestedSeconds.HasValue && requestedSeconds.Value > 0)
             {
+                // 时长等待:上限 120 秒
+                var requestedDurationMs = Math.Min((long)(requestedSeconds.Value * 1000), 120000);
+                var startFrame = Time.frameCount;
+                var startedAt = DateTime.UtcNow;
+                completion = new DeferredCompletion<Result>
+                {
+                    TimeoutMs = (int)Math.Min(requestedDurationMs + 5000, 120000),
+                    IsComplete = () => !EditorApplication.isPlaying || (long)(DateTime.UtcNow - startedAt).TotalMilliseconds >= requestedDurationMs,
+                    OnComplete = () => BuildResult(condition, requestedFrames, startFrame, startedAt),
+                    TimeoutErrorCode = "E_RUNTIME_TIMEOUT",
+                    TimeoutErrorMessage = "Runtime wait did not complete before the timeout.",
+                    TimeoutNextAction = "Reduce the requested frames or seconds, or increase the timeout."
+                };
+                return true;
+            }
+
+            // next-frame 或无效参数:走同步 Execute 立即返回
+            completion = null;
+            return false;
+        }
+
+        /// <summary>同步路径:next-frame 立即返回当前帧状态(TryDefer 返回 false 时框架调用)。</summary>
+        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        {
+            var condition = string.IsNullOrEmpty(request.Condition) ? "next-frame" : request.Condition;
+            var requestedFrames = request.Frames ?? 1;
+            var startFrame = Time.frameCount;
+            var startedAt = DateTime.UtcNow;
+            return BuildResult(condition, requestedFrames, startFrame, startedAt);
+        }
+
+        // 构造等待结果。framesWaited 至少 1;Play Mode 结束时反映退出状态。
+        private static Result BuildResult(string condition, long requestedFrames, int startFrame, DateTime startedAt)
+        {
+            return new Result
+            {
+                FramesWaited = Math.Max(1, Time.frameCount - startFrame),
+                ElapsedMs = (long)(DateTime.UtcNow - startedAt).TotalMilliseconds,
                 Condition = condition,
                 RequestedFrames = requestedFrames,
-                FramesToWait = framesToWait,
-                RequestedDurationMs = requestedDurationMs,
-                StartFrame = Time.frameCount,
-                StartedAt = DateTime.UtcNow
+                IsPlaying = EditorApplication.isPlaying,
+                FrameCount = Time.frameCount
             };
-
-            return DeferredWaitMarker;
-        }
-
-        /// <summary>
-        /// The most recent WaitRequest from Execute, used by RuntimeExecutor
-        /// to configure the deferred wait parameters.
-        /// </summary>
-        public static WaitRequest LastWaitRequest;
-
-        private static string ExtractString(string json, string name)
-        {
-            var pattern = "\"" + name + "\"\\s*:\\s*\"((?:\\\\.|[^\\\"])*)\"";
-            var match = System.Text.RegularExpressions.Regex.Match(json ?? string.Empty, pattern);
-            return match.Success ? match.Groups[1].Value : null;
-        }
-
-        private static int? ExtractInt(string json, string name)
-        {
-            var pattern = "\"" + name + "\"\\s*:\\s*(-?\\d+)";
-            var match = System.Text.RegularExpressions.Regex.Match(json ?? string.Empty, pattern);
-            if (match.Success && int.TryParse(match.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var value))
-            {
-                return value;
-            }
-            return null;
-        }
-
-        private static double? ExtractDouble(string json, string name)
-        {
-            var pattern = "\"" + name + "\"\\s*:\\s*(-?\\d+(?:\\.\\d+)?)";
-            var match = System.Text.RegularExpressions.Regex.Match(json ?? string.Empty, pattern);
-            if (match.Success && double.TryParse(match.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var value))
-            {
-                return value;
-            }
-            return null;
         }
     }
 }

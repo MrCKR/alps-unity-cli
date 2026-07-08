@@ -14,12 +14,9 @@ import { getString, getBoolean } from "../args.js";
 import { readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { executeBridgeCommand, type BridgeRuntime } from "../bridge/index.js";
-import { builtinToolGroups, builtinToolMetadata, extensionToolMetadata } from "../tools/metadata/index.js";
+import { findDefineContext, StructuredContextError } from "../contexts/registry.js";
 import {
-  builtinContextDescriptors,
-  builtinContextCategories,
   findBuiltinContextByName,
-  searchContexts,
   allContextDescriptors,
   discoverCustomContexts,
   customContextToDescriptor,
@@ -213,28 +210,33 @@ async function handleContextRead(
   if (!parsedInput.ok) return parsedInput.error!;
   const inputArgs = parsedInput.input;
 
-  if (contextName === "tools.groups") {
-    const tools = [...builtinToolMetadata(), ...extensionToolMetadata()];
-    const counts = new Map<string, number>();
-    for (const tool of tools) {
-      counts.set(tool.group, (counts.get(tool.group) ?? 0) + 1);
+  const definition = findDefineContext(contextName);
+  if (definition) {
+    try {
+      const data = await definition.read(inputArgs, {
+        requestId,
+        flags,
+        bridgeExecute: runtime.bridgeExecute,
+        bridgeEndpoint: runtime.bridgeEndpoint,
+        dataDir: runtime.dataDir,
+        projectTools: runtime.projectTools
+      });
+      return success(requestId, { command: "context.read", context: contextName, ...(data && typeof data === "object" && !Array.isArray(data) ? data as Record<string, unknown> : { data }) });
+    } catch (error) {
+      if (error instanceof StructuredContextError) {
+        return failure(requestId, error.code, error.message, error.nextActions, error.details);
+      }
+      return failure(requestId, "CONTEXT_READ_FAILED", error instanceof Error ? error.message : String(error), [
+        `Run unity_cli context describe ${contextName} for input requirements and availability.`
+      ]);
     }
-    const groups = [...new Set([...builtinToolGroups(), ...extensionToolMetadata().map((tool) => tool.group)])]
-      .sort()
-      .map((group) => ({ name: group, toolCount: counts.get(group) ?? 0, cliCommand: `tools group list ${group}` }));
-    return success(requestId, {
-      command: "context.read",
-      context: contextName,
-      groups,
-      count: groups.length,
-    });
   }
 
   return executeBridgeCommand(
     requestId,
     "context.read",
     { ...flags, name: contextName, input: JSON.stringify(inputArgs), ...inputArgs },
-    undefined,
+    contextName,
     runtime
   );
 }

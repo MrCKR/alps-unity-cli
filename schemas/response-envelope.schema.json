@@ -2,7 +2,7 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://unity-cli.local/schemas/response-envelope.schema.json",
   "title": "Unity CLI Response Envelope",
-  "description": "Unified response envelope for all CLI commands. Defines the unified response envelope. Every CLI output follows this shape.",
+  "description": "Unified response envelope for CLI commands. Field names are camelCase; successful command payloads live under data, structured failures live under error.",
   "oneOf": [
     {
       "title": "Success Response",
@@ -13,7 +13,7 @@
         "requestId": { "type": "string", "description": "Echoes the request requestId." },
         "data": {
           "type": "object",
-          "description": "Command-specific result payload."
+          "description": "Command-specific result payload. For C# tools this is serialized from the Result DTO."
         },
         "warnings": {
           "type": "array",
@@ -46,7 +46,7 @@
         "requestId": { "type": "string", "description": "Echoes the request requestId." },
         "error": {
           "$ref": "./error-code.schema.json",
-          "description": "Structured error details."
+          "description": "Structured error details. Recovery guidance is nested under error.nextActions and transient retry delay under error.retryAfterMs."
         },
         "durationMs": {
           "type": "number",

@@ -24,13 +24,35 @@ namespace UnityCli
 
         // ── ProfilerDriver 反射(UnityEditorInternal) ──
 
-        private static Type FindType(string fullName)
+        /// <summary>
+        /// 跨程序集按全名解析类型。profiler 域各工具反射 UnityEditorInternal/UnityEditor 内部类型时复用。
+        /// </summary>
+        public static Type FindType(string fullName)
         {
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
                 Type type = null;
                 try { type = assembly.GetType(fullName, false); } catch { }
                 if (type != null) return type;
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// 反射读取类型静态/实例成员的 string 值(属性优先,回退字段)。
+        /// 供 profiler.rendering-stats 读取 UnityEditor.UnityStats 字段等场景复用。
+        /// </summary>
+        public static string StringMemberValue(Type type, object instance, string memberName)
+        {
+            var prop = type.GetProperty(memberName, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            if (prop != null)
+            {
+                try { return prop.GetValue(instance, null) as string; } catch { return null; }
+            }
+            var field = type.GetField(memberName, BindingFlags.Instance | BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
+            if (field != null)
+            {
+                try { return field.GetValue(instance) as string; } catch { return null; }
             }
             return null;
         }
@@ -258,6 +280,25 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_PROFILER_FORMAT_UNSUPPORTED", "Profiler capture format must be json or raw.", "Use --format json or --format raw.");
             }
             return format;
+        }
+
+        /// <summary>查找 MemoryProfiler 类型(包 com.unity.memoryprofiler)。找不到返回 null。</summary>
+        public static Type MemoryProfilerType()
+        {
+            return FindType("Unity.Profiling.Memory.MemoryProfiler")
+                ?? FindType("UnityEngine.Profiling.Memory.Experimental.MemoryProfiler");
+        }
+
+        /// <summary>
+        /// 解析输出路径:相对路径基于工程根;空则抛 E_OUTPUT_PATH_REQUIRED。
+        /// profiler.capture/export 共享,保证路径解析一致。
+        /// </summary>
+        public static string ResolveOutputPath(string rawPath)
+        {
+            if (string.IsNullOrEmpty(rawPath))
+                throw new UnityCliBridge.BridgeCommandException("E_OUTPUT_PATH_REQUIRED", "Profiler output requires a path.", "Pass --path <path>.");
+            var normalized = rawPath.Replace('\\', Path.DirectorySeparatorChar).Replace('/', Path.DirectorySeparatorChar);
+            return Path.GetFullPath(Path.IsPathRooted(normalized) ? normalized : Path.Combine(ProjectRoot(), normalized));
         }
 
         /// <summary>同步单帧 raw 采集。</summary>

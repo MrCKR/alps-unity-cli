@@ -5,8 +5,8 @@ import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
  * ProBuilder extension bridge specs — 36 single-action tools.
  *
  * Each CLI command is routed through the project-tool.run bridge command
- * to reach the ProBuilder handlers registered via [UnityCliTool] in the
- * Unity package. The bridgeCommand field is always "project-tool.run";
+ * to reach ProBuilder IUnityCliTool handlers in the Unity package. The
+ * bridgeCommand field is always "project-tool.run";
  * the toolName field carries the underlying project-tool name (e.g.
  * "probuilder.ping"). The buildArgs output is wrapped into { name, input }
  * so the C# ProjectToolRun handler receives both the tool name and its

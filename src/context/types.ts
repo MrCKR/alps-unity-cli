@@ -21,6 +21,8 @@ export type ContextPlayModeSupport = "supported" | "runtime-only" | "session-aff
 export interface ContextDescriptor {
   /** Dotted context name, e.g. "project.info", "editor.state", "scene.cameras". */
   name: string;
+  /** Short routing summary for discovery output. */
+  summary?: string;
   /** One-paragraph description shown in discovery and describe output. */
   description: string;
   /** Logical category: "project", "editor", "scene", "prefab", "tools", "tests", or custom. */
@@ -56,6 +58,7 @@ export interface ContextDescriptor {
 /** Summary entry returned by `context list` — lightweight view of a context. */
 export interface ContextListEntry {
   name: string;
+  summary: string;
   description: string;
   category: string;
   source: ContextSource;
@@ -82,14 +85,34 @@ export interface ContextReadResult {
 export interface CustomContextDescriptor {
   /** Dotted context name. */
   name: string;
+  /** Short routing summary. */
+  summary?: string;
   /** One-paragraph description. */
   description: string;
   /** Logical category. */
   category: string;
+  /** Whether this runtime-discovered context is built-in, extension, or project-defined. */
+  source?: ContextSource;
+  /** Execution target. */
+  target?: ContextTarget;
+  /** Availability scope. */
+  availabilityScope?: ContextAvailabilityScope;
+  /** Play Mode read semantics. */
+  playModeSupport?: ContextPlayModeSupport;
+  /** Current routing status for AI execution decisions. */
+  supportStatus?: string;
+  /** CLI command for reading this context. */
+  cliCommand?: string;
   /** Input schema. */
   inputSchema?: Record<string, unknown>;
   /** Output schema. */
   outputSchema?: Record<string, unknown>;
+  /** Unity package names required for this context to be available. */
+  requiresPackages?: string[];
+  /** Refresh behavior for read cost / staleness decisions. */
+  refreshBehavior?: string;
+  /** Whether the context is currently available. */
+  available?: boolean;
   /** Extension ID or assembly source. */
   extensionId?: string;
 }

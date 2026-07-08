@@ -60,9 +60,9 @@ test("rawDescriptorToContextDescriptor maps project context descriptor correctly
   const descriptor = rawDescriptorToContextDescriptor(raw);
   assert.ok(descriptor);
   assert.equal(descriptor!.name, "project.scene-list");
+  assert.equal(descriptor!.summary, "Lists all scenes in the project.");
   assert.equal(descriptor!.description, "Lists all scenes in the project.");
   assert.equal("title" in descriptor!, false);
-  assert.equal("summary" in descriptor!, false);
   assert.equal("kind" in descriptor!, false);
   assert.equal("requiresUnity" in descriptor!, false);
   assert.equal(descriptor!.source, "project");
@@ -157,7 +157,7 @@ test("ContextDescriptor stays distinct from tool descriptors", () => {
   assert.equal("kind" in descriptor!, false);
   assert.equal("destructiveHint" in descriptor!, false);
   assert.equal("title" in descriptor!, false);
-  assert.equal("summary" in descriptor!, false);
+  assert.equal(descriptor!.summary, "Reads project data.");
   assert.equal(descriptor!.cliCommand, "context read project.data");
   assert.ok(!descriptor!.cliCommand?.startsWith("tools run"));
 });
@@ -238,8 +238,8 @@ test("context list --include-custom discovers project custom contexts through th
   assert.equal(requests.length, 1);
   assert.equal(requests[0].command, "context.list");
   const data = result.data as { contexts: ContextDescriptor[]; count: number };
-  // 23 built-in contexts + 1 extension manifest context + 1 project custom context
-  assert.equal(data.count, 25);
+  // 2 TS-owned local contexts + 1 extension manifest context + 1 project custom context
+  assert.equal(data.count, 4);
   const projectCtx = data.contexts.find((c) => c.name === "project.scene-list");
   assert.ok(projectCtx, "project.scene-list should be in results");
   assert.equal(projectCtx.source, "project");
@@ -281,17 +281,26 @@ test("context list --include-custom merges built-in and project custom contexts 
 
   assert.equal(result.ok, true);
   const data = result.data as { contexts: ContextDescriptor[]; count: number };
-  // 16 built-in + 1 bridge-discovered built-in + 1 custom
-  assert.ok(data.count >= 17, `expected >= 17 contexts, got ${data.count}`);
+  // 2 TS-owned local contexts + 1 extension manifest context + 1 bridge-discovered built-in + 1 custom
+  assert.equal(data.count, 5);
   const unityVersion = data.contexts.find((c) => c.name === "unity.version");
   const projectSceneList = data.contexts.find((c) => c.name === "project.scene-list");
   assert.ok(unityVersion, "unity.version should be in results");
   assert.ok(projectSceneList, "project.scene-list should be in results");
 });
 
-test("context list --include-custom rejects project context with same name as built-in (duplicate guard)", async () => {
+test("context list --include-custom rejects project context with same name as bridge built-in (duplicate guard)", async () => {
   const runtime = await makeRuntime();
-  // Both contexts have the same name as a static built-in — custom should be filtered by dedup
+  const builtInDescriptor = {
+    name: "project.info",
+    description: "Read project info from the built-in bridge context.",
+    category: "project",
+    source: "built-in",
+    inputSchema: {},
+    handler: "bridge",
+    supportStatus: "live-bridge",
+    cliCommand: "context read project.info"
+  };
   const conflictingDescriptor = {
     name: "project.info",
     description: "Overridden project info.",
@@ -308,8 +317,8 @@ test("context list --include-custom rejects project context with same name as bu
     bridgeExecute: async () => ({
       ok: true as const,
       data: {
-        contexts: [conflictingDescriptor],
-        builtInCount: 0,
+        contexts: [builtInDescriptor, conflictingDescriptor],
+        builtInCount: 1,
         projectCustomCount: 1
       }
     })
@@ -317,7 +326,6 @@ test("context list --include-custom rejects project context with same name as bu
 
   assert.equal(result.ok, true);
   const data = result.data as { contexts: ContextDescriptor[]; count: number };
-  // Built-in deduplication: static builtin takes precedence over bridge-discovered duplicate
   const projectInfoContexts = data.contexts.filter((c) => c.name === "project.info");
   assert.equal(projectInfoContexts.length, 1, "project.info should appear exactly once (deduplicated)");
   assert.equal(projectInfoContexts[0].source, "built-in");
@@ -415,32 +423,37 @@ test("context read without name returns E_CONTEXT_NAME_REQUIRED error", async ()
   assert.equal(result.error?.code, "E_CONTEXT_NAME_REQUIRED");
 });
 
-test("context list without --include-custom returns built-in and extension manifest contexts", async () => {
+test("context list without --include-custom returns local TS-owned and extension manifest contexts", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["context", "list"], runtime);
   assert.equal(result.ok, true);
   const data = result.data as { contexts: Array<ContextDescriptor | { name: string; source: "extension" }>; count: number };
-  // Built-in contexts plus extension manifest descriptors are available offline.
-  assert.equal(data.count, 24);
-  assert.ok(data.contexts.some((c) => c.name === "project.info"));
-  assert.ok(data.contexts.some((c) => c.name === "editor.state"));
+  assert.equal(data.count, 3);
+  assert.ok(data.contexts.some((c) => c.name === "tools.groups"));
+  assert.ok(data.contexts.some((c) => c.name === "tools.custom"));
   assert.ok(data.contexts.some((c) => c.name === "probuilder.scene" && c.source === "extension"));
+  assert.ok(!data.contexts.some((c) => c.name === "project.info"));
   assert.ok(!data.contexts.some((c) => c.source === "project"));
 });
 
 // ─── C# registry structural tests ──────────────────────────────────────
 
-test("Unity C# custom context registry supports UnityCliContextAttribute and bridge commands", async () => {
+test("Unity C# custom context registry supports IUnityCliContext descriptors and bridge commands", async () => {
   const { readFile } = await import("node:fs/promises");
   const registry = await readFile(new URL("../../unitypkg/Editor/ProjectContexts/ProjectContextRegistry.cs", import.meta.url), "utf8");
-  const attribute = await readFile(new URL("../../unitypkg/Editor/ProjectContexts/UnityCliContextAttribute.cs", import.meta.url), "utf8");
+  const interfaceFile = await readFile(new URL("../../unitypkg/Editor/ProjectTools/IUnityCliTool.cs", import.meta.url), "utf8");
 
-  // Attribute targets method-level (simpler than tool attribute which also supports class)
-  assert.match(attribute, /AttributeTargets\.Method/);
-  // Attribute has required Name field
-  assert.match(attribute, /public string Name/);
-  // Registry discovers via attribute
-  assert.match(registry, /typeof\(UnityCliContextAttribute\)/);
+  assert.match(interfaceFile, /interface IUnityCliContext<TReq, TRes>/);
+  assert.match(interfaceFile, /ContextDescriptor Describe\(\)/);
+  assert.match(interfaceFile, /TRes Read\(TReq request, UnityCliProjectToolContext ctx\)/);
+  assert.match(registry, /TryRegisterInterfaceContext/);
+  assert.match(registry, /typeof\(IUnityCliContext<,>\)/);
+  assert.match(registry, /UnityCliSchemaDeriver\.DeriveSchema/);
+  assert.doesNotMatch(registry, /UnityCliContextAttribute/);
+  await assert.rejects(
+    readFile(new URL("../../unitypkg/Editor/ProjectContexts/UnityCliContextAttribute.cs", import.meta.url), "utf8"),
+    /ENOENT/
+  );
   // Registry has context.list/describe/read bridge commands
   assert.match(registry, /context\.list/);
   assert.match(registry, /context\.describe/);
@@ -460,7 +473,7 @@ test("Unity C# context definition enforces read-only constraint", async () => {
   assert.doesNotMatch(definition, /public string Kind/);
   assert.match(definition, /public string Source/);
   // Definition has Read handler (not Execute/Run)
-  assert.match(definition, /Func<UnityCliContextRequest, string> Read/);
+  assert.match(definition, /Func<UnityCliProjectToolContext, string> Read/);
   // No destructive/write fields as public properties (the doc comment mentions them as "must not declare")
   // Check property declarations, not doc comments
   const propertyLines = definition.split('\n').filter(line => line.match(/public\s+\w+\s+\w+\s*\{/));
@@ -470,12 +483,12 @@ test("Unity C# context definition enforces read-only constraint", async () => {
 
 // ─── SampleContext contract / snapshot tests ──────────────────────────────
 
-test("SampleContext uses UnityCliContextAttribute with correct contract fields", async () => {
+test("SampleContext uses IUnityCliContext with correct contract fields", async () => {
   const { readFile } = await import("node:fs/promises");
   const sample = await readFile(new URL("../../unitypkg/Editor/Samples/SampleContext.cs", import.meta.url), "utf8");
 
-  // Uses [UnityCliContext] attribute (not [UnityCliTool])
-  assert.match(sample, /\[UnityCliContext\(/);
+  assert.match(sample, /class SampleContext : IUnityCliContext<SampleContext\.Request, SampleContext\.Result>/);
+  assert.doesNotMatch(sample, /\[UnityCliContext\(/);
   assert.doesNotMatch(sample, /\[UnityCliTool\(/);
 
   // Name matches the required contract
@@ -484,12 +497,12 @@ test("SampleContext uses UnityCliContextAttribute with correct contract fields",
   // Category is sample
   assert.match(sample, /Category\s*=\s*"sample"/);
 
-  // Has inputSchema with includeDisabled boolean
-  assert.match(sample, /includeDisabled.*boolean/);
-
-  // Has outputSchema with project summary fields
-  assert.match(sample, /unityVersion.*string/);
-  assert.match(sample, /buildTarget.*string/);
+  // Schema comes from DTO fields, not descriptor string literals.
+  assert.match(sample, /public bool IncludeDisabled \{ get; set; \}/);
+  assert.match(sample, /public string UnityVersion \{ get; set; \}/);
+  assert.match(sample, /public string BuildTarget \{ get; set; \}/);
+  assert.doesNotMatch(sample, /InputSchema\s*=/);
+  assert.doesNotMatch(sample, /OutputSchema\s*=/);
 
   assert.doesNotMatch(sample, /EquivalentUnityMcp/);
   assert.doesNotMatch(sample, /Title\s*=/);
@@ -498,29 +511,25 @@ test("SampleContext uses UnityCliContextAttribute with correct contract fields",
   assert.match(sample, /RefreshBehavior.*=.*"onDemand"/);
 });
 
-test("SampleContext descriptor has schema and fingerprint", async () => {
+test("SampleContext descriptor derives schema and fingerprint from interface form", async () => {
   const { readFile } = await import("node:fs/promises");
   const sample = await readFile(new URL("../../unitypkg/Editor/Samples/SampleContext.cs", import.meta.url), "utf8");
+  const registry = await readFile(new URL("../../unitypkg/Editor/ProjectContexts/ProjectContextRegistry.cs", import.meta.url), "utf8");
 
-  // InputSchema is declared
-  assert.match(sample, /InputSchema\s*=\s*"/);
-  // OutputSchema is declared
-  assert.match(sample, /OutputSchema\s*=\s*"/);
-  // Fingerprint is available (context infrastructure auto-computes)
-  // But the attribute implies it through the context kind
-  assert.match(sample, /UnityCliContext\(/);
+  assert.doesNotMatch(sample, /InputSchema\s*=/);
+  assert.doesNotMatch(sample, /OutputSchema\s*=/);
+  assert.match(registry, /UnityCliSchemaDeriver\.DeriveSchema\(reqType\)/);
+  assert.match(registry, /UnityCliSchemaDeriver\.DeriveSchema\(resType\)/);
+  assert.match(registry, /DescriptorSource = "IUnityCliContext"/);
 });
 
-test("SampleContext handler method name avoids Execute/Run", async () => {
+test("SampleContext handler uses Read and avoids Execute/Run", async () => {
   const { readFile } = await import("node:fs/promises");
   const sample = await readFile(new URL("../../unitypkg/Editor/Samples/SampleContext.cs", import.meta.url), "utf8");
 
-  // The handler method must NOT be named Execute or Run (registry constraint)
-  // It should use a different verb like Provide, Read, Get, etc.
   assert.doesNotMatch(sample, /public static string Execute\(/);
   assert.doesNotMatch(sample, /public static string Run\(/);
-  // Verify the handler has the right signature
-  assert.match(sample, /public static string Provide\(UnityCliContextRequest/);
+  assert.match(sample, /public Result Read\(Request request, UnityCliProjectToolContext ctx\)/);
 });
 
 // ─── Source guard tests ─────────────────────────────────────────────────
@@ -559,21 +568,20 @@ test("custom context does not enter tools execution path", async () => {
   const sampleContext = await readFile(new URL("../../unitypkg/Editor/Samples/SampleContext.cs", import.meta.url), "utf8");
   const sampleTool = await readFile(new URL("../../unitypkg/Editor/Samples/SampleEchoTool.cs", import.meta.url), "utf8");
 
-  // SampleContext uses [UnityCliContext], not [UnityCliTool]
-  assert.match(sampleContext, /\[UnityCliContext\(/);
+  // SampleContext 新形态:用 IUnityCliContext<,> 泛型接口,不再用 attribute
+  assert.match(sampleContext, /IUnityCliContext</);
+  assert.doesNotMatch(sampleContext, /\[UnityCliContext\(/);
   assert.doesNotMatch(sampleContext, /\[UnityCliTool\(/);
 
   // SampleEchoTool 新形态:用 IUnityCliTool<,> 泛型接口,不再用 [UnityCliTool] attribute
   assert.match(sampleTool, /IUnityCliTool</);
   assert.doesNotMatch(sampleTool, /\[UnityCliTool\(/);
 
-  // Context handler takes UnityCliContextRequest, not UnityCliProjectToolContext
-  assert.match(sampleContext, /UnityCliContextRequest/);
-  assert.doesNotMatch(sampleContext, /UnityCliProjectToolContext/);
-
-  // Tool handler(新形态)接 UnityCliProjectToolContext(ctx 参数)
-  assert.match(sampleTool, /UnityCliProjectToolContext/);
-  assert.doesNotMatch(sampleTool, /UnityCliContextRequest/);
+  // Context handler is Read(Request, ctx); Tool handler is Execute(Request, ctx).
+  assert.match(sampleContext, /public Result Read\(Request request, UnityCliProjectToolContext ctx\)/);
+  assert.doesNotMatch(sampleContext, /public Result Execute\(/);
+  assert.match(sampleTool, /public Result Execute\(Request request, UnityCliProjectToolContext ctx\)/);
+  assert.doesNotMatch(sampleTool, /IUnityCliContext/);
 });
 
 test("custom context registry is separate from tools registry", async () => {

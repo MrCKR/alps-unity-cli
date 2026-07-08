@@ -39,7 +39,7 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   "error-codes": {
     title: "Error Codes and nextActions",
-    summary: "Structured error taxonomy with machine-readable codes, transient hints, `retryAfterMs`, and `nextActions` for automated recovery. JSON fields are `nextActions` and `retryAfterMs` (snake_case, matching error-code.schema.json). Every error follows the unified response envelope.",
+    summary: "Structured error taxonomy with machine-readable codes, transient hints, `retryAfterMs`, and `nextActions` for automated recovery. Error JSON fields use camelCase and match error-code.schema.json. Every error follows the unified response envelope.",
     guide: "Read `error.code` for the error category. Check `transient` — if true, retry after `retryAfterMs`. Follow `nextActions` for recovery. Never guess; use the suggested commands."
   },
   "risk-and-side-effects": {
@@ -169,7 +169,7 @@ const STATIC_TOPIC_DOCS: Record<string, Omit<DocTopic, "key" | "tools"> & { tool
   },
   "project-tool": {
     title: "Project Tools (Custom)",
-    summary: "Tools registered by Unity project C# code via [UnityCliTool] attribute. Discovered through `tools group` and `tools group list <group> --include-custom`. Executed via `tools run <name>`. Handler: bridge or bridge-runtime. Target: editor or runtime. Availability depends on target instance and PlayMode state. Fingerprint-protected.",
+    summary: "Tools registered by Unity project C# code via IUnityCliTool<TReq,TRes>. Discovered through `tools group` and `tools group list <group> --include-custom`. Executed via `tools run <name>`. Handler: bridge or bridge-runtime. Target: editor or runtime. Availability depends on target instance and PlayMode state. Fingerprint-protected.",
     guide: "Use `tools group` to list groups, then `tools group list <group> --include-custom` to discover project tools. Use `tools describe <name>` for full schema, risk hints, and target/availability. Use `tools run <name>` to execute."
   }
 };

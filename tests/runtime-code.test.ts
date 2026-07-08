@@ -160,6 +160,31 @@ test("code exec validates source selection, args json, channel and refs", async 
   assert.equal(refs.error?.code, "E_REFERENCE_RESOLUTION_FAILED");
 });
 
+test("code exec structured input arrays dry-run through defineTool", async () => {
+  const runtime = await makeRuntime();
+  const refPath = join(runtime.dataDir, "Extra.dll");
+  const artifactDir = join(runtime.dataDir, "artifacts", "structured");
+  await writeFile(refPath, "placeholder", "utf8");
+
+  const result = await execute(["tools", "run", "code.exec", "--input", JSON.stringify({
+    code: "return Args[\"answer\"];",
+    refs: [refPath],
+    define: ["UNITY_CLI_TEST"],
+    args: { answer: 42 },
+    timeoutMs: 123,
+    artifactDir
+  }), "--dry-run"], runtime);
+
+  assert.equal(result.ok, true);
+  const data = result.data as { dryRun: boolean; preview: { sourceKind: string; timeoutMs: number; artifactDir: string; args: { answer: number } }; plannedEffects: Array<{ type: string; channel: string }> };
+  assert.equal(data.dryRun, true);
+  assert.equal(data.preview.sourceKind, "inline");
+  assert.equal(data.preview.timeoutMs, 123);
+  assert.equal(data.preview.artifactDir, artifactDir);
+  assert.deepEqual(data.preview.args, { answer: 42 });
+  assert.deepEqual(data.plannedEffects, [{ type: "code.exec", channel: "live", artifactDir, sideEffects: "user-code-not-executed" }]);
+});
+
 test("code exec --channel batchmode creates Unity job and deploys bridge package", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject(runtime.dataDir);

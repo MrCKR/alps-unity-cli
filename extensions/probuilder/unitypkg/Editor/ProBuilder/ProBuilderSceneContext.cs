@@ -10,26 +10,67 @@ namespace UnityCli.ProBuilder
     /// <summary>
     /// ProBuilder 场景 Context：只读返回场景网格与选择状态。
     /// </summary>
-    public static class ProBuilderSceneContext
+    public class ProBuilderSceneContext : IUnityCliContext<ProBuilderSceneContext.Request, ProBuilderSceneContext.Result>
     {
-        /// <summary>
-        /// 读取当前场景中的 ProBuilderMesh 对象摘要和 Editor 选择状态；不修改场景、对象或资源。
-        /// </summary>
-        [UnityCliContext(
-            "probuilder.scene",
+        public sealed class Request
+        {
+            public string NamePattern { get; set; }
+            public int PageSize { get; set; }
+        }
+
+        public sealed class Result
+        {
+            public bool Installed { get; set; }
+            public int SceneCount { get; set; }
+            public int ObjectCount { get; set; }
+            public int SelectedObjectCount { get; set; }
+            public int PageSize { get; set; }
+            public bool Truncated { get; set; }
+            public List<ProBuilderSceneRow> Objects { get; set; }
+            public ProBuilderSceneSelection Selection { get; set; }
+        }
+
+        public sealed class ProBuilderSceneRow
+        {
+            public string Name { get; set; }
+            public string Path { get; set; }
+            public string Scene { get; set; }
+            public int InstanceId { get; set; }
+            public bool Active { get; set; }
+            public bool Selected { get; set; }
+            public int FaceCount { get; set; }
+            public int VertexCount { get; set; }
+            public int EdgeCount { get; set; }
+        }
+
+        public sealed class ProBuilderSceneSelection
+        {
+            public int ObjectCount { get; set; }
+            public List<string> ObjectNames { get; set; }
+        }
+
+        // ── desc:只声明人工字段,不含 inputSchema/outputSchema ──
+        public ContextDescriptor Describe() => new ContextDescriptor
+        {
+            Name = "probuilder.scene",
             Description = "Read ProBuilder mesh objects, face/edge/vertex selection context, and editable mesh state in the current scene without modifying Unity state.",
             Category = "probuilder",
-            InputSchema = "{\"type\":\"object\",\"properties\":{\"namePattern\":{\"type\":\"string\",\"description\":\"Optional case-insensitive substring filter for ProBuilder GameObject names or hierarchy paths.\"},\"pageSize\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":200,\"default\":50}}}",
-            OutputSchema = "{\"type\":\"object\",\"properties\":{\"installed\":{\"type\":\"boolean\"},\"sceneCount\":{\"type\":\"integer\"},\"objectCount\":{\"type\":\"integer\"},\"selectedObjectCount\":{\"type\":\"integer\"},\"truncated\":{\"type\":\"boolean\"},\"objects\":{\"type\":\"array\",\"items\":{\"type\":\"object\"}},\"selection\":{\"type\":\"object\"}}}",
+            Version = "1.0.0",
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
             RefreshBehavior = "onDemand",
-            RequiresPackages = "com.unity.probuilder")]
-        public static string Provide(UnityCliContextRequest request)
+            RequiresPackages = new[] { "com.unity.probuilder" }
+        };
+
+        /// <summary>
+        /// 读取当前场景中的 ProBuilderMesh 对象摘要和 Editor 选择状态；不修改场景、对象或资源。
+        /// </summary>
+        public Result Read(Request request, UnityCliProjectToolContext ctx)
         {
-            var pageSize = Clamp(ProBuilderInput.IntArg(request.InputJson, "pageSize", 50), 1, 200);
-            var namePattern = ProBuilderInput.StringArg(request.InputJson, "namePattern");
+            var requestedPageSize = request != null && request.PageSize > 0 ? request.PageSize : 50;
+            var pageSize = Clamp(requestedPageSize, 1, 200);
+            var namePattern = request != null ? request.NamePattern : null;
             var rows = new List<ProBuilderSceneRow>();
             var selectedIds = SelectedGameObjectIds();
             var selectedProBuilderNames = new List<string>();
@@ -46,31 +87,27 @@ namespace UnityCli.ProBuilder
 
             var objectCount = rows.Count;
             var visibleCount = Math.Min(pageSize, objectCount);
-            var writer = new UnityCliJsonWriter().BeginObject()
-                .Prop("installed", ProBuilderReflection.IsAvailable)
-                .Prop("sceneCount", SceneManager.sceneCount)
-                .Prop("objectCount", objectCount)
-                .Prop("selectedObjectCount", selectedProBuilderNames.Count)
-                .Prop("pageSize", pageSize)
-                .Prop("truncated", objectCount > visibleCount)
-                .PropArray("objects", arrayWriter =>
-                {
-                    for (var i = 0; i < visibleCount; i++)
-                    {
-                        WriteRow(arrayWriter, rows[i]);
-                    }
-                })
-                .PropObject("selection", selectionWriter =>
-                {
-                    selectionWriter
-                        .Prop("objectCount", selectedProBuilderNames.Count)
-                        .PropArray("objectNames", namesWriter =>
-                        {
-                            foreach (var name in selectedProBuilderNames) namesWriter.Value(name);
-                        });
-                });
+            var visibleRows = new List<ProBuilderSceneRow>();
+            for (var i = 0; i < visibleCount; i++)
+            {
+                visibleRows.Add(rows[i]);
+            }
 
-            return writer.EndObject().ToString();
+            return new Result
+            {
+                Installed = ProBuilderReflection.IsAvailable,
+                SceneCount = SceneManager.sceneCount,
+                ObjectCount = objectCount,
+                SelectedObjectCount = selectedProBuilderNames.Count,
+                PageSize = pageSize,
+                Truncated = objectCount > visibleCount,
+                Objects = visibleRows,
+                Selection = new ProBuilderSceneSelection
+                {
+                    ObjectCount = selectedProBuilderNames.Count,
+                    ObjectNames = selectedProBuilderNames
+                }
+            };
         }
 
         /// <summary>
@@ -87,6 +124,7 @@ namespace UnityCli.ProBuilder
                 {
                     var selected = selectedIds.Contains(go.GetInstanceID());
                     if (selected) selectedNames.Add(path);
+                    var faceCount = ProBuilderReflection.GetFaceCountProperty(mesh);
                     rows.Add(new ProBuilderSceneRow
                     {
                         Name = go.name,
@@ -95,8 +133,9 @@ namespace UnityCli.ProBuilder
                         InstanceId = go.GetInstanceID(),
                         Active = go.activeInHierarchy,
                         Selected = selected,
-                        FaceCount = ProBuilderReflection.GetFaceCountProperty(mesh),
-                        VertexCount = ProBuilderReflection.GetVertexCountProperty(mesh)
+                        FaceCount = faceCount,
+                        VertexCount = ProBuilderReflection.GetVertexCountProperty(mesh),
+                        EdgeCount = Math.Max(0, faceCount * 3 / 2)
                     });
                 }
             }
@@ -105,21 +144,6 @@ namespace UnityCli.ProBuilder
             {
                 CollectRows(transform.GetChild(i), sceneName, namePattern, selectedIds, rows, selectedNames);
             }
-        }
-
-        private static void WriteRow(UnityCliJsonWriter writer, ProBuilderSceneRow row)
-        {
-            writer.BeginObject()
-                .Prop("name", row.Name)
-                .Prop("path", row.Path)
-                .Prop("scene", row.Scene)
-                .Prop("instanceId", row.InstanceId)
-                .Prop("active", row.Active)
-                .Prop("selected", row.Selected)
-                .Prop("faceCount", row.FaceCount)
-                .Prop("vertexCount", row.VertexCount)
-                .Prop("edgeCount", Math.Max(0, row.FaceCount * 3 / 2))
-                .EndObject();
         }
 
         private static HashSet<int> SelectedGameObjectIds()
@@ -157,18 +181,6 @@ namespace UnityCli.ProBuilder
         {
             if (value < min) return min;
             return value > max ? max : value;
-        }
-
-        private sealed class ProBuilderSceneRow
-        {
-            public string Name;
-            public string Path;
-            public string Scene;
-            public int InstanceId;
-            public bool Active;
-            public bool Selected;
-            public int FaceCount;
-            public int VertexCount;
         }
     }
 }

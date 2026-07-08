@@ -139,17 +139,17 @@ unity_cli tools run reflect.member UnityEngine.Camera.fieldOfView
 
 ### 4. 项目自定义工具
 
-Unity 项目可通过 C# `[UnityCliTool]` 特性注册自定义工具：
+Unity 项目可通过 C# `IUnityCliTool<TReq,TRes>` 注册自定义工具；Request/Result 派生 schema，`Describe()` 只写人工 descriptor 字段：
 
 ```powershell
 # 发现项目自定义工具（需要 Bridge 连接）
 unity_cli tools group list custom --include-custom
 
 # 查看自定义工具描述
-unity_cli tools describe my.custom-tool
+unity_cli tools describe my.custom-tool --include-custom
 
 # 执行自定义工具
-unity_cli tools run my.custom-tool --input '{"key":"value"}'
+unity_cli tools run my.custom-tool --include-custom --input '{"key":"value"}'
 ```
 
 > **注意**：可通过 `extensions list` 查看已安装扩展，`extensions install <id>` / `extensions remove <id>` 管理扩展，`extensions doctor` 诊断扩展状态。扩展包也可通过 `init` 命令安装 Bridge 包来启用。
@@ -713,35 +713,60 @@ Bridge 生命周期：
 
 ## 项目自定义工具（Custom Tools）
 
-Unity 项目 C# 代码通过 `[UnityCliTool]` 特性注册自定义工具：
+Unity 项目 C# 代码通过 `IUnityCliTool<TReq,TRes>` 注册自定义工具。Tool 类自包含 `Request`、`Result`、`Describe()` 和 `Execute(Request, ctx)`；schema 由框架从 DTO 派生，不在 descriptor 里手写。
 
 ```csharp
-[UnityCliTool(
-    "my.editor-tool",
-    Summary = "Run the project-specific editor action and return a structured result.",
-    Group = "custom")]
-public static class MyEditorTool
+#if UNITY_EDITOR
+using UnityCli;
+
+public sealed class MyEditorTool : IUnityCliTool<MyEditorTool.Request, MyEditorTool.Result>
 {
-    public static object Execute(Dictionary<string, object> input)
+    public sealed class Request
     {
-        // 工具实现
-        return new { result = "done" };
+        [UnityCliRequired]
+        public string Message { get; set; }
+    }
+
+    public sealed class Result
+    {
+        public string Result { get; set; }
+    }
+
+    public ToolDescriptor Describe() => new ToolDescriptor
+    {
+        Name = "my.editor-tool",
+        Summary = "Run the project-specific editor action and return a structured result.",
+        Description = "Runs a project-specific Editor action with a required message input.",
+        Group = "custom",
+        DestructiveHint = false,
+        Target = "editor",
+        PlayModeSupport = "editor-only"
+    };
+
+    /// <summary>
+    /// 执行项目侧 Editor 动作。输入和输出 schema 由 DTO 派生。
+    /// </summary>
+    public Result Execute(Request request, UnityCliProjectToolContext ctx)
+    {
+        return new Result { Result = "done" };
     }
 }
+#endif
 ```
 
-特性参数：
-- `name`：工具唯一标识（如 `my.editor-tool`）
+关键字段：
+- `Name`：工具唯一标识（如 `my.editor-tool`）
 - `Summary`：必填短说明，用于 discovery/list/search
-- `Group`：工具分组（如 `custom`）
-- `Description`：完整工具描述
+- `Group`：工具分组（如 `custom` 或项目域名）
+- `Description`：完整工具描述、边界和副作用
 - `DestructiveHint`：是否需要 `--yes`（默认 false）
+- `Target` / `PlayModeSupport`：Editor/Runtime 可用性语义
 
 发现与执行：
 ```powershell
 unity_cli tools group list custom --include-custom
-unity_cli tools describe my.editor-tool
-unity_cli tools run my.editor-tool --input '{"key":"value"}'
+unity_cli tools describe my.editor-tool --include-custom
+unity_cli tools run my.editor-tool --include-custom --input '{"message":"hello"}'
 ```
 
 ### 统一 Tool 与 target

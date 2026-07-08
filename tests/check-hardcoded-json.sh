@@ -30,8 +30,6 @@ ALLOWLIST=(
     "unitypkg/Editor/Samples/SampleEchoTool.cs:OutputSchema="
     "unitypkg/Editor/Samples/SampleRuntimeEchoTool.cs:InputSchema="
     "unitypkg/Editor/Samples/SampleRuntimeEchoTool.cs:OutputSchema="
-    "unitypkg/Editor/Samples/RuntimeWaitTool.cs:InputSchema="
-    "unitypkg/Editor/Samples/RuntimeWaitTool.cs:OutputSchema="
 
     # Default {} values for optional JSON args are not construction
     ':"{}"'

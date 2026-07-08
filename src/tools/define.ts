@@ -11,6 +11,12 @@
  * 阶段2b 先建机制,不迁移现有工具(新旧并存)。
  */
 
+import type { BridgeRuntime } from "../bridge/index.js";
+import type { BuiltinDocsRuntime } from "../builtin-docs.js";
+import type { JobRunner } from "../job-runner.js";
+import type { JobStore } from "../job-store.js";
+import type { ContextDescriptor } from "../project-context-discovery.js";
+import type { CliResult } from "../types.js";
 import type { ToolMetadata, PlayModeSupport, ToolHandler } from "./metadata/types.js";
 
 // ─── 工具定义输入(defineTool 接收的形态)────────────────────────────────
@@ -39,13 +45,41 @@ export interface ToolDefinition<TReq = unknown, TRes = unknown> {
 }
 
 /** 工具执行上下文(运行时由框架注入)。 */
+export interface ToolRunInvocation {
+  name: string;
+  flags?: Record<string, string | boolean>;
+  positionalTarget?: string;
+  /** 内部 wrapper 回调到 router 时跳过同名 defineTool,避免自递归。 */
+  bypassDefineTool?: boolean;
+}
+
 export interface ToolContext {
   requestId: string;
   projectPath: string;
+  /** CLI data 目录,用于离线 cache 与 job store。 */
+  dataDir?: string;
   /** artifact 目录(可写)。 */
   artifactDir: string;
   /** bridge 日志路径。 */
   logPath?: string;
+  /** tools run 合并后的原始 flags,供 action 型工具执行内部确认与 dry-run 判定。 */
+  flags?: Record<string, string | boolean>;
+  /** 运行时已发现的项目自定义工具,供 docs/diagnose 等离线工具生成动态能力视图。 */
+  projectTools?: ToolMetadata[];
+  /** 运行时已发现的项目自定义 Context,供 diagnose.capabilities 保持统一 discovery 语义。 */
+  projectContexts?: ContextDescriptor[];
+  /** 可选 live Bridge 执行器,供 defineTool 包装既有 live/offline 混合工具。 */
+  bridgeExecute?: BridgeRuntime["bridgeExecute"];
+  /** 可选 live Bridge endpoint,供 describe/run 输入与 runtime 默认值组合。 */
+  bridgeEndpoint?: string;
+  /** 测试或宿主注入的文档抓取器,用于 docs online fallback,避免工具内部直接绑定全局网络。 */
+  fetch?: BuiltinDocsRuntime["fetch"];
+  /** CLI job store,供 build/test/job 类 defineTool 读取持久化 job 状态。 */
+  jobStore?: JobStore;
+  /** CLI job runner,供 build/test/job 类 defineTool 执行取消或等待等 job 控制。 */
+  jobRunner?: JobRunner;
+  /** 内部 router 回调,供 wrapper 调回统一分发入口;可用 bypassDefineTool 落回 legacy/bridge/job 分支。 */
+  runTool?: (invocation: ToolRunInvocation) => Promise<CliResult>;
 }
 
 // ─── registry(收集 defineTool 注册的工具)──────────────────────────────

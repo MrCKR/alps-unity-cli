@@ -98,7 +98,7 @@ test("tool summaries are concise route fields and alias tools point to main entr
   assert.match(`${controllerInfo.summary} ${controllerInfo.description}`, /does not modify|no dedicated existing-transition edit/i);
 });
 
-test("context discovery descriptions are route-specific and summary-free", () => {
+test("local context discovery descriptions are route-specific and summary-free", () => {
   const contexts = builtinContextDescriptors();
   assert.ok(contexts.length > 0);
   for (const context of contexts) {
@@ -108,7 +108,8 @@ test("context discovery descriptions are route-specific and summary-free", () =>
       assert.doesNotMatch(context.description, pattern, `${context.name} context description is not route-specific`);
     }
   }
-  assert.ok(contexts.some((context) => context.name === "scene.gameobject" && /component\.get|object\.get-data/.test(context.description)));
+  assert.ok(contexts.some((context) => context.name === "tools.groups" && /local CLI registry/i.test(context.description)));
+  assert.ok(contexts.some((context) => context.name === "tools.custom" && /custom Unity project tools/i.test(context.description)));
 });
 
 test("extension manifest and contribution descriptions are route-specific", () => {

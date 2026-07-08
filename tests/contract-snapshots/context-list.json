@@ -238,7 +238,7 @@
       },
       {
         "name": "tools.custom",
-        "description": "Read custom Unity project tools discovered through [UnityCliTool].",
+        "description": "Read custom Unity project IUnityCliTool descriptors discovered through the live Bridge.",
         "category": "tools",
         "source": "built-in",
         "target": "editor",

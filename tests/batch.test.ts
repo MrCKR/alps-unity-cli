@@ -157,18 +157,21 @@ test("batch can orchestrate long job status logs and cancel chain", async () => 
 // With -logFile -, Unity writes its log to stdout. The runner captures stdout
 // and writes it to the job's logPath.
 process.stdout.write("build started\\n");
-setTimeout(() => process.exit(0), 5000);
+setTimeout(() => process.exit(0), 15000);
 `);
   const created = await execute(["tools", "run", "build.run", "--unity", unity, "--project", runtime.dataDir], runtime);
   const jobId = (created.data as { jobId: string }).jobId;
-  for (let attempt = 0; attempt < 20; attempt += 1) {
+  let readyForBatch = false;
+  for (let attempt = 0; attempt < 300; attempt += 1) {
     const job = await runtime.store.get(jobId);
     const logs = await runtime.runner.logs(jobId);
     if (job?.status === "running" && logs.lines.includes("build started")) {
+      readyForBatch = true;
       break;
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
+  assert.equal(readyForBatch, true, "build job should be running and have emitted its first log before batch status/logs/cancel checks");
   const batch = await writeBatch(runtime.dataDir, {
     steps: [
       { id: "status", command: ["jobs", "status", jobId] },

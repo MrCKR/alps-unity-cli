@@ -28,7 +28,7 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
-        internal sealed class BridgeRequest
+        public sealed class BridgeRequest
         {
             private readonly string body;
 

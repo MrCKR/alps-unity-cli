@@ -1,236 +1,66 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import {
-  builtinContextMetadata,
-  builtinContextCategories,
-  findContextByName,
-  filterContextsByCategory,
-  searchContexts,
-  type ContextMetadata
-} from "../src/context/metadata/index.js";
+import { access } from "node:fs/promises";
+import { constants } from "node:fs";
+import { builtinContextCategories, builtinContextDescriptors, findBuiltinContextByName, filterContextsByCategory, searchContexts } from "../src/context/registry.js";
+import { defineContextMetadata } from "../src/contexts/registry.js";
 
-test("builtin context metadata contains all required entries", () => {
-  const contexts = builtinContextMetadata();
-  assert.equal(contexts.length, 23);
+async function exists(path: string): Promise<boolean> {
+  try {
+    await access(path, constants.F_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+test("Stage 6 cleanup removes duplicated TS context metadata sources", async () => {
+  assert.equal(await exists("src/context/builtin.ts"), false, "src/context/builtin.ts must be removed");
+  assert.equal(await exists("src/context/metadata/index.ts"), false, "src/context/metadata/index.ts must be removed");
+  assert.equal(await exists("src/context/metadata/types.ts"), false, "src/context/metadata/types.ts must be removed");
 });
 
-test("builtin context metadata does not expose removed public descriptor fields", () => {
-  const forbidden = ["title", "summary", "kind", "resourceUri", "destructiveHint", "bridgeCommand"];
-  for (const ctx of builtinContextMetadata()) {
+test("local builtin context descriptors now only expose TS-owned contexts", () => {
+  const contexts = builtinContextDescriptors();
+  assert.deepEqual(contexts.map((context) => context.name).sort(), ["tools.custom", "tools.groups"]);
+  assert.deepEqual(defineContextMetadata().map((context) => context.name).sort(), ["tools.custom", "tools.groups"]);
+});
+
+test("TS-owned context descriptors keep public descriptor hygiene", () => {
+  const forbidden = ["title", "kind", "resourceUri", "destructiveHint", "bridgeCommand"];
+  for (const ctx of builtinContextDescriptors()) {
+    assert.ok(ctx.name, "name required");
+    assert.ok(ctx.summary, `${ctx.name} summary required`);
+    assert.ok(ctx.description, `${ctx.name} description required`);
+    assert.equal(ctx.source, "built-in", `${ctx.name} source must be built-in`);
+    assert.ok(ctx.inputSchema, `${ctx.name} inputSchema required`);
+    assert.ok(ctx.outputSchema, `${ctx.name} outputSchema required`);
+    assert.ok(ctx.cliCommand.startsWith("context read "), `${ctx.name} cliCommand must be context read form`);
     for (const field of forbidden) {
       assert.equal(field in ctx, false, `${ctx.name} must not expose ${field}`);
     }
   }
 });
 
-test("all builtin contexts have outputSchema", () => {
-  for (const ctx of builtinContextMetadata()) {
-    assert.ok(ctx.outputSchema, `${ctx.name} must have outputSchema`);
-    assert.equal(typeof ctx.outputSchema, "object", `${ctx.name} outputSchema must be an object`);
-  }
-});
-
-test("all builtin contexts expose playModeSupport", () => {
-  for (const ctx of builtinContextMetadata()) {
-    assert.ok(["supported", "runtime-only", "session-affecting", "editor-only", "unknown"].includes(ctx.playModeSupport ?? ""), `${ctx.name} must have playModeSupport`);
-  }
-});
-
-test("all builtin contexts declare an explicit handler", () => {
-  for (const ctx of builtinContextMetadata()) {
-    assert.ok(["bridge", "bridge-runtime", "offline"].includes(ctx.handler ?? ""), `${ctx.name} handler must be explicit`);
-  }
-});
-
-test("all builtin contexts have source=built-in", () => {
-  for (const ctx of builtinContextMetadata()) {
-    assert.equal(ctx.source, "built-in", `${ctx.name} source must be "built-in"`);
-  }
-});
-
-test("all builtin contexts have valid dotted names", () => {
-  const namePattern = /^[a-z][a-z0-9]*(\.[a-z][a-z0-9-]*)+$/;
-  for (const ctx of builtinContextMetadata()) {
-    assert.ok(namePattern.test(ctx.name), `${ctx.name} must match dotted name pattern`);
-  }
-});
-
-test("all builtin contexts have cliCommand", () => {
-  for (const ctx of builtinContextMetadata()) {
-    assert.ok(ctx.cliCommand, `${ctx.name} must have cliCommand`);
-    assert.ok(ctx.cliCommand.startsWith("context read "), `${ctx.name} cliCommand must start with "context read "`);
-  }
-});
-
-test("context names match the expected built-in contexts", () => {
-  const expectedNames = [
-    "project.info",
-    "project.tags",
-    "project.layers",
-    "editor.state",
-    "editor.selection",
-    "editor.active-tool",
-    "editor.windows",
-    "editor.tool-states",
-    "prefab.stage",
-    "editor.menu-items",
-    "scene.gameobject",
-    "scene.gameobject.components",
-    "scene.gameobject.component",
-    "scene.opened",
-    "scene.cameras",
-    "scene.volumes",
-    "scene.renderer-features",
-    "scene.rendering-stats",
-    "prefab.info",
-    "prefab.hierarchy",
-    "tests.list",
-    "tools.groups",
-    "tools.custom"
-  ];
-  const actualNames = builtinContextMetadata().map((c) => c.name);
-  assert.deepEqual(actualNames.sort(), expectedNames.sort());
-});
-
-test("prefab.stage is categorized as prefab (not editor)", () => {
-  const prefabStage = findContextByName("prefab.stage");
-  assert.ok(prefabStage, "prefab.stage must exist");
-  assert.equal(prefabStage.category, "prefab");
-  assert.match(prefabStage.description, /Prefab Stage/i);
-});
-
-test("editor.tool-states describes Unity Editor tool settings", () => {
-  const toolStates = findContextByName("editor.tool-states");
-  assert.ok(toolStates, "editor.tool-states must exist");
-  assert.match(toolStates.description, /Unity Editor.*tool/i);
-  const schema = toolStates.outputSchema as { properties: Record<string, unknown> };
-  assert.ok(schema.properties.transform, "editor.tool-states must expose transform settings");
-  assert.ok(schema.properties.snap, "editor.tool-states must expose snap settings");
-  assert.ok(schema.properties.gridAvailable, "editor.tool-states must expose grid availability");
-});
-
-test("editor.selection exposes reusable selection detail fields", () => {
-  const selection = findContextByName("editor.selection");
-  assert.ok(selection, "editor.selection must exist");
-  assert.match(selection.description, /reusable object details/i);
-  const schema = selection.outputSchema as { properties: Record<string, unknown> };
-  assert.ok(schema.properties.activeObjectDetail, "editor.selection must expose activeObjectDetail");
-  assert.ok(schema.properties.activeGameObjectDetail, "editor.selection must expose activeGameObjectDetail");
-  assert.ok(schema.properties.activeTransformDetail, "editor.selection must expose activeTransformDetail");
-  assert.ok(schema.properties.objectDetails, "editor.selection must expose objectDetails");
-  assert.ok(schema.properties.gameObjectDetails, "editor.selection must expose gameObjectDetails");
-});
-
-test("editor contexts describe read-only runtime-safe observations", () => {
-  const expected = ["editor.state", "editor.selection", "editor.active-tool", "editor.windows", "editor.tool-states", "editor.menu-items"];
-  for (const name of expected) {
-    const ctx = findContextByName(name);
-    assert.ok(ctx, `${name} must exist`);
-    assert.equal(ctx.category, "editor", `${name} must stay in editor category`);
-    assert.equal(ctx.playModeSupport ?? "supported", "supported", `${name} must be readable in Play Mode`);
-    assert.equal(ctx.handler, "bridge", `${name} must route through bridge`);
-  }
-
-  const editorState = findContextByName("editor.state")!;
-  assert.match(editorState.description, /busy/i, "editor.state must explain busy state");
-  const stateSchema = editorState.outputSchema as { properties: Record<string, unknown> };
-  assert.ok(stateSchema.properties.state, "editor.state must expose wrapped state payload");
-
-  const menuItems = findContextByName("editor.menu-items")!;
-  assert.match(menuItems.description, /no stable public API/i, "editor.menu-items must disclose Unity menu enumeration limitation");
-  assert.match(menuItems.description, /editor\.menu/, "editor.menu-items must distinguish read context from menu execution tool");
-  const menuSchema = menuItems.outputSchema as { properties: Record<string, unknown> };
-  assert.ok(menuSchema.properties.diagnostics, "editor.menu-items must expose diagnostics");
-});
-
-test("scene.renderer-features has source=built-in (not extension)", () => {
-  const rendererFeatures = findContextByName("scene.renderer-features");
-  assert.ok(rendererFeatures, "scene.renderer-features must exist");
-  assert.equal(rendererFeatures.source, "built-in");
-  assert.deepEqual(rendererFeatures.requiresPackages, ["com.unity.render-pipelines.universal"]);
-  assert.match(rendererFeatures.description, /URP/i);
-});
-
-test("scene.gameobject has id/path/target input parameters", () => {
-  const go = findContextByName("scene.gameobject");
-  assert.ok(go, "scene.gameobject must exist");
-  const schema = go.inputSchema as { type: string; properties: Record<string, unknown> };
-  assert.equal(schema.type, "object");
-  assert.ok(schema.properties.target, "scene.gameobject must accept target");
-  assert.ok(schema.properties.id, "scene.gameobject must accept id");
-  assert.ok(schema.properties.path, "scene.gameobject must accept path");
-});
-
-test("tests and tools contexts expose runtime-accurate schemas", () => {
-  const tests = findContextByName("tests.list");
-  assert.ok(tests, "tests.list must exist");
-  const schema = tests.inputSchema as { type: string; properties: Record<string, unknown> };
-  assert.equal(schema.type, "object");
-  assert.ok(schema.properties.mode, "tests.list must accept mode (not platform)");
-  assert.ok(!schema.properties.platform, "tests.list must NOT accept platform parameter");
-  const testsOutput = tests.outputSchema as { properties: Record<string, unknown> };
-  assert.ok(testsOutput.properties.tests, "tests.list must expose tests array");
-  assert.ok(testsOutput.properties.count, "tests.list must expose count");
-
-  const toolsGroups = findContextByName("tools.groups");
+test("tools.groups remains offline and tools.custom remains live bridge backed", () => {
+  const toolsGroups = findBuiltinContextByName("tools.groups");
   assert.ok(toolsGroups, "tools.groups must exist");
-  assert.equal(toolsGroups.handler, "offline", "tools.groups must disclose that it reads the local CLI registry");
-  assert.equal(toolsGroups.availabilityScope, "always", "tools.groups must be available without a Unity session");
+  assert.equal(toolsGroups.supportStatus, "cli-only");
+  assert.equal(toolsGroups.availabilityScope, "always");
+  assert.ok((toolsGroups.outputSchema.properties as Record<string, unknown>).groups, "tools.groups must expose groups array");
 
-  const toolsCustom = findContextByName("tools.custom");
+  const toolsCustom = findBuiltinContextByName("tools.custom");
   assert.ok(toolsCustom, "tools.custom must exist");
-  const customOutput = toolsCustom.outputSchema as { properties: Record<string, unknown> };
-  assert.ok(customOutput.properties.tools, "tools.custom must expose tools array");
-  assert.ok(customOutput.properties.count, "tools.custom must expose count");
+  assert.equal(toolsCustom.supportStatus, "live-bridge");
+  assert.equal(toolsCustom.refreshBehavior, "on-demand");
+  assert.ok((toolsCustom.outputSchema.properties as Record<string, unknown>).tools, "tools.custom must expose tools array");
 });
 
-test("builtinContextCategories returns expected categories", () => {
-  const categories = builtinContextCategories();
-  assert.ok(categories.includes("project"));
-  assert.ok(categories.includes("editor"));
-  assert.ok(categories.includes("prefab"));
-  assert.ok(categories.includes("scene"));
-  assert.ok(categories.includes("tests"));
-});
-
-test("findContextByName returns undefined for unknown context", () => {
-  assert.equal(findContextByName("unknown.context"), undefined);
-  assert.equal(findContextByName(""), undefined);
-});
-
-test("filterContextsByCategory returns correct contexts", () => {
-  const project = filterContextsByCategory("project");
-  assert.equal(project.length, 3);
-  assert.ok(project.every((c) => c.category === "project"));
-
-  const scene = filterContextsByCategory("scene");
-  assert.equal(scene.length, 8);
-  assert.ok(scene.every((c) => c.category === "scene"));
-
-  const prefab = filterContextsByCategory("prefab");
-  assert.equal(prefab.length, 3);
-  assert.ok(prefab.some((c) => c.name === "prefab.stage"));
-});
-
-test("searchContexts finds contexts by keyword", () => {
-  const camera = searchContexts("camera");
-  assert.ok(camera.length >= 1);
-  assert.ok(camera.some((c) => c.name === "scene.cameras"));
-
-  const prefab = searchContexts("prefab");
-  assert.ok(prefab.length >= 1);
-  assert.ok(prefab.some((c) => c.name === "prefab.stage"));
-});
-
-test("all contexts have destructiveHint absent or undefined", () => {
-  for (const ctx of builtinContextMetadata()) {
-    const hasDestructive = "destructiveHint" in ctx && (ctx as Record<string, unknown>).destructiveHint !== undefined;
-    assert.ok(!hasDestructive, `${ctx.name} must not have destructiveHint — contexts do not expose destructive metadata`);
-  }
-});
-
-test("no context name duplicates", () => {
-  const names = builtinContextMetadata().map((c) => c.name);
-  const unique = new Set(names);
-  assert.equal(names.length, unique.size, "All context names must be unique");
+test("local context categories, filtering, and search reflect TS-owned contexts only", () => {
+  assert.deepEqual(builtinContextCategories(), ["tools"]);
+  assert.deepEqual(filterContextsByCategory("tools").map((context) => context.name).sort(), ["tools.custom", "tools.groups"]);
+  assert.deepEqual(filterContextsByCategory("scene"), []);
+  assert.equal(findBuiltinContextByName("scene.cameras"), undefined);
+  assert.ok(searchContexts("custom").some((context) => context.name === "tools.custom"));
+  assert.equal(searchContexts("camera").length, 0, "C# built-in contexts are no longer searched from TS static metadata");
 });

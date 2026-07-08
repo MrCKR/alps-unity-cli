@@ -7,70 +7,62 @@ using UnityEngine.SceneManagement;
 namespace UnityCli.Samples
 {
     /// <summary>
-    /// Minimal project-local Editor custom context example. Provides a read-only
-    /// project summary: Unity version, active scene, render pipeline, and build target.
-    /// The descriptor is derived entirely from the C# method attribute; there is no
-    /// JSON, YAML, manifest or external script config to maintain by hand.
+    /// 新形态自定义 Context 样板(IUnityCliContext&lt;TReq,TRes&gt; 泛型接口自包含)。
     ///
-    /// Key constraints (enforced by the registry at registration):
-    /// - Handler method name must NOT be Execute/Run.
-    /// - Handler must NOT contain write-semantic tokens (see ProjectContextRegistry
-    ///   ContextSourceGuardForbiddenTokens for the full list).
-    /// - No DestructiveHint/SupportsJob/ArtifactKinds.
+    /// 设计依据:.plan/Context形态.md
+    /// - Request/Result 嵌套 Context 类内
+    /// - Describe() 只声明人写字段,schema 由框架从 Request/Result 反射派生
+    /// - Read(Request, ctx): Result,只读观察,不得修改 Unity 状态、资产、场景或 PlayMode
     /// </summary>
-    public static class SampleContext
+    public class SampleContext : IUnityCliContext<SampleContext.Request, SampleContext.Result>
     {
-        /// <summary>
-        /// Read handler for sample.project-summary context.
-        /// Returns project configuration summary without writing files,
-        /// changing scenes, modifying assets, or triggering Play Mode.
-        /// Method name intentionally avoids Execute/Run (registry constraint).
-        /// </summary>
-        [UnityCliContext(
-            "sample.project-summary",
+        // ── 协议类型:嵌套 ──
+        public sealed class Request
+        {
+            public bool IncludeDisabled { get; set; }
+        }
+
+        public sealed class Result
+        {
+            public string UnityVersion { get; set; }
+            public string ActiveScene { get; set; }
+            public string RenderPipeline { get; set; }
+            public string BuildTarget { get; set; }
+            public bool IncludeDisabled { get; set; }
+        }
+
+        // ── desc:只声明人工字段,不含 inputSchema/outputSchema ──
+        public ContextDescriptor Describe() => new ContextDescriptor
+        {
+            Name = "sample.project-summary",
             Description = "Returns a read-only summary of the Unity project: version, active scene, render pipeline, and build target.",
             Category = "sample",
-            InputSchema = "{\"type\":\"object\",\"properties\":{\"includeDisabled\":{\"type\":\"boolean\"}}}",
-            OutputSchema = "{\"type\":\"object\",\"properties\":{\"unityVersion\":{\"type\":\"string\"},\"activeScene\":{\"type\":\"string\"},\"renderPipeline\":{\"type\":\"string\"},\"buildTarget\":{\"type\":\"string\"},\"includeDisabled\":{\"type\":\"boolean\"}}}",
-            RefreshBehavior = "onDemand")]
-        public static string Provide(UnityCliContextRequest request)
+            Version = "1.0.0",
+            Target = "editor",
+            AvailabilityScope = "editorSession",
+            PlayModeSupport = "supported",
+            RefreshBehavior = "onDemand"
+        };
+
+        /// <summary>
+        /// 读取项目配置摘要。只读访问 Editor 状态,不写文件、不改场景、不触发导入或 PlayMode。
+        /// </summary>
+        public Result Read(Request request, UnityCliProjectToolContext ctx)
         {
-            var includeDisabled = TryParseIncludeDisabled(request.InputJson);
             var activeScene = SceneManager.GetActiveScene();
             var buildTarget = EditorUserBuildSettings.activeBuildTarget.ToString();
             var renderPipeline = GraphicsSettings.currentRenderPipeline != null
                 ? GraphicsSettings.currentRenderPipeline.name
                 : "Built-in";
 
-            return new UnityCliJsonWriter().BeginObject()
-                .Prop("unityVersion", Application.unityVersion)
-                .Prop("activeScene", activeScene.path ?? string.Empty)
-                .Prop("renderPipeline", renderPipeline)
-                .Prop("buildTarget", buildTarget)
-                .Prop("includeDisabled", includeDisabled)
-                .EndObject()
-                .ToString();
-        }
-
-        /// <summary>
-        /// Minimal JSON boolean extraction for the includeDisabled field.
-        /// Avoids dependency on external JSON libraries.
-        /// </summary>
-        private static bool TryParseIncludeDisabled(string inputJson)
-        {
-            if (string.IsNullOrEmpty(inputJson)) return false;
-            var idx = inputJson.IndexOf("includeDisabled", System.StringComparison.Ordinal);
-            if (idx < 0) return false;
-            // Find the colon after the key
-            var colonIdx = inputJson.IndexOf(':', idx);
-            if (colonIdx < 0) return false;
-            // Scan forward to the value
-            for (var i = colonIdx + 1; i < inputJson.Length; i++)
+            return new Result
             {
-                if (inputJson[i] == 't') return true;   // true
-                if (inputJson[i] == 'f') return false;  // false
-            }
-            return false;
+                UnityVersion = Application.unityVersion,
+                ActiveScene = activeScene.path ?? string.Empty,
+                RenderPipeline = renderPipeline,
+                BuildTarget = buildTarget,
+                IncludeDisabled = request != null && request.IncludeDisabled
+            };
         }
     }
 }

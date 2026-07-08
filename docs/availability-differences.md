@@ -30,7 +30,7 @@ Package 依赖通过 `requiresPackages` 字段声明在工具 descriptor 中：
 
 ### 2. 项目工具注册
 
-项目工具（`[UnityCliTool]` C# 特性）通过 Bridge 运行时发现。不同项目注册不同工具。`tools group list custom --include-custom` 对实例 A 可能显示 `sample.echo`，对实例 B 可能显示 `acme.custom-builder`。
+项目工具（`IUnityCliTool<TReq,TRes>` C# 实现）通过 Bridge 运行时发现。不同项目注册不同工具。`tools group list custom --include-custom` 对实例 A 可能显示 `sample.echo`，对实例 B 可能显示 `acme.custom-builder`。
 
 项目工具发现需要可达的 Bridge。无 Bridge 连接时，只能发现内置工具。
 

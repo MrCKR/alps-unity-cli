@@ -7,12 +7,11 @@
  */
 
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
-import { builtinContextCategories } from "./context/index.js";
+import { builtinContextCategories, builtinContextDescriptors } from "./context/index.js";
 import { getBoolean, getString } from "./args.js";
 import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
 import { discoverProjectContexts, shouldDiscoverContexts, type ProjectContextRuntime, type ContextDescriptor } from "./project-context-discovery.js";
 import { builtinToolGroups, builtinToolMetadata, extensionToolMetadata, allRegisteredToolMetadata, EXTENSION_GROUPS, type ToolMetadata } from "./tools/metadata/index.js";
-import { builtinContextMetadata, type ContextMetadata } from "./context/metadata/index.js";
 import { builtinExtensionMetadata, type ExtensionMetadata } from "./extensions/metadata/index.js";
 import { isLongRunningTool, supportStatusForTool } from "./tools/metadata/index.js";
 import { ExtensionRegistry, extensionAvailabilitySummary, collectAvailableTools, collectAllTools } from "./extensions/index.js";
@@ -91,9 +90,10 @@ export async function handleCapabilitiesCommand(
 
   const staticCapabilities = buildStaticCapabilities(projectTools, projectContexts, extensionGroupFilter.size > 0 ? extensionGroupFilter : undefined);
 
-  // Context and extension base counts.
-  const contextCount = builtinContextMetadata().length;
-  const contextCategories = builtinContextCategories();
+  // Context and extension base counts. TS-owned contexts are local; C# built-ins are counted from live Bridge discovery when available.
+  const localContexts = builtinContextDescriptors();
+  const contextCount = localContexts.length + projectContexts.filter((context) => context.source === "built-in").length;
+  const contextCategories = [...new Set([...builtinContextCategories(), ...projectContexts.map((context) => context.category)])].sort();
   const extensions = builtinExtensionMetadata();
   const installedExtensions = extensions.filter((e) => e.status === "installed").length;
   const availableExtensions = extensions.filter((e) => e.status === "available").length;

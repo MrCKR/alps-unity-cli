@@ -102,6 +102,8 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 
 ## JSON 字段命名
 
-所有错误响应使用 snake_case：
-- `nextActions`（不是 `nextActions`）
-- `retryAfterMs`（不是 `retryAfterMs`）
+所有错误响应使用 camelCase：
+- `nextActions`
+- `retryAfterMs`
+
+不要使用旧的 snake_case 字段名；错误恢复逻辑必须读取上述 camelCase 字段。

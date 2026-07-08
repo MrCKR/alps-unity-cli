@@ -27,6 +27,7 @@ const ts = require("typescript");
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
 const TOOLS_DIR = join(ROOT, "src", "tools");
+const CONTEXTS_DIR = join(ROOT, "src", "contexts");
 
 // ─── 扫描 src/tools 下所有 .ts(递归,排除 define.ts/.generated-schemas.ts)────────
 
@@ -45,17 +46,17 @@ function collectTsFiles(dir, acc = []) {
 
 // ─── 从文件找 defineTool 调用 + 提取 Request/Result interface 名 ─────────
 
-// 返回 [{ toolName, reqInterfaceName, resInterfaceName }] 或空
-function findDefineTools(sourceFile) {
-  const tools = [];
+// 返回 [{ name, reqInterfaceName, resInterfaceName }] 或空
+function findDefineCalls(sourceFile, functionName) {
+  const definitions = [];
   function visit(node) {
-    // export default defineTool({ name: "...", ... })
+    // export default defineTool({ name: "...", ... }) / defineContext({ name: "...", ... })
     if (
       (ts.isExportAssignment(node) || ts.isCallExpression(node)) &&
       ts.isCallExpression(node.expression ? node.expression : node)
     ) {
       const call = ts.isCallExpression(node) ? node : node.expression;
-      if (ts.isIdentifier(call.expression) && call.expression.text === "defineTool") {
+      if (ts.isIdentifier(call.expression) && call.expression.text === functionName) {
         // 类型参数 <TReq, TRes>
         let reqName = null;
         let resName = null;
@@ -64,24 +65,32 @@ function findDefineTools(sourceFile) {
           resName = typeName(call.typeArguments[1]);
         }
         // 从第一个参数对象字面量取 name
-        let toolName = null;
+        let name = null;
         if (call.arguments.length > 0) {
           const arg = call.arguments[0];
           if (ts.isObjectLiteralExpression(arg)) {
             for (const prop of arg.properties) {
               if (ts.isPropertyAssignment(prop) && prop.name.getText(sourceFile) === "name") {
-                if (ts.isStringLiteral(prop.initializer)) toolName = prop.initializer.text;
+                if (ts.isStringLiteral(prop.initializer)) name = prop.initializer.text;
               }
             }
           }
         }
-        if (toolName) tools.push({ toolName, reqName, resName });
+        if (name) definitions.push({ name, reqName, resName });
       }
     }
     ts.forEachChild(node, visit);
   }
   visit(sourceFile);
-  return tools;
+  return definitions;
+}
+
+function findDefineTools(sourceFile) {
+  return findDefineCalls(sourceFile, "defineTool").map((entry) => ({ toolName: entry.name, reqName: entry.reqName, resName: entry.resName }));
+}
+
+function findDefineContexts(sourceFile) {
+  return findDefineCalls(sourceFile, "defineContext").map((entry) => ({ contextName: entry.name, reqName: entry.reqName, resName: entry.resName }));
 }
 
 function typeName(node) {
@@ -148,29 +157,45 @@ function collectInterfaces(sourceFile) {
 // ─── 主流程 ──────────────────────────────────────────────────────────────
 
 function generate() {
-  if (!existsSync(TOOLS_DIR)) {
-    console.log("gen-tool-schemas: src/tools/ not found, skip");
-    return;
-  }
-  const files = collectTsFiles(TOOLS_DIR);
-  const injections = []; // { toolName, inputSchema, outputSchema }
+  const toolInjections = generateToolInjections();
+  writeToolSchemaModule(toolInjections);
 
+  const contextInjections = generateContextInjections();
+  writeContextSchemaModule(contextInjections);
+
+  console.log(`gen-tool-schemas: injected ${toolInjections.length} tool schema(s), ${contextInjections.length} context schema(s)`);
+}
+
+function buildInjections(files, finder, nameKey) {
+  const injections = [];
   for (const file of files) {
     const sourceText = require("node:fs").readFileSync(file, "utf8");
     const sourceFile = ts.createSourceFile(file, sourceText, ts.ScriptTarget.ES2022, true);
     const interfaceMap = collectInterfaces(sourceFile);
-    const tools = findDefineTools(sourceFile);
+    const definitions = finder(sourceFile);
 
-    for (const t of tools) {
-      const reqInterface = t.reqName ? interfaceMap.get(t.reqName) : null;
-      const resInterface = t.resName ? interfaceMap.get(t.resName) : null;
-      const inputSchema = reqInterface ? interfaceToSchema(reqInterface, interfaceMap, sourceFile, new Set([t.reqName])) : {};
-      const outputSchema = resInterface ? interfaceToSchema(resInterface, interfaceMap, sourceFile, new Set([t.resName])) : {};
-      injections.push({ toolName: t.toolName, inputSchema, outputSchema });
+    for (const d of definitions) {
+      const reqInterface = d.reqName ? interfaceMap.get(d.reqName) : null;
+      const resInterface = d.resName ? interfaceMap.get(d.resName) : null;
+      const inputSchema = reqInterface ? interfaceToSchema(reqInterface, interfaceMap, sourceFile, new Set([d.reqName])) : {};
+      const outputSchema = resInterface ? interfaceToSchema(resInterface, interfaceMap, sourceFile, new Set([d.resName])) : {};
+      injections.push({ name: d[nameKey], inputSchema, outputSchema });
     }
   }
+  return injections;
+}
 
-  // 生成注入模块
+function generateToolInjections() {
+  if (!existsSync(TOOLS_DIR)) return [];
+  return buildInjections(collectTsFiles(TOOLS_DIR), findDefineTools, "toolName");
+}
+
+function generateContextInjections() {
+  if (!existsSync(CONTEXTS_DIR)) return [];
+  return buildInjections(collectTsFiles(CONTEXTS_DIR), findDefineContexts, "contextName");
+}
+
+function writeToolSchemaModule(injections) {
   const outDir = join(ROOT, "src", "tools");
   mkdirSync(outDir, { recursive: true });
   const outPath = join(outDir, ".generated-schemas.ts");
@@ -182,12 +207,30 @@ import { injectToolSchema } from "./define.js";
 ${injections
   .map(
     (i) =>
-      `injectToolSchema(${JSON.stringify(i.toolName)}, ${JSON.stringify(i.inputSchema)}, ${JSON.stringify(i.outputSchema)});`
+      `injectToolSchema(${JSON.stringify(i.name)}, ${JSON.stringify(i.inputSchema)}, ${JSON.stringify(i.outputSchema)});`
   )
   .join("\n")}
 `;
   writeFileSync(outPath, content, "utf8");
-  console.log(`gen-tool-schemas: injected ${injections.length} tool schema(s)`);
+}
+
+function writeContextSchemaModule(injections) {
+  const outDir = join(ROOT, "src", "contexts");
+  mkdirSync(outDir, { recursive: true });
+  const outPath = join(outDir, ".generated-schemas.ts");
+  const content = `// <auto-generated by scripts/gen-tool-schemas.mjs />
+// 构建期从 src/contexts/**/*.ts 的 Request/Result interface 生成。
+// 运行时 import 本模块即注入 schema 到 defineContext registry。禁止手改。
+import { injectContextSchema } from "./define.js";
+
+${injections
+  .map(
+    (i) =>
+      `injectContextSchema(${JSON.stringify(i.name)}, ${JSON.stringify(i.inputSchema)}, ${JSON.stringify(i.outputSchema)});`
+  )
+  .join("\n")}
+`;
+  writeFileSync(outPath, content, "utf8");
 }
 
 generate();

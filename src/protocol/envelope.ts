@@ -38,7 +38,7 @@ export interface ToolError<TDetails = unknown> {
   message: string;
   /** 结构化错误详情(DTO,不再手拼 JSON)。无值时不发。 */
   details?: TDetails;
-  /** 可执行的下一步建议(机器可读,snake_case 动作短语)。空数组或不发。 */
+  /** 可执行的下一步建议(机器可读恢复动作说明)。空数组或不发。 */
   nextActions?: string[];
   /** 是否为瞬时错误(可重试)。无值时视为 false。 */
   transient?: boolean;

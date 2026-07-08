@@ -374,27 +374,12 @@ namespace UnityCli
                     "Check Unity Console and UnityCliBridge.log with the returned requestId.");
             }
 
-            // If the runtime tool returned the deferred wait marker (RuntimeWaitTool),
-            // set up a deferred EditorApplication.update callback-based wait that
-            // does not block the Unity main thread, and returns the response wrapped
-            // in the runtime tool envelope.
-            if (resultJson == RuntimeWaitTool.DeferredWaitMarker && RuntimeWaitTool.LastWaitRequest != null)
+            // deferred: Execute 委托已启动 StartDeferredWait 并返回 marker(统一 IUnityCliDeferredTool 路径)。
+            // 直接透传给 ProcessQueuedWork(IsDeferred 已标记,真实响应由 deferred 回调异步填入)。
+            // 旧 RuntimeWaitTool 专属 marker 拦截已废除,deferred 现在在 Execute 委托内统一处理。
+            if (resultJson == DeferredResponseMarker)
             {
-                var waitReq = RuntimeWaitTool.LastWaitRequest;
-                RuntimeWaitTool.LastWaitRequest = null; // consume
-                var item = currentWorkItem;
-                var waitTimeoutMs = (int)Math.Min(waitReq.RequestedDurationMs + 5000, timeoutMs);
-
-                WriteLog("runtime_tool_deferred_wait requestId=" + request.RequestId + " name=" + name + " condition=" + waitReq.Condition + " framesToWait=" + waitReq.FramesToWait.ToString(CultureInfo.InvariantCulture));
-
-                return StartDeferredWait(
-                    item,
-                    () => RuntimeWaitCondition(waitReq),
-                    waitTimeoutMs,
-                    () => RuntimeWaitResponse(waitReq, name, definition, startedAt, artifactDir, request, timeoutMs),
-                    "E_RUNTIME_TIMEOUT",
-                    "Runtime wait did not complete before the timeout.",
-                    "Reduce the requested frames or seconds, or increase the timeout.");
+                return resultJson;
             }
 
             // Verify Play Mode session is still valid after execution
@@ -416,123 +401,6 @@ namespace UnityCli
             var manifest = ProjectToolManifestJson(request.RequestId, definition, artifactDir, startedAt, endedAt);
             try
             {
-                File.WriteAllText(Path.Combine(artifactDir, "manifest.json"), manifest);
-            }
-            catch (Exception exception)
-            {
-                return ErrorJson("E_ARTIFACT_WRITE_FAILED", "Failed to write artifact manifest: " + exception.Message,
-                    "Pass --artifact-dir to a writable directory.");
-            }
-
-            if (durationMs > timeoutMs)
-            {
-                WriteLog("runtime_tool_timeout requestId=" + request.RequestId + " name=" + name + " durationMs=" + durationMs.ToString(CultureInfo.InvariantCulture) + " timeoutMs=" + timeoutMs.ToString(CultureInfo.InvariantCulture));
-                return ErrorJsonWithDetails("E_RUNTIME_TIMEOUT",
-                    "Runtime tool exceeded timeoutMs: " + durationMs.ToString(CultureInfo.InvariantCulture) + "ms > " + timeoutMs.ToString(CultureInfo.InvariantCulture) + "ms.",
-                    new UnityCliJsonWriter().BeginObject()
-                        .Prop("durationMs", durationMs)
-                        .Prop("timeoutMs", timeoutMs)
-                        .EndObject().ToString(),
-                    "Increase the timeout or optimize the runtime tool, then retry.");
-            }
-
-            var data = new UnityCliJsonWriter().BeginObject()
-                .Prop("command", "runtime-tool.run")
-                .PropObject("tool", tool =>
-                {
-                    tool.Prop("name", definition.Name)
-                        .Prop("version", definition.Version)
-                        .Prop("target", definition.Target);
-                })
-                .PropObject("session", session =>
-                {
-                    session.Prop("playModeSessionId", currentPlayModeSessionId)
-                        .Prop("ready", playModeReady)
-                        .Prop("registryVersion", runtimeRegistryVersion);
-                })
-                .PropObject("execution", execution =>
-                {
-                    execution.Prop("channel", "runtime")
-                        .Prop("startedAt", startedAt.ToString("O", CultureInfo.InvariantCulture))
-                        .Prop("endedAt", endedAt.ToString("O", CultureInfo.InvariantCulture))
-                        .Prop("durationMs", durationMs)
-                        .Prop("exitState", "completed");
-                })
-                .PropRaw("result", resultJson)
-                .PropArray("artifacts", artifacts =>
-                {
-                    artifacts.BeginObject()
-                        .Prop("id", "manifest")
-                        .Prop("kind", "json")
-                        .Prop("path", Path.Combine(artifactDir, "manifest.json"))
-                        .Prop("description", "runtime-tool artifact manifest")
-                        .EndObject();
-                })
-                .PropObject("logs", logs => logs.Prop("bridge", LogPath()))
-                .EndObject()
-                .ToString();
-            return SuccessJson(data);
-        }
-
-        /// <summary>
-        /// Check whether the runtime wait condition is met.
-        /// Returns true when the requested frames/duration have elapsed or Play Mode ends.
-        /// </summary>
-        private static bool RuntimeWaitCondition(RuntimeWaitTool.WaitRequest waitReq)
-        {
-            if (!EditorApplication.isPlaying)
-            {
-                return true; // Play Mode ended — stop waiting
-            }
-
-            var elapsedFrames = Time.frameCount - waitReq.StartFrame;
-            var elapsedMs = (long)(DateTime.UtcNow - waitReq.StartedAt).TotalMilliseconds;
-
-            switch (waitReq.Condition)
-            {
-                case "duration":
-                    return elapsedMs >= waitReq.RequestedDurationMs;
-
-                case "frame-count":
-                    return elapsedFrames >= waitReq.FramesToWait;
-
-                default:
-                    return true; // next-frame or unknown — always met
-            }
-        }
-
-        /// <summary>
-        /// Build the full runtime tool response envelope for a deferred wait result.
-        /// Wraps the wait result JSON in the standard runtime-tool.run response format.
-        /// </summary>
-        private static string RuntimeWaitResponse(
-            RuntimeWaitTool.WaitRequest waitReq,
-            string name,
-            UnityCliProjectToolDefinition definition,
-            DateTime startedAt,
-            string artifactDir,
-            BridgeRequest request,
-            int timeoutMs)
-        {
-            var endedAt = DateTime.UtcNow;
-            var durationMs = (long)(endedAt - startedAt).TotalMilliseconds;
-            var elapsedFrames = Time.frameCount - waitReq.StartFrame;
-            var elapsedMs = (long)(DateTime.UtcNow - waitReq.StartedAt).TotalMilliseconds;
-
-            var resultJson = new UnityCliJsonWriter().BeginObject()
-                .Prop("framesWaited", Math.Max(1, elapsedFrames))
-                .Prop("elapsedMs", elapsedMs)
-                .Prop("condition", waitReq.Condition)
-                .Prop("requestedFrames", waitReq.RequestedFrames)
-                .Prop("isPlaying", EditorApplication.isPlaying)
-                .Prop("frameCount", Time.frameCount)
-                .EndObject()
-                .ToString();
-
-            var manifest = ProjectToolManifestJson(request.RequestId, definition, artifactDir, startedAt, endedAt);
-            try
-            {
-                Directory.CreateDirectory(artifactDir);
                 File.WriteAllText(Path.Combine(artifactDir, "manifest.json"), manifest);
             }
             catch (Exception exception)

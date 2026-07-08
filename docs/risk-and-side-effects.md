@@ -87,7 +87,7 @@ For tools with `supportsDryRun`, `--dry-run` returns the same `plannedEffects` w
 
 ## Project Tool Fingerprint
 
-Project tools registered by `[UnityCliTool]` C# attributes carry a `fingerprint` field (SHA-256 of handler code + descriptor). This fingerprint is checked at execution time:
+Project tools registered by `IUnityCliTool<TReq,TRes>` C# implementations carry a `fingerprint` field (SHA-256 of handler code + descriptor). This fingerprint is checked at execution time:
 
 | `--fingerprint-mode` | Behavior on mismatch |
 |---------------------|---------------------|

@@ -4,7 +4,7 @@
   "title": "Unity CLI Tool Metadata",
   "description": "Describes a single tool exposed by the Unity CLI, including identity, schemas, behavioral hints, permissions, examples and documentation references.",
   "type": "object",
-  "required": ["name", "title", "description", "group", "inputSchema", "destructiveHint"],
+  "required": ["name", "summary", "description", "group", "inputSchema", "destructiveHint"],
   "properties": {
     "name": {
       "type": "string",
@@ -12,10 +12,10 @@
       "pattern": "^[a-z][a-z0-9]*(\\.[a-z][a-z0-9-]*)+$",
       "description": "Dotted tool identifier, e.g. 'scene.hierarchy'. Must be unique across the CLI."
     },
-    "title": {
+    "summary": {
       "type": "string",
       "minLength": 1,
-      "description": "Human-readable short title."
+      "description": "Short routing summary used by tools group/list/search/describe so an AI can select the right tool during discovery."
     },
     "description": {
       "type": "string",
@@ -39,11 +39,11 @@
     },
     "inputSchema": {
       "type": "object",
-      "description": "JSON Schema for the tool's input parameters."
+      "description": "JSON Schema for the tool's input parameters. Built-in TS tools provide this through defineTool metadata; C# tools derive it from the Request DTO."
     },
     "outputSchema": {
       "type": "object",
-      "description": "JSON Schema for the tool's successful output."
+      "description": "JSON Schema for the tool's successful output. Built-in TS tools provide this through defineTool metadata; C# tools derive it from the Result DTO."
     },
     "destructiveHint": {
       "type": "boolean",

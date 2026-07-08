@@ -97,27 +97,40 @@ test("integration: capabilities via execute()", async () => {
 
 test("integration: docs built-in topics via canonical docs command", async () => {
   const runtime = await makeRuntime();
-  const list = await execute(["tools", "run", "docs.list"], runtime);
+  const list = await execute(["tools", "run", "docs.list", "--format", "text"], runtime);
   const topic = await execute(["tools", "run", "docs.topic", "scene"], runtime);
+  const missing = await execute(["tools", "run", "docs.topic", "missing-topic"], runtime);
 
   assert.equal(list.ok, true);
   assert.equal(topic.ok, true);
+  assert.equal(missing.ok, false);
   assert.equal((list.data as { command: string }).command, "docs.list");
+  assert.match((list.data as { text: string }).text, /scene/);
   assert.equal((topic.data as { command: string; topic: string }).command, "docs.topic");
   assert.equal((topic.data as { topic: string }).topic, "scene");
+  assert.equal(missing.error?.code, "DOCS_TOPIC_NOT_FOUND");
 });
 
-test("integration: package.list runs through tools entrypoint", async () => {
+test("integration: package read tools run through tools entrypoint", async () => {
   const runtime = await makeRuntime();
   const project = await mkdtemp(join(tmpdir(), "unity_cli-pkg-"));
   await mkdir(join(project, "Packages"), { recursive: true });
   await writeFile(join(project, "Packages", "manifest.json"), `${JSON.stringify({ dependencies: { "com.example.tool": "1.0.0" } }, null, 2)}\n`, "utf8");
 
-  const result = await execute(["tools", "run", "package.list", "--project", project], runtime);
+  const list = await execute(["tools", "run", "package.list", "--project", project], runtime);
+  const status = await execute(["tools", "run", "package.status", "--project", project], runtime);
+  const info = await execute(["tools", "run", "package.info", "com.example.tool", "--project", project], runtime);
 
-  assert.equal(result.ok, true);
-  const data = result.data as { packages: Array<{ name: string; requestedVersion?: string }> };
-  assert.deepEqual(data.packages.map((entry) => entry.name), ["com.example.tool"]);
+  assert.equal(list.ok, true);
+  assert.equal(status.ok, true);
+  assert.equal(info.ok, true);
+  const listData = list.data as { packages: Array<{ name: string; requestedVersion?: string }> };
+  const statusData = status.data as { packageCount: number };
+  const infoData = info.data as { package: { name: string; requestedVersion?: string } };
+  assert.deepEqual(listData.packages.map((entry) => entry.name), ["com.example.tool"]);
+  assert.equal(statusData.packageCount, 1);
+  assert.equal(infoData.package.name, "com.example.tool");
+  assert.equal(infoData.package.requestedVersion, "1.0.0");
 });
 
 

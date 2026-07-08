@@ -17,7 +17,7 @@ echo '{"target":"Main Camera"}' | unity_cli tools run camera.screenshot --stdin
 
 ## 执行通道
 
-`tools run` 根据 descriptor 的 `handler` 和 `target` 自动路由：
+`tools run` 根据 descriptor 的 `handler` 和 `target` 自动路由。TS 工具由 `defineTool.execute` 返回业务数据；C# 工具由 `IUnityCliTool<TReq,TRes>.Execute(Request, ctx)` 返回 Result DTO；CLI/Bridge 负责把结果包装成统一 JSON envelope。
 
 | Handler | 通道 | 说明 |
 |---------|------|------|
@@ -37,7 +37,7 @@ echo '{"target":"Main Camera"}' | unity_cli tools run camera.screenshot --stdin
 
 ## 输入校验
 
-`tools run` 会用 `inputSchema.required` 做执行前必填字段校验。校验失败返回 `E_SCHEMA_INVALID`，`nextActions` 指向 `tools describe <tool>`。
+`tools run` 会用 `inputSchema.required` 做执行前必填字段校验。TS 工具的 schema 来自 `defineTool`，C# 工具的 schema 来自 Request DTO 和 `[UnityCliRequired]`。校验失败返回 `E_SCHEMA_INVALID`，`nextActions` 指向 `tools describe <tool>`。
 
 ```powershell
 # 正确：提供 inputSchema 要求的字段

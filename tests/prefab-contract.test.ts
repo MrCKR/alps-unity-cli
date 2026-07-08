@@ -89,13 +89,14 @@ test("C# handlers exist for prefab commands (RegisterCommand or IUnityCliTool)",
   }
 });
 
-test("prefab C# error recovery hints use current tools run form, not legacy unity_cli", async () => {
+test("prefab C# error recovery hints use current forms without legacy unity_cli or placeholder asset search text", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Commands/PrefabCommands.cs", import.meta.url), "utf8");
   assert.equal(source.includes("unity_cli prefab"), false, "must not reference legacy 'unity_cli prefab'");
   assert.equal(source.includes("unity_cli scene hierarchy"), false, "must not reference legacy 'unity_cli scene hierarchy'");
   assert.equal(source.includes("unity_cli asset search"), false, "must not reference legacy 'unity_cli asset search'");
-  assert.match(source, /tools run prefab\.hierarchy/, "error hints should route to tools run prefab.hierarchy");
-  assert.match(source, /tools run asset\.search/, "error hints should route to tools run asset.search");
+  assert.match(source, /tools run prefab\.hierarchy/, "child errors should still route to prefab.hierarchy when hierarchy inspection is needed");
+  assert.doesNotMatch(source, /tools run asset\.search --input '\{\\"filter\\":\\"t:Prefab\\"\}'/, "Prefab asset miss errors must not embed old command strings");
+  assert.doesNotMatch(source, /\"<path>\"/, "Prefab recovery hints must avoid placeholder path tokens");
 });
 
 test("prefab bridge spec forwards structured --input fields", async () => {
