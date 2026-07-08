@@ -150,13 +150,19 @@ async function handleToolsGroup(
     groupCounts[group] = (groupCounts[group] ?? 0) + 1;
   }
 
-  const groups = [...seen].sort().map((group) => ({
-    name: group,
-    summary: groupDescriptions[group] ?? `${group} tools.`,
-    toolCount: groupCounts[group] ?? 0,
-    source: EXTENSION_GROUPS.has(group) ? "extension" : builtinGroups.includes(group) ? "built-in" : "project",
-    cliCommand: `tools group list ${group}`
-  }));
+  const groups = [...seen].sort().map((group) => {
+    const groupTools = allTools.filter((tool) => tool.group === group);
+    const explicitSource = groupTools.find((tool) => tool.source === "built-in")?.source
+      ?? groupTools.find((tool) => tool.source === "extension")?.source
+      ?? groupTools.find((tool) => tool.source === "project")?.source;
+    return {
+      name: group,
+      summary: groupDescriptions[group] ?? `${group} tools.`,
+      toolCount: groupCounts[group] ?? 0,
+      source: explicitSource ?? (EXTENSION_GROUPS.has(group) ? "extension" : builtinGroups.includes(group) ? "built-in" : "project"),
+      cliCommand: `tools group list ${group}`
+    };
+  });
 
   const data: Record<string, unknown> = {
     command: "tools.group",
@@ -373,8 +379,47 @@ async function handleToolsRun(
     ]);
   }
 
-  // Discover the tool (builtin metadata + project tools)
+  // Discover the tool (TS-local metadata + live C# discovery when needed)
   const builtinTool = findToolByName(toolName);
+  const bridgeSpec = findBridgeSpecForTool(toolName);
+
+  // 新语义:无 bridge 时不显示 C# 工具；但 tools run 若明确给出一个 bridge-spec 工具名,
+  // 允许直接按 spec 执行(由 executeBridgePayload 自己完成实例选择/bridge endpoint 解析),
+  // 不再要求先有离线 metadata 或预发现成功。
+  if (!builtinTool && bridgeSpec && bridgeSpec.internal !== true) {
+    const parsedInput = await parseToolInput(flags, requestId);
+    if (!parsedInput.ok) return parsedInput.error!;
+    const mergedFlags = mergeInputToFlags(parsedInput.input, flags);
+    let args = await bridgeSpec.buildArgs({ command: toolName, flags: mergedFlags, positionalTarget: positional[1] });
+    if (getBoolean(mergedFlags, "job") && bridgeSpec.supportsJob !== true) {
+      return unsupportedBridgeJob(requestId, toolName);
+    }
+    if (bridgeSpec.destructiveHint) {
+      const confirmation = await confirmDestructiveExecution(mergedFlags, {
+        command: toolName,
+        summary: toolName,
+        destructiveHint: true,
+        supportsDryRun: bridgeSpec.supportsDryRun,
+        requestId
+      });
+      if (confirmation) return confirmation;
+    }
+    const bridgeCommand = bridgeSpec.bridgeCommand;
+    if (bridgeSpec.toolName) {
+      args = { name: bridgeSpec.toolName, input: args };
+    }
+    if (getBoolean(mergedFlags, "job")) {
+      const jobRuntime = bridgeJobRuntime(runtime);
+      if (!jobRuntime) {
+        return failure(requestId, "E_TOOL_HANDLER_UNSUPPORTED", `Tool "${toolName}" requires a job runner runtime for --job.`, [
+          "Run from the unity_cli entrypoint, or provide runtime.dataDir, runtime.store and runtime.runner in tests."
+        ]);
+      }
+      return startBridgeCommandJob(requestId, toolName, bridgeCommand, args as Record<string, unknown>, mergedFlags, jobRuntime, bridgeSpec);
+    }
+    return executeBridgePayload(requestId, bridgeCommand, args as Record<string, unknown>, mergedFlags, runtime);
+  }
+
   const includeCustom = shouldDiscoverProjectTools(flags, runtime) || getBoolean(flags, "include-custom");
   let projectTool: ToolMetadata | undefined;
   if (!builtinTool && includeCustom) {

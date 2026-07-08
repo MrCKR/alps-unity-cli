@@ -1,13 +1,10 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFile } from "node:fs/promises";
 import { findToolByName, toolCancellation } from "../src/tools/metadata/index.js";
 import { findCommandContract } from "../src/contracts/command-contract.js";
 
-/**
- * test.run 契约测试：运行 Unity EditMode/PlayMode 测试的 batch job。
- * 对齐 CoplayDev run_tests。真实执行会启动 Unity batchmode 与 live Editor 冲突（UNITY_BUSY），
- * 故真实执行 DEFERRED；契约+describe 验证 metadata/contract 一致与 routing 语义。
- */
+/** test.run 契约测试：TS 本地 job 工具，继续离线可见。 */
 
 test("test.run exists with job handler, longRunning and session-affecting play mode", () => {
   const tool = findToolByName("test.run")!;
@@ -22,15 +19,17 @@ test("test.run exists with job handler, longRunning and session-affecting play m
   assert.ok(tool.examples && tool.examples.length > 0);
 });
 
-test("test.run input schema documents platform enum", () => {
+test("test.run input schema and source document platform semantics", async () => {
   const tool = findToolByName("test.run")!;
-  const props = tool.inputSchema.properties as Record<string, { enum?: string[]; default?: string }>;
-  assert.ok(props.platform?.enum?.includes("EditMode"), "platform should document EditMode");
-  assert.ok(props.platform?.enum?.includes("PlayMode"), "platform should document PlayMode");
-  assert.equal(props.platform?.default, "EditMode");
+  const props = tool.inputSchema.properties as Record<string, unknown>;
+  assert.ok(props.platform, "platform should be documented in input schema");
   assert.ok(props.project, "project should be documented");
   assert.ok(props.unity, "unity path should be documented");
   assert.ok(props.timeoutMs, "timeoutMs should be documented");
+
+  const source = await readFile(new URL("../../src/tools/test/run.ts", import.meta.url), "utf8");
+  assert.match(source, /platform\?: "EditMode" \| "PlayMode";/, "source should keep the EditMode/PlayMode union");
+  assert.match(source, /const platform = request\.platform \?\? "EditMode";/, "source should default platform to EditMode");
 });
 
 test("test.run exposes structured cancellation semantics", () => {

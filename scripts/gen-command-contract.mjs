@@ -41,15 +41,30 @@ for (const tool of allRegisteredToolMetadata()) {
 for (const spec of bridgeCommandRegistry.specs()) {
   const key = spec.toolName ?? spec.bridgeCommand;
   if (entries.has(key)) continue;
+
   const override = bridgeOnlyEntries.get(spec.bridgeCommand);
-  if (!override) continue;
+  if (override) {
+    entries.set(key, {
+      bridgeCommand: key,
+      group: spec.group,
+      command: spec.command || commandName(key, spec.group),
+      handler_type: override.handler_type,
+      csharp_handler: "present",
+      destructive: override.destructive,
+      timeout: DEFAULT_TIMEOUT_MS
+    });
+    continue;
+  }
+
+  // 新语义:TS metadata 只覆盖 TS 本地工具。其余 bridge specs(尤其 project-tool.run 包装的 C# built-in/extension 工具)
+  // 由 bridge registry 直接补 contract entry。
   entries.set(key, {
     bridgeCommand: key,
     group: spec.group,
     command: spec.command || commandName(key, spec.group),
-    handler_type: override.handler_type,
+    handler_type: normalizeSpecHandler(spec),
     csharp_handler: "present",
-    destructive: override.destructive,
+    destructive: spec.destructiveHint ?? false,
     timeout: DEFAULT_TIMEOUT_MS
   });
 }
@@ -72,6 +87,10 @@ function importFromDist(relativePath) {
 function normalizeHandler(handler) {
   if (handler === "bridge-runtime") return "bridge";
   return handler ?? "bridge";
+}
+
+function normalizeSpecHandler(spec) {
+  return spec.supportsJob ? "hybrid" : "bridge";
 }
 
 function csharpHandlerForTool(tool) {

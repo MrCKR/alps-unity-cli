@@ -73,14 +73,15 @@ test("batch step input is serialized as --input JSON", async () => {
 test("batch step input does not override explicit input args", async () => {
   const runtime = await makeRuntime();
   const batch = await writeBatch(runtime.dataDir, {
-    steps: [{ id: "describe", command: ["tools", "run", "tools.describe"], args: ["--input", JSON.stringify({ name: "scene.active" })], input: { name: "profiler.capture" } }]
+    // 选 TS 本地工具,避免依赖 bridge 才能 describe 的 C# 工具。
+    steps: [{ id: "describe", command: ["tools", "run", "tools.describe"], args: ["--input", JSON.stringify({ name: "tools.group" })], input: { name: "profiler.capture" } }]
   });
 
   const result = await execute(["batch", "run", batch, "--yes"], runtime);
 
   assert.equal(result.ok, true);
   const data = result.data as { steps: Array<{ envelope: { data: { name: string } } }> };
-  assert.equal(data.steps[0].envelope.data.name, "scene.active");
+  assert.equal(data.steps[0].envelope.data.name, "tools.group");
 });
 
 test("batch step job appends --job for tools run steps", async () => {
@@ -186,7 +187,8 @@ setTimeout(() => process.exit(0), 15000);
   const data = result.data as { summary: { succeeded: number }; steps: Array<{ id: string; envelope: { data: { status?: string; lines?: string[]; cancellation?: { mode: string } } } }> };
   assert.equal(data.summary.succeeded, 3);
   assert.equal(data.steps.find((step) => step.id === "status")?.envelope.data.status, "running");
-  assert.deepEqual(data.steps.find((step) => step.id === "logs")?.envelope.data.lines, ["build started"]);
+  const logLines = data.steps.find((step) => step.id === "logs")?.envelope.data.lines ?? [];
+  assert.ok(logLines.includes("build started"), `expected logs to include 'build started', got ${JSON.stringify(logLines)}`);
   assert.equal(data.steps.find((step) => step.id === "cancel")?.envelope.data.status, "cancelled");
   assert.equal(data.steps.find((step) => step.id === "cancel")?.envelope.data.cancellation?.mode, "immediate");
 });

@@ -1,16 +1,13 @@
-/**
- * Unit tests for capabilities CLI command.
- */
-
 import assert from "node:assert/strict";
 import test from "node:test";
 import { handleCapabilitiesCommand } from "../src/capabilities.js";
 import type { BridgeRuntime } from "../src/bridge/index.js";
 import type { ProjectContextRuntime } from "../src/project-context-discovery.js";
+import { projectAuditTool, sceneHierarchyTool, probuilderPingTool } from "./helpers/live-tool-fixtures.js";
 
 const requestId = "test_req_caps_001";
 
-test("capabilities without bridge returns static-only result", async () => {
+test("capabilities without bridge returns TS-local static capabilities only", async () => {
   const runtime: BridgeRuntime = {};
   const result = await handleCapabilitiesCommand({}, runtime, requestId);
   assert.equal(result.ok, true);
@@ -20,32 +17,24 @@ test("capabilities without bridge returns static-only result", async () => {
   assert.equal(data.requiresUnity, false);
 
   const staticData = data.static as Record<string, unknown>;
-  assert.ok(typeof staticData.toolCount === "number");
-  assert.ok(staticData.toolCount > 0);
-  assert.ok(typeof staticData.groups === "object");
-
   const groups = staticData.groups as Record<string, number>;
-  assert.ok(groups.scene > 0, "scene group should have tools");
+  assert.equal(staticData.toolCount, 34);
+  assert.ok(groups.docs > 0, "docs group should stay offline-visible");
+  assert.ok(groups.tools > 0, "tools group should stay offline-visible");
+  assert.equal(groups.scene, undefined, "scene group should require live discovery");
 
-  assert.ok(Array.isArray(staticData.liveBridgeTools));
-  assert.ok(Array.isArray(staticData.hybridTools));
-  assert.ok(Array.isArray(staticData.batchJobTools));
-  assert.ok(Array.isArray(staticData.cliOnlyTools));
-  assert.ok(Array.isArray(staticData.plannedTools));
-  assert.ok(Array.isArray(staticData.bridgeTools));
-  assert.ok(Array.isArray(staticData.offlineTools));
-  assert.ok(Array.isArray(staticData.destructiveTools));
+  const destructiveTools = staticData.destructiveTools as string[];
+  assert.ok(destructiveTools.includes("code.exec"));
+  assert.ok(destructiveTools.includes("package.install"));
+  assert.ok(!destructiveTools.includes("scene.save"));
 
-  // No runtime section since bridge not reachable
+  const hybridTools = staticData.hybridTools as string[];
+  const batchJobTools = staticData.batchJobTools as string[];
+  const cliOnlyTools = staticData.cliOnlyTools as string[];
+  assert.ok(hybridTools.includes("code.exec"));
+  assert.ok(batchJobTools.includes("build.run"));
+  assert.ok(cliOnlyTools.includes("tools.group"));
   assert.equal(data.runtime, undefined);
-});
-
-test("capabilities --json flag works", async () => {
-  const runtime: BridgeRuntime = {};
-  const result = await handleCapabilitiesCommand({ json: true }, runtime, requestId);
-  assert.equal(result.ok, true);
-  const data = result.data as Record<string, unknown>;
-  assert.equal(data.mode, "offline");
 });
 
 test("capabilities with bridge returns hybrid result", async () => {
@@ -68,56 +57,38 @@ test("capabilities with bridge error falls back to offline", async () => {
   assert.equal(result.ok, true);
 
   const data = result.data as Record<string, unknown>;
-  // Should still succeed with static-only data
+  assert.equal(data.mode, "offline");
   assert.ok(data.static !== undefined);
 });
 
-test("capabilities static data includes destructive tools", async () => {
-  const runtime: BridgeRuntime = {};
+test("capabilities includes live-discovered built-in, extension and project tools when runtime provides them", async () => {
+  const runtime: BridgeRuntime & { projectTools: ReturnType<typeof sceneHierarchyTool>[] } = {
+    projectTools: [
+      sceneHierarchyTool(),
+      probuilderPingTool(),
+      projectAuditTool()
+    ]
+  };
+
   const result = await handleCapabilitiesCommand({}, runtime, requestId);
   assert.equal(result.ok, true);
 
   const data = result.data as Record<string, unknown>;
   const staticData = data.static as Record<string, unknown>;
-  const destructiveTools = staticData.destructiveTools as string[];
-
-  assert.ok(destructiveTools.length > 0);
-  assert.ok(destructiveTools.includes("scene.save"), "scene.save should be in destructive list");
-});
-
-test("capabilities static data separates live bridge, hybrid and planned tools", async () => {
-  const runtime: BridgeRuntime = {};
-  const result = await handleCapabilitiesCommand({}, runtime, requestId);
-  assert.equal(result.ok, true);
-
-  const data = result.data as Record<string, unknown>;
-  const staticData = data.static as Record<string, unknown>;
+  const groups = staticData.groups as Record<string, number>;
   const liveBridgeTools = staticData.liveBridgeTools as string[];
-  const hybridTools = staticData.hybridTools as string[];
-  const batchJobTools = staticData.batchJobTools as string[];
-  const bridgeTools = staticData.bridgeTools as string[];
-  const jobTools = staticData.jobTools as string[];
-  const plannedTools = staticData.plannedTools as string[];
 
+  assert.equal((data.projectTools as { count: number }).count, 3);
+  assert.equal(groups.scene, 1);
+  assert.equal(groups.probuilder, 1);
+  assert.equal(groups.project, 1);
   assert.ok(liveBridgeTools.includes("scene.hierarchy"));
-  assert.ok(bridgeTools.includes("scene.hierarchy"));
-  assert.ok(plannedTools.length >= 0, "planned tools may be zero after core tools promotion to live-bridge");
-  // Core tools (scene/go/component/script) are now live-bridge, no longer planned
-  assert.equal(liveBridgeTools.includes("component.set"), true);
-  assert.ok(bridgeTools.includes("component.set"));
-
-  const hybridProbuilderTools = hybridTools.filter((name) => name.startsWith("probuilder."));
-  assert.ok(hybridProbuilderTools.length >= 30, `expected >= 30 probuilder hybrid tools, got ${hybridProbuilderTools.length}`);
-  for (const name of ["probuilder.create-shape", "probuilder.extrude-faces", "profiler.start", "profiler.capture"]) {
-    assert.ok(hybridTools.includes(name), `${name} should be listed as hybrid`);
-    assert.equal(batchJobTools.includes(name), false, `${name} should not be listed as batch-only`);
-    assert.ok(jobTools.includes(name), `${name} should be job-capable as a hybrid tool`);
-  }
+  assert.ok(liveBridgeTools.includes("probuilder.ping"));
+  assert.ok(liveBridgeTools.includes("project.audit"));
 });
 
 test("capabilities static data includes schemaFeatures", async () => {
-  const runtime: BridgeRuntime = {};
-  const result = await handleCapabilitiesCommand({}, runtime, requestId);
+  const result = await handleCapabilitiesCommand({}, {}, requestId);
   assert.equal(result.ok, true);
 
   const data = result.data as Record<string, unknown>;
@@ -131,40 +102,8 @@ test("capabilities static data includes schemaFeatures", async () => {
   assert.equal(schemaFeatures.requestEnvelope, true);
   assert.equal(schemaFeatures.responseEnvelope, true);
   assert.equal(schemaFeatures.errorCode, true);
-});
-
-test("capabilities includes custom tools in unified static manifest when available", async () => {
-  const runtime: BridgeRuntime & { projectTools: Array<{ name: string; summary: string; description: string; group: string; inputSchema: Record<string, unknown>; destructiveHint: boolean }> } = {
-    projectTools: [{
-      name: "project.audit",
-      summary: "Project Audit",
-      description: "Audits project state.",
-      group: "project",
-      inputSchema: { type: "object" },
-      destructiveHint: false
-    }]
-  };
-  const result = await handleCapabilitiesCommand({}, runtime, requestId);
-  assert.equal(result.ok, true);
-
-  const data = result.data as Record<string, unknown>;
-  const staticData = data.static as Record<string, unknown>;
-  assert.equal((data.projectTools as { count: number }).count, 1);
-  assert.equal((staticData.groups as Record<string, number>).project, 3);
-  assert.ok((staticData.liveBridgeTools as string[]).includes("project.audit"));
-});
-
-test("capabilities static data includes customContextDescriptor and contextFingerprint schema features", async () => {
-  const runtime: BridgeRuntime = {};
-  const result = await handleCapabilitiesCommand({}, runtime, requestId);
-  assert.equal(result.ok, true);
-
-  const data = result.data as Record<string, unknown>;
-  const staticData = data.static as Record<string, unknown>;
-  const schemaFeatures = staticData.schemaFeatures as Record<string, boolean>;
-
-  assert.equal(schemaFeatures.customContextDescriptor, true, "customContextDescriptor should be true");
-  assert.equal(schemaFeatures.contextFingerprint, true, "contextFingerprint should be true");
+  assert.equal(schemaFeatures.customContextDescriptor, true);
+  assert.equal(schemaFeatures.contextFingerprint, true);
 });
 
 test("capabilities includes customContexts when project contexts are available", async () => {
@@ -184,7 +123,7 @@ test("capabilities includes customContexts when project contexts are available",
 
   const data = result.data as Record<string, unknown>;
   const customCtx = data.customContexts as { mode: string; count: number; categories: string[] };
-  assert.ok(customCtx, "customContexts should be present");
+  assert.ok(customCtx);
   assert.equal(customCtx.count, 1);
   assert.ok(customCtx.categories.includes("sample"));
 });
@@ -210,7 +149,7 @@ test("capabilities passes bridge customContexts summary as runtimeCustomContexts
 
   const data = result.data as Record<string, unknown>;
   assert.equal(data.mode, "hybrid");
-  assert.ok(data.runtimeCustomContexts, "runtimeCustomContexts should be present when bridge returns customContexts");
   const rtCtx = data.runtimeCustomContexts as { count: number; categories: string[] };
   assert.equal(rtCtx.count, 3);
+  assert.ok(rtCtx.categories.includes("sample"));
 });

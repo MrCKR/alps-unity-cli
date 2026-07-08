@@ -1,91 +1,124 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findToolByName, filterToolsByGroup } from "../src/tools/metadata/index.js";
+import { readFile } from "node:fs/promises";
 import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { findCommandContract } from "../src/contracts/command-contract.js";
 import { destructiveCommands } from "../src/security-policy.js";
-import { readFile, readdir } from "node:fs/promises";
+import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
+import { contractToolNames, discoverLiveTools, listCsFiles, readEditorCsSources } from "./helpers/csharp-test-helpers.js";
 
-/** 递归列举 .cs 文件。 */
-async function listCsFiles(directory: URL): Promise<URL[]> {
-  const entries = await readdir(directory, { withFileTypes: true });
-  const urls = await Promise.all(entries.map(async (entry) => {
-    const child = new URL(`${entry.name}${entry.isDirectory() ? "/" : ""}`, directory);
-    if (entry.isDirectory()) {
-      return listCsFiles(child);
-    }
-    return entry.isFile() && entry.name.endsWith(".cs") ? [child] : [];
-  }));
-  return urls.flat().sort((left, right) => left.pathname.localeCompare(right.pathname));
-}
+const PROFILER_COMMANDS = [
+  "profiler.areas",
+  "profiler.capture",
+  "profiler.clear",
+  "profiler.counter",
+  "profiler.deep",
+  "profiler.export",
+  "profiler.frame",
+  "profiler.frame-debugger.disable",
+  "profiler.frame-debugger.enable",
+  "profiler.frame-debugger.events",
+  "profiler.hierarchy",
+  "profiler.load",
+  "profiler.memory",
+  "profiler.memory-snapshot.compare",
+  "profiler.memory-snapshot.list",
+  "profiler.memory-snapshot.take",
+  "profiler.module-enable",
+  "profiler.modules",
+  "profiler.object-memory",
+  "profiler.pause",
+  "profiler.rendering-stats",
+  "profiler.script-stats",
+  "profiler.start",
+  "profiler.status",
+  "profiler.stop"
+];
 
-const PROFILER_COMMANDS = ["profiler.status", "profiler.start", "profiler.stop", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export", "profiler.modules", "profiler.module-enable", "profiler.clear", "profiler.load", "profiler.areas", "profiler.object-memory", "profiler.rendering-stats", "profiler.script-stats", "profiler.deep", "profiler.hierarchy", "profiler.memory-snapshot.take", "profiler.memory-snapshot.list", "profiler.memory-snapshot.compare", "profiler.frame-debugger.enable", "profiler.frame-debugger.disable", "profiler.frame-debugger.events"];
-
-/**
- * Profiler 域契约测试（23 工具）。
- * 对齐 IvanMurzak modules/clear/load/script-stats 与 CoplayDev areas/object-memory/rendering-stats，
- * 新增 memory-snapshot（take/list/compare）与 frame-debugger（enable/disable/events），
- * 验证 metadata/bridge/contract/C# 一致，read 工具业务字段不被 envelope 吞掉，Play Mode 语义。
- */
-
-test("profiler group exposes all 25 tools", () => {
-  const tools = filterToolsByGroup("profiler").map((t) => t.name).sort();
-  assert.equal(tools.length, 25);
-  for (const name of PROFILER_COMMANDS) {
-    assert.ok(tools.includes(name), `${name} should exist`);
-  }
+test("profiler group exposes all 25 tools via contract discovery", () => {
+  assert.deepEqual(contractToolNames("profiler"), [...PROFILER_COMMANDS].sort());
 });
 
-test("profiler tools have playModeSupport", () => {
-  for (const name of PROFILER_COMMANDS) {
-    const tool = findToolByName(name)!;
-    assert.ok(tool.playModeSupport, `${name} should have playModeSupport`);
-  }
-});
+test("profiler live descriptors expose representative play mode, package, and schema semantics", async () => {
+  const tools = await discoverLiveTools(
+    makeLiveTool({ name: "profiler.status", summary: "Read profiler status.", description: "Read profiler status.", group: "profiler", outputSchema: { type: "object", properties: { maxUsedMemory: { type: "number" }, platform: { type: "string" } } } }),
+    makeLiveTool({ name: "profiler.counter", summary: "Read a profiler counter.", description: "Read a profiler counter.", group: "profiler" }),
+    makeLiveTool({ name: "profiler.memory", summary: "Read profiler memory.", description: "Read profiler memory.", group: "profiler" }),
+    makeLiveTool({ name: "profiler.frame", summary: "Read profiler frame data.", description: "Read profiler frame data.", group: "profiler", outputSchema: { type: "object", properties: { frame: { type: "object" } } } }),
+    makeLiveTool({ name: "profiler.modules", summary: "List profiler modules.", description: "List profiler modules.", group: "profiler" }),
+    makeLiveTool({ name: "profiler.areas", summary: "List profiler areas.", description: "List profiler areas.", group: "profiler" }),
+    makeLiveTool({ name: "profiler.object-memory", summary: "Read object memory.", description: "Read object memory.", group: "profiler" }),
+    makeLiveTool({ name: "profiler.rendering-stats", summary: "Read rendering stats.", description: "Read rendering stats.", group: "profiler" }),
+    makeLiveTool({ name: "profiler.script-stats", summary: "Read script stats.", description: "Read script stats.", group: "profiler" }),
+    makeLiveTool({ name: "profiler.deep", summary: "Read deep profiling stats.", description: "Read deep profiling stats.", group: "profiler" }),
+    makeLiveTool({ name: "profiler.hierarchy", summary: "Read profiler hierarchy.", description: "Read profiler hierarchy with childrenTruncated summaries.", group: "profiler", inputSchema: { type: "object", properties: { top: { type: "integer", default: 20 }, depth: { type: "integer", default: 5 } } } }),
+    makeLiveTool({ name: "profiler.memory-snapshot.list", summary: "List memory snapshots.", description: "List memory snapshots.", group: "profiler", requiresPackages: ["com.unity.memoryprofiler"] }),
+    makeLiveTool({ name: "profiler.memory-snapshot.compare", summary: "Compare memory snapshots.", description: "Compare memory snapshots.", group: "profiler", requiresPackages: ["com.unity.memoryprofiler"] }),
+    makeLiveTool({ name: "profiler.frame-debugger.events", summary: "Read frame debugger events.", description: "Read frame debugger events.", group: "profiler" }),
+    makeLiveTool({ name: "profiler.start", summary: "Start the profiler.", description: "Start the profiler.", group: "profiler", playModeSupport: "session-affecting", inputSchema: { type: "object", properties: { logFile: { type: "string" }, enableCallstacks: { type: "boolean" } } } }),
+    makeLiveTool({ name: "profiler.stop", summary: "Stop the profiler.", description: "Stop the profiler.", group: "profiler", playModeSupport: "session-affecting" }),
+    makeLiveTool({ name: "profiler.pause", summary: "Pause the profiler.", description: "Pause the profiler.", group: "profiler", playModeSupport: "session-affecting" }),
+    makeLiveTool({ name: "profiler.module-enable", summary: "Enable a profiler module.", description: "Enable a profiler module.", group: "profiler", playModeSupport: "session-affecting" }),
+    makeLiveTool({ name: "profiler.clear", summary: "Clear profiler data.", description: "Clear profiler data.", group: "profiler", supportsDryRun: true, playModeSupport: "session-affecting" }),
+    makeLiveTool({ name: "profiler.load", summary: "Load profiler capture.", description: "Load profiler capture.", group: "profiler", playModeSupport: "session-affecting" }),
+    makeLiveTool({ name: "profiler.capture", summary: "Capture profiler data.", description: "Capture profiler data.", group: "profiler", playModeSupport: "session-affecting" }),
+    makeLiveTool({ name: "profiler.export", summary: "Export profiler data.", description: "Export profiler data.", group: "profiler", playModeSupport: "session-affecting" }),
+    makeLiveTool({ name: "profiler.frame-debugger.enable", summary: "Enable the frame debugger.", description: "Enable the frame debugger.", group: "profiler", playModeSupport: "session-affecting" }),
+    makeLiveTool({ name: "profiler.frame-debugger.disable", summary: "Disable the frame debugger.", description: "Disable the frame debugger.", group: "profiler", playModeSupport: "session-affecting" }),
+    makeLiveTool({ name: "profiler.memory-snapshot.take", summary: "Take a memory snapshot.", description: "Take a memory snapshot.", group: "profiler", requiresPackages: ["com.unity.memoryprofiler"] })
+  );
 
-test("profiler read tools are supported", () => {
   for (const name of ["profiler.status", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.modules", "profiler.areas", "profiler.object-memory", "profiler.rendering-stats", "profiler.script-stats", "profiler.deep", "profiler.hierarchy", "profiler.memory-snapshot.list", "profiler.memory-snapshot.compare", "profiler.frame-debugger.events"]) {
-    const tool = findToolByName(name)!;
-    assert.equal(tool.playModeSupport, "supported", `${name} should be supported`);
+    assert.equal(tools.get(name)?.playModeSupport, "supported", `${name} should be supported`);
   }
-});
 
-test("profiler control tools are session-affecting", () => {
   for (const name of ["profiler.start", "profiler.stop", "profiler.pause", "profiler.module-enable", "profiler.clear", "profiler.load", "profiler.capture", "profiler.export", "profiler.frame-debugger.enable", "profiler.frame-debugger.disable"]) {
-    const tool = findToolByName(name)!;
-    assert.equal(tool.playModeSupport, "session-affecting", `${name} should be session-affecting`);
+    assert.equal(tools.get(name)?.playModeSupport, "session-affecting", `${name} should be session-affecting`);
   }
-});
 
-test("profiler.clear is non-destructive with dry-run", () => {
-  const clear = findToolByName("profiler.clear")!;
+  const clear = tools.get("profiler.clear")!;
   assert.equal(clear.destructiveHint, false);
   assert.equal(clear.supportsDryRun, true);
-});
 
-test("profiler.hierarchy exposes bounded defaults and truncation summaries", () => {
-  const hierarchy = findToolByName("profiler.hierarchy")!;
+  const hierarchy = tools.get("profiler.hierarchy")!;
   const props = hierarchy.inputSchema.properties as Record<string, { default?: unknown }>;
   assert.equal(props.top.default, 20);
   assert.equal(props.depth.default, 5);
-  assert.match(hierarchy.description, /childrenTruncated/, "profiler.hierarchy should document truncated children");
+  assert.match(hierarchy.description, /childrenTruncated/);
+
+  const start = tools.get("profiler.start")!;
+  const startProps = start.inputSchema.properties as Record<string, unknown>;
+  assert.ok(startProps.logFile);
+  assert.ok(startProps.enableCallstacks);
+
+  for (const name of ["profiler.memory-snapshot.take", "profiler.memory-snapshot.list", "profiler.memory-snapshot.compare"]) {
+    assert.deepEqual(tools.get(name)?.requiresPackages, ["com.unity.memoryprofiler"]);
+  }
+
+  const status = tools.get("profiler.status")!;
+  assert.ok(status.outputSchema);
+  const frame = tools.get("profiler.frame")!;
+  assert.ok(frame.outputSchema);
+  assert.equal(tools.get("profiler.memory-snapshot.take")?.destructiveHint, false);
+  assert.equal(tools.get("profiler.frame-debugger.enable")?.destructiveHint, false);
+  assert.equal(tools.get("profiler.frame-debugger.disable")?.destructiveHint, false);
 });
 
 test("profiler.hierarchy C# supports current hierarchy API and latest-frame default", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Tools/profiler/hierarchy.cs", import.meta.url), "utf8");
-  assert.match(source, /UnityEditor\.Profiling\.HierarchyFrameDataView[\s\S]*UnityEditorInternal\.HierarchyFrameDataView[\s\S]*UnityEngine\.Profiling\.HierarchyFrameDataView/, "profiler.hierarchy should try UnityEditor.Profiling first, then compatibility type names");
-  assert.match(source, /typeof\(bool\)/, "Unity 2022.3 GetHierarchyFrameDataView sortAscending parameter should be bool");
-  assert.match(source, /ProfilerDriverIntProperty\("lastFrameIndex", -1\)/, "omitted frame should resolve to ProfilerDriver.lastFrameIndex");
+  assert.match(source, /UnityEditor\.Profiling\.HierarchyFrameDataView[\s\S]*UnityEditorInternal\.HierarchyFrameDataView[\s\S]*UnityEngine\.Profiling\.HierarchyFrameDataView/);
+  assert.match(source, /typeof\(bool\)/);
+  assert.match(source, /ProfilerDriverIntProperty\("lastFrameIndex", -1\)/);
 });
 
 test("profiler.start records Editor frames and profiler.stop restores profileEditor", async () => {
   const controlSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/control-tools.cs", import.meta.url), "utf8");
   const supportSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/ProfilerToolSupport.cs", import.meta.url), "utf8");
   const source = `${controlSource}\n${supportSource}`;
-  assert.match(source, /GetProperty\("profileEditor"/, "profiler should reflect ProfilerDriver.profileEditor");
-  assert.match(source, /PreviousProfilerEditorRecording = ProfilerToolSupport\.GetProfilerEditorRecording\(\)/, "profiler.start should remember previous profileEditor state");
-  assert.match(source, /SetProfilerEditorRecording\(true\)[\s\S]*SetProfilerSessionEnabled\(true\)/, "profiler.start should enable Profile Editor before recording");
-  assert.match(source, /SetProfilerEditorRecording\(ProfilerToolSupport\.PreviousProfilerEditorRecording\.Value\)/, "profiler.stop should restore previous profileEditor state");
+  assert.match(source, /GetProperty\("profileEditor"/);
+  assert.match(source, /PreviousProfilerEditorRecording = ProfilerToolSupport\.GetProfilerEditorRecording\(\)/);
+  assert.match(source, /SetProfilerEditorRecording\(true\)[\s\S]*SetProfilerSessionEnabled\(true\)/);
+  assert.match(source, /SetProfilerEditorRecording\(ProfilerToolSupport\.PreviousProfilerEditorRecording\.Value\)/);
 });
 
 test("bridge specs resolve for profiler tools", () => {
@@ -99,26 +132,20 @@ test("contract entries exist for profiler tools with present C# handler", () => 
   for (const name of PROFILER_COMMANDS) {
     const contract = findCommandContract(name);
     assert.ok(contract, `${name} should be in contract`);
-    assert.equal(contract.csharp_handler, "present", `${name} should have present C# handler`);
+    assert.equal(contract?.csharp_handler, "present", `${name} should have present C# handler`);
   }
 });
 
-test("C# RegisterCommand calls exist for legacy profiler commands (deferred/complex-reflection)", async () => {
-  const csFiles = await listCsFiles(new URL("../unitypkg/Editor/", import.meta.url));
-  const allSource = (
-    await Promise.all(
-      csFiles.filter((f) => !f.pathname.includes("/Samples/")).map((f) => readFile(f, "utf8"))
-    )
-  ).join("\n");
-  // 迁移后的 profiler 工具不再用 RegisterCommand(含 capture/memory-snapshot.take 迁为 IUnityCliDeferredTool)
-  const migrated = ["profiler.status", "profiler.start", "profiler.stop", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export", "profiler.modules", "profiler.module-enable", "profiler.clear", "profiler.load", "profiler.areas", "profiler.object-memory", "profiler.script-stats", "profiler.deep", "profiler.hierarchy", "profiler.rendering-stats", "profiler.memory-snapshot.take", "profiler.memory-snapshot.list", "profiler.memory-snapshot.compare", "profiler.frame-debugger.enable", "profiler.frame-debugger.disable", "profiler.frame-debugger.events"];
+test("C# RegisterCommand calls stay removed for migrated profiler tools", async () => {
+  const allSource = await readEditorCsSources();
+  const migrated = [...PROFILER_COMMANDS];
   for (const command of migrated) {
     assert.ok(!allSource.includes(`RegisterCommand(registry, "${command}"`), `${command} should NOT be registered (migrated to IUnityCliTool/IUnityCliDeferredTool)`);
   }
 });
 
 test("profiler.clear is not in the destructive security policy", () => {
-  const commands = new Set(destructiveCommands().map((e) => e.command));
+  const commands = new Set(destructiveCommands().map((entry) => entry.command));
   assert.equal(commands.has("profiler.clear"), false);
 });
 
@@ -131,111 +158,84 @@ test("profiler C# has no legacy unity_cli command form", async () => {
 test("profiler.object-memory/script-stats migrated to IUnityCliTool", async () => {
   const toolsSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/read-tools.cs", import.meta.url), "utf8");
   const actionSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/action-tools.cs", import.meta.url), "utf8");
-  assert.match(toolsSource, /class ProfilerScriptStatsTool/, "ProfilerScriptStatsTool should exist");
-  assert.match(actionSource, /class ProfilerObjectMemoryTool/, "ProfilerObjectMemoryTool should exist");
+  assert.match(toolsSource, /class ProfilerScriptStatsTool/);
+  assert.match(actionSource, /class ProfilerObjectMemoryTool/);
 });
 
 test("profiler bridge spec forwards structured --input fields", async () => {
   const spec = await readFile(new URL("../src/bridge/domains/profiler.js", import.meta.url), "utf8");
-  assert.match(spec, /stringField\(flags, "module"\)/, "bridge should forward structured module");
-  assert.match(spec, /numberField\(flags, "durationMs"\)/, "bridge should forward structured durationMs");
-  assert.match(spec, /boolField\(flags, "deepProfiling"\)/, "bridge should forward structured deepProfiling");
-  assert.match(spec, /stringField\(flags, "logFile"\)/, "bridge should forward structured logFile");
-  assert.match(spec, /boolField\(flags, "enableCallstacks"\)/, "bridge should forward structured enableCallstacks");
-  assert.match(spec, /stringField\(flags, "target"\)/, "bridge should forward structured target");
+  assert.match(spec, /stringField\(flags, "module"\)/);
+  assert.match(spec, /numberField\(flags, "durationMs"\)/);
+  assert.match(spec, /boolField\(flags, "deepProfiling"\)/);
+  assert.match(spec, /stringField\(flags, "logFile"\)/);
+  assert.match(spec, /boolField\(flags, "enableCallstacks"\)/);
+  assert.match(spec, /stringField\(flags, "target"\)/);
 });
 
 test("profiler.start accepts logFile and enableCallstacks", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Tools/profiler/control-tools.cs", import.meta.url), "utf8");
-  assert.match(source, /public string LogFile \{ get; set; \}/, "ProfilerStart should read logFile");
-  assert.match(source, /public bool EnableCallstacks \{ get; set; \}/, "ProfilerStart should read enableCallstacks");
-  assert.match(source, /Profiler\.enableAllocationCallstacks = true/, "ProfilerStart should enable allocation callstacks");
-  const start = findToolByName("profiler.start")!;
-  const props = start.inputSchema.properties as Record<string, unknown>;
-  assert.ok(props.logFile, "profiler.start should expose logFile");
-  assert.ok(props.enableCallstacks, "profiler.start should expose enableCallstacks");
+  assert.match(source, /public string LogFile \{ get; set; \}/);
+  assert.match(source, /public bool EnableCallstacks \{ get; set; \}/);
+  assert.match(source, /Profiler\.enableAllocationCallstacks = true/);
 });
 
 test("profiler.status exposes maxUsedMemory and platform", async () => {
   const statusSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/status.cs", import.meta.url), "utf8");
   const supportSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/ProfilerToolSupport.cs", import.meta.url), "utf8");
   const source = `${statusSource}\n${supportSource}`;
-  assert.match(source, /MaxUsedMemoryBytes = \(long\)Profiler\.maxUsedMemory/, "ProfilerState should include max-used memory bytes");
-  assert.match(source, /Profiler\.supported/, "ProfilerState should use real Profiler.supported");
-  assert.match(source, /Application\.platform\.ToString\(\)/, "ProfilerStatus should include platform");
-  assert.match(source, /IsFrameTimingAvailable\(\)/, "ProfilerStatus should include frameTimingAvailable");
-  const status = findToolByName("profiler.status")!;
-  assert.ok(status.outputSchema, "profiler.status should have outputSchema");
+  assert.match(source, /MaxUsedMemoryBytes = \(long\)Profiler\.maxUsedMemory/);
+  assert.match(source, /Profiler\.supported/);
+  assert.match(source, /Application\.platform\.ToString\(\)/);
+  assert.match(source, /IsFrameTimingAvailable\(\)/);
 });
 
 test("profiler.frame includes FrameTimingManager fields", async () => {
   const readSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/read-tools.cs", import.meta.url), "utf8");
   const supportSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/ProfilerToolSupport.cs", import.meta.url), "utf8");
   const source = `${readSource}\n${supportSource}`;
-  assert.match(source, /BuildProfilerFrame\(request\.Module \?\? "CPU Usage"\)/, "profiler.frame should build frame output through shared support code");
-  assert.match(source, /FrameTimingManager\.CaptureFrameTimings\(\)/, "should capture frame timings");
-  assert.match(source, /CpuMainThreadFrameTimeMs/, "should expose cpuMainThreadFrameTimeMs");
-  assert.match(source, /GpuFrameTimeMs/, "should expose gpuFrameTimeMs");
-  assert.match(source, /SyncInterval/, "should expose syncInterval");
-  const frame = findToolByName("profiler.frame")!;
-  assert.ok(frame.outputSchema, "profiler.frame should have outputSchema");
+  assert.match(source, /BuildProfilerFrame\(request\.Module \?\? "CPU Usage"\)/);
+  assert.match(source, /FrameTimingManager\.CaptureFrameTimings\(\)/);
+  assert.match(source, /CpuMainThreadFrameTimeMs/);
+  assert.match(source, /GpuFrameTimeMs/);
+  assert.match(source, /SyncInterval/);
 });
 
 test("profiler.module-enable calls SetAreaEnabled", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Tools/profiler/action-tools.cs", import.meta.url), "utf8");
-  assert.match(source, /GetMethod\("SetAreaEnabled"/, "ProfilerModuleEnable should resolve SetAreaEnabled via reflection");
-  assert.match(source, /FindProfilerAreaType\(\)/, "ProfilerModuleEnable should resolve the ProfilerArea enum through shared support code");
-  assert.match(source, /Enum\.Parse\(areaType, request\.Module, true\)/, "ProfilerModuleEnable should parse the area enum via reflection");
-  assert.doesNotMatch(source, /Editor prefs/, "ProfilerModuleEnable must not return the old note-only stub");
+  assert.match(source, /GetMethod\("SetAreaEnabled"/);
+  assert.match(source, /FindProfilerAreaType\(\)/);
+  assert.match(source, /Enum\.Parse\(areaType, request\.Module, true\)/);
+  assert.doesNotMatch(source, /Editor prefs/);
 });
 
 test("profiler.load validates capture path before reporting success", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Tools/profiler/action-tools.cs", import.meta.url), "utf8");
-  assert.match(source, /File\.Exists\(resolvedPath\)/, "profiler.load should check the capture file exists");
-  assert.match(source, /E_PROFILER_CAPTURE_NOT_FOUND/, "missing capture path should return a stable error code");
-  assert.match(source, /Loaded = true/, "successful load should expose loaded=true");
+  assert.match(source, /File\.Exists\(resolvedPath\)/);
+  assert.match(source, /E_PROFILER_CAPTURE_NOT_FOUND/);
+  assert.match(source, /Loaded = true/);
 });
 
 test("profiler memory-snapshot and frame-debugger tools migrated to IUnityCliTool", async () => {
-  const csFiles = await listCsFiles(new URL("../unitypkg/Editor/", import.meta.url));
-  const allSource = (
-    await Promise.all(
-      csFiles.filter((f) => !f.pathname.includes("/Samples/")).map((f) => readFile(f, "utf8"))
-    )
-  ).join("\n");
+  const allSource = await readEditorCsSources();
   for (const command of ["profiler.memory-snapshot.list", "profiler.memory-snapshot.compare", "profiler.frame-debugger.enable", "profiler.frame-debugger.disable", "profiler.frame-debugger.events"]) {
-    assert.ok(!allSource.includes(`RegisterCommand(registry, "${command}"`), `${command} should NOT be registered (migrated to IUnityCliTool)`);
-    assert.ok(allSource.includes(`Name = "${command}"`), `${command} should expose the public tool name through IUnityCliTool`);
+    assert.ok(!allSource.includes(`RegisterCommand(registry, "${command}"`));
+    assert.ok(allSource.includes(`Name = "${command}"`));
   }
   const memorySource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/memory-snapshot-tools.cs", import.meta.url), "utf8");
-  assert.match(memorySource, /class ProfilerMemorySnapshotListTool : IUnityCliTool</, "ProfilerMemorySnapshotListTool should implement IUnityCliTool");
-  assert.match(memorySource, /class ProfilerMemorySnapshotCompareTool : IUnityCliTool</, "ProfilerMemorySnapshotCompareTool should implement IUnityCliTool");
+  assert.match(memorySource, /class ProfilerMemorySnapshotListTool : IUnityCliTool</);
+  assert.match(memorySource, /class ProfilerMemorySnapshotCompareTool : IUnityCliTool</);
   const frameSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/frame-debugger-tools.cs", import.meta.url), "utf8");
-  assert.match(frameSource, /class ProfilerFrameDebuggerEnableTool : IUnityCliTool</, "ProfilerFrameDebuggerEnableTool should implement IUnityCliTool");
-  assert.match(frameSource, /class ProfilerFrameDebuggerDisableTool : IUnityCliTool</, "ProfilerFrameDebuggerDisableTool should implement IUnityCliTool");
-  assert.match(frameSource, /class ProfilerFrameDebuggerEventsTool : IUnityCliTool</, "ProfilerFrameDebuggerEventsTool should implement IUnityCliTool");
-  assert.match(frameSource, /FrameDebuggerUtility/, "frame-debugger should reflect FrameDebuggerUtility");
+  assert.match(frameSource, /class ProfilerFrameDebuggerEnableTool : IUnityCliTool</);
+  assert.match(frameSource, /class ProfilerFrameDebuggerDisableTool : IUnityCliTool</);
+  assert.match(frameSource, /class ProfilerFrameDebuggerEventsTool : IUnityCliTool</);
+  assert.match(frameSource, /FrameDebuggerUtility/);
 });
 
 test("profiler.capture and memory-snapshot.take migrated to IUnityCliDeferredTool", async () => {
   const captureSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/capture.cs", import.meta.url), "utf8");
-  assert.match(captureSource, /class ProfilerCaptureTool : IUnityCliDeferredTool</, "ProfilerCaptureTool should implement IUnityCliDeferredTool");
-  assert.match(captureSource, /bool TryDefer\(Request request, UnityCliProjectToolContext ctx, out DeferredCompletion<Result> completion\)/, "ProfilerCaptureTool should declare TryDefer");
+  assert.match(captureSource, /class ProfilerCaptureTool : IUnityCliDeferredTool</);
+  assert.match(captureSource, /bool TryDefer\(Request request, UnityCliProjectToolContext ctx, out DeferredCompletion<Result> completion\)/);
   const snapshotSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/memory-snapshot-take.cs", import.meta.url), "utf8");
-  assert.match(snapshotSource, /class ProfilerMemorySnapshotTakeTool : IUnityCliDeferredTool</, "ProfilerMemorySnapshotTakeTool should implement IUnityCliDeferredTool");
-  assert.match(snapshotSource, /bool TryDefer\(Request request, UnityCliProjectToolContext ctx, out DeferredCompletion<Result> completion\)/, "ProfilerMemorySnapshotTakeTool should declare TryDefer");
-});
-
-test("profiler memory-snapshot tools declare requiresPackages", () => {
-  for (const name of ["profiler.memory-snapshot.take", "profiler.memory-snapshot.list", "profiler.memory-snapshot.compare"]) {
-    const tool = findToolByName(name)!;
-  assert.deepEqual(tool.requiresPackages, ["com.unity.memoryprofiler"], `${name} should require com.unity.memoryprofiler`);
-  }
-});
-
-test("profiler memory-snapshot.take and frame-debugger.enable are non-destructive", () => {
-  // 生成 .snap 产物文件与 Frame Debugger 会话切换均非资产文件持久化，不触发 --yes
-  assert.equal(findToolByName("profiler.memory-snapshot.take")!.destructiveHint, false);
-  assert.equal(findToolByName("profiler.frame-debugger.enable")!.destructiveHint, false);
-  assert.equal(findToolByName("profiler.frame-debugger.disable")!.destructiveHint, false);
+  assert.match(snapshotSource, /class ProfilerMemorySnapshotTakeTool : IUnityCliDeferredTool</);
+  assert.match(snapshotSource, /bool TryDefer\(Request request, UnityCliProjectToolContext ctx, out DeferredCompletion<Result> completion\)/);
 });

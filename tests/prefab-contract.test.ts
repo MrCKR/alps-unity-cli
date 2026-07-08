@@ -1,71 +1,75 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findToolByName, filterToolsByGroup } from "../src/tools/metadata/index.js";
+import { readFile } from "node:fs/promises";
 import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { findCommandContract } from "../src/contracts/command-contract.js";
-import { readFile, readdir } from "node:fs/promises";
+import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
+import { contractToolNames, discoverLiveTools, readCsSources, readEditorCsSources } from "./helpers/csharp-test-helpers.js";
 
-/** 递归列举 .cs 文件。 */
-async function listCsFiles(directory: URL): Promise<URL[]> {
-  const entries = await readdir(directory, { withFileTypes: true });
-  const urls = await Promise.all(entries.map(async (entry) => {
-    const child = new URL(`${entry.name}${entry.isDirectory() ? "/" : ""}`, directory);
-    if (entry.isDirectory()) {
-      return listCsFiles(child);
-    }
-    return entry.isFile() && entry.name.endsWith(".cs") ? [child] : [];
-  }));
-  return urls.flat().sort((left, right) => left.pathname.localeCompare(right.pathname));
-}
+const PREFAB_COMMANDS = [
+  "prefab.create",
+  "prefab.hierarchy",
+  "prefab.info",
+  "prefab.instantiate",
+  "prefab.modify",
+  "prefab.stage-close",
+  "prefab.stage-open",
+  "prefab.stage-save",
+  "prefab.unpack"
+];
 
-/** 读取整个 Prefab 域新形态源码集合。 */
-async function readPrefabSources(): Promise<string> {
-  const toolsUrl = new URL("../unitypkg/Editor/Tools/prefab/", import.meta.url);
-  const files = await listCsFiles(toolsUrl);
-  return (await Promise.all(files.map((file) => readFile(file, "utf8")))).join("\n");
-}
+test("prefab group is contract-discovered with 9 tools", () => {
+  assert.deepEqual(contractToolNames("prefab"), [...PREFAB_COMMANDS].sort());
+});
 
-const PREFAB_COMMANDS = ["prefab.info", "prefab.create", "prefab.modify", "prefab.stage-open", "prefab.stage-save", "prefab.stage-close", "prefab.hierarchy", "prefab.instantiate", "prefab.unpack"];
+test("prefab live descriptors expose expected safety hints", async () => {
+  const tools = await discoverLiveTools(
+    makeLiveTool({ name: "prefab.info", summary: "Read prefab info.", description: "Read prefab info.", group: "prefab" }),
+    makeLiveTool({ name: "prefab.create", summary: "Create a prefab asset.", description: "Create a prefab asset.", group: "prefab", playModeSupport: "session-affecting", sideEffects: ["asset-write"] }),
+    makeLiveTool({ name: "prefab.stage-open", summary: "Open Prefab Stage.", description: "Open Prefab Stage.", group: "prefab", playModeSupport: "editor-only" }),
+    makeLiveTool({ name: "prefab.instantiate", summary: "Instantiate a prefab.", description: "Instantiate a prefab.", group: "prefab", supportsDryRun: true, playModeSupport: "session-affecting" }),
+    makeLiveTool({ name: "prefab.unpack", summary: "Unpack a prefab instance.", description: "Unpack a prefab instance.", group: "prefab", supportsDryRun: true }),
+    makeLiveTool({ name: "prefab.hierarchy", summary: "Read prefab hierarchy.", description: "Read prefab hierarchy.", group: "prefab", outputSchema: { type: "object", properties: { children: { type: "array" }, pageInfo: { type: "object" } } } })
+  );
 
-/**
- * Prefab 域契约测试。对齐 CoplayDev manage_prefabs 的 headless/interactive 两模式与 hierarchy/stage 工作流，
- * 验证 metadata/bridge/contract/C# 一致，错误恢复提示迁移到 `tools run` 形态，bridge 透传结构化字段。
- */
-
-test("prefab group tools exist with correct safety hints", () => {
-  const tools = filterToolsByGroup("prefab").map((t) => t.name).sort();
-  assert.deepEqual(tools, ["prefab.create", "prefab.hierarchy", "prefab.info", "prefab.instantiate", "prefab.modify", "prefab.stage-close", "prefab.stage-open", "prefab.stage-save", "prefab.unpack"]);
-
-  const info = findToolByName("prefab.info")!;
+  const info = tools.get("prefab.info")!;
   assert.equal(info.destructiveHint, false);
   assert.equal(info.playModeSupport, "supported");
 
-  const create = findToolByName("prefab.create")!;
+  const create = tools.get("prefab.create")!;
   assert.equal(create.playModeSupport, "session-affecting");
   assert.ok(create.sideEffects?.includes("asset-write"));
 
-  const stageOpen = findToolByName("prefab.stage-open")!;
+  const stageOpen = tools.get("prefab.stage-open")!;
   assert.equal(stageOpen.playModeSupport, "editor-only", "stage-open is an editor UI session op");
 
-  const instantiate = findToolByName("prefab.instantiate")!;
+  const instantiate = tools.get("prefab.instantiate")!;
   assert.equal(instantiate.destructiveHint, false);
   assert.equal(instantiate.supportsDryRun, true);
   assert.equal(instantiate.playModeSupport, "session-affecting");
 
-  const unpack = findToolByName("prefab.unpack")!;
+  const unpack = tools.get("prefab.unpack")!;
   assert.equal(unpack.destructiveHint, false);
   assert.equal(unpack.supportsDryRun, true);
-});
 
-test("prefab.hierarchy exposes output schema with paging", () => {
-  const hierarchy = findToolByName("prefab.hierarchy")!;
+  const hierarchy = tools.get("prefab.hierarchy")!;
   const out = hierarchy.outputSchema?.properties as Record<string, unknown>;
-  assert.ok(out.children, "hierarchy output should expose children");
-  assert.ok(out.pageInfo, "hierarchy output should expose pageInfo");
+  assert.ok(out.children);
+  assert.ok(out.pageInfo);
 });
 
 test("bridge specs resolve for prefab tools", () => {
-  const lookups: Record<string, string> = { info: "prefab.info", create: "prefab.create", modify: "prefab.modify", "stage-open": "prefab.stage-open", "stage-save": "prefab.stage-save", "stage-close": "prefab.stage-close", hierarchy: "prefab.hierarchy", instantiate: "prefab.instantiate", unpack: "prefab.unpack" };
+  const lookups: Record<string, string> = {
+    info: "prefab.info",
+    create: "prefab.create",
+    modify: "prefab.modify",
+    "stage-open": "prefab.stage-open",
+    "stage-save": "prefab.stage-save",
+    "stage-close": "prefab.stage-close",
+    hierarchy: "prefab.hierarchy",
+    instantiate: "prefab.instantiate",
+    unpack: "prefab.unpack"
+  };
   for (const [cmd, expected] of Object.entries(lookups)) {
     const spec = bridgeCommandRegistry.lookup("prefab", cmd);
     assert.equal(spec?.bridgeCommand, "project-tool.run", `prefab ${cmd} should route via project-tool.run`);
@@ -77,27 +81,21 @@ test("contract entries exist for prefab tools with present C# handler", () => {
   for (const name of PREFAB_COMMANDS) {
     const contract = findCommandContract(name);
     assert.ok(contract, `${name} should be in command contract`);
-    assert.equal(contract.csharp_handler, "present", `${name} should have present C# handler`);
+    assert.equal(contract?.csharp_handler, "present", `${name} should have present C# handler`);
   }
 });
 
-test("C# handlers exist for prefab commands (RegisterCommand or IUnityCliTool)", async () => {
-  const csFiles = await listCsFiles(new URL("../unitypkg/Editor/", import.meta.url));
-  const allSource = (
-    await Promise.all(
-      csFiles.filter((f) => !f.pathname.includes("/Samples/")).map((f) => readFile(f, "utf8"))
-    )
-  ).join("\n");
+test("prefab C# handlers are registered", async () => {
+  const allSource = await readEditorCsSources();
   for (const command of PREFAB_COMMANDS) {
-    // 接受 RegisterCommand(旧)或 IUnityCliTool(新,Name="...")两种形态
     const hasRegisterCommand = allSource.includes(`RegisterCommand(registry, "${command}"`);
     const hasIUnityCliTool = allSource.includes(`Name = "${command}"`);
     assert.ok(hasRegisterCommand || hasIUnityCliTool, `${command} should be registered via RegisterCommand or IUnityCliTool`);
   }
 });
 
-test("prefab C# error recovery hints use current forms without legacy unity_cli or placeholder asset search text", async () => {
-  const source = await readPrefabSources();
+test("prefab C# error recovery hints use current forms without legacy unity_cli", async () => {
+  const source = await readCsSources(new URL("../unitypkg/Editor/Tools/prefab/", import.meta.url));
   assert.equal(source.includes("unity_cli prefab"), false, "must not reference legacy 'unity_cli prefab'");
   assert.equal(source.includes("unity_cli scene hierarchy"), false, "must not reference legacy 'unity_cli scene hierarchy'");
   assert.equal(source.includes("unity_cli asset search"), false, "must not reference legacy 'unity_cli asset search'");

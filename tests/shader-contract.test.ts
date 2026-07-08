@@ -1,146 +1,121 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findToolByName, filterToolsByGroup } from "../src/tools/metadata/index.js";
+import { readFile } from "node:fs/promises";
 import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { findCommandContract } from "../src/contracts/command-contract.js";
-import { readFile, readdir } from "node:fs/promises";
+import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
+import { contractToolNames, discoverLiveTools, readCsSources, readEditorCsSources } from "./helpers/csharp-test-helpers.js";
 
-/** 递归列举 .cs 文件。 */
-async function listCsFiles(directory: URL): Promise<URL[]> {
-  const entries = await readdir(directory, { withFileTypes: true });
-  const urls = await Promise.all(entries.map(async (entry) => {
-    const child = new URL(`${entry.name}${entry.isDirectory() ? "/" : ""}`, directory);
-    if (entry.isDirectory()) {
-      return listCsFiles(child);
-    }
-    return entry.isFile() && entry.name.endsWith(".cs") ? [child] : [];
-  }));
-  return urls.flat().sort((left, right) => left.pathname.localeCompare(right.pathname));
-}
+const SHADER_COMMANDS = ["shader.create", "shader.delete", "shader.get-data", "shader.info", "shader.list", "shader.read", "shader.update"];
 
-/** 读取整个 Shader 域新形态源码集合。 */
-async function readShaderSources(): Promise<string> {
-  const toolsUrl = new URL("../unitypkg/Editor/Tools/shader/", import.meta.url);
-  const files = await listCsFiles(toolsUrl);
-  return (await Promise.all(files.map((file) => readFile(file, "utf8")))).join("\n");
-}
+test("shader group tools are contract-discovered with correct live descriptor hints", async () => {
+  assert.deepEqual(contractToolNames("shader"), [...SHADER_COMMANDS].sort());
 
-/**
- * Shader 域契约测试：shader.info / read / create / update / list / get-data。
- * 对齐 IvanMurzak assets-shader-get-data / assets-shader-list-all 与 CoplayDev shader 工具，
- * 验证 metadata/bridge/contract/C# 四层一致，且错误恢复提示已迁移到当前 `tools run` 形态。
- */
+  const tools = await discoverLiveTools(
+    makeLiveTool({ name: "shader.info", summary: "Read shader info.", description: "Read shader info.", group: "shader" }),
+    makeLiveTool({ name: "shader.create", summary: "Create a shader asset.", description: "Create a shader asset.", group: "shader", playModeSupport: "session-affecting", sideEffects: ["asset-write"] }),
+    makeLiveTool({ name: "shader.update", summary: "Update a shader asset.", description: "Update a shader asset.", group: "shader", playModeSupport: "session-affecting", sideEffects: ["shader-recompile"], destructiveHint: false }),
+    makeLiveTool({ name: "shader.delete", summary: "Delete a shader asset.", description: "Delete a shader asset.", group: "shader", destructiveHint: true, supportsDryRun: true, sideEffects: ["asset-delete"] }),
+    makeLiveTool({ name: "shader.list", summary: "List shaders.", description: "List shaders.", group: "shader", outputSchema: { type: "object", properties: { shaders: { type: "array" }, count: { type: "integer" } } } }),
+    makeLiveTool({ name: "shader.read", summary: "Read shader source.", description: "Read shader source with nextOffset continuation.", group: "shader", inputSchema: { type: "object", properties: { offset: { type: "integer" }, maxBytes: { type: "integer" } } }, outputSchema: { type: "object", properties: { nextOffset: { type: "integer" } } } }),
+    makeLiveTool({ name: "shader.get-data", summary: "Read structured shader data.", description: "Read structured shader data.", group: "shader", inputSchema: { type: "object", properties: { path: { type: "string" }, name: { type: "string" }, includeSourceCode: { type: "boolean", default: false }, maxSubshaders: { type: "integer" }, maxPasses: { type: "integer" } } }, outputSchema: { type: "object", properties: { properties: { type: "array" }, isSupported: { type: "boolean" }, diagnostics: { type: "array" }, subshaders: { type: "array" } } } })
+  );
 
-test("shader group tools exist with correct safety hints", () => {
-  const tools = filterToolsByGroup("shader").map((t) => t.name).sort();
-  assert.deepEqual(tools, ["shader.create", "shader.delete", "shader.get-data", "shader.info", "shader.list", "shader.read", "shader.update"]);
-
-  const info = findToolByName("shader.info")!;
+  const info = tools.get("shader.info")!;
   assert.equal(info.destructiveHint, false);
   assert.equal(info.handler, "bridge");
   assert.equal(info.playModeSupport, "supported");
 
-  const create = findToolByName("shader.create")!;
+  const create = tools.get("shader.create")!;
   assert.equal(create.playModeSupport, "session-affecting");
   assert.ok(create.sideEffects?.includes("asset-write"));
 
-  const update = findToolByName("shader.update")!;
+  const update = tools.get("shader.update")!;
   assert.equal(update.playModeSupport, "session-affecting");
   assert.ok(update.sideEffects?.includes("shader-recompile"));
   assert.equal(update.riskLevel, "medium");
 
-  const del = findToolByName("shader.delete")!;
+  const del = tools.get("shader.delete")!;
   assert.equal(del.destructiveHint, true);
   assert.equal(del.supportsDryRun, true);
   assert.ok(del.sideEffects?.includes("asset-delete"));
 
-  const list = findToolByName("shader.list")!;
-  assert.equal(list.playModeSupport, "supported");
+  assert.equal(tools.get("shader.list")?.playModeSupport, "supported");
+  assert.equal(tools.get("shader.get-data")?.playModeSupport, "supported");
 
-  const getData = findToolByName("shader.get-data")!;
-  assert.equal(getData.playModeSupport, "supported");
-});
-
-test("shader.read, shader.list and shader.get-data expose bounded output schemas", () => {
-  const read = findToolByName("shader.read")!;
+  const read = tools.get("shader.read")!;
   const readProps = read.inputSchema.properties as Record<string, unknown>;
   const readOut = read.outputSchema?.properties as Record<string, unknown>;
-  assert.ok(readProps.offset, "shader.read should accept offset continuation");
-  assert.ok(readProps.maxBytes, "shader.read should accept maxBytes cap");
-  assert.ok(readOut.nextOffset, "shader.read output should expose nextOffset when truncated");
-  assert.match(read.description, /nextOffset/, "shader.read should document continuation");
+  assert.ok(readProps.offset);
+  assert.ok(readProps.maxBytes);
+  assert.ok(readOut.nextOffset);
+  assert.match(read.description, /nextOffset/);
 
-  const list = findToolByName("shader.list")!;
-  const listOut = list.outputSchema?.properties as Record<string, unknown>;
-  assert.ok(listOut.shaders, "list output should expose shaders array");
-  assert.ok(listOut.count, "list output should expose count");
+  const listOut = tools.get("shader.list")!.outputSchema?.properties as Record<string, unknown>;
+  assert.ok(listOut.shaders);
+  assert.ok(listOut.count);
 
-  const getData = findToolByName("shader.get-data")!;
-  const props = getData.inputSchema.properties as Record<string, unknown>;
-  assert.ok(props.path, "get-data should accept path");
-  assert.ok(props.name, "get-data should accept name for Shader.Find resolution");
-  assert.equal((props.includeSourceCode as { default?: boolean }).default, false, "source code should be opt-in");
-  assert.ok(props.maxSubshaders, "get-data should expose maxSubshaders cap");
-  assert.ok(props.maxPasses, "get-data should expose maxPasses cap");
+  const getData = tools.get("shader.get-data")!;
+  const props = getData.inputSchema.properties as Record<string, { default?: boolean }>;
+  assert.ok(props.path);
+  assert.ok(props.name);
+  assert.equal(props.includeSourceCode.default, false);
+  assert.ok(props.maxSubshaders);
+  assert.ok(props.maxPasses);
   const out = getData.outputSchema?.properties as Record<string, unknown>;
-  assert.ok(out.properties, "get-data output should expose properties");
-  assert.ok(out.isSupported, "get-data output should expose isSupported");
-  assert.ok(out.diagnostics, "get-data output should expose diagnostics");
-  assert.ok(out.subshaders, "get-data output should expose subshader/pass structure");
+  assert.ok(out.properties);
+  assert.ok(out.isSupported);
+  assert.ok(out.diagnostics);
+  assert.ok(out.subshaders);
 });
 
 test("bridge specs resolve for shader tools", () => {
   for (const command of ["info", "read", "create", "update", "delete", "list", "get-data"]) {
     const spec = bridgeCommandRegistry.lookup("shader", command);
-    assert.equal(spec?.bridgeCommand, "project-tool.run", `shader ${command} should route via project-tool.run`);
-    assert.equal(spec?.toolName, `shader.${command}`, `shader ${command} toolName should match`);
+    assert.equal(spec?.bridgeCommand, "project-tool.run");
+    assert.equal(spec?.toolName, `shader.${command}`);
   }
 });
 
 test("contract entries exist for shader tools with present C# handler", () => {
-  for (const name of ["shader.info", "shader.read", "shader.create", "shader.update", "shader.delete", "shader.list", "shader.get-data"]) {
+  for (const name of SHADER_COMMANDS) {
     const contract = findCommandContract(name);
     assert.ok(contract, `${name} should be in command contract`);
-    assert.equal(contract.csharp_handler, "present", `${name} should have present C# handler`);
+    assert.equal(contract?.csharp_handler, "present", `${name} should have present C# handler`);
   }
 });
 
-test("C# handlers exist for shader commands (RegisterCommand or IUnityCliTool)", async () => {
-  const csFiles = await listCsFiles(new URL("../unitypkg/Editor/", import.meta.url));
-  const allSource = (
-    await Promise.all(
-      csFiles.filter((f) => !f.pathname.includes("/Samples/")).map((f) => readFile(f, "utf8"))
-    )
-  ).join("\n");
-  for (const command of ["shader.info", "shader.read", "shader.create", "shader.update", "shader.delete", "shader.list", "shader.get-data"]) {
+test("shader C# handlers are registered", async () => {
+  const allSource = await readEditorCsSources();
+  for (const command of SHADER_COMMANDS) {
     const hasRegisterCommand = allSource.includes(`RegisterCommand(registry, "${command}"`);
     const hasIUnityCliTool = allSource.includes(`Name = "${command}"`);
-    assert.ok(hasRegisterCommand || hasIUnityCliTool, `${command} should be registered via RegisterCommand or IUnityCliTool`);
+    assert.ok(hasRegisterCommand || hasIUnityCliTool);
   }
 });
 
 test("shader C# error recovery hints use current tools run form, not legacy unity_cli", async () => {
-  const source = await readShaderSources();
-  assert.equal(source.includes("unity_cli shader info"), false, "must not reference legacy 'unity_cli shader info'");
-  assert.equal(source.includes("unity_cli asset search"), false, "must not reference legacy 'unity_cli asset search'");
-  assert.match(source, /tools run asset\.search/, "error hints should route to tools run asset.search");
-  assert.match(source, /tools run shader\.list/, "error hints should route to tools run shader.list");
+  const source = await readCsSources(new URL("../unitypkg/Editor/Tools/shader/", import.meta.url));
+  assert.equal(source.includes("unity_cli shader info"), false);
+  assert.equal(source.includes("unity_cli asset search"), false);
+  assert.match(source, /tools run asset\.search/);
+  assert.match(source, /tools run shader\.list/);
 });
 
 test("shader.get-data C# returns diagnostics plus subshader structure", async () => {
-  const source = await readShaderSources();
-  assert.match(source, /class ShaderGetDataTool : IUnityCliTool</, "ShaderGetDataTool should exist");
-  assert.match(source, /Diagnostics = includeMessages[\s\S]*BuildDiagnostics\(shader\)[\s\S]*BuildDiagnosticsSummary\(shader\)/, "ShaderGetData should include compile diagnostics through shared support helpers");
-  assert.match(source, /BuildSubshaders\(shader, includeSourceCode, maxSubshaders, maxPasses\)/, "ShaderGetData should expose SubShader\/Pass structure through shared support code");
-  assert.match(source, /GetShaderData/, "shader support should still reflect ShaderUtil.GetShaderData for subshader inspection");
-  assert.match(source, /AssetDatabase\.DeleteAsset/, "shader.delete should delete through AssetDatabase");
+  const source = await readCsSources(new URL("../unitypkg/Editor/Tools/shader/", import.meta.url));
+  assert.match(source, /class ShaderGetDataTool : IUnityCliTool</);
+  assert.match(source, /Diagnostics = includeMessages[\s\S]*BuildDiagnostics\(shader\)[\s\S]*BuildDiagnosticsSummary\(shader\)/);
+  assert.match(source, /BuildSubshaders\(shader, includeSourceCode, maxSubshaders, maxPasses\)/);
+  assert.match(source, /GetShaderData/);
+  assert.match(source, /AssetDatabase\.DeleteAsset/);
 });
 
 test("shader bridge spec accepts structured content and source alias for create/update", async () => {
   const spec = await readFile(new URL("../src/bridge/domains/shader.js", import.meta.url), "utf8");
-  assert.match(spec, /resolveShaderContent/, "shader bridge should centralize content resolution");
-  assert.match(spec, /stringField\(flags, "source"\)/, "shader bridge should accept structured 'source' alias");
-  assert.match(spec, /stringField\(flags, "content"\)/, "shader bridge should accept structured 'content'");
-  assert.match(spec, /includeSubshaders/, "shader bridge should forward get-data includeSubshaders");
-  assert.match(spec, /maxPasses/, "shader bridge should forward get-data maxPasses");
+  assert.match(spec, /resolveShaderContent/);
+  assert.match(spec, /stringField\(flags, "source"\)/);
+  assert.match(spec, /stringField\(flags, "content"\)/);
+  assert.match(spec, /includeSubshaders/);
+  assert.match(spec, /maxPasses/);
 });

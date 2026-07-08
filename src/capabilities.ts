@@ -41,15 +41,10 @@ export async function handleCapabilitiesCommand(
   // ── Extension availability ──
   const projectPath = getString(flags, "project");
   let extensionInfo: Record<string, unknown> | undefined;
-  // Determine which groups belong to extensions (not core built-in).
-  // When a project path is available, we can determine which extensions
-  // are enabled and separate their groups from the core `groups` map.
+  // Extension tools no longer expose offline TS metadata. Extension groups are surfaced
+  // through manifests/availability and live bridge discovery, not through static tool metadata.
   const extensionGroupFilter = new Set<string>();
   const registry = new ExtensionRegistry();
-  // All registered extension tool groups are extension groups; group names come from tool metadata, not manifests.
-  for (const tool of extensionToolMetadata()) {
-    extensionGroupFilter.add(tool.group);
-  }
   if (projectPath) {
     try {
       const installedPackages = await readInstalledUnityPackages(projectPath);
@@ -153,14 +148,13 @@ export async function handleCapabilitiesCommand(
 }
 
 function buildStaticCapabilities(projectTools: ToolMetadata[] = [], projectContexts: ContextDescriptor[] = [], extensionGroupFilter?: Set<string>): Record<string, unknown> {
-  // builtinToolMetadata() returns core tools only. Extension tools are loaded
-  // from extensionToolMetadata() and merged based on availability.
+  // builtinToolMetadata() now returns TS-local tools only.
+  // C# built-in / extension / project tools enter through live discovery (projectTools).
   const coreTools = builtinToolMetadata();
-  const allExtensionTools = extensionToolMetadata();
-  const activeExtensionTools = extensionGroupFilter
-    ? allExtensionTools.filter((t) => extensionGroupFilter.has(t.group))
-    : allExtensionTools;
-  const tools = [...coreTools, ...activeExtensionTools, ...projectTools];
+  const activeExtensionTools = extensionGroupFilter && extensionGroupFilter.size > 0
+    ? projectTools.filter((t) => t.source === "extension" && extensionGroupFilter.has(t.group))
+    : projectTools.filter((t) => t.source === "extension");
+  const tools = [...coreTools, ...projectTools];
   const coreGroups = [...new Set([...coreTools, ...projectTools].map((tool) => tool.group))].sort();
 
   const destructiveTools = tools.filter((t) => t.destructiveHint).map((t) => t.name);
@@ -197,7 +191,7 @@ function buildStaticCapabilities(projectTools: ToolMetadata[] = [], projectConte
 
   return {
     toolCount: tools.length,
-    groups: extensionGroupFilter ? coreGroupCounts : groupCounts,
+    groups: extensionGroupFilter && extensionGroupFilter.size > 0 ? coreGroupCounts : groupCounts,
     ...(Object.keys(extensionGroupCounts).length > 0 ? { extensionGroups: extensionGroupCounts } : {}),
     liveBridgeTools,
     hybridTools,

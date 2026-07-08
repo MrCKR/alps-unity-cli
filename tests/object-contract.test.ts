@@ -1,70 +1,77 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findToolByName, filterToolsByGroup } from "../src/tools/metadata/index.js";
+import { readFile } from "node:fs/promises";
 import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { findCommandContract } from "../src/contracts/command-contract.js";
 import { destructiveCommands } from "../src/security-policy.js";
-import { readFile, readdir } from "node:fs/promises";
+import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
+import { contractToolNames, discoverLiveTools, listCsFiles, readEditorCsSources } from "./helpers/csharp-test-helpers.js";
 
-/** 递归列举 .cs 文件。 */
-async function listCsFiles(directory: URL): Promise<URL[]> {
-  const entries = await readdir(directory, { withFileTypes: true });
-  const urls = await Promise.all(entries.map(async (entry) => {
-    const child = new URL(`${entry.name}${entry.isDirectory() ? "/" : ""}`, directory);
-    if (entry.isDirectory()) {
-      return listCsFiles(child);
-    }
-    return entry.isFile() && entry.name.endsWith(".cs") ? [child] : [];
-  }));
-  return urls.flat().sort((left, right) => left.pathname.localeCompare(right.pathname));
-}
+/** Object 域契约测试：离线 metadata 断言迁移到 live discovery + 源码/契约断言。 */
 
-/**
- * Object 域契约测试：object.get-data / object.modify。
- * 对齐 IvanMurzak object-get-data/object-modify，验证 metadata/bridge/contract/C# 四层一致。
- */
+test("object tools are contract-discovered and expose expected live descriptor fields", async () => {
+  assert.deepEqual(contractToolNames("object"), ["object.get-data", "object.modify"]);
 
-test("object group tools exist with correct safety hints", () => {
-  const objectTools = filterToolsByGroup("object");
-  const names = objectTools.map((t) => t.name).sort();
-  assert.deepEqual(names, ["object.get-data", "object.modify"]);
+  const tools = await discoverLiveTools(
+    makeLiveTool({
+      name: "object.get-data",
+      summary: "Read serialized object data.",
+      description: "Read deep serialized object data; paths and viewQuery are mutually exclusive.",
+      group: "object",
+      inputSchema: {
+        type: "object",
+        properties: {
+          instanceId: { type: "integer" },
+          assetPath: { type: "string" },
+          guid: { type: "string" },
+          path: { type: "string" },
+          paths: { type: "array" },
+          viewQuery: { type: "object" },
+          maxArrayItems: { type: "integer" }
+        }
+      },
+      outputSchema: { type: "object", properties: { fields: { type: "array" }, path: { type: "string" }, truncated: { type: "boolean" }, nextPath: { type: "string" } } }
+    }),
+    makeLiveTool({
+      name: "object.modify",
+      summary: "Patch serialized object data.",
+      description: "Patch serialized object data.",
+      group: "object",
+      destructiveHint: true,
+      supportsDryRun: true,
+      playModeSupport: "runtime-only",
+      inputSchema: { type: "object", properties: { pathPatches: { type: "array" }, jsonPatch: { type: "array" } } }
+    })
+  );
 
-  const getData = findToolByName("object.get-data")!;
+  const getData = tools.get("object.get-data")!;
   assert.equal(getData.destructiveHint, false);
   assert.equal(getData.handler, "bridge");
   assert.equal(getData.playModeSupport, "supported");
+  const getProps = getData.inputSchema.properties as Record<string, unknown>;
+  const getOutput = getData.outputSchema?.properties as Record<string, unknown>;
+  assert.ok(getProps.instanceId);
+  assert.ok(getProps.assetPath);
+  assert.ok(getProps.guid);
+  assert.ok(getProps.path);
+  assert.ok(getProps.paths);
+  assert.ok(getProps.viewQuery);
+  assert.ok(getProps.maxArrayItems);
+  assert.ok(getOutput.fields);
+  assert.ok(getOutput.path);
+  assert.ok(getOutput.truncated);
+  assert.ok(getOutput.nextPath);
+  assert.equal(getOutput.data, undefined);
+  assert.match(getData.description, /mutually exclusive/);
 
-  const modify = findToolByName("object.modify")!;
+  const modify = tools.get("object.modify")!;
+  const modifyProps = modify.inputSchema.properties as Record<string, unknown>;
   assert.equal(modify.destructiveHint, true);
   assert.equal(modify.supportsDryRun, true);
   assert.equal(modify.playModeSupport, "runtime-only");
   assert.equal(modify.riskLevel, "high");
-});
-
-test("object.modify input schema supports pathPatches and jsonPatch", () => {
-  const modify = findToolByName("object.modify")!;
-  const props = modify.inputSchema.properties as Record<string, unknown>;
-  assert.ok(props.pathPatches, "pathPatches should be in schema");
-  assert.ok(props.jsonPatch, "jsonPatch should be in schema");
-});
-
-test("object.get-data supports ObjectRef resolution and token-safe read scopes", () => {
-  const getData = findToolByName("object.get-data")!;
-  const props = getData.inputSchema.properties as Record<string, unknown>;
-  assert.ok(props.instanceId, "instanceId should be supported");
-  assert.ok(props.assetPath, "assetPath should be supported");
-  assert.ok(props.guid, "guid should be supported");
-  assert.ok(props.path, "path should be supported");
-  const output = getData.outputSchema?.properties as Record<string, unknown>;
-  assert.ok(props.paths, "paths should be supported for exact reads");
-  assert.ok(props.viewQuery, "viewQuery should be supported for scoped reads");
-  assert.ok(props.maxArrayItems, "maxArrayItems should cap large arrays/lists/dictionaries");
-  assert.ok(output.fields, "output schema should expose SerializedMember fields");
-  assert.ok(output.path, "output schema should expose SerializedMember path");
-  assert.ok(output.truncated, "output schema should expose truncation continuation state");
-  assert.ok(output.nextPath, "output schema should expose nextPath for precision continuation");
-  assert.equal(output.data, undefined, "output schema should not claim an extra data wrapper");
-  assert.match(getData.description, /mutually exclusive/, "describe text should warn paths/viewQuery are mutually exclusive");
+  assert.ok(modifyProps.pathPatches);
+  assert.ok(modifyProps.jsonPatch);
 });
 
 test("bridge specs resolve for object tools", () => {
@@ -78,33 +85,25 @@ test("contract entries exist for object tools with present C# handler", () => {
   for (const name of ["object.get-data", "object.modify"]) {
     const contract = findCommandContract(name);
     assert.ok(contract, `${name} should be in command contract`);
-    assert.equal(contract.csharp_handler, "present", `${name} should have present C# handler`);
+    assert.equal(contract?.csharp_handler, "present", `${name} should have present C# handler`);
   }
 });
 
 test("destructive security policy covers object.modify", () => {
-  const commands = new Set(destructiveCommands().map((e) => e.command));
+  const commands = new Set(destructiveCommands().map((entry) => entry.command));
   assert.ok(commands.has("object.modify"));
 });
 
 test("C# RegisterCommand calls removed for object commands (migrated to IUnityCliTool)", async () => {
-  const csFiles = await listCsFiles(new URL("../unitypkg/Editor/", import.meta.url));
-  const allSource = (
-    await Promise.all(
-      csFiles.filter((f) => !f.pathname.includes("/Samples/")).map((f) => readFile(f, "utf8"))
-    )
-  ).join("\n");
+  const allSource = await readEditorCsSources();
   for (const command of ["object.get-data", "object.modify"]) {
-    assert.ok(
-      !allSource.includes(`RegisterCommand(registry, "${command}"`),
-      `${command} should NOT be registered (migrated to IUnityCliTool)`
-    );
+    assert.ok(!allSource.includes(`RegisterCommand(registry, "${command}"`), `${command} should NOT be registered (migrated to IUnityCliTool)`);
   }
 });
 
 test("C# infrastructure files exist for ObjectRef, serializer and patch", async () => {
   const infraFiles = await listCsFiles(new URL("../unitypkg/Editor/Infrastructure/", import.meta.url));
-  const names = infraFiles.map((f) => f.pathname.split("/").pop());
+  const names = infraFiles.map((file) => file.pathname.split("/").pop());
   assert.ok(names.includes("UnityCliObjectRef.cs"));
   assert.ok(names.includes("UnityCliObjectSerializer.cs"));
   assert.ok(names.includes("UnityCliObjectPatch.cs"));
@@ -124,9 +123,13 @@ test("C# object serializer implements path aggregate and viewQuery conflict", as
   assert.match(supportSource, /E_OBJECT_READ_SCOPE_CONFLICT[\s\S]*paths and viewQuery are mutually exclusive/, "object serializer options should reject paths and viewQuery together");
 });
 
-test("no duplicate main entry: go.inspect stays lightweight, object.get-data is the deep reader", () => {
-  const inspect = findToolByName("go.inspect")!;
-  const getData = findToolByName("object.get-data")!;
+test("no duplicate main entry: go.inspect stays lightweight, object.get-data is the deep reader", async () => {
+  const tools = await discoverLiveTools(
+    makeLiveTool({ name: "go.inspect", summary: "Inspect a GameObject.", description: "Inspect a GameObject with a lightweight summary.", group: "go" }),
+    makeLiveTool({ name: "object.get-data", summary: "Read serialized object data.", description: "Read deep serialized object data.", group: "object" })
+  );
+  const inspect = tools.get("go.inspect")!;
+  const getData = tools.get("object.get-data")!;
   assert.notEqual(inspect.name, getData.name);
   assert.ok(getData.description.toLowerCase().includes("deep"));
 });

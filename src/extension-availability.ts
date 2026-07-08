@@ -9,9 +9,8 @@
 
 import { ExtensionRegistry } from "./extensions/index.js";
 import { readInstalledUnityPackages } from "./extensions/project-resolver.js";
-import { collectAllTools } from "./extensions/descriptor-loader.js";
 import type { ExtensionAvailabilityResult, ExtensionId } from "./extensions/types.js";
-import { extensionToolMetadata } from "./tools/metadata/index.js";
+import { findBuiltinExtensionToolContribution } from "./extensions/tool-manifest.js";
 import type { ResolvedToolMetadata, ToolMetadata } from "./tools/metadata/types.js";
 import { getString } from "./args.js";
 
@@ -228,13 +227,9 @@ export async function collectExtensionToolDescriptors(
     }
   }
 
-  const metadataByName = new Map(extensionToolMetadata().map((tool) => [tool.name, tool]));
-  const allTools = collectAllTools(registry, installedPackages);
-  return allTools.flatMap((extTool) => {
-    const metadata = metadataByName.get(extTool.name);
-    if (!metadata) return [];
-    return [{ ...metadata, extensionId: extTool.extensionId, extensionAvailable: extTool.available }];
-  });
+  // 离线不再提供 extension tool 的完整 metadata 快照。descriptor 需通过 live bridge 获取。
+  // 这里仅返回空数组，调用方若要列出 extension tool 名称/分组，应改走 manifest 或 live discovery。
+  return [];
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -270,6 +265,8 @@ function packageAvailabilityForTool(
 }
 
 function findExtensionForTool(registry: ExtensionRegistry, toolName: string): ExtensionId | undefined {
+  const contribution = findBuiltinExtensionToolContribution(toolName);
+  if (contribution) return contribution.extensionId;
   for (const id of registry.extensionIds()) {
     const ext = registry.getExtension(id)!;
     if (ext.manifest.contributions.tools?.some((t) => t.name === toolName)) {

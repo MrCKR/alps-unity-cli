@@ -1,46 +1,19 @@
 /**
- * Static built-in tool metadata for the Unity CLI.
+ * Tool metadata index for TS-local tools.
  *
- * Covers every supported or declared CLI command, including live bridge, batch/job,
- * CLI-only and planned command contract entries. This data is shipped with the
- * CLI/UnityPkg release so that `tools describe` works without a live Unity instance.
- *
- * The schema is /schemas/tool-metadata.schema.json v1.0.
- *
- * ProBuilder, Cinemachine, VFX, URP, and HDRP tool metadata is not statically
- * aggregated here. These optional extensions register their tools through the
- * extension contribution loader instead.
+ * 设计原则(2026-07-08 修正):
+ * - 无 bridge = 不显示 C# 工具
+ * - TS 本地工具(metadata 真源 = defineTool registry)离线可发现/describe/search
+ * - C# built-in / extension / project 工具 descriptor 运行时从 bridge 取
+ * - 不再保留任何 C# 工具的 TS 手写重复 metadata
  */
 
 import { bridgeCommandRegistry } from "../../bridge/index.js";
 import { validateBridgeRegistryContracts, validateToolMetadataContracts } from "../../contracts/command-contract.js";
 import { scoreSearch } from "../../util.js";
-import { SCENE_TOOLS } from "./groups/scene.js";
-import { CAMERA_TOOLS } from "./groups/camera.js";
-import { GO_TOOLS } from "./groups/game-object.js";
-import { COMPONENT_TOOLS } from "./groups/game-object.js";
-import { ASSET_TOOLS } from "./groups/asset.js";
-import { PREFAB_TOOLS } from "./groups/prefab.js";
-import { MATERIAL_TOOLS } from "./groups/material.js";
-import { GRAPHICS_TOOLS } from "./groups/graphics.js";
-import { PHYSICS_TOOLS } from "./groups/physics.js";
-import { PROFILER_TOOLS } from "./groups/profiler.js";
-import { SHADER_TOOLS } from "./groups/shader.js";
-import { TEXTURE_TOOLS } from "./groups/texture.js";
-import { ANIMATION_TOOLS } from "./groups/animation.js";
-import { UI_TOOLS } from "./groups/ui.js";
-import { SCRIPTABLE_OBJECT_TOOLS } from "./groups/scriptable-object.js";
-import { EDITOR_TOOLS } from "./groups/editor.js";
-import { DIAGNOSE_TOOLS } from "./groups/diagnose.js";
-import { SCREENSHOT_TOOLS } from "./groups/screenshot.js";
-import { CODE_TOOLS } from "./groups/code.js";
-import { BUILD_TOOLS } from "./groups/build.js";
-import { CONSOLE_TOOLS } from "./groups/console.js";
-import { PACKAGE_TOOLS } from "./groups/package.js";
-import { OBJECT_TOOLS } from "./groups/object.js";
-import { REFLECTION_TOOLS } from "./groups/reflection.js";
-import { CLI_ONLY_TOOLS } from "./groups/cli-only.js";
-import { TOOLS_DISCOVERY_TOOLS } from "./groups/tools.js";
+import "../registry.js";
+import { defineToolMetadata } from "../define.js";
+import { builtinExtensionGroupNames } from "../../extensions/tool-manifest.js";
 import type { PlayModeSupport, ResolvedToolMetadata, ToolMetadata, ToolSource } from "./types.js";
 import { inferToolRiskLevel, isLongRunningTool, toolAvailabilityScope, toolCliCommand, toolSource } from "./derived.js";
 import { supportStatusForTool, toolHandler } from "./status.js";
@@ -49,8 +22,8 @@ export { supportStatusForTool, toolHandler } from "./status.js";
 export { inferToolRiskLevel, isLongRunningTool, toolAvailabilityScope, toolCancellation, toolCliCommand, toolDocsTopic, toolSource } from "./derived.js";
 export type { PlayModeSupport, ResolvedToolMetadata, ToolCancellation, ToolExample, ToolHandler, ToolMetadata, ToolSource, ToolRiskLevel, ToolSupportStatus } from "./types.js";
 
-/** Extension groups that register through the contribution loader, not core aggregation. */
-export const EXTENSION_GROUPS = new Set(["probuilder", "cinemachine", "vfx", "urp", "hdrp"]);
+/** Extension groups are discovered from extension manifests, not TS tool metadata. */
+export const EXTENSION_GROUPS = new Set(builtinExtensionGroupNames());
 
 /** Normalize a ToolMetadata entry to include generated source and Play Mode defaults. */
 export function normalizeToolMetadata(tool: ToolMetadata, source: ToolSource = "built-in"): ResolvedToolMetadata {
@@ -79,102 +52,52 @@ export function inferPlayModeSupport(tool: ToolMetadata): PlayModeSupport {
   return "supported";
 }
 
-/**
- * Core built-in tools — no extension groups.
- * Extension tools are registered separately via registerExtensionTools().
- */
-const CORE_TOOLS: ToolMetadata[] = [
-  ...SCENE_TOOLS,
-  ...CAMERA_TOOLS,
-  ...GO_TOOLS,
-  ...COMPONENT_TOOLS,
-  ...ASSET_TOOLS,
-  ...PREFAB_TOOLS,
-  ...MATERIAL_TOOLS,
-  ...GRAPHICS_TOOLS,
-  ...PHYSICS_TOOLS,
-  ...PROFILER_TOOLS,
-  ...SHADER_TOOLS,
-  ...TEXTURE_TOOLS,
-  ...ANIMATION_TOOLS,
-  ...UI_TOOLS,
-  ...SCRIPTABLE_OBJECT_TOOLS,
-  ...EDITOR_TOOLS,
-  ...DIAGNOSE_TOOLS,
-  ...SCREENSHOT_TOOLS,
-  ...CODE_TOOLS,
-  ...CONSOLE_TOOLS,
-  ...PACKAGE_TOOLS,
-  ...BUILD_TOOLS,
-  ...OBJECT_TOOLS,
-  ...REFLECTION_TOOLS,
-  ...CLI_ONLY_TOOLS,
-  ...TOOLS_DISCOVERY_TOOLS,
-];
+/** TS 本地工具(metadata 真源 = defineTool registry)。无 bridge 时仅这些工具可见。 */
+function localTsTools(): ToolMetadata[] {
+  return defineToolMetadata();
+}
 
-/**
- * Extension tool metadata — populated by the extension contribution loader.
- * ProBuilder, Cinemachine, VFX, URP, HDRP and other optional extensions register
- * their tools here rather than being statically aggregated in CORE_TOOLS.
- */
-const extensionTools: ToolMetadata[] = [];
-
-// Validate core tools at module level (no extension groups yet).
-// 生成 command-contract.json 时需要先加载 metadata,因此跳过契约反向校验以避免循环依赖。
+// Validate bridge registry once at module level. TS 本地工具 metadata 在运行时从 defineTool registry 取。
 if (process.env.UNITY_CLI_GENERATING_CONTRACT !== "1") {
   validateBridgeRegistryContracts(bridgeCommandRegistry, EXTENSION_GROUPS);
-  validateToolMetadataContracts(CORE_TOOLS, bridgeCommandRegistry);
-}
-validateBuiltinTools(CORE_TOOLS, false);
-
-/** Register extension tool metadata. Called by the contribution loader. */
-export function registerExtensionTools(tools: ToolMetadata[]): void {
-  const existingNames = new Set([...CORE_TOOLS, ...extensionTools].map((t) => t.name));
-  for (const tool of tools) {
-    if (existingNames.has(tool.name)) {
-      throw new Error(`Duplicate extension tool metadata name: ${tool.name}`);
-    }
-    existingNames.add(tool.name);
-  }
-  extensionTools.push(...tools);
 }
 
-/** Validate extension tool metadata after registration. */
+/** Extension tool metadata offline is intentionally empty. Extension tools require a live bridge for full descriptors. */
+export function registerExtensionTools(_tools: ToolMetadata[]): void {
+  // no-op: extension tools no longer register TS metadata duplicates
+}
+
 export function validateExtensionToolMetadata(): void {
-  validateBuiltinTools(extensionTools, true);
-  if (process.env.UNITY_CLI_GENERATING_CONTRACT !== "1") {
-    validateToolMetadataContracts(extensionTools, bridgeCommandRegistry);
-  }
+  // no-op: extension manifests + bridge specs are validated elsewhere
 }
 
-/** Return core built-in tool metadata entries (no extension tools). */
+/** Return TS-local tool metadata only. C# built-in/extension/project tools require a live bridge. */
 export function builtinToolMetadata(): ResolvedToolMetadata[] {
-  return CORE_TOOLS.map((tool) => normalizeToolMetadata(tool, "built-in"));
+  const tools = localTsTools();
+  validateBuiltinTools(tools, false);
+  return tools.map((tool) => normalizeToolMetadata(tool, tool.source ?? "built-in"));
 }
 
-/** Return extension tool metadata entries (registered by extension contributions). */
+/** Offline extension tool metadata is intentionally empty. */
 export function extensionToolMetadata(): ResolvedToolMetadata[] {
-  return extensionTools.map((tool) => normalizeToolMetadata(tool, "extension"));
+  return [];
 }
 
-/** Return all registered tool metadata entries (core + extension). */
+/** Return all locally registered metadata entries (TS-local only). */
 export function allRegisteredToolMetadata(): ResolvedToolMetadata[] {
-  return [
-    ...CORE_TOOLS.map((tool) => normalizeToolMetadata(tool, "built-in")),
-    ...extensionTools.map((tool) => normalizeToolMetadata(tool, "extension"))
-  ];
+  return builtinToolMetadata();
 }
 
-/** Return distinct core group names from built-in metadata. */
+/** Return distinct TS-local group names only. C# groups require a live bridge. */
 export function builtinToolGroups(): string[] {
   const groups = new Set<string>();
-  for (const tool of CORE_TOOLS) {
+  for (const tool of localTsTools()) {
     groups.add(tool.group);
   }
   return [...groups].sort();
 }
 
-/** Return distinct group names including extension groups. */
+/** Return distinct group names from locally visible metadata (TS-local only). */
 export function allRegisteredToolGroups(): string[] {
   const groups = new Set<string>();
   for (const tool of allRegisteredToolMetadata()) {
@@ -183,17 +106,17 @@ export function allRegisteredToolGroups(): string[] {
   return [...groups].sort();
 }
 
-/** Find a single tool by its dotted name (core + extension). */
+/** Find a single tool by its dotted name (TS-local only, offline). C# tools require live discovery. */
 export function findToolByName(name: string): ResolvedToolMetadata | undefined {
   return allRegisteredToolMetadata().find((t) => t.name === name);
 }
 
-/** Filter tools by group (core + extension). */
+/** Filter tools by group (TS-local only, offline). C# tools require live discovery. */
 export function filterToolsByGroup(group: string): ResolvedToolMetadata[] {
   return allRegisteredToolMetadata().filter((t) => t.group === group);
 }
 
-/** Search tools by keyword across name, summary, description, group (built-in + extension). */
+/** Search tools by keyword across name, summary, description, group (TS-local only, offline). */
 export function searchTools(keyword: string): ResolvedToolMetadata[] {
   const lower = keyword.toLowerCase();
   return allRegisteredToolMetadata().filter((t) =>
@@ -220,8 +143,6 @@ function validateBuiltinTools(tools: ToolMetadata[], skipCliCommandBridgeCheck: 
 
     if (!skipCliCommandBridgeCheck && toolHandler(tool) === "bridge" && tool.supportStatus !== "planned") {
       const cliCommand = toolCliCommand(tool);
-      // cliCommand 现为 "tools run <name>" 形态(README Project Baseline)。
-      // 通过工具名查 bridge spec,验证 bridgeCommand/toolName 与 tool.name 一致。
       const match = /^tools run (.+)$/.exec(cliCommand);
       if (match) {
         const toolName = match[1];

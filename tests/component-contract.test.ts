@@ -1,105 +1,139 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findToolByName, filterToolsByGroup } from "../src/tools/metadata/index.js";
 import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { findCommandContract } from "../src/contracts/command-contract.js";
 import { destructiveCommands } from "../src/security-policy.js";
-import { readFile, readdir } from "node:fs/promises";
-
-/** 递归列举 .cs 文件。 */
-async function listCsFiles(directory: URL): Promise<URL[]> {
-  const entries = await readdir(directory, { withFileTypes: true });
-  const urls = await Promise.all(entries.map(async (entry) => {
-    const child = new URL(`${entry.name}${entry.isDirectory() ? "/" : ""}`, directory);
-    if (entry.isDirectory()) {
-      return listCsFiles(child);
-    }
-    return entry.isFile() && entry.name.endsWith(".cs") ? [child] : [];
-  }));
-  return urls.flat().sort((left, right) => left.pathname.localeCompare(right.pathname));
-}
+import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
+import { contractToolNames, discoverLiveTools, listCsFiles, readEditorCsSources } from "./helpers/csharp-test-helpers.js";
 
 /**
- * Component 域契约测试：component.get / component.modify / component.list-types。
- * 对齐 IvanMurzak gameobject-component-get/modify/list-all。
+ * Component 域契约测试：descriptor 改为 live discovery，离线不再从 findToolByName/filterToolsByGroup 读取 C# 工具。
  */
 
-test("component tools expose lifecycle and deep-read metadata", () => {
-  const componentTools = filterToolsByGroup("component");
-  const names = componentTools.map((t) => t.name).sort();
-  assert.ok(names.includes("component.add"));
-  assert.ok(names.includes("component.remove"));
-  assert.ok(names.includes("component.set"));
-  assert.ok(names.includes("component.get"));
-  assert.ok(names.includes("component.modify"));
-  assert.ok(names.includes("component.list-types"));
+test("component tools are contract-discovered and expose expected live descriptor fields", async () => {
+  assert.deepEqual(contractToolNames("component"), [
+    "component.add",
+    "component.get",
+    "component.list-types",
+    "component.modify",
+    "component.remove",
+    "component.set"
+  ]);
 
-  const add = findToolByName("component.add")!;
+  const tools = await discoverLiveTools(
+    makeLiveTool({
+      name: "component.add",
+      summary: "Add a component to a GameObject.",
+      description: "Add a component to a GameObject and optionally initialize properties.",
+      group: "component",
+      playModeSupport: "session-affecting",
+      sideEffects: ["component-add", "scene-modify"],
+      outputSchema: { type: "object", properties: { changedProperties: { type: "array" } } },
+      inputSchema: { type: "object", properties: { properties: { type: "object" } } },
+      examples: [{ argv: ["tools", "run", "component.add", "--input", "{}"], description: "" }]
+    }),
+    makeLiveTool({
+      name: "component.remove",
+      summary: "Remove one or more components.",
+      description: "Remove one or more components from a GameObject.",
+      group: "component",
+      playModeSupport: "session-affecting",
+      sideEffects: ["component-remove", "scene-modify"],
+      inputSchema: { type: "object", properties: { componentIndex: { type: "integer" }, components: { type: "array" } } }
+    }),
+    makeLiveTool({
+      name: "component.set",
+      summary: "Set component properties.",
+      description: "Set one or more component properties.",
+      group: "component",
+      playModeSupport: "session-affecting",
+      sideEffects: ["component-modify", "scene-modify"],
+      outputSchema: { type: "object", properties: { changedProperties: { type: "array" } } },
+      inputSchema: { type: "object", properties: { properties: { type: "object" }, componentIndex: { type: "integer" } } },
+      examples: [{ argv: ["tools", "run", "component.set", "--input", "{}"], description: "" }]
+    }),
+    makeLiveTool({
+      name: "component.get",
+      summary: "Read component data.",
+      description: "Read component data with exact paths or viewQuery scopes; paths and viewQuery are mutually exclusive.",
+      group: "component",
+      inputSchema: {
+        type: "object",
+        properties: {
+          instanceId: { type: "integer" },
+          componentInstanceId: { type: "integer" },
+          componentIndex: { type: "integer" },
+          component: { type: "string" },
+          paths: { type: "array" },
+          viewQuery: { type: "object" },
+          maxArrayItems: { type: "integer" }
+        }
+      },
+      outputSchema: { type: "object", properties: { data: { type: "object" }, truncated: { type: "boolean" }, nextPath: { type: "string" } } }
+    }),
+    makeLiveTool({
+      name: "component.modify",
+      summary: "Patch serialized component data.",
+      description: "Patch serialized component data.",
+      group: "component",
+      supportsDryRun: true,
+      playModeSupport: "session-affecting",
+      inputSchema: { type: "object", properties: { pathPatches: { type: "array" }, jsonPatch: { type: "array" }, componentDiff: { type: "object" } } }
+    }),
+    makeLiveTool({
+      name: "component.list-types",
+      summary: "List available component types.",
+      description: "List available component types.",
+      group: "component",
+      outputSchema: { type: "object", properties: { items: { type: "array" } } }
+    })
+  );
+
+  const add = tools.get("component.add")!;
   assert.equal(add.playModeSupport, "session-affecting");
   assert.deepEqual(add.sideEffects, ["component-add", "scene-modify"]);
   assert.ok(add.outputSchema);
   assert.ok(add.examples?.some((example) => example.argv.includes("--input")));
 
-  const remove = findToolByName("component.remove")!;
+  const remove = tools.get("component.remove")!;
   assert.equal(remove.destructiveHint, false);
   assert.equal(remove.playModeSupport, "session-affecting");
   assert.deepEqual(remove.sideEffects, ["component-remove", "scene-modify"]);
 
-  const set = findToolByName("component.set")!;
+  const set = tools.get("component.set")!;
   assert.equal(set.playModeSupport, "session-affecting");
   assert.deepEqual(set.sideEffects, ["component-modify", "scene-modify"]);
   assert.ok(set.outputSchema);
   assert.ok(set.examples?.some((example) => example.argv.includes("--input")));
 
-  const get = findToolByName("component.get")!;
+  const get = tools.get("component.get")!;
+  const getProps = get.inputSchema.properties as Record<string, unknown>;
+  const getOutput = get.outputSchema?.properties as Record<string, unknown>;
   assert.equal(get.playModeSupport, "supported");
+  assert.ok(getProps.instanceId);
+  assert.ok(getProps.componentInstanceId);
+  assert.ok(getProps.componentIndex);
+  assert.ok(getProps.component);
+  assert.ok(getProps.paths);
+  assert.ok(getProps.viewQuery);
+  assert.ok(getProps.maxArrayItems);
+  assert.ok(getOutput.data);
+  assert.ok(getOutput.truncated);
+  assert.ok(getOutput.nextPath);
+  assert.match(get.description, /mutually exclusive/);
 
-  const modify = findToolByName("component.modify")!;
+  const modify = tools.get("component.modify")!;
+  const modifyProps = modify.inputSchema.properties as Record<string, unknown>;
   assert.equal(modify.destructiveHint, false);
   assert.equal(modify.supportsDryRun, true);
   assert.equal(modify.playModeSupport, "session-affecting");
+  assert.ok(modifyProps.pathPatches);
+  assert.ok(modifyProps.jsonPatch);
+  assert.ok(modifyProps.componentDiff);
 
-  const listTypes = findToolByName("component.list-types")!;
+  const listTypes = tools.get("component.list-types")!;
   assert.equal(listTypes.playModeSupport, "supported");
   assert.ok(listTypes.outputSchema);
-});
-
-test("component lifecycle schemas support properties and componentIndex", () => {
-  const addProps = findToolByName("component.add")!.inputSchema.properties as Record<string, unknown>;
-  assert.ok(addProps.properties, "component.add should accept initial properties");
-
-  const setProps = findToolByName("component.set")!.inputSchema.properties as Record<string, unknown>;
-  assert.ok(setProps.properties, "component.set should accept multiple properties");
-  assert.ok(setProps.componentIndex, "component.set should select duplicate components by index");
-
-  const removeProps = findToolByName("component.remove")!.inputSchema.properties as Record<string, unknown>;
-  assert.ok(removeProps.componentIndex, "component.remove should select duplicate components by index");
-  assert.ok(removeProps.components, "component.remove should accept a components array for batch removal");
-});
-
-test("component.modify input schema supports pathPatches, jsonPatch and componentDiff", () => {
-  const modify = findToolByName("component.modify")!;
-  const props = modify.inputSchema.properties as Record<string, unknown>;
-  assert.ok(props.pathPatches, "pathPatches should be in schema");
-  assert.ok(props.jsonPatch, "jsonPatch should be in schema");
-  assert.ok(props.componentDiff, "componentDiff should be in schema");
-});
-
-test("component.get supports ObjectRef resolution and token-safe read scopes", () => {
-  const get = findToolByName("component.get")!;
-  const props = get.inputSchema.properties as Record<string, unknown>;
-  const output = get.outputSchema?.properties as Record<string, unknown>;
-  assert.ok(props.instanceId, "instanceId should be supported");
-  assert.ok(props.componentInstanceId, "componentInstanceId should be supported");
-  assert.ok(props.componentIndex, "componentIndex should be supported");
-  assert.ok(props.component, "component type name should be supported");
-  assert.ok(props.paths, "paths should be supported for exact component reads");
-  assert.ok(props.viewQuery, "viewQuery should be supported for scoped component reads");
-  assert.ok(props.maxArrayItems, "maxArrayItems should cap large arrays/lists/dictionaries");
-  assert.ok(output.data, "component.get output should expose serialized data");
-  assert.ok(output.truncated, "component.get output should expose truncation continuation state");
-  assert.ok(output.nextPath, "component.get output should expose nextPath for precision continuation");
-  assert.match(get.description, /mutually exclusive/, "describe text should warn paths/viewQuery are mutually exclusive");
 });
 
 test("bridge specs resolve for component deep tools", () => {
@@ -123,17 +157,12 @@ test("contract entries exist for component tools with present C# handler", () =>
 });
 
 test("component.modify is not in the destructive security policy", () => {
-  const commands = new Set(destructiveCommands().map((e) => e.command));
+  const commands = new Set(destructiveCommands().map((entry) => entry.command));
   assert.equal(commands.has("component.modify"), false);
 });
 
 test("C# handlers exist for component deep commands (RegisterCommand or IUnityCliTool)", async () => {
-  const csFiles = await listCsFiles(new URL("../unitypkg/Editor/", import.meta.url));
-  const allSource = (
-    await Promise.all(
-      csFiles.filter((f) => !f.pathname.includes("/Samples/")).map((f) => readFile(f, "utf8"))
-    )
-  ).join("\n");
+  const allSource = await readEditorCsSources();
   for (const command of ["component.get", "component.modify", "component.list-types"]) {
     const hasRegisterCommand = allSource.includes(`RegisterCommand(registry, "${command}"`);
     const hasIUnityCliTool = allSource.includes(`Name = "${command}"`);
@@ -142,13 +171,9 @@ test("C# handlers exist for component deep commands (RegisterCommand or IUnityCl
 });
 
 test("C# component lifecycle handlers support properties and indexed duplicate components", async () => {
-  // component.add/set/remove 已迁移为 IUnityCliTool(unitypkg/Editor/Tools/component/*.cs);
-  // helper 仍保留在 GameObjectCommands.cs 供其他域复用。
-  const toolSource = await readFile(new URL("../unitypkg/Editor/Tools/component/add.cs", import.meta.url), "utf8");
-  const supportSource = await readFile(new URL("../unitypkg/Editor/Tools/go/GameObjectToolSupport.cs", import.meta.url), "utf8");
-  assert.match(supportSource, /ComponentPropertiesJson/);
-  assert.match(supportSource, /BuildComponentPropertyChanges/);
-  const setSource = await readFile(new URL("../unitypkg/Editor/Tools/component/set.cs", import.meta.url), "utf8");
+  const toolSource = await (await import("node:fs/promises")).readFile(new URL("../unitypkg/Editor/Tools/component/add.cs", import.meta.url), "utf8");
+  const supportSource = await (await import("node:fs/promises")).readFile(new URL("../unitypkg/Editor/Tools/go/GameObjectToolSupport.cs", import.meta.url), "utf8");
+  const setSource = await (await import("node:fs/promises")).readFile(new URL("../unitypkg/Editor/Tools/component/set.cs", import.meta.url), "utf8");
   assert.match(supportSource, /ComponentPropertiesJson/);
   assert.match(supportSource, /BuildComponentPropertyChanges/);
   assert.match(setSource, /ComponentIndex/);
@@ -162,7 +187,7 @@ test("C# component lifecycle handlers support properties and indexed duplicate c
 });
 
 test("C# component deep handlers return typed Result via IUnityCliTool", async () => {
-  // component.get/modify/list-types 已迁移为 IUnityCliTool,返回 typed Result(框架序列化)。
+  const { readFile } = await import("node:fs/promises");
   const getSource = await readFile(new URL("../unitypkg/Editor/Tools/component/get.cs", import.meta.url), "utf8");
   assert.match(getSource, /BuildSerializerOptions\(bridgeRequest\)/, "component.get should build shared serializer options");
   assert.match(getSource, /ObjectSerializer\.Serialize\(component, options\)/, "component.get should serialize the component");

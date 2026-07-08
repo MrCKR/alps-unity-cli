@@ -117,32 +117,33 @@ export function validateExtensionManifestContracts(
 
     for (const contribution of tools) {
       const metadata = metadataByName.get(contribution.name);
-      if (!metadata) {
-        throw new Error(`Extension '${manifest.id}' contributes unknown tool '${contribution.name}' with no tool metadata.`);
-      }
 
       const contract = findCommandContract(contribution.name);
       if (!contract) {
         throw new Error(`Extension '${manifest.id}' contributes tool '${contribution.name}' that is missing from the contract.`);
       }
 
-      if (contract.group !== metadata.group) {
+      const expectedGroup = metadata?.group ?? contribution.name.split(".")[0] ?? "extension";
+      if (contract.group !== expectedGroup) {
         throw new Error(
           `Extension '${manifest.id}' tool '${contribution.name}' group mismatch: ` +
-          `metadata=${metadata.group} contract=${contract.group}`
+          `expected=${expectedGroup} contract=${contract.group}`
         );
       }
 
-      // Tool-level metadata is the source of truth for optional Unity package needs.
-      // A single extension bundle may contain built-in Unity component tools and
-      // package-specific tools, so extension-level packages are not inherited here.
-      const expectedPackages = (metadata.requiresPackages ?? contribution.requiresPackages ?? manifest.unityPackages.map((p) => p.packageId)).slice().sort();
-      const contractPackages = (contract.requires_packages ?? []).slice().sort();
-      if (JSON.stringify(contractPackages) !== JSON.stringify(expectedPackages)) {
-        throw new Error(
-          `Extension '${manifest.id}' tool '${contribution.name}' requires_packages mismatch: ` +
-          `metadata=${JSON.stringify(expectedPackages)} contract=${JSON.stringify(contractPackages)}`
-        );
+      // 新语义下，extension tool 的离线依赖真源在 manifest：
+      // - 若 metadata/单 tool contribution 显式声明 requiresPackages，则 contract 必须对齐
+      // - 若只存在 extension-level unityPackages，则不再强制 contract 重复该依赖
+      const expectedPackages = metadata?.requiresPackages ?? contribution.requiresPackages;
+      if (expectedPackages !== undefined && contract.requires_packages !== undefined) {
+        const normalizedExpected = [...new Set(expectedPackages)].slice().sort();
+        const contractPackages = contract.requires_packages.slice().sort();
+        if (JSON.stringify(contractPackages) !== JSON.stringify(normalizedExpected)) {
+          throw new Error(
+            `Extension '${manifest.id}' tool '${contribution.name}' requires_packages mismatch: ` +
+            `metadata=${JSON.stringify(normalizedExpected)} contract=${JSON.stringify(contractPackages)}`
+          );
+        }
       }
 
       const spec = registry.specs().find((s) => s.toolName === contribution.name || s.bridgeCommand === contribution.name) as BridgeCommandSpec | undefined;

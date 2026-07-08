@@ -1,17 +1,9 @@
-/**
- * ProBuilder C# handler contract tests.
- *
- * Validates:
- * - All 36 ProBuilder tools have csharp_handler = "present" in contract
- * - Tool names match the 36 C# handler classes
- * - Unavailable degradation: contract entries require com.unity.probuilder
- * - 6 representative chain names exist
- */
-
 import assert from "node:assert/strict";
 import test from "node:test";
 import { commandContracts, findCommandContract } from "../src/contracts/command-contract.js";
-import { filterToolsByGroup, findToolByName } from "../src/tools/metadata/index.js";
+import { builtinExtensionToolContributions } from "../src/extensions/tool-manifest.js";
+import { probuilderDeleteFacesTool, probuilderPingTool } from "./helpers/live-tool-fixtures.js";
+import { discoverLiveTools } from "./helpers/csharp-test-helpers.js";
 import "../src/extensions/index.js";
 
 const EXPECTED_PROBUILDER_TOOLS = [
@@ -53,7 +45,6 @@ const EXPECTED_PROBUILDER_TOOLS = [
   "probuilder.repair-mesh"
 ] as const;
 
-// 6 representative chains per acceptance criteria
 const REPRESENTATIVE_CHAINS = [
   "probuilder.create-shape",
   "probuilder.mesh-info",
@@ -64,85 +55,50 @@ const REPRESENTATIVE_CHAINS = [
 ];
 
 test("all 36 ProBuilder contracts have csharp_handler = present", () => {
-  const contracts = commandContracts().filter(c => c.group === "probuilder");
-  assert.equal(contracts.length, 36, `Expected 36 probuilder contracts, got ${contracts.length}`);
-
+  const contracts = commandContracts().filter((entry) => entry.group === "probuilder");
+  assert.equal(contracts.length, 36);
   for (const contract of contracts) {
-    assert.equal(
-      contract.csharp_handler,
-      "present",
-      `${contract.bridgeCommand}: csharp_handler should be "present" after T2b implementation, got "${contract.csharp_handler}"`
-    );
+    assert.equal(contract.csharp_handler, "present");
   }
 });
 
-test("all 36 ProBuilder contracts require com.unity.probuilder package", () => {
-  const contracts = commandContracts().filter(c => c.group === "probuilder");
-
-  for (const contract of contracts) {
-    assert.ok(
-      contract.requires_packages,
-      `${contract.bridgeCommand}: must have requires_packages`
-    );
-    assert.deepEqual(
-      contract.requires_packages,
-      ["com.unity.probuilder"],
-      `${contract.bridgeCommand}: requires_packages must be ["com.unity.probuilder"]`
-    );
-  }
+test("all 36 ProBuilder tools are discoverable through extension manifest contributions", () => {
+  const names = builtinExtensionToolContributions()
+    .filter((tool) => tool.extensionId === "probuilder")
+    .map((tool) => tool.name)
+    .sort();
+  assert.deepEqual(names, [...EXPECTED_PROBUILDER_TOOLS].sort());
 });
 
-test("all 36 ProBuilder tools are discoverable via metadata", () => {
-  for (const name of EXPECTED_PROBUILDER_TOOLS) {
-    const tool = findToolByName(name);
-    assert.ok(tool, `${name}: should be discoverable via findToolByName`);
-    assert.equal(tool.group, "probuilder");
-    assert.equal(tool.handler, "hybrid");
-    assert.equal(tool.target, "editor");
-    assert.equal(tool.availabilityScope, "editorSession");
-  }
-});
-
-test("6 representative chains exist with correct handler = hybrid and csharp_handler = present", () => {
+test("representative chains keep contract routing with present C# handlers", () => {
   for (const name of REPRESENTATIVE_CHAINS) {
-    const tool = findToolByName(name);
-    assert.ok(tool, `${name}: representative chain tool must exist`);
-    assert.equal(tool.handler, "hybrid", `${name}: handler must be hybrid`);
-
     const contract = findCommandContract(name);
     assert.ok(contract, `${name}: contract must exist`);
-    assert.equal(contract.csharp_handler, "present", `${name}: csharp_handler must be present`);
-    assert.equal(contract.handler_type, "hybrid", `${name}: handler_type must be hybrid`);
+    assert.equal(contract?.csharp_handler, "present");
+    assert.equal(contract?.handler_type, "bridge");
   }
 });
 
-test("unavailable degradation: all ProBuilder tools have requiresPackages with com.unity.probuilder", () => {
-  const probuilderTools = filterToolsByGroup("probuilder");
-
-  for (const tool of probuilderTools) {
-    assert.ok(
-      tool.requiresPackages,
-      `${tool.name}: must have requiresPackages for unavailable degradation`
-    );
-    assert.deepEqual(
-      tool.requiresPackages,
-      ["com.unity.probuilder"],
-      `${tool.name}: requiresPackages must include com.unity.probuilder`
-    );
+test("unavailable degradation comes from manifest/live descriptor, not offline metadata", async () => {
+  const contributions = builtinExtensionToolContributions().filter((tool) => tool.extensionId === "probuilder");
+  for (const tool of contributions) {
+    assert.deepEqual(tool.requiresPackages, ["com.unity.probuilder"], `${tool.name}: requiresPackages must include com.unity.probuilder`);
   }
+
+  const liveTools = await discoverLiveTools(probuilderPingTool(), probuilderDeleteFacesTool());
+  const ping = liveTools.get("probuilder.ping")!;
+  assert.equal(ping.destructiveHint, false);
+  assert.deepEqual(ping.requiresPackages, ["com.unity.probuilder"]);
+
+  const deleteFaces = liveTools.get("probuilder.delete-faces")!;
+  assert.equal(deleteFaces.destructiveHint, true);
+  assert.equal(deleteFaces.supportsDryRun, true);
+  assert.deepEqual(deleteFaces.requiresPackages, ["com.unity.probuilder"]);
 });
 
-test("unavailable degradation: ProBuilder ping tool is read-only and safe to call without package", () => {
-  const ping = findToolByName("probuilder.ping");
-  assert.ok(ping, "probuilder.ping must exist");
-  assert.equal(ping.destructiveHint, false, "ping must not be destructive");
-  // Ping is the canonical unavailable-check tool; it returns installed=false
-  // without throwing when the package is missing.
-});
-
-test("ProBuilder tool count in metadata matches contract count", () => {
-  const tools = filterToolsByGroup("probuilder");
-  const contracts = commandContracts().filter(c => c.group === "probuilder");
-  assert.equal(tools.length, contracts.length, "tool count and contract count must match");
-  assert.equal(tools.length, 36, "both must be 36");
+test("ProBuilder manifest count matches contract count", () => {
+  const contributions = builtinExtensionToolContributions().filter((tool) => tool.extensionId === "probuilder");
+  const contracts = commandContracts().filter((entry) => entry.group === "probuilder");
+  assert.equal(contributions.length, contracts.length);
+  assert.equal(contributions.length, 36);
 });

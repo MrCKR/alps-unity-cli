@@ -19,12 +19,6 @@ import { urpBridgeSpecs } from "../bridge/domains/urp.js";
 import { hdrpBridgeSpecs } from "../bridge/domains/hdrp.js";
 import { bridgeCommandRegistry } from "../bridge/index.js";
 import { validateBridgeRegistryContracts } from "../contracts/command-contract.js";
-import { PROBUILDER_TOOLS } from "../tools/metadata/groups/probuilder.js";
-import { CINEMACHINE_TOOLS } from "../tools/metadata/groups/cinemachine.js";
-import { VFX_TOOLS } from "../tools/metadata/groups/vfx.js";
-import { URP_TOOLS } from "../tools/metadata/groups/urp.js";
-import { HDRP_TOOLS } from "../tools/metadata/groups/hdrp.js";
-import { registerExtensionTools, validateExtensionToolMetadata, EXTENSION_GROUPS } from "../tools/metadata/index.js";
 
 let registered = false;
 
@@ -52,18 +46,8 @@ export function registerBuiltinExtensionContributions(): void {
     ...markNativeCliCommands(hdrpBridgeSpecs)
   ]);
 
-  // Register extension tool metadata. User-facing execution always goes
-  // through tools run, while argument builders preserve native argv mapping internally.
-  registerExtensionTools(markToolsRunCommands([
-    ...PROBUILDER_TOOLS,
-    ...CINEMACHINE_TOOLS,
-    ...VFX_TOOLS,
-    ...URP_TOOLS,
-    ...HDRP_TOOLS
-  ]));
-
-  // Validate extension contributions
-  validateExtensionToolMetadata();
+  // Extension tool metadata is no longer duplicated in TS. Tool names/packages come from manifests,
+  // full descriptors are discovered from the live bridge.
 
   // 生成 command-contract.json 时契约尚未完成,跳过完整反向校验。
   if (process.env.UNITY_CLI_GENERATING_CONTRACT !== "1") {
@@ -82,6 +66,3 @@ function markNativeCliCommands<T extends { group: string; command: string; nativ
   return specs.map((spec) => ({ ...spec, nativeCliCommand: spec.nativeCliCommand ?? `${spec.group} ${spec.command}` }));
 }
 
-function markToolsRunCommands<T extends { name: string; cliCommand?: string }>(tools: T[]): T[] {
-  return tools.map((tool) => ({ ...tool, cliCommand: `tools run ${tool.name}` }));
-}

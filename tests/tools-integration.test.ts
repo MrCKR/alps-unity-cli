@@ -1,7 +1,3 @@
-/**
- * Integration tests: execute() → tools/capabilities/docs commands through the full CLI pipeline.
- */
-
 import assert from "node:assert/strict";
 import test from "node:test";
 import { execute } from "../src/cli.js";
@@ -10,6 +6,7 @@ import { JobRunner } from "../src/job-runner.js";
 import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { probuilderPingTool, sceneHierarchyTool } from "./helpers/live-tool-fixtures.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
@@ -19,56 +16,45 @@ async function makeRuntime() {
   return { dataDir, store, runner: new JobRunner(store, dataDir) };
 }
 
-test("integration: tools group via execute()", async () => {
+test("integration: offline tools group via execute() only shows TS-local groups", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["tools", "group"], runtime);
   assert.equal(result.ok, true);
 
   const data = result.data as Record<string, unknown>;
   assert.equal(data.command, "tools.group");
-  assert.ok(typeof data.count === "number");
-  assert.ok(data.count > 0);
-
   const groups = data.groups as Array<{ name: string; toolCount: number }>;
   const groupNames = groups.map((g) => g.name);
-  assert.ok(groupNames.includes("scene"));
+  assert.ok(groupNames.includes("docs"));
+  assert.ok(groupNames.includes("tools"));
+  assert.ok(!groupNames.includes("scene"));
 });
 
-test("integration: tools group list scene via execute()", async () => {
-  const runtime = await makeRuntime();
+test("integration: live-discovered built-in group list via execute()", async () => {
+  const runtime = { ...(await makeRuntime()), projectTools: [sceneHierarchyTool()] };
   const result = await execute(["tools", "group", "list", "scene"], runtime);
   assert.equal(result.ok, true);
 
   const data = result.data as Record<string, unknown>;
   assert.equal(data.command, "tools.group.list");
   const tools = data.tools as Array<{ name: string; source: string }>;
-  assert.ok(tools.length > 0);
-  for (const t of tools) {
-    assert.equal(t.source, "built-in");
-  }
+  assert.deepEqual(tools.map((tool) => tool.name), ["scene.hierarchy"]);
+  assert.equal(tools[0].source, "built-in");
 });
 
-test("integration: unregistered tools subcommand returns unknown-command error", async () => {
-  const runtime = await makeRuntime();
-  const result = await execute(["tools", "catalog"], runtime);
-  assert.equal(result.ok, false);
-  assert.equal(result.error?.code, "UNKNOWN_TOOLS_COMMAND");
-});
-
-test("integration: tools search hierarchy via execute()", async () => {
-  const runtime = await makeRuntime();
-  const result = await execute(["tools", "search", "hierarchy"], runtime);
+test("integration: live-discovered extension tool search via execute()", async () => {
+  const runtime = { ...(await makeRuntime()), projectTools: [probuilderPingTool()] };
+  const result = await execute(["tools", "search", "probuilder"], runtime);
   assert.equal(result.ok, true);
 
   const data = result.data as Record<string, unknown>;
   assert.equal(data.command, "tools.search");
-  const tools = data.tools as Array<{ name: string }>;
-  const names = tools.map((t) => t.name);
-  assert.ok(names.includes("scene.hierarchy"));
+  const tools = data.tools as Array<{ name: string; source: string }>;
+  assert.ok(tools.some((tool) => tool.name === "probuilder.ping" && tool.source === "extension"));
 });
 
-test("integration: tools describe scene.hierarchy via execute()", async () => {
-  const runtime = await makeRuntime();
+test("integration: live-discovered C# describe via execute()", async () => {
+  const runtime = { ...(await makeRuntime()), projectTools: [sceneHierarchyTool()] };
   const result = await execute(["tools", "describe", "scene.hierarchy"], runtime);
   assert.equal(result.ok, true);
 
@@ -77,8 +63,13 @@ test("integration: tools describe scene.hierarchy via execute()", async () => {
   assert.equal(data.group, "scene");
   assert.equal(data.destructiveHint, false);
   assert.ok(data.inputSchema);
-  assert.ok(Array.isArray(data.examples));
-  assert.equal("mode" in data, false);
+});
+
+test("integration: unregistered tools subcommand returns unknown-command error", async () => {
+  const runtime = await makeRuntime();
+  const result = await execute(["tools", "catalog"], runtime);
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "UNKNOWN_TOOLS_COMMAND");
 });
 
 test("integration: capabilities via execute()", async () => {
@@ -98,16 +89,16 @@ test("integration: capabilities via execute()", async () => {
 test("integration: docs built-in topics via canonical docs command", async () => {
   const runtime = await makeRuntime();
   const list = await execute(["tools", "run", "docs.list", "--format", "text"], runtime);
-  const topic = await execute(["tools", "run", "docs.topic", "scene"], runtime);
+  const topic = await execute(["tools", "run", "docs.topic", "package"], runtime);
   const missing = await execute(["tools", "run", "docs.topic", "missing-topic"], runtime);
 
   assert.equal(list.ok, true);
   assert.equal(topic.ok, true);
   assert.equal(missing.ok, false);
   assert.equal((list.data as { command: string }).command, "docs.list");
-  assert.match((list.data as { text: string }).text, /scene/);
+  assert.match((list.data as { text: string }).text, /package/);
   assert.equal((topic.data as { command: string; topic: string }).command, "docs.topic");
-  assert.equal((topic.data as { topic: string }).topic, "scene");
+  assert.equal((topic.data as { topic: string }).topic, "package");
   assert.equal(missing.error?.code, "DOCS_TOPIC_NOT_FOUND");
 });
 
@@ -132,8 +123,6 @@ test("integration: package read tools run through tools entrypoint", async () =>
   assert.equal(infoData.package.name, "com.example.tool");
   assert.equal(infoData.package.requestedVersion, "1.0.0");
 });
-
-
 
 test("integration: tools describe nonexistent returns E_TOOL_NOT_FOUND_FOR_TARGET via execute()", async () => {
   const runtime = await makeRuntime();

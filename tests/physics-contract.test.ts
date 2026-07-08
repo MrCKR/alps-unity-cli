@@ -1,69 +1,85 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { findToolByName, filterToolsByGroup } from "../src/tools/metadata/index.js";
+import { readFile } from "node:fs/promises";
 import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { findCommandContract } from "../src/contracts/command-contract.js";
-import { readFile, readdir } from "node:fs/promises";
+import { makeLiveTool } from "./helpers/live-tool-fixtures.js";
+import { contractToolNames, discoverLiveTools, readCsSources, readEditorCsSources } from "./helpers/csharp-test-helpers.js";
 
-/** 递归列举 .cs 文件。 */
-async function listCsFiles(directory: URL): Promise<URL[]> {
-  const entries = await readdir(directory, { withFileTypes: true });
-  const urls = await Promise.all(entries.map(async (entry) => {
-    const child = new URL(`${entry.name}${entry.isDirectory() ? "/" : ""}`, directory);
-    if (entry.isDirectory()) {
-      return listCsFiles(child);
-    }
-    return entry.isFile() && entry.name.endsWith(".cs") ? [child] : [];
-  }));
-  return urls.flat().sort((left, right) => left.pathname.localeCompare(right.pathname));
-}
+const PHYSICS_COMMANDS = [
+  "physics.assign-material",
+  "physics.collision-matrix",
+  "physics.force",
+  "physics.joint",
+  "physics.linecast",
+  "physics.material",
+  "physics.overlap",
+  "physics.raycast",
+  "physics.raycast-all",
+  "physics.rigidbody",
+  "physics.settings",
+  "physics.shapecast",
+  "physics.simulation",
+  "physics.validate"
+];
 
-/** 读取整个 Physics 域新形态源码集合。 */
-async function readPhysicsSources(): Promise<string> {
-  const toolsUrl = new URL("../unitypkg/Editor/Tools/physics/", import.meta.url);
-  const files = await listCsFiles(toolsUrl);
-  return (await Promise.all(files.map((file) => readFile(file, "utf8")))).join("\n");
-}
-
-const PHYSICS_COMMANDS = ["physics.settings", "physics.collision-matrix", "physics.material", "physics.assign-material", "physics.joint", "physics.force", "physics.overlap", "physics.rigidbody", "physics.raycast", "physics.simulation", "physics.raycast-all", "physics.linecast", "physics.shapecast", "physics.validate"];
-
-/**
- * Physics 域契约测试（14 工具）。
- * 对齐 CoplayDev manage_physics，验证 metadata/bridge/contract/C# 一致，
- * physics.validate 业务字段不被 envelope 吞掉，query/force/simulation 的 Play Mode 语义。
- */
-
-test("physics group exposes the 14 tools", () => {
-  const tools = filterToolsByGroup("physics").map((t) => t.name).sort();
-  assert.equal(tools.length, 14);
-  for (const name of PHYSICS_COMMANDS) {
-    assert.ok(tools.includes(name), `${name} should exist`);
-  }
+test("physics group exposes the 14 tools via contract discovery", () => {
+  assert.deepEqual(contractToolNames("physics"), [...PHYSICS_COMMANDS].sort());
 });
 
-test("physics query tools are supported/read-only", () => {
+test("physics live descriptors expose representative semantics", async () => {
+  const tools = await discoverLiveTools(
+    makeLiveTool({ name: "physics.raycast", summary: "Raycast in the physics scene.", description: "Raycast in the physics scene.", group: "physics", examples: [{ argv: ["tools", "run", "physics.raycast", "--input", "{}"], description: "" }] }),
+    makeLiveTool({ name: "physics.raycast-all", summary: "Raycast all hits.", description: "Raycast all hits.", group: "physics", examples: [{ argv: ["tools", "run", "physics.raycast-all", "--input", "{}"], description: "" }] }),
+    makeLiveTool({ name: "physics.linecast", summary: "Linecast in the physics scene.", description: "Linecast in the physics scene.", group: "physics", examples: [{ argv: ["tools", "run", "physics.linecast", "--input", "{}"], description: "" }] }),
+    makeLiveTool({ name: "physics.shapecast", summary: "Shapecast in the physics scene.", description: "Supports CircleCast/BoxCast/CapsuleCast.", group: "physics", examples: [{ argv: ["tools", "run", "physics.shapecast", "--input", "{}"], description: "" }] }),
+    makeLiveTool({ name: "physics.overlap", summary: "Overlap query.", description: "Overlap query supporting mode 2d and 3d.", group: "physics", examples: [{ argv: ["tools", "run", "physics.overlap", "--input", "{}"], description: "" }] }),
+    makeLiveTool({ name: "physics.validate", summary: "Validate physics state.", description: "Validate physics state.", group: "physics", examples: [{ argv: ["tools", "run", "physics.validate", "--input", "{}"], description: "" }] }),
+    makeLiveTool({ name: "physics.force", summary: "Apply runtime force.", description: "Apply runtime force.", group: "physics", playModeSupport: "runtime-only", sideEffects: ["runtime-state"] }),
+    makeLiveTool({ name: "physics.simulation", summary: "Step runtime simulation.", description: "Step runtime simulation.", group: "physics", playModeSupport: "runtime-only" }),
+    makeLiveTool({ name: "physics.settings", summary: "Mutate physics settings.", description: "Mutate physics settings.", group: "physics", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] }),
+    makeLiveTool({ name: "physics.collision-matrix", summary: "Read or update collision matrix.", description: "Read or update the full 32-layer collision matrix.", group: "physics", playModeSupport: "session-affecting", sideEffects: ["scene-modify"], inputSchema: { type: "object", properties: {} } }),
+    makeLiveTool({ name: "physics.material", summary: "Mutate physics materials.", description: "Mutate physics materials.", group: "physics", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] }),
+    makeLiveTool({ name: "physics.assign-material", summary: "Assign a physics material.", description: "Assign a physics material.", group: "physics", supportsDryRun: true, playModeSupport: "session-affecting", sideEffects: ["scene-modify"], inputSchema: { type: "object", required: ["target", "materialPath"], properties: { target: { type: "string" }, materialPath: { type: "string" } } } }),
+    makeLiveTool({ name: "physics.joint", summary: "Mutate joints.", description: "Mutate joints; supports action=remove.", group: "physics", playModeSupport: "session-affecting", sideEffects: ["scene-modify"], inputSchema: { type: "object", properties: { action: { type: "string" } } } }),
+    makeLiveTool({ name: "physics.rigidbody", summary: "Read or mutate rigidbody state.", description: "Read rigidbody state without adding or modifying components.", group: "physics", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] })
+  );
+
   for (const name of ["physics.raycast", "physics.raycast-all", "physics.linecast", "physics.shapecast", "physics.overlap", "physics.validate"]) {
-    const tool = findToolByName(name)!;
+    const tool = tools.get(name)!;
     assert.equal(tool.destructiveHint, false, `${name} non-destructive`);
     assert.equal(tool.playModeSupport, "supported", `${name} play mode supported`);
     assert.ok(tool.examples?.length, `${name} examples`);
   }
-});
 
-test("physics runtime tools (force/simulation) are runtime-only", () => {
-  const force = findToolByName("physics.force")!;
-  assert.equal(force.playModeSupport, "runtime-only", "force is runtime-only");
+  const force = tools.get("physics.force")!;
+  assert.equal(force.playModeSupport, "runtime-only");
   assert.ok(force.sideEffects?.includes("runtime-state"));
-  const sim = findToolByName("physics.simulation")!;
-  assert.equal(sim.playModeSupport, "runtime-only", "simulation is runtime-only");
-});
+  assert.equal(tools.get("physics.simulation")?.playModeSupport, "runtime-only");
 
-test("physics write tools are session-affecting", () => {
   for (const name of ["physics.settings", "physics.collision-matrix", "physics.material", "physics.assign-material", "physics.joint", "physics.rigidbody"]) {
-    const tool = findToolByName(name)!;
+    const tool = tools.get(name)!;
     assert.equal(tool.playModeSupport, "session-affecting", `${name} session-affecting`);
     assert.ok(tool.sideEffects?.length, `${name} side effects`);
   }
+
+  const collision = tools.get("physics.collision-matrix")!;
+  assert.equal(Array.isArray(collision.inputSchema.required), false, "full matrix read must not require layerA/layerB");
+  assert.match(collision.description, /full 32-layer collision matrix/i);
+
+  const assign = tools.get("physics.assign-material")!;
+  assert.equal(assign.destructiveHint, false);
+  assert.equal(assign.supportsDryRun, true);
+  assert.ok(assign.sideEffects?.includes("scene-modify"));
+  assert.deepEqual(assign.inputSchema.required, ["target", "materialPath"]);
+
+  const joint = tools.get("physics.joint")!;
+  assert.ok((joint.inputSchema.properties as Record<string, unknown>).action);
+  assert.match(joint.description, /action=remove/);
+
+  assert.match(tools.get("physics.overlap")?.description ?? "", /mode 2d/i);
+  assert.match(tools.get("physics.shapecast")?.description ?? "", /CircleCast\/BoxCast\/CapsuleCast/);
+  assert.match(tools.get("physics.rigidbody")?.description ?? "", /without adding or modifying components/);
 });
 
 test("bridge specs resolve for physics tools", () => {
@@ -78,17 +94,12 @@ test("contract entries exist for physics tools with present C# handler", () => {
   for (const name of PHYSICS_COMMANDS) {
     const contract = findCommandContract(name);
     assert.ok(contract, `${name} should be in contract`);
-    assert.equal(contract.csharp_handler, "present", `${name} should have present C# handler`);
+    assert.equal(contract?.csharp_handler, "present", `${name} should have present C# handler`);
   }
 });
 
-test("C# RegisterCommand calls exist for physics commands", async () => {
-  const csFiles = await listCsFiles(new URL("../unitypkg/Editor/", import.meta.url));
-  const allSource = (
-    await Promise.all(
-      csFiles.filter((f) => !f.pathname.includes("/Samples/")).map((f) => readFile(f, "utf8"))
-    )
-  ).join("\n");
+test("physics C# handlers are registered", async () => {
+  const allSource = await readEditorCsSources();
   for (const command of PHYSICS_COMMANDS) {
     const hasRegisterCommand = allSource.includes(`RegisterCommand(registry, "${command}"`);
     const hasIUnityCliTool = allSource.includes(`Name = "${command}"`);
@@ -97,7 +108,7 @@ test("C# RegisterCommand calls exist for physics commands", async () => {
 });
 
 test("physics C# has no legacy unity_cli command form", async () => {
-  const source = await readPhysicsSources();
+  const source = await readCsSources(new URL("../unitypkg/Editor/Tools/physics/", import.meta.url));
   assert.equal(source.includes("unity_cli "), false, "must not reference legacy 'unity_cli ' command form");
 });
 
@@ -116,28 +127,4 @@ test("physics bridge spec forwards structured --input fields", async () => {
   assert.match(spec, /stringField\(flags, "shape"\)/, "bridge should forward structured shape");
   assert.match(spec, /stringField\(flags, "materialPath"\)/, "bridge should forward structured materialPath");
   assert.match(spec, /stringField\(flags, "action"\)/, "bridge should forward structured joint action");
-});
-
-test("M absorption fields are described for AI self-discovery", async () => {
-  const collision = findToolByName("physics.collision-matrix")!;
-  assert.equal(Array.isArray(collision.inputSchema.required), false, "full matrix read must not require layerA/layerB");
-  assert.match(collision.description, /full 32-layer collision matrix/i);
-
-  const assign = findToolByName("physics.assign-material")!;
-  assert.equal(assign.destructiveHint, false);
-  assert.equal(assign.supportsDryRun, true);
-  assert.ok(assign.sideEffects?.includes("scene-modify"));
-  assert.deepEqual(assign.inputSchema.required, ["target", "materialPath"]);
-
-  const joint = findToolByName("physics.joint")!;
-  assert.ok((joint.inputSchema.properties as Record<string, unknown>).action, "joint action should be documented");
-  assert.match(joint.description, /action=remove/);
-
-  const overlap = findToolByName("physics.overlap")!;
-  assert.match(overlap.description, /mode 2d/i);
-  const shapecast = findToolByName("physics.shapecast")!;
-  assert.match(shapecast.description, /CircleCast\/BoxCast\/CapsuleCast/);
-
-  const rigidbody = findToolByName("physics.rigidbody")!;
-  assert.match(rigidbody.description, /without adding or modifying components/);
 });

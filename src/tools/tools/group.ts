@@ -122,13 +122,20 @@ function summarizeGroups(tools: ToolMetadata[], builtinGroups: string[]): ToolsG
     }
     groupCounts[tool.group] = (groupCounts[tool.group] ?? 0) + 1;
   }
-  return [...seen].sort().map((group) => ({
-    name: group,
-    summary: GROUP_DESCRIPTIONS[group] ?? `${group} tools.`,
-    toolCount: groupCounts[group] ?? 0,
-    source: EXTENSION_GROUPS.has(group) ? "extension" : builtinGroups.includes(group) ? "built-in" : "project",
-    cliCommand: `tools group list ${group}`
-  }));
+  return [...seen].sort().map((group) => {
+    const groupTools = tools.filter((tool) => tool.group === group);
+    const explicitSource = groupTools.find((tool) => tool.source === "built-in")?.source
+      ?? groupTools.find((tool) => tool.source === "extension")?.source
+      ?? groupTools.find((tool) => tool.source === "project")?.source;
+    const source = explicitSource ?? (EXTENSION_GROUPS.has(group) ? "extension" : builtinGroups.includes(group) ? "built-in" : "project");
+    return {
+      name: group,
+      summary: GROUP_DESCRIPTIONS[group] ?? `${group} tools.`,
+      toolCount: groupCounts[group] ?? 0,
+      source,
+      cliCommand: `tools group list ${group}`
+    };
+  });
 }
 
 export default defineTool<ToolsGroupRequest, ToolsGroupResult>({

@@ -2,12 +2,14 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile, readdir } from "node:fs/promises";
 import { bridgeCommandRegistry } from "../../src/bridge/index.js";
-import { builtinToolMetadata, allRegisteredToolMetadata } from "../../src/tools/metadata/index.js";
-import { commandContracts, validateBridgeRegistryContracts, validateToolMetadataContracts } from "../../src/contracts/command-contract.js";
+import { BUILTIN_EXTENSION_MANIFESTS } from "../../src/extensions/index.js";
+import { commandContracts, validateBridgeRegistryContracts, validateExtensionManifestContracts, validateToolMetadataContracts } from "../../src/contracts/command-contract.js";
+import { allRegisteredToolMetadata, builtinToolMetadata, extensionToolMetadata } from "../../src/tools/metadata/index.js";
 import "../../src/extensions/index.js";
 
 const editorUrl = new URL("../../../unitypkg/Editor/", import.meta.url);
 const extensionsUrl = new URL("../../../extensions/", import.meta.url);
+
 const filledCsharpHandlerCommands = [
   "scene.active",
   "scene.build-settings",
@@ -43,47 +45,79 @@ const filledCsharpHandlerCommands = [
   "scriptable-object.modify"
 ];
 
-test("command contract validates bridge registry and metadata", () => {
-  // Full validation includes extension contributions registered via extensions/index.js.
+test("command contract validates TS-local metadata, bridge registry and extension manifests under the new split model", () => {
+  assert.equal(builtinToolMetadata().length, 34, "TS-local built-in metadata count should stay stable");
+  assert.equal(allRegisteredToolMetadata().length, 34, "allRegisteredToolMetadata should be TS-local only");
+  assert.equal(extensionToolMetadata().length, 0, "offline extension tool metadata should stay empty");
+
   assert.doesNotThrow(() => validateBridgeRegistryContracts(bridgeCommandRegistry));
- assert.doesNotThrow(() => validateToolMetadataContracts(allRegisteredToolMetadata(), bridgeCommandRegistry));
-  // All registered tools (core + extension) + runtime-tool commands + project-tool commands + context commands + extension command
-  assert.equal(commandContracts().length, allRegisteredToolMetadata().length + 4 + 3 + 1);
-  // Bridge registry includes core + extension specs
-  const bridgeSpecCount = new Set(bridgeCommandRegistry.specs().map((spec) => spec.bridgeCommand)).size;
-  assert.ok(bridgeSpecCount > 0, "Bridge registry should have specs");
+  assert.doesNotThrow(() => validateToolMetadataContracts(allRegisteredToolMetadata(), bridgeCommandRegistry));
+  assert.doesNotThrow(() => validateExtensionManifestContracts(BUILTIN_EXTENSION_MANIFESTS, bridgeCommandRegistry, extensionToolMetadata()));
+
+  assert.equal(commandContracts().length, 335, "contract should still expose the full tool catalog");
+});
+
+test("command contract keeps representative TS-local, C# built-in, and extension entries", () => {
+  const contracts = new Map(commandContracts().map((entry) => [entry.bridgeCommand, entry]));
+
+  assert.equal(contracts.get("tools.group")?.handler_type, "offline");
+  assert.equal(contracts.get("build.run")?.handler_type, "job");
+  assert.equal(contracts.get("scene.hierarchy")?.handler_type, "bridge");
+  assert.equal(contracts.get("probuilder.ping")?.handler_type, "bridge");
+  assert.equal(contracts.get("cinemachine.ping")?.group, "cinemachine");
 });
 
 test("command contract includes Profiler bridge commands", () => {
   const contracts = commandContracts().filter((entry) => entry.group === "profiler");
-  assert.deepEqual(contracts.map((entry) => entry.bridgeCommand), ["profiler.areas", "profiler.capture", "profiler.clear", "profiler.counter", "profiler.deep", "profiler.export", "profiler.frame", "profiler.frame-debugger.disable", "profiler.frame-debugger.enable", "profiler.frame-debugger.events", "profiler.hierarchy", "profiler.load", "profiler.memory", "profiler.memory-snapshot.compare", "profiler.memory-snapshot.list", "profiler.memory-snapshot.take", "profiler.module-enable", "profiler.modules", "profiler.object-memory", "profiler.pause", "profiler.rendering-stats", "profiler.script-stats", "profiler.start", "profiler.status", "profiler.stop"]);
+  assert.deepEqual(contracts.map((entry) => entry.bridgeCommand), [
+    "profiler.areas",
+    "profiler.capture",
+    "profiler.clear",
+    "profiler.counter",
+    "profiler.deep",
+    "profiler.export",
+    "profiler.frame",
+    "profiler.frame-debugger.disable",
+    "profiler.frame-debugger.enable",
+    "profiler.frame-debugger.events",
+    "profiler.hierarchy",
+    "profiler.load",
+    "profiler.memory",
+    "profiler.memory-snapshot.compare",
+    "profiler.memory-snapshot.list",
+    "profiler.memory-snapshot.take",
+    "profiler.module-enable",
+    "profiler.modules",
+    "profiler.object-memory",
+    "profiler.pause",
+    "profiler.rendering-stats",
+    "profiler.script-stats",
+    "profiler.start",
+    "profiler.status",
+    "profiler.stop"
+  ]);
 });
 
-test("command contract marks asset.refresh as bridge-job capable", () => {
-  const contract = commandContracts().find((entry) => entry.bridgeCommand === "asset.refresh");
-  assert.ok(contract, "asset.refresh should be in command contract");
-  assert.equal(contract.handler_type, "hybrid");
-  assert.equal(contract.csharp_handler, "present");
-  assert.equal(contract.destructive, false);
+test("command contract marks representative routing correctly", () => {
+  const assetRefresh = commandContracts().find((entry) => entry.bridgeCommand === "asset.refresh");
+  const editorCompile = commandContracts().find((entry) => entry.bridgeCommand === "editor.compile");
+  const compileDiagnostics = commandContracts().find((entry) => entry.bridgeCommand === "editor.compile-diagnostics");
+
+  assert.ok(assetRefresh);
+  assert.equal(assetRefresh.handler_type, "hybrid");
+  assert.equal(assetRefresh.csharp_handler, "present");
+  assert.equal(assetRefresh.destructive, false);
+
+  assert.ok(editorCompile);
+  assert.equal(editorCompile.handler_type, "bridge");
+  assert.equal(editorCompile.csharp_handler, "present");
+
+  assert.ok(compileDiagnostics);
+  assert.equal(compileDiagnostics.handler_type, "hybrid");
+  assert.equal(compileDiagnostics.csharp_handler, "none");
 });
 
-test("command contract marks editor.compile as live bridge handler", () => {
-  const contract = commandContracts().find((entry) => entry.bridgeCommand === "editor.compile");
-  assert.ok(contract, "editor.compile should be in command contract");
-  assert.equal(contract.handler_type, "bridge");
-  assert.equal(contract.csharp_handler, "present");
-  assert.equal(contract.destructive, false);
-});
-
-test("command contract marks editor.compile-diagnostics as CLI orchestration", () => {
-  const contract = commandContracts().find((entry) => entry.bridgeCommand === "editor.compile-diagnostics");
-  assert.ok(contract, "editor.compile-diagnostics should be in command contract");
-  assert.equal(contract.handler_type, "hybrid");
-  assert.equal(contract.csharp_handler, "none");
-  assert.equal(contract.destructive, false);
-});
-
-test("command contract marks C# handler gaps as present", async () => {
+test("registered C# command counts remain stable", async () => {
   const contracts = new Map(commandContracts().map((entry) => [entry.bridgeCommand, entry]));
   const csharpCommands = await registeredCsharpCommands(editorUrl);
   const extensionCsharpCommands = await registeredExtensionCsharpCommands();
@@ -91,7 +125,7 @@ test("command contract marks C# handler gaps as present", async () => {
 
   for (const command of filledCsharpHandlerCommands) {
     assert.equal(contracts.get(command)?.csharp_handler, "present", `${command} contract should be present`);
-    assert.ok(allCsharpCommands.has(command), `${command} should be registered in C# BridgeCommandRegistry or an extension bundle`);
+    assert.ok(allCsharpCommands.has(command), `${command} should be registered in C# or extension bundles`);
   }
 
   assert.equal(csharpCommands.size, 233);
@@ -102,15 +136,11 @@ test("command contract marks C# handler gaps as present", async () => {
 async function registeredCsharpCommands(directory: URL): Promise<Set<string>> {
   const commands = new Set<string>();
   for (const file of await listCSharpFiles(directory)) {
-    // 排除 Samples(样板工具不参与核心契约)
     if (file.pathname.includes("/Samples/") || file.pathname.includes("\\Samples\\")) continue;
     const source = await readFile(file, "utf8");
-    // RegisterCommand 形态(旧)
     for (const match of source.matchAll(/RegisterCommand\(registry, "([^"]+)"/g)) {
       commands.add(match[1]);
     }
-    // IUnityCliTool/IUnityCliDeferredTool 形态(新,Stage 2+):文件含接口声明则提取 Name="..."。
-    // Context 名不属于 command-contract；context 契约由 context tests 覆盖。
     if (source.includes(": IUnityCliTool<") || source.includes(": IUnityCliDeferredTool<")) {
       for (const match of source.matchAll(/Name\s*=\s*"([a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+)"/g)) {
         commands.add(match[1]);
