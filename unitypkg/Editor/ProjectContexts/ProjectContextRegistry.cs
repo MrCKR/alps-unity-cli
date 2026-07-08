@@ -290,11 +290,12 @@ namespace UnityCli
                     RequiresPackages = descriptor.RequiresPackages,
                     ReadHandler = delegate(BridgeRequest request)
                     {
+                        var args = request.DeserializeArgs<ContextRouteArgs>();
                         var inputJson = request.RawJsonArg("input") ?? "{}";
                         var context = new UnityCliProjectToolContext
                         {
                             RequestId = request.RequestId,
-                            ProjectPath = request.StringArg("projectPath") ?? ProjectRoot(),
+                            ProjectPath = args.ProjectPath ?? ProjectRoot(),
                             InputJson = inputJson,
                             LogPath = LogPath()
                         };
@@ -654,6 +655,13 @@ namespace UnityCli
             return SuccessJson(data);
         }
 
+        private sealed class ContextRouteArgs
+        {
+            public string Name { get; set; }
+            public string FingerprintMode { get; set; }
+            public string ProjectPath { get; set; }
+        }
+
         /// <summary>
         /// context.describe — returns full descriptor/schema/fingerprint for a named context.
         /// Lookup order: built-in first, project custom second.
@@ -663,7 +671,8 @@ namespace UnityCli
         private static string ContextDescribe(BridgeRequest request)
         {
             DiscoverProjectContexts();
-            var name = request.StringArg("name");
+            var args = request.DeserializeArgs<ContextRouteArgs>();
+            var name = args.Name;
             if (string.IsNullOrEmpty(name))
             {
                 return ErrorJson("E_CONTEXT_NAME_REQUIRED",
@@ -682,7 +691,7 @@ namespace UnityCli
             if (ProjectContexts.ContainsKey(name))
             {
                 var definition = ProjectContexts[name];
-                RefreshProjectContextFingerprint(definition, request.StringArg("fingerprintMode"));
+                RefreshProjectContextFingerprint(definition, args.FingerprintMode);
                 return SuccessJson(ProjectContextDefinitionJson(definition));
             }
 
@@ -701,7 +710,8 @@ namespace UnityCli
         private static string ContextRead(BridgeRequest request)
         {
             DiscoverProjectContexts();
-            var name = request.StringArg("name");
+            var args = request.DeserializeArgs<ContextRouteArgs>();
+            var name = args.Name;
             if (string.IsNullOrEmpty(name))
             {
                 return ErrorJson("E_CONTEXT_NAME_REQUIRED",
@@ -737,7 +747,7 @@ namespace UnityCli
 
             // ── Fingerprint check ──
             var fingerprintCheck = RefreshProjectContextFingerprint(
-                definition, request.StringArg("fingerprintMode"));
+                definition, args.FingerprintMode);
             if (fingerprintCheck.Blocked)
             {
                 WriteLog("custom_context_fingerprint_blocked requestId=" + request.RequestId +
@@ -780,7 +790,7 @@ namespace UnityCli
                 resultJson = definition.Read(new UnityCliProjectToolContext
                 {
                     RequestId = request.RequestId,
-                    ProjectPath = request.StringArg("projectPath") ?? ProjectRoot(),
+                    ProjectPath = args.ProjectPath ?? ProjectRoot(),
                     InputJson = inputJson,
                     LogPath = LogPath()
                 });

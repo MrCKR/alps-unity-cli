@@ -31,26 +31,30 @@ namespace UnityCli
         public sealed class BridgeRequest
         {
             private readonly string body;
+            private readonly Dictionary<string, object> root;
 
-            internal BridgeRequest(string body, string requestId, string command)
+            internal BridgeRequest(string body, string requestId, string command, Dictionary<string, object> root)
             {
-                this.body = body;
+                this.body = body ?? string.Empty;
+                this.root = root ?? new Dictionary<string, object>(StringComparer.Ordinal);
                 RequestId = requestId;
                 Command = command;
             }
 
             public string RequestId { get; private set; }
             public string Command { get; private set; }
+            public string Body { get { return body; } }
             public bool DryRun { get { return BoolArg("dryRun", false); } }
 
             public static BridgeRequest Parse(string body)
             {
-                return new BridgeRequest(body ?? string.Empty, ExtractString(body, "requestId"), ExtractString(body, "command"));
+                var parsed = UnityCliToolJson.Parse(body) as Dictionary<string, object> ?? new Dictionary<string, object>(StringComparer.Ordinal);
+                return new BridgeRequest(body ?? string.Empty, GetString(parsed, "requestId"), GetString(parsed, "command"), parsed);
             }
 
             public string StringArg(string name)
             {
-                return ExtractString(body, name);
+                return ConvertToString(GetField(name));
             }
 
             /// <summary>
@@ -70,16 +74,7 @@ namespace UnityCli
 
             public int? OptionalIntArg(string name)
             {
-                var match = Regex.Match(body ?? string.Empty, "\\\"" + Regex.Escape(name) + "\\\"\\s*:\\s*(?:\\\")?(-?\\d+)(?:\\\")?");
-                if (match.Success)
-                {
-                    int parsed;
-                    if (int.TryParse(match.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed))
-                    {
-                        return parsed;
-                    }
-                }
-                return null;
+                return ConvertToInt(GetField(name));
             }
 
             public float FloatArg(string name, float fallback)
@@ -90,16 +85,7 @@ namespace UnityCli
 
             public float? OptionalFloatArg(string name)
             {
-                var match = Regex.Match(body ?? string.Empty, "\\\"" + Regex.Escape(name) + "\\\"\\s*:\\s*(?:\\\")?(-?\\d+(?:\\.\\d+)?)(?:\\\")?");
-                if (match.Success)
-                {
-                    float parsed;
-                    if (float.TryParse(match.Groups[1].Value, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed))
-                    {
-                        return parsed;
-                    }
-                }
-                return null;
+                return ConvertToFloat(GetField(name));
             }
 
             public bool BoolArg(string name, bool fallback)
@@ -110,13 +96,12 @@ namespace UnityCli
 
             public bool? OptionalBoolArg(string name)
             {
-                var match = Regex.Match(body ?? string.Empty, "\\\"" + Regex.Escape(name) + "\\\"\\s*:\\s*(true|false)", RegexOptions.IgnoreCase);
-                return match.Success ? (bool?)string.Equals(match.Groups[1].Value, "true", StringComparison.OrdinalIgnoreCase) : null;
+                return ConvertToBool(GetField(name));
             }
 
             public bool HasArg(string name)
             {
-                return Regex.IsMatch(body ?? string.Empty, "\\\"" + Regex.Escape(name) + "\\\"\\s*:");
+                return GetField(name) != null;
             }
 
             public bool SecurityConfirmed(string expectedFingerprint)
@@ -127,85 +112,107 @@ namespace UnityCli
 
             public string StringArgAtPath(string[] path)
             {
-                var current = body;
-                foreach (var segment in path ?? new string[0])
-                {
-                    current = JsonRawProperty(current, segment);
-                    if (string.IsNullOrEmpty(current)) return null;
-                }
-                if (current.Length >= 2 && current[0] == (char)34 && current[current.Length - 1] == (char)34)
-                {
-                    return Unescape(current.Substring(1, current.Length - 2));
-                }
-                return null;
+                return ConvertToString(GetFieldAtPath(path));
             }
 
             public string RawJsonArg(string name)
             {
-                return ExtractRawJson(body, name);
+                var value = GetField(name);
+                return value == null ? null : UnityCliSerializer.Serialize(value);
             }
 
             public bool BoolArgAtPath(string[] path, bool fallback)
             {
-                var current = body;
+                var value = GetFieldAtPath(path);
+                var parsed = ConvertToBool(value);
+                return parsed.HasValue ? parsed.Value : fallback;
+            }
+
+            public T DeserializeArgs<T>()
+            {
+                object argsObj;
+                if (!root.TryGetValue("args", out argsObj) || argsObj == null)
+                {
+                    return Activator.CreateInstance<T>();
+                }
+                return UnityCliSerializer.Deserialize<T>(UnityCliSerializer.Serialize(argsObj));
+            }
+
+            private object GetField(string name)
+            {
+                object value;
+                if (root.TryGetValue(name, out value)) return value;
+                object argsObj;
+                if (root.TryGetValue("args", out argsObj) && argsObj is Dictionary<string, object> args && args.TryGetValue(name, out value))
+                {
+                    return value;
+                }
+                return null;
+            }
+
+            private object GetFieldAtPath(string[] path)
+            {
+                object current = root;
                 foreach (var segment in path ?? new string[0])
                 {
-                    current = JsonRawProperty(current, segment);
-                    if (string.IsNullOrEmpty(current)) return fallback;
-                }
-                if (string.Equals(current, "true", StringComparison.OrdinalIgnoreCase)) return true;
-                if (string.Equals(current, "false", StringComparison.OrdinalIgnoreCase)) return false;
-                return fallback;
-            }
-
-            private static string ExtractString(string json, string name)
-            {
-                var match = Regex.Match(json ?? string.Empty, "\\\"" + Regex.Escape(name) + "\\\"\\s*:\\s*\\\"((?:\\\\.|[^\\\"])*)\\\"");
-                return match.Success ? Unescape(match.Groups[1].Value) : null;
-            }
-
-            private static string ExtractRawJson(string json, string name)
-            {
-                var match = Regex.Match(json ?? string.Empty, "\\\"" + Regex.Escape(name) + "\\\"\\s*:");
-                if (!match.Success)
-                {
-                    return null;
-                }
-                var start = match.Index + match.Length;
-                while (start < json.Length && char.IsWhiteSpace(json[start])) start++;
-                if (start >= json.Length) return null;
-                var end = FindJsonValueEnd(json, start);
-                return end > start ? json.Substring(start, end - start).Trim() : null;
-            }
-
-            private static string Unescape(string value)
-            {
-                var builder = new StringBuilder();
-                for (var index = 0; index < value.Length; index++)
-                {
-                    var current = value[index];
-                    if (current != '\\' || index + 1 >= value.Length)
+                    if (!(current is Dictionary<string, object> dict) || !dict.TryGetValue(segment, out current))
                     {
-                        builder.Append(current);
-                        continue;
-                    }
-
-                    var escaped = value[++index];
-                    switch (escaped)
-                    {
-                        case (char)34: builder.Append((char)34); break;
-                        case '\\': builder.Append((char)92); break;
-                        case '/': builder.Append('/'); break;
-                        case 'n': builder.Append('\n'); break;
-                        case 'r': builder.Append('\r'); break;
-                        case 't': builder.Append('\t'); break;
-                        default:
-                            builder.Append('\\');
-                            builder.Append(escaped);
-                            break;
+                        return null;
                     }
                 }
-                return builder.ToString();
+                return current;
+            }
+
+            private static string GetString(Dictionary<string, object> dict, string key)
+            {
+                object value;
+                return dict != null && dict.TryGetValue(key, out value) ? ConvertToString(value) : null;
+            }
+
+            private static string ConvertToString(object value)
+            {
+                if (value == null) return null;
+                if (value is string s) return s;
+                if (value is bool b) return b ? "true" : "false";
+                if (value is long l) return l.ToString(CultureInfo.InvariantCulture);
+                if (value is double d) return d.ToString(CultureInfo.InvariantCulture);
+                if (value is int i) return i.ToString(CultureInfo.InvariantCulture);
+                if (value is float f) return f.ToString(CultureInfo.InvariantCulture);
+                return Convert.ToString(value, CultureInfo.InvariantCulture);
+            }
+
+            private static int? ConvertToInt(object value)
+            {
+                if (value == null) return null;
+                if (value is int i) return i;
+                if (value is long l) return (int)l;
+                if (value is double d) return (int)d;
+                if (value is float f) return (int)f;
+                if (value is string s && int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed)) return parsed;
+                return null;
+            }
+
+            private static float? ConvertToFloat(object value)
+            {
+                if (value == null) return null;
+                if (value is float f) return f;
+                if (value is double d) return (float)d;
+                if (value is int i) return i;
+                if (value is long l) return l;
+                if (value is string s && float.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed)) return parsed;
+                return null;
+            }
+
+            private static bool? ConvertToBool(object value)
+            {
+                if (value == null) return null;
+                if (value is bool b) return b;
+                if (value is string s)
+                {
+                    if (string.Equals(s, "true", StringComparison.OrdinalIgnoreCase)) return true;
+                    if (string.Equals(s, "false", StringComparison.OrdinalIgnoreCase)) return false;
+                }
+                return null;
             }
         }
     }

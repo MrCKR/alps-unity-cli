@@ -296,7 +296,6 @@ test("Unity bridge and batch source expose Runtime Code diagnostics", async () =
   assert.match(bridge, /name\.Equals\("netstandard"/);
   assert.match(bridge, /ProjectRoot\(\), "Library", "ScriptAssemblies"/);
   assert.match(bridge, /Directory\.GetFiles\(scriptAssemblies, "\*\.dll"\)/);
-  assert.match(bridge, /builder\.Append\('\\\\'\)/);
   assert.match(batch, /public static void ExecuteCode\(\)/);
   assert.match(batch, /public static void Refresh\(\)/);
   assert.match(batch, /__UNITY_CLI_EMPTY__/);

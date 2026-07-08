@@ -346,10 +346,26 @@ namespace UnityCli
             return writer.EndArray().ToString();
         }
 
+        private sealed class ProjectToolRunArgs
+        {
+            public string Name { get; set; }
+            public string FingerprintMode { get; set; }
+            public int? TimeoutMs { get; set; }
+            public string ArtifactDir { get; set; }
+            public string ProjectPath { get; set; }
+            public ProjectToolExecutionArgs Execution { get; set; }
+        }
+
+        private sealed class ProjectToolExecutionArgs
+        {
+            public bool? PreferJob { get; set; }
+        }
+
         private static string ProjectToolRun(BridgeRequest request)
         {
             DiscoverProjectTools();
-            var name = request.StringArg("name");
+            var args = request.DeserializeArgs<ProjectToolRunArgs>();
+            var name = args.Name;
             if (string.IsNullOrEmpty(name) || !ProjectTools.ContainsKey(name))
             {
                 return ErrorJson("E_TOOL_NOT_FOUND", "Tool not found: " + name, "Run unity_cli tools list --include-custom to inspect registered tools.");
@@ -380,7 +396,7 @@ namespace UnityCli
                         .EndObject().ToString(),
                     "Use runtime-tool.run <name> or tools run <name> with a runtime target to execute this tool in Play Mode.");
             }
-            var fingerprintCheck = RefreshProjectToolFingerprint(definition, request.StringArg("fingerprintMode"));
+            var fingerprintCheck = RefreshProjectToolFingerprint(definition, args.FingerprintMode);
             if (fingerprintCheck.Blocked)
             {
                 WriteLog("custom_tool_fingerprint_blocked requestId=" + request.RequestId + " name=" + name + " expected=" + fingerprintCheck.Expected + " actual=" + fingerprintCheck.Actual);
@@ -391,13 +407,13 @@ namespace UnityCli
                 WriteLog("custom_tool_fingerprint_warn requestId=" + request.RequestId + " name=" + name + " expected=" + fingerprintCheck.Expected + " actual=" + fingerprintCheck.Actual);
             }
 
-            var timeoutMs = request.IntArg("timeoutMs", definition.DefaultTimeoutMs);
+            var timeoutMs = args.TimeoutMs ?? definition.DefaultTimeoutMs;
             if (timeoutMs <= 0 || timeoutMs > definition.MaxTimeoutMs)
             {
                 return ErrorJson("E_SCHEMA_INVALID", "timeoutMs exceeds the registered tool limit.", "Use a timeout between 1 and " + definition.MaxTimeoutMs.ToString(CultureInfo.InvariantCulture) + "ms.");
             }
 
-            if (request.BoolArgAtPath(new[] { "args", "execution", "preferJob" }, false))
+            if (args.Execution != null && (args.Execution.PreferJob ?? false))
             {
                 return ErrorJson("E_JOB_UNSUPPORTED", "--job / Local Agent project-tool execution is not implemented by the bundled Live Bridge yet.", "Run without --job for synchronous Live Bridge execution, or wait for Local Agent job support before relying on asynchronous project-tool semantics.");
             }
@@ -410,7 +426,7 @@ namespace UnityCli
             }
 
             var startedAt = DateTime.UtcNow;
-            var artifactDir = ResolveArtifactDir(request.StringArg("artifactDir"), request.RequestId);
+            var artifactDir = ResolveArtifactDir(args.ArtifactDir, request.RequestId);
             try
             {
                 Directory.CreateDirectory(artifactDir);
@@ -427,7 +443,7 @@ namespace UnityCli
                 resultJson = definition.Execute(new UnityCliProjectToolContext
                 {
                     RequestId = request.RequestId,
-                    ProjectPath = request.StringArg("projectPath") ?? ProjectRoot(),
+                    ProjectPath = args.ProjectPath ?? ProjectRoot(),
                     InputJson = inputJson,
                     ArtifactDir = artifactDir,
                     LogPath = LogPath()

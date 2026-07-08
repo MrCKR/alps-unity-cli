@@ -205,12 +205,23 @@ namespace UnityCli
         /// timeout, routes to the tool's Execute delegate, and returns structured
         /// errors for non-ready, session stale, and timeout scenarios.
         /// </summary>
+        private sealed class RuntimeToolRunArgs
+        {
+            public string Name { get; set; }
+            public string PlayModeSessionId { get; set; }
+            public string FingerprintMode { get; set; }
+            public int? TimeoutMs { get; set; }
+            public string ArtifactDir { get; set; }
+            public string ProjectPath { get; set; }
+        }
+
         private static string RuntimeToolRun(BridgeRequest request)
         {
             DiscoverProjectTools();
             InitializeRuntimeExecutor();
 
-            var name = request.StringArg("name");
+            var args = request.DeserializeArgs<RuntimeToolRunArgs>();
+            var name = args.Name;
             if (string.IsNullOrEmpty(name))
             {
                 return ErrorJsonWithDetails("E_SCHEMA_INVALID", "Runtime tool name is required.",
@@ -226,7 +237,7 @@ namespace UnityCli
                 // If the caller specified a session ID, check whether it matches a
                 // recently-stale session. This gives a more actionable error than
                 // E_RUNTIME_NOT_READY when the Play Mode session simply ended.
-                var staleRequestedSessionId = request.StringArg("playModeSessionId");
+                var staleRequestedSessionId = args.PlayModeSessionId;
                 if (!string.IsNullOrEmpty(staleRequestedSessionId) && string.Equals(staleRequestedSessionId, lastStalePlayModeSessionId, StringComparison.Ordinal))
                 {
                     WriteLog("runtime_tool_session_stale_after_exit requestId=" + request.RequestId + " name=" + name + " requested=" + staleRequestedSessionId + " stale=" + lastStalePlayModeSessionId);
@@ -246,7 +257,7 @@ namespace UnityCli
             }
 
             // Validate the requested session matches the current session
-            var requestedSessionId = request.StringArg("playModeSessionId");
+            var requestedSessionId = args.PlayModeSessionId;
             if (!string.IsNullOrEmpty(requestedSessionId) && !string.Equals(requestedSessionId, currentPlayModeSessionId, StringComparison.Ordinal))
             {
                 WriteLog("runtime_tool_session_stale requestId=" + request.RequestId + " name=" + name + " requested=" + requestedSessionId + " current=" + currentPlayModeSessionId);
@@ -287,7 +298,7 @@ namespace UnityCli
             }
 
             // Fingerprint check
-            var fingerprintCheck = RefreshProjectToolFingerprint(definition, request.StringArg("fingerprintMode"));
+            var fingerprintCheck = RefreshProjectToolFingerprint(definition, args.FingerprintMode);
             if (fingerprintCheck.Blocked)
             {
                 WriteLog("runtime_tool_fingerprint_blocked requestId=" + request.RequestId + " name=" + name);
@@ -297,7 +308,7 @@ namespace UnityCli
             }
 
             // Timeout validation
-            var timeoutMs = request.IntArg("timeoutMs", definition.DefaultTimeoutMs);
+            var timeoutMs = args.TimeoutMs ?? definition.DefaultTimeoutMs;
             if (timeoutMs <= 0 || timeoutMs > definition.MaxTimeoutMs)
             {
                 return ErrorJson("E_SCHEMA_INVALID", "timeoutMs exceeds the registered tool limit.",
@@ -315,7 +326,7 @@ namespace UnityCli
 
             // Execute the runtime tool with timeout awareness
             var startedAt = DateTime.UtcNow;
-            var artifactDir = ResolveArtifactDir(request.StringArg("artifactDir"), request.RequestId);
+            var artifactDir = ResolveArtifactDir(args.ArtifactDir, request.RequestId);
             try
             {
                 Directory.CreateDirectory(artifactDir);
@@ -342,7 +353,7 @@ namespace UnityCli
                 resultJson = definition.Execute(new UnityCliProjectToolContext
                 {
                     RequestId = request.RequestId,
-                    ProjectPath = request.StringArg("projectPath") ?? ProjectRoot(),
+                    ProjectPath = args.ProjectPath ?? ProjectRoot(),
                     InputJson = inputJson,
                     ArtifactDir = artifactDir,
                     LogPath = LogPath()
