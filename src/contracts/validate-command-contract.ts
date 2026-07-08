@@ -58,10 +58,10 @@ function extractCSharpRegisteredCommands(root: string): string[] {
     for (const match of source.matchAll(/RegisterCommand\(registry, "([^"]+)"/g)) {
       commands.add(match[1]);
     }
-    // Scan for IUnityCliTool<TReq,TRes> implementers (new form, Stage 2+).
+    // Scan for IUnityCliTool<TReq,TRes> / IUnityCliDeferredTool<TReq,TRes> implementers (new form, Stage 2+).
     // These are discovered by ProjectToolRegistry at runtime via interface scan.
     // Tool name lives in Describe()'s Name = "group.name" (dotted lowercase string literal).
-    if (source.includes(": IUnityCliTool<")) {
+    if (source.includes(": IUnityCliTool<") || source.includes(": IUnityCliDeferredTool<")) {
       for (const match of source.matchAll(/Name\s*=\s*"([a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+)"/g)) {
         commands.add(match[1]);
       }

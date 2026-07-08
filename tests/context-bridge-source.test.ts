@@ -215,7 +215,7 @@ test("Context commands are registered as non-mutating (allowed in Play Mode)", a
 });
 
 async function readContextCommandsSource(): Promise<string> {
-  return readFile(new URL("Commands/ContextCommands.cs", editorUrl), "utf8");
+  return readFile(new URL("ProjectContexts/BuiltInContextSupport.cs", editorUrl), "utf8");
 }
 
 async function readUnityBridgeSources(): Promise<string> {
