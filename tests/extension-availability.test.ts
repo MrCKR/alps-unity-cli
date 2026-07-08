@@ -157,7 +157,7 @@ test("validateExtensionManifestContracts validates manifests against bridge rout
   );
 });
 
-test("URP, HDRP, and Cinemachine extension bridge specs route through project-tool.run", () => {
+test("URP, HDRP, Cinemachine, and VFX extension bridge specs route through project-tool.run", () => {
   const urpFeature = bridgeCommandRegistry.lookup("urp", "feature");
   const urpVolume = bridgeCommandRegistry.lookup("urp", "volume");
   const urpSettings = bridgeCommandRegistry.lookup("urp", "settings");
@@ -166,6 +166,9 @@ test("URP, HDRP, and Cinemachine extension bridge specs route through project-to
   const cmPing = bridgeCommandRegistry.lookup("cinemachine", "ping");
   const cmForce = bridgeCommandRegistry.lookup("cinemachine", "force-camera");
   const cmRelease = bridgeCommandRegistry.lookup("cinemachine", "release-override");
+  const vfxGraph = bridgeCommandRegistry.lookup("vfx", "graph");
+  const vfxEffect = bridgeCommandRegistry.lookup("vfx", "effect");
+  const vfxTrail = bridgeCommandRegistry.lookup("vfx", "trail");
 
   assert.equal(urpFeature?.bridgeCommand, "project-tool.run");
   assert.equal(urpFeature?.toolName, "urp.feature");
@@ -183,6 +186,12 @@ test("URP, HDRP, and Cinemachine extension bridge specs route through project-to
   assert.equal(cmForce?.toolName, "cinemachine.force-camera");
   assert.equal(cmRelease?.bridgeCommand, "project-tool.run");
   assert.equal(cmRelease?.toolName, "cinemachine.release-override");
+  assert.equal(vfxGraph?.bridgeCommand, "project-tool.run");
+  assert.equal(vfxGraph?.toolName, "vfx.graph");
+  assert.equal(vfxEffect?.bridgeCommand, "project-tool.run");
+  assert.equal(vfxEffect?.toolName, "vfx.effect");
+  assert.equal(vfxTrail?.bridgeCommand, "project-tool.run");
+  assert.equal(vfxTrail?.toolName, "vfx.trail");
 });
 
 test("extension registry helpers still expose contribution counts", async () => {

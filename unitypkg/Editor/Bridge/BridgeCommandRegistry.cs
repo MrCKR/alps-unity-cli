@@ -101,10 +101,7 @@ namespace UnityCli
         /// </summary>
         private static void RegisterInstalledExtensionCommands(BridgeCommandRegistry registry)
         {
-            var methodNames = new[]
-            {
-                "RegisterVfxCommands"
-            };
+            var methodNames = new string[0];
             foreach (var methodName in methodNames)
             {
                 var method = typeof(UnityCliBridge).GetMethod(methodName, BindingFlags.Static | BindingFlags.NonPublic);

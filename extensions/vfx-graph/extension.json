@@ -86,8 +86,68 @@
     "contexts": [],
     "csharpEntries": [
       {
-        "type": "UnityCli.VfxCommands",
-        "description": "Bridge handler for VFX Graph, ParticleSystem, LineRenderer, and TrailRenderer operations."
+        "type": "UnityCli.VfxGraphTool",
+        "description": "Self-contained vfx.graph tool."
+      },
+      {
+        "type": "UnityCli.VfxEffectTool",
+        "description": "Self-contained vfx.effect tool."
+      },
+      {
+        "type": "UnityCli.VfxParameterTool",
+        "description": "Self-contained vfx.parameter tool."
+      },
+      {
+        "type": "UnityCli.VfxControlTool",
+        "description": "Self-contained vfx.control tool."
+      },
+      {
+        "type": "UnityCli.VfxEventTool",
+        "description": "Self-contained vfx.event tool."
+      },
+      {
+        "type": "UnityCli.VfxTemplateTool",
+        "description": "Self-contained vfx.template tool."
+      },
+      {
+        "type": "UnityCli.VfxParticleCreateTool",
+        "description": "Self-contained vfx.particle-create tool."
+      },
+      {
+        "type": "UnityCli.VfxParticleInfoTool",
+        "description": "Self-contained vfx.particle-info tool."
+      },
+      {
+        "type": "UnityCli.VfxParticleMainTool",
+        "description": "Self-contained vfx.particle-main tool."
+      },
+      {
+        "type": "UnityCli.VfxParticleEmissionTool",
+        "description": "Self-contained vfx.particle-emission tool."
+      },
+      {
+        "type": "UnityCli.VfxParticleShapeTool",
+        "description": "Self-contained vfx.particle-shape tool."
+      },
+      {
+        "type": "UnityCli.VfxParticlePlayTool",
+        "description": "Self-contained vfx.particle-play tool."
+      },
+      {
+        "type": "UnityCli.VfxParticleModuleTool",
+        "description": "Self-contained vfx.particle-module tool."
+      },
+      {
+        "type": "UnityCli.VfxLineCreateTool",
+        "description": "Self-contained vfx.line-create tool."
+      },
+      {
+        "type": "UnityCli.VfxLinePositionsTool",
+        "description": "Self-contained vfx.line-positions tool."
+      },
+      {
+        "type": "UnityCli.VfxTrailTool",
+        "description": "Self-contained vfx.trail tool."
       }
     ]
   },

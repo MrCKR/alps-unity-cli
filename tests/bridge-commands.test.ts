@@ -1012,19 +1012,19 @@ test("animation and vfx commands forward Windows paths, targets and effects", as
   assert.equal(lineCreate.ok, true);
   assert.equal(linePositions.ok, true);
   assert.equal(trail.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "vfx.graph", "vfx.effect", "vfx.particle-module", "vfx.line-create", "vfx.line-positions", "vfx.trail"]);
+  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
   assert.deepEqual(requests[0].args, { name: "animation.clip", input: { path: "Assets\\Animations\\Idle.anim", maxCurveKeys: 2 } });
   assert.deepEqual(requests[1].args, { name: "animation.clip.create", input: { path: "Assets\\Animations\\Run.anim", overwrite: true, frameRate: 30, legacy: false, wrapMode: "Loop", loopTime: true, length: 1, maxCurveKeys: 2 } });
   assert.deepEqual(requests[2].args, { name: "animation.clip.modify", input: { path: "Assets\\Animations\\Run.anim", frameRate: 24, wrapMode: "ClampForever", loopTime: false } });
   assert.deepEqual(requests[3].args, { name: "animation.state", input: { target: "Rig/Player", layer: 1 } });
   assert.deepEqual(requests[4].args, { name: "animation.play", input: { target: "Rig/Player", state: "Base Layer.Run", layer: 0, normalizedTime: 0.25 } });
   assert.deepEqual(requests[5].args, { name: "animation.stop", input: { target: "Rig/Player" } });
-  assert.deepEqual(requests[6].args, { action: "create", path: "Assets\\VFX\\Explosion.vfx", overwrite: true });
-  assert.deepEqual(requests[7].args, { target: "Effects/Emitter", graph: "Assets\\VFX\\Explosion.vfx", add: true });
-  assert.deepEqual(requests[8].args, particleModuleInput);
-  assert.deepEqual(requests[9].args, lineCreateInput);
-  assert.deepEqual(requests[10].args, linePositionsInput);
-  assert.deepEqual(requests[11].args, trailInput);
+  assert.deepEqual(requests[6].args, { name: "vfx.graph", input: { path: "Assets\\VFX\\Explosion.vfx", action: "create", create: true, overwrite: true } });
+  assert.deepEqual(requests[7].args, { name: "vfx.effect", input: { target: "Effects/Emitter", graph: "Assets\\VFX\\Explosion.vfx", add: true } });
+  assert.deepEqual(requests[8].args, { name: "vfx.particle-module", input: particleModuleInput });
+  assert.deepEqual(requests[9].args, { name: "vfx.line-create", input: lineCreateInput });
+  assert.deepEqual(requests[10].args, { name: "vfx.line-positions", input: linePositionsInput });
+  assert.deepEqual(requests[11].args, { name: "vfx.trail", input: trailInput });
 });
 
 test("animation and vfx bridge errors preserve diagnostics", async () => {

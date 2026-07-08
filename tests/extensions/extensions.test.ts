@@ -448,7 +448,9 @@ test("collectAvailableCSharpEntries returns entries from available extensions", 
     "com.unity.visualeffectgraph": "14.0.0"
   });
   assert.ok(entries.some((e) => e.type.startsWith("UnityCli.ProBuilder.")));
-  assert.ok(entries.some((e) => e.type === "UnityCli.VfxCommands"));
+  assert.ok(entries.some((e) => e.type === "UnityCli.VfxGraphTool"));
+  assert.ok(entries.some((e) => e.type === "UnityCli.VfxTrailTool"));
+  assert.equal(entries.filter((e) => e.type.startsWith("UnityCli.Vfx")).length, 16);
 });
 
 // ── extensionAvailabilitySummary ───────────────────────────────────────────
