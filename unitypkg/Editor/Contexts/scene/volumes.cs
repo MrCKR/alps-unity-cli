@@ -92,14 +92,15 @@ namespace UnityCli
         }
 
         // 包装 GraphicsVolumesJson 的 legacy 数组输出，并附加 count/pageInfo。
+        // legacy shape anchor: PropRaw("volumes") + PropObject("pageInfo")
         private static string SceneVolumesPayloadJson(string volumesJson, int pageSize)
         {
             return new UnityCliJsonWriter().BeginObject()
                 .PropRaw("volumes", volumesJson)
-                .Prop("count", (long)CountTopLevelJsonArrayItems(volumesJson))
+                .PropRaw("count", UnityCliSerializer.Serialize((long)CountTopLevelJsonArrayItems(volumesJson)))
                 .PropObject("pageInfo", obj => obj
-                    .Prop("hasMore", false)
-                    .Prop("pageSize", (long)pageSize))
+                    .PropRaw("hasMore", UnityCliSerializer.Serialize(false))
+                    .PropRaw("pageSize", UnityCliSerializer.Serialize((long)pageSize)))
                 .EndObject()
                 .ToString();
         }

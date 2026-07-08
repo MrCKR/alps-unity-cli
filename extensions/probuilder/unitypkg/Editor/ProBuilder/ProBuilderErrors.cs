@@ -1,6 +1,5 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
-using System.Globalization;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -19,10 +18,11 @@ namespace UnityCli.ProBuilder
     {
         public static UnityCliBridge.BridgeCommandException PackageNotAvailable()
         {
-            var details = new UnityCliJsonWriter().BeginObject()
-                .Prop("packageName", "com.unity.probuilder")
-                .Prop("available", false)
-                .EndObject().ToString();
+            var details = UnityCliSerializer.Serialize(new Dictionary<string, object>
+            {
+                { "packageName", "com.unity.probuilder" },
+                { "available", false }
+            });
             return new UnityCliBridge.BridgeCommandException(
                 "E_EXTENSION_DEPENDENCY_MISSING",
                 "ProBuilder package (com.unity.probuilder) is not installed or not available.",
@@ -32,9 +32,10 @@ namespace UnityCli.ProBuilder
 
         public static UnityCliBridge.BridgeCommandException TargetNotFound(string target)
         {
-            var details = new UnityCliJsonWriter().BeginObject()
-                .Prop("target", target ?? "")
-                .EndObject().ToString();
+            var details = UnityCliSerializer.Serialize(new Dictionary<string, object>
+            {
+                { "target", target ?? "" }
+            });
             return new UnityCliBridge.BridgeCommandException(
                 "E_TARGET_NOT_FOUND",
                 "ProBuilder target not found: " + (target ?? "(null)"),
@@ -47,16 +48,17 @@ namespace UnityCli.ProBuilder
             return new UnityCliBridge.BridgeCommandException(
                 "E_SCHEMA_INVALID",
                 message ?? "Input schema validation failed.",
-                "{}",
+                UnityCliSerializer.Serialize(new Dictionary<string, object>()),
                 new[] { "check_tool_input_schema_with_tools_describe", "ensure_all_required_properties_are_provided" });
         }
 
         public static UnityCliBridge.BridgeCommandException OperationFailed(string operation, string reason)
         {
-            var details = new UnityCliJsonWriter().BeginObject()
-                .Prop("operation", operation ?? "unknown")
-                .Prop("reason", reason ?? "unknown")
-                .EndObject().ToString();
+            var details = UnityCliSerializer.Serialize(new Dictionary<string, object>
+            {
+                { "operation", operation ?? "unknown" },
+                { "reason", reason ?? "unknown" }
+            });
             return new UnityCliBridge.BridgeCommandException(
                 "E_PROBUILDER_OPERATION_FAILED",
                 "ProBuilder operation '" + (operation ?? "unknown") + "' failed: " + (reason ?? "unknown error"),
@@ -66,9 +68,10 @@ namespace UnityCli.ProBuilder
 
         public static UnityCliBridge.BridgeCommandException PackageNotFound(string message)
         {
-            var details = new UnityCliJsonWriter().BeginObject()
-                .Prop("packageName", "com.unity.probuilder")
-                .EndObject().ToString();
+            var details = UnityCliSerializer.Serialize(new Dictionary<string, object>
+            {
+                { "packageName", "com.unity.probuilder" }
+            });
             return new UnityCliBridge.BridgeCommandException(
                 "E_PROBUILDER_PACKAGE_NOT_FOUND",
                 message ?? "Unity ProBuilder package is not installed.",

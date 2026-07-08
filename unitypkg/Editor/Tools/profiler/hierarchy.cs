@@ -187,15 +187,16 @@ namespace UnityCli
             return result;
         }
 
-        // 错误 details:辅助定位 frame/thread/profilerRecording 状态
+        // 错误 details:辅助定位 frame/thread/profilerRecording 状态。
         private static string HierarchyDetailsJson(int frame, int threadIndex)
         {
-            return new UnityCliJsonWriter().BeginObject()
-                .Prop("command", "profiler.hierarchy")
-                .Prop("frame", (long)frame)
-                .Prop("thread", (long)threadIndex)
-                .Prop("profilerRecording", ProfilerToolSupport.GetProfilerSessionEnabled())
-                .EndObject().ToString();
+            return UnityCliSerializer.Serialize(new ProfilerHierarchyDetails
+            {
+                Command = "profiler.hierarchy",
+                Frame = frame,
+                Thread = threadIndex,
+                ProfilerRecording = ProfilerToolSupport.GetProfilerSessionEnabled()
+            });
         }
     }
 }

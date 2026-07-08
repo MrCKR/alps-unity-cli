@@ -88,12 +88,12 @@ namespace UnityCli
         // 生成 scene.gameobject.components legacy payload；includeProperties=false 时只返回组件摘要。
         private static string SceneGameObjectComponentsPayloadJson(GameObject gameObject, bool includeProperties)
         {
-            return new UnityCliJsonWriter().BeginObject()
-                .PropRaw("gameObject", GameObjectTargetJson(gameObject))
-                .PropRaw("components", includeProperties ? SceneContextComponentDetailsJson(gameObject) : ComponentsJson(gameObject))
-                .Prop("count", (long)gameObject.GetComponents<Component>().Length)
-                .EndObject()
-                .ToString();
+            return UnityCliSerializer.Serialize(new Dictionary<string, object>
+            {
+                { "gameObject", UnityCliToolJson.Parse(GameObjectTargetJson(gameObject)) },
+                { "components", UnityCliToolJson.Parse(includeProperties ? SceneContextComponentDetailsJson(gameObject) : ComponentsJson(gameObject)) },
+                { "count", (long)gameObject.GetComponents<Component>().Length }
+            });
         }
     }
 }

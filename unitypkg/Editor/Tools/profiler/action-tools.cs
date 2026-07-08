@@ -216,23 +216,18 @@ namespace UnityCli
             return Path.GetFullPath(Path.IsPathRooted(normalized) ? normalized : Path.Combine(ProfilerToolSupport.ProjectRoot(), normalized));
         }
 
-        // 构造 JSON 摘要(用 UnityCliJsonWriter 直接写文件内容,不经过 Result 序列化)
+        // 构造 JSON 摘要文件；字段 shape 与旧 requestId/startedAt/durationMs/frames/profiler/memory 保持一致。
         private static string BuildProfilerArtifactJson(string requestId, DateTime startedAt, int durationMs, int frames)
         {
-            return new UnityCliJsonWriter().BeginObject()
-                .Prop("requestId", requestId)
-                .Prop("startedAt", startedAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture))
-                .Prop("durationMs", (long)durationMs)
-                .Prop("frames", (long)frames)
-                .PropRaw("profiler", UnityCliSerializer.Serialize(ProfilerToolSupport.BuildProfilerState()))
-                .PropRaw("memory", new UnityCliJsonWriter().BeginObject()
-                    .Prop("monoUsedBytes", (long)Profiler.GetMonoUsedSizeLong())
-                    .Prop("monoHeapBytes", (long)Profiler.GetMonoHeapSizeLong())
-                    .Prop("totalAllocatedBytes", (long)Profiler.GetTotalAllocatedMemoryLong())
-                    .Prop("totalReservedBytes", (long)Profiler.GetTotalReservedMemoryLong())
-                    .Prop("totalUnusedReservedBytes", (long)Profiler.GetTotalUnusedReservedMemoryLong())
-                    .EndObject().ToString())
-                .EndObject().ToString();
+            return UnityCliSerializer.Serialize(new ProfilerArtifactFile
+            {
+                RequestId = requestId,
+                StartedAt = startedAt.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
+                DurationMs = durationMs,
+                Frames = frames,
+                Profiler = ProfilerToolSupport.BuildProfilerState(),
+                Memory = ProfilerToolSupport.BuildProfilerMemory()
+            });
         }
     }
 }

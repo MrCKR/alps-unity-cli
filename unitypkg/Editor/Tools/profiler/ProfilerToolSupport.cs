@@ -333,16 +333,18 @@ namespace UnityCli
             try
             {
                 var sidecarPath = outputPath + ".metadata.json";
-                File.WriteAllText(sidecarPath, new UnityCliJsonWriter().BeginObject()
-                    .Prop("requestId", requestId)
-                    .Prop("captureTag", captureTag)
-                    .Prop("artifactPath", outputPath)
-                    .Prop("startFrame", startFrame)
-                    .Prop("endFrame", endFrame)
-                    .Prop("startedAt", startedAt.ToString("O", CultureInfo.InvariantCulture))
-                    .Prop("finishedAt", finishedAt.ToString("O", CultureInfo.InvariantCulture))
-                    .Prop("sidecarVersion", "unity-cli-profiler-capture-v1")
-                    .EndObject().ToString(), System.Text.Encoding.UTF8);
+                var sidecar = new ProfilerCaptureMetadataSidecar
+                {
+                    RequestId = requestId,
+                    CaptureTag = captureTag,
+                    ArtifactPath = outputPath,
+                    StartFrame = startFrame,
+                    EndFrame = endFrame,
+                    StartedAt = startedAt.ToString("O", CultureInfo.InvariantCulture),
+                    FinishedAt = finishedAt.ToString("O", CultureInfo.InvariantCulture),
+                    SidecarVersion = "unity-cli-profiler-capture-v1"
+                };
+                File.WriteAllText(sidecarPath, UnityCliSerializer.Serialize(sidecar), System.Text.Encoding.UTF8);
             }
             catch (Exception exception)
             {
@@ -359,6 +361,39 @@ namespace UnityCli
     }
 
     // ── profiler 域 DTO ──
+
+    /// <summary>profiler.export / profiler.capture 的 JSON 摘要文件 DTO。</summary>
+    public sealed class ProfilerArtifactFile
+    {
+        public string RequestId { get; set; }
+        public string StartedAt { get; set; }
+        public long DurationMs { get; set; }
+        public long Frames { get; set; }
+        public ProfilerState Profiler { get; set; }
+        public ProfilerMemory Memory { get; set; }
+    }
+
+    /// <summary>captureTag sidecar 的稳定归档元数据。</summary>
+    public sealed class ProfilerCaptureMetadataSidecar
+    {
+        public string RequestId { get; set; }
+        public string CaptureTag { get; set; }
+        public string ArtifactPath { get; set; }
+        public long StartFrame { get; set; }
+        public long EndFrame { get; set; }
+        public string StartedAt { get; set; }
+        public string FinishedAt { get; set; }
+        public string SidecarVersion { get; set; }
+    }
+
+    /// <summary>profiler.hierarchy 错误详情 DTO，保持 command/frame/thread shape。</summary>
+    public sealed class ProfilerHierarchyDetails
+    {
+        public string Command { get; set; }
+        public long Frame { get; set; }
+        public long Thread { get; set; }
+        public bool ProfilerRecording { get; set; }
+    }
 
     public sealed class ProfilerState
     {

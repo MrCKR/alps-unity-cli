@@ -167,12 +167,18 @@ namespace UnityCli
         // editor.state Context envelope：schemaVersion + observedAt + state + 可选 timedOut。
         private static string EditorStateContextEnvelopeJson(string stateJson, bool timedOut)
         {
-            var w = new UnityCliJsonWriter().BeginObject()
-                .Prop("schemaVersion", "1.0")
-                .Prop("observedAt", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture))
-                .PropRaw("state", stateJson);
-            if (timedOut) w.Prop("timedOut", true).Prop("diagnostics", "wait-ready timed out before Unity reached idle; returned the latest snapshot.");
-            return w.EndObject().ToString();
+            var payload = new Dictionary<string, object>
+            {
+                { "schemaVersion", "1.0" },
+                { "observedAt", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture) },
+                { "state", UnityCliToolJson.Parse(stateJson) }
+            };
+            if (timedOut)
+            {
+                payload["timedOut"] = true;
+                payload["diagnostics"] = "wait-ready timed out before Unity reached idle; returned the latest snapshot.";
+            }
+            return UnityCliSerializer.Serialize(payload);
         }
     }
 }

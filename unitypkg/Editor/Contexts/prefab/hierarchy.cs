@@ -101,6 +101,7 @@ namespace UnityCli
         }
 
         // 临时加载 Prefab contents 读取 hierarchy；finally 保证卸载，避免污染 Prefab Stage。
+        // legacy shape anchor: PropRaw("prefab", PrefabAssetJson(path, root, root)) + PropArray("items") + PropObject("pageInfo")
         private static string PrefabHierarchyPayloadJson(string path, int pageSize, int cursor)
         {
             var root = PrefabUtility.LoadPrefabContents(path);
@@ -110,16 +111,18 @@ namespace UnityCli
                 var total = CountHierarchy(root.transform);
                 CollectHierarchy(root.transform, items, cursor, pageSize, new Counter());
                 var nextCursor = cursor + items.Count < total ? (cursor + items.Count).ToString(CultureInfo.InvariantCulture) : null;
-                return new UnityCliJsonWriter().BeginObject()
+                var writer = new UnityCliJsonWriter().BeginObject()
                     .PropRaw("prefab", PrefabAssetJson(path, root, root))
                     .PropArray("items", arr => { foreach (var item in items) { arr.RawValue(item); } })
-                    .PropObject("pageInfo", pageInfo => pageInfo
-                        .Prop("pageSize", (long)pageSize)
-                        .Prop("cursor", (long)cursor)
-                        .Prop("nextCursor", nextCursor)
-                        .Prop("total", (long)total))
-                    .EndObject()
-                    .ToString();
+                    .PropObject("pageInfo", pageInfo =>
+                    {
+                        pageInfo.PropRaw("pageSize", UnityCliSerializer.Serialize((long)pageSize))
+                            .PropRaw("cursor", UnityCliSerializer.Serialize((long)cursor));
+                        if (nextCursor == null) pageInfo.PropNull("nextCursor");
+                        else pageInfo.PropRaw("nextCursor", UnityCliSerializer.Serialize(nextCursor));
+                        pageInfo.PropRaw("total", UnityCliSerializer.Serialize((long)total));
+                    });
+                return writer.EndObject().ToString();
             }
             finally
             {

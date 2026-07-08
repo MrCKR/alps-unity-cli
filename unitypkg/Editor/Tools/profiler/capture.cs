@@ -212,23 +212,18 @@ namespace UnityCli
             };
         }
 
-        // json 格式单帧采集的文件内容(状态/内存/帧摘要)
+        // json 格式单帧采集的文件内容(状态/内存/帧摘要)。
         private static string BuildJsonArtifact(string requestId, DateTime startedAt, int durationMs, int frames)
         {
-            return new UnityCliJsonWriter().BeginObject()
-                .Prop("requestId", requestId)
-                .Prop("startedAt", startedAt.ToString("O", CultureInfo.InvariantCulture))
-                .Prop("durationMs", (long)durationMs)
-                .Prop("frames", (long)frames)
-                .PropRaw("profiler", UnityCliSerializer.Serialize(ProfilerToolSupport.BuildProfilerState()))
-                .PropRaw("memory", new UnityCliJsonWriter().BeginObject()
-                    .Prop("monoUsedBytes", (long)Profiler.GetMonoUsedSizeLong())
-                    .Prop("monoHeapBytes", (long)Profiler.GetMonoHeapSizeLong())
-                    .Prop("totalAllocatedBytes", (long)Profiler.GetTotalAllocatedMemoryLong())
-                    .Prop("totalReservedBytes", (long)Profiler.GetTotalReservedMemoryLong())
-                    .Prop("totalUnusedReservedBytes", (long)Profiler.GetTotalUnusedReservedMemoryLong())
-                    .EndObject().ToString())
-                .EndObject().ToString();
+            return UnityCliSerializer.Serialize(new ProfilerArtifactFile
+            {
+                RequestId = requestId,
+                StartedAt = startedAt.ToString("O", CultureInfo.InvariantCulture),
+                DurationMs = durationMs,
+                Frames = frames,
+                Profiler = ProfilerToolSupport.BuildProfilerState(),
+                Memory = ProfilerToolSupport.BuildProfilerMemory()
+            });
         }
     }
 }

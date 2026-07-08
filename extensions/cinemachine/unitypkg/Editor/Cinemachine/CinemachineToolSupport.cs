@@ -74,10 +74,11 @@ namespace UnityCli.Cinemachine
                 return;
             }
 
-            var details = new UnityCliJsonWriter().BeginObject()
-                .Prop("packageName", "com.unity.cinemachine")
-                .Prop("available", false)
-                .EndObject().ToString();
+            var details = UnityCliSerializer.Serialize(new Dictionary<string, object>
+            {
+                { "packageName", "com.unity.cinemachine" },
+                { "available", false }
+            });
             throw new UnityCliBridge.BridgeCommandException(
                 "E_CINEMACHINE_PACKAGE_NOT_FOUND",
                 "Cinemachine package (com.unity.cinemachine) is not installed.",

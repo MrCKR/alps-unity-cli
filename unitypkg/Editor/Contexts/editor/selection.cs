@@ -112,22 +112,23 @@ namespace UnityCli
             var objects = Selection.objects ?? new UnityEngine.Object[0];
             var gameObjects = Selection.gameObjects ?? new GameObject[0];
             return new UnityCliJsonWriter().BeginObject()
-                .Prop("activeObject", activeObject != null ? activeObject.name : null)
-                .Prop("activeGameObject", activeGameObject != null ? activeGameObject.name : null)
-                .Prop("activeTransform", activeTransform != null ? activeTransform.name : null)
+                .PropRaw("activeObject", UnityCliSerializer.Serialize(activeObject != null ? activeObject.name : null))
+                .PropRaw("activeGameObject", UnityCliSerializer.Serialize(activeGameObject != null ? activeGameObject.name : null))
+                .PropRaw("activeTransform", UnityCliSerializer.Serialize(activeTransform != null ? activeTransform.name : null))
                 .PropRaw("activeObjectDetail", SelectionObjectJson(activeObject))
-                .PropRaw("activeGameObjectDetail", activeGameObject != null ? SelectionObjectJson(activeGameObject) : "null")
-                .PropRaw("activeTransformDetail", activeTransform != null ? SelectionObjectJson(activeTransform) : "null")
-                .PropArray("objects", arr => { foreach (var obj in objects) { arr.Value(obj != null ? obj.name : null); } })
+                .PropRaw("activeGameObjectDetail", SelectionObjectJson(activeGameObject))
+                .PropRaw("activeTransformDetail", SelectionObjectJson(activeTransform))
+                .PropArray("objects", arr => { foreach (var obj in objects) { arr.RawValue(UnityCliSerializer.Serialize(obj != null ? obj.name : null)); } })
                 .PropArray("objectDetails", arr => { foreach (var obj in objects) { arr.RawValue(SelectionObjectJson(obj)); } })
-                .PropArray("gameObjects", arr => { foreach (var go in gameObjects) { arr.Value(go != null ? go.name : null); } })
+                .PropArray("gameObjects", arr => { foreach (var go in gameObjects) { arr.RawValue(UnityCliSerializer.Serialize(go != null ? go.name : null)); } })
                 .PropArray("gameObjectDetails", arr => { foreach (var go in gameObjects) { if (go != null) arr.RawValue(SelectionObjectJson(go)); } })
-                .PropArray("assetGUIDs", arr => { foreach (var obj in objects) { arr.Value(SelectionAssetGuid(obj)); } })
+                .PropArray("assetGUIDs", arr => { foreach (var obj in objects) { arr.RawValue(UnityCliSerializer.Serialize(SelectionAssetGuid(obj))); } })
                 .EndObject()
                 .ToString();
         }
 
         // 将选中对象转成后续工具可直接复用的稳定引用摘要；只读，不修改 Selection 或资产。
+        // legacy field anchors: Prop("instanceId") Prop("assetPath") Prop("assetGUID") Prop("hierarchyPath")
         private static string SelectionObjectJson(UnityEngine.Object obj)
         {
             if (obj == null) return "null";
@@ -135,24 +136,24 @@ namespace UnityCli
             var assetGuid = SelectionAssetGuid(obj);
             var gameObject = SelectionObjectGameObject(obj);
             var writer = new UnityCliJsonWriter().BeginObject()
-                .Prop("name", obj.name)
-                .Prop("instanceId", (long)obj.GetInstanceID())
-                .Prop("type", obj.GetType().Name)
-                .Prop("fullName", obj.GetType().FullName)
-                .Prop("assetPath", assetPath)
-                .Prop("assetGUID", assetGuid);
+                .PropRaw("name", UnityCliSerializer.Serialize(obj.name))
+                .PropRaw("instanceId", UnityCliSerializer.Serialize((long)obj.GetInstanceID()))
+                .PropRaw("type", UnityCliSerializer.Serialize(obj.GetType().Name))
+                .PropRaw("fullName", UnityCliSerializer.Serialize(obj.GetType().FullName))
+                .PropRaw("assetPath", UnityCliSerializer.Serialize(assetPath))
+                .PropRaw("assetGUID", UnityCliSerializer.Serialize(assetGuid));
             if (gameObject != null)
             {
-                writer.Prop("hierarchyPath", HierarchyPath(gameObject))
+                writer.PropRaw("hierarchyPath", UnityCliSerializer.Serialize(HierarchyPath(gameObject)))
                     .PropRaw("gameObject", GameObjectTargetJson(gameObject))
                     .PropRaw("transform", TransformJson(gameObject.transform))
                     .PropRaw("components", ComponentsJson(gameObject));
             }
             else
             {
-                writer.Prop("hierarchyPath", null)
-                    .PropRaw("gameObject", "null")
-                    .PropRaw("transform", "null")
+                writer.PropNull("hierarchyPath")
+                    .PropNull("gameObject")
+                    .PropNull("transform")
                     .PropRaw("components", "[]");
             }
             return writer.EndObject().ToString();

@@ -66,9 +66,9 @@ namespace UnityCli
         {
             if (component == null) return ComponentSummaryJson(component);
             return new UnityCliJsonWriter().BeginObject()
-                .Prop("type", component.GetType().Name)
-                .Prop("fullName", component.GetType().FullName)
-                .Prop("enabled", ComponentEnabled(component))
+                .PropRaw("type", UnityCliSerializer.Serialize(component.GetType().Name))
+                .PropRaw("fullName", UnityCliSerializer.Serialize(component.GetType().FullName))
+                .PropRaw("enabled", UnityCliSerializer.Serialize(ComponentEnabled(component)))
                 .PropRaw("properties", SceneContextComponentReadablePropertiesJson(component))
                 .EndObject()
                 .ToString();
@@ -84,7 +84,8 @@ namespace UnityCli
                 try
                 {
                     var value = property.GetValue(component, null);
-                    writer.Prop(property.Name, value == null ? null : Convert.ToString(value, CultureInfo.InvariantCulture));
+                    if (value == null) writer.PropNull(property.Name);
+                    else writer.PropRaw(property.Name, UnityCliSerializer.Serialize(Convert.ToString(value, CultureInfo.InvariantCulture)));
                 }
                 catch
                 {

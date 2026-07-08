@@ -65,6 +65,16 @@ namespace UnityCli
                 public object Fingerprint { get; set; }
             }
 
+            public sealed class CompileStatusCheck
+            {
+                public string Name { get; set; }
+                public bool Ok { get; set; }
+                public bool Compiling { get; set; }
+                public bool HasCompileErrors { get; set; }
+                public List<string> CompileErrors { get; set; }
+                public List<string> NextActions { get; set; }
+            }
+
             public ToolDescriptor Describe() => new()
             {
                 Name = "diagnose.preflight",
@@ -187,22 +197,22 @@ namespace UnityCli
                 {
                     errors.Insert(0, "Failed to read compile errors: " + exception.GetType().Name);
                 }
-                var w = new UnityCliJsonWriter().BeginObject();
-                w.Prop("name", "compileStatus");
-                w.Prop("ok", !compiling && !hasCompileErrors);
-                w.Prop("compiling", compiling);
-                w.Prop("hasCompileErrors", hasCompileErrors);
-                w.PropArray("compileErrors", arr => { foreach (var e in errors) arr.Value(e); });
-                w.PropArray("nextActions", arr =>
+                var nextActions = new List<string>();
+                if (hasCompileErrors) nextActions.Add("Review the listed compile errors (often from a broken extension under Packages/com.unity_cli/Extensions). Fix or remove the offending extension, then let Unity recompile.");
+                if (compiling) nextActions.Add("Wait for Unity to finish compiling, then re-run doctor.");
+                if (hasCompileErrors && File.Exists(Path.Combine(ProjectRoot(), "Packages", "com.unity_cli", "Extensions", "extension.json")))
                 {
-                    if (hasCompileErrors) arr.Value("Review the listed compile errors (often from a broken extension under Packages/com.unity_cli/Extensions). Fix or remove the offending extension, then let Unity recompile.");
-                    if (compiling) arr.Value("Wait for Unity to finish compiling, then re-run doctor.");
-                    if (hasCompileErrors && File.Exists(Path.Combine(ProjectRoot(), "Packages", "com.unity_cli", "Extensions", "extension.json")))
-                    {
-                        arr.Value("If an extension no longer compiles, remove it via unity_cli extensions remove <id> --project <path>.");
-                    }
+                    nextActions.Add("If an extension no longer compiles, remove it via unity_cli extensions remove <id> --project <path>.");
+                }
+                return UnityCliSerializer.Serialize(new CompileStatusCheck
+                {
+                    Name = "compileStatus",
+                    Ok = !compiling && !hasCompileErrors,
+                    Compiling = compiling,
+                    HasCompileErrors = hasCompileErrors,
+                    CompileErrors = errors,
+                    NextActions = nextActions
                 });
-                return w.EndObject().ToString();
             }
 
             // ── 轻量 JSON → object 树解析器 ──
