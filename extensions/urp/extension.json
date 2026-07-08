@@ -24,16 +24,16 @@
     "contexts": [],
     "csharpEntries": [
       {
-        "type": "UnityCli.URP.UrpRendererFeatureTools",
-        "description": "Bridge handlers for URP renderer feature operations."
+        "type": "UnityCli.UrpFeatureTool",
+        "description": "Self-contained URP renderer feature tool."
       },
       {
-        "type": "UnityCli.URP.UrpVolumeTools",
-        "description": "Bridge handlers for URP volume operations."
+        "type": "UnityCli.UrpVolumeTool",
+        "description": "Self-contained URP volume tool."
       },
       {
-        "type": "UnityCli.URP.UrpSettingsTools",
-        "description": "Bridge handlers for URP pipeline settings operations."
+        "type": "UnityCli.UrpSettingsTool",
+        "description": "Self-contained URP pipeline settings tool."
       }
     ]
   },

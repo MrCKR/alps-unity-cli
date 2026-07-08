@@ -221,9 +221,9 @@ export const URP_MANIFEST: ExtensionManifest = {
     ],
     contexts: [],
     csharpEntries: [
-      { type: "UnityCli.URP.UrpRendererFeatureTools", description: "Bridge handlers for URP renderer feature operations." },
-      { type: "UnityCli.URP.UrpVolumeTools", description: "Bridge handlers for URP volume operations." },
-      { type: "UnityCli.URP.UrpSettingsTools", description: "Bridge handlers for URP pipeline settings operations." }
+      { type: "UnityCli.UrpFeatureTool", description: "Self-contained URP renderer feature tool." },
+      { type: "UnityCli.UrpVolumeTool", description: "Self-contained URP volume tool." },
+      { type: "UnityCli.UrpSettingsTool", description: "Self-contained URP pipeline settings tool." }
     ],
   },
   tags: ["rendering", "pipeline", "urp"]
@@ -251,8 +251,8 @@ export const HDRP_MANIFEST: ExtensionManifest = {
     ],
     contexts: [],
     csharpEntries: [
-      { type: "UnityCli.HDRP.HdrpVolumeTools", description: "Bridge handlers for HDRP volume operations." },
-      { type: "UnityCli.HDRP.HdrpSettingsTools", description: "Bridge handlers for HDRP pipeline settings operations." }
+      { type: "UnityCli.HdrpVolumeTool", description: "Self-contained HDRP volume tool." },
+      { type: "UnityCli.HdrpSettingsTool", description: "Self-contained HDRP pipeline settings tool." }
     ],
   },
   tags: ["rendering", "pipeline", "hdrp"]

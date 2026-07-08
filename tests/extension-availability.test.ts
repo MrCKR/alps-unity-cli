@@ -157,6 +157,25 @@ test("validateExtensionManifestContracts validates manifests against bridge rout
   );
 });
 
+test("URP and HDRP extension bridge specs route through project-tool.run", () => {
+  const urpFeature = bridgeCommandRegistry.lookup("urp", "feature");
+  const urpVolume = bridgeCommandRegistry.lookup("urp", "volume");
+  const urpSettings = bridgeCommandRegistry.lookup("urp", "settings");
+  const hdrpVolume = bridgeCommandRegistry.lookup("hdrp", "volume");
+  const hdrpSettings = bridgeCommandRegistry.lookup("hdrp", "settings");
+
+  assert.equal(urpFeature?.bridgeCommand, "project-tool.run");
+  assert.equal(urpFeature?.toolName, "urp.feature");
+  assert.equal(urpVolume?.bridgeCommand, "project-tool.run");
+  assert.equal(urpVolume?.toolName, "urp.volume");
+  assert.equal(urpSettings?.bridgeCommand, "project-tool.run");
+  assert.equal(urpSettings?.toolName, "urp.settings");
+  assert.equal(hdrpVolume?.bridgeCommand, "project-tool.run");
+  assert.equal(hdrpVolume?.toolName, "hdrp.volume");
+  assert.equal(hdrpSettings?.bridgeCommand, "project-tool.run");
+  assert.equal(hdrpSettings?.toolName, "hdrp.settings");
+});
+
 test("extension registry helpers still expose contribution counts", async () => {
   const registry = new ExtensionRegistry();
   const projectPath = await makeFakeProject({ "com.unity.probuilder": "5.0.0" });

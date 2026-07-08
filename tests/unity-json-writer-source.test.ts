@@ -6,7 +6,7 @@ const writerUrl = new URL("../../unitypkg/Editor/Infrastructure/UnityCliJsonWrit
 const envelopeUrl = new URL("../../unitypkg/Editor/Infrastructure/UnityCliEnvelope.cs", import.meta.url);
 const jsonUrl = new URL("../../unitypkg/Editor/Infrastructure/UnityCliJson.cs", import.meta.url);
 const bridgeHttpUrl = new URL("../../unitypkg/Editor/Bridge/BridgeHttpServer.cs", import.meta.url);
-const codeExecUrl = new URL("../../unitypkg/Editor/Commands/CodeExecCommand.cs", import.meta.url);
+const codeExecUrl = new URL("../../unitypkg/Editor/Infrastructure/CodeExecSupport.cs", import.meta.url);
 const batchUrl = new URL("../../unitypkg/Editor/UnityCliBatch.cs", import.meta.url);
 const projectToolsUrl = new URL("../../unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs", import.meta.url);
 

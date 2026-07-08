@@ -2852,7 +2852,7 @@
       "command": "feature",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": true,
+      "destructive": false,
       "timeout": 30000
     },
     {

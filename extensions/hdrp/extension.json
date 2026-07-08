@@ -21,12 +21,12 @@
     "contexts": [],
     "csharpEntries": [
       {
-        "type": "UnityCli.HDRP.HdrpVolumeTools",
-        "description": "Bridge handlers for HDRP volume operations."
+        "type": "UnityCli.HdrpVolumeTool",
+        "description": "Self-contained HDRP volume tool."
       },
       {
-        "type": "UnityCli.HDRP.HdrpSettingsTools",
-        "description": "Bridge handlers for HDRP pipeline settings operations."
+        "type": "UnityCli.HdrpSettingsTool",
+        "description": "Self-contained HDRP pipeline settings tool."
       }
     ]
   },

@@ -105,9 +105,7 @@ namespace UnityCli
             {
                 "RegisterProBuilderCommands",
                 "RegisterCinemachineCommands",
-                "RegisterVfxCommands",
-                "RegisterUrpCommands",
-                "RegisterHdrpCommands"
+                "RegisterVfxCommands"
             };
             foreach (var methodName in methodNames)
             {
