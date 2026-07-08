@@ -76,7 +76,8 @@ export function projectDescriptorToToolMetadata(value: unknown): ResolvedToolMet
     handler: toolHandlerProp(descriptor, "handler"),
     supportStatus: toolSupportStatusProp(descriptor, "supportStatus"),
     target,
-    available: booleanProp(descriptor, "available") ?? undefined
+    available: booleanProp(descriptor, "available") ?? undefined,
+    source: toolSourceProp(descriptor, "source")
   });
 }
 
@@ -85,13 +86,14 @@ function ensureProjectToolDefaults(tool: ToolMetadata): ResolvedToolMetadata {
   // target=runtime 是公开契约不变量；即使旧桥返回 bridge/live-bridge，也必须按 runtime 路由归一化。
   const handler = target === "runtime" ? "bridge-runtime" : tool.handler ?? "bridge";
   const supportStatus = target === "runtime" ? "live-bridge-runtime" : tool.supportStatus;
+  const source = tool.source === "built-in" || tool.source === "extension" || tool.source === "project" ? tool.source : "project";
   return normalizeToolMetadata({
     ...tool,
     handler,
     supportStatus,
     target,
     playModeSupport: tool.playModeSupport ?? inferPlayModeSupport(tool)
-  }, "project");
+  }, source);
 }
 
 function isResolvedToolMetadata(value: ResolvedToolMetadata | undefined): value is ResolvedToolMetadata {
@@ -137,6 +139,11 @@ function objectProp(record: Record<string, unknown>, key: string): Record<string
 function stringArrayProp(record: Record<string, unknown>, key: string): string[] | undefined {
   const value = record[key];
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : undefined;
+}
+
+function toolSourceProp(record: Record<string, unknown>, key: string): ToolMetadata["source"] | undefined {
+  const value = record[key];
+  return value === "built-in" || value === "extension" || value === "project" ? value : undefined;
 }
 
 export function groupFromName(name: string): string {

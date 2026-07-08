@@ -33,6 +33,11 @@ namespace UnityCli
         public string Summary { get; set; }
         public string Description { get; set; }
         public string Group { get; set; }
+        /// <summary>
+        /// Discovery source exposed to CLI/AI: built-in / extension / project.
+        /// 对于 IUnityCliTool,由 registry 根据执行逻辑归属推导,不由工具手写。
+        /// </summary>
+        public string Source { get; set; }
         public string Version { get; set; }
         public string InputSchema { get; set; }
         public string OutputSchema { get; set; }

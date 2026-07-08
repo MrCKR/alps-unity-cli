@@ -12,6 +12,8 @@ export type ToolCancellation = "none" | "cooperative" | "job";
 export type PlayModeSupport = "supported" | "runtime-only" | "session-affecting" | "editor-only" | "unknown";
 
 export interface ToolMetadata {
+  /** Optional origin override when a live bridge descriptor already knows whether this tool is built-in/extension/project. */
+  source?: ToolSource;
   name: string;
   summary: string;
   description: string;

@@ -186,6 +186,7 @@ namespace UnityCli
             // 从 TReq/TRes 反射派生 schema(框架派生,Describe 无法染指)
             var inputSchema = UnityCliSchemaDeriver.DeriveSchema(reqType);
             var outputSchema = UnityCliSchemaDeriver.DeriveSchema(resType);
+            var inferredSource = InferProjectToolSource(assembly, type, descriptor);
 
             // 包装 Execute 为旧 UnityCliProjectToolDefinition.Execute 委托(string in/out)
             // 输入 JSON → 反序列化为 TReq → 调 Execute(TReq):TRes → 序列化 TRes 为 JSON
@@ -196,6 +197,7 @@ namespace UnityCli
                 Summary = descriptor.Summary,
                 Description = descriptor.Description,
                 Group = string.IsNullOrEmpty(descriptor.Group) ? "custom" : descriptor.Group,
+                Source = inferredSource,
                 Version = string.IsNullOrEmpty(descriptor.Version) ? "1.0.0" : descriptor.Version,
                 InputSchema = string.IsNullOrEmpty(inputSchema) ? "{}" : inputSchema,
                 OutputSchema = string.IsNullOrEmpty(outputSchema) ? "{}" : outputSchema,
@@ -573,7 +575,7 @@ namespace UnityCli
                 .Prop("summary", definition.Summary)
                 .Prop("description", definition.Description)
                 .Prop("group", definition.Group)
-                .Prop("source", "project")
+                .Prop("source", string.IsNullOrEmpty(definition.Source) ? "project" : definition.Source)
                 .Prop("destructiveHint", definition.DestructiveHint)
                 .Prop("target", definition.Target)
                 .Prop("availabilityScope", definition.AvailabilityScope)
@@ -584,6 +586,20 @@ namespace UnityCli
                 .PropRaw("outputSchema", definition.OutputSchema)
                 .EndObject()
                 .ToString();
+        }
+
+        private static string InferProjectToolSource(Assembly assembly, Type type, ToolDescriptor descriptor)
+        {
+            var group = string.IsNullOrEmpty(descriptor.Group) ? ProjectToolGroupFromName(descriptor.Name) : descriptor.Group;
+            if (group == "probuilder" || group == "cinemachine" || group == "vfx" || group == "urp" || group == "hdrp")
+            {
+                return "extension";
+            }
+            if (assembly == typeof(UnityCliBridge).Assembly)
+            {
+                return "built-in";
+            }
+            return "project";
         }
 
         private static string ProjectToolManifestJson(string requestId, UnityCliProjectToolDefinition definition, string artifactDir, DateTime startedAt, DateTime endedAt)
