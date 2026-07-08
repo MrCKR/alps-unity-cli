@@ -625,9 +625,10 @@ function checkContextDiscovery(flags: Record<string, string | boolean>, runtime:
  * ProBuilder extension specific check.
  *
  * Diagnoses the ProBuilder extension specifically: installed status,
- * Unity package present/version, descriptor count=36, bridge command
- * count=36, C# handler availability. Used by `doctor` to surface ProBuilder
- * extension health alongside the generic extension_availability check.
+ * Unity package present/version, manifest tool count, offline descriptor
+ * visibility(现语义固定为 0), bridge command count, and C# handler routing.
+ * Used by `doctor` to surface ProBuilder extension health alongside the
+ * generic extension_availability check.
  */
 async function checkProBuilderExtension(flags: Record<string, string | boolean>): Promise<DoctorCheck> {
   const projectPath = getString(flags, "project");
@@ -663,20 +664,17 @@ async function checkProBuilderExtension(flags: Record<string, string | boolean>)
     }
   }
 
-  // Count descriptors (built-in metadata path) and bridge specs.
+  // 新语义下，offline tools metadata 不再暴露 extension tool descriptors；
+  // 数量应固定为 0。工具清单真源来自 manifest，bridge 路由真源来自 registry。
   const probuilderTools = filterToolsByGroup("probuilder");
   const descriptorCount = probuilderTools.length;
+  const expectedDescriptorCount = 0;
+  const manifestToolCount = registry.getExtension("probuilder")?.manifest.contributions.tools?.length ?? 0;
   const bridgeSpecs = bridgeCommandRegistry.specs().filter((s) => s.group === "probuilder");
   const bridgeCommandCount = bridgeSpecs.length;
 
-  // Expected ProBuilder extension tool and bridge spec count.
-  const expectedCount = 36;
-
-  // C# handler availability — the descriptor path is built-in, so
-  // handlers are "present" in code when descriptorCount matches and
-  // the bridge domain registers commands. Real runtime availability
-  // requires the Unity package; this check reports "code_present".
-  const csharpHandlerPresent = descriptorCount === expectedCount && bridgeCommandCount === expectedCount;
+  // C# handler availability 以 manifest 工具数和 bridge registry 路由数对齐为准。
+  const csharpHandlerPresent = manifestToolCount > 0 && bridgeCommandCount === manifestToolCount;
 
   const details: Record<string, unknown> = {
     registered: true,
@@ -687,10 +685,11 @@ async function checkProBuilderExtension(flags: Record<string, string | boolean>)
       present: unityPackagePresent,
       version: unityPackageVersion
     },
+    manifestToolCount,
     descriptorCount,
-    expectedDescriptorCount: expectedCount,
+    expectedDescriptorCount,
     bridgeCommandCount,
-    expectedBridgeCommandCount: expectedCount,
+    expectedBridgeCommandCount: manifestToolCount,
     csharpHandlerPresent,
     projectResolved: projectPath !== undefined
   };
@@ -698,11 +697,11 @@ async function checkProBuilderExtension(flags: Record<string, string | boolean>)
   // Determine status.
   const issues: string[] = [];
 
-  if (descriptorCount !== expectedCount) {
-    issues.push(`descriptor count ${descriptorCount} does not match expected ${expectedCount}`);
+  if (descriptorCount !== expectedDescriptorCount) {
+    issues.push(`offline descriptor count ${descriptorCount} does not match expected ${expectedDescriptorCount}`);
   }
-  if (bridgeCommandCount !== expectedCount) {
-    issues.push(`bridge command count ${bridgeCommandCount} does not match expected ${expectedCount}`);
+  if (bridgeCommandCount !== manifestToolCount) {
+    issues.push(`bridge command count ${bridgeCommandCount} does not match expected ${manifestToolCount}`);
   }
   if (projectPath && !unityPackagePresent && enabled) {
     issues.push("ProBuilder extension is enabled but com.unity.probuilder is not installed in the project");
@@ -725,7 +724,7 @@ async function checkProBuilderExtension(flags: Record<string, string | boolean>)
     return {
       name: "extension.probuilder",
       status: "pass",
-      message: `ProBuilder extension registered with ${descriptorCount} descriptors and ${bridgeCommandCount} bridge commands. Pass --project to verify Unity package availability.`,
+      message: `ProBuilder extension registered with ${manifestToolCount} manifest tools, ${descriptorCount} offline descriptors, and ${bridgeCommandCount} bridge commands. Pass --project to verify Unity package availability.`,
       details
     };
   }
@@ -733,7 +732,7 @@ async function checkProBuilderExtension(flags: Record<string, string | boolean>)
   return {
     name: "extension.probuilder",
     status: "pass",
-    message: `ProBuilder extension is ${enabled ? "enabled" : "disabled"}; com.unity.probuilder ${unityPackagePresent ? `present (v${unityPackageVersion ?? "unknown"})` : "not installed"}; ${descriptorCount} descriptors, ${bridgeCommandCount} bridge commands.`,
+    message: `ProBuilder extension is ${enabled ? "enabled" : "disabled"}; com.unity.probuilder ${unityPackagePresent ? `present (v${unityPackageVersion ?? "unknown"})` : "not installed"}; ${manifestToolCount} manifest tools, ${descriptorCount} offline descriptors, ${bridgeCommandCount} bridge commands.`,
     details
   };
 }
