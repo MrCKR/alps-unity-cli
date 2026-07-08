@@ -109,22 +109,21 @@ test("C# RegisterCommand calls exist for ui commands", async () => {
 });
 
 test("ui C# error recovery hints use current tools run form, not legacy unity_cli", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/UiCommands.cs", import.meta.url), "utf8");
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/ui/uitoolkit-tools.cs", import.meta.url), "utf8");
   assert.equal(source.includes("unity_cli ui"), false, "must not reference legacy 'unity_cli ui'");
+  assert.match(source, /Pass a UIDocument GameObject or an Assets\/\*\.uxml path\./, "ui.document.info should guide the caller with current target or asset-path wording");
 });
 
 test("ui C# implements document CRUD, stylesheet linking, listing and preview", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/UiCommands.cs", import.meta.url), "utf8");
-  const block = source.slice(source.indexOf("UiGetVisualTree(BridgeRequest request)"), source.indexOf("private static void CollectVisualElement"));
-  assert.match(block, /return SuccessJson\(w\.EndObject/, "UiGetVisualTree must wrap payload in SuccessJson");
-  assert.match(source, /UiDocumentUpdate[\s\S]*File\.WriteAllText/, "ui.document.update should write UXML content");
-  assert.match(source, /UiDocumentDelete[\s\S]*AssetDatabase\.DeleteAsset/, "ui.document.delete should delete UI assets");
-  assert.match(source, /UiDetachDocument[\s\S]*Undo\.DestroyObjectImmediate/, "ui.detach-document should remove UIDocument component");
-  assert.match(source, /UiLinkStylesheet[\s\S]*project:\/\/database/, "ui.link-stylesheet should write Unity project stylesheet references");
-  assert.match(source, /UiListDocuments[\s\S]*AssetDatabase\.FindAssets/, "ui.list-documents should discover UI assets");
-  assert.match(source, /UiRenderPreview[\s\S]*AssetPreview/, "ui.render-preview should use Unity AssetPreview");
-  assert.match(source, /UiModifyVisualElement[\s\S]*FindVisualElementByName/, "ui.modify-visual-element should edit a live VisualElement");
-  assert.match(source, /ApplyOptionalPanelSettings[\s\S]*targetTexture/, "PanelSettings tools should accept optional PanelSettings fields");
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/ui/uitoolkit-tools.cs", import.meta.url), "utf8");
+  assert.match(source, /class UiDocumentUpdateTool : IUnityCliTool[\s\S]*File\.WriteAllText/, "ui.document.update should write UXML content");
+  assert.match(source, /class UiDocumentDeleteTool : IUnityCliTool[\s\S]*AssetDatabase\.DeleteAsset/, "ui.document.delete should delete UI assets");
+  assert.match(source, /class UiDetachDocumentTool : IUnityCliTool[\s\S]*DestroyImmediate\(doc\)/, "ui.detach-document should remove the UIDocument component");
+  assert.match(source, /class UiLinkStylesheetTool : IUnityCliTool[\s\S]*File\.ReadAllText[\s\S]*File\.WriteAllText/, "ui.link-stylesheet should update UXML text content to link a stylesheet");
+  assert.match(source, /class UiListDocumentsTool : IUnityCliTool[\s\S]*AssetDatabase\.FindAssets/, "ui.list-documents should discover UI assets");
+  assert.match(source, /class UiRenderPreviewTool : IUnityCliTool/, "ui.render-preview should remain an explicit preview tool in the new shape");
+  assert.match(source, /class UiModifyVisualElementTool : IUnityCliTool[\s\S]*rootVisualElement\.Q\(r\.ElementName\)/, "ui.modify-visual-element should edit a live VisualElement by name");
+  assert.match(source, /class UiCreatePanelSettingsTool : IUnityCliTool[\s\S]*referenceResolution/, "PanelSettings tools should accept optional PanelSettings fields");
 });
 
 test("ui bridge spec forwards structured --input fields", async () => {

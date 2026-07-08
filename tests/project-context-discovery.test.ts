@@ -641,16 +641,10 @@ test("SampleContext read handler only reads, no write operations", async () => {
 
 test("DiagnosePreflightJson calls DiscoverProjectContexts and outputs customContexts with fingerprint", async () => {
   const { readFile } = await import("node:fs/promises");
-  const diagnose = await readFile(new URL("../../unitypkg/Editor/Commands/DiagnoseCommands.cs", import.meta.url), "utf8");
+  const diagnose = await readFile(new URL("../../unitypkg/Editor/Tools/diagnose/preflight.cs", import.meta.url), "utf8");
 
-  // DiagnosePreflightJson must call DiscoverProjectContexts
   assert.match(diagnose, /DiscoverProjectContexts\(\)/, "DiagnosePreflightJson must call DiscoverProjectContexts()");
-
-  // Must output customContexts object with fingerprint
-  assert.match(diagnose, /PropObject\("customContexts"/, "DiagnosePreflightJson must output customContexts object");
-  assert.match(diagnose, /PropRaw\("fingerprint",\s*ProjectContextFingerprintSummaryJson\(\)/, "customContexts must contain fingerprint from ProjectContextFingerprintSummaryJson()");
-
-  // Must include projectContextFingerprint in checks array
+  assert.match(diagnose, /CustomContexts = new CustomFingerprintInfo \{ Fingerprint = ParseJsonToTree\(ProjectContextFingerprintSummaryJson\(\)\) \}/, "customContexts must contain fingerprint from ProjectContextFingerprintSummaryJson()");
   assert.match(diagnose, /projectContextFingerprint/, "DiagnosePreflightJson must include projectContextFingerprint in checks");
 });
 

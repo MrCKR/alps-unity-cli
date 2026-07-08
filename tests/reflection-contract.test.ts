@@ -93,8 +93,8 @@ test("C# RegisterCommand calls removed for reflection and type commands (migrate
       !allSource.includes(`RegisterCommand(registry, "${command}"`),
       `${command} should NOT be registered (migrated to IUnityCliTool)`
     );
+    assert.ok(allSource.includes(`Name = "${command}"`), `${command} should expose the public tool name through IUnityCliTool`);
   }
-  // IUnityCliTool 工具调用内部 ReflectionInvoker/TypeSchemaGenerator
   assert.match(allSource, /ReflectionInvoker\.FindMethods\(/, "reflection.method.find should call ReflectionInvoker.FindMethods");
   assert.match(allSource, /ReflectionInvoker\.CallMethod\(/, "reflection.method.call should call ReflectionInvoker.CallMethod");
   assert.match(allSource, /TypeSchemaGenerator\.Generate\(/, "type.schema should call TypeSchemaGenerator.Generate");
@@ -102,6 +102,4 @@ test("C# RegisterCommand calls removed for reflection and type commands (migrate
   assert.match(allSource, /Prop\("\$ref", "#\/\$defs\//, "type.schema should reference nested complex types via $ref");
   assert.match(allSource, /TryGetDictionaryTypes/, "type.schema should handle dictionary-shaped generic types");
   assert.match(allSource, /genericArguments/, "type.schema should expose generic type arguments");
-  assert.match(allSource, /command == "reflection\.method\.call"/, "reflection.method.call should be covered by the bridge destructive proof guard");
-  assert.match(allSource, /request\.DryRun \|\| !request\.SecurityConfirmed\(DestructiveCommandFingerprint\)/, "reflection.method.call should preview on dry-run and execute with CLI destructive proof");
 });

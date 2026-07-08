@@ -83,22 +83,7 @@ namespace UnityCli
         private static BridgeCommandRegistry CreateCommandRegistry()
         {
             var registry = new BridgeCommandRegistry();
-            RegisterCameraCommands(registry);
-            RegisterSceneCommands(registry);
-            RegisterPrefabCommands(registry);
-            RegisterGameObjectCommands(registry);
-            RegisterAssetCommands(registry);
-            RegisterUiCommands(registry);
-            RegisterMaterialCommands(registry);
-            RegisterGraphicsCommands(registry);
-            RegisterPhysicsCommands(registry);
-            RegisterProfilerCommands(registry);
             RegisterInstalledExtensionCommands(registry);
-            RegisterAnimationCommands(registry);
-            RegisterShaderCommands(registry);
-            RegisterTextureCommands(registry);
-            RegisterEditorCommands(registry);
-            RegisterDiagnoseCommands(registry);
             RegisterCodeExecCommand(registry);
             RegisterProjectToolCommands(registry);
             RegisterRuntimeToolCommands(registry);

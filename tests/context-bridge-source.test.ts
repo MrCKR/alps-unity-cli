@@ -89,7 +89,8 @@ test("prefab.info is interface-owned and preserves legacy prefab payload", async
   assert.match(allSources, /class PrefabInfoContext : IUnityCliContext<PrefabInfoContext\.Request, PrefabInfoContext\.Result>, IUnityCliBuiltInRawBridgeContext/, "prefab.info must keep raw read support");
   assert.match(allSources, /Name\s*=\s*"prefab\.info"/, "prefab.info descriptor must keep public context name");
   assert.match(allSources, /PrefabInfoPayloadJson[\s\S]*PropRaw\("prefab", PrefabAssetJson\(path, prefab\)\)/, "prefab.info must preserve the legacy prefab payload");
-  assert.match(allSources, /E_PREFAB_PATH_REQUIRED[\s\S]*Pass a concrete Assets\/\*\.prefab path discovered from project assets\./, "prefab.info path errors must avoid placeholder command text");
+  assert.match(allSources, /E_PREFAB_PATH_REQUIRED/, "prefab.info should keep a stable path-required error code");
+  assert.doesNotMatch(allSources, /unity_cli prefab/, "prefab.info path hints must not reference removed legacy prefab CLI");
 });
 
 test("prefab.hierarchy is interface-owned and preserves legacy paged hierarchy payload", async () => {

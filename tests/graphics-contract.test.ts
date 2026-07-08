@@ -18,6 +18,13 @@ async function listCsFiles(directory: URL): Promise<URL[]> {
   return urls.flat().sort((left, right) => left.pathname.localeCompare(right.pathname));
 }
 
+/** 读取整个 Graphics 域新形态源码集合。 */
+async function readGraphicsSources(): Promise<string> {
+  const toolsUrl = new URL("../unitypkg/Editor/Tools/graphics/", import.meta.url);
+  const files = await listCsFiles(toolsUrl);
+  return (await Promise.all(files.map((file) => readFile(file, "utf8")))).join("\n");
+}
+
 const GRAPHICS_COMMANDS = [
   "graphics.quality", "graphics.settings", "graphics.pipeline", "graphics.volume", "graphics.screenshot",
   "graphics.bake-start", "graphics.bake-cancel", "graphics.bake-status", "graphics.bake-clear", "graphics.bake-reflection-probe",
@@ -89,7 +96,7 @@ test("C# RegisterCommand calls exist for graphics commands", async () => {
 });
 
 test("graphics C# error recovery hints use current tools run form, not legacy unity_cli", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/GraphicsCommands.cs", import.meta.url), "utf8");
+  const source = await readGraphicsSources();
   assert.equal(source.includes("unity_cli tools run"), false, "must not reference legacy 'unity_cli tools run' command form");
   assert.match(source, /tools run graphics\.quality/, "error hints should route to tools run graphics.quality");
 });

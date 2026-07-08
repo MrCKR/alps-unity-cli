@@ -18,6 +18,13 @@ async function listCsFiles(directory: URL): Promise<URL[]> {
   return urls.flat().sort((left, right) => left.pathname.localeCompare(right.pathname));
 }
 
+/** 读取整个 Texture 域新形态源码集合。 */
+async function readTextureSources(): Promise<string> {
+  const toolsUrl = new URL("../unitypkg/Editor/Tools/texture/", import.meta.url);
+  const files = await listCsFiles(toolsUrl);
+  return (await Promise.all(files.map((file) => readFile(file, "utf8")))).join("\n");
+}
+
 /**
  * Texture 域契约测试：texture.info / create / sprite / import-settings / generate。
  * 对齐 CoplayDev manage_texture 的 enum 文档化与生成能力，
@@ -115,7 +122,7 @@ test("C# handlers exist for texture commands (RegisterCommand or IUnityCliTool)"
 });
 
 test("texture C# error recovery hints use current tools run form, not legacy unity_cli", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/TextureCommands.cs", import.meta.url), "utf8");
+  const source = await readTextureSources();
   assert.equal(source.includes("unity_cli texture info"), false, "must not reference legacy 'unity_cli texture info'");
   assert.equal(source.includes("unity_cli asset search"), false, "must not reference legacy 'unity_cli asset search'");
   assert.match(source, /tools run asset\.search/, "error hints should route to tools run asset.search");
@@ -132,8 +139,8 @@ test("texture bridge spec forwards structured --input fields (width/enum/bool), 
 });
 
 test("texture C# implements sprite slices and texture-specific delete", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/TextureCommands.cs", import.meta.url), "utf8");
-  assert.match(source, /ParseSpriteSlices[\s\S]*SpriteMetaData/, "C# should parse sprite slice metadata");
-  assert.match(source, /TextureDelete[\s\S]*AssetDatabase\.DeleteAsset/, "texture.delete should delete through AssetDatabase");
-  assert.match(source, /TextureModify[\s\S]*ImageConversion\.LoadImage[\s\S]*SetPixel/, "texture.modify should edit decoded texture pixels");
+  const source = await readTextureSources();
+  assert.match(source, /BuildSpriteSlices\(List<TextureSliceInput> slices\)[\s\S]*SpriteMetaData/, "C# should build sprite slice metadata from structured slice input");
+  assert.match(source, /AssetDatabase\.DeleteAsset/, "texture.delete should delete through AssetDatabase");
+  assert.match(source, /ImageConversion\.LoadImage[\s\S]*SetPixel/, "texture.modify should edit decoded texture pixels");
 });

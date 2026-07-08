@@ -18,6 +18,13 @@ async function listCsFiles(directory: URL): Promise<URL[]> {
   return urls.flat().sort((left, right) => left.pathname.localeCompare(right.pathname));
 }
 
+/** 读取整个 Material 域新形态源码集合。 */
+async function readMaterialSources(): Promise<string> {
+  const toolsUrl = new URL("../unitypkg/Editor/Tools/material/", import.meta.url);
+  const files = await listCsFiles(toolsUrl);
+  return (await Promise.all(files.map((file) => readFile(file, "utf8")))).join("\n");
+}
+
 /**
  * Material 域契约测试：material.info / create / assign / set。
  * 对齐 CoplayDev manage_material 与 IvanMurzak assets-material-create，
@@ -93,19 +100,18 @@ test("C# handlers exist for material commands (RegisterCommand or IUnityCliTool)
 });
 
 test("material C# error recovery hints use current tools run form, not legacy unity_cli", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/MaterialCommands.cs", import.meta.url), "utf8");
-  // 旧顶层命令形态不得出现在错误恢复提示中
+  const source = await readMaterialSources();
   assert.equal(source.includes("unity_cli material info"), false, "must not reference legacy 'unity_cli material info'");
   assert.equal(source.includes("unity_cli asset search"), false, "must not reference legacy 'unity_cli asset search'");
-  // 当前形态应出现在恢复提示中
   assert.match(source, /tools run material\.info/, "error hints should route to tools run material.info");
   assert.match(source, /tools run asset\.search/, "error hints should route to tools run asset.search");
 });
 
 test("material.info C# implements namePattern filtering", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/MaterialCommands.cs", import.meta.url), "utf8");
-  assert.match(source, /ParseNameFilter[\s\S]*namePattern/, "C# should parse namePattern into a filter set");
-  assert.match(source, /nameFilterApplied/, "C# should report whether a name filter was applied");
+  const source = await readMaterialSources();
+  assert.match(source, /ParseNameFilter\(string namePattern\)/, "C# should parse namePattern into a filter set");
+  assert.match(source, /BuildMaterialInfo\(path, material, nameFilter\)/, "material.info should pass the parsed filter into the material summary builder");
+  assert.match(source, /NameFilterApplied = nameFilter != null/, "material.info should report whether a name filter was applied");
 });
 
 test("material.set exposes typed aliases and renderer color uses MaterialPropertyBlock", async () => {
@@ -114,6 +120,6 @@ test("material.set exposes typed aliases and renderer color uses MaterialPropert
   assert.ok(setProps.floatValue, "material.set should expose floatValue alias");
   assert.ok(setProps.vector, "material.set should expose vector alias");
   assert.ok(setProps.texture, "material.set should expose texture alias");
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/MaterialCommands.cs", import.meta.url), "utf8");
-  assert.match(source, /MaterialSetRendererColor[\s\S]*MaterialPropertyBlock[\s\S]*SetColor/, "renderer color should use MaterialPropertyBlock");
+  const source = await readMaterialSources();
+  assert.match(source, /MaterialPropertyBlock[\s\S]*SetColor/, "renderer color should use MaterialPropertyBlock");
 });

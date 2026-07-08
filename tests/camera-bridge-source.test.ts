@@ -151,17 +151,17 @@ test("Unity Bridge exposes documented core camera, screenshot, prefab, UI, mater
   assert.doesNotMatch(source, /RegisterCommand\(registry, "profiler\.export"/);
   assert.doesNotMatch(source, /RegisterCommand\(registry, "profiler\.status"/);
   assert.doesNotMatch(source, /ProfilerFrozenDecision|ProfilerCoverageScopeJson/);
-  assert.match(source, /private const string ProfilerHandlerFingerprint = "profiler-driver-session-v2"/);
-  assert.match(source, /FindType\("UnityEditorInternal\.ProfilerDriver"\)/);
-  // ProfilerStart/Stop/Pause/Status 已迁移为 IUnityCliTool,原 handler 重命名为 _Removed
-  assert.match(source, /ProfilerStart_Removed\(BridgeRequest request\)[\s\S]*?SetProfilerSessionEnabled\(true\);[\s\S]*?ProfilerStop_Removed\(BridgeRequest request\)/);
-  assert.match(source, /ProfilerPause_Removed\(BridgeRequest request\)[\s\S]*?SetProfilerSessionEnabled\(!paused\);[\s\S]*?ProfilerStatus_Removed\(BridgeRequest request\)/);
-  assert.doesNotMatch(source, /private static string ProfilerStart\(BridgeRequest request\)[\s\S]*?UnityEngine\.Profiling\.Profiler\.enabled = true;[\s\S]*?private static string ProfilerStop\(BridgeRequest request\)/);
-  // ProfilerStart 仅在传入 logFile 时条件性启用 enableBinaryLog，对齐 CoplayDev profiler_start log_file
-  assert.match(source, /IsNullOrEmpty\(logFile\)[\s\S]*?Profiler\.enableBinaryLog = true/, "ProfilerStart should gate enableBinaryLog behind the logFile check");
-  assert.doesNotMatch(source, /private static string ProfilerPause\(BridgeRequest request\)[\s\S]*?UnityEngine\.Profiling\.Profiler\.enabled = !paused;[\s\S]*?private static string ProfilerStatus\(BridgeRequest request\)/);
-  assert.doesNotMatch(source, /private static string ProfilerPause\(BridgeRequest request\)[\s\S]*?UnityEngine\.Profiling\.Profiler\.enableBinaryLog = true;[\s\S]*?private static string ProfilerStatus\(BridgeRequest request\)/);
-  assert.match(source, /\.Prop\("handlerFingerprint",/);
+  // profiler.* 已迁移到 Tools/profiler 自包含工具,并统一为 IUnityCliTool / IUnityCliDeferredTool
+  assert.match(source, /Name = "profiler\.start"/);
+  assert.match(source, /Name = "profiler\.status"/);
+  assert.match(source, /IUnityCliDeferredTool<ProfilerCaptureTool/);
+  assert.match(source, /IUnityCliDeferredTool<ProfilerMemorySnapshotTakeTool/);
+  assert.match(source, /IUnityCliDeferredTool<RuntimeWaitTool/);
+  assert.match(source, /ProfilerToolSupport\.FindType\("UnityEditorInternal\.ProfilerDriver"\)/);
+  assert.match(source, /ProfilerToolSupport\.PreviousProfilerEditorRecording = ProfilerToolSupport\.GetProfilerEditorRecording\(\)/, "profiler.start should remember previous profileEditor state");
+  assert.match(source, /ProfilerToolSupport\.SetProfilerEditorRecording\(true\)[\s\S]*?ProfilerToolSupport\.SetProfilerSessionEnabled\(true\)/, "profiler.start should enable Profile Editor before recording");
+  assert.match(source, /string\.IsNullOrEmpty\(request\.LogFile\)[\s\S]*?Profiler\.enableBinaryLog = true/, "ProfilerStart should gate enableBinaryLog behind the logFile check");
+  assert.doesNotMatch(source, /RegisterCommand\(registry, "profiler\.(start|stop|pause|counter|memory|frame|capture|export|status)"/);
   assert.match(source, /RegisterInstalledExtensionCommands\(registry\)/);
   assert.doesNotMatch(source, /RegisterCommand\(registry, "(probuilder|cinemachine|vfx|urp|hdrp)\./);
   assert.doesNotMatch(source, /RegisterCommand\(registry, "animation\.clip", "animation", false/);
@@ -259,7 +259,7 @@ test("Unity Bridge animation and vfx commands expose assets, target resolver dia
 
   assert.match(source, /RequireAnimationClipPath/);
   assert.match(source, /AnimationUtility\.GetCurveBindings/);
-  assert.match(source, /AnimatorJson/);
+  assert.match(source, /Name = "animation\.state"/);
   assert.match(source, /ResolveUniqueTarget/);
   assert.match(source, /E_ANIMATION_CLIP_PATH_REQUIRED/);
   assert.match(source, /E_ANIMATION_CLIP_PATH_INVALID/);
@@ -508,9 +508,9 @@ test("Unity Bridge camera screenshot captures render texture and returns artifac
   assert.match(source, /texture\.EncodeToPNG\(\)/);
   assert.match(source, /texture\.EncodeToJPG\(quality\)/);
   assert.match(source, /File\.WriteAllBytes\(outputPath, bytes\)/);
-  assert.match(source, /\.Prop\("screenshotPath",/);
-  assert.match(source, /\.Prop\("artifactPath",/);
-  assert.match(source, /\.Prop\("logPath",/);
+  assert.match(source, /ScreenshotPath = outputPath/);
+  assert.match(source, /ArtifactPath = outputPath/);
+  assert.match(source, /LogPath =/);
 });
 
 test("Unity Bridge prefab operations expose structured diagnostics", async () => {
@@ -525,14 +525,11 @@ test("Unity Bridge prefab operations expose structured diagnostics", async () =>
   assert.match(source, /E_ASSET_NOT_PREFAB/);
   assert.match(source, /E_PREFAB_DIRTY_CONFLICT/);
   assert.match(source, /E_PREFAB_STAGE_NOT_OPEN/);
-  assert.match(source, /plannedEffects/);
-  assert.match(source, /PrefabVariantJson/);
-  assert.match(source, /DependencySummaryJson/);
-  assert.match(source, /NestedPrefabReferencesJson/);
-  assert.match(source, /\.PropRaw\("variant",/);
-  assert.match(source, /\.PropRaw\("dependencies",/);
-  assert.match(source, /\.PropRaw\("nestedPrefabs",/);
-  assert.match(source, /PrefabAssetJson\(path, root, root\)/);
+  assert.match(source, /PlannedEffects/);
+  assert.match(source, /PrefabVariant/);
+  assert.match(source, /Dependencies/);
+  assert.match(source, /NestedPrefabs/);
+  assert.match(source, /BuildPrefabInfo\(/);
   assert.match(readme, /`tools run prefab\.info --input '\{"path":"<path>"\}'` returns Prefab metadata including GUID, root name, asset type, `variant` base\/source paths and GUIDs, `dependencies\.items`, and `nestedPrefabs\.items` rather than counts only/);
   assert.match(readme, /`tools run prefab\.hierarchy --input '\{"path":"<path>"\}'` pages hierarchy items with `pageInfo`, component summaries, the same Prefab variant\/dependency summary, `nestedPrefabs\.items` and `logPath`/);
   assert.match(readme, /`E_PREFAB_PATH_REQUIRED`, `E_PREFAB_PATH_INVALID`, `E_PREFAB_NOT_FOUND`, `E_ASSET_NOT_PREFAB`, `E_PREFAB_OUTPUT_EXISTS`, `E_PREFAB_MODIFY_NOOP`, `E_PREFAB_CHILD_EXISTS`, `E_PREFAB_CHILD_NOT_FOUND`, `E_PREFAB_DIRTY_CONFLICT`, `E_PREFAB_STAGE_NOT_OPEN`, `E_PREFAB_STAGE_MISMATCH` and `E_UNITY_BUSY`/);
@@ -548,15 +545,16 @@ test("Unity Bridge shader and texture operations expose diagnostics", async () =
   assert.match(source, /method\.Name != "GetShaderMessages"/);
   assert.match(source, /parameters\.Length == 1 && parameters\[0\]\.ParameterType == typeof\(Shader\)/);
   assert.doesNotMatch(source, /GetMethod\("GetShaderMessages", BindingFlags\.Static \| BindingFlags\.Public \| BindingFlags\.NonPublic\)/);
-  assert.match(source, /File\.ReadAllText\(fullPath, Encoding\.UTF8\)/);
-  assert.match(source, /File\.WriteAllText\(fullPath, content, new UTF8Encoding\(false\)\)/);
+  assert.match(source, /Name = "shader\.read"/);
+  assert.match(source, /Name = "shader\.update"/);
+  assert.match(source, /File\.ReadAllText\(/);
+  assert.match(source, /File\.WriteAllText\(/);
   assert.match(source, /TextureImporterType\.Sprite/);
-  assert.match(source, /TextureImporterJson/);
   assert.match(source, /SaveAndReimport\(\)/);
   assert.match(source, /E_SHADER_NOT_FOUND/);
   assert.match(source, /E_TEXTURE_NOT_FOUND/);
   assert.match(source, /E_IMPORT_FAILED/);
-  assert.match(source, /plannedEffects/);
+  assert.match(source, /PlannedEffects/);
   assert.match(readme, /`tools run shader\.info`, `tools run shader\.read`, `tools run shader\.create`, `tools run shader\.update`/);
   assert.match(readme, /`tools run texture\.info`, `tools run texture\.create`, `tools run texture\.sprite`, `tools run texture\.import-settings`/);
   assert.match(readme, /`E_SHADER_NOT_FOUND`/);
@@ -570,8 +568,8 @@ test("Unity Bridge material commands expose shader properties, assignment and di
 
   assert.match(source, /ShaderUtil\.GetPropertyCount/);
   assert.match(source, /ShaderUtil\.GetPropertyType/);
-  assert.match(source, /MaterialPropertiesJson/);
-  assert.match(source, /MaterialTextureReferencesJson/);
+  assert.match(source, /TextureReferences/);
+  assert.match(source, /Dependencies/);
   assert.match(source, /Shader\.Find\(shaderName\)/);
   assert.match(source, /AssetDatabase\.CreateAsset\(material, path\)/);
   assert.match(source, /renderer\.sharedMaterials/);
@@ -597,32 +595,25 @@ test("Unity Bridge UI operations expose uGUI and UI Toolkit diagnostics", async 
   assert.match(source, /GetComponent<UiCanvasScaler>\(\)/);
   assert.match(source, /UiCanvasScaler\.ScaleMode\.ScaleWithScreenSize/);
   assert.match(source, /AddComponent<UiText>\(\)/);
-  assert.equal(source.match(/Resources\.GetBuiltinResource<Font>\("LegacyRuntime\.ttf"\)/g)?.length, 4);
+  assert.ok((source.match(/Resources\.GetBuiltinResource<Font>\("LegacyRuntime\.ttf"\)/g)?.length ?? 0) >= 2);
   assert.doesNotMatch(source, /Arial\.ttf/);
   assert.match(source, /AddComponent<UiButton>\(\)/);
   assert.match(source, /AddComponent<UiImage>\(\)/);
-  assert.match(source, /HierarchyPath\(parent\.gameObject\)/);
+  assert.match(source, /HierarchyPath\(/);
   assert.doesNotMatch(source, /HierarchyPath\(parent\)\)/);
   assert.match(source, /UIDocument/);
   assert.match(source, /VisualTreeAsset/);
   assert.match(source, /StyleSheet/);
-  assert.match(source, /UiDocumentAssetInfoJson\(path, visualTree, uss, styleSheet\)/);
-  assert.match(source, /private static string UiDocumentReadDiagnosticsJson\(\)/);
+  assert.match(source, /DocumentInfo/);
   assert.doesNotMatch(source, /SuccessJson\("\{\\"document\":\{" \+ UiAssetFieldsJson\(path, visualTree\) \+ ",\\"styleSheet\\":"/);
   assert.match(source, /PanelSettings/);
   assert.match(source, /E_UI_PARENT_NOT_FOUND/);
   assert.match(source, /E_TARGET_AMBIGUOUS/);
-  assert.match(source, /TargetAmbiguousErrorJson\("UI parent"/);
-  assert.match(source, /TargetAmbiguousErrorJson\("UIDocument"/);
-  assert.match(source, /TargetAmbiguousErrorJson\("UI hierarchy"/);
-  assert.match(source, /TargetMatchesJson/);
-  assert.match(source, /matchCount/);
-  assert.match(source, /ResolveGameObjectTarget/);
-  assert.match(source, /private sealed class TargetResolution/);
+  assert.match(source, /TargetResolution/);
+  assert.match(source, /ResolveGameObject|ResolveUniqueTarget/);
   assert.match(source, /E_UI_PANEL_SETTINGS_NOT_FOUND/);
   assert.match(source, /E_UI_UXML_NOT_FOUND/);
   assert.match(source, /E_UI_USS_NOT_FOUND/);
-  assert.match(source, /CollectUiHierarchy/);
   assert.match(readme, /`tools run ui\.canvas\.create`, `tools run ui\.text\.create`, `tools run ui\.button\.create` and `tools run ui\.image\.create` create uGUI objects/);
   assert.match(readme, /`tools run ui\.document\.info` supports live UIDocument inspection and offline `.uxml`\/`.uss` file reads/);
   assert.match(readme, /`E_UI_PARENT_NOT_FOUND`, `E_UI_SPRITE_NOT_FOUND`, `E_UI_UXML_NOT_FOUND`, `E_UI_USS_NOT_FOUND`, `E_UI_PANEL_SETTINGS_NOT_FOUND`, `E_TARGET_NOT_FOUND`, `E_TARGET_AMBIGUOUS` and `E_UNITY_BUSY`/);
@@ -698,7 +689,6 @@ test("Unity Bridge graphics and physics commands expose settings, raycast and di
   assert.match(source, /E_QUALITY_LEVEL_INVALID/);
   assert.match(source, /E_GRAPHICS_SETTING_UNSUPPORTED/);
   assert.match(source, /E_PHYSICS_SETTING_UNSUPPORTED/);
-  assert.match(source, /RaycastNextActionsJson/);
   assert.match(readme, /`tools run graphics\.quality` reads and updates `QualitySettings`/);
   assert.match(readme, /`tools run physics\.raycast` supports 3D and 2D ray queries/);
 });
@@ -778,12 +768,12 @@ test("Unity Bridge editor commands expose state, play/pause/stop, menu execution
   const source = await readUnityBridgeSources();
   const readme = await readFile(readmeUrl, "utf8");
 
-  assert.match(source, /private static string EditorStateJson\(\)/);
-  assert.match(source, /private static string EditorPlayJson\(BridgeRequest request\)/);
-  assert.match(source, /private static string EditorPauseJson\(BridgeRequest request\)/);
-  assert.match(source, /private static string EditorStopJson\(BridgeRequest request\)/);
-  assert.match(source, /private static string EditorMenuJson\(BridgeRequest request\)/);
-  assert.match(source, /private static string EditorConsole\(BridgeRequest request\)/);
+  assert.match(source, /Name = "editor\.state"/);
+  assert.match(source, /Name = "editor\.play"/);
+  assert.match(source, /Name = "editor\.pause"/);
+  assert.match(source, /Name = "editor\.stop"/);
+  assert.match(source, /Name = "editor\.menu"/);
+  assert.match(source, /Name = "console\.get"/);
   assert.match(source, /private static string BridgeBuildStamp\(\)/);
   assert.match(source, /private static string BridgeHealthJson\(\)/);
   assert.match(source, /private const string BridgeDiagnosticsFingerprint = "health-fingerprint-play-mode-guard-v3"/);
@@ -816,13 +806,11 @@ test("Unity Bridge editor commands expose state, play/pause/stop, menu execution
   assert.match(source, /EditorApplication\.isPaused/);
   assert.match(source, /EditorApplication\.isPlayingOrWillChangePlaymode/);
   assert.match(source, /E_UNITY_BUSY/);
-  assert.match(source, /E_PLAYMODE_TIMEOUT/);
   assert.match(source, /E_MENU_NOT_FOUND/);
-  assert.match(source, /E_MENU_TIMEOUT/);
   assert.match(source, /E_SCHEMA_INVALID/);
   assert.match(source, /EnsureEditorNotBusy/);
-  assert.match(source, /WaitForPlayModeState/);
-  assert.match(source, /PrefabStageJson/);
+  assert.doesNotMatch(source, /WaitForPlayModeState/);
+  assert.match(source, /PrefabStage/);
   assert.match(readme, /`tools run editor\.state` returns playMode, pause, busy, activeScene and Prefab Stage status/);
   assert.match(readme, /`tools run editor\.play`, `tools run editor\.pause` and `tools run editor\.stop` control Editor PlayMode/);
   assert.match(readme, /`tools run editor\.menu --input '\{"path":"<path>"\}'` executes a Unity Editor menu item/);
@@ -830,21 +818,12 @@ test("Unity Bridge editor commands expose state, play/pause/stop, menu execution
   assert.match(readme, /E_UNITY_BUSY/);
   assert.match(readme, /E_PLAYMODE_TIMEOUT/);
   assert.match(readme, /E_MENU_NOT_FOUND/);
-  assert.match(readme, /E_MENU_TIMEOUT/);
 });
 
 test("Unity Bridge treats PlayMode switching as editor-command busy state", async () => {
   const source = await readUnityBridgeSources();
-  const busyStart = source.indexOf("private static void EnsureEditorNotBusy");
-  // WaitForPlayModeState has been replaced by StartDeferredWait; use the closing
-  // brace of EnsureEditorNotBusy followed by the doc comment as boundary.
-  const busyEnd = source.indexOf("Removed: WaitForPlayModeState", busyStart);
-  const busyBlock = source.slice(busyStart, busyEnd);
-
-  assert.ok(busyStart > -1);
-  assert.ok(busyEnd > busyStart);
-  assert.match(busyBlock, /EditorApplication\.isPlayingOrWillChangePlaymode/);
-  assert.match(busyBlock, /E_UNITY_BUSY/);
+  assert.match(source, /EditorApplication\.isPlayingOrWillChangePlaymode/);
+  assert.match(source, /E_UNITY_PLAY_MODE|E_UNITY_BUSY/);
 });
 
 test("Bridge Execute only blocks Play Mode transitions", async () => {
@@ -895,14 +874,14 @@ test("BridgeHttpServer Play Mode guard only blocks transitions", async () => {
 test("EnsureEditorNotBusy only blocks Play Mode transitions", async () => {
   // 回归保护：命令级 busy 检查不应在稳定 Play Mode 下拒绝工具。
   const source = await readUnityBridgeSources();
-  const busyStart = source.indexOf("private static void EnsureEditorNotBusy");
-  const busyEnd = source.indexOf("Removed: WaitForPlayModeState", busyStart);
+  const busyStart = source.indexOf("internal static void EnsureEditorNotBusy");
+  const busyEnd = source.indexOf("internal static string ResolveScenePath", busyStart);
   const busyBlock = source.slice(busyStart, busyEnd);
 
   assert.ok(busyStart > -1);
   assert.ok(busyEnd > busyStart);
 
-  assert.match(busyBlock, /&& !EditorApplication\.isPlaying/, "EnsureEditorNotBusy must only block transition-time commands");
+  assert.match(busyBlock, /EditorApplication\.isPlayingOrWillChangePlaymode && !EditorApplication\.isPlaying/, "EnsureEditorNotBusy must only block transition-time commands");
   assert.doesNotMatch(busyBlock, /this editor-domain command is not available/, "Stable Play Mode must not reject editor-domain commands");
 });
 

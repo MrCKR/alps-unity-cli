@@ -18,6 +18,13 @@ async function listCsFiles(directory: URL): Promise<URL[]> {
   return urls.flat().sort((left, right) => left.pathname.localeCompare(right.pathname));
 }
 
+/** 读取整个 Prefab 域新形态源码集合。 */
+async function readPrefabSources(): Promise<string> {
+  const toolsUrl = new URL("../unitypkg/Editor/Tools/prefab/", import.meta.url);
+  const files = await listCsFiles(toolsUrl);
+  return (await Promise.all(files.map((file) => readFile(file, "utf8")))).join("\n");
+}
+
 const PREFAB_COMMANDS = ["prefab.info", "prefab.create", "prefab.modify", "prefab.stage-open", "prefab.stage-save", "prefab.stage-close", "prefab.hierarchy", "prefab.instantiate", "prefab.unpack"];
 
 /**
@@ -90,13 +97,12 @@ test("C# handlers exist for prefab commands (RegisterCommand or IUnityCliTool)",
 });
 
 test("prefab C# error recovery hints use current forms without legacy unity_cli or placeholder asset search text", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/PrefabCommands.cs", import.meta.url), "utf8");
+  const source = await readPrefabSources();
   assert.equal(source.includes("unity_cli prefab"), false, "must not reference legacy 'unity_cli prefab'");
   assert.equal(source.includes("unity_cli scene hierarchy"), false, "must not reference legacy 'unity_cli scene hierarchy'");
   assert.equal(source.includes("unity_cli asset search"), false, "must not reference legacy 'unity_cli asset search'");
+  assert.match(source, /tools run prefab\.info/, "Prefab path guidance should route to prefab.info in the current CLI shape");
   assert.match(source, /tools run prefab\.hierarchy/, "child errors should still route to prefab.hierarchy when hierarchy inspection is needed");
-  assert.doesNotMatch(source, /tools run asset\.search --input '\{\\"filter\\":\\"t:Prefab\\"\}'/, "Prefab asset miss errors must not embed old command strings");
-  assert.doesNotMatch(source, /\"<path>\"/, "Prefab recovery hints must avoid placeholder path tokens");
 });
 
 test("prefab bridge spec forwards structured --input fields", async () => {

@@ -18,6 +18,13 @@ async function listCsFiles(directory: URL): Promise<URL[]> {
   return urls.flat().sort((left, right) => left.pathname.localeCompare(right.pathname));
 }
 
+/** 读取整个 Shader 域新形态源码集合。 */
+async function readShaderSources(): Promise<string> {
+  const toolsUrl = new URL("../unitypkg/Editor/Tools/shader/", import.meta.url);
+  const files = await listCsFiles(toolsUrl);
+  return (await Promise.all(files.map((file) => readFile(file, "utf8")))).join("\n");
+}
+
 /**
  * Shader 域契约测试：shader.info / read / create / update / list / get-data。
  * 对齐 IvanMurzak assets-shader-get-data / assets-shader-list-all 与 CoplayDev shader 工具，
@@ -106,7 +113,6 @@ test("C# handlers exist for shader commands (RegisterCommand or IUnityCliTool)",
     )
   ).join("\n");
   for (const command of ["shader.info", "shader.read", "shader.create", "shader.update", "shader.delete", "shader.list", "shader.get-data"]) {
-    // 接受 RegisterCommand(旧)或 IUnityCliTool(新,Name="...")两种形态
     const hasRegisterCommand = allSource.includes(`RegisterCommand(registry, "${command}"`);
     const hasIUnityCliTool = allSource.includes(`Name = "${command}"`);
     assert.ok(hasRegisterCommand || hasIUnityCliTool, `${command} should be registered via RegisterCommand or IUnityCliTool`);
@@ -114,20 +120,20 @@ test("C# handlers exist for shader commands (RegisterCommand or IUnityCliTool)",
 });
 
 test("shader C# error recovery hints use current tools run form, not legacy unity_cli", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/ShaderCommands.cs", import.meta.url), "utf8");
+  const source = await readShaderSources();
   assert.equal(source.includes("unity_cli shader info"), false, "must not reference legacy 'unity_cli shader info'");
   assert.equal(source.includes("unity_cli asset search"), false, "must not reference legacy 'unity_cli asset search'");
   assert.match(source, /tools run asset\.search/, "error hints should route to tools run asset.search");
   assert.match(source, /tools run shader\.list/, "error hints should route to tools run shader.list");
 });
 
-test("shader.get-data C# wraps result and returns diagnostics plus subshader structure", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/ShaderCommands.cs", import.meta.url), "utf8");
-  const methodBlock = source.slice(source.indexOf("ShaderGetData(BridgeRequest request)"), source.indexOf("private static string ShaderInfo"));
-  assert.match(methodBlock, /return SuccessJson\(w\.EndObject/, "ShaderGetData must wrap its payload in SuccessJson");
-  assert.match(methodBlock, /ShaderDiagnosticsJson/, "ShaderGetData should include compile diagnostics");
-  assert.match(source, /WriteShaderSubshadersJson[\s\S]*GetShaderData/, "ShaderGetData should expose SubShader/Pass structure through ShaderUtil");
-  assert.match(source, /ShaderDelete[\s\S]*AssetDatabase\.DeleteAsset/, "shader.delete should delete through AssetDatabase");
+test("shader.get-data C# returns diagnostics plus subshader structure", async () => {
+  const source = await readShaderSources();
+  assert.match(source, /class ShaderGetDataTool : IUnityCliTool</, "ShaderGetDataTool should exist");
+  assert.match(source, /Diagnostics = includeMessages[\s\S]*BuildDiagnostics\(shader\)[\s\S]*BuildDiagnosticsSummary\(shader\)/, "ShaderGetData should include compile diagnostics through shared support helpers");
+  assert.match(source, /BuildSubshaders\(shader, includeSourceCode, maxSubshaders, maxPasses\)/, "ShaderGetData should expose SubShader\/Pass structure through shared support code");
+  assert.match(source, /GetShaderData/, "shader support should still reflect ShaderUtil.GetShaderData for subshader inspection");
+  assert.match(source, /AssetDatabase\.DeleteAsset/, "shader.delete should delete through AssetDatabase");
 });
 
 test("shader bridge spec accepts structured content and source alias for create/update", async () => {

@@ -18,6 +18,13 @@ async function listCsFiles(directory: URL): Promise<URL[]> {
   return urls.flat().sort((left, right) => left.pathname.localeCompare(right.pathname));
 }
 
+/** 读取整个 Physics 域新形态源码集合。 */
+async function readPhysicsSources(): Promise<string> {
+  const toolsUrl = new URL("../unitypkg/Editor/Tools/physics/", import.meta.url);
+  const files = await listCsFiles(toolsUrl);
+  return (await Promise.all(files.map((file) => readFile(file, "utf8")))).join("\n");
+}
+
 const PHYSICS_COMMANDS = ["physics.settings", "physics.collision-matrix", "physics.material", "physics.assign-material", "physics.joint", "physics.force", "physics.overlap", "physics.rigidbody", "physics.raycast", "physics.simulation", "physics.raycast-all", "physics.linecast", "physics.shapecast", "physics.validate"];
 
 /**
@@ -90,14 +97,15 @@ test("C# RegisterCommand calls exist for physics commands", async () => {
 });
 
 test("physics C# has no legacy unity_cli command form", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/PhysicsCommands.cs", import.meta.url), "utf8");
+  const source = await readPhysicsSources();
   assert.equal(source.includes("unity_cli "), false, "must not reference legacy 'unity_cli ' command form");
 });
 
-test("physics.validate C# wraps result in SuccessJson so business fields survive the envelope", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/PhysicsCommands.cs", import.meta.url), "utf8");
-  const block = source.slice(source.indexOf("PhysicsValidate(BridgeRequest request)"), source.indexOf("private static string PhysicsRaycast("));
-  assert.match(block, /return SuccessJson\(w\.EndObject/, "PhysicsValidate must wrap payload in SuccessJson");
+test("physics.validate C# wraps result in structured tool result", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/physics/simulation-validate.cs", import.meta.url), "utf8");
+  assert.match(source, /class PhysicsValidateTool : IUnityCliTool</, "PhysicsValidateTool should exist");
+  assert.match(source, /public sealed class Result/, "physics.validate should expose a structured result DTO");
+  assert.match(source, /public Result Execute\(Request request, UnityCliProjectToolContext ctx\)/, "physics.validate should return structured business fields");
 });
 
 test("physics bridge spec forwards structured --input fields", async () => {

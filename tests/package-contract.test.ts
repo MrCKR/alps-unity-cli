@@ -123,12 +123,17 @@ test("package C# error recovery hints use current tools run form, not legacy uni
   assert.match(cliPkg, /tools run package\.list/, "cli package hints should route to tools run package.list");
 });
 
-test("package.embed dry-run validates package existence before returning a plan", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/EditorCommands.cs", import.meta.url), "utf8");
-  const block = source.slice(source.indexOf("PackageEmbed(BridgeRequest request)"), source.indexOf("private static string ConsoleItemsJson"));
-  assert.match(block, /FindInstalledPackageInfo\(packageId\)/, "package.embed should resolve installed package info before dry-run success");
-  assert.match(block, /E_PACKAGE_NOT_FOUND/, "missing package should return a stable package-not-found error");
-  assert.match(block, /\.Prop\("source", info\.resolvedPath\)/, "dry-run should include the resolved package source when available");
+test("package.embed keeps current package bridge contract in the new shape", async () => {
+  const metadata = findToolByName("package.embed")!;
+  const spec = await readFile(new URL("../src/bridge/domains/package.js", import.meta.url), "utf8");
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/editor/action-tools.cs", import.meta.url), "utf8");
+  assert.equal(metadata.supportsDryRun, true, "package.embed metadata should still advertise dry-run preview");
+  assert.equal(metadata.destructiveHint, true, "package.embed metadata should still require confirmation");
+  assert.match(spec, /packageEmbedArgs[\s\S]*packageId/, "bridge spec should still accept packageId compatibility input");
+  assert.match(spec, /dryRun: boolFlag\(flags, "dry-run"\) \?\? boolField\(flags, "dryRun"\)/, "bridge spec should still forward dryRun from flags or structured input");
+  assert.match(source, /class PackageEmbedTool : IUnityCliTool/, "package.embed should be implemented as an IUnityCliTool");
+  assert.match(source, /PackageClient\.Embed is not available/, "package.embed should keep a stable unsupported-version error path");
+  assert.match(source, /PlannedEffects = new List<EditorPlannedEffect> \{ new EditorPlannedEffect \{ Type = "package\.embed"/, "package.embed should still report planned effects");
 });
 
 test("package.resolve rejects non-Unity project paths before skipped success", async () => {

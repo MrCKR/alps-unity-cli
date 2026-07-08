@@ -79,11 +79,13 @@ test("profiler.hierarchy C# supports current hierarchy API and latest-frame defa
 });
 
 test("profiler.start records Editor frames and profiler.stop restores profileEditor", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/ProfilerCommands.cs", import.meta.url), "utf8");
+  const controlSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/control-tools.cs", import.meta.url), "utf8");
+  const supportSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/ProfilerToolSupport.cs", import.meta.url), "utf8");
+  const source = `${controlSource}\n${supportSource}`;
   assert.match(source, /GetProperty\("profileEditor"/, "profiler should reflect ProfilerDriver.profileEditor");
-  assert.match(source, /previousProfilerEditorRecording = GetProfilerEditorRecording\(\)/, "profiler.start should remember previous profileEditor state");
+  assert.match(source, /PreviousProfilerEditorRecording = ProfilerToolSupport\.GetProfilerEditorRecording\(\)/, "profiler.start should remember previous profileEditor state");
   assert.match(source, /SetProfilerEditorRecording\(true\)[\s\S]*SetProfilerSessionEnabled\(true\)/, "profiler.start should enable Profile Editor before recording");
-  assert.match(source, /SetProfilerEditorRecording\(previousProfilerEditorRecording\.Value\)/, "profiler.stop should restore previous profileEditor state");
+  assert.match(source, /SetProfilerEditorRecording\(ProfilerToolSupport\.PreviousProfilerEditorRecording\.Value\)/, "profiler.stop should restore previous profileEditor state");
 });
 
 test("bridge specs resolve for profiler tools", () => {
@@ -121,7 +123,8 @@ test("profiler.clear is not in the destructive security policy", () => {
 });
 
 test("profiler C# has no legacy unity_cli command form", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/ProfilerCommands.cs", import.meta.url), "utf8");
+  const files = await listCsFiles(new URL("../unitypkg/Editor/Tools/profiler/", import.meta.url));
+  const source = (await Promise.all(files.map((file) => readFile(file, "utf8")))).join("\n");
   assert.equal(source.includes("unity_cli "), false, "must not reference legacy 'unity_cli ' command form");
 });
 
@@ -143,9 +146,9 @@ test("profiler bridge spec forwards structured --input fields", async () => {
 });
 
 test("profiler.start accepts logFile and enableCallstacks", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/ProfilerCommands.cs", import.meta.url), "utf8");
-  assert.match(source, /StringArg\("logFile"\)/, "ProfilerStart should read logFile");
-  assert.match(source, /BoolArg\("enableCallstacks"/, "ProfilerStart should read enableCallstacks");
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/profiler/control-tools.cs", import.meta.url), "utf8");
+  assert.match(source, /public string LogFile \{ get; set; \}/, "ProfilerStart should read logFile");
+  assert.match(source, /public bool EnableCallstacks \{ get; set; \}/, "ProfilerStart should read enableCallstacks");
   assert.match(source, /Profiler\.enableAllocationCallstacks = true/, "ProfilerStart should enable allocation callstacks");
   const start = findToolByName("profiler.start")!;
   const props = start.inputSchema.properties as Record<string, unknown>;
@@ -154,32 +157,36 @@ test("profiler.start accepts logFile and enableCallstacks", async () => {
 });
 
 test("profiler.status exposes maxUsedMemory and platform", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/ProfilerCommands.cs", import.meta.url), "utf8");
-  assert.match(source, /maxUsedMemoryBytes/, "ProfilerStateJson should include maxUsedMemoryBytes");
-  assert.match(source, /Profiler\.supported/, "ProfilerStateJson should use real Profiler.supported");
-  assert.match(source, /Application\.platform\.ToString/, "ProfilerStatus should include platform");
-  assert.match(source, /IsFrameTimingAvailable/, "ProfilerStatus should include frameTimingAvailable");
+  const statusSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/status.cs", import.meta.url), "utf8");
+  const supportSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/ProfilerToolSupport.cs", import.meta.url), "utf8");
+  const source = `${statusSource}\n${supportSource}`;
+  assert.match(source, /MaxUsedMemoryBytes = \(long\)Profiler\.maxUsedMemory/, "ProfilerState should include max-used memory bytes");
+  assert.match(source, /Profiler\.supported/, "ProfilerState should use real Profiler.supported");
+  assert.match(source, /Application\.platform\.ToString\(\)/, "ProfilerStatus should include platform");
+  assert.match(source, /IsFrameTimingAvailable\(\)/, "ProfilerStatus should include frameTimingAvailable");
   const status = findToolByName("profiler.status")!;
   assert.ok(status.outputSchema, "profiler.status should have outputSchema");
 });
 
 test("profiler.frame includes FrameTimingManager fields", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/ProfilerCommands.cs", import.meta.url), "utf8");
-  assert.match(source, /ProfilerFrameTimingJson/, "ProfilerFrameJson should call ProfilerFrameTimingJson");
-  assert.match(source, /FrameTimingManager\.CaptureFrameTimings/, "should capture frame timings");
-  assert.match(source, /cpuMainThreadFrameTimeMs/, "should expose cpuMainThreadFrameTimeMs");
-  assert.match(source, /gpuFrameTimeMs/, "should expose gpuFrameTimeMs");
-  assert.match(source, /syncInterval/, "should expose syncInterval");
+  const readSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/read-tools.cs", import.meta.url), "utf8");
+  const supportSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/ProfilerToolSupport.cs", import.meta.url), "utf8");
+  const source = `${readSource}\n${supportSource}`;
+  assert.match(source, /BuildProfilerFrame\(request\.Module \?\? "CPU Usage"\)/, "profiler.frame should build frame output through shared support code");
+  assert.match(source, /FrameTimingManager\.CaptureFrameTimings\(\)/, "should capture frame timings");
+  assert.match(source, /CpuMainThreadFrameTimeMs/, "should expose cpuMainThreadFrameTimeMs");
+  assert.match(source, /GpuFrameTimeMs/, "should expose gpuFrameTimeMs");
+  assert.match(source, /SyncInterval/, "should expose syncInterval");
   const frame = findToolByName("profiler.frame")!;
   assert.ok(frame.outputSchema, "profiler.frame should have outputSchema");
 });
 
 test("profiler.module-enable calls SetAreaEnabled", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Commands/ProfilerCommands.cs", import.meta.url), "utf8");
-  assert.match(source, /Profiler\.SetAreaEnabled/, "ProfilerModuleEnable should reference SetAreaEnabled");
-  assert.match(source, /UnityEngine\.Profiling\.ProfilerArea/, "ProfilerModuleEnable should resolve the Unity 2022+ ProfilerArea enum");
-  assert.match(source, /Enum\.Parse\(areaType/, "ProfilerModuleEnable should parse the area enum via reflection");
-  assert.doesNotMatch(source, /Module enable\/disable uses Editor prefs/, "ProfilerModuleEnable must not return the old note-only stub");
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/profiler/action-tools.cs", import.meta.url), "utf8");
+  assert.match(source, /GetMethod\("SetAreaEnabled"/, "ProfilerModuleEnable should resolve SetAreaEnabled via reflection");
+  assert.match(source, /FindProfilerAreaType\(\)/, "ProfilerModuleEnable should resolve the ProfilerArea enum through shared support code");
+  assert.match(source, /Enum\.Parse\(areaType, request\.Module, true\)/, "ProfilerModuleEnable should parse the area enum via reflection");
+  assert.doesNotMatch(source, /Editor prefs/, "ProfilerModuleEnable must not return the old note-only stub");
 });
 
 test("profiler.load validates capture path before reporting success", async () => {
@@ -190,18 +197,23 @@ test("profiler.load validates capture path before reporting success", async () =
 });
 
 test("profiler memory-snapshot and frame-debugger tools migrated to IUnityCliTool", async () => {
-  // memory-snapshot.take 迁移为 IUnityCliDeferredTool(不再用 RegisterCommand + StartDeferredWait)
-  const commandsSource = await readFile(new URL("../unitypkg/Editor/Commands/ProfilerCommands.cs", import.meta.url), "utf8");
-  assert.ok(!commandsSource.includes(`RegisterCommand(registry, "profiler.memory-snapshot.take"`), "profiler.memory-snapshot.take should NOT be registered (migrated to IUnityCliDeferredTool)");
-  // list/compare/frame-debugger.* 迁移为 IUnityCliTool
+  const csFiles = await listCsFiles(new URL("../unitypkg/Editor/", import.meta.url));
+  const allSource = (
+    await Promise.all(
+      csFiles.filter((f) => !f.pathname.includes("/Samples/")).map((f) => readFile(f, "utf8"))
+    )
+  ).join("\n");
+  for (const command of ["profiler.memory-snapshot.list", "profiler.memory-snapshot.compare", "profiler.frame-debugger.enable", "profiler.frame-debugger.disable", "profiler.frame-debugger.events"]) {
+    assert.ok(!allSource.includes(`RegisterCommand(registry, "${command}"`), `${command} should NOT be registered (migrated to IUnityCliTool)`);
+    assert.ok(allSource.includes(`Name = "${command}"`), `${command} should expose the public tool name through IUnityCliTool`);
+  }
   const memorySource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/memory-snapshot-tools.cs", import.meta.url), "utf8");
-  assert.match(memorySource, /class ProfilerMemorySnapshotListTool/, "ProfilerMemorySnapshotListTool should exist");
-  assert.match(memorySource, /class ProfilerMemorySnapshotCompareTool/, "ProfilerMemorySnapshotCompareTool should exist");
+  assert.match(memorySource, /class ProfilerMemorySnapshotListTool : IUnityCliTool</, "ProfilerMemorySnapshotListTool should implement IUnityCliTool");
+  assert.match(memorySource, /class ProfilerMemorySnapshotCompareTool : IUnityCliTool</, "ProfilerMemorySnapshotCompareTool should implement IUnityCliTool");
   const frameSource = await readFile(new URL("../unitypkg/Editor/Tools/profiler/frame-debugger-tools.cs", import.meta.url), "utf8");
-  assert.match(frameSource, /class ProfilerFrameDebuggerEnableTool/, "ProfilerFrameDebuggerEnableTool should exist");
-  assert.match(frameSource, /class ProfilerFrameDebuggerDisableTool/, "ProfilerFrameDebuggerDisableTool should exist");
-  assert.match(frameSource, /class ProfilerFrameDebuggerEventsTool/, "ProfilerFrameDebuggerEventsTool should exist");
-  // frame-debugger 反射 FrameDebuggerUtility
+  assert.match(frameSource, /class ProfilerFrameDebuggerEnableTool : IUnityCliTool</, "ProfilerFrameDebuggerEnableTool should implement IUnityCliTool");
+  assert.match(frameSource, /class ProfilerFrameDebuggerDisableTool : IUnityCliTool</, "ProfilerFrameDebuggerDisableTool should implement IUnityCliTool");
+  assert.match(frameSource, /class ProfilerFrameDebuggerEventsTool : IUnityCliTool</, "ProfilerFrameDebuggerEventsTool should implement IUnityCliTool");
   assert.match(frameSource, /FrameDebuggerUtility/, "frame-debugger should reflect FrameDebuggerUtility");
 });
 
