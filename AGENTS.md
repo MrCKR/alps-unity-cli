@@ -207,7 +207,7 @@ Describe 输出不得包含：
 
 ## Extension 形态与文件结构
 
-扩展包必须沿用现有 extension 形态，不得随意发明新结构。
+扩展包必须沿用以下 extension 形态。
 
 标准结构：
 
@@ -216,8 +216,7 @@ extensions/<id>/
   extension.json
   bridge/domains/<domain>.ts
   docs/<id>.md
-  tools/metadata/<domain>.ts
-  unitypkg/Editor/Commands/<Commands>.cs
+  unitypkg/Editor/<Domain>/<tool>.cs
 ```
 
 Unity 项目安装形态：
@@ -233,7 +232,9 @@ Packages/com.unity_cli/Extensions/<id>/
 - Core 不得对可选 Unity package 建立编译期依赖。
 - 扩展可用性必须根据目标项目安装的 Unity package 判断。
 - 扩展工具不可用时，必须返回明确缺失包和下一步操作。
-- 新增扩展能力必须同步更新 manifest、TS metadata、Bridge spec、Unity C#、docs、contract、tests。
+- **扩展 tool 的完整 descriptor/schema 运行时从 bridge 获取；TS 不承担 extension tool 级 descriptor 真相。**
+- extension manifest 只负责 extension 级离线信息（如 `providesTools`、`requiresUnityPackages`、title/description），不负责 tool 级 schema/describe。
+- 新增扩展能力必须同步更新 manifest、Bridge spec、Unity C#、docs、contract、tests；如需离线 extension 名单/依赖信息，只更新 manifest/registry-data。
 
 ### 自定义 Tool / Context 目录约定
 
@@ -272,11 +273,51 @@ Packages/com.unity_cli/Extensions/<id>/
 
 破坏性声明必须在三层保持一致：
 
-1. **metadata `destructiveHint`**（`src/tools/metadata/groups/*.ts`）：AI 看到的权威来源，CLI `--yes` 门禁实际拦截依据。
+1. **Bridge spec `destructiveHint`**（`src/bridge/domains/*.ts`）：CLI/AI 路由和 `--yes` 判定的显式来源。
 2. **`security-policy.ts`**（`src/security-policy.ts`）：CLI 侧显式安全策略列表。
-3. **C# `RegisterCommand`** 第 3 参数（`unitypkg/Editor/Commands/*.cs`）：Bridge 侧门禁。
+3. **C# descriptor / registry 层的 `DestructiveHint`**（`ToolDescriptor.DestructiveHint` / 运行时注册后的 descriptor）：Unity 侧真实执行语义来源。
 
-三层中任一层声明 `destructive=true`，该工具就需要 `--yes`。修改时三层必须同步。
+对业务工具而言，三层中任一层声明 `destructive=true`，该工具就需要 `--yes`。修改时三层必须同步。
+
+## 异步执行与 Wait
+
+本项目的 Tool / Context 执行接口默认具备异步能力。调用 CLI 的人/AI 不应感知同步 / 异步差异；调用者只负责发命令并取得最终结果。
+
+### 接口层
+
+- C# Tool / Context 应使用语言原生异步接口（推荐 `ValueTask<T>`）
+- TS local tool / context 应使用 `Promise<T>`
+- 不再把 deferred 作为“特殊工具形态”暴露给调用者或工具作者
+
+### 框架层 wait
+
+`wait` 是框架能力，不是工具能力。
+
+硬规则：
+- 工具作者**不得**直接注册 `EditorApplication.update`
+- 工具作者**不得**自行维护 callback 生命周期
+- 工具作者只能通过框架提供的 `ctx.Wait`（或等价 wait 服务）申请等待
+- 框架必须只有一个中央 scheduler 持有 `EditorApplication.update`
+- timeout / cancel / domain reload / Play Mode exit / Unity quitting 时，所有 pending waits 必须由框架统一清理
+
+### CLI 层 wait 语义分层
+
+必须显式区分两层 wait：
+
+1. **命令层 wait（保留）**
+   - `--wait`
+   - `--wait-timeout-ms`
+   - `waitReady`
+   它们表达的是 job/batch/编排的交付模式，不是工具内部执行模型。
+
+2. **框架层 wait（统一）**
+   - `ctx.Wait.NextFrame(...)`
+   - `ctx.Wait.Delay(...)`
+   - `ctx.Wait.UntilEditorReady()`
+   - `ctx.Wait.ForCallback(...)`
+   它们表达的是工具内部跨帧/回调执行方式。
+
+禁止把两层 wait 混淆实现。
 
 ## 输出与错误规范
 
@@ -322,6 +363,7 @@ Packages/com.unity_cli/Extensions/<id>/
 - 真实调用矩阵必须覆盖每个受影响能力的每类公开用法：默认调用、主要可选参数、筛选/分页/精读/续读等新增能力、边界值、错误路径、权限/`--yes`/`--dry-run` 行为，以及 Editor/PlayMode 差异。组合爆炸时可以按等价类压缩，但不得跳过任何公开行为类别。
 - 正向用例必须验证输出 envelope 的关键业务字段，不只检查 `ok:true`；反向用例必须验证稳定 `error.code`、`message`、`transient`、`retryAfterMs`、`nextActions`。
 - 每个真实调用证据必须记录完整命令、输入 JSON、输出 envelope、前置状态、测试夹具、目标 Unity instance/endpoint 和是否产生持久化副作用。
+- **当 discovery / describe / offline visibility 的产品语义被明确变更时，tests / docs / skills / descriptor governance 必须整体切到新语义。**
 
 不得为了让测试通过而降低 descriptor 质量或放宽契约。
 
@@ -388,8 +430,7 @@ Packages/com.unity_cli/Extensions/<id>/
 规则：
 
 - Tool 名、Context 名、group、字段名、错误码一旦公开，就视为契约。
-- 不得同时保留新旧两套命令形态。
-- 发现旧语义、阶段性语义、兼容性语义时，应统一改为当前规范；无法干净迁移时，优先删除。
+- 只保留当前命令形态与当前语义，不得提交并存的双轨实现。
 - 任何命名变更都必须同步更新 metadata、docs、Skill、schema、contract、tests。
 
 ## AI 开发方式
@@ -402,6 +443,16 @@ AI Agent 修改本项目时必须遵守：
 - 新增普通方法要有简要中文注释；关键方法、复杂逻辑、状态流转、跨层入口要说明时机、约束、输入输出或副作用。
 - 代码标识符保持英文，注释使用中文。
 - 修改后必须说明验证方式；如果无法完成某个门禁，必须明确原因。
+
+### 维护洁癖
+
+项目所有者对代码与规范的洁净度要求很高，必须遵守以下维护规则：
+
+- **文档、注释、descriptor、示例只描述当前代码现状**，不得写历史形态、迁移过程、阶段性说明、兼容背景或“以前如何如何”的叙述，除非该文件本身就是日志/审计/迁移记录。
+- **废弃功能必须删除干净**：代码、注释、示例、测试、文档、配置、路由、空壳文件、无效 helper 都不得残留。
+- **不允许阶段性代码、阶段性注释、阶段性文档**进入主线。临时桥接、过渡路径、"后续再删"、"先保留"、"兼容一下" 这类中间态不得作为最终提交物存在。
+- **实现必须一次性满足当前确认的需求**。如果需求已讨论定稿，提交物就应是该需求的完整最终形态，而不是半完成的阶段产物。
+- 如果某个需求当前做不到最终形态，应明确停下并报告 blocker；不要把过渡实现伪装成完成态。
 
 核心判断标准：
 
