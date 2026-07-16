@@ -53,7 +53,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             VfxToolSupport.EnsureEditorReady("vfx.event");
             var visualEffectType = VfxToolSupport.RequireVisualEffectType();
@@ -112,7 +112,7 @@ namespace UnityCli
                 sendMethod.Invoke(component, eventAttribute == null ? new object[] { request.EventName } : new[] { (object)request.EventName, eventAttribute });
             }
 
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
                 EventName = request.EventName,
@@ -122,7 +122,7 @@ namespace UnityCli
                     new VfxPlannedEffect { Type = "vfx.event", Target = GameObjectToolSupport.HierarchyPath(gameObject), EventName = request.EventName }
                 },
                 LogPath = ctx.LogPath
-            };
+            });
         }
     }
 }

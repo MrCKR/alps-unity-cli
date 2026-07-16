@@ -10,8 +10,6 @@ namespace UnityCli
 {
     /// <summary>
     /// shader.read — 分页读取 Shader 源码文本(offset/maxBytes/nextOffset)。
-    /// 对齐旧 ShaderRead handler;只读。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class ShaderReadTool : IUnityCliTool<ShaderReadTool.Request, ShaderReadTool.Result>
     {
@@ -54,7 +52,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var path = ShaderToolSupport.ResolveShaderPath(request.Path ?? request.Target);
             ShaderToolSupport.LoadShaderLikeAsset(path);
@@ -73,7 +71,7 @@ namespace UnityCli
             var returnedBytes = Math.Min(maxBytes, bytes.Length - offset);
             var content = Encoding.UTF8.GetString(bytes, offset, returnedBytes);
             var nextOffset = offset + returnedBytes < bytes.Length ? (offset + returnedBytes).ToString(CultureInfo.InvariantCulture) : null;
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Shader = ShaderToolSupport.BuildShaderInfo(path, AssetDatabase.LoadAssetAtPath<Shader>(path), true),
                 Content = content,
@@ -84,7 +82,7 @@ namespace UnityCli
                 ReturnedBytes = returnedBytes,
                 Truncated = nextOffset != null,
                 NextOffset = nextOffset
-            };
+            });
         }
     }
 }

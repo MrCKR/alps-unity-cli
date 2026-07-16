@@ -142,8 +142,6 @@ export interface UnityCliPackageRemoval {
   installMetadataPath: string;
   fileManifestPath: string;
   managedFileCount: number;
-  removedManifestDependency: boolean;
-  previousManifestDependency?: string;
   dryRun: boolean;
   plannedEffects: Array<Record<string, unknown>>;
 }
@@ -271,7 +269,7 @@ export async function removeScopedRegistry(projectPath: string, name: string, op
   const registries = normalizeScopedRegistries(manifest.scopedRegistries);
   const index = registries.findIndex((registry) => registry.name === name);
   if (index < 0) {
-    throw new PackageManagerError("SCOPED_REGISTRY_NOT_FOUND", `Scoped registry not found: ${name}`, ["Run tools run package.scoped-registry --input '{\"action\":\"list\"}' to inspect scoped registries."]);
+    throw new PackageManagerError("SCOPED_REGISTRY_NOT_FOUND", `Scoped registry not found: ${name}`, ["Run tools run package.scoped-registry.list to inspect scoped registries."]);
   }
   const removed = registries[index];
   const matchedPackages = packagesUsingScopes(manifest, removed.scopes);
@@ -351,14 +349,6 @@ export async function ensurePackageBridge(projectPath: string): Promise<UnityCli
 
   // Write file manifest (tracks which files we manage so we don't delete user files on update)
   await writeFileManifest(fileManifestPath, managedFiles);
-
-  // Remove any file: dependency from manifest if present (migration from old install mode)
-  const manifest = await readManifest(paths.manifestPath, false);
-  manifest.dependencies ??= {};
-  if (manifest.dependencies[bridgePackageName]?.startsWith("file:")) {
-    delete manifest.dependencies[bridgePackageName];
-    await writeManifest(paths.manifestPath, manifest);
-  }
 
   const installTime = new Date().toISOString();
   await writeInstallMetadata(installMetadataPath, {
@@ -440,9 +430,6 @@ export async function removePackageBridge(projectPath: string, options: RemovePa
   const fileManifestPath = join(targetPath, fileManifestFileName);
   const { packageManifest } = await readInstalledPackageBridge(paths.projectPath, "BRIDGE_PACKAGE_NOT_INSTALLED", ["Run unity_cli init --project <path> before removing the bundled Unity package."]);
   const managedFiles = await readManagedFileList(fileManifestPath);
-  const manifest = await readManifest(paths.manifestPath, false);
-  const previousManifestDependency = manifest.dependencies?.[bridgePackageName];
-  const removedManifestDependency = previousManifestDependency?.startsWith("file:") === true;
   const plannedEffects: Array<Record<string, unknown>> = [
     {
       type: "package.bridge-remove",
@@ -452,17 +439,10 @@ export async function removePackageBridge(projectPath: string, options: RemovePa
       managedFileCount: managedFiles.length
     }
   ];
-  if (removedManifestDependency) {
-    plannedEffects.push({ type: "manifest.dependency.remove", package: bridgePackageName, previousVersion: previousManifestDependency });
-  }
 
   if (!options.dryRun) {
     await rm(targetPath, { recursive: true, force: true });
     await rm(installMetadataPath, { force: true });
-    if (removedManifestDependency) {
-      delete manifest.dependencies?.[bridgePackageName];
-      await writeManifest(paths.manifestPath, manifest);
-    }
   }
 
   return {
@@ -474,8 +454,6 @@ export async function removePackageBridge(projectPath: string, options: RemovePa
     installMetadataPath,
     fileManifestPath,
     managedFileCount: managedFiles.length,
-    removedManifestDependency,
-    previousManifestDependency,
     dryRun: options.dryRun === true,
     plannedEffects
   };
@@ -649,7 +627,7 @@ export function validateRegistryUrl(url: string | undefined): string {
   } catch {
     throw new PackageManagerError("REGISTRY_URL_INVALID", `Registry URL is invalid: ${url}`, [
       "Use an http(s) registry URL, for example https://package.openupm.com.",
-      "Run unity_cli tools describe package.search or package.registry for accepted registry inputs."
+      "Run unity_cli tools describe package.search or package.registry.set for accepted registry inputs."
     ]);
   }
 }

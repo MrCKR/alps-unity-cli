@@ -10,8 +10,6 @@ namespace UnityCli
 {
     /// <summary>
     /// prefab.instantiate — 在场景中实例化 Prefab。支持 dryRun 预览。
-    /// 对齐旧 PrefabInstantiate handler;session-affecting(scene-modify)。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class PrefabInstantiateTool : IUnityCliTool<PrefabInstantiateTool.Request, PrefabInstantiateTool.Result>
     {
@@ -23,7 +21,6 @@ namespace UnityCli
             public double? X { get; set; }
             public double? Y { get; set; }
             public double? Z { get; set; }
-            public bool? DryRun { get; set; }
         }
 
         public sealed class Result
@@ -55,7 +52,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             PrefabToolSupport.EnsureEditorNotBusy("prefab.instantiate");
             var path = PrefabToolSupport.RequirePrefabPath(request.Path);
@@ -63,15 +60,15 @@ namespace UnityCli
             var posX = (float)(request.X ?? 0f);
             var posY = (float)(request.Y ?? 0f);
             var posZ = (float)(request.Z ?? 0f);
-            if (request.DryRun == true)
+            if (ctx.DryRun)
             {
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Command = "prefab.instantiate",
                     DryRun = true,
                     SourcePath = path,
                     PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.instantiate", Path = path } }
-                };
+                });
             }
             var prefab = AssetDatabase.LoadMainAssetAtPath(path) as GameObject;
             if (prefab == null)
@@ -85,18 +82,20 @@ namespace UnityCli
                 if (parentGo == null) throw new UnityCliBridge.BridgeCommandException("E_PARENT_NOT_FOUND", "Parent not found: " + parentName, "Pass a valid path.");
                 parent = parentGo.transform;
             }
-            var instance = (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent != null ? parent.gameObject.scene : SceneManager.GetActiveScene());
+            var instance = EditorApplication.isPlaying
+                ? UnityEngine.Object.Instantiate(prefab)
+                : (GameObject)PrefabUtility.InstantiatePrefab(prefab, parent != null ? parent.gameObject.scene : SceneManager.GetActiveScene());
             if (parent != null) instance.transform.SetParent(parent, false);
             instance.transform.position = new Vector3(posX, posY, posZ);
             if (!string.IsNullOrEmpty(request.Name)) instance.name = request.Name;
-            EditorSceneManager.MarkSceneDirty(instance.scene);
-            return new Result
+            UnityCliSceneMutation.MarkSceneDirty(instance.scene);
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Command = "prefab.instantiate",
                 Instance = GameObjectToolSupport.BuildGameObjectRef(instance),
                 SourcePath = path,
                 PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.instantiate", Path = path } }
-            };
+            });
         }
     }
 }

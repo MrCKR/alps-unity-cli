@@ -52,11 +52,12 @@ test("material tools are contract-discovered and expose expected live descriptor
       inputSchema: {
         type: "object",
         properties: {
-          color: { type: "string" },
-          floatValue: { type: "number" },
-          vector: { type: "array" },
-          texture: { type: "string" }
-        }
+          path: { type: "string" },
+          property: { type: "string" },
+          value: { type: "string" },
+          type: { type: "string" }
+        },
+        required: ["path", "property", "value"]
       }
     }),
     makeLiveTool({
@@ -92,10 +93,13 @@ test("material tools are contract-discovered and expose expected live descriptor
   assert.equal(set.playModeSupport, "session-affecting");
   assert.ok(set.sideEffects?.includes("asset-write"));
   const setProps = set.inputSchema.properties as Record<string, unknown>;
-  assert.ok(setProps.color);
-  assert.ok(setProps.floatValue);
-  assert.ok(setProps.vector);
-  assert.ok(setProps.texture);
+  assert.ok(setProps.path);
+  assert.ok(setProps.property);
+  assert.ok(setProps.value);
+  assert.ok(setProps.type);
+  for (const removedAlias of ["material", "color", "floatValue", "vector", "texture"]) {
+    assert.equal(removedAlias in setProps, false);
+  }
 
   const rendererColor = tools.get("material.set-renderer-color")!;
   assert.equal(rendererColor.playModeSupport, "session-affecting");
@@ -120,10 +124,8 @@ test("contract entries exist for material tools with present C# handler", () => 
   }
 });
 
-test("material C# error recovery hints use current tools run form, not legacy unity_cli", async () => {
+test("material C# error recovery hints use current tools run forms", async () => {
   const source = await readCsSources(new URL("../unitypkg/Editor/Tools/material/", import.meta.url));
-  assert.equal(source.includes("unity_cli material info"), false, "must not reference legacy 'unity_cli material info'");
-  assert.equal(source.includes("unity_cli asset search"), false, "must not reference legacy 'unity_cli asset search'");
   assert.match(source, /tools run material\.info/, "error hints should route to tools run material.info");
   assert.match(source, /tools run asset\.search/, "error hints should route to tools run asset.search");
 });
@@ -149,9 +151,11 @@ test("material commands are registered in C#", async () => {
   }
 });
 
-test("material bridge spec forwards structured --input fields", async () => {
+test("material bridge spec forwards only the current material.set fields", async () => {
   const spec = await readFile(new URL("../src/bridge/domains/material.js", import.meta.url), "utf8");
   assert.match(spec, /structured\.target/, "bridge should forward structured target");
   assert.match(spec, /structured\.path/, "bridge should forward structured material path");
   assert.match(spec, /structured\.property/, "bridge should forward structured property");
+  const setBlock = spec.match(/if \(command === "material\.set"\)[\s\S]*?if \(command === "material\.set-renderer-color"\)/)?.[0] ?? "";
+  assert.doesNotMatch(setBlock, /structured\.(?:material|color|floatValue|vector|texture)/);
 });

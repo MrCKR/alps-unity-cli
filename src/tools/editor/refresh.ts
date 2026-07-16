@@ -1,14 +1,12 @@
 import { startUnityJob } from "../../cli-commands/unity-job.js";
 import { defineTool, type ToolContext } from "../define.js";
 import { StructuredToolError } from "../errors.js";
+import type { AnyJson } from "../../schema/any-json.js";
 
 export interface EditorRefreshRequest {
   compile?: boolean;
   project?: string;
   unity?: string;
-  wait?: boolean;
-  timeoutMs?: number;
-  waitTimeoutMs?: number;
 }
 
 export interface EditorRefreshJobResult {
@@ -19,7 +17,7 @@ export interface EditorRefreshJobResult {
 export interface EditorRefreshError {
   code: string;
   message: string;
-  details?: unknown;
+  details?: AnyJson;
 }
 
 export interface EditorRefreshCancellation {
@@ -53,14 +51,14 @@ export interface EditorRefreshResult {
 type JobFlags = Record<string, string | boolean>;
 
 // 将 defineTool request 映射回现有 batchmode job helper 使用的 CLI flag 名称。
-function buildEditorRefreshFlags(request: EditorRefreshRequest): JobFlags {
+function buildEditorRefreshFlags(request: EditorRefreshRequest, execution: ToolContext["execution"]): JobFlags {
   const flags: JobFlags = {};
   if (request.compile !== undefined) flags.compile = request.compile;
   if (request.project !== undefined) flags.project = request.project;
   if (request.unity !== undefined) flags.unity = request.unity;
-  if (request.wait !== undefined) flags.wait = request.wait;
-  if (request.timeoutMs !== undefined) flags["timeout-ms"] = String(request.timeoutMs);
-  if (request.waitTimeoutMs !== undefined) flags["wait-timeout-ms"] = String(request.waitTimeoutMs);
+  if (execution.wait !== undefined) flags.wait = execution.wait;
+  if (execution.timeoutMs !== undefined) flags["timeout-ms"] = String(execution.timeoutMs);
+  if (execution.waitTimeoutMs !== undefined) flags["wait-timeout-ms"] = String(execution.waitTimeoutMs);
   return flags;
 }
 
@@ -73,7 +71,7 @@ async function startEditorRefreshJob(request: EditorRefreshRequest, context: Too
   }
 
   const compile = request.compile === true;
-  const result = await startUnityJob("refresh", buildEditorRefreshFlags(request), {
+  const result = await startUnityJob("refresh", buildEditorRefreshFlags(request, context.execution), {
     dataDir: context.dataDir,
     store: context.jobStore,
     runner: context.jobRunner,
@@ -106,8 +104,8 @@ export default defineTool<EditorRefreshRequest, EditorRefreshResult>({
   handler: "job",
   supportStatus: "batch-job",
   examples: [
-    { description: "Refresh assets in batchmode", argv: ["tools", "run", "editor.refresh", "--input", "{\"project\":\"./Dev/UnityProject\",\"unity\":\"C:/Program Files/Unity/Hub/Editor/2022.3.61f1/Editor/Unity.exe\",\"wait\":true}"] },
-    { description: "Refresh and request compilation", argv: ["tools", "run", "editor.refresh", "--input", "{\"project\":\"./Dev/UnityProject\",\"compile\":true,\"wait\":true}"] }
+    { description: "Refresh assets in batchmode", argv: ["tools", "run", "editor.refresh", "--project", ".", "--wait"] },
+    { description: "Refresh and request compilation", argv: ["tools", "run", "editor.refresh", "--project", "./Dev/UnityProject", "--wait", "--input", "{\"compile\":true}"] }
   ],
   async execute(request, context) {
     return startEditorRefreshJob(request, context);

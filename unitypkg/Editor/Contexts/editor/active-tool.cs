@@ -33,6 +33,7 @@ namespace UnityCli.Contexts.Editor
             public bool IsCustom { get; set; }
             public string PivotMode { get; set; }
             public string PivotRotation { get; set; }
+            public bool HandleAvailable { get; set; }
             public Vector3Info HandlePosition { get; set; }
             public QuaternionInfo HandleRotation { get; set; }
         }
@@ -48,25 +49,37 @@ namespace UnityCli.Contexts.Editor
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "live"
+            RefreshBehavior = "live",
+            Examples = new[] { new ContextExample { Description = "Read the active Editor tool", Input = new Request { } } }
         };
 
         /// <summary>
         /// 读取当前 Editor 工具和手柄位置/旋转；只观察状态，不切换工具或修改 pivot 设置。
-        /// </summary>
-        public Result Read(Request request, UnityCliProjectToolContext ctx)
+    /// </summary>
+        public System.Threading.Tasks.ValueTask<Result> ReadAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var current = Tools.current;
-            return new Result
+            var handlePosition = Tools.handlePosition;
+            var handleRotation = Tools.handleRotation;
+            var handleAvailable = IsFinite(handlePosition) && IsFinite(handleRotation);
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 ActiveTool = current.ToString(),
                 IsCustom = current != Tool.Move && current != Tool.Rotate && current != Tool.Scale && current != Tool.Rect && current != Tool.None,
                 PivotMode = Tools.pivotMode.ToString(),
                 PivotRotation = Tools.pivotRotation.ToString(),
-                HandlePosition = ToVector3Info(Tools.handlePosition),
-                HandleRotation = ToQuaternionInfo(Tools.handleRotation)
-            };
+                HandleAvailable = handleAvailable,
+                HandlePosition = ToVector3Info(handleAvailable ? handlePosition : Vector3.zero),
+                HandleRotation = ToQuaternionInfo(handleAvailable ? handleRotation : Quaternion.identity)
+            });
         }
+
+        // Unity 在无有效 Scene handle 时可能返回 NaN/Infinity；协议边界只允许有限 JSON number。
+        private static bool IsFinite(Vector3 value) => IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z);
+
+        private static bool IsFinite(Quaternion value) => IsFinite(value.x) && IsFinite(value.y) && IsFinite(value.z) && IsFinite(value.w);
+
+        private static bool IsFinite(float value) => !float.IsNaN(value) && !float.IsInfinity(value);
 
         // 将 Unity Vector3 转为稳定 JSON DTO。
         private static Vector3Info ToVector3Info(Vector3 value) => new Vector3Info

@@ -28,7 +28,9 @@ namespace UnityCli.ProBuilder
 
         public sealed class Result
         {
-            public long InsertedVertexIndex { get; set; }
+            public bool Inserted { get; set; }
+            public long VertexCountBefore { get; set; }
+            public long VertexCountAfter { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -38,6 +40,7 @@ namespace UnityCli.ProBuilder
             Description = "Insert a new vertex on an edge or face of a ProBuilder mesh. When Edge is provided, inserts on that edge; when FaceIndex is provided, inserts in that face. The insertion point is specified by X/Y/Z coordinates.",
             Group = "probuilder",
             DestructiveHint = false,
+            SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 10000,
@@ -50,12 +53,12 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            var go = ProBuilderInput.ResolveTarget(request.Target);
             if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
@@ -63,28 +66,28 @@ namespace UnityCli.ProBuilder
 
             var point = new Vector3((float)request.X, (float)request.Y, (float)request.Z);
 
+            if ((request.Edge != null) == request.FaceIndex.HasValue)
+                throw ProBuilderErrors.SchemaInvalid("Pass exactly one of edge or faceIndex for insert-vertex.");
+
             Undo.RecordObject(go, "ProBuilder Insert Vertex");
 
-            int insertedIndex = -1;
-            if (request.Edge != null)
-            {
-                insertedIndex = ProBuilderReflection.InsertVertexOnEdgeByPair(mesh, (int)request.Edge.A, (int)request.Edge.B, point);
-            }
-            else if (request.FaceIndex.HasValue)
-            {
-                var inserted = ProBuilderReflection.InsertVertexInFace(mesh, (int)request.FaceIndex.Value, point);
-                if (inserted) insertedIndex = ProBuilderReflection.GetVertexCount(mesh) - 1;
-            }
-            else
-            {
-                // 回退:用 null edge 尝试旧方法
-                insertedIndex = ProBuilderReflection.InsertVertexOnEdge(mesh, null, point);
-            }
+            var vertexCountBefore = ProBuilderReflection.GetVertexCount(mesh);
+            var inserted = request.Edge != null
+                ? ProBuilderReflection.InsertVertexOnEdgeByPair(mesh, (int)request.Edge.A, (int)request.Edge.B, point)
+                : ProBuilderReflection.InsertVertexInFace(mesh, (int)request.FaceIndex.Value, point);
+            var vertexCountAfter = ProBuilderReflection.GetVertexCount(mesh);
+            if (!inserted || vertexCountBefore < 0 || vertexCountAfter < 0)
+                throw ProBuilderErrors.OperationFailed("insert-vertex", "ProBuilder 5.x AppendElements insertion failed.");
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
-            return new Result { InsertedVertexIndex = insertedIndex };
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
+            {
+                Inserted = true,
+                VertexCountBefore = vertexCountBefore,
+                VertexCountAfter = vertexCountAfter
+            });
         }
     }
 }

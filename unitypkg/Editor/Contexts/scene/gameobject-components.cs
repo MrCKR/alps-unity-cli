@@ -9,7 +9,7 @@ namespace UnityCli
         /// <summary>
         /// scene.gameobject.components 内置 Context：读取目标 GameObject 的组件列表。
         /// </summary>
-        public sealed class SceneGameObjectComponentsContext : IUnityCliContext<SceneGameObjectComponentsContext.Request, SceneGameObjectComponentsContext.Result>, IUnityCliBuiltInRawBridgeContext
+        public sealed class SceneGameObjectComponentsContext : IUnityCliContext<SceneGameObjectComponentsContext.Request, SceneGameObjectComponentsContext.Result>
         {
             public sealed class Request
             {
@@ -38,7 +38,7 @@ namespace UnityCli
                 public string Type { get; set; }
                 public string FullName { get; set; }
                 public bool Enabled { get; set; }
-                public object Properties { get; set; }
+                [UnityCliAnyJson] public object Properties { get; set; }
             }
 
             public ContextDescriptor Describe() => new ContextDescriptor
@@ -52,48 +52,28 @@ namespace UnityCli
                 Target = "editor",
                 AvailabilityScope = "editorSession",
                 PlayModeSupport = "supported",
-                RefreshBehavior = "on-demand"
+                RefreshBehavior = "on-demand",
+                Examples = new[] { new ContextExample { Description = "List components on the main camera", Input = new Request { Target = "Main Camera", IncludeProperties = true } }, new ContextExample { Description = "List component names only", Input = new Request { Target = "Main Camera", IncludeProperties = false } } }
             };
 
-            /// <summary>
-            /// 同步 fallback 读取；生产 Bridge 注册路径会优先调用 ReadRaw 保留 legacy JSON shape。
-            /// </summary>
-            public Result Read(Request request, UnityCliProjectToolContext ctx)
+            /// <summary>解析目标并直接构造组件列表 DTO，不经过 JSON 字符串。</summary>
+            public System.Threading.Tasks.ValueTask<Result> ReadAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
             {
                 var id = request.Id == 0 ? (int?)null : request.Id;
                 var gameObject = ResolveSceneContextGameObject(request.Target, id, request.Path);
-                var json = SceneGameObjectComponentsPayloadJson(gameObject, request.IncludeProperties);
-                return UnityCliSerializer.Deserialize(json, typeof(Result)) as Result;
-            }
-
-            /// <summary>
-            /// 返回 legacy raw payload，保持 includeProperties 与目标解析语义不变。
-            /// </summary>
-            public string ReadRaw(BridgeRequest request, UnityCliProjectToolContext ctx)
-            {
-                GameObject gameObject;
-                try
+                var components = SceneContextComponentDetails(gameObject, request.IncludeProperties);
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
-                    gameObject = ResolveSceneContextGameObject(request);
-                }
-                catch (BridgeCommandException exception)
-                {
-                    return BridgeExceptionErrorJson(exception);
-                }
-                var includeProperties = request.BoolArg("includeProperties", true);
-                return SuccessJson(SceneGameObjectComponentsPayloadJson(gameObject, includeProperties));
+                    GameObject = new GameObjectRef
+                    {
+                        Id = gameObject.GetInstanceID(),
+                        Name = gameObject.name,
+                        Path = HierarchyPath(gameObject)
+                    },
+                    Components = components,
+                    Count = components.Count
+                });
             }
-        }
-
-        // 生成 scene.gameobject.components legacy payload；includeProperties=false 时只返回组件摘要。
-        private static string SceneGameObjectComponentsPayloadJson(GameObject gameObject, bool includeProperties)
-        {
-            return UnityCliSerializer.Serialize(new Dictionary<string, object>
-            {
-                { "gameObject", UnityCliToolJson.Parse(GameObjectTargetJson(gameObject)) },
-                { "components", UnityCliToolJson.Parse(includeProperties ? SceneContextComponentDetailsJson(gameObject) : ComponentsJson(gameObject)) },
-                { "count", (long)gameObject.GetComponents<Component>().Length }
-            });
         }
     }
 }

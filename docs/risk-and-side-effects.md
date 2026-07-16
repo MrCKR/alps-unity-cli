@@ -29,7 +29,7 @@ The CLI enforces a confirmation gate for all tools with `destructiveHint: true`.
 | `tools run texture.delete` | Delete Texture Asset | ✅ |
 | `tools run shader.delete` | Delete Shader Asset | ✅ |
 | `tools run object.modify` | Modify Object (deep patch) | ✅ |
-| `tools run reflection.method.call` | Call Method via Reflection | security fingerprint |
+| `tools run reflection.method.call` | Call Method via Reflection | ✅ |
 | `tools run graphics.bake-clear` | Clear Baked Lighting | ❌ |
 | `tools run graphics.bake-start` | Start Light Bake | ❌ |
 | `tools run graphics.bake-reflection-probe` | Bake Reflection Probe | ❌ |
@@ -44,7 +44,7 @@ The CLI enforces a confirmation gate for all tools with `destructiveHint: true`.
 | `batch run` | Batch Run | ✅ (preflight) |
 | `jobs cancel` | Cancel Job | ❌ |
 
-The `reflection.method.call` tool is classified `riskLevel: critical`. It performs no scope restriction on the invoked method (public/private/static/instance, any namespace/assembly, Editor/Runtime). It requires a `security` confirmation object with `confirmed: true` and a `destructiveFingerprint`, and returns a structured audit including target method preview, parameters, result serialization, and any exception.
+The `reflection.method.call` tool is classified `riskLevel: critical`. It performs no scope restriction on the invoked method (public/private/static/instance, any namespace/assembly, Editor/Runtime). It requires `--yes` for execution, supports `--dry-run`, and returns a structured audit including parameters, result serialization, and any exception. When a method name has overloads, pass the selected signature's `parameterType` values as `parameterTypes`.
 
 ### Confirmation Flow
 

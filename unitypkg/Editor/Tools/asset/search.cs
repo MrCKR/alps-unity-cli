@@ -7,8 +7,6 @@ namespace UnityCli
 {
     /// <summary>
     /// asset.search — 搜索 AssetDatabase:支持 Unity 原生 filter、类型追加、多目录范围与分页。
-    /// 对齐旧 AssetSearch handler;只读,分页。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class AssetSearchTool : IUnityCliTool<AssetSearchTool.Request, AssetSearchTool.Result>
     {
@@ -54,7 +52,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var searchInFolders = AssetToolSupport.NormalizeAssetSearchFolders(request.Path, request.SearchInFolders);
             var filterParts = new List<string>();
@@ -72,8 +70,8 @@ namespace UnityCli
                 var assetType = AssetDatabase.GetMainAssetTypeAtPath(assetPath);
                 items.Add(AssetToolSupport.BuildAssetSummary(assetPath, assetType));
             }
-            var nextCursor = cursor + items.Count < guids.Length ? (cursor + items.Count).ToString(System.Globalization.CultureInfo.InvariantCulture) : null;
-            return new Result
+            long? nextCursor = cursor + items.Count < guids.Length ? (long?)(cursor + items.Count) : null;
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Filter = resolvedFilter,
                 Query = request.Query,
@@ -89,7 +87,7 @@ namespace UnityCli
                     Total = guids.Length,
                     Truncated = nextCursor != null
                 }
-            };
+            });
         }
     }
 }

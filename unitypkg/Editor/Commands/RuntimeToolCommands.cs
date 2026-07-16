@@ -31,7 +31,12 @@ namespace UnityCli
         private static void RegisterRuntimeToolCommands(BridgeCommandRegistry registry)
         {
             RegisterCommand(registry, "runtime-tool.list", "runtime-tool", false, RuntimeToolList);
-            RegisterCommand(registry, "runtime-tool.run", "runtime-tool", false, RuntimeToolRun);
+            registry.Register<UnityCli.Protocol.BridgeRequest>(
+                "runtime-tool.run",
+                "runtime-tool",
+                false,
+                60000,
+                RuntimeToolRun);
         }
     }
 }

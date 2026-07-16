@@ -4,7 +4,8 @@ import { readFile, readdir } from "node:fs/promises";
 import { bridgeCommandRegistry } from "../../src/bridge/index.js";
 import { BUILTIN_EXTENSION_MANIFESTS } from "../../src/extensions/index.js";
 import { commandContracts, validateBridgeRegistryContracts, validateExtensionManifestContracts, validateToolMetadataContracts } from "../../src/contracts/command-contract.js";
-import { allRegisteredToolMetadata, builtinToolMetadata, extensionToolMetadata } from "../../src/tools/metadata/index.js";
+import { extractCSharpRegisteredCommandsFromSource } from "../../src/contracts/csharp-command-extractor.js";
+import { allRegisteredToolMetadata, builtinToolMetadata } from "../../src/tools/metadata/index.js";
 import "../../src/extensions/index.js";
 
 const editorUrl = new URL("../../../unitypkg/Editor/", import.meta.url);
@@ -29,11 +30,14 @@ const filledCsharpHandlerCommands = [
   "editor.undo",
   "editor.redo",
   "editor.resolution",
-  "project.tag",
-  "project.layer",
+  "project.tag.add",
+  "project.tag.remove",
+  "project.layer.add",
+  "project.layer.remove",
   "physics.collision-matrix",
   "physics.material",
-  "physics.joint",
+  "physics.joint.add",
+  "physics.joint.remove",
   "physics.force",
   "physics.overlap",
   "physics.rigidbody",
@@ -45,16 +49,17 @@ const filledCsharpHandlerCommands = [
   "scriptable-object.modify"
 ];
 
-test("command contract validates TS-local metadata, bridge registry and extension manifests under the new split model", () => {
-  assert.equal(builtinToolMetadata().length, 34, "TS-local built-in metadata count should stay stable");
-  assert.equal(allRegisteredToolMetadata().length, 34, "allRegisteredToolMetadata should be TS-local only");
-  assert.equal(extensionToolMetadata().length, 0, "offline extension tool metadata should stay empty");
+test("command contract inventory agrees with metadata, bridge registry and extension manifests", () => {
+  const localMetadata = builtinToolMetadata();
+  const extensionMetadata: never[] = [];
+  const allMetadata = allRegisteredToolMetadata();
+  const contracts = commandContracts();
 
+  assert.deepEqual(new Set(allMetadata.map((tool) => tool.name)), new Set(localMetadata.map((tool) => tool.name)));
+  assert.equal(new Set(contracts.map((entry) => entry.bridgeCommand)).size, contracts.length, "contract bridge commands must be unique");
   assert.doesNotThrow(() => validateBridgeRegistryContracts(bridgeCommandRegistry));
-  assert.doesNotThrow(() => validateToolMetadataContracts(allRegisteredToolMetadata(), bridgeCommandRegistry));
-  assert.doesNotThrow(() => validateExtensionManifestContracts(BUILTIN_EXTENSION_MANIFESTS, bridgeCommandRegistry, extensionToolMetadata()));
-
-  assert.equal(commandContracts().length, 335, "contract should still expose the full tool catalog");
+  assert.doesNotThrow(() => validateToolMetadataContracts(allMetadata, bridgeCommandRegistry));
+  assert.doesNotThrow(() => validateExtensionManifestContracts(BUILTIN_EXTENSION_MANIFESTS, bridgeCommandRegistry, extensionMetadata));
 });
 
 test("command contract keeps representative TS-local, C# built-in, and extension entries", () => {
@@ -117,7 +122,33 @@ test("command contract marks representative routing correctly", () => {
   assert.equal(compileDiagnostics.csharp_handler, "none");
 });
 
-test("registered C# command counts remain stable", async () => {
+test("typed generic C# registry registrations are extracted from executable code", () => {
+  const source = `
+    registry.Register<UnityCli.Protocol.BridgeRequest>(
+      "context.read", "context", false, 30000, ContextRead);
+    RegisterCommand(registry, "context.list", "context", false, ContextList);
+  `;
+
+  assert.deepEqual(extractCSharpRegisteredCommandsFromSource(source), ["context.list", "context.read"]);
+});
+
+test("missing typed generic C# registry registration is reported by extraction", () => {
+  const source = `registry.Register<UnityCli.Protocol.BridgeRequest>("project-tool.run", "project-tool", false, 60000, ProjectToolRun);`;
+
+  assert.deepEqual(extractCSharpRegisteredCommandsFromSource(source.replace("Register<UnityCli.Protocol.BridgeRequest>", "RemovedRegister")), []);
+});
+
+test("C# registry extraction ignores similar comments and strings", () => {
+  const source = `
+    // registry.Register<UnityCli.Protocol.BridgeRequest>("runtime-tool.run", "runtime-tool", false, 60000, RuntimeToolRun);
+    var example = "RegisterCommand(registry, \\\"context.read\\\")";
+    /* RegisterCommand(registry, "project-tool.run", "project-tool", false, ProjectToolRun); */
+  `;
+
+  assert.deepEqual(extractCSharpRegisteredCommandsFromSource(source), []);
+});
+
+test("registered C# command inventory agrees with command contracts", async () => {
   const contracts = new Map(commandContracts().map((entry) => [entry.bridgeCommand, entry]));
   const csharpCommands = await registeredCsharpCommands(editorUrl);
   const extensionCsharpCommands = await registeredExtensionCsharpCommands();
@@ -128,20 +159,21 @@ test("registered C# command counts remain stable", async () => {
     assert.ok(allCsharpCommands.has(command), `${command} should be registered in C# or extension bundles`);
   }
 
-  assert.equal(csharpCommands.size, 233);
-  assert.equal(extensionCsharpCommands.size, 70);
-  assert.equal(allCsharpCommands.size, 303);
+  for (const command of allCsharpCommands) {
+    const contract = contracts.get(command);
+    assert.ok(contract, `${command} is registered in C# but absent from the command contract inventory`);
+    assert.equal(contract.csharp_handler, "present", `${command} must advertise its C# handler`);
+  }
 });
 
 async function registeredCsharpCommands(directory: URL): Promise<Set<string>> {
   const commands = new Set<string>();
   for (const file of await listCSharpFiles(directory)) {
-    if (file.pathname.includes("/Samples/") || file.pathname.includes("\\Samples\\")) continue;
     const source = await readFile(file, "utf8");
-    for (const match of source.matchAll(/RegisterCommand\(registry, "([^"]+)"/g)) {
-      commands.add(match[1]);
+    for (const command of extractCSharpRegisteredCommandsFromSource(source)) {
+      commands.add(command);
     }
-    if (source.includes(": IUnityCliTool<") || source.includes(": IUnityCliDeferredTool<")) {
+    if (source.includes(": IUnityCliTool<")) {
       for (const match of source.matchAll(/Name\s*=\s*"([a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+)"/g)) {
         commands.add(match[1]);
       }

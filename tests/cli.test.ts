@@ -7,12 +7,19 @@ import { tmpdir } from "node:os";
 import test from "node:test";
 import { execute, isCliEntryPoint } from "../src/cli.js";
 import { failure, printJson, printResult } from "../src/output.js";
+import type { CliResult } from "../src/types.js";
 import { JobRunner } from "../src/job-runner.js";
 import { JobStore } from "../src/job-store.js";
 import { defaultDataDir } from "../src/platform.js";
 import { isProjectLocked } from "../src/cli-commands/unity-job.js";
+import type { BridgeRequest } from "../src/bridge/index.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
+
+function dataOf(result: CliResult): unknown {
+  assert.ok(result.ok);
+  return result.data;
+}
 
 async function makeRuntime() {
   const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-test-"));
@@ -69,10 +76,15 @@ test("CLI entrypoint detection handles normalized and linked file paths", async 
 test("node dist cli help prints an envelope", async () => {
   const result = await runCli(["--help"]);
   assert.equal(result.code, 0, result.stderr);
-  const payload = JSON.parse(result.stdout) as { ok: boolean; data: { usage: string; options: string[] } };
-  assert.equal(payload.ok, true);
+  const payload = JSON.parse(result.stdout) as { ok: boolean; data: { usage: string; commands: string[]; options: string[]; note: string } };
+  assert.ok(payload.ok);
   assert.equal(payload.data.usage, "unity_cli <command> [options]");
+  assert.ok(payload.data.commands.includes("target alias list"));
+  assert.ok(payload.data.commands.includes("target alias set <instanceId> <alias> [--force]"));
+  assert.ok(payload.data.commands.includes("target alias unset <alias>"));
   assert.ok(payload.data.options.some((option) => option.includes("--raw") && option.includes("compact single-line JSON")));
+  assert.match(payload.data.note, /examples\[\]\.argv.*JSON token array.*PowerShell.*single quotes.*--input-file/);
+  assert.match(payload.data.note, /exact instance.*--instance.*do not call `target set`.*persists mutable global active-target state/);
 });
 
 test("node dist cli version prints package version", async () => {
@@ -80,7 +92,7 @@ test("node dist cli version prints package version", async () => {
   assert.equal(result.code, 0, result.stderr);
   const payload = JSON.parse(result.stdout) as { ok: boolean; data: { version: string } };
   const packageJson = JSON.parse(await readFile(new URL("../package.json", import.meta.url), "utf8")) as { version: string };
-  assert.equal(payload.ok, true);
+  assert.ok(payload.ok);
   assert.equal(payload.data.version, packageJson.version);
 });
 
@@ -91,7 +103,7 @@ test("node dist cli raw output prints compact JSON envelope", async () => {
   assert.equal(result.stdout.split("\n").filter(Boolean).length, 1);
   assert.equal(result.stdout.includes("\n  "), false);
   const payload = JSON.parse(result.stdout) as { ok: boolean; data: { version: string } };
-  assert.equal(payload.ok, true);
+  assert.ok(payload.ok);
   assert.equal(typeof payload.data.version, "string");
 });
 
@@ -102,7 +114,7 @@ test("node dist cli raw output works before the command", async () => {
   assert.equal(result.stdout.split("\n").filter(Boolean).length, 1);
   assert.equal(result.stdout.includes("\n  "), false);
   const payload = JSON.parse(result.stdout) as { ok: boolean; data: { groups: unknown[] } };
-  assert.equal(payload.ok, true);
+  assert.ok(payload.ok);
   assert.ok(Array.isArray(payload.data.groups));
 });
 
@@ -133,16 +145,17 @@ test("final CLI failure envelope preserves structured error details", () => {
     process.stdout.write = originalWrite;
   }
 
-  const payload = JSON.parse(output) as { ok: boolean; error: { code: string; target: string; matchCount: number; matches: unknown[]; nextActions: string[] } };
-  assert.equal(payload.ok, false);
+  const payload = JSON.parse(output) as { ok: boolean; requestId: string; error: { code: string; details: { target: string; matchCount: number; matches: unknown[] }; nextActions: string[] } };
+  assert.ok(!payload.ok);
   assert.equal(payload.error.code, "E_TARGET_AMBIGUOUS");
-  assert.equal(payload.error.target, "HUD");
-  assert.equal(payload.error.matchCount, 2);
-  assert.deepEqual(payload.error.matches, [
+  assert.equal(payload.error.details.target, "HUD");
+  assert.equal(payload.error.details.matchCount, 2);
+  assert.deepEqual(payload.error.details.matches, [
     { id: 101, name: "HUD", path: "Canvas/HUD", components: ["RectTransform"] },
     { id: 202, name: "HUD", path: "Overlay/HUD", components: ["UIDocument"] }
   ]);
   assert.deepEqual(payload.error.nextActions, ["Pass a hierarchy path or instance id."]);
+  assert.equal("requestId" in payload.error, false);
 });
 
 test("printResult raw mode keeps envelope fields and removes pretty spacing", () => {
@@ -161,7 +174,7 @@ test("printResult raw mode keeps envelope fields and removes pretty spacing", ()
 
   assert.equal(output.includes("\n  "), false);
   const payload = JSON.parse(output) as { ok: boolean; requestId: string; error: { code: string } };
-  assert.equal(payload.ok, false);
+  assert.ok(!payload.ok);
   assert.equal(payload.requestId, "req_raw");
   assert.equal(payload.error.code, "COMMAND_FAILED");
 });
@@ -175,14 +188,14 @@ process.exit(0);
 `);
 
   const created = await execute(["tools", "run", "test.run", "--unity", unity, "--project", runtime.dataDir], runtime);
-  assert.equal(created.ok, true);
-  const jobId = (created.data as { jobId: string }).jobId;
+  assert.ok(created.ok);
+  const jobId = (dataOf(created) as { jobId: string }).jobId;
 
   const waited = await runtime.runner.wait(jobId, 3000);
   assert.equal(waited.status, "succeeded");
 
   const status = await execute(["jobs", "status", jobId], runtime);
-  assert.equal((status.data as { status: string }).status, "succeeded");
+  assert.equal((dataOf(status) as { status: string }).status, "succeeded");
 });
 
 test("job logs returns tail lines", async () => {
@@ -193,15 +206,15 @@ process.stdout.write("one\\ntwo\\nthree\\n");
 process.exit(0);
 `);
 
-  const created = await execute(["tools", "run", "build.run", "--unity", unity, "--project", runtime.dataDir], runtime);
-  const jobId = (created.data as { jobId: string }).jobId;
+  const created = await execute(["tools", "run", "build.run", "--yes", "--unity", unity, "--project", runtime.dataDir], runtime);
+  const jobId = (dataOf(created) as { jobId: string }).jobId;
   await runtime.runner.wait(jobId, 3000);
 
   const logs = await execute(["jobs", "logs", jobId, "--tail", "2"], runtime);
-  assert.deepEqual((logs.data as { lines: string[] }).lines, ["two", "three"]);
+  assert.deepEqual((dataOf(logs) as { lines: string[] }).lines, ["two", "three"]);
 
   const buildLogs = await execute(["jobs", "logs", jobId, "--tail", "1"], runtime);
-  assert.deepEqual((buildLogs.data as { lines: string[] }).lines, ["three"]);
+  assert.deepEqual((dataOf(buildLogs) as { lines: string[] }).lines, ["three"]);
 });
 
 test("wait timeout returns structured error while job keeps running", async () => {
@@ -209,7 +222,7 @@ test("wait timeout returns structured error while job keeps running", async () =
   const unity = await makeFakeUnity(`setTimeout(() => process.exit(0), 1000);`);
 
   const result = await execute(["tools", "run", "editor.refresh", "--compile", "--wait", "--wait-timeout-ms", "10", "--unity", unity, "--project", runtime.dataDir], runtime);
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "E_EXECUTION_TIMEOUT");
   assert.deepEqual(result.error?.details, {
     jobId: (result.error?.details as { jobId: string }).jobId,
@@ -228,26 +241,26 @@ test("editor refresh compile uses batch refresh-and-compile method", async () =>
   const compile = await execute(["tools", "run", "editor.refresh", "--compile", "--unity", unity, "--project", runtime.dataDir], runtime);
   const refresh = await execute(["tools", "run", "editor.refresh", "--unity", unity, "--project", runtime.dataDir], runtime);
 
-  assert.equal((compile.data as { command: string[] }).command[(compile.data as { command: string[] }).command.indexOf("-executeMethod") + 1], "UnityCli.UnityCliBatch.RefreshAndCompile");
-  assert.equal((refresh.data as { command: string[] }).command[(refresh.data as { command: string[] }).command.indexOf("-executeMethod") + 1], "UnityCli.UnityCliBatch.Refresh");
+  assert.equal((dataOf(compile) as { command: string[] }).command[(dataOf(compile) as { command: string[] }).command.indexOf("-executeMethod") + 1], "UnityCli.UnityCliBatch.RefreshAndCompile");
+  assert.equal((dataOf(refresh) as { command: string[] }).command[(dataOf(refresh) as { command: string[] }).command.indexOf("-executeMethod") + 1], "UnityCli.UnityCliBatch.Refresh");
 });
 
 test("cancel marks running job as cancelled", async () => {
   const runtime = await makeRuntime();
-  const unity = await makeFakeUnity(`setTimeout(() => process.exit(0), 5000);`);
+  const unity = await makeFakeUnity(`setTimeout(() => process.exit(0), 30000);`);
 
-  const created = await execute(["tools", "run", "build.run", "--unity", unity, "--project", runtime.dataDir], runtime);
-  const jobId = (created.data as { jobId: string }).jobId;
+  const created = await execute(["tools", "run", "build.run", "--yes", "--unity", unity, "--project", runtime.dataDir], runtime);
+  const jobId = (dataOf(created) as { jobId: string }).jobId;
   await runtime.runner.wait(jobId, 100);
 
   const described = await execute(["jobs", "describe", jobId], runtime);
-  assert.equal(described.ok, true);
-  assert.equal((described.data as { cancellation: { mode: string } }).cancellation.mode, "immediate");
+  assert.ok(described.ok);
+  assert.equal((dataOf(described) as { cancellation: { mode: string } }).cancellation.mode, "immediate");
 
   const cancelled = await execute(["jobs", "cancel", jobId, "--yes"], runtime);
-  assert.equal(cancelled.ok, true);
-  assert.equal((cancelled.data as { status: string }).status, "cancelled");
-  assert.equal((cancelled.data as { cancellation: { mode: string } }).cancellation.mode, "immediate");
+  assert.ok(cancelled.ok);
+  assert.equal((dataOf(cancelled) as { status: string }).status, "cancelled");
+  assert.equal((dataOf(cancelled) as { cancellation: { mode: string } }).cancellation.mode, "immediate");
 });
 
 test("failed Unity exit is captured with summary", async () => {
@@ -255,7 +268,7 @@ test("failed Unity exit is captured with summary", async () => {
   const unity = await makeFakeUnity(`process.exit(7);`);
 
   const created = await execute(["tools", "run", "test.run", "--unity", unity, "--project", runtime.dataDir], runtime);
-  const jobId = (created.data as { jobId: string }).jobId;
+  const jobId = (dataOf(created) as { jobId: string }).jobId;
   const waited = await runtime.runner.wait(jobId, 3000);
 
   assert.equal(waited.status, "failed");
@@ -271,7 +284,7 @@ test("successful Unity job clears stale error from summary", async () => {
   const job = await runtime.store.create({
     id: "job_stale_error",
     kind: "package",
-    status: "running",
+    status: "queued",
     requestId: "req_stale_error",
     createdAt: now,
     updatedAt: now,
@@ -289,9 +302,9 @@ test("successful Unity job clears stale error from summary", async () => {
   assert.equal(completed.error, undefined);
 
   const status = await execute(["jobs", "status", job.id], runtime);
-  assert.equal(status.ok, true);
-  assert.equal((status.data as { status: string }).status, "succeeded");
-  assert.equal("error" in (status.data as Record<string, unknown>), false);
+  assert.ok(status.ok);
+  assert.equal((dataOf(status) as { status: string }).status, "succeeded");
+  assert.equal("error" in (dataOf(status) as Record<string, unknown>), false);
 });
 
 test("test run attaches Unity XML result summary", async () => {
@@ -304,7 +317,7 @@ process.exit(1);
 `);
 
   const created = await execute(["tools", "run", "test.run", "--unity", unity, "--project", runtime.dataDir], runtime);
-  const jobId = (created.data as { jobId: string }).jobId;
+  const jobId = (dataOf(created) as { jobId: string }).jobId;
   const waited = await runtime.runner.wait(jobId, 3000);
   const summary = (waited.result?.summary ?? {}) as { total: number; failed: number; failures: Array<{ name: string; message: string }> };
 
@@ -318,8 +331,8 @@ test("build run forwards output path to batch method", async () => {
   const runtime = await makeRuntime();
   const unity = await makeFakeUnity(`process.exit(0);`);
 
-  const created = await execute(["tools", "run", "build.run", "--unity", unity, "--project", runtime.dataDir, "--output", "Builds/App.exe"], runtime);
-  const command = (created.data as { command: string[] }).command;
+  const created = await execute(["tools", "run", "build.run", "--yes", "--unity", unity, "--project", runtime.dataDir, "--output", "Builds/App.exe"], runtime);
+  const command = (dataOf(created) as { command: string[] }).command;
 
   assert.ok(command.includes("-unityCliBuildOutput"));
   assert.equal(command[command.indexOf("-unityCliBuildOutput") + 1].replace(/\\/g, "/").endsWith("Builds/App.exe"), true);
@@ -329,10 +342,10 @@ test("build run accepts multiple targets and returns build job batch", async () 
   const runtime = await makeRuntime();
   const unity = await makeFakeUnity(`process.exit(0);`);
 
-  const created = await execute(["tools", "run", "build.run", "--unity", unity, "--project", runtime.dataDir, "--targets", "StandaloneWindows64,WebGL", "--output", "Builds/{target}/Player"], runtime);
+  const created = await execute(["tools", "run", "build.run", "--yes", "--unity", unity, "--project", runtime.dataDir, "--targets", "StandaloneWindows64,WebGL", "--output", "Builds/{target}/Player"], runtime);
 
-  assert.equal(created.ok, true);
-  const data = created.data as { command: string; mode: string; targetCount: number; jobs: Array<{ jobId: string; result: { target: string; outputPath: string } }> };
+  assert.ok(created.ok);
+  const data = dataOf(created) as { command: string; mode: string; targetCount: number; jobs: Array<{ jobId: string; result: { target: string; outputPath: string } }> };
   assert.equal(data.command, "build.run");
   assert.equal(data.mode, "batch");
   assert.equal(data.targetCount, 2);
@@ -343,19 +356,28 @@ test("build run accepts multiple targets and returns build job batch", async () 
 
 test("build status and cancel wrap build jobs only", async () => {
   const runtime = await makeRuntime();
-  const unity = await makeFakeUnity(`setTimeout(() => process.exit(0), 5000);`);
+  const unity = await makeFakeUnity(`setTimeout(() => process.exit(0), 30000);`);
 
-  const created = await execute(["tools", "run", "build.run", "--unity", unity, "--project", runtime.dataDir], runtime);
-  const jobId = (created.data as { jobId: string }).jobId;
+  const created = await execute(["tools", "run", "build.run", "--yes", "--unity", unity, "--project", runtime.dataDir], runtime);
+  const jobId = (dataOf(created) as { jobId: string }).jobId;
   const status = await execute(["tools", "run", "build.status", "--input", JSON.stringify({ jobId })], runtime);
   const cancelled = await execute(["tools", "run", "build.cancel", "--input", JSON.stringify({ jobId })], runtime);
 
-  assert.equal(status.ok, true);
-  assert.equal((status.data as { command: string; jobId: string; kind: string }).command, "build.status");
-  assert.equal((status.data as { command: string; jobId: string; kind: string }).kind, "build");
-  assert.equal(cancelled.ok, true);
-  assert.equal((cancelled.data as { command: string; status: string }).command, "build.cancel");
-  assert.equal((cancelled.data as { command: string; status: string }).status, "cancelled");
+  assert.ok(status.ok);
+  assert.equal((dataOf(status) as { command: string; jobId: string; kind: string }).command, "build.status");
+  assert.equal((dataOf(status) as { command: string; jobId: string; kind: string }).kind, "build");
+  assert.ok(cancelled.ok);
+  assert.equal((dataOf(cancelled) as { command: string; status: string }).command, "build.cancel");
+  assert.equal((dataOf(cancelled) as { command: string; status: string }).status, "cancelled");
+});
+
+test("job cancellation waits for process-tree termination before terminal state", async () => {
+  const source = await readFile(new URL("../src/job-runner.js", import.meta.url), "utf8");
+  const cancel = source.slice(source.indexOf("async cancel(id"), source.indexOf("async runWorker", source.indexOf("async cancel(id")));
+  assert.match(cancel, /await killProcessTree\(claimed\.job\.pid\)/);
+  assert.doesNotMatch(cancel, /process\.kill\(claimed\.job\.pid\)/);
+  assert.ok(cancel.indexOf('status: "cancelling"') < cancel.indexOf("await killProcessTree"));
+  assert.ok(cancel.indexOf("await killProcessTree") < cancel.indexOf('status: "cancelled"'));
 });
 
 test("non-wait CLI exits quickly and worker persists terminal status", async () => {
@@ -363,10 +385,13 @@ test("non-wait CLI exits quickly and worker persists terminal status", async () 
   assert.equal(defaultDataDir({ UNITY_CLI_DATA_DIR: dataDir, LOCALAPPDATA: join("C:\\", "Users", "tester", "AppData", "Local") }, "win32"), dataDir);
   const unity = await makeFakeUnity(`setTimeout(() => process.exit(0), 2000);`);
 
+  const startedAt = Date.now();
   const created = await runCli(["tools", "run", "editor.refresh", "--compile", "--unity", unity, "--project", dataDir], { UNITY_CLI_DATA_DIR: dataDir });
+  const elapsedMs = Date.now() - startedAt;
   assert.equal(created.code, 0, created.stderr);
+  assert.ok(elapsedMs < 1500, `non-wait CLI retained worker streams for ${elapsedMs}ms`);
   const payload = JSON.parse(created.stdout) as { ok: boolean; data: { jobId: string; status: string } };
-  assert.equal(payload.ok, true);
+  assert.ok(payload.ok);
   assert.equal(payload.data.status, "queued");
 
   const runtime = { dataDir, store: new JobStore(dataDir), runner: new JobRunner(new JobStore(dataDir), dataDir) };
@@ -379,7 +404,7 @@ test("process timeout marks job as timeout", async () => {
   const unity = await makeFakeUnity(`setTimeout(() => process.exit(0), 5000);`);
 
   const created = await execute(["tools", "run", "editor.refresh", "--compile", "--timeout-ms", "50", "--unity", unity, "--project", runtime.dataDir], runtime);
-  const jobId = (created.data as { jobId: string }).jobId;
+  const jobId = (dataOf(created) as { jobId: string }).jobId;
   const waited = await runtime.runner.wait(jobId, 3000);
 
   assert.equal(waited.status, "timeout");
@@ -418,14 +443,14 @@ test("package list and info read manifest and lock data", async () => {
   const project = await makeUnityProject();
 
   const list = await execute(["tools", "run", "package.list", "--project", project], runtime);
-  assert.equal(list.ok, true);
+  assert.ok(list.ok);
   const data = list.data as { registry: string; packages: Array<{ name: string; requestedVersion?: string; lockedVersion?: string; source?: string }> };
   assert.equal(data.registry, "https://packages.unity.com");
   assert.deepEqual(data.packages.map((entry) => entry.name), ["com.example.tool", "com.unity.textmeshpro"]);
   assert.equal(data.packages[0].lockedVersion, "1.2.3");
 
   const info = await execute(["tools", "run", "package.info", "com.example.tool", "--project", project], runtime);
-  assert.equal(info.ok, true);
+  assert.ok(info.ok);
   assert.equal(((info.data as { package: { dependencies: Record<string, string> } }).package.dependencies)["com.unity.textmeshpro"], "3.0.6");
 });
 
@@ -441,8 +466,8 @@ test("package list and info accept UTF-8 BOM manifest and lock", async () => {
   const list = await execute(["tools", "run", "package.list", "--project", project], runtime);
   const info = await execute(["tools", "run", "package.info", "com.example.tool", "--project", project], runtime);
 
-  assert.equal(list.ok, true);
-  assert.equal(info.ok, true);
+  assert.ok(list.ok);
+  assert.ok(info.ok);
   assert.equal(((info.data as { package: { dependencies: Record<string, string> } }).package.dependencies)["com.unity.textmeshpro"], "3.0.6");
 });
 
@@ -451,7 +476,7 @@ test("init copies com.unity_cli package to Packages/com.unity_cli without requir
   const project = await makeUnityProject();
 
   const initialized = await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
-  assert.equal(initialized.ok, true);
+  assert.ok(initialized.ok);
   const data = initialized.data as { action: string; status: string; projectPath: string; package: { status: string; bridge: { dependencyName: string; bridgePath: string; packageVersion: string; sourceHash: string; projectHash: string; installMode: string; installTime: string; cliCompatibilityRange: string; installMetadataPath: string; fileManifestPath: string }; liveRefresh: { status: string } }; liveRefresh: { status: string }; resolve: string };
   assert.equal(data.action, "init");
   assert.equal(data.status, "package_installed");
@@ -491,14 +516,14 @@ test("init --check verifies copy-mode install metadata", async () => {
   const project = await makeUnityProject();
 
   const missing = await execute(["init", "--check", "--project", project], runtime);
-  assert.equal(missing.ok, true);
+  assert.ok(missing.ok);
   const missingData = missing.data as { action: string; package: { status: string; code: string; message: string } };
   assert.equal(missingData.package.status, "not_installed");
 
   await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
   const checked = await execute(["init", "--check", "--project", project], runtime);
 
-  assert.equal(checked.ok, true);
+  assert.ok(checked.ok);
   const data = checked.data as { action: string; package: { status: string; bridge: { dependencyName: string; packageVersion: string; sourceHash: string; projectHash: string; installMode: string; cliCompatibilityRange: string } } };
   assert.equal(data.action, "init_check");
   assert.equal(data.package.status, "installed");
@@ -515,29 +540,29 @@ test("package bridge-remove previews and removes the copy-mode Bridge package", 
   const project = await makeUnityProject();
 
   const initialized = await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
-  assert.equal(initialized.ok, true);
+  assert.ok(initialized.ok);
   const bridge = (initialized.data as { package: { bridge: { bridgePath: string; installMetadataPath: string } } }).package.bridge;
 
   const preview = await execute(["tools", "run", "package.bridge-remove", "--project", project, "--dry-run"], runtime);
-  assert.equal(preview.ok, true);
+  assert.ok(preview.ok);
   assert.equal((preview.data as { dryRun: boolean; managedFileCount: number }).dryRun, true);
   assert.equal((preview.data as { managedFileCount: number }).managedFileCount > 0, true);
   await access(bridge.bridgePath);
   await access(bridge.installMetadataPath);
 
   const blocked = await execute(["tools", "run", "package.bridge-remove", "--project", project], runtime);
-  assert.equal(blocked.ok, false);
+  assert.ok(!blocked.ok);
   assert.equal(blocked.error?.code, "E_DESTRUCTIVE_CONFIRMATION_REQUIRED");
 
   const removed = await execute(["tools", "run", "package.bridge-remove", "--project", project, "--yes"], runtime);
-  assert.equal(removed.ok, true);
+  assert.ok(removed.ok);
   assert.equal((removed.data as { dependencyName: string; dryRun: boolean }).dependencyName, "com.unity_cli");
   assert.equal((removed.data as { dryRun: boolean }).dryRun, false);
   await assert.rejects(access(bridge.bridgePath));
   await assert.rejects(access(bridge.installMetadataPath));
 
   const checked = await execute(["init", "--check", "--project", project], runtime);
-  assert.equal(checked.ok, true);
+  assert.ok(checked.ok);
   assert.equal((checked.data as { package: { status: string } }).package.status, "not_installed");
 });
 
@@ -555,17 +580,17 @@ test("package deploy and restore copy local package sources with backup", async 
   await writeFile(join(originalPackage, "Editor", "Tool.cs"), "// original", "utf8");
 
   const dryRun = await execute(["tools", "run", "package.deploy", "--project", project, "--input", JSON.stringify({ source }), "--dry-run"], runtime);
-  assert.equal(dryRun.ok, true);
+  assert.ok(dryRun.ok);
   assert.equal((dryRun.data as { dryRun: boolean; backupCreated: boolean }).dryRun, true);
   assert.equal((dryRun.data as { backupCreated: boolean }).backupCreated, true);
   assert.equal(await readFile(join(originalPackage, "Editor", "Tool.cs"), "utf8"), "// original");
 
   const blocked = await execute(["tools", "run", "package.deploy", "--project", project, "--input", JSON.stringify({ source })], runtime);
-  assert.equal(blocked.ok, false);
+  assert.ok(!blocked.ok);
   assert.equal(blocked.error?.code, "E_DESTRUCTIVE_CONFIRMATION_REQUIRED");
 
   const deployed = await execute(["tools", "run", "package.deploy", "--project", project, "--input", JSON.stringify({ source }), "--yes"], runtime);
-  assert.equal(deployed.ok, true);
+  assert.ok(deployed.ok);
   const deployData = deployed.data as { packageName: string; packageVersion: string; backupCreated: boolean; copiedFileCount: number; metadataPath: string; liveRefresh: { status: string } };
   assert.equal(deployData.packageName, "com.acme.local");
   assert.equal(deployData.packageVersion, "2.0.0");
@@ -578,13 +603,13 @@ test("package deploy and restore copy local package sources with backup", async 
   await access(metadata.deployments["com.acme.local"].backupPath);
 
   const restorePreview = await execute(["tools", "run", "package.restore", "--project", project, "--input", JSON.stringify({ packageName: "com.acme.local" }), "--dry-run"], runtime);
-  assert.equal(restorePreview.ok, true);
+  assert.ok(restorePreview.ok);
   assert.equal((restorePreview.data as { dryRun: boolean; restoredFromBackup: boolean }).dryRun, true);
   assert.equal((restorePreview.data as { restoredFromBackup: boolean }).restoredFromBackup, true);
   assert.equal(await readFile(join(originalPackage, "Editor", "Tool.cs"), "utf8"), "// deployed");
 
   const restored = await execute(["tools", "run", "package.restore", "--project", project, "--input", JSON.stringify({ packageName: "com.acme.local" }), "--yes"], runtime);
-  assert.equal(restored.ok, true);
+  assert.ok(restored.ok);
   assert.equal((restored.data as { restoredFromBackup: boolean }).restoredFromBackup, true);
   assert.equal(await readFile(join(originalPackage, "Editor", "Tool.cs"), "utf8"), "// original");
   const afterRestoreMetadata = JSON.parse(await readFile(deployData.metadataPath, "utf8")) as { deployments: Record<string, unknown> };
@@ -599,13 +624,13 @@ test("package restore removes a newly deployed package when no backup existed", 
   await writeFile(join(source, "Runtime.cs"), "// runtime", "utf8");
 
   const deployed = await execute(["tools", "run", "package.deploy", "--project", project, "--input", JSON.stringify({ source }), "--yes"], runtime);
-  assert.equal(deployed.ok, true);
+  assert.ok(deployed.ok);
   const targetPath = (deployed.data as { targetPath: string; backupCreated: boolean }).targetPath;
   assert.equal((deployed.data as { backupCreated: boolean }).backupCreated, false);
   await access(targetPath);
 
   const restored = await execute(["tools", "run", "package.restore", "--project", project, "--input", JSON.stringify({ packageName: "com.acme.newpkg" }), "--yes"], runtime);
-  assert.equal(restored.ok, true);
+  assert.ok(restored.ok);
   assert.equal((restored.data as { restoredFromBackup: boolean; removedDeployedPackage: boolean }).restoredFromBackup, false);
   assert.equal((restored.data as { removedDeployedPackage: boolean }).removedDeployedPackage, true);
   await assert.rejects(access(targetPath));
@@ -614,18 +639,23 @@ test("package restore removes a newly deployed package when no backup existed", 
 test("init asks an already open bridge to refresh assets", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
-  const requests: Array<{ command: string; args: Record<string, unknown> }> = [];
+  const requests: BridgeRequest[] = [];
 
   const initialized = await execute(["init", "--project", project], {
     ...runtime,
     bridgeExecute: async (payload) => {
-      requests.push({ command: payload.command, args: payload.args });
-      return { ok: true, data: { command: payload.command, result: { executed: true } } };
+      requests.push(payload);
+      return { ok: true as const, requestId: payload.requestId, data: { command: payload.command, result: { executed: true } } };
     }
   });
 
-  assert.equal(initialized.ok, true);
-  assert.deepEqual(requests, [{ command: "editor.menu", args: { path: "Assets/Refresh", timeoutMs: 7000 } }]);
+  assert.ok(initialized.ok);
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].requestId, /^req_/);
+  assert.equal(requests[0].command, "bridge.package.refresh");
+  assert.deepEqual(requests[0].input, {});
+  assert.deepEqual(requests[0].execution, { timeoutMs: 15000 });
+  assert.equal(requests[0].security, undefined);
   assert.equal(((initialized.data as { liveRefresh: { status: string } }).liveRefresh.status), "triggered");
 });
 
@@ -635,7 +665,7 @@ test("package install updates manifest, deploys bridge and can start package res
   const unity = await makeFakeUnity(`process.exit(0);`);
 
   const installed = await execute(["tools", "run", "package.install", "com.acme.lib@2.0.0", "--project", project, "--unity", unity, "--yes"], runtime);
-  assert.equal(installed.ok, true);
+  assert.ok(installed.ok);
   const jobData = installed.data as { kind: string; result: { action: string; package: string; installedVersion: string; bridge: { dependencyName: string; bridgePath: string; installMode: string } } };
   assert.equal(jobData.kind, "package");
   assert.equal(jobData.result.action, "install");
@@ -658,7 +688,7 @@ test("package install requires explicit confirmation before manifest write", asy
   const project = await makeUnityProject();
 
   const installed = await execute(["tools", "run", "package.install", "com.acme.lib@2.0.0", "--project", project], runtime);
-  assert.equal(installed.ok, false);
+  assert.ok(!installed.ok);
   assert.equal(installed.error?.code, "E_DESTRUCTIVE_CONFIRMATION_REQUIRED");
   const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string> };
   assert.equal(manifest.dependencies["com.acme.lib"], undefined);
@@ -669,7 +699,7 @@ test("package install requires an explicit manifest version", async () => {
   const project = await makeUnityProject();
 
   const installed = await execute(["tools", "run", "package.install", "com.acme.lib", "--project", project, "--yes"], runtime);
-  assert.equal(installed.ok, false);
+  assert.ok(!installed.ok);
   assert.equal(installed.error?.code, "PACKAGE_VERSION_REQUIRED");
   assert.equal(installed.error?.nextActions?.[0].includes("@<version>"), true);
 });
@@ -679,7 +709,7 @@ test("package install blocks numeric version downgrades", async () => {
   const project = await makeUnityProject();
 
   const installed = await execute(["tools", "run", "package.install", "com.unity.textmeshpro@3.0.5", "--project", project, "--yes"], runtime);
-  assert.equal(installed.ok, false);
+  assert.ok(!installed.ok);
   assert.equal(installed.error?.code, "PACKAGE_DOWNGRADE_BLOCKED");
   const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string> };
   assert.equal(manifest.dependencies["com.unity.textmeshpro"], "3.0.6");
@@ -690,7 +720,7 @@ test("package remove returns structured diagnostic for missing package", async (
   const project = await makeUnityProject();
 
   const removed = await execute(["tools", "run", "package.remove", "com.missing", "--project", project, "--yes"], runtime);
-  assert.equal(removed.ok, false);
+  assert.ok(!removed.ok);
   assert.equal(removed.error?.code, "PACKAGE_NOT_FOUND");
   assert.equal(removed.error?.nextActions?.[0].includes("tools run package.list"), true);
 });
@@ -700,17 +730,17 @@ test("package remove blocks dependents unless forced and supports dry-run previe
   const project = await makeUnityProject();
 
   const dryRun = await execute(["tools", "run", "package.remove", "com.unity.textmeshpro", "--project", project, "--dry-run"], runtime);
-  assert.equal(dryRun.ok, true);
+  assert.ok(dryRun.ok);
   assert.equal((dryRun.data as { dryRun: boolean; blocked: boolean }).dryRun, true);
   assert.equal((dryRun.data as { dryRun: boolean; blocked: boolean }).blocked, true);
   assert.deepEqual((dryRun.data as { dependents: Array<{ name: string }> }).dependents.map((entry) => entry.name), ["com.example.tool"]);
 
   const blocked = await execute(["tools", "run", "package.remove", "com.unity.textmeshpro", "--project", project, "--yes"], runtime);
-  assert.equal(blocked.ok, false);
+  assert.ok(!blocked.ok);
   assert.equal(blocked.error?.code, "PACKAGE_DEPENDENTS_BLOCKED");
 
   const forced = await execute(["tools", "run", "package.remove", "com.unity.textmeshpro", "--project", project, "--yes", "--force"], runtime);
-  assert.equal(forced.ok, true);
+  assert.ok(forced.ok);
   assert.equal((forced.data as { forced: boolean; dependents: Array<{ name: string }> }).forced, true);
   assert.deepEqual((forced.data as { forced: boolean; dependents: Array<{ name: string }> }).dependents.map((entry) => entry.name), ["com.example.tool"]);
   const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string> };
@@ -721,18 +751,23 @@ test("package remove with --yes asks an open Editor to refresh via bridge instea
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
   const unity = await makeFakeUnity(`process.exit(0);`);
-  const requests: Array<{ command: string; args: Record<string, unknown> }> = [];
+  const requests: BridgeRequest[] = [];
 
   const removed = await execute(["tools", "run", "package.remove", "com.example.tool", "--project", project, "--unity", unity, "--yes"], {
     ...runtime,
     bridgeExecute: async (payload) => {
-      requests.push({ command: payload.command, args: payload.args });
-      return { ok: true, data: { command: payload.command, result: { executed: true } } };
+      requests.push(payload);
+      return { ok: true as const, requestId: payload.requestId, data: { command: payload.command, result: { executed: true } } };
     }
   });
 
-  assert.equal(removed.ok, true);
-  assert.deepEqual(requests, [{ command: "editor.menu", args: { path: "Assets/Refresh", timeoutMs: 7000 } }]);
+  assert.ok(removed.ok);
+  assert.equal(requests.length, 1);
+  assert.match(requests[0].requestId, /^req_/);
+  assert.equal(requests[0].command, "bridge.package.refresh");
+  assert.deepEqual(requests[0].input, {});
+  assert.deepEqual(requests[0].execution, { timeoutMs: 15000 });
+  assert.equal(requests[0].security, undefined);
   const data = removed.data as { action: string; package: string; resolve: string; liveRefresh: { status: string } };
   assert.equal(data.action, "remove");
   assert.equal(data.package, "com.example.tool");
@@ -744,23 +779,19 @@ test("package remove with --yes asks an open Editor to refresh via bridge instea
   assert.equal(manifest.dependencies["com.example.tool"], undefined);
 });
 
-test("package remove with --yes returns UNITY_BUSY when the project is locked by an open Editor", async () => {
+test("package remove with --yes tolerates a stale UnityLockfile", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
   const unity = await makeFakeUnity(`process.exit(0);`);
-  // Simulate an open Unity Editor by creating the lock file.
+  const lockPath = join(project, "Temp", "UnityLockfile");
   await mkdir(join(project, "Temp"), { recursive: true });
-  await writeFile(join(project, "Temp", "UnityLockfile"), "");
+  await writeFile(lockPath, "stale");
 
   const removed = await execute(["tools", "run", "package.remove", "com.example.tool", "--project", project, "--unity", unity, "--bridge-endpoint", "http://127.0.0.1:9", "--yes"], runtime);
 
-  assert.equal(removed.ok, false);
-  assert.equal(removed.error?.code, "UNITY_BUSY");
-  assert.equal(removed.error?.transient, true);
-  assert.equal((removed.error as unknown as { resolve: string }).resolve, "blocked_by_open_editor");
-  assert.equal((removed.error as unknown as { manifestUpdated: boolean }).manifestUpdated, true);
-
-  // Manifest should still have been updated (package removed) before the resolve was blocked.
+  assert.ok(removed.ok);
+  assert.ok(["queued", "running"].includes((removed.data as { status: string }).status));
+  assert.equal(await readFile(lockPath, "utf8"), "stale");
   const manifest = JSON.parse(await readFile(join(project, "Packages", "manifest.json"), "utf8")) as { dependencies: Record<string, string> };
   assert.equal(manifest.dependencies["com.example.tool"], undefined);
 });
@@ -772,13 +803,13 @@ test("package remove with --yes returns UNITY_BUSY when bridge refresh fails in 
 
   const removed = await execute(["tools", "run", "package.remove", "com.example.tool", "--project", project, "--unity", unity, "--yes"], {
     ...runtime,
-    bridgeExecute: async () => ({ ok: false, error: { code: "BRIDGE_COMMAND_FAILED", message: "Unity is compiling" } })
+    bridgeExecute: async (payload) => ({ ok: false as const, requestId: payload.requestId, error: { code: "BRIDGE_COMMAND_FAILED", message: "Unity is compiling", nextActions: [], transient: false, retryAfterMs: 0 } })
   });
 
-  assert.equal(removed.ok, false);
+  assert.ok(!removed.ok);
   assert.equal(removed.error?.code, "UNITY_BUSY");
   assert.equal(removed.error?.transient, true);
-  assert.equal((removed.error as unknown as { resolve: string }).resolve, "blocked_by_open_editor");
+  assert.equal((removed.error?.details as { resolve: string }).resolve, "blocked_by_open_editor");
 });
 
 test("package write commands require an existing Unity manifest", async () => {
@@ -786,7 +817,7 @@ test("package write commands require an existing Unity manifest", async () => {
   const project = await mkdtemp(join(tmpdir(), "not-unity-project-"));
 
   const result = await execute(["tools", "run", "package.install", "com.acme.lib", "--project", project, "--yes"], runtime);
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "MANIFEST_NOT_FOUND");
 });
 
@@ -799,9 +830,9 @@ process.stdout.write("E_PACKAGE_RESOLVE_FAILED: version conflict for com.acme.li
 process.exit(1);
 `);
 
-  const created = await execute(["tools", "run", "package.resolve", "--project", project, "--unity", unity], runtime);
-  assert.equal(created.ok, true);
-  const waited = await runtime.runner.wait((created.data as { jobId: string }).jobId, 3000);
+  const created = await execute(["tools", "run", "package.resolve", "--yes", "--project", project, "--unity", unity], runtime);
+  assert.ok(created.ok);
+  const waited = await runtime.runner.wait((dataOf(created) as { jobId: string }).jobId, 3000);
   assert.equal(waited.status, "failed");
   assert.equal(waited.error?.code, "PACKAGE_VERSION_CONFLICT");
   assert.equal((waited.result?.diagnostic as { code: string }).code, "PACKAGE_VERSION_CONFLICT");
@@ -816,61 +847,61 @@ process.stdout.write("Packages\\\\com.unity_cli\\\\Editor\\\\UnityCliBatch.cs(13
 process.exit(1);
 `);
 
-  const created = await execute(["tools", "run", "package.resolve", "--project", project, "--unity", unity], runtime);
-  assert.equal(created.ok, true);
-  const waited = await runtime.runner.wait((created.data as { jobId: string }).jobId, 3000);
+  const created = await execute(["tools", "run", "package.resolve", "--yes", "--project", project, "--unity", unity], runtime);
+  assert.ok(created.ok);
+  const waited = await runtime.runner.wait((dataOf(created) as { jobId: string }).jobId, 3000);
   assert.equal(waited.status, "failed");
   assert.equal(waited.error?.code, "BRIDGE_COMPILE_FAILED");
   assert.equal((waited.result?.diagnostic as { code: string }).code, "BRIDGE_COMPILE_FAILED");
   assert.match(waited.error?.message ?? "", /CS0815/);
 });
 
-test("package registry and scoped registry write actions require confirmation", async () => {
+test("package registry and scoped registry write tools require confirmation", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
 
-  const registry = await execute(["tools", "run", "package.registry", "set", "--url", "https://npm.example.com", "--project", project], runtime);
-  assert.equal(registry.ok, false);
+  const registry = await execute(["tools", "run", "package.registry.set", "--url", "https://npm.example.com", "--project", project], runtime);
+  assert.ok(!registry.ok);
   assert.equal(registry.error?.code, "E_DESTRUCTIVE_CONFIRMATION_REQUIRED");
 
-  const scoped = await execute(["tools", "run", "package.scoped-registry", "add", "--name", "Acme", "--url", "https://registry.acme.test", "--scope", "com.acme", "--project", project], runtime);
-  assert.equal(scoped.ok, false);
+  const scoped = await execute(["tools", "run", "package.scoped-registry.add", "--name", "Acme", "--url", "https://registry.acme.test", "--scope", "com.acme", "--project", project], runtime);
+  assert.ok(!scoped.ok);
   assert.equal(scoped.error?.code, "E_DESTRUCTIVE_CONFIRMATION_REQUIRED");
 });
 
-test("package registry and scoped registry commands mutate manifest with confirmation", async () => {
+test("package registry and scoped registry tools mutate manifest with confirmation", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
 
-  const registry = await execute(["tools", "run", "package.registry", "set", "--url", "https://npm.example.com", "--project", project, "--yes"], runtime);
-  assert.equal(registry.ok, true);
+  const registry = await execute(["tools", "run", "package.registry.set", "--url", "https://npm.example.com", "--project", project, "--yes"], runtime);
+  assert.ok(registry.ok);
   assert.equal((registry.data as { registry: string }).registry, "https://npm.example.com");
 
-  const scoped = await execute(["tools", "run", "package.scoped-registry", "add", "--name", "Acme", "--url", "https://registry.acme.test", "--scope", "com.acme,com.acme.tools", "--project", project, "--yes"], runtime);
-  assert.equal(scoped.ok, true);
+  const scoped = await execute(["tools", "run", "package.scoped-registry.add", "--name", "Acme", "--url", "https://registry.acme.test", "--scope", "com.acme,com.acme.tools", "--project", project, "--yes"], runtime);
+  assert.ok(scoped.ok);
   assert.deepEqual((scoped.data as { registry: { scopes: string[] } }).registry.scopes, ["com.acme", "com.acme.tools"]);
 
-  const list = await execute(["tools", "run", "package.scoped-registry", "list", "--project", project], runtime);
-  assert.equal(list.ok, true);
+  const list = await execute(["tools", "run", "package.scoped-registry.list", "--project", project], runtime);
+  assert.ok(list.ok);
   assert.equal((list.data as { scopedRegistries: Array<{ name: string }> }).scopedRegistries.some((entry) => entry.name === "Acme"), true);
 });
 
-test("package scoped registry remove blocks matching package scopes unless forced", async () => {
+test("package scoped registry remove tool blocks matching package scopes unless forced", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
 
-  const dryRun = await execute(["tools", "run", "package.scoped-registry", "remove", "--name", "Example", "--project", project, "--dry-run"], runtime);
-  assert.equal(dryRun.ok, true);
+  const dryRun = await execute(["tools", "run", "package.scoped-registry.remove", "--name", "Example", "--project", project, "--dry-run"], runtime);
+  assert.ok(dryRun.ok);
   assert.equal((dryRun.data as { dryRun: boolean; blocked: boolean }).dryRun, true);
   assert.equal((dryRun.data as { dryRun: boolean; blocked: boolean }).blocked, true);
   assert.deepEqual((dryRun.data as { matchedPackages: string[] }).matchedPackages, ["com.example.tool"]);
 
-  const blocked = await execute(["tools", "run", "package.scoped-registry", "remove", "--name", "Example", "--project", project, "--yes"], runtime);
-  assert.equal(blocked.ok, false);
+  const blocked = await execute(["tools", "run", "package.scoped-registry.remove", "--name", "Example", "--project", project, "--yes"], runtime);
+  assert.ok(!blocked.ok);
   assert.equal(blocked.error?.code, "SCOPED_REGISTRY_IN_USE");
 
-  const forced = await execute(["tools", "run", "package.scoped-registry", "remove", "--name", "Example", "--project", project, "--yes", "--force"], runtime);
-  assert.equal(forced.ok, true);
+  const forced = await execute(["tools", "run", "package.scoped-registry.remove", "--name", "Example", "--project", project, "--yes", "--force"], runtime);
+  assert.ok(forced.ok);
   assert.equal((forced.data as { forced: boolean }).forced, true);
   assert.deepEqual((forced.data as { matchedPackages: string[] }).matchedPackages, ["com.example.tool"]);
 });
@@ -879,8 +910,8 @@ test("package resolve without Unity returns structured diagnostic when job reque
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
 
-  const result = await execute(["tools", "run", "package.resolve", "--project", project, "--job"], runtime);
-  assert.equal(result.ok, false);
+  const result = await execute(["tools", "run", "package.resolve", "--yes", "--project", project, "--job"], runtime);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "UNITY_NOT_FOUND");
 });
 
@@ -904,53 +935,48 @@ test("Unity package batch hook exposes BuildProject executeMethod", async () => 
   assert.match(source, /E_BUILD_OUTPUT_REQUIRED/);
 });
 
-test("job-routing: test run returns UNITY_BUSY when project is locked by open Editor", async () => {
+test("job-routing: test run tolerates a stale UnityLockfile", async () => {
   const runtime = await makeRuntime();
   const unity = await makeFakeUnity(`process.exit(0);`);
-  // Simulate an open Unity Editor by creating the lock file
   await mkdir(join(runtime.dataDir, "Temp"), { recursive: true });
-  await writeFile(join(runtime.dataDir, "Temp", "UnityLockfile"), "lock", "utf8");
+  await writeFile(join(runtime.dataDir, "Temp", "UnityLockfile"), "stale", "utf8");
 
   const result = await execute(["tools", "run", "test.run", "--unity", unity, "--project", runtime.dataDir], runtime);
-  assert.equal(result.ok, false);
-  assert.equal(result.error?.code, "UNITY_BUSY");
-  assert.equal(result.error?.transient, true);
-  assert.equal(result.error?.retryAfterMs, 15000);
-  assert.deepEqual(result.error?.details, {
-    projectPath: runtime.dataDir,
-    kind: "test",
-    lockFilePath: join(runtime.dataDir, "Temp", "UnityLockfile")
-  });
-  assert.ok((result.error?.nextActions ?? []).length > 0);
-  assert.ok((result.error?.nextActions ?? []).some((action) => action.includes("UnityLockfile")));
+  assert.ok(result.ok);
+  assert.ok(["queued", "running"].includes((result.data as { status: string }).status));
+  assert.equal(await readFile(join(runtime.dataDir, "Temp", "UnityLockfile"), "utf8"), "stale");
 });
 
-test("job-routing: build run returns UNITY_BUSY when project is locked by open Editor", async () => {
+test("job-routing: build run tolerates a stale UnityLockfile", async () => {
   const runtime = await makeRuntime();
   const unity = await makeFakeUnity(`process.exit(0);`);
   await mkdir(join(runtime.dataDir, "Temp"), { recursive: true });
-  await writeFile(join(runtime.dataDir, "Temp", "UnityLockfile"), "lock", "utf8");
+  await writeFile(join(runtime.dataDir, "Temp", "UnityLockfile"), "stale", "utf8");
 
-  const result = await execute(["tools", "run", "build.run", "--unity", unity, "--project", runtime.dataDir], runtime);
-  assert.equal(result.ok, false);
-  assert.equal(result.error?.code, "UNITY_BUSY");
-  assert.equal(result.error?.transient, true);
+  const result = await execute(["tools", "run", "build.run", "--yes", "--unity", unity, "--project", runtime.dataDir], runtime);
+  assert.ok(result.ok);
+  assert.ok(["queued", "running"].includes((result.data as { status: string }).status));
 });
 
-test("job-routing: isProjectLocked detects lock file and allows clean project", async () => {
+test("job-routing: isProjectLocked preserves and ignores a renameable stale lock", async () => {
   const project = await mkdtemp(join(tmpdir(), "unity-project-lock-"));
   assert.equal(isProjectLocked(project), false);
 
+  const lockPath = join(project, "Temp", "UnityLockfile");
   await mkdir(join(project, "Temp"), { recursive: true });
-  await writeFile(join(project, "Temp", "UnityLockfile"), "locked", "utf8");
-  assert.equal(isProjectLocked(project), true);
+  await writeFile(lockPath, "stale", "utf8");
+  assert.equal(isProjectLocked(project), false);
+  assert.equal(await readFile(lockPath, "utf8"), "stale");
+  const source = await readFile(new URL("../src/cli-commands/unity-job.js", import.meta.url), "utf8");
+  assert.match(source, /renameSync\(lockPath, probePath\)/);
+  assert.match(source, /renameSync\(probePath, lockPath\)/);
 });
 test("init --agent pi installs unitypkg + pi skill", async () => {
   const runtime = await makeRuntime();
   const project = await makeUnityProject();
 
   const result = await execute(["init", "--project", project, "--agent", "pi", "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as Record<string, unknown>;
   assert.equal(data.action, "init");
   assert.ok(data.package, "package segment should be present");
@@ -970,7 +996,7 @@ test("init --agent pi,claude installs unitypkg + two skills", async () => {
   const project = await makeUnityProject();
 
   const result = await execute(["init", "--project", project, "--agent", "pi,claude", "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as Record<string, unknown>;
   assert.ok(data.package);
   assert.ok(data.skills);
@@ -986,7 +1012,7 @@ test("init --pkg-only installs unitypkg only, no skills", async () => {
   const project = await makeUnityProject();
 
   const result = await execute(["init", "--project", project, "--pkg-only", "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as Record<string, unknown>;
   assert.ok(data.package, "package segment should be present");
   assert.equal(data.skills, undefined, "skills should not be present with --pkg-only");
@@ -997,7 +1023,7 @@ test("init --skill-only --agent pi installs only skill, no unitypkg", async () =
   const project = await makeUnityProject();
 
   const result = await execute(["init", "--skill-only", "--agent", "pi", "--project", project], runtime);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as Record<string, unknown>;
   assert.equal(data.package, undefined, "package segment should not be present with --skill-only");
   assert.ok(data.skills, "skills segment should be present");
@@ -1012,7 +1038,7 @@ test("init --skill-only without --agent or agent dir returns error", async () =>
   const project = await makeUnityProject();
 
   const result = await execute(["init", "--skill-only", "--project", project], runtime);
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "INVALID_INIT_FLAGS");
   assert.match(result.error?.message ?? "", /--skill-only requires --agent or an existing/);
 });
@@ -1022,7 +1048,7 @@ test("init --pkg-only --skill-only returns mutual exclusion error", async () => 
   const project = await makeUnityProject();
 
   const result = await execute(["init", "--pkg-only", "--skill-only", "--agent", "pi", "--project", project], runtime);
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "INVALID_INIT_FLAGS");
   assert.match(result.error?.message ?? "", /mutually exclusive/);
 });
@@ -1032,7 +1058,7 @@ test("init --pkg-only --agent pi returns mutual exclusion error", async () => {
   const project = await makeUnityProject();
 
   const result = await execute(["init", "--pkg-only", "--agent", "pi", "--project", project], runtime);
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "INVALID_INIT_FLAGS");
   assert.match(result.error?.message ?? "", /--pkg-only and --agent are mutually exclusive/);
 });
@@ -1042,7 +1068,7 @@ test("init --agent unknown returns validation error", async () => {
   const project = await makeUnityProject();
 
   const result = await execute(["init", "--agent", "unknown", "--project", project], runtime);
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "UNKNOWN_AGENT_KIND");
   assert.match(result.error?.message ?? "", /Unknown agent kind/);
 });
@@ -1055,7 +1081,7 @@ test("init --check without --agent checks only unitypkg when no agent dir exists
   await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
 
   const checkResult = await execute(["init", "--check", "--project", project], runtime);
-  assert.equal(checkResult.ok, true);
+  assert.ok(checkResult.ok);
   const data = checkResult.data as Record<string, unknown>;
   assert.ok(data.package, "package segment should be present");
   assert.equal(data.skills, undefined, "skills should not be present without an agent directory");
@@ -1070,7 +1096,7 @@ test("init --check without --agent checks auto-detected agent skills", async () 
   await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
 
   const checkResult = await execute(["init", "--check", "--project", project], runtime);
-  assert.equal(checkResult.ok, true);
+  assert.ok(checkResult.ok);
   const data = checkResult.data as Record<string, unknown>;
   assert.ok(data.package, "package segment should be present");
   assert.ok(data.skills, "skills segment should be present for detected agent directory");
@@ -1089,7 +1115,7 @@ test("init --check --agent pi checks unitypkg + skill", async () => {
   await execute(["init", "--project", project, "--agent", "pi", "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
 
   const checkResult = await execute(["init", "--check", "--project", project, "--agent", "pi"], runtime);
-  assert.equal(checkResult.ok, true);
+  assert.ok(checkResult.ok);
   const data = checkResult.data as Record<string, unknown>;
   assert.ok(data.package, "package segment should be present");
   assert.ok(data.skills, "skills segment should be present");
@@ -1107,7 +1133,7 @@ test("init --check --skill-only --agent pi checks only skill", async () => {
   await execute(["init", "--project", project, "--agent", "pi", "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
 
   const checkResult = await execute(["init", "--check", "--skill-only", "--agent", "pi", "--project", project], runtime);
-  assert.equal(checkResult.ok, true);
+  assert.ok(checkResult.ok);
   const data = checkResult.data as Record<string, unknown>;
   assert.equal(data.package, undefined, "package segment should not be present with --skill-only");
   assert.ok(data.skills, "skills segment should be present");
@@ -1118,7 +1144,7 @@ test("init without --agent defaults to unitypkg-only when no agent dir exists", 
   const project = await makeUnityProject();
 
   const result = await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as Record<string, unknown>;
   assert.ok(data.package, "package segment should be present");
   assert.equal(data.skills, undefined, "skills should not be present without an agent directory");
@@ -1130,7 +1156,7 @@ test("init without --agent installs skill for existing agent directory", async (
   await mkdir(join(project, ".pi"), { recursive: true });
 
   const result = await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as Record<string, unknown>;
   assert.ok(data.package, "package segment should be present");
   assert.ok(data.skills, "skills segment should be present for detected agent directory");
@@ -1149,7 +1175,7 @@ test("init --check on missing project returns package not_installed", async () =
   const project = await makeUnityProject();
 
   const checkResult = await execute(["init", "--check", "--project", project], runtime);
-  assert.equal(checkResult.ok, true);
+  assert.ok(checkResult.ok);
   const data = checkResult.data as Record<string, unknown>;
   const pkg = data.package as { status: string; code?: string; message?: string };
   assert.equal(pkg.status, "not_installed");
@@ -1161,7 +1187,7 @@ test("init --skill-only without --agent installs skill for existing agent direct
   await mkdir(join(project, ".claude"), { recursive: true });
 
   const result = await execute(["init", "--skill-only", "--project", project], runtime);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as Record<string, unknown>;
   assert.equal(data.package, undefined, "package segment should not be present with --skill-only");
   assert.ok(data.skills, "skills segment should be present for detected agent directory");
@@ -1178,7 +1204,7 @@ test("init --skill-only without --agent installs skill for existing .agents dire
   await mkdir(join(project, ".agents"), { recursive: true });
 
   const result = await execute(["init", "--skill-only", "--project", project], runtime);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as Record<string, unknown>;
   assert.equal(data.package, undefined, "package segment should not be present with --skill-only");
   assert.ok(data.skills, "skills segment should be present for detected agent directory");
@@ -1200,7 +1226,7 @@ test("init --check --agent on missing skill reports missing", async () => {
   await execute(["init", "--project", project, "--bridge-endpoint", "http://127.0.0.1:9"], runtime);
 
   const checkResult = await execute(["init", "--check", "--agent", "pi", "--project", project], runtime);
-  assert.equal(checkResult.ok, true);
+  assert.ok(checkResult.ok);
   const data = checkResult.data as Record<string, unknown>;
   const skills = data.skills as Array<{ agent: string; status: string }>;
   assert.equal(skills[0].agent, "pi");

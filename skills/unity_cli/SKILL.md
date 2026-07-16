@@ -17,12 +17,14 @@ description: 当任务涉及 Unity Editor 或 Unity 时都优先使用本 Skill�
 
 ## 发现能力
 
-先找到 Unity 实例并选定目标：
+先找到 Unity 实例，并在后续 Bridge 命令上显式绑定目标：
 
 ```powershell
 unity_cli instances list
-unity_cli target set <instanceId-or-alias>
+unity_cli tools group --instance <instanceId-or-alias>
 ```
+
+`target set` 会持久化可变的全局活动目标。调用方已经知道实例时，不要把它当作连接步骤；在 `tools` / `context` 的 discovery、describe 和执行命令上持续传 `--instance`。
 
 使用 Tool 前走 group-first 发现链；不确定关键词时先查搜索结果：
 
@@ -102,15 +104,15 @@ Descriptor 常用字段：
 
 大输出协议：
 
-- 层级/列表先用 `pageSize`、`cursor`、`parent`、`query`、`nameFilter`、`componentType`、`className` 缩小结果；按 `pageInfo.nextCursor` 续读。
-- 深读对象优先用 `paths` 或 `viewQuery`，再用 `maxDepth`、`maxArrayItems` 控制展开。
+- 层级/列表先用 `pageSize`、`cursor`、`parent`、`query`、`nameFilter`、`componentType`、`className` 缩小结果；将 `pageInfo.nextCursor` 原值传回 `cursor` 续读，两者保持相同 JSON 类型。
+- 深读对象优先用 `paths` 或 `viewQuery`，再用 `maxDepth`、`maxArrayItems` 控制展开；AnyJson 值中的非有限 CLR 数分别表示为字符串 `NaN`、`Infinity`、`-Infinity`。
 - 文本和源码用 `offset`、`maxBytes` 分段；看 `truncated` 和 `nextOffset`。
 - 数组和深层字段看 `truncated`、`returnedCount`、`totalCount`、`nextPath`。
 - 截图和相机默认使用 artifact path；只有确实需要内联图像时才传 `inlineBase64:true`。
 
 ## AI 规则
 
-- 执行前先确认目标实例；多个 ready 实例时不要猜，先 `target set`。
+- 执行前先确认目标实例；多个 ready 实例时不要猜，在当前 discovery、describe 和执行命令上显式传 `--instance`。只有明确需要持久化全局默认值时才使用 `target set`。
 - 不要手动读取 Bridge 注册文件，不要直接 ping endpoint；用 `instances`、`target`、`doctor` 和 `editor.state`。
 - Unity 正在 compile/import/build、PlayMode 切换或 domain reload 时，先用 `tools run editor.state --input '{"waitReady":true}'` 等待 `busy.isBusy=false`。
 - `destructiveHint:true` 的 Tool 先 `--dry-run`（如果支持），确认计划输出后再加 `--yes`。

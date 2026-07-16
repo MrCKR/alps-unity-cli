@@ -6,8 +6,6 @@ namespace UnityCli
 {
     /// <summary>
     /// scene.build-settings — 列出 Editor Build Settings 中注册的场景(enabled 与路径)。
-    /// 只读工具,对齐旧 SceneBuildSettings handler。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class SceneBuildSettingsTool : IUnityCliTool<SceneBuildSettingsTool.Request, SceneBuildSettingsTool.Result>
     {
@@ -33,7 +31,7 @@ namespace UnityCli
         {
             Name = "scene.build-settings",
             Summary = "List scenes registered in the Editor Build Settings (enabled scenes and their paths).",
-            Description = "List scenes registered in the Editor Build Settings (enabled scenes and their paths). Read-only; use build.scenes to add/remove scenes from build.",
+            Description = "List scenes registered in the Editor Build Settings (enabled scenes and their paths). Read-only; use build.scene.add or build.scene.remove to change the build list.",
             Group = "scene",
             Version = "1.0.0",
             DestructiveHint = false,
@@ -47,7 +45,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var scenes = EditorBuildSettings.scenes ?? new EditorBuildSettingsScene[0];
             var entries = new System.Collections.Generic.List<BuildSceneEntry>();
@@ -61,11 +59,11 @@ namespace UnityCli
                     BuildIndex = (long)index
                 });
             }
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Scenes = entries,
                 Count = (long)scenes.Length
-            };
+            });
         }
     }
 }

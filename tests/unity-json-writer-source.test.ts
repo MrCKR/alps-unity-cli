@@ -1,69 +1,67 @@
 import assert from "node:assert/strict";
+import { access, readFile } from "node:fs/promises";
 import test from "node:test";
-import { readFile } from "node:fs/promises";
 
-const writerUrl = new URL("../../unitypkg/Editor/Infrastructure/UnityCliJsonWriter.cs", import.meta.url);
-const envelopeUrl = new URL("../../unitypkg/Editor/Infrastructure/UnityCliEnvelope.cs", import.meta.url);
-const jsonUrl = new URL("../../unitypkg/Editor/Infrastructure/UnityCliJson.cs", import.meta.url);
-const bridgeHttpUrl = new URL("../../unitypkg/Editor/Bridge/BridgeHttpServer.cs", import.meta.url);
-const codeExecUrl = new URL("../../unitypkg/Editor/Infrastructure/CodeExecSupport.cs", import.meta.url);
-const batchUrl = new URL("../../unitypkg/Editor/UnityCliBatch.cs", import.meta.url);
-const projectToolsUrl = new URL("../../unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs", import.meta.url);
+const editorUrl = new URL("../../unitypkg/Editor/", import.meta.url);
+const removedWriterUrl = new URL("Infrastructure/UnityCliJsonWriter.cs", editorUrl);
+const serializerUrl = new URL("Infrastructure/UnityCliSerializer.cs", editorUrl);
+const envelopeFactoryUrl = new URL("Protocol/ProtocolEnvelopeFactory.cs", editorUrl);
+const protocolEnvelopeUrl = new URL("Protocol/envelope.cs", editorUrl);
+const jsonUrl = new URL("Infrastructure/UnityCliJson.cs", editorUrl);
+const bridgeHttpUrl = new URL("Bridge/BridgeHttpServer.cs", editorUrl);
+const bridgeUrl = new URL("UnityCliBridge.cs", editorUrl);
+const batchUrl = new URL("UnityCliBatch.cs", editorUrl);
+const projectToolsUrl = new URL("ProjectTools/ProjectToolRegistry.cs", editorUrl);
 
-test("Unity JSON writer supports core JSON values and validates raw JSON", async () => {
-  const writer = await readFile(writerUrl, "utf8");
-
-  assert.match(writer, /internal sealed class UnityCliJsonWriter/);
-  assert.match(writer, /BeginObject\(\)/);
-  assert.match(writer, /BeginArray\(\)/);
-  assert.match(writer, /Prop\(string name, string value\)/);
-  assert.match(writer, /Prop\(string name, bool value\)/);
-  assert.match(writer, /Prop\(string name, long value\)/);
-  assert.match(writer, /PropNull\(string name\)/);
-  assert.match(writer, /PropRaw\(string name, string rawJson\)/);
-  assert.match(writer, /RawValue\(string rawJson\)/);
-  assert.match(writer, /CultureInfo\.InvariantCulture/);
-  assert.match(writer, /IsCompleteJsonValue\(string json\)/);
-  assert.match(writer, /ParseObject\(string json, ref int index\)/);
-  assert.match(writer, /ParseArray\(string json, ref int index\)/);
-  assert.match(writer, /ParseString\(string json, ref int index\)/);
-  assert.match(writer, /ParseNumber\(string json, ref int index\)/);
-  assert.match(writer, /WriteRawOrString\(rawJson\)/);
-  assert.match(writer, /WriteString\(rawJson\)/);
+test("UnityCliSerializer is the only strict JSON implementation", async () => {
+  await assert.rejects(access(removedWriterUrl));
+  const serializer = await readFile(serializerUrl, "utf8");
+  assert.match(serializer, /public static class UnityCliSerializer/);
+  assert.match(serializer, /public static string Serialize\(object value\)/);
+  assert.match(serializer, /public static T Deserialize<T>\(string json\)/);
+  assert.match(serializer, /public static object Parse\(string json\)/);
+  assert.match(serializer, /JSON payload contains trailing tokens/);
+  assert.match(serializer, /JSON does not support non-finite numbers/);
+  assert.match(serializer, /entries\.Sort\(\(left, right\) => string\.CompareOrdinal/);
+  assert.doesNotMatch(serializer, /UnityCliJsonWriter/);
 });
 
-test("Unity envelope centralizes success, error, details and nextActions", async () => {
-  const envelope = await readFile(envelopeUrl, "utf8");
-  const json = await readFile(jsonUrl, "utf8");
+test("ProtocolEnvelopeFactory owns success and structured error construction", async () => {
+  const [factory, protocol, serializer] = await Promise.all([
+    readFile(envelopeFactoryUrl, "utf8"), readFile(protocolEnvelopeUrl, "utf8"), readFile(serializerUrl, "utf8")
+  ]);
 
-  assert.match(envelope, /internal static class UnityCliEnvelope/);
-  assert.match(envelope, /Success\(string requestId, string dataJson\)/);
-  assert.match(envelope, /Error\(string requestId, string code, string message, string detailsJson, IEnumerable<string> nextActions\)/);
-  assert.match(envelope, /PropRaw\("details", ObjectOrEmpty\(detailsJson\)\)/);
-  assert.match(envelope, /PropArray\("nextActions"/);
-  assert.match(envelope, /ObjectOrEmpty\(string rawJson\)/);
-  assert.match(envelope, /ArrayOrEmpty\(string rawJson\)/);
-  assert.match(json, /return UnityCliEnvelope\.Success\(dataJson\)/);
-  assert.match(json, /return UnityCliEnvelope\.Error\(code, message, nextAction\)/);
-  assert.match(json, /return UnityCliEnvelope\.ErrorWithDetails\(code, message, detailsJson, nextAction\)/);
-  assert.match(json, /return UnityCliJsonWriter\.RawOrString\(value\)/);
+  assert.match(factory, /internal static class ProtocolEnvelopeFactory/);
+  assert.match(factory, /public static SuccessEnvelope Success\(string requestId, object data/);
+  assert.match(factory, /public static ErrorEnvelope Error\([\s\S]*object details = null,[\s\S]*IEnumerable<string> nextActions = null/);
+  assert.match(factory, /Details = details/);
+  assert.match(factory, /NextActions = \(nextActions \?\? Array\.Empty<string>\(\)\)/);
+  assert.match(protocol, /class SuccessEnvelope/);
+  assert.match(protocol, /class ErrorEnvelope/);
+  assert.match(protocol, /class ToolError/);
+  assert.match(serializer, /public static class UnityCliSerializer/);
+  assert.match(serializer, /public static string Serialize\(object value\)/);
+  assert.match(serializer, /public static object Deserialize\(string json, Type targetType\)/);
 });
 
-test("high-impact Unity outputs use writer or envelope infrastructure", async () => {
-  const bridgeHttp = await readFile(bridgeHttpUrl, "utf8");
-  const codeExec = await readFile(codeExecUrl, "utf8");
-  const batch = await readFile(batchUrl, "utf8");
-  const projectTools = await readFile(projectToolsUrl, "utf8");
+test("UnityCliSerializer is the protocol envelope serialization boundary", async () => {
+  const [json, bridgeHttp, bridge, batch, projectTools] = await Promise.all([
+    readFile(jsonUrl, "utf8"), readFile(bridgeHttpUrl, "utf8"), readFile(bridgeUrl, "utf8"),
+    readFile(batchUrl, "utf8"), readFile(projectToolsUrl, "utf8")
+  ]);
+  const combined = [json, bridgeHttp, bridge, batch].join("\n");
 
-  assert.match(bridgeHttp, /BridgeHealthJson\(\)[\s\S]*UnityCliEnvelope\.Success\(data\)/);
-  assert.match(bridgeHttp, /UnityCliEnvelope\.Error\("E_BRIDGE_ROUTE_NOT_FOUND"/);
-  assert.match(codeExec, /CodeSuccessDataJson[\s\S]*new UnityCliJsonWriter\(\)\.BeginObject\(\)/);
-  assert.match(codeExec, /CodeDetailsJson[\s\S]*PropRaw\("diagnostics"/);
-  assert.match(batch, /SuccessEnvelope[\s\S]*UnityCliEnvelope\.Success\(requestId, dataJson\)/);
-  assert.match(batch, /ErrorEnvelope[\s\S]*UnityCliEnvelope\.Error\(requestId, code, message, detailsJson, actions\)/);
-  assert.match(projectTools, /ProjectToolDefinitionJson[\s\S]*PropRaw\("inputSchema", definition\.InputSchema\)/);
-  assert.match(projectTools, /ProjectToolDefinitionJson[\s\S]*PropRaw\("outputSchema", definition\.OutputSchema\)/);
-  assert.match(projectTools, /ProjectToolRun[\s\S]*PropRaw\("result", resultJson\)/);
-  assert.match(projectTools, /ProjectToolFingerprintJson[\s\S]*new UnityCliJsonWriter\(\)\.BeginObject\(\)/);
-  assert.doesNotMatch(projectTools, /JsonLiteralOrString\(resultJson\)/);
+  assert.match(json, /UnityCliSerializer\.Serialize\(UnityCli\.Protocol\.ProtocolEnvelopeFactory\.Success/);
+  assert.match(json, /UnityCliSerializer\.Serialize\(UnityCli\.Protocol\.ProtocolEnvelopeFactory\.Error/);
+  assert.match(bridgeHttp, /BridgeHealthJson\(\)[\s\S]*UnityCliSerializer\.Serialize\(UnityCli\.Protocol\.ProtocolEnvelopeFactory\.Success/);
+  assert.match(bridgeHttp, /E_BRIDGE_ROUTE_NOT_FOUND[\s\S]*ProtocolEnvelopeFactory\.Error/);
+  assert.match(bridge, /ProtocolEnvelopeFactory\.Success\(request\.RequestId, data\)/);
+  assert.match(batch, /ProtocolEnvelopeFactory\.Success/);
+  assert.match(batch, /ProtocolEnvelopeFactory\.Error/);
+  assert.doesNotMatch(combined, /UnityCliEnvelope/);
+
+  assert.match(projectTools, /InputSchema = UnityCliSchemaDeriver\.DeriveSchema\(typeof\(TReq\)\)/);
+  assert.match(projectTools, /OutputSchema = UnityCliSchemaDeriver\.DeriveSchema\(typeof\(TRes\)\)/);
+  assert.match(projectTools, /return CompleteProjectToolSuccess/);
+  assert.doesNotMatch(projectTools, /ProtocolEnvelopeFactory\.(?:Success|Error)/);
 });

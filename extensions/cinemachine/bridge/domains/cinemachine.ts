@@ -11,10 +11,13 @@ export const cinemachineBridgeSpecs: BridgeCommandSpec[] = markToolsOnly([
   { group: "cinemachine", command: "body", bridgeCommand: "project-tool.run", toolName: "cinemachine.body", buildArgs: cinemachineBodyArgs },
   { group: "cinemachine", command: "aim", bridgeCommand: "project-tool.run", toolName: "cinemachine.aim", buildArgs: cinemachineAimArgs },
   { group: "cinemachine", command: "noise", bridgeCommand: "project-tool.run", toolName: "cinemachine.noise", buildArgs: cinemachineNoiseArgs },
-  { group: "cinemachine", command: "brain", bridgeCommand: "project-tool.run", toolName: "cinemachine.brain", buildArgs: cinemachineBrainArgs },
+  { group: "cinemachine", command: "brain.ensure", bridgeCommand: "project-tool.run", toolName: "cinemachine.brain.ensure", buildArgs: cinemachineTargetOnlyArgs },
+  { group: "cinemachine", command: "brain.status", bridgeCommand: "project-tool.run", toolName: "cinemachine.brain.status", buildArgs: cinemachineTargetOnlyArgs },
   { group: "cinemachine", command: "force-camera", bridgeCommand: "project-tool.run", toolName: "cinemachine.force-camera", buildArgs: cinemachineForceCameraArgs },
   { group: "cinemachine", command: "release-override", bridgeCommand: "project-tool.run", toolName: "cinemachine.release-override", buildArgs: cinemachineReleaseOverrideArgs },
-  { group: "cinemachine", command: "extension", bridgeCommand: "project-tool.run", toolName: "cinemachine.extension", buildArgs: cinemachineExtensionArgs, destructiveHint: true }
+  { group: "cinemachine", command: "extension.list", bridgeCommand: "project-tool.run", toolName: "cinemachine.extension.list", buildArgs: cinemachineTargetOnlyArgs },
+  { group: "cinemachine", command: "extension.add", bridgeCommand: "project-tool.run", toolName: "cinemachine.extension.add", buildArgs: cinemachineExtensionTypeArgs },
+  { group: "cinemachine", command: "extension.remove", bridgeCommand: "project-tool.run", toolName: "cinemachine.extension.remove", buildArgs: cinemachineExtensionTypeArgs }
 ]);
 
 function markToolsOnly(specs: BridgeCommandSpec[]): BridgeCommandSpec[] {
@@ -102,11 +105,8 @@ function cinemachineNoiseArgs({ flags, positionalTarget }: Parameters<BridgeComm
   });
 }
 
-function cinemachineBrainArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
-  return compactArgs({
-    ...targetArgs(flags, positionalTarget),
-    action: stringFlag(flags, "action") ?? stringFlag(flags, "op") ?? "ensure"
-  });
+function cinemachineTargetOnlyArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs(targetArgs(flags, positionalTarget));
 }
 
 function cinemachineForceCameraArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
@@ -127,10 +127,9 @@ function cinemachineReleaseOverrideArgs({ flags, positionalTarget }: Parameters<
   });
 }
 
-function cinemachineExtensionArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+function cinemachineExtensionTypeArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   return compactArgs({
     ...targetArgs(flags, positionalTarget),
-    action: stringFlag(flags, "action") ?? stringFlag(flags, "op") ?? "list",
     extensionType: stringFlag(flags, "extension-type") ?? stringFlag(flags, "type")
   });
 }

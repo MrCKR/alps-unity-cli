@@ -9,8 +9,6 @@ namespace UnityCli
 {
     /// <summary>
     /// texture.modify — 修改 PNG/JPG 纹理的像素区域并重新导入。支持 dryRun。destructive(asset-write)。
-    /// 对齐旧 TextureModify handler;session-affecting(asset-write)。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class TextureModifyTool : IUnityCliTool<TextureModifyTool.Request, TextureModifyTool.Result>
     {
@@ -24,7 +22,6 @@ namespace UnityCli
             public int? Y { get; set; }
             public int? Width { get; set; }
             public int? Height { get; set; }
-            public bool? DryRun { get; set; }
         }
 
         public sealed class Result
@@ -57,7 +54,7 @@ namespace UnityCli
             SupportsDryRun = true,
             SideEffects = new[] { "asset-write", "asset-import" },
             Target = "editor",
-            PlayModeSupport = "session-affecting",
+            PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 30000,
             MaxTimeoutMs = 600000,
             Examples = new[]
@@ -66,7 +63,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             TextureToolSupport.EnsureEditorNotBusy("texture.modify");
             var path = TextureToolSupport.ResolveTexturePath(request.Path ?? request.Target);
@@ -87,15 +84,15 @@ namespace UnityCli
             }
             width = Math.Min(width, texture.width - x);
             height = Math.Min(height, texture.height - y);
-            if (request.DryRun == true)
+            if (ctx.DryRun)
             {
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Command = "texture.modify",
                     DryRun = true,
                     Region = new TextureRegion { X = x, Y = y, Width = width, Height = height },
                     PlannedEffects = new List<TexturePlannedEffect> { new TexturePlannedEffect { Type = "texture.modify", Path = path } }
-                };
+                });
             }
             var working = new Texture2D(2, 2, TextureFormat.RGBA32, false);
             try
@@ -116,7 +113,7 @@ namespace UnityCli
                 File.WriteAllBytes(AssetToolSupport.AssetFullPath(path), bytes);
                 AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
                 AssetDatabase.Refresh();
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Command = "texture.modify",
                     Texture = TextureToolSupport.BuildTextureInfo(path, TextureToolSupport.LoadTextureAsset(path)),
@@ -124,7 +121,7 @@ namespace UnityCli
                     ChangedPixels = (long)(width * height),
                     Region = new TextureRegion { X = x, Y = y, Width = width, Height = height },
                     PlannedEffects = new List<TexturePlannedEffect> { new TexturePlannedEffect { Type = "texture.modify", Path = path, Refresh = true } }
-                };
+                });
             }
             finally
             {

@@ -1,6 +1,8 @@
 import { defineTool } from "../define.js";
 import { buildJobSummary, readBuildJob, resolveBuildJobId } from "./shared.js";
+import type { BuildJobCancellation } from "./shared.js";
 import { StructuredToolError } from "../errors.js";
+import type { AnyJson } from "../../schema/any-json.js";
 
 export interface BuildCancelRequest {
   jobId: string;
@@ -14,7 +16,7 @@ export interface BuildCancelObject {
 export interface BuildCancelError {
   code: string;
   message: string;
-  details?: unknown;
+  details?: AnyJson;
 }
 
 export interface BuildCancelResult {
@@ -34,7 +36,7 @@ export interface BuildCancelResult {
   finishedAt?: string;
   result?: BuildCancelObject;
   error?: BuildCancelError;
-  cancellation: string;
+  cancellation: BuildJobCancellation;
   jobCommand: string[];
   logTail?: string[];
 }

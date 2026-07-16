@@ -38,13 +38,14 @@ namespace UnityCli.Contexts.Tests
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "on-demand"
+            RefreshBehavior = "on-demand",
+            Examples = new[] { new ContextExample { Description = "List available EditMode tests", Input = new Request { Mode = "EditMode", PageSize = 50 } }, new ContextExample { Description = "List available PlayMode tests", Input = new Request { Mode = "PlayMode", PageSize = 50 } } }
         };
 
         /// <summary>
         /// 检查 Unity Test Runner 相关类型是否可用；当前不做深度枚举，返回稳定诊断字段。
-        /// </summary>
-        public Result Read(Request request, UnityCliProjectToolContext ctx)
+    /// </summary>
+        public System.Threading.Tasks.ValueTask<Result> ReadAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var testRunnerType = FindType("UnityEditor.TestTools.TestRunner.TestRunnerWindow")
                 ?? FindType("UnityEditor.TestRunner.TestRunnerWindow");
@@ -52,7 +53,7 @@ namespace UnityCli.Contexts.Tests
 
             if (testRunnerType == null && editorTestType == null)
             {
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Available = false,
                     Tests = new TestInfo[0],
@@ -63,17 +64,17 @@ namespace UnityCli.Contexts.Tests
                         "Install the Unity Test Framework package via Package Manager.",
                         "Enable the Test Runner window: Window > General > Test Runner."
                     }
-                };
+                });
             }
 
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Available = true,
                 Tests = new TestInfo[0],
                 Count = 0,
                 Diagnostics = "Test enumeration via reflection is not reliably available. Use the Unity Test Runner window for full test discovery, or run tests via the CLI test runner tool.",
                 NextActions = null
-            };
+            });
         }
 
         // 在当前 AppDomain 中查找 Unity/NUnit 类型；找不到时返回 null 并输出可恢复诊断。

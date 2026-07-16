@@ -1,14 +1,29 @@
-# VFX Graph Tools
+# VFX Tools
 
-Tools for creating and managing Visual Effect Graph assets and instances.
+The extension contributes independent tools for Visual Effect Graph components and Unity ParticleSystem/LineRenderer/TrailRenderer workflows.
 
-## Tools
+## Visual Effect Graph
 
 | Tool | Description |
-|------|-------------|
-| `vfx.graph` | Get info on a Visual Effect graph asset, optionally create one |
-| `vfx.effect` | Manage a Visual Effect instance on a GameObject |
+| --- | --- |
+| `vfx.graph.info` | Read one existing Visual Effect Graph asset. |
+| `vfx.graph.create` | Create or overwrite one Visual Effect Graph asset. |
+| `vfx.effect.info` | Read the VisualEffect component and assigned graph. |
+| `vfx.effect.add` | Ensure a target has a VisualEffect component. |
+| `vfx.effect.assign` | Assign an existing graph to a VisualEffect component. |
+| `vfx.parameter` | Set one exposed VisualEffect parameter. |
+| `vfx.control.play` | Play a VisualEffect. |
+| `vfx.control.stop` | Stop a VisualEffect. |
+| `vfx.control.pause` | Toggle VisualEffect pause state. |
+| `vfx.control.reinitialize` | Reinitialize a VisualEffect. |
+| `vfx.control.set-rate` | Set VisualEffect playback rate. |
+| `vfx.control.set-seed` | Set VisualEffect random seed. |
+| `vfx.event` | Send one event to a VisualEffect. |
+| `vfx.template.list` | List installed graph templates. |
+| `vfx.template.create` | Create a graph from a supported template. |
 
-## Requirements
+These tools require `com.unity.visualeffectgraph`.
 
-- `com.unity.visualeffectgraph` package must be installed in the target Unity project
+## Particle And Renderer Tools
+
+The extension also contributes `vfx.particle-create`, `vfx.particle-info`, `vfx.particle-main`, `vfx.particle-emission`, `vfx.particle-shape`, `vfx.particle.play`, `vfx.particle.stop`, `vfx.particle.pause`, `vfx.particle.clear`, `vfx.particle-module`, `vfx.line-create`, `vfx.line-positions`, `vfx.trail.create`, and `vfx.trail.set`.

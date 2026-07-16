@@ -39,13 +39,14 @@ namespace UnityCli.Contexts.Scene
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "live"
+            RefreshBehavior = "live",
+            Examples = new[] { new ContextExample { Description = "List open scenes", Input = new Request { } } }
         };
 
         /// <summary>
         /// 读取 SceneManager 当前已加载场景；只观察状态，不加载、卸载、保存或切换 active scene。
-        /// </summary>
-        public Result Read(Request request, UnityCliProjectToolContext ctx)
+    /// </summary>
+        public System.Threading.Tasks.ValueTask<Result> ReadAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var scenes = new List<OpenedScene>();
             for (var i = 0; i < SceneManager.sceneCount; i++)
@@ -61,13 +62,13 @@ namespace UnityCli.Contexts.Scene
                 });
             }
 
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Scenes = scenes,
                 Count = SceneManager.sceneCount,
                 ActiveScene = SceneManager.GetActiveScene().name,
                 LogPath = ctx.LogPath
-            };
+            });
         }
     }
 }

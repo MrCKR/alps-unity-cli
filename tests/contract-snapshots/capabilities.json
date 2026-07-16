@@ -1,9 +1,0 @@
-{
-  "command": "capabilities (bridge handshake)",
-  "structure": "<array of domain objects>",
-  "domain": {
-    "domain": "<string>",
-    "route": "<string: POST /bridge/execute>",
-    "commands": "<array of command name strings>"
-  }
-}

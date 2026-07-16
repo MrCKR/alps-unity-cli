@@ -12,7 +12,6 @@ namespace UnityCli
     /// texture 域 IUnityCliTool 共享的基础设施 helper:纹理路径校验、纹理资产/importer 加载、
     /// 导入设置应用、颜色解析、sprite 切片构造。仅供 texture 域自包含工具复用;
     /// 不实现 IUnityCliTool,不参与工具发现。
-    /// 设计依据:.plan/工具统一形态.md(自包含工具共享只读 helper,handler 逻辑各自内聚)。
     /// </summary>
     public static class TextureToolSupport
     {

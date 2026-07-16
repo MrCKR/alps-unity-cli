@@ -36,7 +36,7 @@ namespace UnityCli
             Description = "Update the emission module of an existing ParticleSystem. Supports enabled, rateOverTime, rateOverDistance, burstCount, and an optional bursts array with time/count/cycles/repeatInterval entries.",
             Group = "vfx",
             Version = "1.0.0",
-            DestructiveHint = true,
+            DestructiveHint = false,
             SideEffects = new[] { "particle-emission-edit" },
             Target = "editor",
             PlayModeSupport = "supported",
@@ -49,7 +49,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             VfxToolSupport.EnsureEditorReady("vfx.particle-emission");
             var particleSystem = VfxToolSupport.ResolveParticleSystem(request.Target);
@@ -94,9 +94,9 @@ namespace UnityCli
                 effects.Add(VfxToolSupport.Effect("vfx.particle-emission", "burstCount", burstCount.ToString(System.Globalization.CultureInfo.InvariantCulture)));
             }
 
-            EditorUtility.SetDirty(particleSystem);
+            UnityCliSceneMutation.MarkSceneObjectDirty(particleSystem);
             VfxToolSupport.MarkSceneDirty(particleSystem.gameObject);
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Target = GameObjectToolSupport.BuildGameObjectRef(particleSystem.gameObject),
                 Emission = new VfxParticleEmissionInfo
@@ -108,7 +108,7 @@ namespace UnityCli
                 },
                 PlannedEffects = effects,
                 LogPath = ctx.LogPath
-            };
+            });
         }
     }
 }

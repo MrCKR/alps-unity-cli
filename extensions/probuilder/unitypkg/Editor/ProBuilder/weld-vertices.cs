@@ -28,9 +28,10 @@ namespace UnityCli.ProBuilder
         {
             Name = "probuilder.weld-vertices",
             Summary = "Weld vertices of a ProBuilder mesh within a given radius.",
-            Description = "Weld vertices within a radius on a ProBuilder mesh. When vertexIndices is omitted, an empty selection is used. Radius defaults to 0.01.",
+            Description = "Weld at least two selected vertices within a radius with the ProBuilder 5.x VertexEditing.WeldVertices API. Radius defaults to 0.01.",
             Group = "probuilder",
             DestructiveHint = false,
+            SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 10000,
@@ -43,26 +44,35 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            var go = ProBuilderInput.ResolveTarget(request.Target);
             if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("weld-vertices", "No ProBuilderMesh on target.");
 
-            int[] vertexIndices = request.VertexIndices?.Select(i => (int)i).ToArray();
+            int[] vertexIndices = request.VertexIndices?.Select(i => (int)i).Distinct().ToArray();
+            var vertexCount = ProBuilderReflection.GetVertexCount(mesh);
+            if (vertexIndices == null || vertexIndices.Length < 2)
+                throw ProBuilderErrors.SchemaInvalid("At least 2 unique vertexIndices are required for weld-vertices.");
+            if (vertexCount < 0 || vertexIndices.Any(index => index < 0 || index >= vertexCount))
+                throw ProBuilderErrors.SchemaInvalid("vertexIndices contains an invalid vertex index.");
             var radius = (float)(request.Radius ?? 0.01);
+            if (radius <= 0)
+                throw ProBuilderErrors.SchemaInvalid("radius must be greater than 0.");
 
             Undo.RecordObject(go, "ProBuilder Weld Vertices");
-            var welded = ProBuilderReflection.WeldVerticesWithRadius(mesh, vertexIndices ?? new int[0], radius);
+            var welded = ProBuilderReflection.WeldVerticesWithRadius(mesh, vertexIndices, radius);
+            if (welded < 0)
+                throw ProBuilderErrors.OperationFailed("weld-vertices", "ProBuilder 5.x VertexEditing.WeldVertices failed.");
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
-            return new Result { WeldedCount = welded };
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { WeldedCount = welded });
         }
     }
 }

@@ -9,8 +9,6 @@ namespace UnityCli
 {
     /// <summary>
     /// prefab.hierarchy — 读取 Prefab 子级/组件摘要,支持 parent/query/componentType 过滤与分页。
-    /// 对齐旧 PrefabHierarchy handler;只读。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class PrefabHierarchyTool : IUnityCliTool<PrefabHierarchyTool.Request, PrefabHierarchyTool.Result>
     {
@@ -57,7 +55,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var path = PrefabToolSupport.RequirePrefabPath(request.Path);
             PrefabToolSupport.LoadPrefabAsset(path);
@@ -98,8 +96,8 @@ namespace UnityCli
                 {
                     page.Add(PrefabToolSupport.BuildHierarchyItem(matches[i]));
                 }
-                var nextCursor = cursor + page.Count < matches.Count ? (cursor + page.Count).ToString(CultureInfo.InvariantCulture) : null;
-                return new Result
+                long? nextCursor = cursor + page.Count < matches.Count ? (long?)(cursor + page.Count) : null;
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Prefab = PrefabToolSupport.BuildPrefabInfo(path, root, root, includeSummaryDetails),
                     Parent = parent,
@@ -115,7 +113,7 @@ namespace UnityCli
                         Total = matches.Count,
                         Truncated = nextCursor != null
                     }
-                };
+                });
             }
             finally
             {

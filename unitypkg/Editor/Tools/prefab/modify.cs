@@ -7,8 +7,6 @@ namespace UnityCli
 {
     /// <summary>
     /// prefab.modify — 修改 Prefab 内容(name/addChild/removeChild),通过 LoadPrefabContents 编辑后保存。
-    /// 对齐旧 PrefabModify handler;session-affecting(asset-write)。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class PrefabModifyTool : IUnityCliTool<PrefabModifyTool.Request, PrefabModifyTool.Result>
     {
@@ -34,10 +32,10 @@ namespace UnityCli
             Description = "Modify a prefab's contents. Supports renaming the root, adding a child (overwrite=true to replace an existing child of the same name), and removing a child by name. At least one mutation is required. Changes are saved through PrefabUtility.SaveAsPrefabAsset.",
             Group = "prefab",
             Version = "1.0.0",
-            DestructiveHint = false,
+            DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",
-            PlayModeSupport = "session-affecting",
+            PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 30000,
             MaxTimeoutMs = 600000,
             Examples = new[]
@@ -46,7 +44,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             PrefabToolSupport.EnsureEditorNotBusy("prefab.modify");
             var path = PrefabToolSupport.RequirePrefabPath(request.Path);
@@ -99,11 +97,11 @@ namespace UnityCli
                 PrefabUtility.SaveAsPrefabAsset(root, path);
                 AssetDatabase.SaveAssets();
                 AssetDatabase.Refresh();
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Prefab = PrefabToolSupport.BuildPrefabInfo(path, root, root, true),
                     PlannedEffects = effects
-                };
+                });
             }
             finally
             {

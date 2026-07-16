@@ -3,8 +3,9 @@ import { join } from "node:path";
 import { bridgeCommandRegistry } from "../bridge/index.js";
 import { builtinToolMetadata, allRegisteredToolMetadata } from "../tools/metadata/index.js";
 import { commandContracts, validateBridgeRegistryContracts, validateToolMetadataContracts, validateExtensionManifestContracts } from "./command-contract.js";
-import { BUILTIN_EXTENSION_MANIFESTS } from "../extensions/registry-data.js";
+import { BUILTIN_EXTENSION_MANIFESTS } from "../extensions/.generated-registry-data.js";
 import { registerBuiltinExtensionContributions } from "../extensions/contribution-loader.js";
+import { extractCSharpRegisteredCommandsFromSource } from "./csharp-command-extractor.js";
 
 // Register extension contributions before validation.
 registerBuiltinExtensionContributions();
@@ -51,17 +52,10 @@ function extractAllCSharpRegisteredCommands(): string[] {
 function extractCSharpRegisteredCommands(root: string): string[] {
   const commands = new Set<string>();
   for (const file of listFiles(root, ".cs")) {
-    // Skip sample/demo tools — they are not part of the core contract
-    if (file.includes("/Samples/") || file.includes("\\Samples\\")) continue;
     const source = readFileSync(file, "utf8");
-    // Scan for RegisterCommand entries.
-    for (const match of source.matchAll(/RegisterCommand\(registry, "([^"]+)"/g)) {
-      commands.add(match[1]);
-    }
-    // Scan for IUnityCliTool<TReq,TRes> / IUnityCliDeferredTool<TReq,TRes> implementers (new form, Stage 2+).
-    // These are discovered by ProjectToolRegistry at runtime via interface scan.
-    // Tool name lives in Describe()'s Name = "group.name" (dotted lowercase string literal).
-    if (source.includes(": IUnityCliTool<") || source.includes(": IUnityCliDeferredTool<")) {
+    for (const command of extractCSharpRegisteredCommandsFromSource(source)) commands.add(command);
+    // ProjectToolRegistry 通过接口扫描发现项目工具。
+    if (source.includes(": IUnityCliTool<")) {
       for (const match of source.matchAll(/Name\s*=\s*"([a-z][a-z0-9-]*(?:\.[a-z0-9-]+)+)"/g)) {
         commands.add(match[1]);
       }

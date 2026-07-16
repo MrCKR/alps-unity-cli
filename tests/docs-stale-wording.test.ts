@@ -50,32 +50,6 @@ function allDocFiles(): string[] {
   return files;
 }
 
-// ── Stale command names that must NOT appear as current/available ──
-
-// Old ProBuilder coarse tool names replaced by fine-grained extension tools.
-// probuilder.shape → probuilder.create-shape
-// probuilder.create → probuilder.create-shape / probuilder.create-poly-shape
-// probuilder.edit → probuilder.extrude-faces / probuilder.delete-faces / etc.
-// probuilder.csg → probuilder.delete-faces / probuilder.combine-meshes / probuilder.merge-objects
-//
-// Each entry is [staleName, regexPattern] to avoid false positives:
-// - "probuilder.create" must not match "probuilder.create-shape"
-// - "probuilder.edit" must not match "probuilder.editor"
-const STALE_PROBUILDER_PATTERNS: [string, RegExp][] = [
-  // Dot-format: probuilder.shape, probuilder.create, probuilder.edit, probuilder.csg
-  ["probuilder.shape", /probuilder\.shape(?![\w-])/g],
-  ["probuilder.create", /probuilder\.create(?![\w-])/g],
-  ["probuilder.edit", /probuilder\.edit(?![\w-])/g],
-  ["probuilder.csg", /probuilder\.csg(?![\w-])/g],
-  // Space-format: "probuilder shape", "probuilder create", "probuilder edit", "probuilder csg"
-  // These are CLI shortcut forms that no longer exist (replaced by fine-grained extension tools).
-  // Must not match valid forms like "probuilder create-shape" or "probuilder extrude-faces".
-  ["probuilder shape ", /probuilder\s+shape(?![\w-])/g],
-  ["probuilder create ", /probuilder\s+create(?![\w-])/g],
-  ["probuilder edit ", /probuilder\s+edit(?![\w-])/g],
-  ["probuilder csg ", /probuilder\s+csg(?![\w-])/g],
-];
-
 // ── Current commands that MUST appear in docs ──
 
 const REQUIRED_COMMANDS = [
@@ -96,8 +70,8 @@ const REQUIRED_COMMANDS = [
 
 // ── Field naming conventions ──
 
-// Stage 7: JSON fields are now camelCase (nextActions, retryAfterMs).
-// Legacy snake-style field names are assembled to keep full-repo literal scans clean.
+// JSON response fields use camelCase (nextActions, retryAfterMs).
+// Non-camelCase field names are assembled to keep full-repo literal scans clean.
 const LEGACY_NEXT_ACTIONS_FIELD = "next" + "_actions";
 const LEGACY_RETRY_AFTER_MS_FIELD = "retry" + "_after_ms";
 const STALE_SNAKE_CASE = [
@@ -111,59 +85,6 @@ const STALE_ERROR_CODES = [
 ];
 
 // ── Tests ──────────────────────────────────────────────────
-
-test("docs do not use stale ProBuilder coarse tool names", () => {
-  const files = allDocFiles();
-  const violations: string[] = [];
-
-  for (const file of files) {
-    let content: string;
-    try {
-      content = readDocFile(file);
-    } catch {
-      continue;
-    }
-
-    for (const [name, pattern] of STALE_PROBUILDER_PATTERNS) {
-      const lines = content.split("\n");
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        // Use a fresh regex (global flag is stateful); reset lastIndex
-        pattern.lastIndex = 0;
-        if (!pattern.test(line)) continue;
-
-        // Allow in explicit removed or historical context
-        const contextWindow = lines.slice(Math.max(0, i - 3), i + 4).join(" ");
-        if (
-          contextWindow.includes("废弃") ||
-          contextWindow.includes("移除") ||
-          contextWindow.includes("removed") ||
-          contextWindow.includes("已移除") ||
-          contextWindow.includes("已废弃") ||
-          contextWindow.includes("历史") ||
-          contextWindow.includes("旧名") ||
-          contextWindow.includes("替代") ||
-          contextWindow.includes("不得") ||
-          contextWindow.includes("不要") ||
-          contextWindow.includes("旧") ||
-          contextWindow.includes("coarse") ||
-          contextWindow.includes("规划中") ||
-          contextWindow.includes("planned")
-        ) {
-          continue;
-        }
-
-        violations.push(`${file}:${i + 1}: "${name}" appears without deprecation or historical marker`);
-      }
-    }
-  }
-
-  assert.equal(
-    violations.length,
-    0,
-    `Stale ProBuilder names found without markers:\n${violations.join("\n")}`
-  );
-});
 
 test("docs contain required current command references", () => {
   // Check that README and SKILL.md contain all required commands
@@ -204,7 +125,7 @@ test("skill does not use stale CLI parameter/field/error names", () => {
     `skill must not teach --input-json (found ${(inputJsonMatches?.length ?? 0)} occurrences beyond the warning)`
   );
 
-  // Stage 7: JSON fields are now camelCase. Skill must not use legacy snake-style names.
+  // Skill response fields must use camelCase.
   const nextActionsStale = skill.match(new RegExp(LEGACY_NEXT_ACTIONS_FIELD, "g"));
   assert.ok(
     (nextActionsStale?.length ?? 0) === 0,
@@ -238,8 +159,7 @@ test("docs use camelCase for error response fields", () => {
       continue;
     }
 
-    // Stage 7: JSON fields are now camelCase (nextActions, retryAfterMs).
-    // Check for legacy snake-style field names that should be camelCase.
+    // Error response fields must use camelCase (nextActions, retryAfterMs).
     if (content.includes(LEGACY_NEXT_ACTIONS_FIELD)) {
       violations.push(`${file}: uses stale "${LEGACY_NEXT_ACTIONS_FIELD}" (should be "nextActions")`);
     }

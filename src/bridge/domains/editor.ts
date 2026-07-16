@@ -9,16 +9,18 @@ export const editorBridgeSpecs: BridgeCommandSpec[] = [
   { group: "editor", command: "stop", bridgeCommand: "project-tool.run", toolName: "editor.stop", buildArgs: editorArgs },
   { group: "editor", command: "undo", bridgeCommand: "project-tool.run", toolName: "editor.undo", buildArgs: editorArgs },
   { group: "editor", command: "redo", bridgeCommand: "project-tool.run", toolName: "editor.redo", buildArgs: editorArgs },
-  { group: "editor", command: "resolution", bridgeCommand: "project-tool.run", toolName: "editor.resolution", buildArgs: editorArgs },
-  { group: "editor", command: "menu", bridgeCommand: "project-tool.run", toolName: "editor.menu", buildArgs: editorArgs },
+  { group: "editor", command: "resolution", bridgeCommand: "project-tool.run", toolName: "editor.resolution", buildArgs: editorArgs, destructiveHint: true },
+  { group: "editor", command: "menu", bridgeCommand: "project-tool.run", toolName: "editor.menu", buildArgs: editorArgs, destructiveHint: true },
   { group: "editor", command: "compile", bridgeCommand: "project-tool.run", toolName: "editor.compile", buildArgs: editorCompileArgs, supportsDryRun: true },
-  { group: "editor", command: "selection-set", bridgeCommand: "project-tool.run", toolName: "editor.selection.set", buildArgs: selectionSetArgs },
+  { group: "editor", command: "selection-set", bridgeCommand: "project-tool.run", toolName: "editor.selection.set", buildArgs: selectionSetArgs, supportsDryRun: true },
   { group: "editor", command: "active-tool-set", bridgeCommand: "project-tool.run", toolName: "editor.active-tool.set", buildArgs: activeToolSetArgs },
-  { group: "project", command: "tag", bridgeCommand: "project-tool.run", toolName: "project.tag", buildArgs: editorArgs },
-  { group: "project", command: "layer", bridgeCommand: "project-tool.run", toolName: "project.layer", buildArgs: editorArgs }
+  { group: "project", command: "tag-add", bridgeCommand: "project-tool.run", toolName: "project.tag.add", buildArgs: projectTagArgs, destructiveHint: true },
+  { group: "project", command: "tag-remove", bridgeCommand: "project-tool.run", toolName: "project.tag.remove", buildArgs: projectTagArgs, destructiveHint: true },
+  { group: "project", command: "layer-add", bridgeCommand: "project-tool.run", toolName: "project.layer.add", buildArgs: projectLayerArgs, destructiveHint: true },
+  { group: "project", command: "layer-remove", bridgeCommand: "project-tool.run", toolName: "project.layer.remove", buildArgs: projectLayerArgs, destructiveHint: true }
 ];
 
-// 读取 tools run --input 中无法映射为简单 flag 的结构化字段（project.tag/layer 的 action/name/index）
+// 读取 project Tag 和 Layer Tool 的结构化输入字段。
 function structuredInput(flags: BridgeFlags): Record<string, unknown> {
   const raw = typeof flags.__structuredInput === "string" ? flags.__structuredInput : undefined;
   if (!raw) return {};
@@ -53,10 +55,15 @@ function editorArgs({ command, flags, positionalTarget }: Parameters<BridgeComma
   if (command === "editor.resolution") {
     return compactArgs({ width: numberFlag(flags, "width"), height: numberFlag(flags, "height"), fullscreen: boolFlag(flags, "fullscreen"), timeoutMs: numberFlag(flags, "timeout-ms") ?? numberFlag(flags, "timeout") });
   }
-  if (command === "project.tag" || command === "project.layer") {
-    return compactArgs({ action: stringFlag(flags, "action") ?? stringField(flags, "action"), name: positionalTarget ?? stringFlag(flags, "name") ?? stringField(flags, "name"), index: numberFlag(flags, "index") ?? numberField(flags, "index") });
-  }
   return compactArgs({ ...queryArgs(flags), path: positionalTarget ?? stringFlag(flags, "path"), timeoutMs: numberFlag(flags, "timeout-ms") ?? numberFlag(flags, "timeout") });
+}
+
+function projectTagArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({ name: positionalTarget ?? stringFlag(flags, "name") ?? stringField(flags, "name") });
+}
+
+function projectLayerArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({ name: positionalTarget ?? stringFlag(flags, "name") ?? stringField(flags, "name"), index: numberFlag(flags, "index") ?? numberField(flags, "index") });
 }
 
 function editorCompileArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {

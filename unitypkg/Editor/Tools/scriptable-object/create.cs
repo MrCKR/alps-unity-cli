@@ -6,8 +6,6 @@ namespace UnityCli
 {
     /// <summary>
     /// scriptable-object.create — 在 Assets/*.asset 创建新 ScriptableObject 资产。
-    /// 内置工具(原 RegisterCommand 形态)迁移为 IUnityCliTool 自包含。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class ScriptableObjectCreateTool : IUnityCliTool<ScriptableObjectCreateTool.Request, ScriptableObjectCreateTool.Result>
     {
@@ -18,7 +16,6 @@ namespace UnityCli
             [UnityCliRequired]
             public string Type { get; set; }
             public bool Overwrite { get; set; }
-            public bool DryRun { get; set; }
         }
 
         public sealed class Result
@@ -37,10 +34,10 @@ namespace UnityCli
             Description = "Create a new ScriptableObject asset at an Assets/*.asset path. Resolves the type by full name or class name. Refuses to overwrite an existing asset unless overwrite=true. Supports dry-run.",
             Group = "scriptable-object",
             Version = "1.0.0",
-            DestructiveHint = false,
+            DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",
-            PlayModeSupport = "session-affecting",
+            PlayModeSupport = "editor-only",
             SupportsDryRun = true,
             DefaultTimeoutMs = 30000,
             MaxTimeoutMs = 600000,
@@ -50,7 +47,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             ScriptableObjectToolSupport.EnsureEditorNotBusy("scriptable-object.create");
             var path = ScriptableObjectToolSupport.RequireScriptableObjectPath(request.Path);
@@ -59,9 +56,9 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_SCRIPTABLE_OBJECT_EXISTS", "ScriptableObject asset already exists: " + path, "Pass overwrite=true or choose a different Assets/*.asset path.");
             }
-            if (request.DryRun)
+            if (ctx.DryRun)
             {
-                return new Result { DryRun = true, Path = path, Type = type.FullName, Overwrite = request.Overwrite };
+                return new System.Threading.Tasks.ValueTask<Result>(new Result { DryRun = true, Path = path, Type = type.FullName, Overwrite = request.Overwrite });
             }
             ScriptableObjectToolSupport.CreateAssetDirectory(path);
             if (request.Overwrite && !string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(path)))
@@ -71,12 +68,12 @@ namespace UnityCli
             var asset = ScriptableObject.CreateInstance(type);
             AssetDatabase.CreateAsset(asset, path);
             AssetDatabase.SaveAssets();
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Path = path,
                 Type = type.FullName,
                 ScriptableObject = ScriptableObjectToolSupport.BuildScriptableObjectInfo(path, asset)
-            };
+            });
         }
     }
 }

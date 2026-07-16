@@ -2,7 +2,7 @@ import type { BridgeRuntime } from "../bridge/index.js";
 import type { DoctorRuntime } from "../doctor.js";
 import type { JobRunner } from "../job-runner.js";
 import type { JobStore } from "../job-store.js";
-import type { ToolsRuntime } from "../tools.js";
+import type { ToolsRuntime } from "../tools/dispatcher.js";
 import type { CliResult } from "../types.js";
 
 export interface Runtime extends BridgeRuntime, ToolsRuntime, DoctorRuntime {

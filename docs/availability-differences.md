@@ -75,7 +75,7 @@ Unity domain reload 期间（如脚本编译后），Bridge 标记目标为过�
 
 ## AI Agent 处理方式
 
-1. **先解析目标。** 执行任何工具前先 `instances list` + `target set`
+1. **先解析目标。** 执行任何工具前先 `instances list`，然后在 discovery、describe 和执行命令上显式传 `--instance`；只有明确需要持久化全局默认值时才使用 `target set`
 2. **执行前先 describe。** descriptor 显示 `supportStatus`、`target`、`availabilityScope`、`playModeSupport`
 3. **优雅处理错误。** Package-not-found、Bridge-unreachable 和 `E_RUNTIME_NOT_READY` 包含 `nextActions`
 4. **状态变化后重新发现。** 安装包或 domain reload 后，重新 `tools group list custom --include-custom`

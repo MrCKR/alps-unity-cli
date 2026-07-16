@@ -8,8 +8,6 @@ namespace UnityCli
 {
     /// <summary>
     /// camera.multiview — 为每个命名 Camera 捕获一张 PNG/JPG 截图到输出目录,用于多视角审阅。
-    /// 对齐旧 CameraMultiview handler;session-affecting。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class CameraMultiviewTool : IUnityCliTool<CameraMultiviewTool.Request, CameraMultiviewTool.Result>
     {
@@ -36,7 +34,7 @@ namespace UnityCli
             Description = "Capture one PNG/JPG artifact per named Camera into an output directory for side-by-side scene review. Returns artifact paths instead of inline image bytes; keep target count and resolution small for token and disk efficiency.",
             Group = "camera",
             Version = "1.0.0",
-            DestructiveHint = false,
+            DestructiveHint = true,
             SideEffects = new[] { "artifact-write", "render-texture" },
             Target = "editor",
             PlayModeSupport = "session-affecting",
@@ -48,7 +46,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (string.IsNullOrEmpty(request.Targets))
             {
@@ -79,7 +77,7 @@ namespace UnityCli
                 captures.Add(capture);
                 effects.Add(new CameraPlannedEffect { Type = "camera.multiview", Property = "capture", Path = outputPath });
             }
-            return new Result { Captures = captures, Count = captures.Count, PlannedEffects = effects };
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Captures = captures, Count = captures.Count, PlannedEffects = effects });
         }
     }
 }

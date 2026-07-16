@@ -8,8 +8,6 @@ namespace UnityCli
 {
     /// <summary>
     /// extension.status — 返回可选 Unity 包的安装可用性(Library/PackageCache 探测)。
-    /// 内置工具(原 RegisterCommand 形态)迁移为 IUnityCliTool 自包含。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class ExtensionStatusTool : IUnityCliTool<ExtensionStatusTool.Request, ExtensionStatusTool.Result>
     {
@@ -50,7 +48,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             // 已知可选包列表,用于检测扩展依赖的 Unity 包是否已安装
             var optionalPackages = new[]
@@ -78,12 +76,12 @@ namespace UnityCli
                 packages.Add(new PackageAvailability { Name = pkg, Available = available });
             }
 
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Ok = true,
                 Installed = new List<string>(),
                 Packages = packages
-            };
+            });
         }
     }
 }

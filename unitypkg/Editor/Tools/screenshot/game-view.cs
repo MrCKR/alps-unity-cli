@@ -8,8 +8,6 @@ namespace UnityCli
 {
     /// <summary>
     /// screenshot.game-view — 模拟 Game View 渲染所有相机到文件。
-    /// 内置工具(原 RegisterCommand 形态)迁移为 IUnityCliTool 自包含。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class ScreenshotGameViewTool : IUnityCliTool<ScreenshotGameViewTool.Request, ScreenshotGameViewTool.Result>
     {
@@ -31,7 +29,7 @@ namespace UnityCli
             Description = "Capture a Game View screenshot by rendering all active cameras to a temporary RenderTexture and saving to a PNG/JPG file. Defaults to 1280x720.",
             Group = "screenshot",
             Version = "1.0.0",
-            DestructiveHint = false,
+            DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",
             PlayModeSupport = "supported",
@@ -40,7 +38,7 @@ namespace UnityCli
             Examples = new[] { new ToolExample { Description = "Capture game view", Input = new Request { Path = "Assets/Shots/game.png" } } }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var outputPath = ScreenshotToolSupport.ResolveScreenshotOutputPath(request.Path);
             if (File.Exists(outputPath) && !request.Overwrite)
@@ -85,7 +83,7 @@ namespace UnityCli
                 Width = width, Height = height, Quality = 95, Source = "game-view", Target = "Camera.main/allCameras"
             };
             ScreenshotToolSupport.MaybeAppendInline(result, bytes, width, height, format == "jpg" ? "image/jpeg" : "image/png", request.InlineBase64);
-            return result;
+            return new System.Threading.Tasks.ValueTask<Result>(result);
         }
     }
 }

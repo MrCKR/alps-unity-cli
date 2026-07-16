@@ -72,23 +72,20 @@ export class JobRunner {
   }
 
   async cancel(id: string): Promise<JobRecord> {
-    const job = await this.store.get(id);
-    if (!job) {
-      throw new Error(`Job not found: ${id}`);
+    const claimed = await this.store.transition(id, ["queued", "running"], { status: "cancelling" });
+    if (!claimed.changed && terminalStatuses.includes(claimed.job.status)) {
+      throw new Error(`Job is already terminal: ${claimed.job.status}`);
     }
-    if (terminalStatuses.includes(job.status)) {
-      throw new Error(`Job is already terminal: ${job.status}`);
-    }
-    let processKilled = false;
-    if (job.pid) {
-      try {
-        process.kill(job.pid);
-        processKilled = true;
-      } catch {
-        // Process may already be gone; the persisted state is still updated below.
-      }
-    }
-    return this.store.markTerminal(id, "cancelled", { error: { code: "JOB_CANCELLED", message: "Job was cancelled.", details: timeoutDetails(true, true, processKilled, false) } });
+
+    // 先原子声明取消所有权，再等待进程树退出；worker 的 close/timeout 只能结束 queued/running，不能抢先发布 failed。
+    const processKilled = claimed.job.pid ? await killProcessTree(claimed.job.pid) : false;
+    const completed = await this.store.transition(id, ["cancelling"], {
+      status: "cancelled",
+      finishedAt: new Date().toISOString(),
+      pid: undefined,
+      error: { code: "JOB_CANCELLED", message: "Job was cancelled.", details: timeoutDetails(true, true, processKilled, false) }
+    });
+    return completed.job;
   }
 
   async logs(id: string, tail = 100): Promise<{ logPath: string; lines: string[] }> {
@@ -125,26 +122,22 @@ export class JobRunner {
     const cliPath = fileURLToPath(new URL("cli.js", import.meta.url));
     const child = spawn(process.execPath, [cliPath, "__run-job", "--id", id, "--data-dir", this.dataDir], {
       detached: true,
-      stdio: ["ignore", "ignore", "pipe"],
+      stdio: "ignore",
       windowsHide: true
     });
 
-    // Pipe worker stderr to the job log so worker crashes are visible.
-    const job = this.store.get(id).catch(() => undefined);
-    void job.then((record) => {
-      if (!record?.logPath) return;
-      try {
-        const logStream = createWriteStream(record.logPath, { flags: "a" });
-        child.stderr.pipe(logStream);
-      } catch {
-        // Best-effort — worker crash visibility is non-critical.
-      }
-    });
-
+    // worker 自行持久化 job 状态和 Unity 日志；父 CLI 不持有任何子进程 stream。
     child.unref();
   }
 
   private async spawnJob(job: JobRecord): Promise<JobRecord> {
+    // 先原子 claim queued，避免 cancel 已发布 terminal 后 worker 又把状态写回 running。
+    const claimed = await this.store.transition(job.id, ["queued"], {
+      status: "running",
+      startedAt: new Date().toISOString()
+    });
+    if (!claimed.changed) return claimed.job;
+
     const child = spawn(job.unityPath, job.command.slice(1), { windowsHide: true, stdio: ["ignore", "pipe", "pipe"], shell: isWindowsCommandScript(job.unityPath) });
 
     // Unity -logFile - writes all output to stdout. Pipe stdout to the log file AND
@@ -166,11 +159,12 @@ export class JobRunner {
       logStream.end();
     };
 
-    await this.store.update(job.id, {
-      status: "running",
-      startedAt: new Date().toISOString(),
-      pid: child.pid
-    });
+    const attached = await this.store.transition(job.id, ["running"], { pid: child.pid });
+    if (!attached.changed) {
+      await killProcessTree(child.pid);
+      closeLogStream();
+      return attached.job;
+    }
 
     // Always apply an internal timeout — orphan processes are unacceptable.
     const effectiveTimeout = job.timeoutMs && job.timeoutMs > 0 ? job.timeoutMs : DEFAULT_JOB_TIMEOUT_MS;

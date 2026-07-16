@@ -9,7 +9,6 @@ namespace UnityCli
     /// <summary>
     /// build 域 IUnityCliTool 共享的基础设施 helper:Build Profile 反射、路径规范化、忙状态拦截。
     /// 仅供 build 域自包含工具复用;不实现 IUnityCliTool,不参与工具发现。
-    /// 设计依据:.plan/工具统一形态.md(自包含工具共享只读 helper)。
     /// </summary>
     public static class BuildToolSupport
     {
@@ -24,7 +23,7 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_UNITY_IMPORTING", "Unity Editor is importing assets.", "Wait for Unity to finish importing and retry.", transient: true, retryAfterMs: 5000);
             }
-            if (EditorApplication.isPlayingOrWillChangePlaymode && !EditorApplication.isPlaying)
+            if (UnityCliBridge.IsPlayModeChanging())
             {
                 throw new UnityCliBridge.BridgeCommandException("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode.", "Wait for Play mode transition to complete and retry.", transient: true, retryAfterMs: 3000);
             }
@@ -40,7 +39,7 @@ namespace UnityCli
             return string.IsNullOrEmpty(rawPath) ? null : rawPath.Replace('\\', '/').Trim();
         }
 
-        /// <summary>在已加载程序集中查找 Unity 类型,兼容不同 Editor 版本的命名空间变化。</summary>
+        /// <summary>在已加载程序集中按完整名称查找 Unity 类型。</summary>
         public static System.Type FindUnityType(string fullName)
         {
             foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())
@@ -52,7 +51,39 @@ namespace UnityCli
             return null;
         }
 
-        /// <summary>通过反射读取当前激活 Build Profile;旧 Unity 没有该属性时返回 null。</summary>
+        /// <summary>解析当前 Unity 版本可用的 Build Profile 类型。</summary>
+        public static System.Type BuildProfileType()
+        {
+            return FindUnityType("UnityEditor.Build.Profile.BuildProfile") ?? FindUnityType("UnityEditor.BuildProfile");
+        }
+
+        /// <summary>要求当前 Editor 提供 Build Profile API。</summary>
+        public static System.Type RequireBuildProfileType(string toolName)
+        {
+            var profileType = BuildProfileType();
+            if (profileType == null)
+            {
+                throw new UnityCliBridge.BridgeCommandException("E_BUILD_PROFILE_API_UNAVAILABLE", "Unity Build Profile API is not available in this Editor version.", "Use build.settings.get, build.scene.list, or build.platform.get, or upgrade Unity.");
+            }
+            return profileType;
+        }
+
+        /// <summary>验证并加载指定路径的 Build Profile 资产。</summary>
+        public static UnityEngine.Object LoadProfile(System.Type profileType, string path, string toolName)
+        {
+            if (string.IsNullOrEmpty(path)) throw new UnityCliBridge.BridgeCommandException("E_BUILD_PROFILE_PATH_REQUIRED", toolName + " requires path.", "Pass an existing Build Profile asset path.");
+            var profile = AssetDatabase.LoadAssetAtPath(path, profileType);
+            if (profile == null) throw new UnityCliBridge.BridgeCommandException("E_BUILD_PROFILE_NOT_FOUND", "Build Profile was not found: " + path, "Run build.profile.list and pass an existing path.");
+            return profile;
+        }
+
+        /// <summary>验证新建 Build Profile 所需的资产路径。</summary>
+        public static void RequireProfilePath(string path, string toolName)
+        {
+            if (string.IsNullOrEmpty(path)) throw new UnityCliBridge.BridgeCommandException("E_BUILD_PROFILE_PATH_REQUIRED", toolName + " requires path.", "Pass an Assets/*.asset path for the new Build Profile.");
+        }
+
+        /// <summary>通过反射读取当前激活 Build Profile；属性不可用时返回 null。</summary>
         public static UnityEngine.Object ActiveBuildProfile(System.Type profileType)
         {
             var prop = typeof(EditorUserBuildSettings).GetProperty("activeBuildProfile", BindingFlags.Public | BindingFlags.Static);
@@ -65,7 +96,7 @@ namespace UnityCli
             var prop = typeof(EditorUserBuildSettings).GetProperty("activeBuildProfile", BindingFlags.Public | BindingFlags.Static);
             if (prop == null || !prop.CanWrite || !profileType.IsAssignableFrom(prop.PropertyType))
             {
-                throw new UnityCliBridge.BridgeCommandException("E_BUILD_PROFILE_SWITCH_UNSUPPORTED", "This Unity version does not expose EditorUserBuildSettings.activeBuildProfile.", "Use build.platform/build.settings or upgrade Unity.");
+                throw new UnityCliBridge.BridgeCommandException("E_BUILD_PROFILE_SWITCH_UNSUPPORTED", "This Unity version does not expose EditorUserBuildSettings.activeBuildProfile.", "Use build.platform.get or build.settings.get, or upgrade Unity.");
             }
             prop.SetValue(null, profile, null);
         }

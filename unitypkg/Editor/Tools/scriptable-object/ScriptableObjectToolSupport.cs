@@ -13,7 +13,6 @@ namespace UnityCli
     /// scriptable-object 域 IUnityCliTool 共享的基础设施 helper:路径校验、类型解析、
     /// 资产加载、属性序列化。仅供 scriptable-object 域自包含工具复用;
     /// 不实现 IUnityCliTool,不参与工具发现。
-    /// 设计依据:.plan/工具统一形态.md(自包含工具共享只读 helper)。
     /// </summary>
     public static class ScriptableObjectToolSupport
     {
@@ -28,7 +27,7 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_UNITY_IMPORTING", "Unity Editor is importing assets.", "Wait for Unity to finish importing and retry.", transient: true, retryAfterMs: 5000);
             }
-            if (EditorApplication.isPlayingOrWillChangePlaymode && !EditorApplication.isPlaying)
+            if (UnityCliBridge.IsPlayModeChanging())
             {
                 throw new UnityCliBridge.BridgeCommandException("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode.", "Wait for Play mode transition to complete and retry.", transient: true, retryAfterMs: 3000);
             }
@@ -80,7 +79,7 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_SCRIPTABLE_OBJECT_TYPE_REQUIRED", "scriptable-object.create requires type <ScriptableObjectType>.", "Pass a full type name or a unique class name deriving from ScriptableObject.");
             }
-            // 先在所有程序集中按全名查找
+            // 完整类型名优先。
             System.Type type = null;
             foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())
             {
@@ -88,7 +87,7 @@ namespace UnityCli
                 try { candidate = assembly.GetType(typeName, false); } catch { continue; }
                 if (candidate != null) { type = candidate; break; }
             }
-            // 回退:按类名匹配
+            // 未命中完整名称时要求类名唯一匹配。
             if (type == null)
             {
                 foreach (var assembly in System.AppDomain.CurrentDomain.GetAssemblies())

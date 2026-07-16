@@ -5,8 +5,6 @@ namespace UnityCli
 {
     /// <summary>
     /// camera.screenshot — 从指定 Camera 渲染 PNG/JPG 截图到文件。
-    /// 对齐旧 CameraScreenshot handler;session-affecting。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class CameraScreenshotTool : IUnityCliTool<CameraScreenshotTool.Request, CameraCapture>
     {
@@ -31,7 +29,7 @@ namespace UnityCli
             Description = "Render a screenshot from a specific Camera into a PNG/JPG artifact file. Defaults return artifact paths only; inlineBase64 must be explicit and is omitted when the image exceeds the bridge inline limit. Restores camera render state after capture.",
             Group = "camera",
             Version = "1.0.0",
-            DestructiveHint = false,
+            DestructiveHint = true,
             SideEffects = new[] { "artifact-write", "render-texture" },
             Target = "editor",
             PlayModeSupport = "session-affecting",
@@ -43,7 +41,7 @@ namespace UnityCli
             }
         };
 
-        public CameraCapture Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<CameraCapture> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var target = request.Target;
             if (string.IsNullOrEmpty(target))
@@ -60,7 +58,7 @@ namespace UnityCli
             var width = CameraToolSupport.ClampScreenshotDimension(request.Width ?? (camera.pixelWidth > 0 ? camera.pixelWidth : 1280), "width");
             var height = CameraToolSupport.ClampScreenshotDimension(request.Height ?? (camera.pixelHeight > 0 ? camera.pixelHeight : 720), "height");
             var quality = Mathf.Clamp(request.Quality ?? 95, 1, 100);
-            return CameraToolSupport.CaptureCamera(camera, width, height, request.Transparent, quality, outputPath, format, request.Overwrite, request.InlineBase64);
+            return new System.Threading.Tasks.ValueTask<CameraCapture>(CameraToolSupport.CaptureCamera(camera, width, height, request.Transparent, quality, outputPath, format, request.Overwrite, request.InlineBase64));
         }
     }
 }

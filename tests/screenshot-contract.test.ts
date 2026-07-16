@@ -9,7 +9,6 @@ import { contractToolNames, discoverLiveTools } from "./helpers/csharp-test-help
 
 test("screenshot domain exposes game-view/scene-view/isolated-object/orbit/surround", () => {
   const screenshotTools = contractToolNames("screenshot");
-  assert.ok(screenshotTools.includes("screenshot.capture"));
   assert.ok(screenshotTools.includes("screenshot.game-view"));
   assert.ok(screenshotTools.includes("screenshot.scene-view"));
   assert.ok(screenshotTools.includes("screenshot.isolated-object"));
@@ -21,7 +20,6 @@ test("screenshot domain exposes game-view/scene-view/isolated-object/orbit/surro
 test("screenshot live descriptors expose expected safety hints and schemas", async () => {
   const tools = await discoverLiveTools(
     makeLiveTool({ name: "camera.screenshot", summary: "Capture a camera screenshot.", description: "Capture a camera screenshot with optional inlineBase64 output.", group: "camera", inputSchema: { type: "object", properties: { path: { type: "string" }, output: { type: "string" }, inlineBase64: { type: "boolean", description: "Defaults false; optionally include base64 output." } } } }),
-    makeLiveTool({ name: "screenshot.capture", summary: "Capture a screenshot.", description: "Capture a screenshot.", group: "screenshot", inputSchema: { type: "object", properties: { inlineBase64: { type: "boolean", description: "Defaults false; optionally include base64 output." } } }, outputSchema: { type: "object", properties: { artifact: { type: "object" } } } }),
     makeLiveTool({ name: "screenshot.game-view", summary: "Capture the Game view.", description: "Capture the Game view.", group: "screenshot", inputSchema: { type: "object", properties: { inlineBase64: { type: "boolean", description: "Defaults false; optionally include base64 output." } } }, outputSchema: { type: "object", properties: { artifact: { type: "object" } } } }),
     makeLiveTool({ name: "screenshot.scene-view", summary: "Capture the Scene view.", description: "Capture the Scene view.", group: "screenshot", inputSchema: { type: "object", properties: { inlineBase64: { type: "boolean", description: "Defaults false; optionally include base64 output." } } }, outputSchema: { type: "object", properties: { artifact: { type: "object" } } } }),
     makeLiveTool({ name: "screenshot.isolated-object", summary: "Capture an isolated object.", description: "Capture an isolated object.", group: "screenshot", playModeSupport: "editor-only", inputSchema: { type: "object", properties: { inlineBase64: { type: "boolean", description: "Defaults false; optionally include base64 output." } } }, outputSchema: { type: "object", properties: { artifact: { type: "object" } } } }),
@@ -47,7 +45,6 @@ test("screenshot live descriptors expose expected safety hints and schemas", asy
   assert.match(camera.description, /inlineBase64/);
 
   const expected: Record<string, string> = {
-    "screenshot.capture": "supported",
     "screenshot.game-view": "supported",
     "screenshot.scene-view": "supported",
     "screenshot.isolated-object": "editor-only",
@@ -68,7 +65,7 @@ test("screenshot live descriptors expose expected safety hints and schemas", asy
   assert.equal("outputDir" in orbitProps, false);
   assert.equal("captured" in orbitProps, false);
 
-  for (const name of ["screenshot.capture", "screenshot.game-view", "screenshot.scene-view", "screenshot.isolated-object"]) {
+  for (const name of ["screenshot.game-view", "screenshot.scene-view", "screenshot.isolated-object"]) {
     const props = tools.get(name)!.inputSchema.properties as Record<string, { description?: string }>;
     const inlineBase64 = props.inlineBase64;
     assert.ok(inlineBase64, `${name} should document inlineBase64`);
@@ -98,7 +95,7 @@ test("bridge specs resolve for screenshot tools", () => {
 });
 
 test("contract entries exist for screenshot tools with present C# handler", () => {
-  for (const name of ["screenshot.capture", "screenshot.game-view", "screenshot.scene-view", "screenshot.isolated-object", "screenshot.orbit", "screenshot.surround"]) {
+  for (const name of ["screenshot.game-view", "screenshot.scene-view", "screenshot.isolated-object", "screenshot.orbit", "screenshot.surround"]) {
     const contract = findCommandContract(name);
     assert.ok(contract, `${name} should be in contract`);
     assert.equal(contract?.csharp_handler, "present", `${name} should have present C# handler`);

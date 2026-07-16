@@ -2,9 +2,9 @@
  * Extension contribution loader: registers ProBuilder, Cinemachine, VFX, URP,
  * HDRP and other built-in extension contributions into the core registries.
  *
- * Extension contributions (bridge specs, tool metadata) are loaded through
- * this module rather than being statically imported into the core aggregation
- * arrays. This separates the core/extension boundary so that:
+ * Extension bridge specs are registered through this module. Tool ownership
+ * comes from generated manifest projections, while full descriptors are read
+ * from the live bridge. This separates the core/extension boundary so that:
  *
  * 1. Core metadata/registry does not directly aggregate extension tools
  * 2. Extension contributions are registered through the extension mechanism
@@ -12,11 +12,11 @@
  * 4. After extension registration, bridge routing and contract validation work normally
  */
 
-import { probuilderBridgeSpecs } from "../bridge/domains/probuilder.js";
-import { cinemachineBridgeSpecs } from "../bridge/domains/cinemachine.js";
-import { vfxBridgeSpecs } from "../bridge/domains/vfx.js";
-import { urpBridgeSpecs } from "../bridge/domains/urp.js";
-import { hdrpBridgeSpecs } from "../bridge/domains/hdrp.js";
+import { probuilderBridgeSpecs } from "./.generated-bridge-domains/probuilder.js";
+import { cinemachineBridgeSpecs } from "./.generated-bridge-domains/cinemachine.js";
+import { vfxBridgeSpecs } from "./.generated-bridge-domains/vfx.js";
+import { urpBridgeSpecs } from "./.generated-bridge-domains/urp.js";
+import { hdrpBridgeSpecs } from "./.generated-bridge-domains/hdrp.js";
 import { bridgeCommandRegistry } from "../bridge/index.js";
 import { validateBridgeRegistryContracts } from "../contracts/command-contract.js";
 
@@ -46,8 +46,7 @@ export function registerBuiltinExtensionContributions(): void {
     ...markNativeCliCommands(hdrpBridgeSpecs)
   ]);
 
-  // Extension tool metadata is no longer duplicated in TS. Tool names/packages come from manifests,
-  // full descriptors are discovered from the live bridge.
+  // Tool names and package gates come from manifests; full descriptors come from the live bridge.
 
   // 生成 command-contract.json 时契约尚未完成,跳过完整反向校验。
   if (process.env.UNITY_CLI_GENERATING_CONTRACT !== "1") {

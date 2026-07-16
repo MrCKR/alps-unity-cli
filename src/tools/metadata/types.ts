@@ -1,7 +1,17 @@
+import type { AnyJson } from "../../schema/any-json.js";
+
 export interface ToolExample {
   description: string;
   argv: string[];
+  input?: AnyJson;
+  execution?: ToolExampleExecution;
   output?: string;
+}
+
+/** 示例执行提示属于 CLI 命令层，不属于业务 inputSchema。 */
+export interface ToolExampleExecution {
+  dryRun?: boolean;
+  timeoutMs?: number;
 }
 
 export type ToolHandler = "bridge" | "bridge-runtime" | "job" | "offline" | "hybrid";
@@ -39,6 +49,8 @@ export interface ToolMetadata {
   available?: boolean;
   /** Unity package names required by this tool at runtime. When absent the tool has no package prerequisites. */
   requiresPackages?: string[];
+  /** Live Bridge 计算的 handler+descriptor 指纹；破坏性 proof 必须绑定此值。 */
+  liveDescriptorFingerprint?: string;
 }
 
 export type ResolvedToolMetadata = ToolMetadata & {

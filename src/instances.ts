@@ -14,7 +14,8 @@ export const HEALTH_CHECK_TOTAL_BUDGET_MS = 1_200;
 /** bridge /health 探测结果的短时缓存，避免每次 bridge 命令都 ping 所有实例。 */
 export const HEALTH_CACHE_TTL_MS = 5_000;
 
-const healthCache = new Map<string, { reachable: boolean; checkedAt: number }>();
+const healthCache = new Map<string, { checkedAt: number }>();
+const REGISTRY_READ_RETRY_DELAYS_MS = [5, 10, 20, 40] as const;
 
 /** 清空 bridge 健康检查缓存。供需要强制实时的场景（如 instances prune/doctor）或测试调用。 */
 export function clearInstanceHealthCache(): void {
@@ -83,10 +84,12 @@ export async function handleInstancesCommand(
     const staleIds = new Set(stale.map((instance) => instance.instanceId));
     const registryRemaining = before.filter((instance) => !staleIds.has(instance.instanceId));
 
-    const killResults = stale.map((instance) => {
-      const killed = attemptKillPid(instance.processId ?? instance.pid);
-      return { instanceId: instance.instanceId, pid: instance.processId ?? instance.pid ?? null, killed };
-    });
+    // stale 可能只是 domain reload 的瞬时注册状态；prune 只清理发现记录，绝不终止 Editor 进程。
+    const cleanupResults = stale.map((instance) => ({
+      instanceId: instance.instanceId,
+      pid: instance.processId ?? instance.pid ?? null,
+      registryDeleted: true
+    }));
 
     await Promise.all(stale.map((instance) => deleteInstanceFile(dataDir, instance.instanceId)));
     await writeRegistryFileInstances(dataDir, registryRemaining);
@@ -95,7 +98,7 @@ export async function handleInstancesCommand(
       removed: stale.length,
       remaining: registryRemaining.length,
       instances: registryRemaining.map(instanceListSummary),
-      staleCleaned: killResults
+      staleCleaned: cleanupResults
     });
   }
 
@@ -246,10 +249,19 @@ export async function selectInstanceForFlags(
     return undefined;
   }
 
-  const instances = await readInstances(dataDir, Date.now(), { useCache: true });
+  let instances = await readInstances(dataDir, Date.now(), { useCache: true });
   const aliases = await readAliases(dataDir);
   if (explicit) {
-    return resolveRequiredTarget(instances, aliases, explicit, "target");
+    for (let attempt = 0; ; attempt++) {
+      if (resolveInstance(instances, aliases, explicit, "target")) {
+        return resolveRequiredTarget(instances, aliases, explicit, "target");
+      }
+      if (attempt >= REGISTRY_READ_RETRY_DELAYS_MS.length) {
+        return resolveRequiredTarget(instances, aliases, explicit, "target");
+      }
+      await new Promise((resolve) => setTimeout(resolve, REGISTRY_READ_RETRY_DELAYS_MS[attempt]));
+      instances = await readInstances(dataDir, Date.now(), { useCache: true });
+    }
   }
 
   const config = await readTargetConfig(dataDir);
@@ -291,9 +303,29 @@ export async function selectInstanceForFlags(
   return undefined;
 }
 
+export async function hasInstanceForFlags(
+  flags: Record<string, string | boolean>,
+  dataDir: string,
+  cwd = process.cwd()
+): Promise<boolean> {
+  try {
+    return (await selectInstanceForFlags(flags, dataDir, cwd)) !== undefined;
+  } catch {
+    return false;
+  }
+}
+
 export function instanceSelectionFailure(requestId: string, error: unknown): CliResult | undefined {
   if (error instanceof InstanceRegistryError) {
-    return failure(requestId, error.code, error.message, error.nextActions, error.details);
+    const transient = error.code === "E_TARGET_STALE" || error.code === "E_TARGET_UNREACHABLE";
+    return failure(
+      requestId,
+      error.code,
+      error.message,
+      error.nextActions,
+      error.details,
+      transient ? { transient: true, retryAfterMs: 1000 } : undefined
+    );
   }
   return undefined;
 }
@@ -364,6 +396,24 @@ export function targetSummary(instance: UnityInstance, aliases: Record<string, s
   };
 }
 
+/** 在 Windows 原子替换的短暂共享冲突期间重试；已枚举文件还可覆盖 rename 的 ENOENT 窗口。 */
+async function readRegistryText(path: string, retryMissing = false): Promise<string> {
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await readFile(path, "utf8");
+    } catch (error) {
+      if (!isRegistryTransientReadError(error, retryMissing) || attempt >= REGISTRY_READ_RETRY_DELAYS_MS.length) throw error;
+      await new Promise((resolve) => setTimeout(resolve, REGISTRY_READ_RETRY_DELAYS_MS[attempt]));
+    }
+  }
+}
+
+/** 仅识别 Windows replace/open 的瞬时错误，不吞掉普通文件系统错误。 */
+function isRegistryTransientReadError(error: unknown, retryMissing = false): boolean {
+  const code = (error as NodeJS.ErrnoException).code;
+  return (retryMissing && code === "ENOENT") || code === "EBUSY" || code === "EPERM" || code === "EACCES";
+}
+
 async function readInstanceFiles(dataDir: string): Promise<UnityInstance[]> {
   try {
     const dir = instancesDir(dataDir);
@@ -371,7 +421,7 @@ async function readInstanceFiles(dataDir: string): Promise<UnityInstance[]> {
     const files = names.filter((name) => name.endsWith(".json"));
     const values = await Promise.all(files.map(async (name) => {
       try {
-        const raw = await readFile(join(dir, name), "utf8");
+        const raw = await readRegistryText(join(dir, name), true);
         const parsed = JSON.parse(stripBom(raw)) as UnityInstance;
         return parsed;
       } catch {
@@ -387,14 +437,14 @@ async function readInstanceFiles(dataDir: string): Promise<UnityInstance[]> {
 
 async function readRegistryFileInstances(dataDir: string): Promise<UnityInstance[]> {
   try {
-    const raw = await readFile(registryPath(dataDir), "utf8");
+    const raw = await readRegistryText(registryPath(dataDir));
     if (raw.trim().length === 0) return [];
     const parsed = JSON.parse(stripBom(raw)) as RegistryFile;
     return Array.isArray(parsed.instances) ? parsed.instances : [];
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === "ENOENT") return [];
-    // 并发测试或外部进程可能读到旧聚合 registry 的半写 JSON；逐实例文件仍是权威来源。
-    if (error instanceof SyntaxError) return [];
+    // 聚合 registry 可由逐实例文件重建；半写旧 JSON 或共享冲突不得遮蔽权威来源。
+    if (error instanceof SyntaxError || isRegistryTransientReadError(error)) return [];
     throw error;
   }
 }
@@ -529,41 +579,62 @@ function instanceTimestamp(instance: UnityInstance): number {
 
 async function checkInstanceHealth(instances: UnityInstance[], useCache = false): Promise<UnityInstance[]> {
   return Promise.all(instances.map(async (instance) => {
-    if (instance.status === "stale" || instance.status === "unreachable") {
-      return instance;
-    }
+    const cacheKey = `${instance.bridgeEndpoint}\0${instance.instanceId}`;
     if (useCache) {
-      const cached = healthCache.get(instance.bridgeEndpoint);
+      const cached = healthCache.get(cacheKey);
       if (cached && Date.now() - cached.checkedAt < HEALTH_CACHE_TTL_MS) {
-        return cached.reachable ? instance : { ...instance, status: "unreachable" as const };
+        return { ...instance, status: "ready" as const };
       }
     }
-    const reachable = await isBridgeHealthReachable(instance.bridgeEndpoint);
-    healthCache.set(instance.bridgeEndpoint, { reachable, checkedAt: Date.now() });
-    return reachable ? instance : { ...instance, status: "unreachable" as const };
+
+    const identityMatches = await bridgeHealthMatchesTarget(instance.bridgeEndpoint, instance.instanceId);
+    if (identityMatches) {
+      healthCache.set(cacheKey, { checkedAt: Date.now() });
+      return { ...instance, status: "ready" as const };
+    }
+
+    // 失败探测不缓存，domain reload 后的新 listener 必须能在下一次调用中立即恢复。
+    return instance.status === "stale"
+      ? instance
+      : { ...instance, status: "unreachable" as const };
   }));
 }
 
-async function isBridgeHealthReachable(endpoint: string): Promise<boolean> {
+/** 校验 /health envelope 与期望实例身份，禁止把端口复用或任意 2xx 当作目标存活。 */
+async function bridgeHealthMatchesTarget(endpoint: string, expectedInstanceId: string): Promise<boolean> {
   const deadline = Date.now() + HEALTH_CHECK_TOTAL_BUDGET_MS;
   for (let attempt = 0; attempt <= HEALTH_CHECK_RETRIES; attempt += 1) {
     const remainingMs = deadline - Date.now();
-    if (remainingMs <= 0) {
-      return false;
-    }
+    if (remainingMs <= 0) return false;
+
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), Math.min(HEALTH_CHECK_TIMEOUT_MS, remainingMs));
     try {
-      const response = await fetch(new URL("/health", endpoint), { signal: controller.signal });
-      if (response.ok) {
-        return true;
-      }
+      const response = await fetch(new URL("/health", endpoint), {
+        signal: controller.signal,
+        headers: { "x-unity-cli-expected-target-id": expectedInstanceId }
+      });
+      if (!response.ok) continue;
+      const envelope = await response.json() as unknown;
+      if (healthTargetId(envelope) === expectedInstanceId) return true;
+      return false;
     } catch {
     } finally {
       clearTimeout(timeout);
     }
   }
   return false;
+}
+
+/** 从严格的 Bridge health envelope 读取目标 ID；旧式或畸形 2xx 响应一律拒绝。 */
+function healthTargetId(value: unknown): string | undefined {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  const envelope = value as Record<string, unknown>;
+  if (envelope.ok !== true || !envelope.data || typeof envelope.data !== "object" || Array.isArray(envelope.data)) return undefined;
+  const data = envelope.data as Record<string, unknown>;
+  if (data.bridge !== "unity_cli" || !data.target || typeof data.target !== "object" || Array.isArray(data.target)) return undefined;
+  const targetId = (data.target as Record<string, unknown>).id;
+  return typeof targetId === "string" ? targetId : undefined;
 }
 
 function isHeartbeatStale(value: string | undefined, now: number): boolean {
@@ -582,18 +653,6 @@ function isPathWithin(child: string, parent: string): boolean {
 
 function normalizedPath(path: string): string {
   return resolve(path).toLowerCase();
-}
-
-function attemptKillPid(pid: number | undefined): boolean {
-  if (!pid) {
-    return false;
-  }
-  try {
-    process.kill(pid);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 function projectNameFromPath(path: string): string {

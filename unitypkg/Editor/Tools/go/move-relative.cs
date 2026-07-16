@@ -8,8 +8,6 @@ namespace UnityCli
 {
     /// <summary>
     /// go.move-relative — 按 XYZ 偏移移动 GameObject,不替换绝对变换。
-    /// 对齐旧 GameObjectMoveRelative handler;session-affecting。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class GameObjectMoveRelativeTool : IUnityCliTool<GameObjectMoveRelativeTool.Request, GameObjectMoveRelativeTool.Result>
     {
@@ -46,7 +44,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             GameObjectToolSupport.EnsureEditorNotBusy("go.move-relative");
             if (string.IsNullOrEmpty(request.Target))
@@ -54,15 +52,15 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_TARGET_NOT_FOUND", "GameObject move-relative requires a target.", "Pass a GameObject name, hierarchy path or instance id.");
             }
             var gameObject = GameObjectToolSupport.ResolveUniqueTarget(request.Target, "GameObject move-relative requires a target.");
-            Undo.RecordObject(gameObject.transform, "unity_cli go.move-relative");
+            UnityCliSceneMutation.RecordObject(gameObject.transform, "go.move-relative");
             var offset = new Vector3((float)(request.OffsetX ?? 0), (float)(request.OffsetY ?? 0), (float)(request.OffsetZ ?? 0));
             gameObject.transform.position += offset;
-            EditorSceneManager.MarkSceneDirty(gameObject.scene);
-            return new Result
+            UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 GameObject = GameObjectToolSupport.BuildGameObjectDetail(gameObject),
                 PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "go.move-relative", Target = GameObjectToolSupport.HierarchyPath(gameObject) } }
-            };
+            });
         }
     }
 }

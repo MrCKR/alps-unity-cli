@@ -1,12 +1,10 @@
 import { DISMISS_BUTTON_LABEL, LAUNCH_DIALOG_TITLE_FRAGMENTS, dismissUnityLaunchDialog } from "../../launch-dialog-dismiss.js";
-import { defineTool } from "../define.js";
+import { defineTool, type ToolContext } from "../define.js";
 
 export interface EditorLaunchDialogDismissRequest {
-  timeoutMs?: number;
   intervalMs?: number;
   processId?: number;
   pid?: number;
-  dryRun?: boolean;
 }
 
 export interface EditorLaunchDialogPlannedEffect {
@@ -48,21 +46,22 @@ export default defineTool<EditorLaunchDialogDismissRequest, EditorLaunchDialogDi
   group: "editor",
   destructiveHint: false,
   supportsDryRun: true,
-  playModeSupport: "editor-only",
+  // 这是独立于 Editor 场景会话的 Windows 桌面操作，PlayMode 不会限制其执行。
+  playModeSupport: "supported",
   sideEffects: ["desktop-dialog-click"],
   handler: "offline",
   supportStatus: "cli-only",
   examples: [
-    { description: "Dismiss any visible Unity launch error dialog", argv: ["tools", "run", "editor.launch-dialog.dismiss", "--input", "{\"timeoutMs\":5000}"] },
-    { description: "Limit dismiss to one Unity process", argv: ["tools", "run", "editor.launch-dialog.dismiss", "--input", "{\"processId\":44960,\"timeoutMs\":5000}"] },
+    { description: "Dismiss any visible Unity launch error dialog", argv: ["tools", "run", "editor.launch-dialog.dismiss", "--timeout-ms", "5000"] },
+    { description: "Limit dismiss to one Unity process", argv: ["tools", "run", "editor.launch-dialog.dismiss", "--timeout-ms", "5000", "--input", "{\"processId\":44960}"] },
     { description: "Preview the desktop click", argv: ["tools", "run", "editor.launch-dialog.dismiss", "--dry-run", "--input", "{\"pid\":44960}"] }
   ],
   /** 处理 Unity 启动阻塞弹窗；dry-run 只返回计划，不扫描或点击桌面。 */
-  async execute(request) {
+  async execute(request, context: ToolContext) {
     const processId = optionalInteger(request.processId ?? request.pid);
-    const timeoutMs = optionalInteger(request.timeoutMs);
+    const timeoutMs = context.execution.timeoutMs;
     const intervalMs = optionalInteger(request.intervalMs);
-    if (request.dryRun) {
+    if (context.execution.dryRun) {
       return {
         command: "editor.launch-dialog.dismiss",
         dryRun: true,

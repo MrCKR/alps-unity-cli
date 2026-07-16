@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import { failure } from "./output.js";
 import type { CliResult } from "./types.js";
 
 export interface BatchRuntime {
@@ -95,7 +96,6 @@ const commandRegistry = new Map<string, { parallelSafe: boolean }>([
   ["scene.hierarchy", { parallelSafe: true }],
   ["scene.active", { parallelSafe: true }],
   ["scene.build-settings", { parallelSafe: true }],
-  ["scene.screenshot", { parallelSafe: false }],
   ["scene.create", { parallelSafe: false }],
   ["scene.load", { parallelSafe: false }],
   ["scene.save", { parallelSafe: false }],
@@ -156,9 +156,7 @@ const commandRegistry = new Map<string, { parallelSafe: boolean }>([
   ["material.set-renderer-color", { parallelSafe: false }],
   ["graphics.quality", { parallelSafe: false }],
   ["graphics.settings", { parallelSafe: false }],
-  ["graphics.pipeline", { parallelSafe: true }],
   ["graphics.volume", { parallelSafe: true }],
-  ["graphics.screenshot", { parallelSafe: false }],
   ["graphics.bake-start", { parallelSafe: false }],
   ["graphics.bake-cancel", { parallelSafe: false }],
   ["graphics.bake-status", { parallelSafe: true }],
@@ -186,7 +184,8 @@ const commandRegistry = new Map<string, { parallelSafe: boolean }>([
   ["physics.collision-matrix", { parallelSafe: false }],
   ["physics.material", { parallelSafe: false }],
   ["physics.assign-material", { parallelSafe: false }],
-  ["physics.joint", { parallelSafe: false }],
+  ["physics.joint.add", { parallelSafe: false }],
+  ["physics.joint.remove", { parallelSafe: false }],
   ["physics.force", { parallelSafe: false }],
   ["physics.overlap", { parallelSafe: true }],
   ["physics.rigidbody", { parallelSafe: false }],
@@ -282,8 +281,10 @@ const commandRegistry = new Map<string, { parallelSafe: boolean }>([
   ["editor.redo", { parallelSafe: false }],
   ["editor.resolution", { parallelSafe: false }],
   ["editor.menu", { parallelSafe: false }],
-  ["project.tag", { parallelSafe: false }],
-  ["project.layer", { parallelSafe: false }],
+  ["project.tag.add", { parallelSafe: false }],
+  ["project.tag.remove", { parallelSafe: false }],
+  ["project.layer.add", { parallelSafe: false }],
+  ["project.layer.remove", { parallelSafe: false }],
   ["editor.refresh", { parallelSafe: false }],
   ["editor.compile", { parallelSafe: false }],
   ["editor.compile-diagnostics", { parallelSafe: false }],
@@ -291,7 +292,6 @@ const commandRegistry = new Map<string, { parallelSafe: boolean }>([
   ["editor.selection.set", { parallelSafe: false }],
   ["editor.active-tool.set", { parallelSafe: false }],
   ["diagnose.preflight", { parallelSafe: true }],
-  ["screenshot.capture", { parallelSafe: false }],
   ["screenshot.game-view", { parallelSafe: false }],
   ["screenshot.scene-view", { parallelSafe: false }],
   ["screenshot.isolated-object", { parallelSafe: false }],
@@ -301,9 +301,19 @@ const commandRegistry = new Map<string, { parallelSafe: boolean }>([
   ["console.get", { parallelSafe: true }],
   ["console.clear", { parallelSafe: false }],
   ["package.embed", { parallelSafe: false }],
-  ["build.scenes", { parallelSafe: true }],
-  ["build.platform", { parallelSafe: true }],
-  ["build.settings", { parallelSafe: true }],
+  ["build.scene.list", { parallelSafe: true }],
+  ["build.scene.add", { parallelSafe: true }],
+  ["build.scene.remove", { parallelSafe: true }],
+  ["build.scene.enable", { parallelSafe: true }],
+  ["build.scene.disable", { parallelSafe: true }],
+  ["build.platform.get", { parallelSafe: true }],
+  ["build.platform.set", { parallelSafe: true }],
+  ["build.profile.list", { parallelSafe: true }],
+  ["build.profile.create", { parallelSafe: true }],
+  ["build.profile.switch", { parallelSafe: true }],
+  ["build.profile.modify", { parallelSafe: true }],
+  ["build.settings.get", { parallelSafe: true }],
+  ["build.settings.set", { parallelSafe: true }],
   ["object.get-data", { parallelSafe: true }],
   ["object.modify", { parallelSafe: false }],
   ["reflection.method.find", { parallelSafe: true }],
@@ -319,8 +329,12 @@ const commandRegistry = new Map<string, { parallelSafe: boolean }>([
   ["package.deploy", { parallelSafe: false }],
   ["package.restore", { parallelSafe: false }],
   ["package.resolve", { parallelSafe: false }],
-  ["package.registry", { parallelSafe: false }],
-  ["package.scoped-registry", { parallelSafe: false }],
+  ["package.registry.get", { parallelSafe: true }],
+  ["package.registry.set", { parallelSafe: false }],
+  ["package.registry.clear", { parallelSafe: false }],
+  ["package.scoped-registry.list", { parallelSafe: true }],
+  ["package.scoped-registry.add", { parallelSafe: false }],
+  ["package.scoped-registry.remove", { parallelSafe: false }],
   ["docs.list", { parallelSafe: true }],
   ["docs.topic", { parallelSafe: true }],
   ["docs.get", { parallelSafe: true }],
@@ -787,17 +801,7 @@ function countSteps(steps: StepEnvelope[]): Record<string, number> {
 }
 
 function batchFailure(requestId: string, code: string, message: string, data: unknown): CliResult {
-  return {
-    ok: false,
-    requestId,
-    data,
-    error: {
-      code,
-      message,
-      requestId,
-      nextActions: ["Fix the batch file and rerun unity_cli batch run <file> --preflight."]
-    }
-  };
+  return failure(requestId, code, message, ["Fix the batch file and rerun unity_cli batch run <file> --preflight."], data);
 }
 
 async function writeBatchRecord(path: string, data: unknown): Promise<void> {
@@ -811,7 +815,7 @@ function readDataString(result: CliResult, key: string): string | undefined {
 }
 
 function readDataValue(result: CliResult, key: string): unknown {
-  return isRecord(result.data) ? result.data[key] : undefined;
+  return result.ok && isRecord(result.data) ? result.data[key] : undefined;
 }
 
 function findCycles(steps: NormalizedStep[]): string[][] {

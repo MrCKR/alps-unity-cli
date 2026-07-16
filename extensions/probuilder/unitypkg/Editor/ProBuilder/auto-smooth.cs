@@ -31,6 +31,7 @@ namespace UnityCli.ProBuilder
             Description = "Automatically apply smoothing to faces based on an angle threshold. When faceIndices is omitted, smoothing is applied to all faces of the target mesh.",
             Group = "probuilder",
             DestructiveHint = false,
+            SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 10000,
@@ -43,32 +44,38 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            var go = ProBuilderInput.ResolveTarget(request.Target);
             if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("auto-smooth", "No ProBuilderMesh on target.");
 
             var angleThreshold = (float)(request.AngleThreshold ?? 30);
-            int[] faceIndices = request.FaceIndices?.Select(i => (int)i).ToArray();
+            if (angleThreshold < 0 || angleThreshold > 180)
+                throw ProBuilderErrors.SchemaInvalid("angleThreshold must be between 0 and 180 degrees.");
             var faceCount = ProBuilderReflection.GetFaceCount(mesh);
+            if (faceCount < 1)
+                throw ProBuilderErrors.OperationFailed("auto-smooth", "Target has no readable faces.");
+            int[] faceIndices = request.FaceIndices?.Select(i => (int)i).Distinct().ToArray();
+            if (faceIndices == null || faceIndices.Length == 0)
+                faceIndices = Enumerable.Range(0, faceCount).ToArray();
+            if (ProBuilderReflection.GetFacesByIndices(mesh, faceIndices) == null)
+                throw ProBuilderErrors.SchemaInvalid("faceIndices contains an invalid face index.");
 
             Undo.RecordObject(go, "ProBuilder Auto Smooth");
-            if (faceIndices != null && faceIndices.Length > 0)
-                ProBuilderReflection.ApplySmoothingGroups(mesh, faceIndices, angleThreshold);
-            else
-                ProBuilderReflection.ApplySmoothingGroups(mesh, Enumerable.Range(0, faceCount).ToArray(), angleThreshold);
+            if (!ProBuilderReflection.ApplySmoothingGroups(mesh, faceIndices, angleThreshold))
+                throw ProBuilderErrors.OperationFailed("auto-smooth", "ProBuilder 5.x Smoothing.ApplySmoothingGroups failed.");
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
-            var smoothed = faceIndices != null ? faceIndices.Length : faceCount;
-            return new Result { SmoothedFaceCount = smoothed };
+            var smoothed = faceIndices.Length;
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { SmoothedFaceCount = smoothed });
         }
     }
 }

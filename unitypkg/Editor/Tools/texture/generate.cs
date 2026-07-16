@@ -9,8 +9,6 @@ namespace UnityCli
 {
     /// <summary>
     /// texture.generate — 生成程序化纹理(solid/gradient/radial/noise/checkerboard/stripes/dots/grid/brick)。
-    /// 对齐旧 TextureGenerate handler;destructive(asset-write),支持 dryRun。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class TextureGenerateTool : IUnityCliTool<TextureGenerateTool.Request, TextureGenerateTool.Result>
     {
@@ -23,7 +21,6 @@ namespace UnityCli
             public string Color { get; set; }
             public string Color2 { get; set; }
             public int? PatternSize { get; set; }
-            public bool? DryRun { get; set; }
         }
 
         public sealed class Result
@@ -49,7 +46,7 @@ namespace UnityCli
             SupportsDryRun = true,
             SideEffects = new[] { "asset-write", "asset-import" },
             Target = "editor",
-            PlayModeSupport = "session-affecting",
+            PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 30000,
             MaxTimeoutMs = 600000,
             Examples = new[]
@@ -58,7 +55,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             TextureToolSupport.EnsureEditorNotBusy("texture.generate");
             var path = request.Path;
@@ -71,9 +68,9 @@ namespace UnityCli
             var pattern = request.Pattern ?? "solid";
             var color1 = ParseColorArg(request.Color, Color.white);
             var color2 = ParseColorArg(request.Color2, Color.black);
-            if (request.DryRun == true)
+            if (ctx.DryRun)
             {
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Command = "texture.generate",
                     DryRun = true,
@@ -82,7 +79,7 @@ namespace UnityCli
                     Height = height,
                     Pattern = pattern,
                     PlannedEffects = new List<TexturePlannedEffect> { new TexturePlannedEffect { Type = "texture.generate", Path = path } }
-                };
+                });
             }
             var texture = new Texture2D(width, height, TextureFormat.RGBA32, false);
             var pixels = new Color32[width * height];
@@ -100,7 +97,7 @@ namespace UnityCli
             File.WriteAllBytes(AssetToolSupport.AssetFullPath(path), bytes);
             AssetDatabase.ImportAsset(path);
             UnityEngine.Object.DestroyImmediate(texture);
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Command = "texture.generate",
                 Path = path,
@@ -109,7 +106,7 @@ namespace UnityCli
                 Pattern = pattern,
                 SizeBytes = bytes.Length,
                 PlannedEffects = new List<TexturePlannedEffect> { new TexturePlannedEffect { Type = "texture.generate", Path = path } }
-            };
+            });
         }
 
         private static Color32 ComputePixel(string pattern, int x, int y, int width, int height, Color32 color1, Color32 color2, int patternSize)

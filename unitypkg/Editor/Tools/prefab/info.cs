@@ -3,8 +3,6 @@ namespace UnityCli
 {
     /// <summary>
     /// prefab.info — 读取 Prefab 资产摘要(变体来源/依赖/嵌套 Prefab)。
-    /// 对齐旧 PrefabInfo handler;只读。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class PrefabInfoTool : IUnityCliTool<PrefabInfoTool.Request, PrefabInfoTool.Result>
     {
@@ -36,11 +34,11 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var path = PrefabToolSupport.RequirePrefabPath(request.Path);
             var prefab = PrefabToolSupport.LoadPrefabAsset(path);
-            return new Result { Prefab = PrefabToolSupport.BuildPrefabInfo(path, prefab, null, true) };
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Prefab = PrefabToolSupport.BuildPrefabInfo(path, prefab, null, true) });
         }
     }
 }

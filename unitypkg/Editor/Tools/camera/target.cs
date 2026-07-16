@@ -8,8 +8,6 @@ namespace UnityCli
 {
     /// <summary>
     /// camera.target — 通过 lookAt 和/或显式 position/rotation 调整 Camera 变换。
-    /// 对齐旧 CameraTarget handler;session-affecting。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class CameraTargetTool : IUnityCliTool<CameraTargetTool.Request, CameraTargetTool.Result>
     {
@@ -46,7 +44,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (string.IsNullOrEmpty(request.Target))
             {
@@ -74,8 +72,8 @@ namespace UnityCli
                 camera.transform.eulerAngles = GameObjectToolSupport.ParseVector3(request.Rotation);
                 effects.Add(new CameraPlannedEffect { Type = "camera.target", Property = "rotation", Value = request.Rotation });
             }
-            EditorUtility.SetDirty(camera);
-            return new Result { Camera = CameraToolSupport.BuildCameraInfo(camera), PlannedEffects = effects };
+            UnityCliSceneMutation.MarkSceneObjectDirty(camera);
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Camera = CameraToolSupport.BuildCameraInfo(camera), PlannedEffects = effects });
         }
     }
 }

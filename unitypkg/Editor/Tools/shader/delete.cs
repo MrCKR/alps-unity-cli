@@ -7,8 +7,6 @@ namespace UnityCli
 {
     /// <summary>
     /// shader.delete — 删除 Shader 资产。destructive,支持 dryRun。
-    /// 对齐旧 ShaderDelete handler;session-affecting(asset-delete)。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class ShaderDeleteTool : IUnityCliTool<ShaderDeleteTool.Request, ShaderDeleteTool.Result>
     {
@@ -16,7 +14,6 @@ namespace UnityCli
         {
             public string Path { get; set; }
             public string Target { get; set; }
-            public bool? DryRun { get; set; }
         }
 
         public sealed class Result
@@ -38,40 +35,40 @@ namespace UnityCli
             SupportsDryRun = true,
             SideEffects = new[] { "asset-delete" },
             Target = "editor",
-            PlayModeSupport = "session-affecting",
+            PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 30000,
             MaxTimeoutMs = 600000,
             Examples = new[]
             {
-                new ToolExample { Description = "Preview deleting a shader", Input = new Request { Path = "Assets/Shaders/Old.shader", DryRun = true } }
+                new ToolExample { Description = "Preview deleting a shader", Input = new Request { Path = "Assets/Shaders/Old.shader" }, Execution = new ToolExampleExecution { DryRun = true } }
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             ShaderToolSupport.EnsureEditorNotBusy("shader.delete");
             var path = ShaderToolSupport.ResolveShaderPath(request.Path ?? request.Target);
-            if (request.DryRun == true)
+            if (ctx.DryRun)
             {
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Command = "shader.delete",
                     DryRun = true,
                     Shader = ShaderToolSupport.BuildShaderInfo(path, AssetDatabase.LoadAssetAtPath<Shader>(path), false),
                     PlannedEffects = new List<ShaderPlannedEffect> { new ShaderPlannedEffect { Type = "shader.delete", Path = path } }
-                };
+                });
             }
             if (!AssetDatabase.DeleteAsset(path))
             {
                 throw new UnityCliBridge.BridgeCommandException("E_SHADER_DELETE_FAILED", "Failed to delete shader asset: " + path, "Check Unity Console and file permissions.");
             }
             AssetDatabase.Refresh();
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Command = "shader.delete",
                 Shader = new ShaderInfo { Path = path, Exists = false },
                 PlannedEffects = new List<ShaderPlannedEffect> { new ShaderPlannedEffect { Type = "shader.delete", Path = path } }
-            };
+            });
         }
     }
 }

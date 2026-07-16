@@ -38,26 +38,10 @@ export interface ExtensionToolContribution {
   requiresPackages?: string[];
 }
 
-/** A context descriptor contribution from an extension. */
+/** Extension Context 的离线 ownership 标识；完整 descriptor 仅来自 live Bridge。 */
 export interface ExtensionContextContribution {
   /** Context key, e.g. "probuilder.scene". */
   key: string;
-  /** Human-readable description of the context. */
-  description: string;
-  /** 可选发现分类；未提供时使用 dotted key 前缀。 */
-  category?: string;
-  /** context read 输入参数的 JSON Schema。 */
-  inputSchema?: Record<string, unknown>;
-  /** context read 输出结果的 JSON Schema。 */
-  outputSchema?: Record<string, unknown>;
-  /** Context handler 的执行目标。 */
-  target?: "editor" | "runtime" | "both";
-  /** Context 结果的可用范围。 */
-  availabilityScope?: "editorSession" | "playModeSession" | "always";
-  /** Play Mode 下的读取语义。 */
-  playModeSupport?: "supported" | "runtime-only" | "session-affecting" | "editor-only" | "unknown";
-  /** 描述读取成本和陈旧性的刷新行为。 */
-  refreshBehavior?: string;
 }
 
 /** A C# implementation entry contributed by an extension. */

@@ -31,6 +31,7 @@ namespace UnityCli.ProBuilder
             Description = "Set the smoothing group for selected faces on a ProBuilder mesh. Requires a non-negative smoothingGroup. When faceIndices is omitted, all faces are assigned the smoothing group.",
             Group = "probuilder",
             DestructiveHint = false,
+            SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 10000,
@@ -43,12 +44,12 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            var go = ProBuilderInput.ResolveTarget(request.Target);
             if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
@@ -58,20 +59,24 @@ namespace UnityCli.ProBuilder
             if (smoothingGroup < 0)
                 throw ProBuilderErrors.SchemaInvalid("smoothingGroup must be a non-negative integer.");
 
-            int[] faceIndices = request.FaceIndices?.Select(i => (int)i).ToArray();
             var faceCount = ProBuilderReflection.GetFaceCount(mesh);
+            if (faceCount < 1)
+                throw ProBuilderErrors.OperationFailed("set-smoothing", "Target has no readable faces.");
+            int[] faceIndices = request.FaceIndices?.Select(i => (int)i).Distinct().ToArray();
+            if (faceIndices == null || faceIndices.Length == 0)
+                faceIndices = Enumerable.Range(0, faceCount).ToArray();
+            if (ProBuilderReflection.GetFacesByIndices(mesh, faceIndices) == null)
+                throw ProBuilderErrors.SchemaInvalid("faceIndices contains an invalid face index.");
 
             Undo.RecordObject(go, "ProBuilder Set Smoothing");
-            if (faceIndices != null && faceIndices.Length > 0)
-                ProBuilderReflection.ApplySmoothingGroup(mesh, faceIndices, (int)smoothingGroup);
-            else
-                ProBuilderReflection.ApplySmoothingGroup(mesh, Enumerable.Range(0, faceCount).ToArray(), (int)smoothingGroup);
+            if (!ProBuilderReflection.ApplySmoothingGroup(mesh, faceIndices, (int)smoothingGroup))
+                throw ProBuilderErrors.OperationFailed("set-smoothing", "Failed to set ProBuilder 5.x Face.smoothingGroup.");
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
-            var modified = faceIndices != null ? faceIndices.Length : faceCount;
-            return new Result { ModifiedFaceCount = modified };
+            var modified = faceIndices.Length;
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { ModifiedFaceCount = modified });
         }
     }
 }

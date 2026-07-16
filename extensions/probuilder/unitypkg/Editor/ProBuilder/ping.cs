@@ -38,15 +38,15 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var available = ProBuilderReflection.IsAvailable;
             var meshTypeAvailable = ProBuilderReflection.GetProBuilderMeshType() != null;
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Installed = available,
                 MeshTypeAvailable = meshTypeAvailable
-            };
+            });
         }
     }
 }

@@ -1,329 +1,119 @@
-/**
- * Extension availability checker for tools describe / tools run.
- *
- * When a tool declares `requiresPackages` (indicating it depends on an
- * optional Unity package), this module resolves whether the extension
- * is available against a target project. If not, it returns a structured
- * unavailable result with nextActions instead of attempting execution.
- */
-
 import { ExtensionRegistry } from "./extensions/index.js";
+import { readExtensionPhysicalStates, type ExtensionStatusCheck } from "./extensions/installer.js";
 import { readInstalledUnityPackages } from "./extensions/project-resolver.js";
 import type { ExtensionAvailabilityResult, ExtensionId } from "./extensions/types.js";
 import { findBuiltinExtensionToolContribution } from "./extensions/tool-manifest.js";
 import type { ResolvedToolMetadata, ToolMetadata } from "./tools/metadata/types.js";
 import { getString } from "./args.js";
+import { currentInstanceProjectPath } from "./instances.js";
 
-/**
- * Result of checking extension availability for a tool.
- */
+/** Extension capability 的统一可用性结论。dependencyInstalled 与 installed 永不互相替代。 */
 export interface ExtensionAvailabilityCheck {
-  /** Whether the tool's extension dependencies are satisfied. */
   available: boolean;
-  /** The extension ID that provides this tool, if applicable. */
   extensionId?: ExtensionId;
-  /** Detailed availability result from the registry. */
   availabilityResult?: ExtensionAvailabilityResult;
-  /** Next actions when the tool is unavailable. */
+  physicalState?: ExtensionStatusCheck;
   nextActions: string[];
-  /** Error code for the unavailable case. */
   errorCode: string;
-  /** Human-readable message for the unavailable case. */
   message: string;
 }
 
 /**
- * Check whether a tool's extension dependencies are available.
- *
- * For tools that declare `requiresPackages`, this resolves the extension
- * manifest against the target project's installed Unity packages.
- *
- * For tools without `requiresPackages`, always returns available.
- *
- * @param tool - The tool metadata to check.
- * @param flags - CLI flags (may contain --project path).
- * @returns Availability check result.
+ * 对 live extension Tool 执行 physical install gate。
+ * TS-local Tool 不经过此 gate；extension Tool 即使没有 package dependency 也必须已安装。
  */
-export async function checkToolExtensionAvailability(
-  tool: ToolMetadata,
-  flags: Record<string, string | boolean>
-): Promise<ExtensionAvailabilityCheck> {
-  // Tools without package requirements are always available.
-  if (!tool.requiresPackages || tool.requiresPackages.length === 0) {
-    return { available: true, nextActions: [], errorCode: "", message: "" };
-  }
-
+export async function checkToolExtensionAvailability(tool: ToolMetadata, flags: Record<string, string | boolean>): Promise<ExtensionAvailabilityCheck> {
   const registry = new ExtensionRegistry();
-
-  // Find which extension provides this tool.
   const extensionId = findExtensionForTool(registry, tool.name);
-
-  // No project path → we cannot determine availability, but we
-  // don't block execution either; we report "unknown" and let
-  // the bridge attempt fail naturally if the package is truly missing.
-  const projectPath = getString(flags, "project");
-  if (!projectPath) {
-    return {
-      available: true,
-      extensionId,
-      nextActions: [],
-      errorCode: "",
-      message: ""
-    };
-  }
-
-  // Resolve installed packages from the target project.
-  let installedPackages: Map<string, string>;
-  try {
-    installedPackages = await readInstalledUnityPackages(projectPath);
-  } catch {
-    return {
-      available: true,
-      extensionId,
-      nextActions: [],
-      errorCode: "",
-      message: ""
-    };
-  }
-
-  const missingPackages = tool.requiresPackages.filter((pkg) => !installedPackages.has(pkg));
-  const availability = extensionId && registry.hasExtension(extensionId)
-    ? packageAvailabilityForTool(registry, extensionId, installedPackages, missingPackages)
-    : undefined;
-
-  if (missingPackages.length === 0) {
-    return {
-      available: true,
-      extensionId,
-      availabilityResult: availability,
-      nextActions: [],
-      errorCode: "",
-      message: ""
-    };
-  }
-
-  const extensionName = extensionId && registry.hasExtension(extensionId)
-    ? registry.getExtension(extensionId)!.manifest.name
-    : "unknown";
-
-  return {
-    available: false,
-    extensionId,
-    availabilityResult: availability,
-    nextActions: buildToolUnavailableNextActions(tool, extensionName, missingPackages),
-    errorCode: "E_EXTENSION_UNAVAILABLE",
-    message: `Tool "${tool.name}" requires Unity package(s) not installed: ${missingPackages.join(", ")}.`
-  };
+  return extensionId ? checkExtensionPhysicalAvailability(registry, extensionId, getString(flags, "project"), `Tool \"${tool.name}\"`, tool.requiresPackages) : available();
 }
 
-/**
- * Check whether a context's extension dependencies are available.
- *
- * Contexts contributed by extensions (e.g. probuilder.scene, vfx.assets)
- * need their dependencies satisfied before they can be read.
- *
- * @param contextKey - The context key (e.g. "probuilder.scene").
- * @param flags - CLI flags (may contain --project path).
- * @returns Availability check result.
- */
-export async function checkContextExtensionAvailability(
-  contextKey: string,
-  flags: Record<string, string | boolean>
-): Promise<ExtensionAvailabilityCheck> {
+/** 对 live extension Context 执行与 Tool 相同的 physical install gate。 */
+export async function checkContextExtensionAvailability(contextKey: string, flags: Record<string, string | boolean>): Promise<ExtensionAvailabilityCheck> {
   const registry = new ExtensionRegistry();
   const extensionId = findExtensionForContext(registry, contextKey);
-
-  if (!extensionId) {
-    return { available: true, nextActions: [], errorCode: "", message: "" };
-  }
-
-  const projectPath = getString(flags, "project");
-  if (!projectPath) {
-    return {
-      available: true,
-      extensionId,
-      nextActions: [],
-      errorCode: "",
-      message: ""
-    };
-  }
-
-  let installedPackages: Map<string, string>;
-  try {
-    installedPackages = await readInstalledUnityPackages(projectPath);
-  } catch {
-    return {
-      available: true,
-      extensionId,
-      nextActions: [],
-      errorCode: "",
-      message: ""
-    };
-  }
-
-  if (!registry.hasExtension(extensionId)) {
-    return {
-      available: true,
-      extensionId,
-      nextActions: [],
-      errorCode: "",
-      message: ""
-    };
-  }
-
-  const availability = registry.resolveAvailability(extensionId, installedPackages);
-
-  if (availability.status === "available") {
-    return {
-      available: true,
-      extensionId,
-      availabilityResult: availability,
-      nextActions: [],
-      errorCode: "",
-      message: ""
-    };
-  }
-
-  if (availability.status === "unavailable") {
-    const extension = registry.getExtension(extensionId)!;
-    return {
-      available: false,
-      extensionId,
-      availabilityResult: availability,
-      nextActions: buildContextUnavailableNextActions(contextKey, extension.manifest.name, availability.missingPackageIds),
-      errorCode: "E_EXTENSION_UNAVAILABLE",
-      message: `Context "${contextKey}" requires the ${extension.manifest.name} extension, but required Unity package(s) are not installed: ${availability.missingPackageIds.join(", ")}.`
-    };
-  }
-
-  // "unknown" — can't determine; allow proceed.
-  return {
-    available: true,
-    extensionId,
-    availabilityResult: availability,
-    nextActions: [],
-    errorCode: "",
-    message: ""
-  };
+  return extensionId ? checkExtensionPhysicalAvailability(registry, extensionId, getString(flags, "project"), `Context \"${contextKey}\"`) : available();
 }
 
 /**
- * Build the full list of extension tool descriptors, including unavailable
- * extension tools alongside built-in tools. Used by tools group list/describe to surface
- * extension tools alongside built-in tools.
+ * physical gate 优先使用显式 project，否则复用实例选择语义推断当前目标项目。
+ * bridge endpoint 没有可用 registry 项目时保留原 flags，使调用方返回可恢复的 unknown。
  */
+export async function extensionAvailabilityFlags(
+  flags: Record<string, string | boolean>,
+  runtime: { dataDir?: string }
+): Promise<Record<string, string | boolean>> {
+  if (getString(flags, "project") || !runtime.dataDir) return flags;
+  const project = await currentInstanceProjectPath(flags, runtime.dataDir);
+  return project ? { ...flags, project } : flags;
+}
+
+/** Extension 不提供离线 Tool descriptor；完整 descriptor/schema 只能由 live Bridge 返回。 */
 export async function collectExtensionToolDescriptors(
-  flags: Record<string, string | boolean>
+  _flags: Record<string, string | boolean>
 ): Promise<Array<ResolvedToolMetadata & { extensionId?: ExtensionId; extensionAvailable?: boolean }>> {
-  const registry = new ExtensionRegistry();
-  const projectPath = getString(flags, "project");
-
-  let installedPackages: Map<string, string> | undefined;
-  if (projectPath) {
-    try {
-      installedPackages = await readInstalledUnityPackages(projectPath);
-    } catch {
-      // Leave undefined → "unknown" availability
-    }
-  }
-
-  // 离线不再提供 extension tool 的完整 metadata 快照。descriptor 需通过 live bridge 获取。
-  // 这里仅返回空数组，调用方若要列出 extension tool 名称/分组，应改走 manifest 或 live discovery。
   return [];
 }
 
-// ── Helpers ──────────────────────────────────────────────────────────────────
-
-function packageAvailabilityForTool(
+async function checkExtensionPhysicalAvailability(
   registry: ExtensionRegistry,
   extensionId: ExtensionId,
-  installedPackages: ReadonlyMap<string, string>,
-  missingPackageIds: string[]
-): ExtensionAvailabilityResult {
-  const extension = registry.getExtension(extensionId)!;
-  const requiredPackages = extension.manifest.unityPackages.filter((pkg) => installedPackages.has(pkg.packageId) || missingPackageIds.includes(pkg.packageId));
-  const packages = requiredPackages.map((pkg) => ({
-    packageId: pkg.packageId,
-    displayName: pkg.displayName,
-    installed: installedPackages.has(pkg.packageId),
-    version: installedPackages.get(pkg.packageId)
-  }));
-  return {
-    extensionId,
-    status: missingPackageIds.length === 0 ? "available" : "unavailable",
-    packages,
-    missingPackageIds,
-    nextActions: missingPackageIds.length === 0 ? [] : buildToolUnavailableNextActions({
-      name: extensionId,
-      summary: extension.manifest.name,
-      description: extension.manifest.description,
-      group: extensionId,
-      inputSchema: {},
-      destructiveHint: false
-    }, extension.manifest.name, missingPackageIds)
-  };
+  projectPath: string | undefined,
+  subject: string,
+  capabilityPackages?: string[]
+): Promise<ExtensionAvailabilityCheck> {
+  const extension = registry.getExtension(extensionId);
+  if (!extension) return available();
+  if (!projectPath) {
+    return unavailable(extensionId, undefined, undefined, "E_EXTENSION_PHYSICAL_STATE_UNKNOWN", `${subject} requires a project path to verify extension physical installation.`, [
+      "Pass --project <path> for a Unity project with the extension installed.",
+      `Run unity_cli extensions doctor --project <path> to inspect ${extensionId}.`
+    ]);
+  }
+
+  const physicalStates = await readExtensionPhysicalStates(projectPath);
+  const physicalState = physicalStates.get(extensionId);
+  if (!physicalState) {
+    return unavailable(extensionId, undefined, undefined, "E_EXTENSION_PHYSICAL_STATE_UNKNOWN", `${subject} has no physical state record for extension \"${extensionId}\".`, [
+      `Run unity_cli extensions doctor --project ${projectPath}.`
+    ]);
+  }
+  const installedPackages = await readInstalledUnityPackages(projectPath);
+  const requiredPackageIds = capabilityPackages ?? extension.manifest.unityPackages.map((pkg) => pkg.packageId);
+  const missingPackageIds = requiredPackageIds.filter((packageId) => !installedPackages.has(packageId));
+  const availability = registry.resolveAvailability(extensionId, installedPackages);
+  const dependencyInstalled = physicalState.dependencyInstalled && missingPackageIds.length === 0;
+  if (physicalState.installed && dependencyInstalled) {
+    return { available: true, extensionId, availabilityResult: availability, physicalState, nextActions: [], errorCode: "", message: "" };
+  }
+  const code = dependencyInstalled ? "E_EXTENSION_NOT_INSTALLED" : "E_EXTENSION_DEPENDENCY_MISSING";
+  const reason = dependencyInstalled
+    ? `extension files are ${physicalState.status}`
+    : `required Unity package(s) are missing: ${(missingPackageIds.length > 0 ? missingPackageIds : physicalState.missingPackageIds).join(", ")}`;
+  return unavailable(extensionId, availability, physicalState, code, `${subject} is unavailable because ${reason}.`, physicalState.nextActions);
+}
+
+function available(): ExtensionAvailabilityCheck {
+  return { available: true, nextActions: [], errorCode: "", message: "" };
+}
+
+function unavailable(
+  extensionId: ExtensionId,
+  availabilityResult: ExtensionAvailabilityResult | undefined,
+  physicalState: ExtensionStatusCheck | undefined,
+  errorCode: string,
+  message: string,
+  nextActions: string[]
+): ExtensionAvailabilityCheck {
+  return { available: false, extensionId, availabilityResult, physicalState, errorCode, message, nextActions };
 }
 
 function findExtensionForTool(registry: ExtensionRegistry, toolName: string): ExtensionId | undefined {
   const contribution = findBuiltinExtensionToolContribution(toolName);
   if (contribution) return contribution.extensionId;
-  for (const id of registry.extensionIds()) {
-    const ext = registry.getExtension(id)!;
-    if (ext.manifest.contributions.tools?.some((t) => t.name === toolName)) {
-      return id;
-    }
-  }
-  return undefined;
+  return registry.extensionIds().find((id) => registry.getExtension(id)!.manifest.contributions.tools?.some((tool) => tool.name === toolName));
 }
 
 function findExtensionForContext(registry: ExtensionRegistry, contextKey: string): ExtensionId | undefined {
-  for (const id of registry.extensionIds()) {
-    const ext = registry.getExtension(id)!;
-    if (ext.manifest.contributions.contexts?.some((c) => c.key === contextKey)) {
-      return id;
-    }
-  }
-  return undefined;
-}
-
-function buildToolUnavailableNextActions(
-  tool: ToolMetadata,
-  extensionName: string,
-  missingPackageIds: string[]
-): string[] {
-  const actions: string[] = [];
-  actions.push(
-    `Install the required Unity package(s) manually via Unity Package Manager, or run package.install with explicit package versions to enable ${extensionName}: ${missingPackageIds.join(", ")}.`
-  );
-  actions.push(
-    `Do not write \"latest\" into manifest.json; Unity requires a SemVer/package source such as \"<version>\", \"file:<path>\" or a Git URL.`
-  );
-  actions.push(
-    `After Unity resolves packages, run 'unity_cli extensions install <id> --project <path>' for the matching extension bundle.`
-  );
-  actions.push(
-    `Run 'unity_cli extensions doctor --project <path>' to diagnose all extension availability.`
-  );
-  actions.push(
-    `Run 'unity_cli tools describe ${tool.name}' to inspect tool requirements.`
-  );
-  return actions;
-}
-
-function buildContextUnavailableNextActions(
-  contextKey: string,
-  extensionName: string,
-  missingPackageIds: string[]
-): string[] {
-  const actions: string[] = [];
-  actions.push(
-    `Install the required Unity package(s) manually via Unity Package Manager, or run package.install with explicit package versions to enable ${extensionName}: ${missingPackageIds.join(", ")}.`
-  );
-  actions.push(
-    `Do not write \"latest\" into manifest.json; Unity requires a SemVer/package source such as \"<version>\", \"file:<path>\" or a Git URL.`
-  );
-  actions.push(
-    `Run 'unity_cli extensions doctor --project <path>' to diagnose all extension availability.`
-  );
-  return actions;
+  return registry.extensionIds().find((id) => registry.getExtension(id)!.manifest.contributions.contexts?.some((context) => context.key === contextKey));
 }

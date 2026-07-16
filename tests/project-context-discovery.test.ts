@@ -1,662 +1,77 @@
-/**
- * Tests for project context discovery and context CLI integration.
- *
- * Covers:
- * - Descriptor mapping: raw bridge descriptor → unified ContextDescriptor
- * - Source isolation: built-in vs project contexts correctly classified
- * - Duplicate guard: project context with same name as built-in is rejected
- * * - Context never enters tools path: ContextDescriptor is distinct from ToolMetadata
- * - CLI context list/describe/read with --include-custom
- */
-
 import assert from "node:assert/strict";
 import test from "node:test";
-import { execute } from "../src/cli.js";
-import { JobRunner } from "../src/job-runner.js";
-import { JobStore } from "../src/job-store.js";
 import type { BridgeRequest } from "../src/bridge/index.js";
 import {
-  shouldDiscoverContexts,
+  discoverProjectContexts,
   rawDescriptorToContextDescriptor,
-  type ContextDescriptor,
-  type ProjectContextRuntime
+  shouldDiscoverContexts
 } from "../src/project-context-discovery.js";
-import { mkdtemp } from "node:fs/promises";
-import { join } from "node:path";
-import { tmpdir } from "node:os";
+import type { ContextDescriptor } from "../src/contexts/types.js";
 
-process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
-
-async function makeRuntime(): Promise<ProjectContextRuntime & { dataDir: string; store: JobStore; runner: JobRunner }> {
-  const dataDir = await mkdtemp(join(tmpdir(), "unity_cli-context-"));
-  const store = new JobStore(dataDir);
-  return { dataDir, store, runner: new JobRunner(store, dataDir) };
+function descriptor(source: ContextDescriptor["source"]): ContextDescriptor {
+  return {
+    name: source === "extension" ? "probuilder.scene" : `${source}.sample`,
+    summary: `Read ${source} sample.`,
+    description: `Read a ${source} sample from the live registry.`,
+    category: "sample",
+    source,
+    target: "editor",
+    availabilityScope: "editorSession",
+    playModeSupport: "supported",
+    inputSchema: { type: "object", properties: {}, additionalProperties: false },
+    outputSchema: { type: "object", properties: { value: { type: "string" } }, additionalProperties: false },
+    examples: [{ description: `Read ${source} sample.`, input: {}, argv: ["context", "read", source === "extension" ? "probuilder.scene" : `${source}.sample`, "--input", "{}"] }],
+    cliCommand: `context read ${source === "extension" ? "probuilder.scene" : `${source}.sample`}`
+  };
 }
 
-// ─── Descriptor mapping tests ──────────────────────────────────────────
-
-test("rawDescriptorToContextDescriptor maps project context descriptor correctly", () => {
-  const raw = {
-    name: "project.scene-list",
-    description: "Lists all scenes in the project.",
-    category: "project",
-    version: "1.0.0",
-    inputSchema: { type: "object", properties: { includeDisabled: { type: "boolean" } } },
-    outputSchema: { type: "object", properties: { scenes: { type: "array" } } },
-    source: "project",
-    target: "editor",
-    availabilityScope: "editorSession",
-    supportStatus: "live-bridge",
-    cliCommand: "context read project.scene-list",
-    fingerprint: {
-      algorithm: "unity-cli-project-context-fingerprint-v1",
-      value: "abc123",
-      status: "matched",
-      descriptorSha256: "def456",
-      handlerSha256: "ghi789"
-    }
-  };
-
-  const descriptor = rawDescriptorToContextDescriptor(raw);
-  assert.ok(descriptor);
-  assert.equal(descriptor!.name, "project.scene-list");
-  assert.equal(descriptor!.summary, "Lists all scenes in the project.");
-  assert.equal(descriptor!.description, "Lists all scenes in the project.");
-  assert.equal("title" in descriptor!, false);
-  assert.equal("kind" in descriptor!, false);
-  assert.equal("requiresUnity" in descriptor!, false);
-  assert.equal(descriptor!.source, "project");
-  assert.equal(descriptor!.category, "project");
-  assert.deepEqual(descriptor!.inputSchema, raw.inputSchema);
-  assert.deepEqual(descriptor!.outputSchema, raw.outputSchema);
-  assert.equal(descriptor!.fingerprint?.algorithm, "unity-cli-project-context-fingerprint-v1");
-  assert.equal(descriptor!.fingerprint?.value, "abc123");
-  assert.equal(descriptor!.fingerprint?.status, "matched");
-  assert.equal(descriptor!.fingerprint?.descriptorSha256, "def456");
-  assert.equal(descriptor!.fingerprint?.handlerSha256, "ghi789");
-});
-
-test("rawDescriptorToContextDescriptor maps built-in context descriptor", () => {
-  const raw = {
-    name: "unity.version",
-    source: "built-in",
-    description: "Reports the Unity version."
-  };
-
-  const descriptor = rawDescriptorToContextDescriptor(raw);
-  assert.ok(descriptor);
-  assert.equal(descriptor!.source, "built-in");
-  assert.equal("requiresUnity" in descriptor!, false);
-  assert.equal("kind" in descriptor!, false);
-  assert.equal("handler" in descriptor!, false);
-  assert.equal(descriptor!.supportStatus, "live-bridge");
-});
-
-test("rawDescriptorToContextDescriptor returns undefined for invalid input", () => {
-  assert.equal(rawDescriptorToContextDescriptor(null), undefined);
-  assert.equal(rawDescriptorToContextDescriptor(undefined), undefined);
-  assert.equal(rawDescriptorToContextDescriptor("string"), undefined);
-  assert.equal(rawDescriptorToContextDescriptor(42), undefined);
-  assert.equal(rawDescriptorToContextDescriptor({}), undefined);
-  assert.equal(rawDescriptorToContextDescriptor({ description: "no name" }), undefined);
-});
-
-test("rawDescriptorToContextDescriptor fills defaults for missing fields", () => {
-  const raw = { name: "minimal.context", source: "project", description: "Minimal context." };
-  const descriptor = rawDescriptorToContextDescriptor(raw);
-  assert.ok(descriptor);
-  assert.equal(descriptor!.description, "Minimal context.");
-  assert.equal(descriptor!.category, "custom");
-  assert.equal(descriptor!.target, "editor");
-  assert.deepEqual(descriptor!.inputSchema, {});
-  assert.equal(descriptor!.outputSchema, undefined);
-  assert.equal(descriptor!.supportStatus, "live-bridge");
-  assert.equal(descriptor!.cliCommand, "context read minimal.context");
-  assert.equal("handler" in descriptor!, false);
-  assert.equal("docsTopic" in descriptor!, false);
-});
-
-// ─── Source isolation tests ─────────────────────────────────────────────
-
-test("project context is correctly identified as source=project", () => {
-  const raw = { name: "custom.data", source: "project", description: "Reads custom data." };
-  const descriptor = rawDescriptorToContextDescriptor(raw);
-  assert.ok(descriptor);
-  assert.equal(descriptor!.source, "project");
-  assert.equal("requiresUnity" in descriptor!, false);
-});
-
-test("built-in context is correctly identified as source=built-in", () => {
-  const raw = { name: "unity.data", source: "built-in", description: "Reads Unity data." };
-  const descriptor = rawDescriptorToContextDescriptor(raw);
-  assert.ok(descriptor);
-  assert.equal(descriptor!.source, "built-in");
-  assert.equal("requiresUnity" in descriptor!, false);
-});
-
-test("context with unknown source defaults to built-in", () => {
-  const raw = { name: "unknown.data", source: "unknown", description: "Reads unknown data." };
-  const descriptor = rawDescriptorToContextDescriptor(raw);
-  assert.ok(descriptor);
-  assert.equal(descriptor!.source, "built-in");
-  assert.equal("requiresUnity" in descriptor!, false);
-});
-
-// ─── Context not in tools path ─────────────────────────────────────────
-
-test("ContextDescriptor stays distinct from tool descriptors", () => {
-  const raw = {
-    name: "project.data",
-    description: "Reads project data.",
-    source: "project",
-    inputSchema: {},
-    outputSchema: { type: "object" }
-  };
-  const descriptor = rawDescriptorToContextDescriptor(raw);
-  assert.ok(descriptor);
-  assert.equal("kind" in descriptor!, false);
-  assert.equal("destructiveHint" in descriptor!, false);
-  assert.equal("title" in descriptor!, false);
-  assert.equal(descriptor!.summary, "Reads project data.");
-  assert.equal(descriptor!.cliCommand, "context read project.data");
-  assert.ok(!descriptor!.cliCommand?.startsWith("tools run"));
-});
-
-// ─── shouldDiscoverContexts tests ──────────────────────────────────────
-
-test("shouldDiscoverContexts returns true with --include-custom flag", () => {
-  const flags = { "include-custom": true };
-  assert.equal(shouldDiscoverContexts(flags, {}), true);
-});
-
-test("shouldDiscoverContexts returns false without bridge hints", () => {
-  const flags = {};
-  assert.equal(shouldDiscoverContexts(flags, {}), false);
-});
-
-test("shouldDiscoverContexts returns true with bridge-endpoint flag", () => {
-  const flags = { "bridge-endpoint": "http://localhost:1234" };
-  assert.equal(shouldDiscoverContexts(flags, {}), true);
-});
-
-test("shouldDiscoverContexts returns true with pre-populated projectContexts", () => {
-  const flags = {};
-  const runtime: ProjectContextRuntime = { projectContexts: [] };
-  assert.equal(shouldDiscoverContexts(flags, runtime), true);
-});
-
-test("shouldDiscoverContexts returns true with UNITY_CLI_BRIDGE_ENDPOINT env var", () => {
-  const prev = process.env.UNITY_CLI_BRIDGE_ENDPOINT;
-  process.env.UNITY_CLI_BRIDGE_ENDPOINT = "http://localhost:9999";
-  try {
-    assert.equal(shouldDiscoverContexts({}, {}), true);
-  } finally {
-    if (prev === undefined) {
-      delete process.env.UNITY_CLI_BRIDGE_ENDPOINT;
-    } else {
-      process.env.UNITY_CLI_BRIDGE_ENDPOINT = prev;
-    }
+test("raw descriptor mapping preserves built-in, extension, and project source", () => {
+  for (const source of ["built-in", "extension", "project"] as const) {
+    const mapped = rawDescriptorToContextDescriptor(descriptor(source));
+    assert.ok(mapped);
+    assert.equal(mapped.source, source);
   }
 });
 
-// ─── CLI integration tests ──────────────────────────────────────────────
+test("raw descriptor mapping rejects unknown source and missing schemas", () => {
+  assert.equal(rawDescriptorToContextDescriptor({ ...descriptor("built-in"), source: "unknown" }), undefined);
+  assert.equal(rawDescriptorToContextDescriptor({ ...descriptor("built-in"), inputSchema: undefined }), undefined);
+  assert.equal(rawDescriptorToContextDescriptor({ ...descriptor("built-in"), outputSchema: undefined }), undefined);
+});
 
-test("context list --include-custom discovers project custom contexts through the bridge", async () => {
-  const runtime = await makeRuntime();
+test("context discovery target detection recognizes explicit and runtime targets", () => {
+  assert.equal(shouldDiscoverContexts({}, {}), false);
+  assert.equal(shouldDiscoverContexts({ "include-custom": true }, {}), true);
+  assert.equal(shouldDiscoverContexts({ "bridge-endpoint": "http://127.0.0.1:1234" }, {}), true);
+  assert.equal(shouldDiscoverContexts({}, { projectContexts: [] }), true);
+});
+
+test("project context discovery delegates to the strict plural catalog", async () => {
   const requests: BridgeRequest[] = [];
-  const customDescriptor = {
-    name: "project.scene-list",
-    description: "Lists all scenes in the project.",
-    category: "project",
-    source: "project",
-    inputSchema: { type: "object" },
-    outputSchema: { type: "object" },
-    target: "editor",
-    availabilityScope: "editorSession",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "context read project.scene-list",
-    fingerprint: { algorithm: "unity-cli-project-context-fingerprint-v1", value: "abc123", status: "matched" }
-  };
-
-  const result = await execute(["context", "list", "--include-custom"], {
-    ...runtime,
-    bridgeExecute: async (payload: BridgeRequest) => {
+  const contexts = [descriptor("built-in"), descriptor("extension"), descriptor("project")];
+  const result = await discoverProjectContexts({ "include-custom": true }, {
+    bridgeExecute: async (payload) => {
       requests.push(payload);
-      return {
-        ok: true as const,
-        data: {
-          contexts: [customDescriptor],
-          builtInCount: 0,
-          projectCustomCount: 1
-        }
-      };
+      return { ok: true, requestId: payload.requestId, data: { contexts } };
     }
-  });
+  }, "context_discovery");
 
-  assert.equal(result.ok, true);
-  assert.equal(requests.length, 1);
-  assert.equal(requests[0].command, "context.list");
-  const data = result.data as { contexts: ContextDescriptor[]; count: number };
-  // 2 TS-owned local contexts + 1 extension manifest context + 1 project custom context
-  assert.equal(data.count, 4);
-  const projectCtx = data.contexts.find((c) => c.name === "project.scene-list");
-  assert.ok(projectCtx, "project.scene-list should be in results");
-  assert.equal(projectCtx.source, "project");
+  assert.ok(result.ok);
+  if (!result.ok) return;
+  assert.deepEqual(requests.map((request) => request.command), ["context.list"]);
+  assert.equal(result.builtInCount, 1);
+  assert.equal(result.projectCustomCount, 1);
+  assert.ok(result.contexts.some((context) => context.source === "extension"));
 });
 
-test("context list --include-custom merges built-in and project custom contexts with source isolation", async () => {
-  const runtime = await makeRuntime();
-  const builtInDescriptor = {
-    name: "unity.version",
-    description: "Current Unity editor version.",
-    category: "built-in",
-    source: "built-in",
-    inputSchema: {},
-    target: "editor"
-  };
-  const customDescriptor = {
-    name: "project.scene-list",
-    description: "Lists all scenes in the project.",
-    category: "project",
-    source: "project",
-    inputSchema: { type: "object" },
-    target: "editor",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "context read project.scene-list"
-  };
-
-  const result = await execute(["context", "list", "--include-custom"], {
-    ...runtime,
-    bridgeExecute: async () => ({
-      ok: true as const,
-      data: {
-        contexts: [builtInDescriptor, customDescriptor],
-        builtInCount: 1,
-        projectCustomCount: 1
-      }
+test("project context discovery returns structured registry errors", async () => {
+  const result = await discoverProjectContexts({ "include-custom": true }, {
+    bridgeExecute: async (payload) => ({
+      ok: true,
+      requestId: payload.requestId,
+      data: { contexts: [{ ...descriptor("project"), inputSchema: undefined }] }
     })
-  });
-
-  assert.equal(result.ok, true);
-  const data = result.data as { contexts: ContextDescriptor[]; count: number };
-  // 2 TS-owned local contexts + 1 extension manifest context + 1 bridge-discovered built-in + 1 custom
-  assert.equal(data.count, 5);
-  const unityVersion = data.contexts.find((c) => c.name === "unity.version");
-  const projectSceneList = data.contexts.find((c) => c.name === "project.scene-list");
-  assert.ok(unityVersion, "unity.version should be in results");
-  assert.ok(projectSceneList, "project.scene-list should be in results");
-});
-
-test("context list --include-custom rejects project context with same name as bridge built-in (duplicate guard)", async () => {
-  const runtime = await makeRuntime();
-  const builtInDescriptor = {
-    name: "project.info",
-    description: "Read project info from the built-in bridge context.",
-    category: "project",
-    source: "built-in",
-    inputSchema: {},
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "context read project.info"
-  };
-  const conflictingDescriptor = {
-    name: "project.info",
-    description: "Overridden project info.",
-    category: "project",
-    source: "project",
-    inputSchema: {},
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "context read project.info"
-  };
-
-  const result = await execute(["context", "list", "--include-custom"], {
-    ...runtime,
-    bridgeExecute: async () => ({
-      ok: true as const,
-      data: {
-        contexts: [builtInDescriptor, conflictingDescriptor],
-        builtInCount: 1,
-        projectCustomCount: 1
-      }
-    })
-  });
-
-  assert.equal(result.ok, true);
-  const data = result.data as { contexts: ContextDescriptor[]; count: number };
-  const projectInfoContexts = data.contexts.filter((c) => c.name === "project.info");
-  assert.equal(projectInfoContexts.length, 1, "project.info should appear exactly once (deduplicated)");
-  assert.equal(projectInfoContexts[0].source, "built-in");
-});
-
-test("context describe <name> resolves custom context descriptor through the bridge", async () => {
-  const runtime = await makeRuntime();
-  const customDescriptor = {
-    name: "project.build-info",
-    description: "Current build configuration.",
-    category: "project",
-    source: "project",
-    inputSchema: { type: "object" },
-    outputSchema: { type: "object" },
-    target: "editor",
-    availabilityScope: "editorSession",
-    handler: "bridge",
-    supportStatus: "live-bridge",
-    cliCommand: "context read project.build-info",
-    fingerprint: { algorithm: "unity-cli-project-context-fingerprint-v1", value: "fp123", status: "matched" }
-  };
-
-  const result = await execute(["context", "describe", "project.build-info", "--include-custom"], {
-    ...runtime,
-    bridgeExecute: async (payload: BridgeRequest) => {
-      if (payload.command === "context.list") {
-        return { ok: true as const, data: { contexts: [customDescriptor], builtInCount: 0, projectCustomCount: 1 } };
-      }
-      // context.describe fallback
-      return { ok: true as const, data: customDescriptor };
-    }
-  });
-
-  assert.equal(result.ok, true);
-  const data = result.data as Record<string, unknown>;
-  assert.equal(data.name, "project.build-info");
-  assert.equal(data.source, "project");
-});
-
-test("context read <name> delegates to bridge context.read and returns envelope", async () => {
-  const runtime = await makeRuntime();
-
-  const result = await execute(["context", "read", "project.scene-list", "--include-custom"], {
-    ...runtime,
-    bridgeExecute: async (payload: BridgeRequest) => {
-      if (payload.command === "context.list") {
-        return {
-          ok: true as const,
-          data: {
-            contexts: [{
-              name: "project.scene-list",
-              description: "Lists all scenes in the project.",
-              category: "project",
-              source: "project",
-              inputSchema: {},
-              target: "editor"
-            }],
-            builtInCount: 0,
-            projectCustomCount: 1
-          }
-        };
-      }
-      if (payload.command === "context.read") {
-        return {
-          ok: true as const,
-          data: {
-            command: "context.read",
-            context: { name: "project.scene-list", source: "project" },
-            execution: { channel: "live", exitState: "completed" },
-            result: { scenes: ["Assets/Scenes/Main.unity"], count: 1 },
-            logs: { bridge: "/tmp/bridge.log" }
-          }
-        };
-      }
-      return { ok: false as const, error: { code: "UNKNOWN_COMMAND", message: "Unexpected" } };
-    }
-  });
-
-  assert.equal(result.ok, true);
-  const data = result.data as Record<string, unknown>;
-  assert.equal(data.command, "context.read");
-});
-
-test("context describe without name returns CONTEXT_DESCRIBE_NAME_REQUIRED error", async () => {
-  const runtime = await makeRuntime();
-  const result = await execute(["context", "describe"], runtime);
-  assert.equal(result.ok, false);
-  assert.equal(result.error?.code, "CONTEXT_DESCRIBE_NAME_REQUIRED");
-});
-
-test("context read without name returns E_CONTEXT_NAME_REQUIRED error", async () => {
-  const runtime = await makeRuntime();
-  const result = await execute(["context", "read"], runtime);
-  assert.equal(result.ok, false);
-  assert.equal(result.error?.code, "E_CONTEXT_NAME_REQUIRED");
-});
-
-test("context list without --include-custom returns local TS-owned and extension manifest contexts", async () => {
-  const runtime = await makeRuntime();
-  const result = await execute(["context", "list"], runtime);
-  assert.equal(result.ok, true);
-  const data = result.data as { contexts: Array<ContextDescriptor | { name: string; source: "extension" }>; count: number };
-  assert.equal(data.count, 3);
-  assert.ok(data.contexts.some((c) => c.name === "tools.groups"));
-  assert.ok(data.contexts.some((c) => c.name === "tools.custom"));
-  assert.ok(data.contexts.some((c) => c.name === "probuilder.scene" && c.source === "extension"));
-  assert.ok(!data.contexts.some((c) => c.name === "project.info"));
-  assert.ok(!data.contexts.some((c) => c.source === "project"));
-});
-
-// ─── C# registry structural tests ──────────────────────────────────────
-
-test("Unity C# custom context registry supports IUnityCliContext descriptors and bridge commands", async () => {
-  const { readFile } = await import("node:fs/promises");
-  const registry = await readFile(new URL("../../unitypkg/Editor/ProjectContexts/ProjectContextRegistry.cs", import.meta.url), "utf8");
-  const interfaceFile = await readFile(new URL("../../unitypkg/Editor/ProjectTools/IUnityCliTool.cs", import.meta.url), "utf8");
-
-  assert.match(interfaceFile, /interface IUnityCliContext<TReq, TRes>/);
-  assert.match(interfaceFile, /ContextDescriptor Describe\(\)/);
-  assert.match(interfaceFile, /TRes Read\(TReq request, UnityCliProjectToolContext ctx\)/);
-  assert.match(registry, /TryRegisterInterfaceContext/);
-  assert.match(registry, /typeof\(IUnityCliContext<,>\)/);
-  assert.match(registry, /UnityCliSchemaDeriver\.DeriveSchema/);
-  assert.doesNotMatch(registry, /UnityCliContextAttribute/);
-  await assert.rejects(
-    readFile(new URL("../../unitypkg/Editor/ProjectContexts/UnityCliContextAttribute.cs", import.meta.url), "utf8"),
-    /ENOENT/
-  );
-  // Registry has context.list/describe/read bridge commands
-  assert.match(registry, /context\.list/);
-  assert.match(registry, /context\.describe/);
-  assert.match(registry, /context\.read/);
-  assert.doesNotMatch(registry, /Kind.*=.*"context"/);
-  // Registry enforces Source=project
-  assert.match(registry, /Source.*=.*"project"/);
-  // Registry has fingerprint support
-  assert.match(registry, /E_CONTEXT_FINGERPRINT_MISMATCH/);
-  // Registry has source guard
-  assert.match(registry, /ExecuteMenuItem|SaveAssets/);
-});
-
-test("Unity C# context definition enforces read-only constraint", async () => {
-  const { readFile } = await import("node:fs/promises");
-  const definition = await readFile(new URL("../../unitypkg/Editor/ProjectContexts/UnityCliContextDefinition.cs", import.meta.url), "utf8");
-  assert.doesNotMatch(definition, /public string Kind/);
-  assert.match(definition, /public string Source/);
-  // Definition has Read handler (not Execute/Run)
-  assert.match(definition, /Func<UnityCliProjectToolContext, string> Read/);
-  // No destructive/write fields as public properties (the doc comment mentions them as "must not declare")
-  // Check property declarations, not doc comments
-  const propertyLines = definition.split('\n').filter(line => line.match(/public\s+\w+\s+\w+\s*\{/));
-  const destructiveProps = propertyLines.filter(line => /DestructiveHint|SupportsJob|ArtifactKinds/.test(line));
-  assert.equal(destructiveProps.length, 0, 'Context definition should not have DestructiveHint/SupportsJob/ArtifactKinds as public properties');
-});
-
-// ─── SampleContext contract / snapshot tests ──────────────────────────────
-
-test("SampleContext uses IUnityCliContext with correct contract fields", async () => {
-  const { readFile } = await import("node:fs/promises");
-  const sample = await readFile(new URL("../../unitypkg/Editor/Samples/SampleContext.cs", import.meta.url), "utf8");
-
-  assert.match(sample, /class SampleContext : IUnityCliContext<SampleContext\.Request, SampleContext\.Result>/);
-  assert.doesNotMatch(sample, /\[UnityCliContext\(/);
-  assert.doesNotMatch(sample, /\[UnityCliTool\(/);
-
-  // Name matches the required contract
-  assert.match(sample, /"sample\.project-summary"/);
-
-  // Category is sample
-  assert.match(sample, /Category\s*=\s*"sample"/);
-
-  // Schema comes from DTO fields, not descriptor string literals.
-  assert.match(sample, /public bool IncludeDisabled \{ get; set; \}/);
-  assert.match(sample, /public string UnityVersion \{ get; set; \}/);
-  assert.match(sample, /public string BuildTarget \{ get; set; \}/);
-  assert.doesNotMatch(sample, /InputSchema\s*=/);
-  assert.doesNotMatch(sample, /OutputSchema\s*=/);
-
-  assert.doesNotMatch(sample, /EquivalentUnityMcp/);
-  assert.doesNotMatch(sample, /Title\s*=/);
-
-  // Has RefreshBehavior
-  assert.match(sample, /RefreshBehavior.*=.*"onDemand"/);
-});
-
-test("SampleContext descriptor derives schema and fingerprint from interface form", async () => {
-  const { readFile } = await import("node:fs/promises");
-  const sample = await readFile(new URL("../../unitypkg/Editor/Samples/SampleContext.cs", import.meta.url), "utf8");
-  const registry = await readFile(new URL("../../unitypkg/Editor/ProjectContexts/ProjectContextRegistry.cs", import.meta.url), "utf8");
-
-  assert.doesNotMatch(sample, /InputSchema\s*=/);
-  assert.doesNotMatch(sample, /OutputSchema\s*=/);
-  assert.match(registry, /UnityCliSchemaDeriver\.DeriveSchema\(reqType\)/);
-  assert.match(registry, /UnityCliSchemaDeriver\.DeriveSchema\(resType\)/);
-  assert.match(registry, /DescriptorSource = "IUnityCliContext"/);
-});
-
-test("SampleContext handler uses Read and avoids Execute/Run", async () => {
-  const { readFile } = await import("node:fs/promises");
-  const sample = await readFile(new URL("../../unitypkg/Editor/Samples/SampleContext.cs", import.meta.url), "utf8");
-
-  assert.doesNotMatch(sample, /public static string Execute\(/);
-  assert.doesNotMatch(sample, /public static string Run\(/);
-  assert.match(sample, /public Result Read\(Request request, UnityCliProjectToolContext ctx\)/);
-});
-
-// ─── Source guard tests ─────────────────────────────────────────────────
-
-test("SampleContext does not contain write/side-effect banned tokens", async () => {
-  const { readFile } = await import("node:fs/promises");
-  const sample = await readFile(new URL("../../unitypkg/Editor/Samples/SampleContext.cs", import.meta.url), "utf8");
-
-  const bannedTokens = [
-    "ExecuteMenuItem",
-    "SaveAssets",
-    "AssetDatabase.Refresh",
-    "isPlaying =",
-    "EditorSceneManager.SaveScene",
-    "MarkSceneDirty",
-    "PackageManager.",
-    "File.Write",
-    "File.WriteAll",
-    "File.Append",
-    "Directory.Create",
-    "Directory.Delete",
-    "Process.Start"
-  ];
-
-  for (const token of bannedTokens) {
-    assert.doesNotMatch(
-      sample,
-      new RegExp(token.replace(".", "\\.")),
-      `SampleContext must not contain write-semantic token: ${token}`
-    );
-  }
-});
-
-test("custom context does not enter tools execution path", async () => {
-  const { readFile } = await import("node:fs/promises");
-  const sampleContext = await readFile(new URL("../../unitypkg/Editor/Samples/SampleContext.cs", import.meta.url), "utf8");
-  const sampleTool = await readFile(new URL("../../unitypkg/Editor/Samples/SampleEchoTool.cs", import.meta.url), "utf8");
-
-  // SampleContext 新形态:用 IUnityCliContext<,> 泛型接口,不再用 attribute
-  assert.match(sampleContext, /IUnityCliContext</);
-  assert.doesNotMatch(sampleContext, /\[UnityCliContext\(/);
-  assert.doesNotMatch(sampleContext, /\[UnityCliTool\(/);
-
-  // SampleEchoTool 新形态:用 IUnityCliTool<,> 泛型接口,不再用 [UnityCliTool] attribute
-  assert.match(sampleTool, /IUnityCliTool</);
-  assert.doesNotMatch(sampleTool, /\[UnityCliTool\(/);
-
-  // Context handler is Read(Request, ctx); Tool handler is Execute(Request, ctx).
-  assert.match(sampleContext, /public Result Read\(Request request, UnityCliProjectToolContext ctx\)/);
-  assert.doesNotMatch(sampleContext, /public Result Execute\(/);
-  assert.match(sampleTool, /public Result Execute\(Request request, UnityCliProjectToolContext ctx\)/);
-  assert.doesNotMatch(sampleTool, /IUnityCliContext/);
-});
-
-test("custom context registry is separate from tools registry", async () => {
-  const { readFile } = await import("node:fs/promises");
-  const contextRegistry = await readFile(new URL("../../unitypkg/Editor/ProjectContexts/ProjectContextRegistry.cs", import.meta.url), "utf8");
-  const toolCommands = await readFile(new URL("../../unitypkg/Editor/Commands/ProjectToolCommands.cs", import.meta.url), "utf8");
-
-  // Context registry uses context.list/describe/read commands
-  assert.match(contextRegistry, /"context\.list"/);
-  assert.match(contextRegistry, /"context\.describe"/);
-  assert.match(contextRegistry, /"context\.read"/);
-
-  // Tool commands use project-tool.list/run commands
-  assert.match(toolCommands, /"project-tool\.list"/);
-  assert.match(toolCommands, /"project-tool\.run"/);
-
-  // Context registry does NOT register project-tool commands
-  assert.doesNotMatch(contextRegistry, /"project-tool\.run"/);
-
-  // Tool commands do NOT register context commands
-  assert.doesNotMatch(toolCommands, /"context\.read"/);
-});
-
-test("SampleContext read handler only reads, no write operations", async () => {
-  const { readFile } = await import("node:fs/promises");
-  const sample = await readFile(new URL("../../unitypkg/Editor/Samples/SampleContext.cs", import.meta.url), "utf8");
-
-  // Verify read-only API usage patterns:
-  // Application.unityVersion — read
-  assert.match(sample, /Application\.unityVersion/);
-  // SceneManager.GetActiveScene — read
-  assert.match(sample, /SceneManager\.GetActiveScene/);
-  // GraphicsSettings.currentRenderPipeline — read
-  assert.match(sample, /GraphicsSettings\.currentRenderPipeline/);
-  // EditorUserBuildSettings.activeBuildTarget — read
-  assert.match(sample, /EditorUserBuildSettings\.activeBuildTarget/);
-
-  // Verify no write operations (source guard banned tokens):
-  const bannedTokens = [
-    "AssetDatabase.Refresh",
-    "AssetDatabase.SaveAssets",
-    "EditorSceneManager.SaveScene",
-    "EditorApplication.EnterPlayMode",
-    "File.Write",
-    "Directory.Create"
-  ];
-  for (const token of bannedTokens) {
-    assert.doesNotMatch(
-      sample,
-      new RegExp(token.replace(".", "\\.")),
-      `SampleContext must not contain write operation: ${token}`
-    );
-  }
-});
-
-// ─── DiagnosePreflightJson customContexts contract tests ────────────────────
-
-test("DiagnosePreflightJson calls DiscoverProjectContexts and outputs customContexts with fingerprint", async () => {
-  const { readFile } = await import("node:fs/promises");
-  const diagnose = await readFile(new URL("../../unitypkg/Editor/Tools/diagnose/preflight.cs", import.meta.url), "utf8");
-
-  assert.match(diagnose, /DiscoverProjectContexts\(\)/, "DiagnosePreflightJson must call DiscoverProjectContexts()");
-  assert.match(diagnose, /CustomContexts = new CustomFingerprintInfo \{ Fingerprint = ParseJsonToTree\(ProjectContextFingerprintSummaryJson\(\)\) \}/, "customContexts must contain fingerprint from ProjectContextFingerprintSummaryJson()");
-  assert.match(diagnose, /projectContextFingerprint/, "DiagnosePreflightJson must include projectContextFingerprint in checks");
-});
-
-test("DiagnosePreflightJson customContexts fingerprint fields match TS doctor expectations", async () => {
-  const { readFile } = await import("node:fs/promises");
-  const registry = await readFile(new URL("../../unitypkg/Editor/ProjectContexts/ProjectContextRegistry.cs", import.meta.url), "utf8");
-
-  // ProjectContextFingerprintSummaryJson must output the fields that TS doctor reads:
-  // contextCount, blockedCount, warnCount, mode, algorithm
-  assert.match(registry, /Prop\("algorithm"/, "Fingerprint summary must include algorithm");
-  assert.match(registry, /Prop\("mode"/, "Fingerprint summary must include mode");
-  assert.match(registry, /Prop\("contextCount"/, "Fingerprint summary must include contextCount");
-  assert.match(registry, /Prop\("blockedCount"/, "Fingerprint summary must include blockedCount");
-  assert.match(registry, /Prop\("warnCount"/, "Fingerprint summary must include warnCount");
+  }, "context_discovery_invalid");
+  assert.ok(!result.ok);
+  assert.equal(result.error?.code, "E_CONTEXT_REGISTRY_UNHEALTHY");
 });

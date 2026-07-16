@@ -8,8 +8,6 @@ namespace UnityCli
 {
     /// <summary>
     /// material.create — 从指定 shader 创建新 Material 资产。拒绝覆盖(除非 overwrite)。
-    /// 对齐旧 MaterialCreate handler;session-affecting(asset-write)。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class MaterialCreateTool : IUnityCliTool<MaterialCreateTool.Request, MaterialCreateTool.Result>
     {
@@ -33,10 +31,10 @@ namespace UnityCli
             Description = "Create a new Material asset from a named shader at an Assets/*.mat path. Use shader.list or asset.search-built-in to discover a valid shader name first; an unknown shader returns E_SHADER_NOT_FOUND. Refuses to overwrite an existing material unless overwrite=true.",
             Group = "material",
             Version = "1.0.0",
-            DestructiveHint = false,
+            DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",
-            PlayModeSupport = "session-affecting",
+            PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 30000,
             MaxTimeoutMs = 600000,
             Examples = new[]
@@ -45,7 +43,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             MaterialToolSupport.EnsureEditorNotBusy("material.create");
             var path = MaterialToolSupport.RequireMaterialPath(request.Path);
@@ -75,11 +73,11 @@ namespace UnityCli
             AssetDatabase.CreateAsset(material, path);
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Material = MaterialToolSupport.BuildMaterialInfo(path, MaterialToolSupport.LoadMaterialAsset(path), null),
                 PlannedEffects = new List<MaterialPlannedEffect> { new MaterialPlannedEffect { Type = "material.create", Path = path } }
-            };
+            });
         }
     }
 }

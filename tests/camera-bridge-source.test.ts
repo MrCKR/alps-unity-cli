@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
 import { readdir, readFile } from "node:fs/promises";
 import test from "node:test";
+import { bridgeCommandRegistry } from "../src/bridge/index.js";
+import { findCommandContract } from "../src/contracts/command-contract.js";
 
 const editorUrl = new URL("../../unitypkg/Editor/", import.meta.url);
-const sourceUrl = new URL("UnityCliBridge.cs", editorUrl);
 const readmeUrl = new URL("../../README.md", import.meta.url);
 const extensionsUrl = new URL("../../extensions/", import.meta.url);
 
@@ -36,230 +37,60 @@ test("Unity Bridge source does not duplicate C# method signatures", async () => 
   assert.deepEqual(duplicateCSharpMethodSignatures(source), []);
 });
 
-test("Unity Bridge exposes documented core camera, screenshot, prefab, UI, material, graphics, physics, profiler, animation, shader, texture and editor commands", async () => {
-  const source = await readUnityBridgeSources();
-  const vfxSource = await readExtensionSources("vfx-graph");
-  const bridgeSource = await readFile(sourceUrl, "utf8");
-  const readme = await readFile(readmeUrl, "utf8");
-  const bridgeSection = readme.slice(readme.indexOf("## Unity Editor Bridge"), readme.indexOf("## 项目自定义工具"));
+test("AssetImportWorker never starts or registers a Bridge listener", async () => {
+  // Worker 会加载 Editor assembly，但不是用户可寻址的 Unity Editor instance。
+  const source = await readFile(new URL("UnityCliBridge.cs", editorUrl), "utf8");
+  const start = source.indexOf("static UnityCliBridge()");
+  const end = source.indexOf("private static void StartListener", start);
+  const constructor = source.slice(start, end);
+  assert.ok(start > -1 && end > start);
+  assert.match(constructor, /AssetDatabase\.IsAssetImportWorkerProcess\(\)/);
+  assert.ok(constructor.indexOf("IsAssetImportWorkerProcess") < constructor.indexOf("EditorApplication.update += ProcessQueuedWork"));
+  assert.ok(constructor.indexOf("IsAssetImportWorkerProcess") < constructor.indexOf("StartListener()"));
+});
 
-  assert.match(source, /HttpListener/);
-  assert.doesNotMatch(bridgeSource, /switch \(request\.Command\)/);
-  assert.match(source, /POST" \|\| context\.Request\.Url\.AbsolutePath != "\/bridge\/execute"/);
-  assert.match(source, /CapabilityJson\("camera", CameraCommands\)/);
-  assert.match(source, /CapabilityJson\("asset", AssetCommands\)/);
-  assert.match(source, /CapabilityJson\("editor", EditorCommands\)/);
-  assert.match(source, /private static readonly string\[\] AssetCommands = \{ [^}]*"asset\.refresh"[^}]* \};/);
-  assert.match(source, /private static readonly string\[\] EditorCommands = \{ [^}]*"editor\.compile"[^}]* \};/);
-  assert.match(source, /CapabilityJson\("prefab", PrefabCommands\)/);
-  assert.match(source, /CapabilityJson\("ui", UiCommands\)/);
-  assert.match(source, /CapabilityJson\("material", MaterialCommands\)/);
-  assert.match(source, /CapabilityJson\("graphics", GraphicsCommands\)/);
-  assert.match(source, /CapabilityJson\("physics", PhysicsCommands\)/);
-  assert.match(source, /CapabilityJson\("profiler", ProfilerCommands\)/);
-  assert.match(source, /CapabilityJson\("animation", AnimationCommands\)/);
-  assert.doesNotMatch(source, /CapabilityJson\("(probuilder|cinemachine|vfx|urp|hdrp)",/);
-  assert.match(source, /w\.RawValue\(CapabilityJson\("physics", PhysicsCommands\)\)/);
-  assert.match(source, /CapabilityJson\("shader", ShaderCommands\)/);
-  assert.match(source, /CapabilityJson\("texture", TextureCommands\)/);
-  assert.match(source, /CapabilityJson\("code", CodeCommands\)/);
-  assert.match(source, /CapabilityJson\("project-tool", ProjectToolCommands\)/);
-  assert.match(source, /CapabilityJson\("runtime-tool", RuntimeToolCommands\)/);
-  assert.match(source, /CapabilityJson\("context", ContextCommands\)/);
-  assert.match(source, /CapabilityJson\("extension", ExtensionCommands\)/);
-  assert.match(source, /AssemblyReloadEvents\.beforeAssemblyReload \+= OnBeforeAssemblyReload/);
-  assert.match(source, /EditorApplication\.quitting \+= UnregisterAndStop/);
-  assert.match(source, /RegisterInstance\("healthy"\)/);
-  assert.match(source, /RegisterInstance\("stale"\)/);
-  assert.match(source, /return "unity-" \+ ProjectHash\(\) \+ "-" \+ System\.Diagnostics\.Process\.GetCurrentProcess\(\)\.Id\.ToString/);
-  assert.doesNotMatch(source, /InstanceSuffix/);
-  assert.match(source, /DeleteSupersededInstanceFiles\(\)/);
-  assert.match(source, /ShouldRemoveRegistration\(item\)/);
-  assert.match(source, /RegistrationPid\(string json\)/);
-  assert.match(source, /RegistrationTimestamp\(string json\)/);
-  assert.match(source, /StaleRegistrationSeconds/);
-  assert.match(source, /"instances"/);
-  assert.match(source, /\.Prop\("domainReloading", domainReloading\)/);
-  assert.doesNotMatch(source, /\.Prop\("domainReloading", EditorApplication\.isCompiling\)/);
-  assert.match(source, /private static Type FindType\(string fullName\)/);
-  assert.match(source, /private static string JsonLiteralOrString\(string value\)/);
-  assert.doesNotMatch(source, /new\[\] \{ \(object\)/);
-  assert.doesNotMatch(source, /private static readonly string\[\] (ProBuilder|Cinemachine|Vfx|Urp|Hdrp)Commands/);
-  // camera.* 已迁移为 IUnityCliTool(unitypkg/Editor/Tools/camera/*.cs),不再用 RegisterCommand
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "camera\.list"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "camera\.info"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "camera\.screenshot"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "camera\.create"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "camera\.target"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "camera\.lens"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "camera\.multiview"/);
-  // scene.* 已迁移为 IUnityCliTool(unitypkg/Editor/Tools/scene/*.cs),不再用 RegisterCommand
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "scene\.active"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "scene\.build-settings"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "scene\.screenshot"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "scene\.create"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "scene\.load"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "scene\.save"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "screenshot\.capture"/);
-  // prefab.* 已迁移为 IUnityCliTool(project-tool.run 路由),不再用 RegisterCommand
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "prefab\.info"/);
-  // prefab.* 已迁移为 IUnityCliTool(project-tool.run 路由)
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "prefab\.create"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "prefab\.modify"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "prefab\.stage-open"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "prefab\.stage-save"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "prefab\.stage-close"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "prefab\.hierarchy"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "ui\.canvas\.create", "ui", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "ui\.text\.create", "ui", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "ui\.button\.create", "ui", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "ui\.image\.create", "ui", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "ui\.document\.info", "ui", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "ui\.document\.create", "ui", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "ui\.hierarchy", "ui", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "material\.info", "material", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "material\.create", "material", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "material\.assign", "material", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "material\.set", "material", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "graphics\.quality", "graphics", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "graphics\.settings", "graphics", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "graphics\.screenshot", "graphics", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "graphics\.bake-start", "graphics", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "graphics\.bake-cancel", "graphics", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "graphics\.bake-status", "graphics", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "graphics\.bake-clear", "graphics", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "graphics\.skybox-get", "graphics", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "graphics\.pipeline-settings", "graphics", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "graphics\.pipeline-info", "graphics", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "physics\.settings", "physics", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "physics\.collision-matrix", "physics", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "physics\.material", "physics", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "physics\.joint", "physics", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "physics\.force", "physics", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "physics\.overlap", "physics", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "physics\.rigidbody", "physics", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "physics\.raycast", "physics", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "physics\.simulation", "physics", true/);
-  // profiler.* 部分已迁移为 IUnityCliTool(unitypkg/Editor/Tools/profiler/*.cs),不再用 RegisterCommand
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "profiler\.start"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "profiler\.stop"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "profiler\.pause"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "profiler\.counter"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "profiler\.memory"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "profiler\.frame"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "profiler\.capture"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "profiler\.export"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "profiler\.status"/);
-  assert.doesNotMatch(source, /ProfilerFrozenDecision|ProfilerCoverageScopeJson/);
-  // profiler.* 已迁移到 Tools/profiler 自包含工具,并统一为 IUnityCliTool / IUnityCliDeferredTool
-  assert.match(source, /Name = "profiler\.start"/);
-  assert.match(source, /Name = "profiler\.status"/);
-  assert.match(source, /IUnityCliDeferredTool<ProfilerCaptureTool/);
-  assert.match(source, /IUnityCliDeferredTool<ProfilerMemorySnapshotTakeTool/);
-  assert.match(source, /IUnityCliDeferredTool<RuntimeWaitTool/);
-  assert.match(source, /ProfilerToolSupport\.FindType\("UnityEditorInternal\.ProfilerDriver"\)/);
-  assert.match(source, /ProfilerToolSupport\.PreviousProfilerEditorRecording = ProfilerToolSupport\.GetProfilerEditorRecording\(\)/, "profiler.start should remember previous profileEditor state");
-  assert.match(source, /ProfilerToolSupport\.SetProfilerEditorRecording\(true\)[\s\S]*?ProfilerToolSupport\.SetProfilerSessionEnabled\(true\)/, "profiler.start should enable Profile Editor before recording");
-  assert.match(source, /string\.IsNullOrEmpty\(request\.LogFile\)[\s\S]*?Profiler\.enableBinaryLog = true/, "ProfilerStart should gate enableBinaryLog behind the logFile check");
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "profiler\.(start|stop|pause|counter|memory|frame|capture|export|status)"/);
-  assert.match(source, /RegisterInstalledExtensionCommands\(registry\)/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "(probuilder|cinemachine|vfx|urp|hdrp)\./);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "animation\.clip", "animation", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "animation\.clip\.create", "animation", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "animation\.clip\.modify", "animation", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "animation\.state", "animation", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "animation\.play", "animation", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "animation\.stop", "animation", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "animator\.get-info", "animation", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "animator\.get-parameter", "animation", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "animator\.set-parameter", "animation", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "animator\.crossfade", "animation", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "animator\.set-speed", "animation", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "animator\.set-enabled", "animation", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "controller\.create", "animation", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "controller\.add-state", "animation", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "controller\.add-transition", "animation", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "controller\.add-parameter", "animation", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "controller\.get-info", "animation", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "controller\.assign", "animation", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "controller\.add-layer", "animation", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "controller\.remove-layer", "animation", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "controller\.set-layer-weight", "animation", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "controller\.create-blend-tree-1d", "animation", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "controller\.create-blend-tree-2d", "animation", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "controller\.add-blend-tree-child", "animation", true/);
-  assert.doesNotMatch(source, /RegisterVfxCommands/);
-  assert.doesNotMatch(vfxSource, /RegisterCommand\(registry, "vfx\./);
-  assert.match(vfxSource, /class VfxGraphTool : IUnityCliTool/);
-  assert.match(vfxSource, /class VfxEffectTool : IUnityCliTool/);
-  assert.match(vfxSource, /class VfxParticleCreateTool : IUnityCliTool/);
-  assert.match(vfxSource, /class VfxParticleInfoTool : IUnityCliTool/);
-  assert.match(vfxSource, /class VfxParticlePlayTool : IUnityCliTool/);
-  assert.match(vfxSource, /class VfxLineCreateTool : IUnityCliTool/);
-  assert.match(vfxSource, /class VfxLinePositionsTool : IUnityCliTool/);
-  assert.match(vfxSource, /class VfxTrailTool : IUnityCliTool/);
-  assert.match(vfxSource, /Name = "vfx\.graph"/);
-  assert.match(vfxSource, /Name = "vfx\.effect"/);
-  assert.match(vfxSource, /Name = "vfx\.particle-create"/);
-  assert.match(vfxSource, /Name = "vfx\.particle-info"/);
-  assert.match(vfxSource, /Name = "vfx\.particle-play"/);
-  assert.match(vfxSource, /Name = "vfx\.line-create"/);
-  assert.match(vfxSource, /Name = "vfx\.line-positions"/);
-  assert.match(vfxSource, /Name = "vfx\.trail"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "shader\.info", "shader", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "shader\.read", "shader", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "shader\.create", "shader", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "shader\.update", "shader", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "texture\.info", "texture", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "texture\.create", "texture", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "texture\.sprite", "texture", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "texture\.import-settings", "texture", true/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "scene\.hierarchy"/);
-  // go.* / component.* 已迁移为 IUnityCliTool(unitypkg/Editor/Tools/go/*.cs、component/*.cs),不再用 RegisterCommand
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "go\.find"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "go\.inspect"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "go\.create"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "go\.modify"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "go\.duplicate"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "go\.move-relative"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "go\.look-at"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "go\.delete"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "component\.add"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "component\.remove"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "component\.set"/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "asset\.search", "asset", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "asset\.info", "asset", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "asset\.create", "asset", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "asset\.import", "asset", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "asset\.modify", "asset", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "asset\.delete", "asset", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "asset\.duplicate", "asset", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "asset\.move", "asset", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "asset\.rename", "asset", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "asset\.refresh", "asset", false/);
-  // diagnose.preflight 已迁移为 IUnityCliTool(unitypkg/Editor/Tools/diagnose/preflight.cs),不再用 RegisterCommand
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "diagnose\.preflight", "diagnose", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "editor\.state", "editor", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "editor\.play", "editor", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "editor\.pause", "editor", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "editor\.stop", "editor", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "editor\.menu", "editor", false/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "editor\.compile", "editor", false, EditorCompile\)/);
-  assert.match(source, /CompilationPipeline\.RequestScriptCompilation\(\)/);
-  assert.match(source, /var allowedDuringCompileOrImport = request\.Command == "editor\.compile";/);
-  assert.match(source, /if \(EditorApplication\.isCompiling && !allowedDuringCompileOrImport\)/);
-  assert.match(source, /if \(cachedIsCompiling && !allowedDuringCompileOrImport\)/);
-  assert.match(source, /skippedReason = alreadyBusy \? \(wasCompiling \? "already-compiling" : "already-importing"\) : null/);
-  assert.doesNotMatch(source, /RegisterCommand\(registry, "editor\.console", "editor", false/);
-  assert.match(source, /RegisterCommand\(registry, "code\.exec", "code", true/);
-  assert.match(source, /RegisterCommand\(registry, "project-tool\.list", "project-tool", false/);
-  assert.match(source, /RegisterCommand\(registry, "project-tool\.run", "project-tool", true/);
-  assert.match(bridgeSection, /`camera\.list`, `camera\.info`, `camera\.screenshot`, `scene\.active`, `scene\.hierarchy`, `scene\.build-settings`, `scene\.screenshot`, `scene\.create`, `scene\.load`, `scene\.save`, `go\.find`, `go\.inspect`, `go\.create`, `go\.modify`, `go\.duplicate`, `go\.move-relative`, `go\.look-at`, `go\.delete`, `component\.add`, `component\.remove`, `component\.set`/);
-  assert.match(bridgeSection, /`code\.exec`\./);
-  assert.doesNotMatch(bridgeSection, /live query\/edit\/screenshot/);
-  assert.doesNotMatch(bridgeSection, /not routed by this package yet/);
-  assert.doesNotMatch(bridgeSection, /E_BRIDGE_COMMAND_UNSUPPORTED/);
+test("one-capability-per-file camera tools route through project-tool.run with matching descriptors and contracts", async () => {
+  const bridgeRegistry = await readFile(new URL("Bridge/BridgeCommandRegistry.cs", editorUrl), "utf8");
+  const support = await readFile(new URL("Tools/camera/CameraToolSupport.cs", editorUrl), "utf8");
+  const expectedTools = new Map([
+    ["list.cs", "camera.list"],
+    ["info.cs", "camera.info"],
+    ["screenshot.cs", "camera.screenshot"],
+    ["create.cs", "camera.create"],
+    ["target.cs", "camera.target"],
+    ["lens.cs", "camera.lens"],
+    ["multiview.cs", "camera.multiview"]
+  ]);
 
+  assert.match(bridgeRegistry, /RegisterProjectToolCommands\(registry\)/);
+  assert.doesNotMatch(bridgeRegistry, /CapabilityJson|CameraCommands|RegisterCommand\(registry, "camera\./);
+  assert.match(support, /ParseCameraClearFlags/);
+  assert.match(support, /E_CAMERA_CLEAR_FLAGS_INVALID/);
+  assert.match(support, /Camera\.allCameras/);
+
+  const cameraDirectory = await readdir(new URL("Tools/camera/", editorUrl));
+  assert.deepEqual(cameraDirectory.filter((name) => name.endsWith(".cs")).sort(), [
+    "CameraToolSupport.cs", "create.cs", "info.cs", "lens.cs", "list.cs", "multiview.cs", "screenshot.cs", "target.cs"
+  ]);
+
+  for (const [file, name] of expectedTools) {
+    const source = await readFile(new URL(`Tools/camera/${file}`, editorUrl), "utf8");
+    const [, command] = name.split(".");
+    const spec = bridgeCommandRegistry.lookup("camera", command);
+    const contract = findCommandContract(name);
+    assert.match(source, /IUnityCliTool/);
+    assert.match(source, new RegExp(`Name = "${name.replace(".", "\\.")}"`));
+    assert.match(source, /ToolDescriptor Describe\(\)/);
+    assert.equal(spec?.bridgeCommand, "project-tool.run", `${name} must use the typed project-tool route`);
+    assert.equal(spec?.toolName, name, `${name} route must preserve its public tool name`);
+    assert.equal(contract?.csharp_handler, "present", `${name} must have a typed C# contract handler`);
+  }
+
+  const createSource = await readFile(new URL("Tools/camera/create.cs", editorUrl), "utf8");
+  assert.match(createSource, /ResolveUniqueTarget\(request\.Parent/);
+  assert.match(createSource, /ParseCameraClearFlags\(request\.ClearFlags\)/);
+  assert.ok(createSource.indexOf("ResolveUniqueTarget(request.Parent") < createSource.indexOf("new GameObject(name)"));
+  assert.ok(createSource.indexOf("ParseCameraClearFlags(request.ClearFlags)") < createSource.indexOf("new GameObject(name)"));
 });
 
 test("Unity Bridge animation and vfx commands expose assets, target resolver diagnostics and package checks", async () => {
@@ -302,11 +133,11 @@ test("Unity Bridge animation and vfx commands expose assets, target resolver dia
   assert.match(vfxSource, /AssetDatabase\.LoadAssetAtPath\(path, assetType\)/);
   assert.match(source, /E_TARGET_AMBIGUOUS/);
   assert.match(source, /rawPath\.Replace\('\\\\', '\/'\)\.Trim\(\)/);
-  assert.match(source, /Replace\("\\\\t", "\\t"\)/);
   assert.match(readme, /`tools run animation\.clip --input '\{"path":"<path>"\}'` reads `Assets\/\*\.anim` AnimationClip settings, events, and bounded curve summaries/);
   assert.match(readme, /`tools run animation\.clip\.create --input '\{"path":"<path>","length":1\}' --yes` creates or overwrites persistent `Assets\/\*\.anim` assets/);
   assert.match(readme, /`tools run animation\.clip\.modify --input '\{"path":"<path>","loopTime":true\}' --yes` updates persistent clip-level settings/);
-  assert.match(readme, /`tools run vfx\.graph --input/);
+  assert.match(readme, /`tools run vfx\.graph\.info --input/);
+  assert.match(readme, /`tools run vfx\.graph\.create --input/);
   assert.match(readme, /Windows-style `Assets\\VFX\\Explosion\.vfx` paths are normalized to Unity asset paths/);
   assert.match(readme, /`E_VFX_PACKAGE_MISSING`/);
   assert.match(readme, /`E_VFX_GRAPH_NOT_FOUND`/);
@@ -703,30 +534,21 @@ test("Unity Bridge graphics and physics commands expose settings, raycast and di
   assert.match(readme, /`tools run physics\.raycast` supports 3D and 2D ray queries/);
 });
 
-test("Unity Bridge HTTP timeout prevents queued side effects from stale requests", async () => {
+test("Unity Bridge cancellation prevents queued side effects and cancels started work", async () => {
   const source = await readUnityBridgeSources();
-  const readme = await readFile(readmeUrl, "utf8");
 
   assert.match(source, /CancelBeforeStart/);
   assert.match(source, /TryStart/);
-  assert.match(source, /MarkTimedOut/);
-  assert.match(source, /bridge_execute_accepted/);
-  assert.match(source, /bridge_request_body_read requestId=/);
-  assert.match(source, /bridge_request_enqueued requestId=/);
-  assert.match(source, /bridge_request_dequeued requestId=/);
-  assert.match(source, /bridge_request_started requestId=/);
-  assert.match(source, /bridge_request_finished requestId=/);
+  assert.match(source, /CancellationTokenSource/);
+  assert.match(source, /public void Cancel\(\)[\s\S]*cancellation\.Cancel\(\)/);
+  assert.match(source, /item\.CancelBeforeStart\(\)[\s\S]*E_UNITY_BUSY/);
+  assert.match(source, /item\.Cancel\(\)[\s\S]*E_EXECUTION_TIMEOUT/);
+  assert.match(source, /await Execute\(item\.Request, item\.Token\)/);
   assert.match(source, /request\.ContentLength64/);
   assert.match(source, /stream\.Read\(bytes, offset, bytes\.Length - offset\)/);
-  assert.match(source, /bridge_request_timeout_cancelled/);
-  assert.match(source, /bridge_request_timeout_started/);
+  assert.match(source, /bridge_request_enqueued requestId=/);
+  assert.match(source, /bridge_request_dequeued requestId=/);
   assert.match(source, /bridge_request_skipped_expired/);
-  assert.match(source, /bridge_request_completed_after_http_timeout/);
-  assert.match(source, /sideEffectSemantics/);
-  assert.match(source, /started-before-http-timeout/);
-  assert.match(source, /IsMutatingCommand/);
-  assert.match(readme, /the bridge cancels that queued work before execution and returns `E_UNITY_BUSY` with no side effects applied/);
-  assert.match(readme, /returns a success envelope with `status: "running"`, `sideEffectSemantics: "started-before-http-timeout"`, the original `requestId` and `logPath`/);
 });
 
 test("Unity Bridge screenshot validates path, format, overwrite and busy diagnostics", async () => {
@@ -791,7 +613,6 @@ test("Unity Bridge editor commands expose state, play/pause/stop, menu execution
   assert.match(source, /private static string AssemblyLocation\(Assembly assembly\)/);
   assert.match(source, /private static string RuntimeDiagnosticsPath\(\)/);
   assert.match(source, /private static void WriteRuntimeLoadDiagnostics\(string phase\)/);
-  assert.match(source, /private static string RuntimeDiagnosticsJson\(string phase\)/);
   assert.match(source, /UnityCliBridgeRuntime\.json/);
   assert.match(source, /bridge_runtime_loaded phase=/);
   assert.match(source, /BridgePackageAssetPath\(\)/);
@@ -836,25 +657,25 @@ test("Unity Bridge treats PlayMode switching as editor-command busy state", asyn
   assert.match(source, /E_UNITY_PLAY_MODE|E_UNITY_BUSY/);
 });
 
-test("Bridge Execute only blocks Play Mode transitions", async () => {
-  // 回归保护：稳定 Play Mode 不应阻塞 CLI 工具，AI 需要能在游戏运行时继续通过 Bridge 操作 Unity。
+test("Bridge execution uses the protocol request, linked cancellation, and one envelope boundary", async () => {
   const source = await readUnityBridgeSources();
-  const executeStart = source.indexOf("private static string Execute(BridgeRequest request)");
-  const executeEnd = source.indexOf("RequiresDestructiveSecurityProof", executeStart);
+  const executeStart = source.indexOf("private static async ValueTask<string> Execute(UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)");
+  const executeEnd = source.indexOf("private static bool RequiresDestructiveSecurityProof", executeStart);
   const executeBlock = source.slice(executeStart, executeEnd);
 
-  assert.ok(executeStart > -1, "Could not find Execute method");
-  assert.ok(executeEnd > executeStart, "Could not find end of Execute method");
+  assert.ok(executeStart > -1, "Could not find typed Execute method");
+  assert.ok(executeEnd > executeStart, "Could not find end of typed execution path");
+  assert.match(executeBlock, /await ExecuteData\(request, cancellationToken\)/);
+  assert.match(executeBlock, /ProtocolEnvelopeFactory\.Success\(request\.RequestId, data\)/);
+  assert.match(executeBlock, /CommandRegistry\.ExecuteAsync\(request, cancellationToken\)/);
+  assert.match(executeBlock, /!EditorApplication\.isPlaying && !allowedDuringPlayModeTransition/);
+  assert.match(executeBlock, /request\.Command == "runtime-tool\.run"/);
+  assert.doesNotMatch(executeBlock, /editor-domain write commands are not available/);
 
-  // guard 只应在 Play Mode 切换期拒绝命令，稳定运行态必须放行。
-  assert.match(executeBlock, /!EditorApplication\.isPlaying && !allowedDuringPlayModeTransition/, "Execute must only block transition-time commands");
-  assert.match(executeBlock, /execute-guard-v3/, "Execute transition error must include the v3 marker");
-  assert.doesNotMatch(executeBlock, /editor-domain write commands are not available/, "Stable Play Mode must not reject editor-domain tools");
-
-  // 切换期 allowlist 仍保留，用于安全的状态查询和运行态控制。
-  assert.match(executeBlock, /request\.Command == "editor\.state"/, "editor.state must remain allowed during Play Mode transitions");
-  assert.match(executeBlock, /request\.Command == "runtime-tool\.list"/, "runtime-tool.list must remain allowed during Play Mode transitions");
-  assert.match(executeBlock, /request\.Command == "runtime-tool\.run"/, "runtime-tool.run must remain allowed during Play Mode transitions");
+  const updateRegistrations = source.match(/EditorApplication\.update \+= ProcessQueuedWork/g) ?? [];
+  assert.equal(updateRegistrations.length, 1, "Bridge must have exactly one Editor update scheduler");
+  assert.match(source, /CancellationTokenSource\.CreateLinkedTokenSource\(cancellationToken/);
+  assert.match(source, /UnityCliWaitScheduler\.Tick\(\)/);
 });
 
 test("BridgeHttpServer Play Mode guard only blocks transitions", async () => {
@@ -891,28 +712,43 @@ test("EnsureEditorNotBusy only blocks Play Mode transitions", async () => {
   assert.ok(busyStart > -1);
   assert.ok(busyEnd > busyStart);
 
-  assert.match(busyBlock, /EditorApplication\.isPlayingOrWillChangePlaymode && !EditorApplication\.isPlaying/, "EnsureEditorNotBusy must only block transition-time commands");
+  assert.match(busyBlock, /UnityCliBridge\.IsPlayModeChanging\(\)/, "EnsureEditorNotBusy must block both entering and exiting Play Mode transitions");
   assert.doesNotMatch(busyBlock, /this editor-domain command is not available/, "Stable Play Mode must not reject editor-domain commands");
 });
 
-test("Play Mode guard includes diagnostic version markers (http-guard-v3 / execute-guard-v3)", async () => {
-  // 回归保护：版本标记用于确认当前运行的是稳定 Play Mode 放行 guard。
+test("editor.state and shared wait guards treat stable Play Mode as ready", async () => {
+  // 回归保护：isPlayingOrWillChangePlaymode 在稳定 PlayMode 中仍为 true，不能直接作为 busy 标志。
+  const stateSource = await readFile(new URL("Contexts/editor/state.cs", editorUrl), "utf8");
+  const editorSupport = await readFile(new URL("Tools/editor/EditorToolSupport.cs", editorUrl), "utf8");
+  const waiter = await readFile(new URL("Infrastructure/UnityCliWaiter.cs", editorUrl), "utf8");
+  const allSource = await readUnityBridgeSources();
+
+  assert.match(stateSource, /EditorApplication\.isPlayingOrWillChangePlaymode != EditorApplication\.isPlaying/);
+  assert.match(stateSource, /IsEditorBusy\(\)[\s\S]*IsPlayModeChanging\(\)/);
+  assert.match(stateSource, /PlayModeChanging = IsPlayModeChanging\(\)/);
+  assert.match(editorSupport, /EnsureEditorNotBusy[\s\S]*UnityCliBridge\.IsPlayModeChanging\(\)/);
+  assert.match(editorSupport, /IsBusy = [^\n]*UnityCliBridge\.IsPlayModeChanging\(\)/);
+  assert.match(editorSupport, /PlayModeChanging = UnityCliBridge\.IsPlayModeChanging\(\)/);
+  assert.match(waiter, /UntilEditorReady[\s\S]*!UnityCliBridge\.IsPlayModeChanging\(\)/);
+  assert.doesNotMatch(allSource, /isPlayingOrWillChangePlaymode && !EditorApplication\.isPlaying/);
+  assert.doesNotMatch(allSource, /!EditorApplication\.isPlayingOrWillChangePlaymode && !UnityCliBridge\.IsBuildingPlayer/);
+});
+
+test("HTTP and execution guards share the safe Play Mode transition allowlist", async () => {
   const source = await readUnityBridgeSources();
-
-  // HandleHttpCore guard
   const httpStart = source.indexOf("private static void HandleHttpCore");
-  const httpEnd = source.indexOf("private static void StopStaleBridgeListeners", httpStart);
-  const httpBlock = source.slice(httpStart, httpEnd > httpStart ? httpEnd : undefined);
-  assert.ok(httpStart > -1, "Could not find HandleHttpCore method");
-  assert.match(httpBlock, /http-guard-v3/, "HandleHttpCore Play Mode guard must include http-guard-v3 version marker");
+  const httpEnd = source.indexOf("private static async ValueTask<string> Execute", httpStart);
+  const executeStart = httpEnd;
+  const executeEnd = source.indexOf("private static bool RequiresDestructiveSecurityProof", executeStart);
+  const httpBlock = source.slice(httpStart, httpEnd);
+  const executeBlock = source.slice(executeStart, executeEnd);
 
-  // Execute() guard
-  const executeStart = source.indexOf("private static string Execute(BridgeRequest request)");
-  const executeEnd = source.indexOf("RequiresDestructiveSecurityProof", executeStart);
-  const executeBlock = source.slice(executeStart, executeEnd > executeStart ? executeEnd : undefined);
-  assert.ok(executeStart > -1, "Could not find Execute method");
-  assert.match(executeBlock, /execute-guard-v3/, "Execute() Play Mode guard must include execute-guard-v3 version marker");
-
-  // Bridge diagnostics fingerprint must be updated to reflect the guard change
-  assert.match(source, /play-mode-guard-v3/, "BridgeDiagnosticsFingerprint must include play-mode-guard-v3");
+  assert.ok(httpStart > -1 && executeStart > -1 && executeEnd > executeStart);
+  for (const command of ["editor.state", "runtime-tool.list", "runtime-tool.run", "context.read"]) {
+    const pattern = new RegExp(`request\\.Command == "${command.replaceAll(".", "\\.")}"`);
+    assert.match(httpBlock, pattern, `${command} must be allowed before queueing`);
+    assert.match(executeBlock, pattern, `${command} must be allowed during execution`);
+  }
+  assert.match(httpBlock, /!cachedIsPlaying && !allowedDuringPlayModeTransition/);
+  assert.match(executeBlock, /!EditorApplication\.isPlaying && !allowedDuringPlayModeTransition/);
 });

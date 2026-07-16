@@ -138,22 +138,44 @@ test("ui C# handlers are registered", async () => {
   }
 });
 
-test("ui C# error recovery hints use current tools run form, not legacy unity_cli", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Tools/ui/uitoolkit-tools.cs", import.meta.url), "utf8");
-  assert.equal(source.includes("unity_cli ui"), false, "must not reference legacy 'unity_cli ui'");
+test("ui C# error recovery hints identify valid targets", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/ui/document/info.cs", import.meta.url), "utf8");
   assert.match(source, /Pass a UIDocument GameObject or an Assets\/\*\.uxml path\./);
 });
 
-test("ui C# implements document CRUD, stylesheet linking, listing and preview", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Tools/ui/uitoolkit-tools.cs", import.meta.url), "utf8");
-  assert.match(source, /class UiDocumentUpdateTool : IUnityCliTool[\s\S]*File\.WriteAllText/);
-  assert.match(source, /class UiDocumentDeleteTool : IUnityCliTool[\s\S]*AssetDatabase\.DeleteAsset/);
-  assert.match(source, /class UiDetachDocumentTool : IUnityCliTool[\s\S]*DestroyImmediate\(doc\)/);
-  assert.match(source, /class UiLinkStylesheetTool : IUnityCliTool[\s\S]*File\.ReadAllText[\s\S]*File\.WriteAllText/);
-  assert.match(source, /class UiListDocumentsTool : IUnityCliTool[\s\S]*AssetDatabase\.FindAssets/);
-  assert.match(source, /class UiRenderPreviewTool : IUnityCliTool/);
-  assert.match(source, /class UiModifyVisualElementTool : IUnityCliTool[\s\S]*rootVisualElement\.Q\(r\.ElementName\)/);
-  assert.match(source, /class UiCreatePanelSettingsTool : IUnityCliTool[\s\S]*referenceResolution/);
+test("ui C# keeps one capability per physical file with CRUD, stylesheet, list, and preview behavior", async () => {
+  const files = {
+    update: "document/update.cs",
+    delete: "document/delete.cs",
+    detach: "detach-document.cs",
+    stylesheet: "link-stylesheet.cs",
+    list: "list-documents.cs",
+    preview: "render-preview.cs",
+    modify: "modify-visual-element.cs",
+    panel: "create-panel-settings.cs"
+  } as const;
+  const sources = Object.fromEntries(await Promise.all(Object.entries(files).map(async ([key, file]) => [
+    key,
+    await readFile(new URL(`../unitypkg/Editor/Tools/ui/${file}`, import.meta.url), "utf8")
+  ]))) as Record<keyof typeof files, string>;
+
+  assert.match(sources.update, /class UiDocumentUpdateTool : IUnityCliTool[\s\S]*File\.WriteAllText/);
+  assert.match(sources.delete, /class UiDocumentDeleteTool : IUnityCliTool[\s\S]*AssetDatabase\.DeleteAsset/);
+  assert.match(sources.detach, /class UiDetachDocumentTool : IUnityCliTool[\s\S]*UnityCliSceneMutation\.DestroyObject\(doc\)/);
+  assert.match(sources.stylesheet, /class UiLinkStylesheetTool : IUnityCliTool[\s\S]*File\.ReadAllText[\s\S]*File\.WriteAllText/);
+  assert.match(sources.list, /class UiListDocumentsTool : IUnityCliTool[\s\S]*AssetDatabase\.FindAssets/);
+  assert.match(sources.preview, /class UiRenderPreviewTool : IUnityCliTool/);
+  assert.match(sources.preview, /public async ValueTask<Result> ExecuteAsync/);
+  assert.match(sources.preview, /ScriptableObject\.CreateInstance<PanelSettings>\(\)/);
+  assert.match(sources.preview, /new RenderTexture\(width, height, 24, RenderTextureFormat\.ARGB32\)/);
+  assert.match(sources.preview, /await ctx\.Wait\.NextFrame\(2, ct\)/);
+  assert.match(sources.preview, /ReadPixels\(new Rect\(0, 0, width, height\)/);
+  assert.match(sources.preview, /ScreenshotToolSupport\.WriteScreenshotBytes\(outputPath, bytes\)/);
+  assert.match(sources.preview, /finally[\s\S]*DestroyImmediate\(panelSettings\)/);
+  assert.match(sources.preview, /ctx\.DryRun/);
+  assert.doesNotMatch(sources.preview, /new Texture2D\(1, 1/);
+  assert.match(sources.modify, /class UiModifyVisualElementTool : IUnityCliTool[\s\S]*rootVisualElement\.Q\(r\.ElementName\)/);
+  assert.match(sources.panel, /class UiCreatePanelSettingsTool : IUnityCliTool[\s\S]*referenceResolution/);
 });
 
 test("ui bridge spec forwards structured --input fields", async () => {

@@ -27,20 +27,21 @@ namespace UnityCli.Contexts.Project
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "on-demand"
+            RefreshBehavior = "on-demand",
+            Examples = new[] { new ContextExample { Description = "List configured project tags", Input = new Request { } } }
         };
 
         /// <summary>
         /// 读取 TagManager 标签；只读，不创建、删除或重命名标签。
-        /// </summary>
-        public Result Read(Request request, UnityCliProjectToolContext ctx)
+    /// </summary>
+        public System.Threading.Tasks.ValueTask<Result> ReadAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var tags = InternalEditorUtility.tags;
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Tags = tags,
                 Count = tags.Length
-            };
+            });
         }
     }
 }

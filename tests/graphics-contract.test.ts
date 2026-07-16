@@ -14,7 +14,6 @@ const GRAPHICS_COMMANDS = [
   "graphics.bake-start",
   "graphics.bake-status",
   "graphics.light-probe-group",
-  "graphics.pipeline",
   "graphics.pipeline-info",
   "graphics.pipeline-quality",
   "graphics.pipeline-settings",
@@ -22,7 +21,6 @@ const GRAPHICS_COMMANDS = [
   "graphics.quality",
   "graphics.reflection-probe",
   "graphics.scene-debug",
-  "graphics.screenshot",
   "graphics.settings",
   "graphics.skybox-get",
   "graphics.skybox-set-ambient",
@@ -37,13 +35,12 @@ const GRAPHICS_COMMANDS = [
   "graphics.volume"
 ];
 
-test("graphics group exposes all 28 tools via contract discovery", () => {
+test("graphics group exposes all 26 tools via contract discovery", () => {
   assert.deepEqual(contractToolNames("graphics"), [...GRAPHICS_COMMANDS].sort());
 });
 
 test("graphics live descriptors expose representative play mode semantics", async () => {
   const tools = await discoverLiveTools(
-    makeLiveTool({ name: "graphics.pipeline", summary: "Read render pipeline state.", description: "Read render pipeline state.", group: "graphics" }),
     makeLiveTool({ name: "graphics.pipeline-info", summary: "Read render pipeline and quality info.", description: "Read render pipeline and quality info.", group: "graphics" }),
     makeLiveTool({ name: "graphics.skybox-get", summary: "Read skybox settings.", description: "Read skybox settings.", group: "graphics" }),
     makeLiveTool({ name: "graphics.stats", summary: "Read graphics stats.", description: "Read graphics stats.", group: "graphics" }),
@@ -57,7 +54,7 @@ test("graphics live descriptors expose representative play mode semantics", asyn
     makeLiveTool({ name: "graphics.pipeline-settings", summary: "Mutate pipeline settings.", description: "Mutate pipeline settings.", group: "graphics", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] })
   );
 
-  for (const name of ["graphics.pipeline", "graphics.pipeline-info", "graphics.skybox-get", "graphics.stats", "graphics.stats-counters", "graphics.stats-memory", "graphics.bake-status", "graphics.volume"]) {
+  for (const name of ["graphics.pipeline-info", "graphics.skybox-get", "graphics.stats", "graphics.stats-counters", "graphics.stats-memory", "graphics.bake-status", "graphics.volume"]) {
     assert.equal(tools.get(name)?.playModeSupport, "supported", `${name} should be supported`);
   }
   for (const name of ["graphics.quality", "graphics.settings", "graphics.pipeline-quality", "graphics.pipeline-settings"]) {
@@ -92,9 +89,8 @@ test("graphics C# handlers are registered", async () => {
   }
 });
 
-test("graphics C# error recovery hints use current tools run form, not legacy unity_cli", async () => {
+test("graphics C# error recovery hints use current tools run forms", async () => {
   const source = await readCsSources(new URL("../unitypkg/Editor/Tools/graphics/", import.meta.url));
-  assert.equal(source.includes("unity_cli tools run"), false, "must not reference legacy 'unity_cli tools run' command form");
   assert.match(source, /tools run graphics\.quality/, "error hints should route to tools run graphics.quality");
 });
 

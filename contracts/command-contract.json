@@ -98,7 +98,7 @@
       "command": "set-parameter",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -116,7 +116,7 @@
       "command": "create",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -134,7 +134,7 @@
       "command": "duplicate",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -161,7 +161,7 @@
       "command": "import",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -179,7 +179,7 @@
       "command": "modify",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -188,7 +188,7 @@
       "command": "move",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -215,7 +215,7 @@
       "command": "rename",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -246,18 +246,54 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "build.platform",
+      "bridgeCommand": "build.platform.get",
       "group": "build",
-      "command": "platform",
+      "command": "platform-get",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
     },
     {
-      "bridgeCommand": "build.profiles",
+      "bridgeCommand": "build.platform.set",
       "group": "build",
-      "command": "profiles",
+      "command": "platform-set",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "build.profile.create",
+      "group": "build",
+      "command": "profile-create",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "build.profile.list",
+      "group": "build",
+      "command": "profile-list",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "build.profile.modify",
+      "group": "build",
+      "command": "profile-modify",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "build.profile.switch",
+      "group": "build",
+      "command": "profile-switch",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
@@ -269,25 +305,70 @@
       "command": "run",
       "handler_type": "job",
       "csharp_handler": "none",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
-      "bridgeCommand": "build.scenes",
+      "bridgeCommand": "build.scene.add",
       "group": "build",
-      "command": "scenes",
+      "command": "scene-add",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "build.scene.disable",
+      "group": "build",
+      "command": "scene-disable",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "build.scene.enable",
+      "group": "build",
+      "command": "scene-enable",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "build.scene.list",
+      "group": "build",
+      "command": "scene-list",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
     },
     {
-      "bridgeCommand": "build.settings",
+      "bridgeCommand": "build.scene.remove",
       "group": "build",
-      "command": "settings",
+      "command": "scene-remove",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "build.settings.get",
+      "group": "build",
+      "command": "settings-get",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "build.settings.set",
+      "group": "build",
+      "command": "settings-set",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -341,7 +422,7 @@
       "command": "multiview",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -350,7 +431,7 @@
       "command": "screenshot",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -390,9 +471,18 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "cinemachine.brain",
+      "bridgeCommand": "cinemachine.brain.ensure",
       "group": "cinemachine",
-      "command": "brain",
+      "command": "brain.ensure",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "cinemachine.brain.status",
+      "group": "cinemachine",
+      "command": "brain.status",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
@@ -408,12 +498,30 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "cinemachine.extension",
+      "bridgeCommand": "cinemachine.extension.add",
       "group": "cinemachine",
-      "command": "extension",
+      "command": "extension.add",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": true,
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "cinemachine.extension.list",
+      "group": "cinemachine",
+      "command": "extension.list",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "cinemachine.extension.remove",
+      "group": "cinemachine",
+      "command": "extension.remove",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
       "timeout": 30000
     },
     {
@@ -593,7 +701,7 @@
       "command": "add-blend-tree-child",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -602,7 +710,7 @@
       "command": "add-layer",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -611,7 +719,7 @@
       "command": "add-parameter",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -620,7 +728,7 @@
       "command": "add-state",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -629,7 +737,7 @@
       "command": "add-transition",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -647,7 +755,7 @@
       "command": "create",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -656,7 +764,7 @@
       "command": "create-blend-tree-1d",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -665,7 +773,7 @@
       "command": "create-blend-tree-2d",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -692,7 +800,7 @@
       "command": "set-layer-weight",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -845,7 +953,7 @@
       "command": "resolution",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -1038,15 +1146,6 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "graphics.pipeline",
-      "group": "graphics",
-      "command": "pipeline",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
       "bridgeCommand": "graphics.pipeline-info",
       "group": "graphics",
       "command": "pipeline-info",
@@ -1061,7 +1160,7 @@
       "command": "pipeline-quality",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -1070,7 +1169,7 @@
       "command": "pipeline-settings",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -1088,7 +1187,7 @@
       "command": "quality",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -1104,15 +1203,6 @@
       "bridgeCommand": "graphics.scene-debug",
       "group": "graphics",
       "command": "scene-debug",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
-      "bridgeCommand": "graphics.screenshot",
-      "group": "graphics",
-      "command": "screenshot",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
@@ -1169,7 +1259,7 @@
       "command": "skybox-set-properties",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -1227,18 +1317,63 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "hdrp.settings",
+      "bridgeCommand": "hdrp.settings.get",
       "group": "hdrp",
-      "command": "settings",
+      "command": "settings-get",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
     },
     {
-      "bridgeCommand": "hdrp.volume",
+      "bridgeCommand": "hdrp.settings.set",
       "group": "hdrp",
-      "command": "volume",
+      "command": "settings-set",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "hdrp.volume.add-effect",
+      "group": "hdrp",
+      "command": "volume-add-effect",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "hdrp.volume.create",
+      "group": "hdrp",
+      "command": "volume-create",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "hdrp.volume.info",
+      "group": "hdrp",
+      "command": "volume-info",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "hdrp.volume.list",
+      "group": "hdrp",
+      "command": "volume-list",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "hdrp.volume.set",
+      "group": "hdrp",
+      "command": "volume-set",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
@@ -1259,7 +1394,7 @@
       "command": "create",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -1277,7 +1412,7 @@
       "command": "set",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -1304,7 +1439,7 @@
       "command": "modify",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": true,
+      "destructive": false,
       "timeout": 30000
     },
     {
@@ -1362,12 +1497,30 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "package.registry",
+      "bridgeCommand": "package.registry.clear",
       "group": "package",
-      "command": "registry",
+      "command": "registry.clear",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "package.registry.get",
+      "group": "package",
+      "command": "registry.get",
       "handler_type": "offline",
       "csharp_handler": "none",
       "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "package.registry.set",
+      "group": "package",
+      "command": "registry.set",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -1385,7 +1538,7 @@
       "command": "resolve",
       "handler_type": "hybrid",
       "csharp_handler": "none",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -1398,12 +1551,30 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "package.scoped-registry",
+      "bridgeCommand": "package.scoped-registry.add",
       "group": "package",
-      "command": "scoped-registry",
+      "command": "scoped-registry.add",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "package.scoped-registry.list",
+      "group": "package",
+      "command": "scoped-registry.list",
       "handler_type": "offline",
       "csharp_handler": "none",
       "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "package.scoped-registry.remove",
+      "group": "package",
+      "command": "scoped-registry.remove",
+      "handler_type": "offline",
+      "csharp_handler": "none",
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -1439,7 +1610,7 @@
       "command": "collision-matrix",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -1452,9 +1623,18 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "physics.joint",
+      "bridgeCommand": "physics.joint.add",
       "group": "physics",
-      "command": "joint",
+      "command": "joint-add",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "physics.joint.remove",
+      "group": "physics",
+      "command": "joint-remove",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
@@ -1475,7 +1655,7 @@
       "command": "material",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -1520,7 +1700,7 @@
       "command": "settings",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -1556,7 +1736,7 @@
       "command": "create",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -1592,7 +1772,7 @@
       "command": "modify",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -1619,7 +1799,7 @@
       "command": "stage-save",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -1682,7 +1862,7 @@
       "command": "combine-meshes",
       "handler_type": "hybrid",
       "csharp_handler": "present",
-      "destructive": true,
+      "destructive": false,
       "timeout": 30000
     },
     {
@@ -1736,7 +1916,7 @@
       "command": "delete-faces",
       "handler_type": "hybrid",
       "csharp_handler": "present",
-      "destructive": true,
+      "destructive": false,
       "timeout": 30000
     },
     {
@@ -1745,7 +1925,7 @@
       "command": "detach-faces",
       "handler_type": "hybrid",
       "csharp_handler": "present",
-      "destructive": true,
+      "destructive": false,
       "timeout": 30000
     },
     {
@@ -1781,7 +1961,7 @@
       "command": "flip-normals",
       "handler_type": "hybrid",
       "csharp_handler": "present",
-      "destructive": true,
+      "destructive": false,
       "timeout": 30000
     },
     {
@@ -1817,7 +1997,7 @@
       "command": "merge-objects",
       "handler_type": "hybrid",
       "csharp_handler": "present",
-      "destructive": true,
+      "destructive": false,
       "timeout": 30000
     },
     {
@@ -1970,7 +2150,7 @@
       "command": "capture",
       "handler_type": "hybrid",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2006,7 +2186,7 @@
       "command": "export",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2096,7 +2276,7 @@
       "command": "memory-snapshot.take",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2199,21 +2379,39 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "project.layer",
+      "bridgeCommand": "project.layer.add",
       "group": "project",
-      "command": "layer",
+      "command": "layer-add",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
-      "bridgeCommand": "project.tag",
+      "bridgeCommand": "project.layer.remove",
       "group": "project",
-      "command": "tag",
+      "command": "layer-remove",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "project.tag.add",
+      "group": "project",
+      "command": "tag-add",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "project.tag.remove",
+      "group": "project",
+      "command": "tag-remove",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2276,7 +2474,7 @@
       "command": "run",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": true,
+      "destructive": false,
       "timeout": 30000
     },
     {
@@ -2303,7 +2501,7 @@
       "command": "create",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2361,15 +2559,6 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "scene.screenshot",
-      "group": "scene",
-      "command": "screenshot",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
       "bridgeCommand": "scene.set-active",
       "group": "scene",
       "command": "set-active",
@@ -2384,7 +2573,7 @@
       "command": "unload",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2406,21 +2595,12 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "screenshot.capture",
-      "group": "screenshot",
-      "command": "capture",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
       "bridgeCommand": "screenshot.game-view",
       "group": "screenshot",
       "command": "game-view",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2429,7 +2609,7 @@
       "command": "isolated-object",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2438,7 +2618,7 @@
       "command": "orbit",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2447,7 +2627,7 @@
       "command": "scene-view",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2501,7 +2681,7 @@
       "command": "create",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2555,7 +2735,7 @@
       "command": "update",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2573,7 +2753,7 @@
       "command": "create",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2735,7 +2915,7 @@
       "command": "document/create",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
@@ -2847,45 +3027,189 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "urp.feature",
+      "bridgeCommand": "urp.feature.add",
       "group": "urp",
-      "command": "feature",
+      "command": "feature-add",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": true,
       "timeout": 30000
     },
     {
-      "bridgeCommand": "urp.settings",
+      "bridgeCommand": "urp.feature.configure",
       "group": "urp",
-      "command": "settings",
+      "command": "feature-configure",
       "handler_type": "bridge",
       "csharp_handler": "present",
-      "destructive": false,
+      "destructive": true,
       "timeout": 30000
     },
     {
-      "bridgeCommand": "urp.volume",
+      "bridgeCommand": "urp.feature.list",
       "group": "urp",
-      "command": "volume",
+      "command": "feature-list",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
     },
     {
-      "bridgeCommand": "vfx.control",
-      "group": "vfx",
-      "command": "control",
+      "bridgeCommand": "urp.feature.remove",
+      "group": "urp",
+      "command": "feature-remove",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "urp.feature.toggle",
+      "group": "urp",
+      "command": "feature-toggle",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "urp.settings.get",
+      "group": "urp",
+      "command": "settings-get",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
     },
     {
-      "bridgeCommand": "vfx.effect",
+      "bridgeCommand": "urp.settings.set",
+      "group": "urp",
+      "command": "settings-set",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "urp.volume.add-effect",
+      "group": "urp",
+      "command": "volume-add-effect",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "urp.volume.create",
+      "group": "urp",
+      "command": "volume-create",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "urp.volume.info",
+      "group": "urp",
+      "command": "volume-info",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "urp.volume.list",
+      "group": "urp",
+      "command": "volume-list",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "urp.volume.set",
+      "group": "urp",
+      "command": "volume-set",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "vfx.control.pause",
       "group": "vfx",
-      "command": "effect",
+      "command": "control.pause",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "vfx.control.play",
+      "group": "vfx",
+      "command": "control.play",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "vfx.control.reinitialize",
+      "group": "vfx",
+      "command": "control.reinitialize",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "vfx.control.set-rate",
+      "group": "vfx",
+      "command": "control.set-rate",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "vfx.control.set-seed",
+      "group": "vfx",
+      "command": "control.set-seed",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "vfx.control.stop",
+      "group": "vfx",
+      "command": "control.stop",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "vfx.effect.add",
+      "group": "vfx",
+      "command": "effect.add",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "vfx.effect.assign",
+      "group": "vfx",
+      "command": "effect.assign",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "vfx.effect.info",
+      "group": "vfx",
+      "command": "effect.info",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
@@ -2901,9 +3225,18 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "vfx.graph",
+      "bridgeCommand": "vfx.graph.create",
       "group": "vfx",
-      "command": "graph",
+      "command": "graph.create",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "vfx.graph.info",
+      "group": "vfx",
+      "command": "graph.info",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
@@ -2982,15 +3315,6 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "vfx.particle-play",
-      "group": "vfx",
-      "command": "particle-play",
-      "handler_type": "bridge",
-      "csharp_handler": "present",
-      "destructive": false,
-      "timeout": 30000
-    },
-    {
       "bridgeCommand": "vfx.particle-shape",
       "group": "vfx",
       "command": "particle-shape",
@@ -3000,18 +3324,72 @@
       "timeout": 30000
     },
     {
-      "bridgeCommand": "vfx.template",
+      "bridgeCommand": "vfx.particle.clear",
       "group": "vfx",
-      "command": "template",
+      "command": "particle.clear",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,
       "timeout": 30000
     },
     {
-      "bridgeCommand": "vfx.trail",
+      "bridgeCommand": "vfx.particle.pause",
       "group": "vfx",
-      "command": "trail",
+      "command": "particle.pause",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "vfx.particle.play",
+      "group": "vfx",
+      "command": "particle.play",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "vfx.particle.stop",
+      "group": "vfx",
+      "command": "particle.stop",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "vfx.template.create",
+      "group": "vfx",
+      "command": "template.create",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": true,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "vfx.template.list",
+      "group": "vfx",
+      "command": "template.list",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "vfx.trail.create",
+      "group": "vfx",
+      "command": "trail.create",
+      "handler_type": "bridge",
+      "csharp_handler": "present",
+      "destructive": false,
+      "timeout": 30000
+    },
+    {
+      "bridgeCommand": "vfx.trail.set",
+      "group": "vfx",
+      "command": "trail.set",
       "handler_type": "bridge",
       "csharp_handler": "present",
       "destructive": false,

@@ -88,11 +88,11 @@ unity_cli --version
 # 列出运行中的 Unity 实例
 unity_cli instances list
 
-# 设置活动目标
-unity_cli target set <instanceId>
-# 或使用别名
+# 已知实例时，在后续每条 Bridge 命令上显式传入
+unity_cli tools group --instance <instanceId>
+# 可先创建稳定别名，再继续显式传入
 unity_cli target alias set <instanceId> my-project
-unity_cli target set my-project
+unity_cli tools group --instance my-project
 ```
 
 ### 2. 发现工具能力（group-first 路径）
@@ -311,7 +311,7 @@ unity_cli tools run reflection.method.call --input '{"typeName":"UnityEngine.Tra
 unity_cli tools run type.schema --input '{"typeName":"UnityEngine.Rigidbody"}'
 ```
 
-> patch 路径语法对齐 IvanMurzak ReflectorNet：`fieldName`、`nested/field`、`arrayField/[i]`、`dictField/[key]`，同时兼容 `.` 分隔。执行顺序：`jsonPatch` → `pathPatches` → `objectDiff/componentDiff`。
+> patch 路径使用 `/` 分隔：`fieldName`、`nested/field`、`arrayField/[i]`、`dictField/[key]`，并可带 `#/` 前缀。执行顺序：`jsonPatch` → `pathPatches` → `objectDiff/componentDiff`。
 
 ### 资产与预制体
 
@@ -330,7 +330,8 @@ unity_cli tools run prefab.create <source> --path <prefab-path>
 unity_cli tools run prefab.modify <path> --name <new-name>
 unity_cli tools run prefab.stage-open <path>
 unity_cli tools run prefab.stage-save
-unity_cli tools run prefab.stage-close --save
+unity_cli tools run prefab.stage-save
+unity_cli tools run prefab.stage-close
 unity_cli tools run prefab.hierarchy <path> --page-size 100
 unity_cli tools run prefab.instantiate <path> --parent Enemies --name Enemy_1
 unity_cli tools run prefab.unpack --target Player --yes
@@ -377,11 +378,11 @@ unity_cli tools run console.clear --yes
 
 unity_cli tools run package.embed --package com.unity.inputsystem --yes
 
-unity_cli tools run build.scenes
-unity_cli tools run build.scenes --action add --path Assets/Scenes/Main.unity
-unity_cli tools run build.platform
-unity_cli tools run build.platform --action set --target Android
-unity_cli tools run build.settings
+unity_cli tools run build.scene.list
+unity_cli tools run build.scene.add --path Assets/Scenes/Main.unity --yes
+unity_cli tools run build.platform.get
+unity_cli tools run build.platform.set --target Android
+unity_cli tools run build.settings.get
 ```
 
 ### Profiler
@@ -408,8 +409,10 @@ unity_cli tools run animation.state <target>
 unity_cli tools run animation.play <target> --state Run
 unity_cli tools run animation.stop <target>
 
-unity_cli tools run vfx.graph --input '{"path":"<path>"}'
-unity_cli tools run vfx.effect --input '{"target":"<target>","add":true,"graph":"<vfx-path>"}'
+unity_cli tools run vfx.graph.info --input '{"path":"<path>"}'
+unity_cli tools run vfx.graph.create --input '{"path":"<path>"}' --yes
+unity_cli tools run vfx.effect.add --input '{"target":"<target>","graph":"<vfx-path>"}'
+unity_cli tools run vfx.effect.info --input '{"target":"<target>"}'
 
 unity_cli tools run shader.info <path>
 unity_cli tools run shader.read <path>
@@ -485,9 +488,12 @@ unity_cli tools run package.deploy --input '{"project":"<path>","source":"<local
 unity_cli tools run package.restore --input '{"project":"<path>","packageName":"<package-name>"}' --dry-run
 unity_cli tools run package.restore --input '{"project":"<path>","packageName":"<package-name>"}' --yes
 unity_cli tools run package.resolve --project <path> --unity <unity-exe> --wait
-unity_cli tools run package.registry get --project <path>
-unity_cli tools run package.registry set --url <url> --project <path>
-unity_cli tools run package.scoped-registry add --name <name> --url <url> --scope <scope> --project <path>
+unity_cli tools run package.registry.get --project <path>
+unity_cli tools run package.registry.set --url <url> --project <path> --yes
+unity_cli tools run package.registry.clear --project <path> --yes
+unity_cli tools run package.scoped-registry.list --project <path>
+unity_cli tools run package.scoped-registry.add --name <name> --url <url> --scope <scope> --project <path> --yes
+unity_cli tools run package.scoped-registry.remove --name <name> --project <path> --yes
 ```
 
 ### 测试与构建
@@ -534,6 +540,7 @@ unity_cli instances list
 unity_cli instances prune --yes
 
 unity_cli target current
+# target set 持久化可变的全局默认值；显式 --instance 时不要调用
 unity_cli target set <id|alias>
 unity_cli target clear
 unity_cli target alias set <instanceId> <alias>
@@ -677,7 +684,8 @@ Bridge 生命周期：
 - `tools run animation.clip --input '{"path":"<path>"}'` reads `Assets/*.anim` AnimationClip settings, events, and bounded curve summaries
 - `tools run animation.clip.create --input '{"path":"<path>","length":1}' --yes` creates or overwrites persistent `Assets/*.anim` assets
 - `tools run animation.clip.modify --input '{"path":"<path>","loopTime":true}' --yes` updates persistent clip-level settings
-- `tools run vfx.graph --input '{"path":"<path>"}'` reads or creates `Assets/*.vfx` Visual Effect Graph assets
+- `tools run vfx.graph.info --input '{"path":"<path>"}'` reads an `Assets/*.vfx` Visual Effect Graph asset
+- `tools run vfx.graph.create --input '{"path":"<path>"}' --yes` creates a persistent Visual Effect Graph asset
 - Windows-style `Assets\VFX\Explosion.vfx` paths are normalized to Unity asset paths
 - `E_VFX_PACKAGE_MISSING`, `E_VFX_GRAPH_NOT_FOUND`
 
@@ -708,8 +716,8 @@ Bridge 生命周期：
 
 **Cinemachine, URP, HDRP Extensions:**
 - Cinemachine: `cinemachine.create`, `cinemachine.target`, `cinemachine.lens`, etc.
-- URP: `urp.feature`, `urp.volume`, `urp.settings`
-- HDRP: `hdrp.volume`, `hdrp.settings`
+- URP: `urp.feature.list`, `urp.feature.add`, `urp.feature.toggle`, `urp.feature.configure`, `urp.feature.remove`, `urp.volume.list`, `urp.volume.create`, `urp.volume.info`, `urp.volume.add-effect`, `urp.volume.set`, `urp.settings.get`, `urp.settings.set`
+- HDRP: `hdrp.volume.list`, `hdrp.volume.create`, `hdrp.volume.info`, `hdrp.volume.add-effect`, `hdrp.volume.set`, `hdrp.settings.get`, `hdrp.settings.set`
 
 ## 项目自定义工具（Custom Tools）
 

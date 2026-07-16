@@ -27,9 +27,10 @@ namespace UnityCli.ProBuilder
         {
             Name = "probuilder.duplicate-and-flip",
             Summary = "Duplicate selected faces and flip their normals on a ProBuilder mesh.",
-            Description = "Duplicate selected faces and flip their normals. When faceIndices is omitted, all faces are used. Falls back to flipping normals in place when the ProBuilder DuplicateAndFlip API is unavailable.",
+            Description = "Duplicate selected faces and flip their normals with the ProBuilder 5.x AppendElements.DuplicateAndFlip API. When faceIndices is omitted, all faces are used.",
             Group = "probuilder",
             DestructiveHint = false,
+            SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 10000,
@@ -42,19 +43,18 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            var go = ProBuilderInput.ResolveTarget(request.Target);
             if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("duplicate-and-flip", "No ProBuilderMesh on target.");
 
             int[] faceIndices = request.FaceIndices?.Select(i => (int)i).ToArray();
-            var faceCount = ProBuilderReflection.GetFaceCount(mesh);
 
             var faces = faceIndices != null && faceIndices.Length > 0
                 ? ProBuilderReflection.GetFacesByIndices(mesh, faceIndices)
@@ -66,15 +66,12 @@ namespace UnityCli.ProBuilder
             Undo.RecordObject(go, "ProBuilder Duplicate and Flip");
             var duplicated = ProBuilderReflection.DuplicateAndFlip(mesh, faces);
             if (!duplicated)
-            {
-                // 回退:DuplicateAndFlip API 不可用时手动翻转
-                ProBuilderReflection.FlipFaces(mesh, faceIndices ?? Enumerable.Range(0, faceCount).ToArray());
-            }
+                throw ProBuilderErrors.OperationFailed("duplicate-and-flip", "ProBuilder 5.x AppendElements.DuplicateAndFlip failed.");
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
-            return new Result { DuplicatedCount = faces.Length };
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { DuplicatedCount = faces.Length });
         }
     }
 }

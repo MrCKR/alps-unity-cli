@@ -37,40 +37,41 @@ namespace UnityCli.Contexts.Scene
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
             RefreshBehavior = "static",
+            Examples = new[] { new ContextExample { Description = "Read URP renderer features", Input = new Request { } } },
             RequiresPackages = new[] { "com.unity.render-pipelines.universal" }
         };
 
         /// <summary>
         /// 通过反射读取 URP renderer data 列表；URP 或 pipeline asset 缺失时返回可恢复诊断。
-        /// </summary>
-        public Result Read(Request request, UnityCliProjectToolContext ctx)
+    /// </summary>
+        public System.Threading.Tasks.ValueTask<Result> ReadAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var rendererDataType = FindType("UnityEngine.Rendering.Universal.RendererData");
             var pipelineAssetType = FindType("UnityEngine.Rendering.Universal.UniversalRenderPipelineAsset");
 
             if (pipelineAssetType == null && rendererDataType == null)
             {
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Available = false,
                     Features = new string[0],
                     Count = 0,
                     Diagnostics = "URP package (com.unity.render-pipelines.universal) is not installed. Renderer features context requires URP.",
                     NextActions = new[] { "Install the URP package via Package Manager." }
-                };
+                });
             }
 
             var pipelineAsset = GraphicsSettings.defaultRenderPipeline;
             if (pipelineAsset == null)
             {
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Available = false,
                     Features = new string[0],
                     Count = 0,
                     Diagnostics = "No URP render pipeline asset is assigned in Graphics Settings.",
                     NextActions = new[] { "Assign a UniversalRenderPipelineAsset in Graphics Settings." }
-                };
+                });
             }
 
             var rendererDataListProp = pipelineAsset.GetType().GetProperty("m_RendererDataList", BindingFlags.Instance | BindingFlags.NonPublic)
@@ -87,7 +88,7 @@ namespace UnityCli.Contexts.Scene
                 }
             }
 
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Available = true,
                 Renderer = pipelineAsset.name,
@@ -95,7 +96,7 @@ namespace UnityCli.Contexts.Scene
                 Count = features.Count,
                 Diagnostics = null,
                 NextActions = null
-            };
+            });
         }
 
         // 查找可选 URP 类型，避免 Core 对 URP 建立编译期依赖。

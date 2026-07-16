@@ -44,7 +44,7 @@ namespace UnityCli.Cinemachine
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             CinemachineToolSupport.EnsureEditorReady("cinemachine.target");
             CinemachineToolSupport.EnsureCinemachineAvailable();
@@ -84,13 +84,13 @@ namespace UnityCli.Cinemachine
                 CinemachineToolSupport.MarkDirty(gameObject);
             }
 
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Cinemachine = CinemachineToolSupport.BuildPackageStatus(),
                 Object = CinemachineToolSupport.BuildObjectInfo(gameObject),
                 PlannedEffects = effects,
                 LogPath = ctx.LogPath
-            };
+            });
         }
     }
 }

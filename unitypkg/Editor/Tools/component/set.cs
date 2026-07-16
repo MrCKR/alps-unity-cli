@@ -9,8 +9,6 @@ namespace UnityCli
 {
     /// <summary>
     /// component.set — 设置 Component 的一个或多个简单公开字段/属性。
-    /// 对齐旧 ComponentSet handler;session-affecting。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class ComponentSetTool : IUnityCliTool<ComponentSetTool.Request, ComponentSetTool.Result>
     {
@@ -20,8 +18,8 @@ namespace UnityCli
             public string Component { get; set; }
             public int? ComponentIndex { get; set; }
             public string Property { get; set; }
-            public string Value { get; set; }
-            public string Properties { get; set; }
+            [UnityCliAnyJson] public object Value { get; set; }
+            [UnityCliAnyJson] public Dictionary<string, object> Properties { get; set; }
         }
 
         public sealed class Result
@@ -49,12 +47,12 @@ namespace UnityCli
             MaxTimeoutMs = 600000,
             Examples = new[]
             {
-                new ToolExample { Description = "Set multiple Rigidbody values", Input = new Request { Target = "Player", Component = "Rigidbody", Properties = "{\"mass\":5,\"useGravity\":false}" } },
-                new ToolExample { Description = "Set one boolean value", Input = new Request { Target = "Main Camera", Component = "Camera", Property = "enabled", Value = "false" } }
+                new ToolExample { Description = "Set multiple Rigidbody values", Input = new Request { Target = "Player", Component = "Rigidbody", Properties = new Dictionary<string, object> { { "mass", 5L }, { "useGravity", false } } } },
+                new ToolExample { Description = "Set one boolean value", Input = new Request { Target = "Main Camera", Component = "Camera", Property = "enabled", Value = false } }
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             GameObjectToolSupport.EnsureEditorNotBusy("component.set");
             var gameObject = ComponentAddTool.ResolveTarget(request.Target, "Component set requires a target.");
@@ -65,7 +63,7 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_NOT_FOUND", "Component not found on target: " + componentName, "Run unity_cli tools run component.get or context read scene.gameobject.components to list components.");
             }
 
-            if (string.IsNullOrEmpty(request.Property) && string.IsNullOrEmpty(request.Properties))
+            if (string.IsNullOrEmpty(request.Property) && (request.Properties == null || request.Properties.Count == 0))
             {
                 throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_PROPERTY_REQUIRED", "component.set requires property/value or a properties object.", "Pass --input '{\"target\":\"Player\",\"component\":\"Rigidbody\",\"properties\":{\"mass\":5}}'.");
             }
@@ -73,19 +71,19 @@ namespace UnityCli
             var propertyChanges = new List<ComponentPropertyChange>();
             if (!string.IsNullOrEmpty(request.Property))
             {
-                if (string.IsNullOrEmpty(request.Value))
+                if (request.Value == null)
                 {
                     throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_VALUE_REQUIRED", "component.set requires a value when property is provided.", "Pass value as --input JSON so booleans/numbers keep their type.");
                 }
                 propertyChanges.Add(GameObjectToolSupport.BuildComponentPropertyChange(component.GetType(), request.Property, request.Value));
             }
-            propertyChanges.AddRange(GameObjectToolSupport.BuildComponentPropertyChanges(component.GetType(), GameObjectToolSupport.ComponentPropertiesJson(request.Properties)));
+            propertyChanges.AddRange(GameObjectToolSupport.BuildComponentPropertyChanges(component.GetType(), request.Properties));
 
-            Undo.RecordObject(component, "unity_cli component.set");
+            UnityCliSceneMutation.RecordObject(component, "component.set");
             GameObjectToolSupport.ApplyComponentPropertyChanges(component, propertyChanges);
-            EditorUtility.SetDirty(component);
-            EditorSceneManager.MarkSceneDirty(gameObject.scene);
-            return new Result
+            UnityCliSceneMutation.MarkSceneObjectDirty(component);
+            UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
                 Component = GameObjectToolSupport.BuildComponentSummary(component),
@@ -93,7 +91,7 @@ namespace UnityCli
                 ComponentIndex = request.ComponentIndex.HasValue ? request.ComponentIndex.Value.ToString(CultureInfo.InvariantCulture) : null,
                 ChangedProperties = ComponentAddTool.BuildChangedProperties(propertyChanges),
                 PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "component.set", Target = GameObjectToolSupport.HierarchyPath(gameObject), Component = component.GetType().Name } }
-            };
+            });
         }
     }
 }

@@ -12,7 +12,6 @@ namespace UnityCli
     /// material 域 IUnityCliTool 共享的基础设施 helper:Material 路径校验、Material 资产加载、
     /// 属性枚举/取值/赋值、颜色/向量解析、UI Graphic 查找。仅供 material 域自包含工具复用;
     /// 不实现 IUnityCliTool,不参与工具发现。
-    /// 设计依据:.plan/工具统一形态.md(自包含工具共享只读 helper,handler 逻辑各自内聚)。
     /// </summary>
     public static class MaterialToolSupport
     {
@@ -323,7 +322,7 @@ namespace UnityCli
         public string Name { get; set; }
         public string DisplayName { get; set; }
         public string Type { get; set; }
-        public object Value { get; set; }
+        [UnityCliAnyJson] public object Value { get; set; }
     }
 
     public sealed class MaterialTextureReferenceCollection

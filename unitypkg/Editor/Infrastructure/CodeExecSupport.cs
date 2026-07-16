@@ -28,12 +28,16 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
+        // 注册运行时代码执行命令。
         private static void RegisterCodeExecCommand(BridgeCommandRegistry registry)
         {
             RegisterCommand(registry, "code.exec", "code", true, CodeExec);
         }
 
-        private static string CodeExec(BridgeRequest request)
+        /// <summary>
+        /// 编译并执行请求中的 C# 源码；会临时重定向进程标准输出，失败时返回结构化诊断或异常详情。
+        /// </summary>
+        private static string CodeExec(UnityCli.Protocol.BridgeRequest request)
         {
             var startedAt = DateTime.UtcNow;
             var source = request.StringArg("sourceText");
@@ -46,26 +50,27 @@ namespace UnityCli
                 }
                 catch (Exception exception)
                 {
-                    return ErrorJson("E_CODE_SOURCE_INVALID", "Code source is not readable: " + exception.Message, "Check that --file points to a UTF-8 C# source file.");
+                    return SerializeErrorEnvelope("E_CODE_SOURCE_INVALID", "Code source is not readable: " + exception.Message, "Check that --file points to a UTF-8 C# source file.");
                 }
             }
             if (string.IsNullOrWhiteSpace(source))
             {
-                return ErrorJson("E_CODE_SOURCE_INVALID", "Code source is empty.", "Pass --file, --stdin or --code with non-empty C# source.");
+                return SerializeErrorEnvelope("E_CODE_SOURCE_INVALID", "Code source is empty.", "Pass --file, --stdin or --code with non-empty C# source.");
             }
 
             var result = ExecuteCodeSource(request, source, startedAt);
             WriteLog("code_exec requestId=" + request.RequestId + " ok=" + result.Ok + " exitState=" + result.ExitState);
             if (!result.Ok)
             {
-                return ErrorJsonWithDetails(result.ErrorCode, result.ErrorMessage, result.DetailsJson, result.NextAction);
+                return UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
+                    request.RequestId, result.ErrorCode, result.ErrorMessage, result.Details, result.NextActions));
             }
-            return SuccessJson(result.DataJson);
+            return UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Success(request.RequestId, result.Data));
         }
 
-        private static CodeExecutionResult ExecuteCodeSource(BridgeRequest request, string source, DateTime startedAt)
+        // 编译源码并执行约定的 Run 方法，收集编译诊断、输出和运行时异常。
+        private static CodeExecutionResult ExecuteCodeSource(UnityCli.Protocol.BridgeRequest request, string source, DateTime startedAt)
         {
-            var requestId = request.RequestId;
             var argsJson = request.StringArg("argsJson");
             var provider = new CSharpCodeProvider();
             var parameters = new CompilerParameters
@@ -78,10 +83,7 @@ namespace UnityCli
             var referenceError = ValidateCodeReferences(references);
             if (!string.IsNullOrEmpty(referenceError))
             {
-                var details = new UnityCliJsonWriter().BeginObject()
-                    .Prop("referenceError", referenceError)
-                    .EndObject()
-                    .ToString();
+                var details = new Dictionary<string, object> { { "referenceError", referenceError } };
                 return CodeExecutionResult.Fail("E_REFERENCE_RESOLUTION_FAILED", referenceError, details, "Check Unity/Editor/project assembly references and --refs.");
             }
             // 使用 response file 传引用，避免 Windows 32KB 命令行长度限制
@@ -111,7 +113,7 @@ namespace UnityCli
                 }
                 catch (Exception exception)
                 {
-                    return CodeExecutionResult.Fail("E_REFERENCE_RESOLUTION_FAILED", "Failed to compile Runtime Code: " + exception.Message, CodeDetailsJson("[]", Quote(exception.GetType().Name), Quote(exception.Message), Quote(exception.StackTrace), "", ""), "Check Unity/Editor/project assembly references and --refs.");
+                    return CodeExecutionResult.Fail("E_REFERENCE_RESOLUTION_FAILED", "Failed to compile Runtime Code: " + exception.Message, ExceptionDetails(exception, "", ""), "Check Unity/Editor/project assembly references and --refs.");
                 }
             }
             finally
@@ -121,11 +123,7 @@ namespace UnityCli
 
             if (compiled.Errors.HasErrors)
             {
-                var diagnostics = CompilerDiagnosticsJson(compiled.Errors);
-                var details = new UnityCliJsonWriter().BeginObject()
-                    .PropRaw("diagnostics", diagnostics)
-                    .EndObject()
-                    .ToString();
+                var details = new Dictionary<string, object> { { "diagnostics", CompilerDiagnostics(compiled.Errors) } };
                 return CodeExecutionResult.Fail("E_CODE_COMPILE_FAILED", "Runtime Code compilation failed.", details, "Fix compiler diagnostics and rerun code exec.");
             }
 
@@ -143,24 +141,24 @@ namespace UnityCli
                 Console.SetOut(previousOut);
                 Console.SetError(previousError);
                 var endedAt = DateTime.UtcNow;
-                var dataJson = CodeSuccessDataJson(request, startedAt, endedAt, stdout.ToString(), stderr.ToString(), returnValue);
-                return CodeExecutionResult.Success(dataJson);
+                return CodeExecutionResult.Success(CodeSuccessData(request, startedAt, endedAt, stdout.ToString(), stderr.ToString(), returnValue));
             }
             catch (TargetInvocationException exception)
             {
                 Console.SetOut(previousOut);
                 Console.SetError(previousError);
                 var inner = exception.InnerException ?? exception;
-                return CodeExecutionResult.Fail("E_CODE_RUNTIME_EXCEPTION", inner.GetType().FullName + ": " + inner.Message, CodeDetailsJson("[]", Quote(inner.GetType().FullName), Quote(inner.Message), Quote(inner.StackTrace), stdout.ToString(), stderr.ToString()), "Inspect runtime stdout/stderr and exception stackTrace.");
+                return CodeExecutionResult.Fail("E_CODE_RUNTIME_EXCEPTION", inner.GetType().FullName + ": " + inner.Message, ExceptionDetails(inner, stdout.ToString(), stderr.ToString()), "Inspect runtime stdout/stderr and exception stackTrace.");
             }
             catch (Exception exception)
             {
                 Console.SetOut(previousOut);
                 Console.SetError(previousError);
-                return CodeExecutionResult.Fail("E_CODE_RUNTIME_EXCEPTION", exception.GetType().FullName + ": " + exception.Message, CodeDetailsJson("[]", Quote(exception.GetType().FullName), Quote(exception.Message), Quote(exception.StackTrace), stdout.ToString(), stderr.ToString()), "Inspect runtime stdout/stderr and exception stackTrace.");
+                return CodeExecutionResult.Fail("E_CODE_RUNTIME_EXCEPTION", exception.GetType().FullName + ": " + exception.Message, ExceptionDetails(exception, stdout.ToString(), stderr.ToString()), "Inspect runtime stdout/stderr and exception stackTrace.");
             }
         }
 
+        // 将源码包装为运行时约定的 Script.Run 入口。
         private static string WrapCodeSource(string source)
         {
             if (Regex.IsMatch(source, "\\bpublic\\s+static\\s+object\\s+Run\\s*\\("))
@@ -170,6 +168,7 @@ namespace UnityCli
             return "using System; using System.IO; using System.Linq; using System.Collections.Generic; using UnityEngine; using UnityEditor; namespace UnityCli.RuntimeCode { public static class Script { public static object Run(string argsJson) { " + source + " } } }";
         }
 
+        // 汇总当前 Unity 域、项目程序集和调用方指定的编译引用。
         private static IEnumerable<string> DefaultCodeReferences(string refsCsv)
         {
             var references = new List<string>();
@@ -213,17 +212,20 @@ namespace UnityCli
             return references;
         }
 
+        // 向引用列表添加非空且不重复的路径。
         private static void AddReference(List<string> references, string reference)
         {
             if (string.IsNullOrEmpty(reference)) return;
             if (!references.Contains(reference)) references.Add(reference);
         }
 
+        // 仅在文件存在时添加编译引用。
         private static void AddReferenceIfExists(List<string> references, string reference)
         {
             if (!string.IsNullOrEmpty(reference) && File.Exists(reference)) AddReference(references, reference);
         }
 
+        // 验证所有编译引用均存在且可读。
         private static string ValidateCodeReferences(IEnumerable<string> references)
         {
             foreach (var reference in references)
@@ -241,6 +243,7 @@ namespace UnityCli
             return null;
         }
 
+        // 拆分并清理逗号分隔参数。
         private static IEnumerable<string> SplitCsv(string value)
         {
             if (string.IsNullOrEmpty(value)) yield break;
@@ -252,135 +255,120 @@ namespace UnityCli
             }
         }
 
-        private static string CompilerDiagnosticsJson(CompilerErrorCollection errors)
+        // 将编译器诊断转换为协议可序列化的对象数组。
+        private static object[] CompilerDiagnostics(CompilerErrorCollection errors)
         {
-            var w = new UnityCliJsonWriter().BeginArray();
-            foreach (CompilerError error in errors)
+            return errors.Cast<CompilerError>().Select(error => (object)new Dictionary<string, object>
             {
-                w.BeginObject()
-                    .Prop("severity", error.IsWarning ? "warning" : "error")
-                    .Prop("id", error.ErrorNumber)
-                    .Prop("message", error.ErrorText)
-                    .Prop("file", error.FileName)
-                    .Prop("line", (long)error.Line)
-                    .Prop("column", (long)error.Column)
-                    .PropNull("span")
-                    .EndObject();
-            }
-            w.EndArray();
-            return w.ToString();
+                { "severity", error.IsWarning ? "warning" : "error" },
+                { "id", error.ErrorNumber },
+                { "message", error.ErrorText },
+                { "file", error.FileName },
+                { "line", (long)error.Line },
+                { "column", (long)error.Column },
+                { "span", null }
+            }).ToArray();
         }
 
-        private static string CodeSuccessDataJson(BridgeRequest request, DateTime startedAt, DateTime endedAt, string stdout, string stderr, object returnValue)
+        // 构造 live 执行成功数据，保留运行输出、审计信息和副作用声明。
+        private static Dictionary<string, object> CodeSuccessData(UnityCli.Protocol.BridgeRequest request, DateTime startedAt, DateTime endedAt, string stdout, string stderr, object returnValue)
         {
-            var timeoutMs = request.OptionalIntArg("timeoutMs");
+            var timeoutMs = request.Execution == null ? null : request.Execution.TimeoutMs;
             var argsJson = request.StringArg("argsJson");
             var durationMs = (long)(endedAt - startedAt).TotalMilliseconds;
-            return new UnityCliJsonWriter().BeginObject()
-                .Prop("command", "code.exec")
-                .Prop("mode", "live")
-                .PropObject("execution", execution =>
-                {
-                    execution.Prop("channel", "live")
-                        .Prop("startedAt", startedAt.ToString("O", CultureInfo.InvariantCulture))
-                        .Prop("endedAt", endedAt.ToString("O", CultureInfo.InvariantCulture))
-                        .Prop("durationMs", durationMs);
-                    if (timeoutMs.HasValue) execution.Prop("timeoutMs", timeoutMs.Value); else execution.PropNull("timeoutMs");
-                    execution.Prop("exitState", "completed");
-                })
-                .PropObject("compile", compile =>
-                {
-                    compile.Prop("ok", true)
-                        .PropRaw("diagnostics", "[]");
-                })
-                .PropObject("runtime", runtime =>
-                {
-                    runtime.Prop("ok", true)
-                        .PropRaw("returnValue", ReturnValueJson(returnValue))
-                        .Prop("stdout", stdout)
-                        .Prop("stderr", stderr);
-                })
-                .PropRaw("artifacts", "[]")
-                .PropObject("audit", audit =>
-                {
-                    audit.Prop("requestId", request.RequestId)
-                        .Prop("projectPath", ProjectRoot())
-                        .Prop("instanceId", InstanceId())
-                        .Prop("unityVersion", Application.unityVersion)
-                        .Prop("bridgeVersion", "com.unity_cli")
-                        .Prop("initiator", "cli.live")
-                        .PropObject("input", input =>
-                        {
-                            input.Prop("sourceKind", request.StringArg("sourceKind"))
-                                .Prop("sourcePath", request.StringArg("sourcePath"))
-                                .Prop("sourceSha256", request.StringArg("sourceSha256"))
-                                .PropRaw("args", string.IsNullOrEmpty(argsJson) ? "{}" : argsJson);
-                        })
-                        .PropObject("execution", execution =>
-                        {
-                            if (timeoutMs.HasValue) execution.Prop("timeoutMs", timeoutMs.Value); else execution.PropNull("timeoutMs");
-                            execution.Prop("exitState", "completed");
-                        })
-                        .PropRaw("artifacts", "[]")
-                        .Prop("startedAt", startedAt.ToString("O", CultureInfo.InvariantCulture))
-                        .Prop("endedAt", endedAt.ToString("O", CultureInfo.InvariantCulture))
-                        .Prop("durationMs", durationMs)
-                        .PropObject("effects", effects =>
-                        {
-                            effects.PropRaw("fileWrites", "[]")
-                                .Prop("assetRefresh", false)
-                                .Prop("domainReload", false)
-                                .Prop("playModeChanged", false)
-                                .Prop("packagesChanged", false);
-                        });
-                })
-                .PropObject("logs", logs => logs.Prop("bridge", LogPath()))
-                .PropRaw("nextActions", "[]")
-                .EndObject()
-                .ToString();
+            return new Dictionary<string, object>
+            {
+                { "command", "code.exec" },
+                { "mode", "live" },
+                { "execution", new Dictionary<string, object>
+                    {
+                        { "channel", "live" }, { "startedAt", startedAt.ToString("O", CultureInfo.InvariantCulture) },
+                        { "endedAt", endedAt.ToString("O", CultureInfo.InvariantCulture) }, { "durationMs", durationMs },
+                        { "timeoutMs", timeoutMs.HasValue ? (object)timeoutMs.Value : null }, { "exitState", "completed" }
+                    }
+                },
+                { "compile", new Dictionary<string, object> { { "ok", true }, { "diagnostics", Array.Empty<object>() } } },
+                { "runtime", new Dictionary<string, object>
+                    {
+                        { "ok", true }, { "returnValue", NormalizeReturnValue(returnValue) },
+                        { "stdout", stdout }, { "stderr", stderr }
+                    }
+                },
+                { "artifacts", Array.Empty<object>() },
+                { "audit", new Dictionary<string, object>
+                    {
+                        { "requestId", request.RequestId }, { "projectPath", ProjectRoot() }, { "instanceId", InstanceId() },
+                        { "unityVersion", Application.unityVersion }, { "bridgeVersion", "com.unity_cli" }, { "initiator", "cli.live" },
+                        { "input", new Dictionary<string, object>
+                            {
+                                { "sourceKind", request.StringArg("sourceKind") }, { "sourcePath", request.StringArg("sourcePath") },
+                                { "sourceSha256", request.StringArg("sourceSha256") },
+                                { "args", UnityCliSerializer.Parse(string.IsNullOrEmpty(argsJson) ? "{}" : argsJson) }
+                            }
+                        },
+                        { "execution", new Dictionary<string, object>
+                            {
+                                { "timeoutMs", timeoutMs.HasValue ? (object)timeoutMs.Value : null }, { "exitState", "completed" }
+                            }
+                        },
+                        { "artifacts", Array.Empty<object>() }, { "startedAt", startedAt.ToString("O", CultureInfo.InvariantCulture) },
+                        { "endedAt", endedAt.ToString("O", CultureInfo.InvariantCulture) }, { "durationMs", durationMs },
+                        { "effects", new Dictionary<string, object>
+                            {
+                                { "fileWrites", Array.Empty<string>() }, { "assetRefresh", false }, { "domainReload", false },
+                                { "playModeChanged", false }, { "packagesChanged", false }
+                            }
+                        }
+                    }
+                },
+                { "logs", new Dictionary<string, object> { { "bridge", LogPath() } } },
+                { "nextActions", Array.Empty<string>() }
+            };
         }
 
-        private static string CodeDetailsJson(string diagnosticsJson, string exceptionTypeJson, string messageJson, string stackTraceJson, string stdout, string stderr)
+        // 构造包含诊断、输出和堆栈的运行时异常详情。
+        private static Dictionary<string, object> ExceptionDetails(Exception exception, string stdout, string stderr)
         {
-            return new UnityCliJsonWriter().BeginObject()
-                .PropRaw("diagnostics", string.IsNullOrEmpty(diagnosticsJson) ? "[]" : diagnosticsJson)
-                .PropRaw("exceptionType", exceptionTypeJson)
-                .PropRaw("message", messageJson)
-                .PropRaw("stackTrace", stackTraceJson)
-                .Prop("stdout", stdout)
-                .Prop("stderr", stderr)
-                .EndObject()
-                .ToString();
+            return new Dictionary<string, object>
+            {
+                { "diagnostics", Array.Empty<object>() }, { "exceptionType", exception.GetType().FullName },
+                { "message", exception.Message }, { "stackTrace", exception.StackTrace },
+                { "stdout", stdout }, { "stderr", stderr }
+            };
         }
 
-        private static string ReturnValueJson(object value)
+        // 将执行返回值规范化为序列化器支持的协议值。
+        private static object NormalizeReturnValue(object value)
         {
-            if (value == null) return "null";
-            if (value is bool) return Bool((bool)value);
-            if (value is float) return UnityCliJsonWriter.Number((float)value);
-            if (value is double) return UnityCliJsonWriter.Number((double)value);
-            if (value is int || value is long || value is decimal) return Convert.ToString(value, CultureInfo.InvariantCulture);
-            return Quote(Convert.ToString(value, CultureInfo.InvariantCulture));
+            if (value == null || value is bool || value is float || value is double || value is int || value is long) return value;
+            if (value is decimal) return Convert.ToDouble(value, CultureInfo.InvariantCulture);
+            return Convert.ToString(value, CultureInfo.InvariantCulture);
         }
 
         private sealed class CodeExecutionResult
         {
             public bool Ok;
-            public string DataJson;
+            public object Data;
             public string ErrorCode;
             public string ErrorMessage;
-            public string DetailsJson;
-            public string NextAction;
+            public object Details;
+            public string[] NextActions;
             public string ExitState;
 
-            public static CodeExecutionResult Success(string dataJson)
+            // 创建成功执行结果。
+            public static CodeExecutionResult Success(object data)
             {
-                return new CodeExecutionResult { Ok = true, DataJson = dataJson, ExitState = "completed" };
+                return new CodeExecutionResult { Ok = true, Data = data, NextActions = Array.Empty<string>(), ExitState = "completed" };
             }
 
-            public static CodeExecutionResult Fail(string code, string message, string detailsJson, string nextAction)
+            // 创建包含结构化详情和后续动作的失败执行结果。
+            public static CodeExecutionResult Fail(string code, string message, object details, string nextAction)
             {
-                return new CodeExecutionResult { Ok = false, ErrorCode = code, ErrorMessage = message, DetailsJson = detailsJson, NextAction = nextAction, ExitState = "failed" };
+                return new CodeExecutionResult
+                {
+                    Ok = false, ErrorCode = code, ErrorMessage = message, Details = details,
+                    NextActions = string.IsNullOrWhiteSpace(nextAction) ? Array.Empty<string>() : new[] { nextAction }, ExitState = "failed"
+                };
             }
         }
     }

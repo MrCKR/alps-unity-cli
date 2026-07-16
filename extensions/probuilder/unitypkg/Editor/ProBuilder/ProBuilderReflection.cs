@@ -18,34 +18,55 @@ namespace UnityCli.ProBuilder
     /// </summary>
     internal static class ProBuilderReflection
     {
-        // ─── Cached type lookups ───────────────────────────────────
-        private static readonly Lazy<Type> ProBuilderMeshType = new Lazy<Type>(() => FindType("UnityEngine.ProBuilder.ProBuilderMesh"));
-        private static readonly Lazy<Type> ShapeGeneratorType = new Lazy<Type>(() => FindType("UnityEngine.ProBuilder.ShapeGenerator"));
-        private static readonly Lazy<Type> MeshOperationsType = new Lazy<Type>(() => FindType("UnityEngine.ProBuilder.MeshOperations"));
-        private static readonly Lazy<Type> EditorMeshUtilityType = new Lazy<Type>(() => FindType("UnityEditor.ProBuilder.EditorMeshUtility"));
-        private static readonly Lazy<Type> SmoothingType = new Lazy<Type>(() => FindType("UnityEngine.ProBuilder.Smoothing"));
-        private static readonly Lazy<Type> MeshValidationType = new Lazy<Type>(() => FindType("UnityEngine.ProBuilder.MeshValidation"));
-        private static readonly Lazy<Type> ProBuilderEditorType = new Lazy<Type>(() => FindType("UnityEditor.ProBuilder.ProBuilderEditor"));
-        private static readonly Lazy<Type> FaceType = new Lazy<Type>(() => FindType("UnityEngine.ProBuilder.Face"));
-        private static readonly Lazy<Type> EdgeType = new Lazy<Type>(() => FindType("UnityEngine.ProBuilder.Edge"));
-        private static readonly Lazy<Type> VertexType = new Lazy<Type>(() => FindType("UnityEngine.ProBuilder.Vertex"));
-        private static readonly Lazy<Type> SharedVertexType = new Lazy<Type>(() => FindType("UnityEngine.ProBuilder.SharedVertex"));
-        private static readonly Lazy<Type> ColorType = new Lazy<Type>(() => FindType("UnityEngine.ProBuilder.Color"));
-        private static readonly Lazy<Type> PivotType = new Lazy<Type>(() => FindType("UnityEngine.ProBuilder.PivotType"));
-        private static readonly Lazy<Type> ExtrudeMethodType = new Lazy<Type>(() => FindType("UnityEngine.ProBuilder.ExtrudeMethod"));
-        private static readonly Lazy<Type> ShapeTypeType = new Lazy<Type>(() => FindType("UnityEngine.ProBuilder.ShapeType"));
-        private static readonly Lazy<Type> ExtrudeElementsType = new Lazy<Type>(() => FindType("UnityEngine.ProBuilder.MeshOperations.ExtrudeElements"));
-        private static readonly Lazy<Type> BevelType = new Lazy<Type>(() => FindType("UnityEngine.ProBuilder.MeshOperations.Bevel"));
-        private static readonly Lazy<Type> DeleteElementsType = new Lazy<Type>(() => FindType("UnityEngine.ProBuilder.MeshOperations.DeleteElements"));
-        private static readonly Lazy<Type> AppendElementsType = new Lazy<Type>(() => FindType("UnityEngine.ProBuilder.MeshOperations.AppendElements"));
-        private static readonly Lazy<Type> ConnectElementsType = new Lazy<Type>(() => FindType("UnityEngine.ProBuilder.MeshOperations.ConnectElements"));
-        private static readonly Lazy<Type> MergeElementsType = new Lazy<Type>(() => FindType("UnityEngine.ProBuilder.MeshOperations.MergeElements"));
-        private static readonly Lazy<Type> CombineMeshesType = new Lazy<Type>(() => FindType("UnityEngine.ProBuilder.MeshOperations.CombineMeshes"));
-        private static readonly Lazy<Type> VertexEditingType = new Lazy<Type>(() => FindType("UnityEngine.ProBuilder.MeshOperations.VertexEditing"));
-        private static readonly Lazy<Type> MeshImporterType = new Lazy<Type>(() => FindType("UnityEngine.ProBuilder.MeshOperations.MeshImporter"));
-        private static readonly Lazy<Type> ElementSelectionType = new Lazy<Type>(() => FindType("UnityEngine.ProBuilder.MeshOperations.ElementSelection"));
-        private static readonly Lazy<Type> PivotLocationType = new Lazy<Type>(() => FindType("UnityEngine.ProBuilder.PivotLocation"));
-        private static readonly Lazy<Type> AxisType = new Lazy<Type>(() => FindType("UnityEngine.ProBuilder.Axis"));
+        // 未加载到 optional assembly 时不缓存 null；domain reload 完成后下一次调用会重新解析。
+        private sealed class RetryingType
+        {
+            private readonly string fullName;
+            private readonly object gate = new object();
+            private Type value;
+
+            public RetryingType(string fullName)
+            {
+                this.fullName = fullName;
+            }
+
+            public Type Value
+            {
+                get
+                {
+                    if (value != null) return value;
+                    lock (gate)
+                    {
+                        if (value == null) value = FindType(fullName);
+                        return value;
+                    }
+                }
+            }
+        }
+
+        // ─── Cached successful type lookups ─────────────────────────
+        private static readonly RetryingType ProBuilderMeshType = new RetryingType("UnityEngine.ProBuilder.ProBuilderMesh");
+        private static readonly RetryingType ShapeGeneratorType = new RetryingType("UnityEngine.ProBuilder.ShapeGenerator");
+        private static readonly RetryingType SmoothingType = new RetryingType("UnityEngine.ProBuilder.Smoothing");
+        private static readonly RetryingType MeshValidationType = new RetryingType("UnityEngine.ProBuilder.MeshOperations.MeshValidation");
+        private static readonly RetryingType FaceType = new RetryingType("UnityEngine.ProBuilder.Face");
+        private static readonly RetryingType EdgeType = new RetryingType("UnityEngine.ProBuilder.Edge");
+        private static readonly RetryingType PivotType = new RetryingType("UnityEngine.ProBuilder.PivotType");
+        private static readonly RetryingType ExtrudeMethodType = new RetryingType("UnityEngine.ProBuilder.ExtrudeMethod");
+        private static readonly RetryingType ShapeTypeType = new RetryingType("UnityEngine.ProBuilder.ShapeType");
+        private static readonly RetryingType ExtrudeElementsType = new RetryingType("UnityEngine.ProBuilder.MeshOperations.ExtrudeElements");
+        private static readonly RetryingType BevelType = new RetryingType("UnityEngine.ProBuilder.MeshOperations.Bevel");
+        private static readonly RetryingType DeleteElementsType = new RetryingType("UnityEngine.ProBuilder.MeshOperations.DeleteElements");
+        private static readonly RetryingType AppendElementsType = new RetryingType("UnityEngine.ProBuilder.MeshOperations.AppendElements");
+        private static readonly RetryingType ConnectElementsType = new RetryingType("UnityEngine.ProBuilder.MeshOperations.ConnectElements");
+        private static readonly RetryingType MergeElementsType = new RetryingType("UnityEngine.ProBuilder.MeshOperations.MergeElements");
+        private static readonly RetryingType SubdivisionType = new RetryingType("UnityEngine.ProBuilder.MeshOperations.Subdivision");
+        private static readonly RetryingType CombineMeshesType = new RetryingType("UnityEngine.ProBuilder.MeshOperations.CombineMeshes");
+        private static readonly RetryingType VertexEditingType = new RetryingType("UnityEngine.ProBuilder.MeshOperations.VertexEditing");
+        private static readonly RetryingType MeshImporterType = new RetryingType("UnityEngine.ProBuilder.MeshOperations.MeshImporter");
+        private static readonly RetryingType MeshImportSettingsType = new RetryingType("UnityEngine.ProBuilder.MeshOperations.MeshImportSettings");
+        private static readonly RetryingType ElementSelectionType = new RetryingType("UnityEngine.ProBuilder.MeshOperations.ElementSelection");
+        private static readonly RetryingType PivotLocationType = new RetryingType("UnityEngine.ProBuilder.PivotLocation");
 
         /// <summary>
         /// Whether the ProBuilder package types are available at runtime.
@@ -60,100 +81,8 @@ namespace UnityCli.ProBuilder
         /// </summary>
         public static Type GetProBuilderMeshType() { return ProBuilderMeshType.Value; }
 
-        /// <summary>
-        /// Returns the ShapeGenerator type or null if the package is missing.
-        /// </summary>
-        public static Type GetShapeGeneratorType() { return ShapeGeneratorType.Value; }
-
-        /// <summary>
-        /// Returns the MeshOperations type or null if the package is missing.
-        /// </summary>
-        public static Type GetMeshOperationsType() { return MeshOperationsType.Value; }
-
-        /// <summary>
-        /// Returns the EditorMeshUtility type or null if the package is missing.
-        /// </summary>
-        public static Type GetEditorMeshUtilityType() { return EditorMeshUtilityType.Value; }
-
-        /// <summary>
-        /// Returns the Smoothing type or null if the package is missing.
-        /// </summary>
-        public static Type GetSmoothingType() { return SmoothingType.Value; }
-
-        /// <summary>
-        /// Returns the MeshValidation type or null if the package is missing.
-        /// </summary>
-        public static Type GetMeshValidationType() { return MeshValidationType.Value; }
-
-        /// <summary>
-        /// Returns the Face type or null if the package is missing.
-        /// </summary>
+        /// <summary>返回 Face type，供逐面 UV 操作使用。</summary>
         public static Type GetFaceType() { return FaceType.Value; }
-
-        /// <summary>
-        /// Returns the Edge type or null if the package is missing.
-        /// </summary>
-        public static Type GetEdgeType() { return EdgeType.Value; }
-
-        /// <summary>
-        /// Returns the ExtrudeElements type or null if the package is missing.
-        /// </summary>
-        public static Type GetExtrudeElementsType() { return ExtrudeElementsType.Value; }
-
-        /// <summary>
-        /// Returns the Bevel type or null if the package is missing.
-        /// </summary>
-        public static Type GetBevelType() { return BevelType.Value; }
-
-        /// <summary>
-        /// Returns the DeleteElements type or null if the package is missing.
-        /// </summary>
-        public static Type GetDeleteElementsType() { return DeleteElementsType.Value; }
-
-        /// <summary>
-        /// Returns the AppendElements type or null if the package is missing.
-        /// </summary>
-        public static Type GetAppendElementsType() { return AppendElementsType.Value; }
-
-        /// <summary>
-        /// Returns the ConnectElements type or null if the package is missing.
-        /// </summary>
-        public static Type GetConnectElementsType() { return ConnectElementsType.Value; }
-
-        /// <summary>
-        /// Returns the MergeElements type or null if the package is missing.
-        /// </summary>
-        public static Type GetMergeElementsType() { return MergeElementsType.Value; }
-
-        /// <summary>
-        /// Returns the CombineMeshes type or null if the package is missing.
-        /// </summary>
-        public static Type GetCombineMeshesType() { return CombineMeshesType.Value; }
-
-        /// <summary>
-        /// Returns the VertexEditing type or null if the package is missing.
-        /// </summary>
-        public static Type GetVertexEditingType() { return VertexEditingType.Value; }
-
-        /// <summary>
-        /// Returns the MeshImporter type or null if the package is missing.
-        /// </summary>
-        public static Type GetMeshImporterType() { return MeshImporterType.Value; }
-
-        /// <summary>
-        /// Returns the ElementSelection type or null if the package is missing.
-        /// </summary>
-        public static Type GetElementSelectionType() { return ElementSelectionType.Value; }
-
-        /// <summary>
-        /// Returns the PivotLocation type or null if the package is missing.
-               /// </summary>
-        public static Type GetPivotLocationType() { return PivotLocationType.Value; }
-
-        /// <summary>
-        /// Returns the Axis type or null if the package is missing.
-        /// </summary>
-        public static Type GetAxisType() { return AxisType.Value; }
 
         // ─── Core reflection operations ─────────────────────────────
 
@@ -194,27 +123,22 @@ namespace UnityCli.ProBuilder
             return GetProBuilderMesh(go) != null;
         }
 
-        /// <summary>
-        /// Call MeshOperations.Extrude via reflection.
-        /// </summary>
-        public static void Extrude(object mesh, object faces, float distance, string method)
+        /// <summary>通过 ProBuilder 5.x ExtrudeElements 挤出指定面。</summary>
+        public static bool Extrude(object mesh, Array faces, float distance, string method)
         {
-            var type = MeshOperationsType.Value;
-            if (type == null || mesh == null) return;
-            var extrudeMethod = (int)0; // ExtrudeMethod.VertexNormal
-            if (!string.IsNullOrEmpty(method) && string.Equals(method, "faceNormal", StringComparison.OrdinalIgnoreCase))
-            {
-                extrudeMethod = 1; // ExtrudeMethod.FaceNormal
-            }
+            var type = ExtrudeElementsType.Value;
+            if (type == null || mesh == null || faces == null || faces.Length == 0) return false;
             try
             {
-                var methodInfo = type.GetMethod("Extrude", new[] { ProBuilderMeshType.Value, FaceType.Value.MakeArrayType(), typeof(float), ExtrudeMethodType.Value });
-                if (methodInfo != null)
-                {
-                    methodInfo.Invoke(null, new[] { mesh, faces, distance, extrudeMethod });
-                }
+                var faceEnumerableType = typeof(IEnumerable<>).MakeGenericType(FaceType.Value);
+                var methodInfo = type.GetMethod("Extrude", BindingFlags.Static | BindingFlags.Public, null,
+                    new[] { ProBuilderMeshType.Value, faceEnumerableType, ExtrudeMethodType.Value, typeof(float) }, null);
+                if (methodInfo == null) return false;
+                var methodName = string.Equals(method, "faceNormal", StringComparison.OrdinalIgnoreCase) ? "FaceNormal" : "VertexNormal";
+                var extrudeMethod = Enum.Parse(ExtrudeMethodType.Value, methodName, true);
+                return methodInfo.Invoke(null, new object[] { mesh, faces, extrudeMethod, distance }) is Array result && result.Length > 0;
             }
-            catch (Exception) { }
+            catch (Exception) { return false; }
         }
 
         /// <summary>
@@ -227,14 +151,16 @@ namespace UnityCli.ProBuilder
             if (type == null) return null;
             try
             {
-                // Try the enum-based overload: CreateShape(ShapeType, PivotLocation)
+                // ProBuilder 5.x 返回 ProBuilderMesh，并要求显式 PivotLocation。
                 var shapeTypeEnum = ParseShapeType(shapeType);
-                if (shapeTypeEnum != null && ShapeTypeType.Value != null)
+                if (shapeTypeEnum != null && ShapeTypeType.Value != null && PivotLocationType.Value != null)
                 {
-                    var methodInfo = type.GetMethod("CreateShape", new[] { ShapeTypeType.Value });
+                    var methodInfo = type.GetMethod("CreateShape", new[] { ShapeTypeType.Value, PivotLocationType.Value });
                     if (methodInfo != null)
                     {
-                        var go = methodInfo.Invoke(null, new[] { shapeTypeEnum }) as GameObject;
+                        var pivot = Enum.Parse(PivotLocationType.Value, "Center", true);
+                        var created = methodInfo.Invoke(null, new[] { shapeTypeEnum, pivot });
+                        var go = created as GameObject ?? (created as Component)?.gameObject;
                         if (go != null)
                         {
                             go.transform.position = position;
@@ -244,12 +170,7 @@ namespace UnityCli.ProBuilder
                     }
                 }
 
-                // Fallback: try CreateShape with Vector3, Quaternion
-                var altMethod = type.GetMethod("CreateShape", new[] { ShapeTypeType.Value, typeof(Vector3), typeof(Quaternion) });
-                if (altMethod != null && shapeTypeEnum != null)
-                {
-                    return altMethod.Invoke(null, new object[] { shapeTypeEnum, position, rotation }) as GameObject;
-                }
+                return null;
             }
             catch (Exception) { }
             return null;
@@ -305,357 +226,140 @@ namespace UnityCli.ProBuilder
             catch (Exception) { return null; }
         }
 
-        /// <summary>
-        /// Call MeshOperations.DeleteFaces via reflection.
-        /// </summary>
-        public static void DeleteFaces(object mesh, int[] faceIndices)
+        /// <summary>通过 ProBuilder 5.x DeleteElements 删除面。</summary>
+        public static bool DeleteFaces(object mesh, int[] faceIndices)
         {
-            var type = MeshOperationsType.Value;
-            if (type == null || mesh == null) return;
+            var type = DeleteElementsType.Value;
+            if (type == null || mesh == null || faceIndices == null || faceIndices.Length == 0) return false;
             try
             {
-                var methodInfo = type.GetMethod("DeleteFaces", new[] { ProBuilderMeshType.Value, typeof(int[]) });
-                if (methodInfo != null)
-                {
-                    methodInfo.Invoke(null, new object[] { mesh, faceIndices });
-                }
+                var methodInfo = type.GetMethod("DeleteFaces", BindingFlags.Static | BindingFlags.Public, null,
+                    new[] { ProBuilderMeshType.Value, typeof(IList<int>) }, null);
+                return methodInfo != null && methodInfo.Invoke(null, new object[] { mesh, faceIndices.ToList() }) is int[];
             }
-            catch (Exception) { }
+            catch (Exception) { return false; }
         }
 
-        /// <summary>
-        /// Call MeshOperations.DetachFaces via reflection.
-        /// Returns the detached GameObject or null.
-        /// </summary>
-        public static GameObject DetachFaces(object mesh, int[] faceIndices)
+        /// <summary>通过 ProBuilder 5.x MergeElements 合并面。</summary>
+        public static bool MergeFaces(object mesh, int[] faceIndices)
         {
-            var type = MeshOperationsType.Value;
-            if (type == null || mesh == null) return null;
+            var type = MergeElementsType.Value;
+            var faces = GetFacesByIndices(mesh, faceIndices);
+            if (type == null || faces == null || faces.Length < 2) return false;
             try
             {
-                var methodInfo = type.GetMethod("DetachFaces", new[] { ProBuilderMeshType.Value, FaceType.Value.MakeArrayType() });
-                if (methodInfo != null)
-                {
-                    var faces = GetFacesByIndices(mesh, faceIndices);
-                    if (faces == null) return null;
-                    var result = methodInfo.Invoke(null, new[] { mesh, faces });
-                    // DetachFaces returns the new GameObject
-                    if (result is GameObject go) return go;
-                    // Some overloads return a struct with gameObject
-                    var goProp = result?.GetType().GetProperty("gameObject");
-                    return goProp?.GetValue(result) as GameObject;
-                }
+                var faceEnumerableType = typeof(IEnumerable<>).MakeGenericType(FaceType.Value);
+                var methodInfo = type.GetMethod("Merge", BindingFlags.Static | BindingFlags.Public, null,
+                    new[] { ProBuilderMeshType.Value, faceEnumerableType }, null);
+                return methodInfo != null && methodInfo.Invoke(null, new object[] { mesh, faces }) != null;
             }
-            catch (Exception) { }
-            return null;
+            catch (Exception) { return false; }
         }
 
-        /// <summary>
-        /// Call MeshOperations.MergeFaces via reflection.
-        /// </summary>
-        public static void MergeFaces(object mesh, int[] faceIndices)
+        /// <summary>通过 ProBuilder 5.x Subdivision 细分面。</summary>
+        public static bool SubdivideFaces(object mesh, int[] faceIndices)
         {
-            var type = MeshOperationsType.Value;
-            if (type == null || mesh == null) return;
+            var type = SubdivisionType.Value;
+            var faces = GetFacesByIndices(mesh, faceIndices);
+            if (type == null || faces == null || faces.Length == 0) return false;
             try
             {
-                var faces = GetFacesByIndices(mesh, faceIndices);
-                if (faces == null) return;
-                var methodInfo = type.GetMethod("MergeFaces", new[] { ProBuilderMeshType.Value, FaceType.Value.MakeArrayType() });
-                if (methodInfo != null)
-                {
-                    methodInfo.Invoke(null, new[] { mesh, faces });
-                }
+                var faceList = ToTypedFaceList(faces);
+                var faceListType = typeof(IList<>).MakeGenericType(FaceType.Value);
+                var methodInfo = type.GetMethod("Subdivide", BindingFlags.Static | BindingFlags.Public, null,
+                    new[] { ProBuilderMeshType.Value, faceListType }, null);
+                return methodInfo != null && methodInfo.Invoke(null, new object[] { mesh, faceList }) is Array result && result.Length > 0;
             }
-            catch (Exception) { }
+            catch (Exception) { return false; }
         }
 
-        /// <summary>
-        /// Call MeshOperations.SubdivideFaces via reflection.
-        /// </summary>
-        public static void SubdivideFaces(object mesh, int[] faceIndices)
+        /// <summary>通过 ProBuilder 5.x Face.Reverse 翻转面法线。</summary>
+        public static bool FlipFaces(object mesh, int[] faceIndices)
         {
-            var type = MeshOperationsType.Value;
-            if (type == null || mesh == null) return;
+            var faces = GetFacesByIndices(mesh, faceIndices);
+            if (mesh == null || faces == null || faces.Length == 0) return false;
             try
             {
-                var faces = GetFacesByIndices(mesh, faceIndices);
-                if (faces == null) return;
-                var methodInfo = type.GetMethod("SubdivideFaces", new[] { ProBuilderMeshType.Value, FaceType.Value.MakeArrayType() });
-                if (methodInfo != null)
-                {
-                    methodInfo.Invoke(null, new[] { mesh, faces });
-                }
+                var reverse = FaceType.Value?.GetMethod("Reverse", Type.EmptyTypes);
+                if (reverse == null) return false;
+                foreach (var face in faces) reverse.Invoke(face, null);
+                return true;
             }
-            catch (Exception) { }
+            catch (Exception) { return false; }
         }
 
-        /// <summary>
-        /// Call MeshOperations.FlipFaces via reflection.
-        /// </summary>
-        public static void FlipFaces(object mesh, int[] faceIndices)
+        /// <summary>通过 ProBuilder 5.x Face.smoothingGroup 设置平滑组。</summary>
+        public static bool ApplySmoothingGroup(object mesh, int[] faceIndices, int smoothingGroup)
         {
-            var type = MeshOperationsType.Value;
-            if (type == null || mesh == null) return;
+            var faces = GetFacesByIndices(mesh, faceIndices);
+            if (mesh == null || faces == null || faces.Length == 0) return false;
             try
             {
-                var faces = GetFacesByIndices(mesh, faceIndices);
-                if (faces == null) return;
-                var methodInfo = type.GetMethod("FlipFaces", new[] { ProBuilderMeshType.Value, FaceType.Value.MakeArrayType() });
-                if (methodInfo != null)
-                {
-                    methodInfo.Invoke(null, new[] { mesh, faces });
-                }
+                var property = FaceType.Value?.GetProperty("smoothingGroup");
+                if (property == null || !property.CanWrite) return false;
+                foreach (var face in faces) property.SetValue(face, smoothingGroup);
+                return true;
             }
-            catch (Exception) { }
+            catch (Exception) { return false; }
         }
 
-        /// <summary>
-        /// Call MeshOperations.BridgeFaces via reflection.
-        /// </summary>
-        public static void Bridge(object mesh, object edgeA, object edgeB)
-        {
-            var type = MeshOperationsType.Value;
-            if (type == null || mesh == null) return;
-            try
-            {
-                var methodInfo = type.GetMethod("Bridge", new[] { ProBuilderMeshType.Value, EdgeType.Value, EdgeType.Value });
-                if (methodInfo != null)
-                {
-                    methodInfo.Invoke(null, new[] { mesh, edgeA, edgeB });
-                }
-            }
-            catch (Exception) { }
-        }
-
-        /// <summary>
-        /// Call MeshOperations.Connect via reflection for edges.
-        /// </summary>
-        public static void Connect(object mesh, object edges)
-        {
-            var type = MeshOperationsType.Value;
-            if (type == null || mesh == null) return;
-            try
-            {
-                var methodInfo = type.GetMethod("Connect", new[] { ProBuilderMeshType.Value, EdgeType.Value.MakeArrayType() });
-                if (methodInfo != null)
-                {
-                    methodInfo.Invoke(null, new[] { mesh, edges });
-                }
-            }
-            catch (Exception) { }
-        }
-
-        /// <summary>
-        /// Call MeshOperations.BevelEdges via reflection.
-        /// </summary>
-        public static void Bevel(object mesh, object edges, float amount)
-        {
-            var type = MeshOperationsType.Value;
-            if (type == null || mesh == null) return;
-            try
-            {
-                var methodInfo = type.GetMethod("BevelEdges", new[] { ProBuilderMeshType.Value, EdgeType.Value.MakeArrayType(), typeof(float) });
-                if (methodInfo != null)
-                {
-                    methodInfo.Invoke(null, new object[] { mesh, edges, amount });
-                }
-            }
-            catch (Exception) { }
-        }
-
-        /// <summary>
-        /// Call MeshOperations.Extrude for edges via reflection.
-        /// </summary>
-        public static void ExtrudeEdges(object mesh, object edges, float distance)
-        {
-            var type = MeshOperationsType.Value;
-            if (type == null || mesh == null) return;
-            try
-            {
-                var methodInfo = type.GetMethod("Extrude", new[] { ProBuilderMeshType.Value, EdgeType.Value.MakeArrayType(), typeof(float) });
-                if (methodInfo != null)
-                {
-                    methodInfo.Invoke(null, new object[] { mesh, edges, distance });
-                }
-            }
-            catch (Exception) { }
-        }
-
-        /// <summary>
-        /// Call MeshOperations.MergeVertices via reflection.
-        /// </summary>
-        public static int MergeVertices(object mesh, int[] vertexIndices)
-        {
-            var type = MeshOperationsType.Value;
-            if (type == null || mesh == null) return 0;
-            try
-            {
-                var sharedType = SharedVertexType.Value;
-                var methodInfo = type.GetMethod("MergeVertices", new[] { ProBuilderMeshType.Value, typeof(int[]) });
-                if (methodInfo != null)
-                {
-                    return (int)methodInfo.Invoke(null, new object[] { mesh, vertexIndices });
-                }
-            }
-            catch (Exception) { }
-            return 0;
-        }
-
-        /// <summary>
-        /// Call MeshOperations.WeldVertices via reflection.
-        /// </summary>
-        public static int WeldVertices(object mesh, int[] vertexIndices, float radius)
-        {
-            var type = MeshOperationsType.Value;
-            if (type == null || mesh == null) return 0;
-            try
-            {
-                var methodInfo = type.GetMethod("WeldVertices", new[] { ProBuilderMeshType.Value, typeof(int[]), typeof(float) });
-                if (methodInfo != null)
-                {
-                    return (int)methodInfo.Invoke(null, new object[] { mesh, vertexIndices, radius });
-                }
-            }
-            catch (Exception) { }
-            return 0;
-        }
-
-        /// <summary>
-        /// Call MeshOperations.SplitVertices via reflection.
-        /// </summary>
-        public static int SplitVertices(object mesh, int[] vertexIndices)
-        {
-            var type = MeshOperationsType.Value;
-            if (type == null || mesh == null) return 0;
-            try
-            {
-                var methodInfo = type.GetMethod("SplitVertices", new[] { ProBuilderMeshType.Value, typeof(int[]) });
-                if (methodInfo != null)
-                {
-                    return (int)methodInfo.Invoke(null, new object[] { mesh, vertexIndices });
-                }
-            }
-            catch (Exception) { }
-            return 0;
-        }
-
-        /// <summary>
-        /// Call MeshOperations.SetVertexPosition via reflection.
-        /// </summary>
-        public static void SetVertexPositions(object mesh, int[] vertexIndices, Vector3[] positions)
-        {
-            var type = MeshOperationsType.Value;
-            if (type == null || mesh == null) return;
-            try
-            {
-                var methodInfo = type.GetMethod("SetVertexPositions", new[] { ProBuilderMeshType.Value, typeof(int[]), typeof(Vector3[]) });
-                if (methodInfo != null)
-                {
-                    methodInfo.Invoke(null, new object[] { mesh, vertexIndices, positions });
-                }
-            }
-            catch (Exception) { }
-        }
-
-        /// <summary>
-        /// Call MeshOperations.InsertVertexOnEdge via reflection.
-        /// Returns the new vertex index or -1.
-        /// </summary>
-        public static int InsertVertexOnEdge(object mesh, object edge, Vector3 point)
-        {
-            var type = MeshOperationsType.Value;
-            if (type == null || mesh == null) return -1;
-            try
-            {
-                var methodInfo = type.GetMethod("InsertVertexOnEdge", new[] { ProBuilderMeshType.Value, EdgeType.Value, typeof(Vector3) });
-                if (methodInfo != null)
-                {
-                    return (int)methodInfo.Invoke(null, new object[] { mesh, edge, point });
-                }
-            }
-            catch (Exception) { }
-            return -1;
-        }
-
-        /// <summary>
-        /// Call Smoothing.ApplySmoothingGroup via reflection.
-        /// </summary>
-        public static void ApplySmoothingGroup(object mesh, int[] faceIndices, int smoothingGroup)
+        /// <summary>通过 ProBuilder 5.x Smoothing.ApplySmoothingGroups 自动分组。</summary>
+        public static bool ApplySmoothingGroups(object mesh, int[] faceIndices, float angleThreshold)
         {
             var type = SmoothingType.Value;
-            if (type == null || mesh == null) return;
+            var faces = GetFacesByIndices(mesh, faceIndices);
+            if (type == null || mesh == null || faces == null || faces.Length == 0) return false;
             try
             {
-                var methodInfo = type.GetMethod("ApplySmoothingGroup", new[] { ProBuilderMeshType.Value, FaceType.Value.MakeArrayType(), typeof(int) });
-                if (methodInfo != null)
-                {
-                    var faces = GetFacesByIndices(mesh, faceIndices);
-                    if (faces != null)
-                    {
-                        methodInfo.Invoke(null, new object[] { mesh, faces, smoothingGroup });
-                    }
-                }
+                var faceEnumerableType = typeof(IEnumerable<>).MakeGenericType(FaceType.Value);
+                var methodInfo = type.GetMethod("ApplySmoothingGroups", BindingFlags.Static | BindingFlags.Public, null,
+                    new[] { ProBuilderMeshType.Value, faceEnumerableType, typeof(float) }, null);
+                if (methodInfo == null) return false;
+                methodInfo.Invoke(null, new object[] { mesh, faces, angleThreshold });
+                return true;
             }
-            catch (Exception) { }
+            catch (Exception) { return false; }
         }
 
-        /// <summary>
-        /// Call Smoothing.ApplySmoothingGroups via reflection for auto-smooth.
-        /// </summary>
-        public static void ApplySmoothingGroups(object mesh, int[] faceIndices, float angleThreshold)
+        /// <summary>统计包含退化三角形的面数量。</summary>
+        public static int CountDegenerateFaces(object mesh)
         {
-            var type = SmoothingType.Value;
-            if (type == null || mesh == null) return;
+            var faces = GetAllFaces(mesh);
+            if (MeshValidationType.Value == null || mesh == null || faces == null) return -1;
             try
             {
-                var faces = GetFacesByIndices(mesh, faceIndices);
-                if (faces == null) return;
-                var methodInfo = type.GetMethod("ApplySmoothingGroups", new[] { ProBuilderMeshType.Value, FaceType.Value.MakeArrayType(), typeof(float) });
-                if (methodInfo != null)
+                var method = MeshValidationType.Value.GetMethod("ContainsDegenerateTriangles", BindingFlags.Static | BindingFlags.Public, null,
+                    new[] { ProBuilderMeshType.Value, FaceType.Value }, null);
+                if (method == null) return -1;
+                var count = 0;
+                foreach (var face in faces)
                 {
-                    methodInfo.Invoke(null, new object[] { mesh, faces, angleThreshold });
+                    if (method.Invoke(null, new[] { mesh, face }) is bool contains && contains) count++;
                 }
+                return count;
             }
-            catch (Exception) { }
+            catch (Exception) { return -1; }
         }
 
-        /// <summary>
-        /// Call MeshValidation.Validate via reflection.
-        /// Returns the validation result object or null.
-        /// </summary>
-        public static object Validate(object mesh)
+        /// <summary>按 face indexes 统计未被任何面引用的顶点。</summary>
+        public static int CountUnusedVertices(object mesh)
         {
-            var type = MeshValidationType.Value;
-            if (type == null || mesh == null) return null;
+            var faces = GetAllFaces(mesh);
+            var vertexCount = GetVertexCount(mesh);
+            if (mesh == null || faces == null || vertexCount < 0) return -1;
             try
             {
-                var methodInfo = type.GetMethod("Validate", new[] { ProBuilderMeshType.Value });
-                if (methodInfo != null)
+                var indexesProperty = FaceType.Value?.GetProperty("indexes");
+                if (indexesProperty == null) return -1;
+                var referenced = new HashSet<int>();
+                foreach (var face in faces)
                 {
-                    return methodInfo.Invoke(null, new object[] { mesh });
+                    if (!(indexesProperty.GetValue(face) is System.Collections.IEnumerable indexes)) return -1;
+                    foreach (var index in indexes) referenced.Add((int)index);
                 }
+                return Math.Max(0, vertexCount - referenced.Count);
             }
-            catch (Exception) { }
-            return null;
-        }
-
-        /// <summary>
-        /// Call EditorMeshUtility.Optimize via reflection.
-        /// </summary>
-        public static void Optimize(object mesh)
-        {
-            var type = EditorMeshUtilityType.Value;
-            if (type == null || mesh == null) return;
-            try
-            {
-                var methodInfo = type.GetMethod("Optimize", new[] { ProBuilderMeshType.Value });
-                if (methodInfo != null)
-                {
-                    methodInfo.Invoke(null, new object[] { mesh });
-                }
-            }
-            catch (Exception) { }
+            catch (Exception) { return -1; }
         }
 
         // ─── Mesh property accessors via reflection ──────────────────
@@ -665,37 +369,34 @@ namespace UnityCli.ProBuilder
         /// </summary>
         public static int GetFaceCount(object mesh)
         {
-            if (mesh == null) return 0;
+            if (mesh == null) return -1;
             try
             {
-                var facesProp = ProBuilderMeshType.Value?.GetProperty("faces");
-                if (facesProp == null) return 0;
-                var faces = facesProp.GetValue(mesh);
-                if (faces is Array arr) return arr.Length;
-                return 0;
+                return ProBuilderMeshType.Value?.GetProperty("faceCount")?.GetValue(mesh) is int count ? count : -1;
             }
-            catch (Exception) { return 0; }
+            catch (Exception) { return -1; }
         }
 
-        /// <summary>
-        /// Get the vertex count from a ProBuilderMesh via reflection.
-        /// </summary>
+        /// <summary>读取 ProBuilder 5.x vertexCount。</summary>
         public static int GetVertexCount(object mesh)
         {
-            if (mesh == null) return 0;
+            if (mesh == null) return -1;
             try
             {
-                var verticesProp = ProBuilderMeshType.Value?.GetProperty("vertices");
-                if (verticesProp == null) return 0;
-                var vertices = verticesProp.GetValue(verticesProp.PropertyType.IsArray ? mesh : null);
-                if (verticesProp.PropertyType.IsArray)
-                {
-                    var arr = verticesProp.GetValue(mesh) as Array;
-                    return arr?.Length ?? 0;
-                }
-                return 0;
+                return ProBuilderMeshType.Value?.GetProperty("vertexCount")?.GetValue(mesh) is int count ? count : -1;
             }
-            catch (Exception) { return 0; }
+            catch (Exception) { return -1; }
+        }
+
+        /// <summary>读取 ProBuilder 5.x edgeCount。</summary>
+        public static int GetEdgeCount(object mesh)
+        {
+            if (mesh == null) return -1;
+            try
+            {
+                return ProBuilderMeshType.Value?.GetProperty("edgeCount")?.GetValue(mesh) is int count ? count : -1;
+            }
+            catch (Exception) { return -1; }
         }
 
         /// <summary>
@@ -709,17 +410,15 @@ namespace UnityCli.ProBuilder
             {
                 var facesProp = ProBuilderMeshType.Value?.GetProperty("faces");
                 if (facesProp == null) return null;
-                var allFaces = facesProp.GetValue(mesh) as Array;
+                var allFaces = facesProp.GetValue(mesh) as System.Collections.IList;
                 if (allFaces == null) return null;
                 var faceType = FaceType.Value;
                 if (faceType == null) return null;
                 var result = Array.CreateInstance(faceType, indices.Length);
                 for (var i = 0; i < indices.Length; i++)
                 {
-                    if (indices[i] >= 0 && indices[i] < allFaces.Length)
-                    {
-                        result.SetValue(allFaces.GetValue(indices[i]), i);
-                    }
+                    if (indices[i] < 0 || indices[i] >= allFaces.Count) return null;
+                    result.SetValue(allFaces[indices[i]], i);
                 }
                 return result;
             }
@@ -734,47 +433,56 @@ namespace UnityCli.ProBuilder
             if (mesh == null) return null;
             try
             {
-                var facesProp = ProBuilderMeshType.Value?.GetProperty("faces");
-                if (facesProp == null) return null;
-                return facesProp.GetValue(mesh) as Array;
+                var faces = ProBuilderMeshType.Value?.GetProperty("faces")?.GetValue(mesh) as System.Collections.IList;
+                if (faces == null || FaceType.Value == null) return null;
+                var result = Array.CreateInstance(FaceType.Value, faces.Count);
+                faces.CopyTo(result, 0);
+                return result;
             }
             catch (Exception) { return null; }
         }
 
-        /// <summary>
-        /// Refresh/ToMesh a ProBuilderMesh via reflection.
-        /// </summary>
-        public static void RefreshMesh(object mesh)
+        /// <summary>通过 ProBuilder 5.x 精确签名重建并刷新网格。</summary>
+        public static bool RefreshMesh(object mesh)
         {
-            if (mesh == null) return;
+            if (mesh == null) return false;
             try
             {
-                // Try ToMesh() then Refresh()
-                var toMesh = ProBuilderMeshType.Value?.GetMethod("ToMesh", Type.EmptyTypes);
-                toMesh?.Invoke(mesh, null);
-                var refresh = ProBuilderMeshType.Value?.GetMethod("Refresh", Type.EmptyTypes);
-                refresh?.Invoke(mesh, null);
+                var meshType = ProBuilderMeshType.Value;
+                var toMesh = meshType?.GetMethod("ToMesh", new[] { typeof(MeshTopology) });
+                var refresh = meshType?.GetMethod("Refresh", new[] { FindType("UnityEngine.ProBuilder.RefreshMask") });
+                if (toMesh == null || refresh == null) return false;
+                toMesh.Invoke(mesh, new object[] { MeshTopology.Triangles });
+                var refreshMask = Enum.Parse(refresh.GetParameters()[0].ParameterType, "All", true);
+                refresh.Invoke(mesh, new[] { refreshMask });
+                return true;
             }
-            catch (Exception) { }
+            catch (Exception) { return false; }
         }
 
-        /// <summary>
-        /// Convert a regular mesh to a ProBuilder mesh via reflection.
-        /// </summary>
+        /// <summary>通过 ProBuilder 5.x MeshImporter(GameObject) 导入普通 Mesh。</summary>
         public static object ConvertToProBuilderMesh(GameObject go)
         {
-            if (go == null) return null;
+            if (go == null || MeshImporterType.Value == null || MeshImportSettingsType.Value == null) return null;
+            if (GetProBuilderMesh(go) != null) return null;
+            UnityEngine.Object component = null;
             try
             {
-                var methodInfo = ProBuilderMeshType.Value?.GetMethod("AddProBuilderMesh", new[] { typeof(GameObject) });
-                if (methodInfo != null)
-                {
-                    return methodInfo.Invoke(null, new object[] { go });
-                }
-                // Alternative: try adding the component directly
-                return AddProBuilderMesh(go);
+                var constructor = MeshImporterType.Value.GetConstructor(new[] { typeof(GameObject) });
+                var import = MeshImporterType.Value.GetMethod("Import", new[] { MeshImportSettingsType.Value });
+                if (constructor == null || import == null) return null;
+                var importer = constructor.Invoke(new object[] { go });
+                component = GetProBuilderMesh(go) as UnityEngine.Object;
+                if (component == null) return null;
+                import.Invoke(importer, new object[] { null });
+                Undo.RegisterCreatedObjectUndo(component, "ProBuilder Convert to ProBuilder");
+                return component;
             }
-            catch (Exception) { return null; }
+            catch (Exception)
+            {
+                if (component != null) UnityEngine.Object.DestroyImmediate(component);
+                return null;
+            }
         }
 
         // ─── Edge resolution helpers ────────────────────────────────────
@@ -923,12 +631,75 @@ namespace UnityCli.ProBuilder
         public static System.Collections.IList ToTypedFaceList(Array faces)
         {
             var faceType = FaceType.Value;
-            if (faceType == null) return null;
+            if (faceType == null || faces == null) return null;
             var faceListType = typeof(List<>).MakeGenericType(faceType);
             var faceList = Activator.CreateInstance(faceListType) as System.Collections.IList;
-            foreach (var f in faces)
-                faceList.Add(f);
+            foreach (var face in faces) faceList.Add(face);
             return faceList;
+        }
+
+        /// <summary>通过 ProBuilder 5.x ElementSelection 执行种子面选择。</summary>
+        public static Array SelectFaces(object mesh, Array seeds, string operation, int growIterations)
+        {
+            var selectionType = ElementSelectionType.Value;
+            var faceType = FaceType.Value;
+            if (selectionType == null || faceType == null || mesh == null || seeds == null || seeds.Length == 0) return null;
+            try
+            {
+                if (operation == "grow")
+                {
+                    var enumerableType = typeof(IEnumerable<>).MakeGenericType(faceType);
+                    var method = selectionType.GetMethod("GrowSelection", BindingFlags.Static | BindingFlags.Public, null,
+                        new[] { ProBuilderMeshType.Value, enumerableType, typeof(float) }, null);
+                    if (method == null) return null;
+                    var current = seeds;
+                    for (var iteration = 0; iteration < growIterations; iteration++)
+                    {
+                        var neighboring = ToTypedFaceArray(method.Invoke(null, new object[] { mesh, current, -1f }));
+                        if (neighboring == null) return null;
+                        current = UnionFaceArrays(current, neighboring);
+                    }
+                    return current;
+                }
+
+                if (operation == "flood")
+                {
+                    var listType = typeof(IList<>).MakeGenericType(faceType);
+                    var method = selectionType.GetMethod("FloodSelection", BindingFlags.Static | BindingFlags.Public, null,
+                        new[] { ProBuilderMeshType.Value, listType, typeof(float) }, null);
+                    return method == null ? null : ToTypedFaceArray(method.Invoke(null, new object[] { mesh, ToTypedFaceList(seeds), -1f }));
+                }
+
+                var loopMethod = selectionType.GetMethod("GetFaceLoop", BindingFlags.Static | BindingFlags.Public, null,
+                    new[] { ProBuilderMeshType.Value, faceType.MakeArrayType(), typeof(bool) }, null);
+                return loopMethod == null ? null : ToTypedFaceArray(loopMethod.Invoke(null, new object[] { mesh, seeds, operation == "ring" }));
+            }
+            catch (Exception) { return null; }
+        }
+
+        /// <summary>合并当前面与增长结果，保持 grow selection 包含原种子。</summary>
+        private static Array UnionFaceArrays(Array current, Array neighboring)
+        {
+            var faces = new List<object>();
+            foreach (var face in current) faces.Add(face);
+            foreach (var face in neighboring)
+            {
+                if (!faces.Any(existing => ReferenceEquals(existing, face))) faces.Add(face);
+            }
+            var result = Array.CreateInstance(FaceType.Value, faces.Count);
+            for (var index = 0; index < faces.Count; index++) result.SetValue(faces[index], index);
+            return result;
+        }
+
+        /// <summary>把 Face 集合转换为强类型 Face[]。</summary>
+        private static Array ToTypedFaceArray(object value)
+        {
+            if (!(value is System.Collections.IEnumerable enumerable) || FaceType.Value == null) return null;
+            var faces = new List<object>();
+            foreach (var face in enumerable) faces.Add(face);
+            var result = Array.CreateInstance(FaceType.Value, faces.Count);
+            for (var index = 0; index < faces.Count; index++) result.SetValue(faces[index], index);
+            return result;
         }
 
         /// <summary>
@@ -962,39 +733,14 @@ namespace UnityCli.ProBuilder
 
             try
             {
-                // Try Extrude(ProBuilderMesh, Edge[], float, bool, bool)
-                var method = extrudeElements.GetMethod("Extrude",
-                    BindingFlags.Static | BindingFlags.Public,
-                    null,
-                    new[] { ProBuilderMeshType.Value, edgeArray.GetType(), typeof(float), typeof(bool), typeof(bool) },
-                    null);
-
-                if (method != null)
-                {
-                    method.Invoke(null, new object[] { mesh, edgeArray, distance, asGroup, true });
-                    return edgeCount;
-                }
-
-                // Fallback: Extrude(ProBuilderMesh, Edge[], ExtrudeMethod, float)
-                var extrudeMethodEnum = ExtrudeMethodType.Value;
-                if (extrudeMethodEnum != null)
-                {
-                    var faceMethod = extrudeElements.GetMethod("Extrude",
-                        BindingFlags.Static | BindingFlags.Public,
-                        null,
-                        new[] { ProBuilderMeshType.Value, edgeArray.GetType(), extrudeMethodEnum, typeof(float) },
-                        null);
-                    if (faceMethod != null)
-                    {
-                        // ExtrudeMethod.VertexNormal = 0
-                        var extrudeMethodVal = Enum.ToObject(extrudeMethodEnum, 0);
-                        faceMethod.Invoke(null, new object[] { mesh, edgeArray, extrudeMethodVal, distance });
-                        return edgeCount;
-                    }
-                }
+                var edgeEnumerableType = typeof(IEnumerable<>).MakeGenericType(EdgeType.Value);
+                var method = extrudeElements.GetMethod("Extrude", BindingFlags.Static | BindingFlags.Public, null,
+                    new[] { ProBuilderMeshType.Value, edgeEnumerableType, typeof(float), typeof(bool), typeof(bool) }, null);
+                return method?.Invoke(null, new object[] { mesh, edgeArray, distance, asGroup, true }) is Array result
+                    ? result.Length
+                    : 0;
             }
-            catch (Exception) { }
-            return 0;
+            catch (Exception) { return 0; }
         }
 
         /// <summary>
@@ -1041,34 +787,11 @@ namespace UnityCli.ProBuilder
 
             try
             {
-                // Try Bridge(ProBuilderMesh, Edge, Edge, bool)
-                var method = appendElements.GetMethod("Bridge",
-                    BindingFlags.Static | BindingFlags.Public,
-                    null,
-                    new[] { ProBuilderMeshType.Value, edgeType, edgeType, typeof(bool) },
-                    null);
-
-                if (method != null)
-                {
-                    method.Invoke(null, new object[] { mesh, edgeA, edgeB, allowNonManifold });
-                    return true;
-                }
-
-                // Fallback: Bridge(ProBuilderMesh, Edge, Edge)
-                var methodNoFlag = appendElements.GetMethod("Bridge",
-                    BindingFlags.Static | BindingFlags.Public,
-                    null,
-                    new[] { ProBuilderMeshType.Value, edgeType, edgeType },
-                    null);
-
-                if (methodNoFlag != null)
-                {
-                    methodNoFlag.Invoke(null, new object[] { mesh, edgeA, edgeB });
-                    return true;
-                }
+                var method = appendElements.GetMethod("Bridge", BindingFlags.Static | BindingFlags.Public, null,
+                    new[] { ProBuilderMeshType.Value, edgeType, edgeType, typeof(bool) }, null);
+                return method != null && method.Invoke(null, new object[] { mesh, edgeA, edgeB, allowNonManifold }) != null;
             }
-            catch (Exception) { }
-            return false;
+            catch (Exception) { return false; }
         }
 
         /// <summary>
@@ -1211,57 +934,27 @@ namespace UnityCli.ProBuilder
 
             try
             {
-                var method = appendType.GetMethod("AppendVerticesToEdge",
-                    BindingFlags.Static | BindingFlags.Public,
-                    null,
-                    new[] { ProBuilderMeshType.Value, typedList.GetType(), typeof(int) },
-                    null);
-
-                if (method != null)
-                {
-                    method.Invoke(null, new object[] { mesh, typedList, count });
-                    return true;
-                }
-
-                // Try any 3-param overload
-                var altMethod = appendType.GetMethods(BindingFlags.Static | BindingFlags.Public)
-                    .FirstOrDefault(m => m.Name == "AppendVerticesToEdge" && m.GetParameters().Length == 3
-                        && m.GetParameters()[2].ParameterType == typeof(int));
-                if (altMethod != null)
-                {
-                    altMethod.Invoke(null, new object[] { mesh, typedList, count });
-                    return true;
-                }
+                var edgeListType = typeof(IList<>).MakeGenericType(EdgeType.Value);
+                var method = appendType.GetMethod("AppendVerticesToEdge", BindingFlags.Static | BindingFlags.Public, null,
+                    new[] { ProBuilderMeshType.Value, edgeListType, typeof(int) }, null);
+                return method != null && method.Invoke(null, new object[] { mesh, typedList, count }) != null;
             }
-            catch (Exception) { }
-            return false;
+            catch (Exception) { return false; }
         }
 
-        /// <summary>
-        /// Call AppendElements.InsertVertexOnEdge via reflection.
-        /// Returns the new vertex index or -1.
-        /// </summary>
-        public static int InsertVertexOnEdgeByPair(object mesh, int edgeA, int edgeB, Vector3 point)
+        /// <summary>通过 ProBuilder 5.x AppendElements 在边上插入顶点。</summary>
+        public static bool InsertVertexOnEdgeByPair(object mesh, int edgeA, int edgeB, Vector3 point)
         {
             var appendType = AppendElementsType.Value;
-            if (appendType == null || mesh == null) return -1;
-
             var edge = CreateEdge(edgeA, edgeB);
-            if (edge == null) return -1;
-
+            if (appendType == null || mesh == null || edge == null) return false;
             try
             {
-                var method = appendType.GetMethod("InsertVertexOnEdge",
-                    BindingFlags.Static | BindingFlags.Public,
-                    null,
-                    new[] { ProBuilderMeshType.Value, EdgeType.Value, typeof(Vector3) },
-                    null);
-
-                if (method != null)
-                    return (int)method.Invoke(null, new object[] { mesh, edge, point });
+                var method = appendType.GetMethod("InsertVertexOnEdge", BindingFlags.Static | BindingFlags.Public, null,
+                    new[] { ProBuilderMeshType.Value, EdgeType.Value, typeof(Vector3) }, null);
+                return method != null && method.Invoke(null, new object[] { mesh, edge, point }) != null;
             }
-            catch (Exception) { }
-            return -1;
+            catch (Exception) { return false; }
         }
 
         /// <summary>
@@ -1284,14 +977,9 @@ namespace UnityCli.ProBuilder
                     new[] { ProBuilderMeshType.Value, FaceType.Value, typeof(Vector3) },
                     null);
 
-                if (method != null)
-                {
-                    method.Invoke(null, new object[] { mesh, face, point });
-                    return true;
-                }
+                return method?.Invoke(null, new object[] { mesh, face, point }) is Array insertedFaces && insertedFaces.Length > 0;
             }
-            catch (Exception) { }
-            return false;
+            catch (Exception) { return false; }
         }
 
         /// <summary>
@@ -1300,20 +988,15 @@ namespace UnityCli.ProBuilder
         public static int MergeVerticesWithCollapse(object mesh, int[] vertexIndices, bool collapseToFirst)
         {
             var vertexEditing = VertexEditingType.Value;
-            if (vertexEditing == null || mesh == null) return 0;
+            if (vertexEditing == null || mesh == null) return -1;
 
             try
             {
-                var method = vertexEditing.GetMethod("MergeVertices",
-                    BindingFlags.Static | BindingFlags.Public);
-                if (method != null)
-                {
-                    var result = method.Invoke(null, new object[] { mesh, vertexIndices, collapseToFirst });
-                    return result is int idx ? idx : vertexIndices.Length;
-                }
+                var method = vertexEditing.GetMethod("MergeVertices", BindingFlags.Static | BindingFlags.Public, null,
+                    new[] { ProBuilderMeshType.Value, typeof(int[]), typeof(bool) }, null);
+                return method?.Invoke(null, new object[] { mesh, vertexIndices, collapseToFirst }) is int index ? index : -1;
             }
-            catch (Exception) { }
-            return MergeVertices(mesh, vertexIndices);
+            catch (Exception) { return -1; }
         }
 
         /// <summary>
@@ -1322,23 +1005,16 @@ namespace UnityCli.ProBuilder
         public static int WeldVerticesWithRadius(object mesh, int[] vertexIndices, float radius)
         {
             var vertexEditing = VertexEditingType.Value;
-            if (vertexEditing == null || mesh == null) return 0;
+            if (vertexEditing == null || mesh == null) return -1;
 
             try
             {
-                var method = vertexEditing.GetMethod("WeldVertices",
-                    BindingFlags.Static | BindingFlags.Public);
-                if (method != null)
-                {
-                    var result = method.Invoke(null, new object[] { mesh, vertexIndices.ToList(), radius });
-                    if (result is int[] arr) return arr.Length;
-                    if (result is int count) return count;
-                    return vertexIndices.Length;
-                }
+                var vertexEnumerableType = typeof(IEnumerable<int>);
+                var method = vertexEditing.GetMethod("WeldVertices", BindingFlags.Static | BindingFlags.Public, null,
+                    new[] { ProBuilderMeshType.Value, vertexEnumerableType, typeof(float) }, null);
+                return method?.Invoke(null, new object[] { mesh, vertexIndices, radius }) is int[] welded ? welded.Length : -1;
             }
-            catch (Exception) { }
-            // Fallback to old WeldVertices method
-            return WeldVertices(mesh, vertexIndices, radius);
+            catch (Exception) { return -1; }
         }
 
         /// <summary>
@@ -1347,24 +1023,17 @@ namespace UnityCli.ProBuilder
         public static int SplitVerticesWithList(object mesh, int[] vertexIndices)
         {
             var vertexEditing = VertexEditingType.Value;
-            if (vertexEditing == null || mesh == null) return 0;
+            if (vertexEditing == null || mesh == null) return -1;
 
             try
             {
-                var method = vertexEditing.GetMethod("SplitVertices",
-                    BindingFlags.Static | BindingFlags.Public,
-                    null,
-                    new[] { ProBuilderMeshType.Value, typeof(IEnumerable<int>) },
-                    null);
-
-                if (method != null)
-                {
-                    method.Invoke(null, new object[] { mesh, vertexIndices.ToList() });
-                    return vertexIndices.Length;
-                }
+                var method = vertexEditing.GetMethod("SplitVertices", BindingFlags.Static | BindingFlags.Public, null,
+                    new[] { ProBuilderMeshType.Value, typeof(IEnumerable<int>) }, null);
+                if (method == null) return -1;
+                method.Invoke(null, new object[] { mesh, vertexIndices });
+                return vertexIndices.Length;
             }
-            catch (Exception) { }
-            return SplitVertices(mesh, vertexIndices);
+            catch (Exception) { return -1; }
         }
 
         /// <summary>
@@ -1400,80 +1069,32 @@ namespace UnityCli.ProBuilder
             catch (Exception) { return 0; }
         }
 
-        /// <summary>
-        /// Call MeshOperations.RemoveDegenerateTriangles via reflection.
-        /// </summary>
-        public static bool RemoveDegenerateTriangles(object mesh)
+        /// <summary>移除退化三角形并返回 ProBuilder 报告的索引数量。</summary>
+        public static int RemoveDegenerateTriangles(object mesh)
         {
-            var meshOps = MeshOperationsType.Value;
-            if (meshOps == null || mesh == null) return false;
-            try
-            {
-                var method = meshOps.GetMethod("RemoveDegenerateTriangles",
-                    new[] { ProBuilderMeshType.Value });
-                if (method != null)
-                {
-                    method.Invoke(null, new object[] { mesh });
-                    return true;
-                }
-            }
-            catch (Exception) { }
-            return false;
+            return InvokeMeshRepair("RemoveDegenerateTriangles", mesh);
         }
 
-        /// <summary>
-        /// Call MeshOperations.RemoveUnusedVertices via reflection.
-        /// </summary>
-        public static bool RemoveUnusedVertices(object mesh)
+        /// <summary>移除未使用顶点并返回 ProBuilder 报告的索引数量。</summary>
+        public static int RemoveUnusedVertices(object mesh)
         {
-            var meshOps = MeshOperationsType.Value;
-            if (meshOps == null || mesh == null) return false;
-            try
-            {
-                var method = meshOps.GetMethod("RemoveUnusedVertices",
-                    new[] { ProBuilderMeshType.Value });
-                if (method != null)
-                {
-                    method.Invoke(null, new object[] { mesh });
-                    return true;
-                }
-            }
-            catch (Exception) { }
-            return false;
+            return InvokeMeshRepair("RemoveUnusedVertices", mesh);
         }
 
-        /// <summary>
-        /// Call MeshImporter to convert a standard mesh to ProBuilder mesh.
-        /// </summary>
-        public static object ConvertViaMeshImporter(GameObject go, object pbMesh)
+        /// <summary>调用 ProBuilder 5.x MeshValidation 修复 API。</summary>
+        private static int InvokeMeshRepair(string methodName, object mesh)
         {
-            var meshImporter = MeshImporterType.Value;
-            if (meshImporter == null) return null;
+            if (MeshValidationType.Value == null || mesh == null) return -1;
             try
             {
-                var meshFilter = go.GetComponent<MeshFilter>();
-                if (meshFilter == null || meshFilter.sharedMesh == null) return null;
-
-                // Try MeshImporter(ProBuilderMesh) constructor
-                var ctor = meshImporter.GetConstructor(new[] { ProBuilderMeshType.Value });
-                if (ctor == null) return null;
-                var importer = ctor.Invoke(new object[] { pbMesh });
-
-                var importMethod = meshImporter.GetMethods(BindingFlags.Instance | BindingFlags.Public)
-                    .Where(m => m.Name == "Import")
-                    .OrderBy(m => m.GetParameters().Length)
-                    .FirstOrDefault();
-                if (importMethod != null)
-                {
-                    var importParams = importMethod.GetParameters();
-                    if (importParams.Length == 0)
-                        importMethod.Invoke(importer, null);
-                    else
-                        importMethod.Invoke(importer, new object[] { null });
-                }
-                return pbMesh;
+                var method = MeshValidationType.Value.GetMethod(methodName, BindingFlags.Static | BindingFlags.Public, null,
+                    new[] { ProBuilderMeshType.Value, typeof(List<int>) }, null);
+                if (method == null) return -1;
+                var removed = new List<int>();
+                method.Invoke(null, new object[] { mesh, removed });
+                return removed.Count;
             }
-            catch (Exception) { return null; }
+            catch (Exception) { return -1; }
         }
 
         /// <summary>
@@ -1482,175 +1103,20 @@ namespace UnityCli.ProBuilder
         public static bool CombineMeshesViaReflection(object[] pbMeshes, object targetMesh)
         {
             var combineType = CombineMeshesType.Value;
-            if (combineType == null) return false;
+            var meshType = ProBuilderMeshType.Value;
+            if (combineType == null || meshType == null || pbMeshes == null || targetMesh == null) return false;
             try
             {
-                var listType = typeof(List<>).MakeGenericType(ProBuilderMeshType.Value);
+                var listType = typeof(List<>).MakeGenericType(meshType);
                 var typedList = Activator.CreateInstance(listType) as System.Collections.IList;
-                foreach (var m in pbMeshes)
-                    typedList.Add(m);
-                var method = combineType.GetMethod("Combine", BindingFlags.Static | BindingFlags.Public);
-                if (method != null)
-                {
-                    method.Invoke(null, new object[] { typedList, targetMesh });
-                    return true;
-                }
+                foreach (var mesh in pbMeshes) typedList.Add(mesh);
+                var enumerableType = typeof(IEnumerable<>).MakeGenericType(meshType);
+                var method = combineType.GetMethod("Combine", BindingFlags.Static | BindingFlags.Public, null,
+                    new[] { enumerableType, meshType }, null);
+                var result = method?.Invoke(null, new object[] { typedList, targetMesh }) as System.Collections.IList;
+                return result != null && result.Count == 1 && ReferenceEquals(result[0], targetMesh);
             }
-            catch (Exception) { }
-            return false;
-        }
-
-        /// <summary>
-        /// Call DeleteElements.DetachFaces via reflection.
-        /// Returns the detached GameObject or null.
-        /// </summary>
-        public static GameObject DetachFacesViaExtrudeElements(object mesh, int[] faceIndices, bool deleteSource)
-        {
-            var extrudeElements = ExtrudeElementsType.Value;
-            if (extrudeElements == null || mesh == null) return null;
-
-            try
-            {
-                var faces = GetFacesByIndices(mesh, faceIndices);
-                if (faces == null) return null;
-                var faceList = ToTypedFaceList(faces);
-                if (faceList == null) return null;
-
-                // Try DetachFaces(ProBuilderMesh, IEnumerable<Face>, bool)
-                var method = extrudeElements.GetMethods(BindingFlags.Static | BindingFlags.Public)
-                    .FirstOrDefault(m => m.Name == "DetachFaces" && m.GetParameters().Length == 3
-                        && m.GetParameters()[1].ParameterType.IsAssignableFrom(faceList.GetType())
-                        && m.GetParameters()[2].ParameterType == typeof(bool));
-
-                if (method != null)
-                {
-                    method.Invoke(null, new object[] { mesh, faceList, deleteSource });
-                    // DetachFaces in the ExtrudeElements namespace creates a new GameObject
-                    // We need to find it by looking at newly created objects
-                    return FindDetachedGameObject(mesh);
-                }
-
-                // Fallback: DetachFaces(ProBuilderMesh, IEnumerable<Face>)
-                var methodNoFlag = extrudeElements.GetMethods(BindingFlags.Static | BindingFlags.Public)
-                    .FirstOrDefault(m => m.Name == "DetachFaces" && m.GetParameters().Length == 2
-                        && m.GetParameters()[1].ParameterType.IsAssignableFrom(faceList.GetType()));
-
-                if (methodNoFlag != null)
-                {
-                    methodNoFlag.Invoke(null, new object[] { mesh, faceList });
-                    return FindDetachedGameObject(mesh);
-                }
-            }
-            catch (Exception) { }
-            return null;
-        }
-
-        /// <summary>
-        /// Try to find the newly detached GameObject after DetachFaces.
-        /// </summary>
-        private static GameObject FindDetachedGameObject(object mesh)
-        {
-            // DetachFaces should return the new object via the method result or
-            // create a new sibling in the scene.
-            // Check for new sibling GameObjects with ProBuilderMesh
-            if (mesh == null) return null;
-            try
-            {
-                var meshComponent = mesh as Component;
-                if (meshComponent == null) return null;
-                var parent = meshComponent.transform.parent;
-                // Search siblings for new ProBuilderMesh components
-                var siblingCount = parent != null ? parent.childCount : 0;
-                for (int i = 0; i < siblingCount; i++)
-                {
-                    var child = parent.GetChild(i);
-                    if (child.gameObject != meshComponent.gameObject && HasProBuilderMesh(child.gameObject))
-                        return child.gameObject;
-                }
-                // Also search root objects in the scene
-                for (int s = 0; s < UnityEngine.SceneManagement.SceneManager.sceneCount; s++)
-                {
-                    var scene = UnityEngine.SceneManagement.SceneManager.GetSceneAt(s);
-                    foreach (var root in scene.GetRootGameObjects())
-                    {
-                        if (root != meshComponent.gameObject && HasProBuilderMesh(root))
-                            return root;
-                    }
-                }
-            }
-            catch (Exception) { }
-            return null;
-        }
-
-        /// <summary>
-        /// Call MergeElements.Merge via reflection for faces.
-        /// </summary>
-        public static bool MergeFacesViaMergeElements(object mesh, int[] faceIndices)
-        {
-            var mergeType = MergeElementsType.Value;
-            if (mergeType == null || mesh == null) return false;
-
-            try
-            {
-                var faces = GetFacesByIndices(mesh, faceIndices);
-                if (faces == null) return false;
-                var faceList = ToTypedFaceList(faces);
-                if (faceList == null) return false;
-
-                var method = mergeType.GetMethods(BindingFlags.Static | BindingFlags.Public)
-                    .FirstOrDefault(m => m.Name == "Merge" && m.GetParameters().Length == 2
-                        && m.GetParameters()[1].ParameterType.IsAssignableFrom(faceList.GetType()));
-
-                if (method != null)
-                {
-                    method.Invoke(null, new object[] { mesh, faceList });
-                    return true;
-                }
-            }
-            catch (Exception) { }
-            return false;
-        }
-
-        /// <summary>
-        /// Call DeleteElements.DeleteFaces via reflection.
-        /// </summary>
-        public static bool DeleteFacesViaDeleteElements(object mesh, int[] faceIndices)
-        {
-            var deleteType = DeleteElementsType.Value;
-            if (deleteType == null || mesh == null) return false;
-
-            try
-            {
-                // Try DeleteFaces(ProBuilderMesh, IList<int>)
-                var method = deleteType.GetMethod("DeleteFaces",
-                    BindingFlags.Static | BindingFlags.Public,
-                    null,
-                    new[] { ProBuilderMeshType.Value, typeof(IList<int>) },
-                    null);
-
-                if (method != null)
-                {
-                    method.Invoke(null, new object[] { mesh, faceIndices.ToList() });
-                    return true;
-                }
-
-                // Fallback: int[] overload
-                var methodArr = deleteType.GetMethod("DeleteFaces",
-                    BindingFlags.Static | BindingFlags.Public,
-                    null,
-                    new[] { ProBuilderMeshType.Value, typeof(int[]) },
-                    null);
-
-                if (methodArr != null)
-                {
-                    methodArr.Invoke(null, new object[] { mesh, faceIndices });
-                    return true;
-                }
-            }
-            catch (Exception) { }
-            // Fallback to old method
-            DeleteFaces(mesh, faceIndices);
-            return true;
+            catch (Exception) { return false; }
         }
 
         /// <summary>
@@ -1683,19 +1149,17 @@ namespace UnityCli.ProBuilder
         /// </summary>
         public static bool SetFaceMaterial(object mesh, Array faces, Material material)
         {
-            if (mesh == null) return false;
+            if (mesh == null || faces == null || faces.Length == 0) return false;
             try
             {
-                var method = ProBuilderMeshType.Value?.GetMethod("SetMaterial",
-                    BindingFlags.Instance | BindingFlags.Public);
-                if (method != null)
-                {
-                    method.Invoke(mesh, new object[] { faces, material });
-                    return true;
-                }
+                var faceEnumerableType = typeof(IEnumerable<>).MakeGenericType(FaceType.Value);
+                var method = ProBuilderMeshType.Value?.GetMethod("SetMaterial", BindingFlags.Instance | BindingFlags.Public, null,
+                    new[] { faceEnumerableType, typeof(Material) }, null);
+                if (method == null) return false;
+                method.Invoke(mesh, new object[] { faces, material });
+                return true;
             }
-            catch (Exception) { }
-            return false;
+            catch (Exception) { return false; }
         }
 
         /// <summary>
@@ -1703,13 +1167,7 @@ namespace UnityCli.ProBuilder
         /// </summary>
         public static int GetFaceCountProperty(object mesh)
         {
-            if (mesh == null) return -1;
-            try
-            {
-                var prop = ProBuilderMeshType.Value?.GetProperty("faceCount");
-                return prop != null ? (int)prop.GetValue(mesh) : GetFaceCount(mesh);
-            }
-            catch (Exception) { return GetFaceCount(mesh); }
+            return GetFaceCount(mesh);
         }
 
         /// <summary>
@@ -1717,13 +1175,7 @@ namespace UnityCli.ProBuilder
         /// </summary>
         public static int GetVertexCountProperty(object mesh)
         {
-            if (mesh == null) return -1;
-            try
-            {
-                var prop = ProBuilderMeshType.Value?.GetProperty("vertexCount");
-                return prop != null ? (int)prop.GetValue(mesh) : GetVertexCount(mesh);
-            }
-            catch (Exception) { return GetVertexCount(mesh); }
+            return GetVertexCount(mesh);
         }
 
         /// <summary>

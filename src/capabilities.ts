@@ -7,11 +7,12 @@
  */
 
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
-import { builtinContextCategories, builtinContextDescriptors } from "./context/index.js";
+import { builtinContextCategories, builtinContextDescriptors } from "./contexts/catalog.js";
 import { getBoolean, getString } from "./args.js";
 import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
-import { discoverProjectContexts, shouldDiscoverContexts, type ProjectContextRuntime, type ContextDescriptor } from "./project-context-discovery.js";
-import { builtinToolGroups, builtinToolMetadata, extensionToolMetadata, allRegisteredToolMetadata, EXTENSION_GROUPS, type ToolMetadata } from "./tools/metadata/index.js";
+import { loadContextCatalog, shouldLoadLiveContextCatalog, type ContextCatalogRuntime } from "./contexts/catalog.js";
+import type { ContextDescriptor } from "./contexts/types.js";
+import { builtinToolGroups, builtinToolMetadata, allRegisteredToolMetadata, EXTENSION_GROUPS, type ToolMetadata } from "./tools/metadata/index.js";
 import { builtinExtensionMetadata, type ExtensionMetadata } from "./extensions/metadata/index.js";
 import { isLongRunningTool, supportStatusForTool } from "./tools/metadata/index.js";
 import { ExtensionRegistry, extensionAvailabilitySummary, collectAvailableTools, collectAllTools } from "./extensions/index.js";
@@ -21,7 +22,7 @@ import type { CliResult } from "./types.js";
 
 export async function handleCapabilitiesCommand(
   flags: Record<string, string | boolean>,
-  runtime: BridgeRuntime & ProjectToolRuntime & ProjectContextRuntime,
+  runtime: BridgeRuntime & ProjectToolRuntime & ContextCatalogRuntime,
   requestId: string
 ): Promise<CliResult> {
   const jsonFormat = getString(flags, "format") === "json" || getBoolean(flags, "json");
@@ -71,15 +72,15 @@ export async function handleCapabilitiesCommand(
   // Project custom context discovery.
   let projectContextDiagnostics: Record<string, unknown> | undefined;
   let projectContexts: ContextDescriptor[] = [];
-  if (shouldDiscoverContexts(flags, runtime)) {
-    const contextDiscovery = await discoverProjectContexts(flags, runtime, requestId, { requireBridge: false });
-    if (contextDiscovery.ok) {
-      projectContexts = contextDiscovery.contexts;
-      const customContexts = projectContexts.filter((c) => c.source === "project");
-      const categories = [...new Set(customContexts.map((c) => c.category))];
-      projectContextDiagnostics = { mode: contextDiscovery.mode, count: customContexts.length, categories, builtInCount: contextDiscovery.builtInCount };
+  if (await shouldLoadLiveContextCatalog(flags, runtime)) {
+    const contextCatalog = await loadContextCatalog(flags, runtime, requestId, { requireLive: false });
+    if (contextCatalog.ok) {
+      projectContexts = contextCatalog.contexts.filter((context) => context.source !== "built-in" || !builtinContextDescriptors().some((local) => local.name === context.name));
+      const customContexts = projectContexts.filter((context) => context.source === "project");
+      const categories = [...new Set(customContexts.map((context) => context.category))];
+      projectContextDiagnostics = { mode: contextCatalog.live ? "bridge" : "skipped", count: customContexts.length, categories, builtInCount: projectContexts.filter((context) => context.source === "built-in").length };
     } else {
-      projectContextDiagnostics = { mode: "error", code: contextDiscovery.error?.code, message: contextDiscovery.error?.message };
+      projectContextDiagnostics = { mode: "error", code: contextCatalog.error?.code, message: contextCatalog.error?.message };
     }
   }
 

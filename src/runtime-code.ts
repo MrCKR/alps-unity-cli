@@ -3,19 +3,39 @@ import { constants } from "node:fs";
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, relative, resolve } from "node:path";
 import { stdin } from "node:process";
-import { getBoolean, getNumber, getString } from "./args.js";
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
-import { confirmDestructiveExecution, isDryRunRequested } from "./security.js";
-import { failure, success } from "./output.js";
 import { discoverUnity } from "./platform.js";
 import type { CliResult } from "./types.js";
 import { ensurePackageBridge } from "./package-manager.js";
 import type { JobRunner } from "./job-runner.js";
 import { summarizeJob } from "./cli-commands/unity-job.js";
+import { StructuredToolError } from "./tools/errors.js";
 
-interface RuntimeCodeRuntime extends BridgeRuntime {
+export interface RuntimeCodeRuntime extends BridgeRuntime {
   dataDir: string;
-  runner: JobRunner;
+  runner?: JobRunner;
+}
+
+export interface RuntimeCodeRequest {
+  file?: string;
+  stdin?: boolean;
+  code?: string;
+  channel?: string;
+  refs?: string[];
+  define?: string[];
+  args?: Record<string, unknown>;
+  timeoutMs?: number;
+  artifactDir?: string;
+  project?: string;
+  unity?: string;
+  job?: boolean;
+  wait?: boolean;
+  waitTimeoutMs?: number;
+  bridgeEndpoint?: string;
+  target?: string;
+  instance?: string;
+  retry?: number;
+  dryRun?: boolean;
 }
 
 interface CodeSource {
@@ -29,136 +49,110 @@ interface CodeSource {
 const liveDefaultTimeoutMs = 60_000;
 const batchDefaultTimeoutMs = 300_000;
 
-export async function handleCode(command: string | undefined, flags: Record<string, string | boolean>, runtime: RuntimeCodeRuntime, requestId: string): Promise<CliResult> {
-  if (command !== "exec") {
-    return failure(requestId, "UNKNOWN_CODE_COMMAND", "Expected code exec --file <path>, code exec --stdin or code exec --code <text>.");
-  }
-
-  const source = await readCodeSource(flags, requestId);
-  if (!source.ok) {
-    return source.result;
-  }
-
-  const confirmation = await confirmDestructiveExecution(flags, {
-    command: "code.exec",
-    summary: "Execute Live Code",
-    destructiveHint: true,
-    supportsDryRun: true,
-    requestId
-  });
-  if (confirmation) {
-    return confirmation;
-  }
-
-  const channel = normalizeChannel(getString(flags, "channel"));
+export async function executeRuntimeCode(request: RuntimeCodeRequest, runtime: RuntimeCodeRuntime, requestId: string): Promise<Record<string, unknown>> {
+  const source = await readCodeSource(request);
+  const channel = normalizeChannel(request.channel);
   if (!channel.ok) {
-    return failure(requestId, channel.code, channel.message, ["Pass --channel live or --channel batchmode."]);
+    throw new StructuredToolError(channel.code, channel.message, ["Pass --channel live or --channel batchmode."]);
   }
 
-  const timeoutMs = normalizeTimeout(getNumber(flags, "timeout-ms"), channel.value);
-  const artifactDir = resolve(getString(flags, "artifact-dir") ?? runtimeArtifactDir(runtime.dataDir, requestId));
-  const projectPath = resolve(getString(flags, "project") ?? process.cwd());
-  const argsJson = getString(flags, "args") ?? "{}";
-  const parsedArgs = parseJsonObject(argsJson);
-  if (!parsedArgs.ok) {
-    return failure(requestId, "E_SCHEMA_INVALID", parsedArgs.message, ["Pass --args as a JSON object."]);
-  }
-
-  const refs = await validateExtraReferences(getString(flags, "refs"), requestId);
-  if (!refs.ok) {
-    return refs.result;
-  }
+  const timeoutMs = normalizeTimeout(request.timeoutMs, channel.value);
+  const artifactDir = resolve(request.artifactDir ?? runtimeArtifactDir(runtime.dataDir, requestId));
+  const projectPath = resolve(request.project ?? process.cwd());
+  const parsedArgs = request.args ?? {};
+  const refs = await validateExtraReferences(request.refs);
 
   const payload = {
     command: "code.exec",
-    sourceKind: source.value.kind,
-    sourcePath: source.value.path,
-    sourceText: source.value.text,
-    sourceSha256: source.value.sha256,
-    sourceSizeBytes: source.value.sizeBytes,
+    sourceKind: source.kind,
+    sourcePath: source.path,
+    sourceText: source.text,
+    sourceSha256: source.sha256,
+    sourceSizeBytes: source.sizeBytes,
     channel: channel.value,
     timeoutMs,
     artifactDir,
     projectPath,
-    argsJson: JSON.stringify(parsedArgs.value),
-    defines: getString(flags, "define") ?? "",
-    refs: refs.value
+    argsJson: JSON.stringify(parsedArgs),
+    defines: request.define?.join(",") ?? "",
+    refs
   };
 
-  if (isDryRunRequested(flags)) {
-    return success(requestId, {
+  if (request.dryRun) {
+    return {
       command: "code.exec",
       dryRun: true,
       preview: {
-        sourceKind: source.value.kind,
-        sourcePath: source.value.path ?? null,
-        sourceSha256: source.value.sha256,
-        sourceSizeBytes: source.value.sizeBytes,
+        sourceKind: source.kind,
+        ...(source.path ? { sourcePath: source.path } : {}),
+        sourceSha256: source.sha256,
+        sourceSizeBytes: source.sizeBytes,
         channel: channel.value,
         timeoutMs,
         artifactDir,
         projectPath,
-        args: parsedArgs.value
+        args: parsedArgs
       },
       plannedEffects: [{ type: "code.exec", channel: channel.value, artifactDir, sideEffects: "user-code-not-executed" }]
-    });
+    };
   }
 
-  const sourceArtifactResult = await writeSourceArtifact(artifactDir, source.value);
+  const sourceArtifactResult = await writeSourceArtifact(artifactDir, source);
   if (!sourceArtifactResult.ok) {
-    return failure(requestId, "E_ARTIFACT_WRITE_FAILED", `Failed to write Runtime Code source artifact: ${sourceArtifactResult.message}`, ["Check --artifact-dir permissions and free disk space."], { artifactDir, artifactPath: sourceArtifactResult.path });
+    throw new StructuredToolError("E_ARTIFACT_WRITE_FAILED", `Failed to write Runtime Code source artifact: ${sourceArtifactResult.message}`, ["Check --artifact-dir permissions and free disk space."], { artifactDir, artifactPath: sourceArtifactResult.path });
   }
 
-  const manifest = manifestData(artifactDir, requestId, undefined, projectPath, source.value, channel.value, timeoutMs, parsedArgs.value);
+  const manifest = manifestData(artifactDir, requestId, undefined, projectPath, source, channel.value, timeoutMs, parsedArgs);
   const manifestResult = await writeManifest(artifactDir, manifest);
   if (!manifestResult.ok) {
-    return failure(requestId, "E_ARTIFACT_WRITE_FAILED", `Failed to write Runtime Code artifact manifest: ${manifestResult.message}`, ["Check --artifact-dir permissions and free disk space."], { artifactDir, manifestPath: resolve(artifactDir, "manifest.json") });
+    throw new StructuredToolError("E_ARTIFACT_WRITE_FAILED", `Failed to write Runtime Code artifact manifest: ${manifestResult.message}`, ["Check --artifact-dir permissions and free disk space."], { artifactDir, manifestPath: resolve(artifactDir, "manifest.json") });
   }
 
-  if (channel.value === "live" && !getBoolean(flags, "job")) {
-    return executeBridgePayload(requestId, "code.exec", payload, flags, runtime);
+  if (channel.value === "live" && !request.job) {
+    const result = await executeBridgePayload(requestId, "code.exec", payload, {
+      "bridge-endpoint": request.bridgeEndpoint ?? runtime.bridgeEndpoint ?? "",
+      instance: request.instance ?? "",
+      target: request.target ?? "",
+      "timeout-ms": String(timeoutMs),
+      retry: request.retry === undefined ? "0" : String(request.retry),
+      __destructiveConfirmed: true
+    }, runtime);
+    if (!result.ok) throwCliFailure(result);
+    return (result.data ?? {}) as Record<string, unknown>;
   }
 
-  return startBatchCodeJob(flags, runtime, requestId, projectPath, source.value, artifactDir, timeoutMs, payload);
+  return startBatchCodeJob(request, runtime, requestId, projectPath, source, artifactDir, timeoutMs, payload);
 }
 
-async function readCodeSource(flags: Record<string, string | boolean>, requestId: string): Promise<{ ok: true; value: CodeSource } | { ok: false; result: CliResult }> {
-  const filePath = getString(flags, "file");
-  const inline = getString(flags, "code");
-  const useStdin = getBoolean(flags, "stdin");
-  const selected = [filePath !== undefined, inline !== undefined, useStdin].filter(Boolean).length;
+async function readCodeSource(request: RuntimeCodeRequest): Promise<CodeSource> {
+  const selected = [request.file !== undefined, request.code !== undefined, request.stdin === true].filter(Boolean).length;
   if (selected !== 1) {
-    return { ok: false, result: failure(requestId, "E_CODE_SOURCE_INVALID", "Pass exactly one code source: --file <path>, --stdin or --code <text>.") };
+    throw new StructuredToolError("E_CODE_SOURCE_INVALID", "Pass exactly one code source: --file <path>, --stdin or --code <text>.");
   }
 
   try {
-    if (filePath) {
-      const path = resolve(filePath);
-      const text = await readFile(path, "utf8");
-      return codeSource("file", text, requestId, path);
+    if (request.file) {
+      const path = resolve(request.file);
+      return codeSource("file", await readFile(path, "utf8"), path);
     }
-    if (inline !== undefined) {
-      return codeSource("inline", inline, requestId);
-    }
-    return codeSource("stdin", await readAllStdin(), requestId);
+    if (request.code !== undefined) return codeSource("inline", request.code);
+    return codeSource("stdin", await readAllStdin());
   } catch (error) {
-    return { ok: false, result: failure(requestId, "E_CODE_SOURCE_INVALID", error instanceof Error ? error.message : String(error), ["Check that the source path exists and is UTF-8 readable."]) };
+    if (error instanceof StructuredToolError) throw error;
+    throw new StructuredToolError("E_CODE_SOURCE_INVALID", error instanceof Error ? error.message : String(error), ["Check that the source path exists and is UTF-8 readable."]);
   }
 }
 
-function codeSource(kind: CodeSource["kind"], text: string, requestId: string, path?: string): { ok: true; value: CodeSource } | { ok: false; result: CliResult } {
+function codeSource(kind: CodeSource["kind"], text: string, path?: string): CodeSource {
   if (text.trim().length === 0) {
-    return { ok: false, result: failure(requestId, "E_CODE_SOURCE_INVALID", "Code source is empty.") };
+    throw new StructuredToolError("E_CODE_SOURCE_INVALID", "Code source is empty.");
   }
   return {
-    ok: true,
-    value: {
-      kind,
-      path,
-      text,
-      sha256: createHash("sha256").update(text, "utf8").digest("hex"),
-      sizeBytes: Buffer.byteLength(text, "utf8")
-    }
+    kind,
+    path,
+    text,
+    sha256: createHash("sha256").update(text, "utf8").digest("hex"),
+    sizeBytes: Buffer.byteLength(text, "utf8")
   };
 }
 
@@ -194,38 +188,21 @@ function runtimeArtifactDir(dataDir: string, requestId: string): string {
   return resolve(process.env.UNITY_CLI_HOME ?? dataDir, "artifacts", requestId);
 }
 
-function parseJsonObject(value: string): { ok: true; value: Record<string, unknown> } | { ok: false; message: string } {
-  try {
-    const parsed = JSON.parse(value) as unknown;
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      return { ok: false, message: "--args must be a JSON object." };
-    }
-    return { ok: true, value: parsed as Record<string, unknown> };
-  } catch (error) {
-    return { ok: false, message: error instanceof Error ? error.message : String(error) };
-  }
-}
-
-async function validateExtraReferences(refsCsv: string | undefined, requestId: string): Promise<{ ok: true; value: string } | { ok: false; result: CliResult }> {
-  if (!refsCsv) {
-    return { ok: true, value: "" };
-  }
-  const refs = refsCsv.split(",").map((part) => part.trim()).filter(Boolean);
-  for (const reference of refs) {
+async function validateExtraReferences(refs: string[] | undefined): Promise<string> {
+  if (!refs) return "";
+  const normalized = refs.map((part) => part.trim()).filter(Boolean);
+  for (const reference of normalized) {
     try {
       await access(reference, constants.R_OK);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      return {
-        ok: false,
-        result: failure(requestId, "E_REFERENCE_RESOLUTION_FAILED", `Runtime Code reference is not readable: ${reference}.`, [
-          message,
-          "Pass --refs with existing readable assembly paths."
-        ])
-      };
+      throw new StructuredToolError("E_REFERENCE_RESOLUTION_FAILED", `Runtime Code reference is not readable: ${reference}.`, [
+        message,
+        "Pass --refs with existing readable assembly paths."
+      ]);
     }
   }
-  return { ok: true, value: refs.join(",") };
+  return normalized.join(",");
 }
 
 function manifestData(artifactDir: string, requestId: string, jobId: string | undefined, projectPath: string, source: CodeSource, channel: string, timeoutMs: number, args: Record<string, unknown>, extraArtifacts: Array<Record<string, unknown>> = []): Record<string, unknown> {
@@ -277,7 +254,7 @@ async function writeManifest(artifactDir: string, manifest: Record<string, unkno
 }
 
 async function startBatchCodeJob(
-  flags: Record<string, string | boolean>,
+  request: RuntimeCodeRequest,
   runtime: RuntimeCodeRuntime,
   requestId: string,
   projectPath: string,
@@ -285,10 +262,13 @@ async function startBatchCodeJob(
   artifactDir: string,
   timeoutMs: number,
   payload: Record<string, unknown>
-): Promise<CliResult> {
-  const unityPath = getString(flags, "unity") ?? discoverUnity();
+): Promise<Record<string, unknown>> {
+  if (!runtime.runner) {
+    throw new StructuredToolError("E_TOOL_HANDLER_UNSUPPORTED", "code.exec requires a job runner runtime for batchmode execution.");
+  }
+  const unityPath = request.unity ?? discoverUnity();
   if (!unityPath) {
-    return failure(requestId, "UNITY_NOT_FOUND", "Unity.exe was not found.", ["Pass --unity <path-to-Unity.exe> or set UNITY_EXE."]);
+    throw new StructuredToolError("UNITY_NOT_FOUND", "Unity.exe was not found.", ["Pass --unity <path-to-Unity.exe> or set UNITY_EXE."]);
   }
 
   const bridge = await ensurePackageBridge(projectPath);
@@ -333,7 +313,7 @@ async function startBatchCodeJob(
   const manifestResult = await writeManifest(artifactDir, manifestData(artifactDir, requestId, job.id, projectPath, source, "batchmode", timeoutMs, payload.argsJson && typeof payload.argsJson === "string" ? JSON.parse(payload.argsJson) as Record<string, unknown> : {}));
   if (!manifestResult.ok) {
     const cancelled = await runtime.runner.cancel(job.id).catch(() => undefined);
-    return failure(requestId, "E_ARTIFACT_WRITE_FAILED", `Failed to write Runtime Code artifact manifest: ${manifestResult.message}`, ["Check --artifact-dir permissions and free disk space before rerunning code exec."], {
+    throw new StructuredToolError("E_ARTIFACT_WRITE_FAILED", `Failed to write Runtime Code artifact manifest: ${manifestResult.message}`, ["Check --artifact-dir permissions and free disk space before rerunning code exec."], {
       jobId: job.id,
       artifactDir,
       manifestPath: resolve(artifactDir, "manifest.json"),
@@ -344,14 +324,12 @@ async function startBatchCodeJob(
     });
   }
 
-  if (!getBoolean(flags, "wait")) {
-    return success(requestId, await summarizeJob(job));
-  }
+  if (!request.wait) return summarizeJob(job);
 
-  const waitTimeoutMs = getNumber(flags, "wait-timeout-ms") ?? timeoutMs;
+  const waitTimeoutMs = request.waitTimeoutMs ?? timeoutMs;
   const waited = await runtime.runner.wait(job.id, waitTimeoutMs);
   if (!["succeeded", "failed", "cancelled", "timeout"].includes(waited.status)) {
-    return failure(requestId, "E_EXECUTION_TIMEOUT", `Job did not reach a terminal state within ${waitTimeoutMs}ms.`, [
+    throw new StructuredToolError("E_EXECUTION_TIMEOUT", `Job did not reach a terminal state within ${waitTimeoutMs}ms.`, [
       `Run unity_cli jobs status ${job.id}.`,
       `Run unity_cli jobs logs ${job.id}.`,
       `Run unity_cli jobs cancel ${job.id} --yes if the Unity process should be stopped.`
@@ -364,7 +342,14 @@ async function startBatchCodeJob(
       domainReloadObserved: false
     });
   }
-  return success(requestId, await summarizeJob(waited));
+  return summarizeJob(waited);
+}
+
+function throwCliFailure(result: CliResult): never {
+  if (result.ok) {
+    throw new StructuredToolError("CODE_EXEC_FAILED", "code.exec returned a success envelope where a failure was required.");
+  }
+  throw StructuredToolError.from(result.error);
 }
 
 function normalizeRelativePath(path: string): string {

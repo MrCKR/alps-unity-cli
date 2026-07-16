@@ -1,5 +1,7 @@
 import { defineTool } from "../define.js";
 import { buildJobSummary, readBuildJob } from "./shared.js";
+import type { BuildJobCancellation } from "./shared.js";
+import type { AnyJson } from "../../schema/any-json.js";
 
 export interface BuildStatusRequest {
   jobId: string;
@@ -13,7 +15,7 @@ export interface BuildStatusObject {
 export interface BuildStatusError {
   code: string;
   message: string;
-  details?: unknown;
+  details?: AnyJson;
 }
 
 export interface BuildStatusResult {
@@ -33,7 +35,7 @@ export interface BuildStatusResult {
   finishedAt?: string;
   result?: BuildStatusObject;
   error?: BuildStatusError;
-  cancellation: string;
+  cancellation: BuildJobCancellation;
   jobCommand: string[];
   logTail?: string[];
 }

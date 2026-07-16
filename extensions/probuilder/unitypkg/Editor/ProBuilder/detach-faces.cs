@@ -38,6 +38,7 @@ namespace UnityCli.ProBuilder
             Description = "Detach selected faces from a ProBuilder mesh into a new GameObject. Requires at least one face index.",
             Group = "probuilder",
             DestructiveHint = false,
+            SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 10000,
@@ -50,40 +51,63 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            var go = ProBuilderInput.ResolveTarget(request.Target);
             if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("detach-faces", "No ProBuilderMesh on target.");
 
-            int[] faceIndices = request.FaceIndices?.Select(i => (int)i).ToArray();
+            int[] faceIndices = request.FaceIndices?.Select(i => (int)i).Distinct().ToArray();
             if (faceIndices == null || faceIndices.Length == 0)
                 throw ProBuilderErrors.SchemaInvalid("faceIndices is required.");
+            var sourceFaceCount = ProBuilderReflection.GetFaceCount(mesh);
+            if (sourceFaceCount < 1 || ProBuilderReflection.GetFacesByIndices(mesh, faceIndices) == null)
+                throw ProBuilderErrors.SchemaInvalid("faceIndices contains an invalid face index.");
 
+            var undoGroup = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName("ProBuilder Detach Faces");
             Undo.RecordObject(go, "ProBuilder Detach Faces");
-            var detached = ProBuilderReflection.DetachFaces(mesh, faceIndices);
-            ProBuilderReflection.RefreshMesh(mesh);
-            EditorSceneManager.MarkSceneDirty(go.scene);
+            var detached = UnityEngine.Object.Instantiate(go);
+            detached.name = go.name + "_Detached";
+            Undo.RegisterCreatedObjectUndo(detached, "ProBuilder Detach Faces");
 
-            int faceCount = 0;
-            if (detached != null)
+            try
             {
-                var detMesh = ProBuilderReflection.GetProBuilderMesh(detached);
-                if (detMesh != null) faceCount = ProBuilderReflection.GetFaceCount(detMesh);
+                var detachedMesh = ProBuilderReflection.GetProBuilderMesh(detached);
+                if (detachedMesh == null)
+                    throw ProBuilderErrors.OperationFailed("detach-faces", "Cloned object has no ProBuilderMesh component.");
+
+                var selected = new HashSet<int>(faceIndices);
+                var inverse = Enumerable.Range(0, sourceFaceCount).Where(index => !selected.Contains(index)).ToArray();
+                if (inverse.Length > 0 && !ProBuilderReflection.DeleteFaces(detachedMesh, inverse))
+                    throw ProBuilderErrors.OperationFailed("detach-faces", "Failed to retain selected faces on the detached object.");
+                if (!ProBuilderReflection.DeleteFaces(mesh, faceIndices))
+                    throw ProBuilderErrors.OperationFailed("detach-faces", "Failed to remove selected faces from the source object.");
+
+                ProBuilderReflection.RefreshMesh(mesh);
+                ProBuilderReflection.RefreshMesh(detachedMesh);
+                var detachedFaceCount = ProBuilderReflection.GetFaceCount(detachedMesh);
+                var remainingFaceCount = ProBuilderReflection.GetFaceCount(mesh);
+                if (detachedFaceCount != faceIndices.Length || remainingFaceCount != sourceFaceCount - faceIndices.Length)
+                    throw ProBuilderErrors.OperationFailed("detach-faces", "Detached and source face counts do not match the requested split.");
+
+                EditorSceneManager.MarkSceneDirty(go.scene);
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
+                {
+                    DetachedObject = new ObjectRef { Id = detached.GetInstanceID(), Name = detached.name, Path = HierarchyPath(detached) },
+                    FaceCount = detachedFaceCount
+                });
             }
-
-            return new Result
+            catch
             {
-                DetachedObject = detached != null
-                    ? new ObjectRef { Id = detached.GetInstanceID(), Name = detached.name, Path = HierarchyPath(detached) }
-                    : null,
-                FaceCount = faceCount
-            };
+                Undo.RevertAllDownToGroup(undoGroup);
+                throw;
+            }
         }
 
         private static string HierarchyPath(GameObject go)

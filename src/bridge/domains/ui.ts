@@ -7,19 +7,19 @@ export const uiBridgeSpecs: BridgeCommandSpec[] = [
   { group: "ui", command: "button/create", bridgeCommand: "project-tool.run", toolName: "ui.button.create", buildArgs: uiArgs },
   { group: "ui", command: "image/create", bridgeCommand: "project-tool.run", toolName: "ui.image.create", buildArgs: uiArgs },
   { group: "ui", command: "document/info", bridgeCommand: "project-tool.run", toolName: "ui.document.info", buildArgs: uiArgs },
-  { group: "ui", command: "document/create", bridgeCommand: "project-tool.run", toolName: "ui.document.create", buildArgs: uiArgs },
-  { group: "ui", command: "document/update", bridgeCommand: "project-tool.run", toolName: "ui.document.update", buildArgs: uiArgs, supportsDryRun: true },
-  { group: "ui", command: "document/delete", bridgeCommand: "project-tool.run", toolName: "ui.document.delete", buildArgs: uiArgs, supportsDryRun: true },
+  { group: "ui", command: "document/create", bridgeCommand: "project-tool.run", toolName: "ui.document.create", buildArgs: uiArgs, destructiveHint: true },
+  { group: "ui", command: "document/update", bridgeCommand: "project-tool.run", toolName: "ui.document.update", buildArgs: uiArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "ui", command: "document/delete", bridgeCommand: "project-tool.run", toolName: "ui.document.delete", buildArgs: uiArgs, destructiveHint: true, supportsDryRun: true },
   { group: "ui", command: "hierarchy", bridgeCommand: "project-tool.run", toolName: "ui.hierarchy", buildArgs: uiArgs },
-  { group: "ui", command: "attach-document", bridgeCommand: "project-tool.run", toolName: "ui.attach-document", buildArgs: uiAttachArgs },
+  { group: "ui", command: "attach-document", bridgeCommand: "project-tool.run", toolName: "ui.attach-document", buildArgs: uiAttachArgs, supportsDryRun: true },
   { group: "ui", command: "detach-document", bridgeCommand: "project-tool.run", toolName: "ui.detach-document", buildArgs: uiAttachArgs, supportsDryRun: true },
-  { group: "ui", command: "create-panel-settings", bridgeCommand: "project-tool.run", toolName: "ui.create-panel-settings", buildArgs: uiPanelArgs },
-  { group: "ui", command: "update-panel-settings", bridgeCommand: "project-tool.run", toolName: "ui.update-panel-settings", buildArgs: uiPanelArgs, supportsDryRun: true },
+  { group: "ui", command: "create-panel-settings", bridgeCommand: "project-tool.run", toolName: "ui.create-panel-settings", buildArgs: uiPanelArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "ui", command: "update-panel-settings", bridgeCommand: "project-tool.run", toolName: "ui.update-panel-settings", buildArgs: uiPanelArgs, destructiveHint: true, supportsDryRun: true },
   { group: "ui", command: "get-visual-tree", bridgeCommand: "project-tool.run", toolName: "ui.get-visual-tree", buildArgs: uiVisualTreeArgs },
   { group: "ui", command: "modify-visual-element", bridgeCommand: "project-tool.run", toolName: "ui.modify-visual-element", buildArgs: uiVisualElementArgs, supportsDryRun: true },
-  { group: "ui", command: "link-stylesheet", bridgeCommand: "project-tool.run", toolName: "ui.link-stylesheet", buildArgs: uiArgs, supportsDryRun: true },
+  { group: "ui", command: "link-stylesheet", bridgeCommand: "project-tool.run", toolName: "ui.link-stylesheet", buildArgs: uiArgs, destructiveHint: true, supportsDryRun: true },
   { group: "ui", command: "list-documents", bridgeCommand: "project-tool.run", toolName: "ui.list-documents", buildArgs: uiListArgs },
-  { group: "ui", command: "render-preview", bridgeCommand: "project-tool.run", toolName: "ui.render-preview", buildArgs: uiArgs, supportsDryRun: true }
+  { group: "ui", command: "render-preview", bridgeCommand: "project-tool.run", toolName: "ui.render-preview", buildArgs: uiArgs, destructiveHint: true, supportsDryRun: true }
 ];
 
 // 读取 tools run --input 中无法映射为简单 flag 的结构化字段
@@ -78,19 +78,42 @@ async function uiArgs({ command, flags, positionalTarget }: Parameters<BridgeCom
       uss: stringFlag(flags, "uss") ?? stringFlag(flags, "style") ?? stringField(flags, "uss")
     });
   }
-  if (command === "ui.document.create" || command === "ui.document.update" || command === "ui.document.delete" || command === "ui.link-stylesheet" || command === "ui.render-preview") {
+  if (command === "ui.document.create") {
     return compactArgs({
-      target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target"),
       name: stringFlag(flags, "name") ?? stringField(flags, "name"),
-      path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "uxml") ?? stringField(flags, "path") ?? stringField(flags, "uxml"),
       uxml: positionalTarget ?? stringFlag(flags, "uxml") ?? stringFlag(flags, "path") ?? stringField(flags, "uxml") ?? stringField(flags, "path"),
       uss: stringFlag(flags, "uss") ?? stringFlag(flags, "style") ?? stringField(flags, "uss"),
-      styleSheet: stringFlag(flags, "style-sheet") ?? stringField(flags, "styleSheet"),
       panelSettings: stringFlag(flags, "panel-settings") ?? stringField(flags, "panelSettings"),
-      content: await resolveUiContent(flags),
+      overwrite: boolFlag(flags, "overwrite") ?? boolField(flags, "overwrite")
+    });
+  }
+  if (command === "ui.document.update") {
+    return compactArgs({
+      path: positionalTarget ?? stringFlag(flags, "path") ?? stringField(flags, "path"),
+      uxml: stringFlag(flags, "uxml") ?? stringField(flags, "uxml"),
+      content: await resolveUiContent(flags)
+    });
+  }
+  if (command === "ui.document.delete") {
+    return compactArgs({
+      path: positionalTarget ?? stringFlag(flags, "path") ?? stringField(flags, "path"),
+      uxml: stringFlag(flags, "uxml") ?? stringField(flags, "uxml")
+    });
+  }
+  if (command === "ui.link-stylesheet") {
+    return compactArgs({
+      path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "uxml") ?? stringField(flags, "path") ?? stringField(flags, "uxml"),
+      uss: stringFlag(flags, "uss") ?? stringFlag(flags, "style") ?? stringField(flags, "uss"),
+      styleSheet: stringFlag(flags, "style-sheet") ?? stringField(flags, "styleSheet")
+    });
+  }
+  if (command === "ui.render-preview") {
+    return compactArgs({
+      target: positionalTarget ?? stringFlag(flags, "target") ?? stringField(flags, "target"),
       output: stringFlag(flags, "output") ?? stringField(flags, "output"),
-      overwrite: boolFlag(flags, "overwrite") ?? boolField(flags, "overwrite"),
-      dryRun: boolFlag(flags, "dry-run") ?? boolField(flags, "dryRun")
+      width: numberFlag(flags, "width") ?? numberField(flags, "width"),
+      height: numberFlag(flags, "height") ?? numberField(flags, "height"),
+      overwrite: boolFlag(flags, "overwrite") ?? boolField(flags, "overwrite")
     });
   }
   return compactArgs({

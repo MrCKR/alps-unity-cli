@@ -53,7 +53,7 @@ describe("success envelope", () => {
   it("creates a success envelope with ok=true, requestId, and data", () => {
     const requestId = createRequestId();
     const result = success(requestId, { tools: ["scene.hierarchy"] });
-    assert.equal(result.ok, true);
+    assert.ok(result.ok);
     assert.equal(result.requestId, requestId);
     assert.deepEqual(result.data, { tools: ["scene.hierarchy"] });
   });
@@ -66,7 +66,7 @@ describe("success envelope", () => {
       jobId: "job_abc123",
       durationMs: 150,
     });
-    assert.equal(result.ok, true);
+    assert.ok(result.ok);
     assert.deepEqual(result.warnings, ["slow query"]);
     assert.equal(result.logsRef, "/path/to/log");
     assert.equal(result.jobId, "job_abc123");
@@ -86,7 +86,7 @@ describe("failure envelope", () => {
   it("creates a failure envelope with ok=false, requestId, and error", () => {
     const requestId = createRequestId();
     const result = failure(requestId, "UNKNOWN_COMMAND", "Unknown command: foo", ["Run unity_cli --help."]);
-    assert.equal(result.ok, false);
+    assert.ok(!result.ok);
     assert.equal(result.requestId, requestId);
     assert.equal(result.error?.code, "UNKNOWN_COMMAND");
     assert.equal(result.error?.message, "Unknown command: foo");
@@ -96,7 +96,7 @@ describe("failure envelope", () => {
   it("transient errors are marked with transient=true and retryAfterMs", () => {
     const requestId = createRequestId();
     const result = failure(requestId, "E_UNITY_COMPILING", "Unity Editor is compiling scripts.", ["Wait for Unity to finish compiling and retry."]);
-    assert.equal(result.ok, false);
+    assert.ok(!result.ok);
     assert.equal(result.error?.transient, true);
     assert.equal(result.error?.retryAfterMs, 5000);
     assert.equal(result.error?.code, "E_UNITY_COMPILING");
@@ -130,31 +130,51 @@ describe("failure envelope", () => {
     assert.equal(result.error?.retryAfterMs, 5000);
   });
 
-  it("non-transient errors have transient=undefined and no retryAfterMs", () => {
+  it("non-transient errors have transient=false and retryAfterMs=0", () => {
     const requestId = createRequestId();
     const result = failure(requestId, "UNKNOWN_COMMAND", "Unknown command.");
-    assert.equal(result.error?.transient, undefined);
-    assert.equal(result.error?.retryAfterMs, undefined);
+    assert.equal(result.error.transient, false);
+    assert.equal(result.error.retryAfterMs, 0);
   });
 
   it("timeout error E_EXECUTION_TIMEOUT is NOT transient", () => {
     const requestId = createRequestId();
     const result = failure(requestId, "E_EXECUTION_TIMEOUT", "Execution timed out.", ["Increase --timeout-ms."]);
-    assert.equal(result.error?.transient, undefined);
+    assert.equal(result.error.transient, false);
+    assert.equal(result.error.retryAfterMs, 0);
   });
 
-  it("details are flattened into the error object", () => {
+  it("keeps details nested and nextActions present", () => {
     const requestId = createRequestId();
     const result = failure(requestId, "E_EXECUTION_TIMEOUT", "Timed out.", [], {
       jobId: "job_123",
       timeoutMs: 30000,
       bridgeEndpoint: "http://127.0.0.1:47392",
     });
-    assert.equal(result.error?.jobId, "job_123");
-    assert.equal(result.error?.timeoutMs, 30000);
-    assert.equal(result.error?.bridgeEndpoint, "http://127.0.0.1:47392");
-    // details is also preserved as-is
-    assert.ok(result.error?.details);
+    assert.deepEqual(result.error.details, {
+      jobId: "job_123",
+      timeoutMs: 30000,
+      bridgeEndpoint: "http://127.0.0.1:47392",
+    });
+    assert.deepEqual(result.error.nextActions, []);
+    assert.equal("jobId" in result.error, false);
+    assert.equal("requestId" in result.error, false);
+  });
+
+  it("golden error envelope has only protocol fields", () => {
+    const result = failure("req_golden", "UNKNOWN_COMMAND", "Unknown command.", [], { path: "tools run" });
+    assert.deepEqual(JSON.parse(JSON.stringify(result)), {
+      ok: false,
+      requestId: "req_golden",
+      error: {
+        code: "UNKNOWN_COMMAND",
+        message: "Unknown command.",
+        nextActions: [],
+        details: { path: "tools run" },
+        transient: false,
+        retryAfterMs: 0,
+      },
+    });
   });
 
   it("failure envelope includes optional durationMs", () => {
@@ -266,7 +286,7 @@ describe("envelope serialization round-trip", () => {
     });
     const json = JSON.stringify(result);
     const parsed = JSON.parse(json) as CliResult;
-    assert.equal(parsed.ok, true);
+    assert.ok(parsed.ok);
     assert.equal(parsed.requestId, requestId);
     assert.deepEqual(parsed.data, { tools: ["scene.hierarchy", "camera.list"] });
     assert.deepEqual(parsed.warnings, ["no custom tools found"]);
@@ -279,7 +299,7 @@ describe("envelope serialization round-trip", () => {
     const result = failure(requestId, "E_UNITY_COMPILING", "Unity is compiling.", ["Wait and retry."], { jobId: "job_xyz" }, { durationMs: 100 });
     const json = JSON.stringify(result);
     const parsed = JSON.parse(json) as CliResult;
-    assert.equal(parsed.ok, false);
+    assert.ok(!parsed.ok);
     assert.equal(parsed.error?.code, "E_UNITY_COMPILING");
     assert.equal(parsed.error?.message, "Unity is compiling.");
     assert.equal(parsed.error?.transient, true);
@@ -298,13 +318,19 @@ describe("envelope serialization round-trip", () => {
     });
     const json = JSON.stringify(result);
     const parsed = JSON.parse(json) as CliResult;
-    assert.equal(parsed.ok, false);
+    assert.ok(!parsed.ok);
     assert.equal(parsed.error?.code, "E_EXECUTION_TIMEOUT");
     // timeout is NOT transient
-    assert.equal(parsed.error?.transient, undefined);
-    // details are flattened
-    assert.equal(parsed.error?.jobId, "job_abc");
-    assert.equal(parsed.error?.timeoutMs, 30000);
+    assert.equal(parsed.error?.transient, false);
+    assert.equal(parsed.error?.retryAfterMs, 0);
+    assert.deepEqual(parsed.error?.details, {
+      jobId: "job_abc",
+      timeoutMs: 30000,
+      cancelAttempted: true,
+      cancelled: false,
+      processKilled: true,
+    });
+    assert.deepEqual(parsed.error?.nextActions, ["Check job status."]);
   });
 });
 
@@ -318,7 +344,7 @@ describe("withRetry", () => {
       return success("req_1", { ok: true });
     }, { maxRetries: 3 });
     assert.equal(calls, 1);
-    assert.equal(result.ok, true);
+    assert.ok(result.ok);
   });
 
   it("returns result immediately on non-transient error (no retry)", async () => {
@@ -328,7 +354,7 @@ describe("withRetry", () => {
       return failure("req_1", "UNKNOWN_COMMAND", "Bad command.");
     }, { maxRetries: 3 });
     assert.equal(calls, 1);
-    assert.equal(result.ok, false);
+    assert.ok(!result.ok);
     assert.equal(result.error?.code, "UNKNOWN_COMMAND");
   });
 
@@ -342,7 +368,7 @@ describe("withRetry", () => {
       return success("req_1", { status: "healthy" });
     }, { maxRetries: 3 });
     assert.equal(calls, 2);
-    assert.equal(result.ok, true);
+    assert.ok(result.ok);
   });
 
   it("retries transient errors up to maxRetries then returns last error", async () => {
@@ -352,7 +378,7 @@ describe("withRetry", () => {
       return failure("req_1", "E_UNITY_COMPILING", "Still compiling.");
     }, { maxRetries: 2 });
     assert.equal(calls, 3); // 1 initial + 2 retries
-    assert.equal(result.ok, false);
+    assert.ok(!result.ok);
     assert.equal(result.error?.code, "E_UNITY_COMPILING");
   });
 
@@ -365,7 +391,7 @@ describe("withRetry", () => {
     }, { maxRetries: 10, retryBudgetMs: 100 });
     // Should stop after budget is exhausted (at least 1 attempt, no more than a few retries)
     assert.ok(calls <= 5, `Too many calls: ${calls}`);
-    assert.equal(result.ok, false);
+    assert.ok(!result.ok);
   });
 
   it("invokes onRetry callback before each retry", async () => {
@@ -380,10 +406,12 @@ describe("withRetry", () => {
     }, {
       maxRetries: 5,
       onRetry: (attempt: number, error: CliResult, retryAfterMs: number) => {
-        retryLog.push({ attempt, code: error.error?.code ?? "", retryAfterMs });
+        if (!error.ok) {
+          retryLog.push({ attempt, code: error.error.code, retryAfterMs });
+        }
       },
     });
-    assert.equal(result.ok, true);
+    assert.ok(result.ok);
     assert.equal(retryLog.length, 2);
     assert.equal(retryLog[0].code, "E_UNITY_COMPILING");
     assert.equal(retryLog[0].attempt, 1);
@@ -397,7 +425,8 @@ describe("withRetry", () => {
       return failure("req_1", "E_EXECUTION_TIMEOUT", "Timed out.");
     }, { maxRetries: 3 });
     assert.equal(calls, 1);
-    assert.equal(result.error?.code, "E_EXECUTION_TIMEOUT");
+    assert.ok(!result.ok);
+    assert.equal(result.error.code, "E_EXECUTION_TIMEOUT");
   });
 });
 
@@ -430,7 +459,7 @@ describe("transientRetryInfo", () => {
     const error: CliError = {
       code: "E_UNITY_COMPILING",
       message: "Compiling.",
-      requestId: "req_1",
+      nextActions: [],
       transient: true,
       retryAfterMs: 8000,
     };
@@ -482,7 +511,7 @@ describe("E_RUNTIME_NOT_READY is transient with retryAfterMs=3000", () => {
   it("E_RUNTIME_NOT_READY failure envelope has transient=true and retryAfterMs=3000", () => {
     const requestId = createRequestId();
     const result = failure(requestId, "E_RUNTIME_NOT_READY", "Runtime is not ready (Play Mode not active).", ["Wait for Play Mode to become active and retry."]);
-    assert.equal(result.ok, false);
+    assert.ok(!result.ok);
     assert.equal(result.error?.transient, true);
     assert.equal(result.error?.retryAfterMs, 3000);
     assert.equal(result.error?.code, "E_RUNTIME_NOT_READY");
@@ -498,7 +527,7 @@ describe("E_RUNTIME_NOT_READY is transient with retryAfterMs=3000", () => {
       return success("req_1", { status: "ready" });
     }, { maxRetries: 3 });
     assert.equal(calls, 2);
-    assert.equal(result.ok, true);
+    assert.ok(result.ok);
   });
 
   it("DEFAULT_RETRY_AFTER_MS has E_RUNTIME_NOT_READY=3000", () => {
@@ -511,12 +540,12 @@ describe("E_RUNTIME_TIMEOUT is non-transient", () => {
     assert.equal(TRANSIENT_ERROR_CODES.has(ERROR_CODES.E_RUNTIME_TIMEOUT), false);
   });
 
-  it("E_RUNTIME_TIMEOUT failure envelope has transient=undefined", () => {
+  it("E_RUNTIME_TIMEOUT failure envelope has explicit non-transient retry fields", () => {
     const requestId = createRequestId();
     const result = failure(requestId, "E_RUNTIME_TIMEOUT", "Runtime tool execution timed out.", ["Increase --timeout-ms or check runtime session state."]);
-    assert.equal(result.ok, false);
-    assert.equal(result.error?.transient, undefined);
-    assert.equal(result.error?.retryAfterMs, undefined);
+    assert.ok(!result.ok);
+    assert.equal(result.error?.transient, false);
+    assert.equal(result.error?.retryAfterMs, 0);
     assert.equal(result.error?.code, "E_RUNTIME_TIMEOUT");
   });
 
@@ -527,7 +556,7 @@ describe("E_RUNTIME_TIMEOUT is non-transient", () => {
       return failure("req_1", "E_RUNTIME_TIMEOUT", "Timed out.");
     }, { maxRetries: 3 });
     assert.equal(calls, 1);
-    assert.equal(result.ok, false);
+    assert.ok(!result.ok);
     assert.equal(result.error?.code, "E_RUNTIME_TIMEOUT");
   });
 });
@@ -537,12 +566,12 @@ describe("E_RUNTIME_TOOL_TARGET_MISMATCH is non-transient", () => {
     assert.equal(TRANSIENT_ERROR_CODES.has(ERROR_CODES.E_RUNTIME_TOOL_TARGET_MISMATCH), false);
   });
 
-  it("E_RUNTIME_TOOL_TARGET_MISMATCH failure envelope has transient=undefined", () => {
+  it("E_RUNTIME_TOOL_TARGET_MISMATCH failure envelope has explicit non-transient retry fields", () => {
     const requestId = createRequestId();
     const result = failure(requestId, "E_RUNTIME_TOOL_TARGET_MISMATCH", "Tool target mismatch: runtime tool called with editor target.", ["Use --runtime flag or ensure the tool's target matches the execution context."]);
-    assert.equal(result.ok, false);
-    assert.equal(result.error?.transient, undefined);
-    assert.equal(result.error?.retryAfterMs, undefined);
+    assert.ok(!result.ok);
+    assert.equal(result.error?.transient, false);
+    assert.equal(result.error?.retryAfterMs, 0);
     assert.equal(result.error?.code, "E_RUNTIME_TOOL_TARGET_MISMATCH");
   });
 
@@ -553,7 +582,7 @@ describe("E_RUNTIME_TOOL_TARGET_MISMATCH is non-transient", () => {
       return failure("req_1", "E_RUNTIME_TOOL_TARGET_MISMATCH", "Target mismatch.");
     }, { maxRetries: 3 });
     assert.equal(calls, 1);
-    assert.equal(result.ok, false);
+    assert.ok(!result.ok);
     assert.equal(result.error?.code, "E_RUNTIME_TOOL_TARGET_MISMATCH");
   });
 });

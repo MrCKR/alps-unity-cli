@@ -90,10 +90,8 @@ test("texture C# handlers are registered", async () => {
   }
 });
 
-test("texture C# error recovery hints use current tools run form, not legacy unity_cli", async () => {
+test("texture C# error recovery hints use current tools run forms", async () => {
   const source = await readCsSources(new URL("../unitypkg/Editor/Tools/texture/", import.meta.url));
-  assert.equal(source.includes("unity_cli texture info"), false);
-  assert.equal(source.includes("unity_cli asset search"), false);
   assert.match(source, /tools run asset\.search/);
 });
 

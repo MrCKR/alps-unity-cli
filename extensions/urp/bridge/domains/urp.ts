@@ -2,39 +2,56 @@ import { boolFlag, compactArgs, floatFlag, numberFlag, stringFlag } from "../arg
 import type { BridgeCommandSpec } from "../types.js";
 
 export const urpBridgeSpecs: BridgeCommandSpec[] = markToolsOnly([
-  { group: "urp", command: "feature", bridgeCommand: "project-tool.run", toolName: "urp.feature", buildArgs: urpFeatureArgs },
-  { group: "urp", command: "volume", bridgeCommand: "project-tool.run", toolName: "urp.volume", buildArgs: urpVolumeArgs },
-  { group: "urp", command: "settings", bridgeCommand: "project-tool.run", toolName: "urp.settings", buildArgs: urpSettingsArgs }
+  { group: "urp", command: "feature-list", bridgeCommand: "project-tool.run", toolName: "urp.feature.list", buildArgs: emptyArgs },
+  { group: "urp", command: "feature-add", bridgeCommand: "project-tool.run", toolName: "urp.feature.add", buildArgs: urpFeatureAddArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "urp", command: "feature-toggle", bridgeCommand: "project-tool.run", toolName: "urp.feature.toggle", buildArgs: urpFeatureToggleArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "urp", command: "feature-configure", bridgeCommand: "project-tool.run", toolName: "urp.feature.configure", buildArgs: urpFeatureConfigureArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "urp", command: "feature-remove", bridgeCommand: "project-tool.run", toolName: "urp.feature.remove", buildArgs: urpFeatureIndexArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "urp", command: "volume-list", bridgeCommand: "project-tool.run", toolName: "urp.volume.list", buildArgs: emptyArgs },
+  { group: "urp", command: "volume-create", bridgeCommand: "project-tool.run", toolName: "urp.volume.create", buildArgs: volumeCreateArgs },
+  { group: "urp", command: "volume-info", bridgeCommand: "project-tool.run", toolName: "urp.volume.info", buildArgs: volumeTargetArgs },
+  { group: "urp", command: "volume-add-effect", bridgeCommand: "project-tool.run", toolName: "urp.volume.add-effect", buildArgs: volumeEffectArgs },
+  { group: "urp", command: "volume-set", bridgeCommand: "project-tool.run", toolName: "urp.volume.set", buildArgs: volumeSetArgs },
+  { group: "urp", command: "settings-get", bridgeCommand: "project-tool.run", toolName: "urp.settings.get", buildArgs: emptyArgs },
+  { group: "urp", command: "settings-set", bridgeCommand: "project-tool.run", toolName: "urp.settings.set", buildArgs: urpSettingsArgs, destructiveHint: true, supportsDryRun: true }
 ]);
 
 function markToolsOnly(specs: BridgeCommandSpec[]): BridgeCommandSpec[] {
   return specs.map((spec) => ({ ...spec, toolsOnly: true }));
 }
 
-function urpFeatureArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
-  return compactArgs({
-    action: stringFlag(flags, "action") ?? stringFlag(flags, "op") ?? "list",
-    featureType: stringFlag(flags, "feature-type") ?? stringFlag(flags, "type"),
-    index: numberFlag(flags, "index"),
-    enabled: boolFlag(flags, "enabled"),
-    property: stringFlag(flags, "property"),
-    value: stringFlag(flags, "value"),
-    rendererIndex: numberFlag(flags, "renderer-index")
-  });
+function urpFeatureAddArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({ featureType: stringFlag(flags, "feature-type") ?? stringFlag(flags, "type"), rendererIndex: numberFlag(flags, "renderer-index") });
 }
 
-function urpVolumeArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
-  return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name"),
-    name: stringFlag(flags, "name"),
-    action: stringFlag(flags, "action") ?? stringFlag(flags, "op") ?? "list",
-    effectType: stringFlag(flags, "effect-type") ?? stringFlag(flags, "type"),
-    isGlobal: boolFlag(flags, "is-global"),
-    priority: floatFlag(flags, "priority"),
-    weight: floatFlag(flags, "weight"),
-    property: stringFlag(flags, "property"),
-    value: stringFlag(flags, "value")
-  });
+function urpFeatureIndexArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({ index: numberFlag(flags, "index"), rendererIndex: numberFlag(flags, "renderer-index") });
+}
+
+function urpFeatureToggleArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({ index: numberFlag(flags, "index"), rendererIndex: numberFlag(flags, "renderer-index"), enabled: boolFlag(flags, "enabled") });
+}
+
+function urpFeatureConfigureArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({ index: numberFlag(flags, "index"), rendererIndex: numberFlag(flags, "renderer-index"), property: stringFlag(flags, "property"), value: stringFlag(flags, "value") });
+}
+
+function emptyArgs(): Record<string, unknown> { return {}; }
+
+function volumeTargetArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({ target: positionalTarget ?? stringFlag(flags, "target") });
+}
+
+function volumeCreateArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({ name: stringFlag(flags, "name"), isGlobal: boolFlag(flags, "is-global"), priority: floatFlag(flags, "priority"), weight: floatFlag(flags, "weight") });
+}
+
+function volumeEffectArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({ target: positionalTarget ?? stringFlag(flags, "target"), effectType: stringFlag(flags, "effect-type") ?? stringFlag(flags, "type") });
+}
+
+function volumeSetArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  return compactArgs({ target: positionalTarget ?? stringFlag(flags, "target"), effectType: stringFlag(flags, "effect-type") ?? stringFlag(flags, "type"), property: stringFlag(flags, "property"), value: stringFlag(flags, "value") });
 }
 
 function urpSettingsArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {

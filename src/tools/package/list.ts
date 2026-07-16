@@ -41,7 +41,7 @@ export default defineTool<PackageListRequest, PackageListResult>({
   handler: "offline",
   supportStatus: "cli-only",
   examples: [
-    { description: "List installed packages", argv: ["tools", "run", "package.list", "--input", "{\"project\":\"D:/workspace/alps-unity-cli/Dev/UnityProject\"}"] }
+    { description: "List installed packages", argv: ["tools", "run", "package.list", "--input", "{\"project\":\"./Dev/UnityProject\"}"] }
   ],
   /** 读取 Unity manifest/lock 快照，不触发 Unity Editor 或 PackageManager resolve。 */
   async execute(request, context) {

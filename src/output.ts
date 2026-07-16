@@ -1,10 +1,6 @@
-/**
- * Unified envelope types and helpers for all CLI output.
- * Defines request-response envelope, error code, and timeout helpers.
- *
- * Every CLI command must return a CliResult (success or error) through these helpers.
- * The error code taxonomy is defined in ERROR_CODES below.
- */
+/** 所有 CLI 输出均通过唯一 wire envelope helper 构造。 */
+import type { ErrorEnvelope, SuccessEnvelope, ToolError } from "./protocol/envelope.js";
+import type { CliResult } from "./types.js";
 
 /** Structured error codes – the taxonomy covers all error categories for the CLI envelope. */
 export const ERROR_CODES = {
@@ -112,8 +108,6 @@ export const ERROR_CODES = {
   UNKNOWN_JOB_COMMAND: "UNKNOWN_JOB_COMMAND",
   UNKNOWN_INSTANCES_COMMAND: "UNKNOWN_INSTANCES_COMMAND",
   UNKNOWN_PACKAGE_COMMAND: "UNKNOWN_PACKAGE_COMMAND",
-  UNKNOWN_PACKAGE_REGISTRY_COMMAND: "UNKNOWN_PACKAGE_REGISTRY_COMMAND",
-  UNKNOWN_SCOPED_REGISTRY_COMMAND: "UNKNOWN_SCOPED_REGISTRY_COMMAND",
   UNKNOWN_CODE_COMMAND: "UNKNOWN_CODE_COMMAND",
   UNKNOWN_GROUP_COMMAND: "UNKNOWN_GROUP_COMMAND",
   COMMAND_FAILED: "COMMAND_FAILED",
@@ -171,19 +165,8 @@ export const MAX_TIMEOUT_MS: Record<string, number> = {
   job_wait: 3_600_000,
 };
 
-export interface CliError {
-  code: ErrorCode | string;
-  message: string;
-  requestId: string;
-  details?: unknown;
-  nextActions?: string[];
-  transient?: boolean;
-  retryAfterMs?: number;
-  [key: string]: unknown;
-}
-
-// CliResult 的唯一定义在 ./types.ts；此处仅按需引入以供 success/failure 等辅助函数使用。
-import type { CliResult } from "./types.js";
+/** 与 protocol.ToolError 保持同一类型来源。 */
+export type CliError<TDetails = unknown> = ToolError<TDetails>;
 export type { CliResult };
 
 import { randomUUID } from "node:crypto";
@@ -193,7 +176,7 @@ export function createRequestId(): string {
 }
 
 /** Create a success envelope. */
-export function success<T>(requestId: string, data: T, options?: { warnings?: string[]; logsRef?: string; jobId?: string; durationMs?: number }): CliResult<T> {
+export function success<T>(requestId: string, data: T, options?: { warnings?: string[]; logsRef?: string; jobId?: string; durationMs?: number }): SuccessEnvelope<T> {
   return {
     ok: true,
     requestId,
@@ -210,29 +193,18 @@ export function failure(
   message: string,
   nextActions: string[] = [],
   details?: unknown,
-  options?: { durationMs?: number }
-): CliResult {
-  const isTransient = TRANSIENT_ERROR_CODES.has(code);
-  const retryAfterMs = isTransient ? DEFAULT_RETRY_AFTER_MS[code] ?? 5000 : undefined;
-
-  // Flatten details into the error object (excluding reserved keys)
-  const safeDetails = details && typeof details === "object" && !Array.isArray(details) ? details as Record<string, unknown> : undefined;
-  const { code: _code, message: _message, requestId: _requestId, nextActions: _nextActions, transient: _transient, retryAfterMs: _retryAfterMs, ...flatDetails } = safeDetails ?? {};
-
+  options?: { durationMs?: number; transient?: boolean; retryAfterMs?: number }
+): ErrorEnvelope {
+  const isTransient = options?.transient ?? TRANSIENT_ERROR_CODES.has(code);
+  const retryAfterMs = isTransient ? options?.retryAfterMs ?? DEFAULT_RETRY_AFTER_MS[code] ?? 5000 : 0;
   const error: CliError = {
     code,
     message,
-    requestId,
-    ...(isTransient ? { transient: true, retryAfterMs: retryAfterMs } : {}),
-    ...flatDetails,
+    nextActions,
+    ...(details !== undefined ? { details } : {}),
+    transient: isTransient,
+    retryAfterMs,
   };
-
-  if (details !== undefined) {
-    error.details = details;
-  }
-  if (nextActions.length > 0) {
-    error.nextActions = nextActions;
-  }
 
   return {
     ok: false,

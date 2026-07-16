@@ -1,10 +1,14 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using UnityEditor;
 using UnityEngine;
 
@@ -34,7 +38,7 @@ namespace UnityCli
         {
             if (runtimeExecutorInitialized) return;
             runtimeExecutorInitialized = true;
-            EditorApplication.playModeStateChanged += OnPlayModeStateChanged;
+            EditorApplication.playModeStateChanged += OnRuntimePlayModeStateChanged;
             RefreshRuntimeToolCatalog();
             WriteLog("runtime_executor_initialized");
 
@@ -69,7 +73,7 @@ namespace UnityCli
         /// entering Play Mode, mark ready, and invalidate the session when
         /// exiting or during domain reload.
         /// </summary>
-        private static void OnPlayModeStateChanged(PlayModeStateChange change)
+        private static void OnRuntimePlayModeStateChanged(PlayModeStateChange change)
         {
             switch (change)
             {
@@ -142,62 +146,48 @@ namespace UnityCli
         }
 
         /// <summary>
-        /// Runtime session readiness report JSON, included in instance registration
+        /// Runtime session readiness report, included in instance registration
         /// and available via editor.state.
         /// </summary>
-        private static string RuntimeSessionJson()
+        private static Dictionary<string, object> RuntimeSessionData()
         {
-            return new UnityCliJsonWriter().BeginObject()
-                .Prop("playModeSessionId", currentPlayModeSessionId ?? (string)null)
-                .Prop("ready", playModeReady)
-                .Prop("registryVersion", runtimeRegistryVersion)
-                .Prop("toolCatalogFingerprint", runtimeToolCatalogFingerprint ?? (string)null)
-                .PropArray("availableRuntimeTools", array =>
+            var availableTools = new List<object>();
+            foreach (var pair in ProjectTools)
+            {
+                if (pair.Value.Target != "runtime" && pair.Value.Target != "both") continue;
+                availableTools.Add(new Dictionary<string, object>
                 {
-                    foreach (var pair in ProjectTools)
-                    {
-                        if (pair.Value.Target == "runtime" || pair.Value.Target == "both")
-                        {
-                            array.BeginObject()
-                                .Prop("name", pair.Value.Name)
-                                .Prop("target", pair.Value.Target)
-                                .Prop("availabilityScope", pair.Value.AvailabilityScope)
-                                .Prop("available", playModeReady)
-                                .EndObject();
-                        }
-                    }
-                })
-                .EndObject()
-                .ToString();
+                    { "name", pair.Value.Name }, { "target", pair.Value.Target }, { "availabilityScope", pair.Value.AvailabilityScope }, { "available", playModeReady }
+                });
+            }
+            // 会话数据直接嵌入最终 response，禁止序列化后重新解析为 object。
+            return new Dictionary<string, object>
+            {
+                { "playModeSessionId", currentPlayModeSessionId }, { "ready", playModeReady }, { "registryVersion", runtimeRegistryVersion },
+                { "toolCatalogFingerprint", runtimeToolCatalogFingerprint }, { "availableRuntimeTools", availableTools }
+            };
         }
 
         /// <summary>
         /// List runtime tools with their availability status based on current
         /// Play Mode session state.
         /// </summary>
-        private static string RuntimeToolList(BridgeRequest request)
+        private static object RuntimeToolList(UnityCli.Protocol.BridgeRequest request)
         {
             DiscoverProjectTools();
             InitializeRuntimeExecutor();
-
-            var tools = new System.Collections.Generic.List<string>();
-            foreach (var pair in ProjectTools)
+            var tools = new System.Collections.Generic.List<object>();
+            foreach (var definition in ProjectTools.Values.OrderBy(tool => tool.Name, StringComparer.Ordinal))
             {
-                var def = pair.Value;
-                if (def.Target == "runtime" || def.Target == "both")
-                {
-                    tools.Add(RuntimeToolDescriptorJson(def));
-                }
+                if (definition.Target != "runtime" && definition.Target != "both") continue;
+                var descriptor = ProjectToolDescriptorData(definition);
+                descriptor["available"] = playModeReady;
+                tools.Add(descriptor);
             }
-            tools.Sort(StringComparer.Ordinal);
-
-            var data = new UnityCliJsonWriter().BeginObject()
-                .PropArray("tools", arr => { foreach (var tool in tools) { arr.RawValue(tool); } })
-                .PropRaw("session", RuntimeSessionJson())
-                .Prop("logPath", LogPath())
-                .EndObject()
-                .ToString();
-            return SuccessJson(data);
+            return new System.Collections.Generic.Dictionary<string, object>
+            {
+                { "tools", tools }, { "session", RuntimeSessionData() }, { "logPath", LogPath() }
+            };
         }
 
         /// <summary>
@@ -208,14 +198,14 @@ namespace UnityCli
         private sealed class RuntimeToolRunArgs
         {
             public string Name { get; set; }
+            [UnityCliAnyJson] public object Input { get; set; }
             public string PlayModeSessionId { get; set; }
             public string FingerprintMode { get; set; }
-            public int? TimeoutMs { get; set; }
             public string ArtifactDir { get; set; }
             public string ProjectPath { get; set; }
         }
 
-        private static string RuntimeToolRun(BridgeRequest request)
+        private static async ValueTask<object> RuntimeToolRun(UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)
         {
             DiscoverProjectTools();
             InitializeRuntimeExecutor();
@@ -224,11 +214,9 @@ namespace UnityCli
             var name = args.Name;
             if (string.IsNullOrEmpty(name))
             {
-                return ErrorJsonWithDetails("E_SCHEMA_INVALID", "Runtime tool name is required.",
-                    new UnityCliJsonWriter().BeginObject()
-                        .Prop("field", "name")
-                        .EndObject().ToString(),
-                    "Run tools run <name> --target <instance> with a valid runtime tool name.");
+                throw new BridgeCommandException("E_SCHEMA_INVALID", "Runtime tool name is required.",
+                    new Dictionary<string, object> { { "field", "name" } },
+                    new[] { "Run tools run <name> --target <instance> with a valid runtime tool name." });
             }
 
             // Validate Play Mode is ready
@@ -241,17 +229,13 @@ namespace UnityCli
                 if (!string.IsNullOrEmpty(staleRequestedSessionId) && string.Equals(staleRequestedSessionId, lastStalePlayModeSessionId, StringComparison.Ordinal))
                 {
                     WriteLog("runtime_tool_session_stale_after_exit requestId=" + request.RequestId + " name=" + name + " requested=" + staleRequestedSessionId + " stale=" + lastStalePlayModeSessionId);
-                    return ErrorJsonWithDetails("E_RUNTIME_SESSION_STALE",
+                    throw new BridgeCommandException("E_RUNTIME_SESSION_STALE",
                         "Runtime tool session is stale: Play Mode session " + staleRequestedSessionId + " has ended (exited Play Mode).",
-                        new UnityCliJsonWriter().BeginObject()
-                            .Prop("requestedSessionId", staleRequestedSessionId)
-                            .Prop("staleSessionId", lastStalePlayModeSessionId)
-                            .Prop("playModeActive", false)
-                            .EndObject().ToString(),
-                        "Re-enter Play Mode and retry, or omit playModeSessionId to use the current session.");
+                        new Dictionary<string, object> { { "requestedSessionId", staleRequestedSessionId }, { "staleSessionId", lastStalePlayModeSessionId }, { "playModeActive", false } },
+                        new[] { "Re-enter Play Mode and retry, or omit playModeSessionId to use the current session." });
                 }
                 WriteLog("runtime_tool_not_ready requestId=" + request.RequestId + " name=" + name + " sessionId=" + (currentPlayModeSessionId ?? "null"));
-                return ErrorJson("E_RUNTIME_NOT_READY",
+                throw new BridgeCommandException("E_RUNTIME_NOT_READY",
                     "Runtime tool cannot execute: Play Mode is not ready. Current Play Mode session is not active.",
                     "Enter Play Mode first (use editor play), then retry the runtime tool call.");
             }
@@ -261,68 +245,56 @@ namespace UnityCli
             if (!string.IsNullOrEmpty(requestedSessionId) && !string.Equals(requestedSessionId, currentPlayModeSessionId, StringComparison.Ordinal))
             {
                 WriteLog("runtime_tool_session_stale requestId=" + request.RequestId + " name=" + name + " requested=" + requestedSessionId + " current=" + currentPlayModeSessionId);
-                return ErrorJsonWithDetails("E_RUNTIME_SESSION_STALE",
+                throw new BridgeCommandException("E_RUNTIME_SESSION_STALE",
                     "Runtime tool session is stale: the Play Mode session has changed. Requested session " + requestedSessionId + " does not match current session " + currentPlayModeSessionId + ".",
-                    new UnityCliJsonWriter().BeginObject()
-                        .Prop("requestedSessionId", requestedSessionId)
-                        .Prop("currentSessionId", currentPlayModeSessionId)
-                        .EndObject().ToString(),
-                    "Re-enter Play Mode and retry, or omit playModeSessionId to use the current session.");
+                    new Dictionary<string, object> { { "requestedSessionId", requestedSessionId }, { "currentSessionId", currentPlayModeSessionId } },
+                    new[] { "Re-enter Play Mode and retry, or omit playModeSessionId to use the current session." });
             }
 
             // Validate the tool exists and is a runtime tool
             if (!ProjectTools.ContainsKey(name))
             {
-                return ErrorJson("E_TOOL_NOT_FOUND", "Tool not found: " + name,
+                throw new BridgeCommandException("E_TOOL_NOT_FOUND", "Tool not found: " + name,
                     "Run tools list --include-custom to see registered tools.");
             }
 
             var definition = ProjectTools[name];
             if (definition.Target != "runtime" && definition.Target != "both")
             {
-                return ErrorJsonWithDetails("E_RUNTIME_TOOL_TARGET_MISMATCH",
+                throw new BridgeCommandException("E_RUNTIME_TOOL_TARGET_MISMATCH",
                     "Tool " + name + " has Target=" + definition.Target + " and cannot be executed via the runtime path.",
-                    new UnityCliJsonWriter().BeginObject()
-                        .Prop("toolName", name)
-                        .Prop("toolTarget", definition.Target)
-                        .EndObject().ToString(),
-                    "Use tools run <name> without --target runtime for editor-domain tools, or use a tool declared with Target=runtime.");
+                    new Dictionary<string, object> { { "toolName", name }, { "toolTarget", definition.Target } },
+                    new[] { "Use tools run <name> without --target runtime for editor-domain tools, or use a tool declared with Target=runtime." });
             }
 
-            // runtime-tool.run 是内部包装命令，破坏性必须按实际 runtime tool descriptor 校验。
-            if (definition.DestructiveHint && !request.DryRun && !request.SecurityConfirmed(DestructiveCommandFingerprint))
+            // runtime-tool.run 是内部包装命令；门禁前刷新 live 指纹，防止跨 PlayMode/domain reload 重放旧 proof。
+            var fingerprintCheck = RefreshProjectToolFingerprint(definition, args.FingerprintMode);
+            var dryRun = request.Execution != null && request.Execution.DryRun == true;
+            if (definition.DestructiveHint
+                && !(dryRun && definition.SupportsDryRun)
+                && !request.SecurityConfirmed(name, true, definition.SupportsDryRun, "runtime-tool.run", definition.Fingerprint))
             {
-                return ErrorJson("E_DESTRUCTIVE_CONFIRMATION_REQUIRED",
+                throw new BridgeCommandException("E_DESTRUCTIVE_CONFIRMATION_REQUIRED",
                     "Destructive runtime tool requires CLI confirmation and fingerprint proof: " + name,
                     "Rerun through unity_cli tools run " + name + " with --yes so the request includes destructive security proof.");
             }
 
-            // Fingerprint check
-            var fingerprintCheck = RefreshProjectToolFingerprint(definition, args.FingerprintMode);
+            // Fingerprint policy 与 security proof 使用同一次 live refresh 结果。
             if (fingerprintCheck.Blocked)
             {
                 WriteLog("runtime_tool_fingerprint_blocked requestId=" + request.RequestId + " name=" + name);
-                return ErrorJsonWithDetails("E_TOOL_FINGERPRINT_MISMATCH", fingerprintCheck.Message,
-                    ProjectToolFingerprintDetailsJson(definition),
-                    "Review the registered custom tool descriptor/handler code, then update the expected fingerprint or rerun with --fingerprint-mode warn.");
+                throw new BridgeCommandException("E_TOOL_FINGERPRINT_MISMATCH", fingerprintCheck.Message,
+                    ProjectToolFingerprintDetails(definition),
+                    new[] { "Review the registered custom tool descriptor/handler code, then update the expected fingerprint or rerun with --fingerprint-mode warn." });
             }
 
-            // Timeout validation
-            var timeoutMs = args.TimeoutMs ?? definition.DefaultTimeoutMs;
-            if (timeoutMs <= 0 || timeoutMs > definition.MaxTimeoutMs)
-            {
-                return ErrorJson("E_SCHEMA_INVALID", "timeoutMs exceeds the registered tool limit.",
-                    "Use a timeout between 1 and " + definition.MaxTimeoutMs.ToString(CultureInfo.InvariantCulture) + "ms.");
-            }
+            // timeout 仅来自顶层 execution，业务 input 不参与执行策略。
+            var timeoutMs = request.ExecutionTimeoutMs(definition.DefaultTimeoutMs, definition.MaxTimeoutMs);
 
             // Input schema validation
             var inputJson = request.RawJsonArg("input") ?? "{}";
             var schemaError = ValidateProjectToolInput(definition, inputJson);
-            if (!string.IsNullOrEmpty(schemaError))
-            {
-                return ErrorJson("E_TOOL_SCHEMA_INVALID", schemaError,
-                    "Run tools list --include-custom to inspect the tool inputSchema.");
-            }
+            if (schemaError != null) throw SchemaValidationException(schemaError);
 
             // Execute the runtime tool with timeout awareness
             var startedAt = DateTime.UtcNow;
@@ -333,11 +305,11 @@ namespace UnityCli
             }
             catch (Exception exception)
             {
-                return ErrorJson("E_ARTIFACT_WRITE_FAILED", "Failed to create artifact directory: " + exception.Message,
+                throw new BridgeCommandException("E_ARTIFACT_WRITE_FAILED", "Failed to create artifact directory: " + exception.Message,
                     "Pass --artifact-dir to a writable directory.");
             }
 
-            string resultJson;
+            object result;
             try
             {
                 WriteLog("runtime_tool_run requestId=" + request.RequestId + " name=" + name + " sessionId=" + currentPlayModeSessionId + " timeoutMs=" + timeoutMs.ToString(CultureInfo.InvariantCulture));
@@ -345,162 +317,107 @@ namespace UnityCli
                 // Check Play Mode is still ready before executing
                 if (!EditorApplication.isPlaying || !playModeReady)
                 {
-                    return ErrorJson("E_RUNTIME_NOT_READY",
+                    throw new BridgeCommandException("E_RUNTIME_NOT_READY",
                         "Play Mode session ended before the runtime tool could execute.",
                         "Re-enter Play Mode and retry.");
                 }
 
-                resultJson = definition.Execute(new UnityCliProjectToolContext
+                using (var toolTimeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, runtimeSession.Token))
                 {
-                    RequestId = request.RequestId,
-                    ProjectPath = args.ProjectPath ?? ProjectRoot(),
-                    InputJson = inputJson,
-                    ArtifactDir = artifactDir,
-                    LogPath = LogPath()
-                });
+                    toolTimeout.CancelAfter(timeoutMs);
+                    var typedInput = UnityCliSerializer.Deserialize(inputJson, definition.RequestType);
+                    result = await definition.InvokeAsync(typedInput, new UnityCliProjectToolContext
+                    {
+                        RequestId = request.RequestId,
+                        ProjectPath = args.ProjectPath ?? ProjectRoot(),
+                        ArtifactDir = artifactDir,
+                        LogPath = LogPath(),
+                        DryRun = dryRun,
+                        TimeoutMs = timeoutMs,
+                        Wait = CreateWaiter(request.RequestId, name),
+                        CancellationToken = toolTimeout.Token
+                    }, toolTimeout.Token);
+                    toolTimeout.Token.ThrowIfCancellationRequested();
+                }
             }
             catch (BridgeCommandException bce)
             {
-                // runtime tool handler 主动抛出的结构化错误：直接转成错误 envelope，
-                // 避免被外层 SuccessJson 误包成 ok:true（旧行为会吞掉错误）。
                 WriteLog("runtime_tool_error requestId=" + request.RequestId + " name=" + name + " error=" + bce.Code);
-                return BridgeExceptionErrorJson(bce);
+                throw;
             }
             catch (TargetInvocationException exception)
             {
-                // 反射调用路径：内层可能是结构化 BridgeCommandException，需正确解包。
                 var inner = exception.InnerException ?? exception;
                 var innerBce = inner as BridgeCommandException;
-                if (innerBce != null)
-                {
-                    WriteLog("runtime_tool_error requestId=" + request.RequestId + " name=" + name + " error=" + innerBce.Code);
-                    return BridgeExceptionErrorJson(innerBce);
-                }
-                return ErrorJson("E_TOOL_EXECUTION_FAILED", inner.GetType().Name + ": " + inner.Message,
+                if (innerBce != null) throw innerBce;
+                throw new BridgeCommandException("E_TOOL_EXECUTION_FAILED", inner.GetType().Name + ": " + inner.Message,
                     "Check Unity Console and UnityCliBridge.log with the returned requestId.");
             }
             catch (Exception exception)
             {
-                return ErrorJson("E_TOOL_EXECUTION_FAILED", exception.GetType().Name + ": " + exception.Message,
+                throw new BridgeCommandException("E_TOOL_EXECUTION_FAILED", exception.GetType().Name + ": " + exception.Message,
                     "Check Unity Console and UnityCliBridge.log with the returned requestId.");
             }
 
-            // deferred: Execute 委托已启动 StartDeferredWait 并返回 marker(统一 IUnityCliDeferredTool 路径)。
-            // 直接透传给 ProcessQueuedWork(IsDeferred 已标记,真实响应由 deferred 回调异步填入)。
-            // 旧 RuntimeWaitTool 专属 marker 拦截已废除,deferred 现在在 Execute 委托内统一处理。
-            if (resultJson == DeferredResponseMarker)
-            {
-                return resultJson;
-            }
+            cancellationToken.ThrowIfCancellationRequested();
 
-            // Verify Play Mode session is still valid after execution
+            // Verify Play Mode session is still valid after execution.
+            // 这里仍在 Unity 主线程，允许直接读取 EditorApplication.isPlaying。
             if (!playModeReady || !EditorApplication.isPlaying)
             {
                 WriteLog("runtime_tool_session_invalid_after_run requestId=" + request.RequestId + " name=" + name);
-                return ErrorJsonWithDetails("E_RUNTIME_SESSION_STALE",
+                throw new BridgeCommandException("E_RUNTIME_SESSION_STALE",
                     "Play Mode session ended during runtime tool execution. The tool may have partially executed.",
-                    new UnityCliJsonWriter().BeginObject()
-                        .Prop("sessionId", currentPlayModeSessionId ?? "unknown")
-                        .Prop("toolName", name)
-                        .Prop("partialExecution", true)
-                        .EndObject().ToString(),
-                    "Re-enter Play Mode and verify the tool's side effects before retrying.");
+                    new Dictionary<string, object> { { "sessionId", currentPlayModeSessionId ?? "unknown" }, { "toolName", name }, { "partialExecution", true } },
+                    new[] { "Re-enter Play Mode and verify the tool's side effects before retrying." });
+            }
+
+            return CompleteRuntimeToolSuccess(request, definition, artifactDir, timeoutMs, startedAt, result, name);
+        }
+
+        private static object CompleteRuntimeToolSuccess(UnityCli.Protocol.BridgeRequest request, RegisteredTool definition, string artifactDir, int timeoutMs, DateTime startedAt, object result, string name)
+        {
+            if (!playModeReady || !cachedIsPlaying)
+            {
+                WriteLog("runtime_tool_session_invalid_after_run requestId=" + request.RequestId + " name=" + name + " cachedIsPlaying=" + Bool(cachedIsPlaying));
+                throw new BridgeCommandException("E_RUNTIME_SESSION_STALE",
+                    "Play Mode session ended during runtime tool execution. The tool may have partially executed.",
+                    new Dictionary<string, object> { { "sessionId", currentPlayModeSessionId ?? "unknown" }, { "toolName", name }, { "partialExecution", true } },
+                    new[] { "Re-enter Play Mode and verify the tool's side effects before retrying." });
             }
 
             var endedAt = DateTime.UtcNow;
             var durationMs = (long)(endedAt - startedAt).TotalMilliseconds;
-            var manifest = ProjectToolManifestJson(request.RequestId, definition, artifactDir, startedAt, endedAt);
+            var manifest = UnityCliSerializer.Serialize(ProjectToolManifestData(request.RequestId, definition, artifactDir, startedAt, endedAt));
             try
             {
                 File.WriteAllText(Path.Combine(artifactDir, "manifest.json"), manifest);
             }
             catch (Exception exception)
             {
-                return ErrorJson("E_ARTIFACT_WRITE_FAILED", "Failed to write artifact manifest: " + exception.Message,
+                throw new BridgeCommandException("E_ARTIFACT_WRITE_FAILED", "Failed to write artifact manifest: " + exception.Message,
                     "Pass --artifact-dir to a writable directory.");
             }
 
             if (durationMs > timeoutMs)
             {
                 WriteLog("runtime_tool_timeout requestId=" + request.RequestId + " name=" + name + " durationMs=" + durationMs.ToString(CultureInfo.InvariantCulture) + " timeoutMs=" + timeoutMs.ToString(CultureInfo.InvariantCulture));
-                return ErrorJsonWithDetails("E_RUNTIME_TIMEOUT",
+                throw new BridgeCommandException("E_RUNTIME_TIMEOUT",
                     "Runtime tool exceeded timeoutMs: " + durationMs.ToString(CultureInfo.InvariantCulture) + "ms > " + timeoutMs.ToString(CultureInfo.InvariantCulture) + "ms.",
-                    new UnityCliJsonWriter().BeginObject()
-                        .Prop("durationMs", durationMs)
-                        .Prop("timeoutMs", timeoutMs)
-                        .EndObject().ToString(),
-                    "Increase the timeout or optimize the runtime tool, then retry.");
+                    new Dictionary<string, object> { { "durationMs", durationMs }, { "timeoutMs", timeoutMs } },
+                    new[] { "Increase the timeout or optimize the runtime tool, then retry." });
             }
 
-            var data = new UnityCliJsonWriter().BeginObject()
-                .Prop("command", "runtime-tool.run")
-                .PropObject("tool", tool =>
-                {
-                    tool.Prop("name", definition.Name)
-                        .Prop("version", definition.Version)
-                        .Prop("target", definition.Target);
-                })
-                .PropObject("session", session =>
-                {
-                    session.Prop("playModeSessionId", currentPlayModeSessionId)
-                        .Prop("ready", playModeReady)
-                        .Prop("registryVersion", runtimeRegistryVersion);
-                })
-                .PropObject("execution", execution =>
-                {
-                    execution.Prop("channel", "runtime")
-                        .Prop("startedAt", startedAt.ToString("O", CultureInfo.InvariantCulture))
-                        .Prop("endedAt", endedAt.ToString("O", CultureInfo.InvariantCulture))
-                        .Prop("durationMs", durationMs)
-                        .Prop("exitState", "completed");
-                })
-                .PropRaw("result", resultJson)
-                .PropArray("artifacts", artifacts =>
-                {
-                    artifacts.BeginObject()
-                        .Prop("id", "manifest")
-                        .Prop("kind", "json")
-                        .Prop("path", Path.Combine(artifactDir, "manifest.json"))
-                        .Prop("description", "runtime-tool artifact manifest")
-                        .EndObject();
-                })
-                .PropObject("logs", logs => logs.Prop("bridge", LogPath()))
-                .EndObject()
-                .ToString();
-            return SuccessJson(data);
-        }
-
-        private static string RuntimeToolDescriptorJson(UnityCliProjectToolDefinition definition)
-        {
-            return new UnityCliJsonWriter().BeginObject()
-                .Prop("name", definition.Name)
-                .Prop("summary", definition.Summary)
-                .Prop("description", definition.Description)
-                .Prop("group", definition.Group)
-                .Prop("version", definition.Version)
-                .PropRaw("inputSchema", definition.InputSchema)
-                .PropRaw("outputSchema", definition.OutputSchema)
-                .Prop("capabilityType", definition.CapabilityType)
-                .Prop("destructiveHint", definition.DestructiveHint)
-                .Prop("target", definition.Target)
-                .Prop("availabilityScope", definition.AvailabilityScope)
-                .Prop("playModeSupport", definition.PlayModeSupport)
-                .Prop("available", playModeReady)
-                .Prop("defaultTimeoutMs", definition.DefaultTimeoutMs)
-                .Prop("maxTimeoutMs", definition.MaxTimeoutMs)
-                .Prop("supportsJob", false)
-                .PropRaw("artifactKinds", StringArrayJson(definition.ArtifactKinds))
-                .Prop("handler", "bridge-runtime")
-                .Prop("supportStatus", "live-bridge-runtime")
-                .Prop("cliCommand", "tools run " + definition.Name)
-                .Prop("docsTopic", "runtime-tool")
-                .Prop("descriptorSource", definition.DescriptorSource)
-                .Prop("registeredBy", definition.RegisteredBy)
-                .Prop("assembly", definition.Assembly)
-                .Prop("method", definition.Method)
-                .PropRaw("fingerprint", ProjectToolFingerprintJson(definition))
-                .EndObject()
-                .ToString();
+            return new System.Collections.Generic.Dictionary<string, object>
+            {
+                { "command", "runtime-tool.run" },
+                { "tool", new System.Collections.Generic.Dictionary<string, object> { { "name", definition.Name }, { "version", definition.Version }, { "target", definition.Target } } },
+                { "session", new System.Collections.Generic.Dictionary<string, object> { { "playModeSessionId", currentPlayModeSessionId }, { "ready", playModeReady }, { "registryVersion", runtimeRegistryVersion } } },
+                { "execution", new System.Collections.Generic.Dictionary<string, object> { { "channel", "runtime" }, { "startedAt", startedAt.ToString("O", CultureInfo.InvariantCulture) }, { "endedAt", endedAt.ToString("O", CultureInfo.InvariantCulture) }, { "durationMs", durationMs }, { "exitState", "completed" } } },
+                { "result", result },
+                { "artifacts", new System.Collections.Generic.List<object> { new System.Collections.Generic.Dictionary<string, object> { { "id", "manifest" }, { "kind", "json" }, { "path", Path.Combine(artifactDir, "manifest.json") }, { "description", "runtime-tool artifact manifest" } } } },
+                { "logs", new System.Collections.Generic.Dictionary<string, object> { { "bridge", LogPath() } } }
+            };
         }
     }
 }

@@ -8,8 +8,6 @@ namespace UnityCli
 {
     /// <summary>
     /// prefab.unpack — 解包场景中的 Prefab 实例为普通 GameObject。支持 dryRun 预览。
-    /// 对齐旧 PrefabUnpack handler;session-affecting(scene-modify)。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class PrefabUnpackTool : IUnityCliTool<PrefabUnpackTool.Request, PrefabUnpackTool.Result>
     {
@@ -17,7 +15,6 @@ namespace UnityCli
         {
             public string Target { get; set; }
             public string Path { get; set; }
-            public bool? DryRun { get; set; }
         }
 
         public sealed class Result
@@ -39,7 +36,7 @@ namespace UnityCli
             SupportsDryRun = true,
             SideEffects = new[] { "scene-modify" },
             Target = "editor",
-            PlayModeSupport = "session-affecting",
+            PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 30000,
             MaxTimeoutMs = 600000,
             Examples = new[]
@@ -48,7 +45,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             PrefabToolSupport.EnsureEditorNotBusy("prefab.unpack");
             var gameObject = PrefabToolSupport.ResolveGameObjectByPath(request.Target ?? request.Path);
@@ -60,24 +57,24 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_NOT_PREFAB_INSTANCE", gameObject.name + " is not a prefab instance.", "Pass a GameObject that is a prefab instance.");
             }
-            if (request.DryRun == true)
+            if (ctx.DryRun)
             {
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Command = "prefab.unpack",
                     DryRun = true,
                     Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
                     PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.unpack", Target = GameObjectToolSupport.HierarchyPath(gameObject) } }
-                };
+                });
             }
             PrefabUtility.UnpackPrefabInstance(gameObject, PrefabUnpackMode.OutermostRoot, InteractionMode.AutomatedAction);
-            EditorSceneManager.MarkSceneDirty(gameObject.scene);
-            return new Result
+            UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Command = "prefab.unpack",
                 Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
                 PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.unpack", Target = GameObjectToolSupport.HierarchyPath(gameObject) } }
-            };
+            });
         }
     }
 }

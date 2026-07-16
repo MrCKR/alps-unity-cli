@@ -33,13 +33,13 @@ namespace UnityCli.Cinemachine
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Cinemachine = CinemachineToolSupport.BuildPackageStatus(),
                 LogPath = ctx.LogPath
-            };
+            });
         }
     }
 }

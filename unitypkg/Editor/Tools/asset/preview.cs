@@ -5,8 +5,6 @@ namespace UnityCli
 {
     /// <summary>
     /// asset.preview — 生成资产缩略图预览元数据(宽高/是否异步加载中)。
-    /// 对齐旧 AssetPreview handler;只读。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class AssetPreviewTool : IUnityCliTool<AssetPreviewTool.Request, AssetPreviewTool.Result>
     {
@@ -32,7 +30,7 @@ namespace UnityCli
         {
             Name = "asset.preview",
             Summary = "Return AssetPreview thumbnail metadata (width/height/transient) for an Assets/* asset.",
-            Description = "Return AssetPreview thumbnail metadata for an Assets/* asset. Read-only; preview may be transient (still loading) — re-run when isTransient is true. Does not return image bytes; use camera.screenshot or scene.screenshot for rendered captures.",
+            Description = "Return AssetPreview thumbnail metadata for an Assets/* asset. Read-only; preview may be transient (still loading) — re-run when isTransient is true. Does not return image bytes; use camera.screenshot or screenshot.scene-view for rendered captures.",
             Group = "asset",
             Version = "1.0.0",
             DestructiveHint = false,
@@ -46,7 +44,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var path = AssetToolSupport.RequireAssetPath(request.AssetPath ?? request.Path);
             if (!AssetToolSupport.AssetExists(path))
@@ -70,7 +68,7 @@ namespace UnityCli
                 result.Height = preview.height;
                 result.IsTransient = AssetPreview.IsLoadingAssetPreview(asset.GetInstanceID());
             }
-            return result;
+            return new System.Threading.Tasks.ValueTask<Result>(result);
         }
     }
 }

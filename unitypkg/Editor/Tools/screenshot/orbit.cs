@@ -9,7 +9,6 @@ namespace UnityCli
 {
     /// <summary>
     /// screenshot.orbit — 从多个角度环绕截图同一对象。
-    /// 内置工具(原 RegisterCommand 形态)迁移为 IUnityCliTool 自包含。
     /// </summary>
     public class ScreenshotOrbitTool : IUnityCliTool<ScreenshotOrbitTool.Request, ScreenshotOrbitTool.Result>
     {
@@ -38,7 +37,7 @@ namespace UnityCli
             Description = "Capture N orbital screenshots (default 8, max 36) around a target GameObject at evenly spaced angles. Saves individual PNGs to an output directory. Editor-only.",
             Group = "screenshot",
             Version = "1.0.0",
-            DestructiveHint = false,
+            DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",
             PlayModeSupport = "editor-only",
@@ -47,7 +46,7 @@ namespace UnityCli
             Examples = new[] { new ToolExample { Description = "Orbit a target", Input = new Request { Target = "Player", Count = 8 } } }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var go = UnityCliBridge.ObjectRefResolver.FindGameObjectByPath(request.Target);
             if (go == null)
@@ -81,7 +80,7 @@ namespace UnityCli
             }
             finally { if (tempCreated) UnityEngine.Object.DestroyImmediate(cam.gameObject); }
 
-            return new Result { Command = "screenshot.orbit", Target = go.name, Count = artifacts.Count, Artifacts = artifacts };
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "screenshot.orbit", Target = go.name, Count = artifacts.Count, Artifacts = artifacts });
         }
     }
 }

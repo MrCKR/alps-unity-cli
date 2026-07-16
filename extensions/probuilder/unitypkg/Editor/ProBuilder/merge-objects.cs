@@ -34,9 +34,10 @@ namespace UnityCli.ProBuilder
         {
             Name = "probuilder.merge-objects",
             Summary = "Merge multiple GameObjects into a single ProBuilder mesh object.",
-            Description = "Merge multiple GameObjects into a single ProBuilder object. Requires at least 2 targets. Optionally auto-convert non-ProBuilder meshes before merging. Falls back to Unity Mesh.CombineMeshes when the ProBuilder CombineMeshes API is unavailable.",
+            Description = "Merge multiple GameObjects into exactly one ProBuilder object with the ProBuilder 5.x CombineMeshes API. Requires at least 2 targets and can import regular meshes before merging when autoConvert is true.",
             Group = "probuilder",
-            DestructiveHint = true,
+            DestructiveHint = false,
+            SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 15000,
@@ -49,12 +50,12 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var targets = ProBuilderInput.ResolveTargets(ctx.InputJson);
+            var targets = ProBuilderInput.ResolveTargets(request.Targets);
             if (targets == null || targets.Length < 2)
                 throw ProBuilderErrors.SchemaInvalid("At least 2 targets required for merge-objects.");
 
@@ -96,48 +97,16 @@ namespace UnityCli.ProBuilder
 
             Undo.RecordObject(targets[0], "ProBuilder Merge Objects");
 
-            // 用 ProBuilder CombineMeshes.Combine 反射调用
             var merged = ProBuilderReflection.CombineMeshesViaReflection(pbMeshes.ToArray(), pbMeshes[0]);
             if (!merged)
-            {
-                // 回退到 Unity Mesh.CombineMeshes
-                var mergedGo = new GameObject(name);
-                var mf = mergedGo.AddComponent<MeshFilter>();
-                var mr = mergedGo.AddComponent<MeshRenderer>();
-                var instances = new List<CombineInstance>();
-                foreach (var go in targets)
-                {
-                    var filter = go.GetComponent<MeshFilter>();
-                    if (filter != null && filter.sharedMesh != null)
-                        instances.Add(new CombineInstance { mesh = filter.sharedMesh, transform = go.transform.localToWorldMatrix });
-                }
-                if (instances.Count > 0)
-                {
-                    var mesh = new Mesh();
-                    mesh.CombineMeshes(instances.ToArray());
-                    mf.sharedMesh = mesh;
-                }
-                ProBuilderReflection.AddProBuilderMesh(mergedGo);
-                Undo.RegisterCreatedObjectUndo(mergedGo, "ProBuilder Merge Objects");
-                EditorSceneManager.MarkSceneDirty(mergedGo.scene);
-
-                return new Result
-                {
-                    MergedObject = new ObjectRef
-                    {
-                        Id = mergedGo.GetInstanceID(),
-                        Name = mergedGo.name,
-                        Path = HierarchyPath(mergedGo)
-                    }
-                };
-            }
+                throw ProBuilderErrors.OperationFailed("merge-objects", "ProBuilder 5.x CombineMeshes.Combine did not return exactly one mesh.");
 
             ProBuilderReflection.RefreshMesh(pbMeshes[0]);
             var firstGo = targets[0];
             if (!string.IsNullOrEmpty(name)) firstGo.name = name;
             EditorSceneManager.MarkSceneDirty(firstGo.scene);
 
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 MergedObject = new ObjectRef
                 {
@@ -145,7 +114,7 @@ namespace UnityCli.ProBuilder
                     Name = firstGo.name,
                     Path = HierarchyPath(firstGo)
                 }
-            };
+            });
         }
 
         private static string HierarchyPath(GameObject go)

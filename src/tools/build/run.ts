@@ -2,6 +2,7 @@ import { resolve } from "node:path";
 import { startUnityJob } from "../../cli-commands/unity-job.js";
 import { defineTool, type ToolContext } from "../define.js";
 import { StructuredToolError } from "../errors.js";
+import type { AnyJson } from "../../schema/any-json.js";
 
 const BUILD_TARGETS = ["StandaloneWindows64", "StandaloneWindows", "StandaloneOSX", "StandaloneLinux64", "WebGL", "iOS", "Android"] as const;
 
@@ -14,9 +15,6 @@ export interface BuildRunRequest {
   targets?: string;
   project?: string;
   unity?: string;
-  wait?: boolean;
-  timeoutMs?: number;
-  waitTimeoutMs?: number;
 }
 
 export interface BuildRunObject {}
@@ -24,7 +22,7 @@ export interface BuildRunObject {}
 export interface BuildRunError {
   code: string;
   message: string;
-  details?: unknown;
+  details?: AnyJson;
 }
 
 export interface BuildRunCancellation {
@@ -68,7 +66,7 @@ export interface BuildRunBatchSummary {
 }
 
 export interface BuildRunResult {
-  command?: unknown;
+  command?: AnyJson;
   jobId?: string;
   kind?: string;
   status?: string;
@@ -96,16 +94,16 @@ export interface BuildRunResult {
 type JobFlags = Record<string, string | boolean>;
 
 // 将 defineTool request 映射回现有 batchmode job helper 使用的 CLI flag 名称。
-function buildRunFlags(request: BuildRunRequest): JobFlags {
+function buildRunFlags(request: BuildRunRequest, execution: ToolContext["execution"]): JobFlags {
   const flags: JobFlags = {};
   if (request.target !== undefined) flags.target = request.target;
   if (request.output !== undefined) flags.output = request.output;
   if (request.targets !== undefined) flags.targets = request.targets;
   if (request.project !== undefined) flags.project = request.project;
   if (request.unity !== undefined) flags.unity = request.unity;
-  if (request.wait !== undefined) flags.wait = request.wait;
-  if (request.timeoutMs !== undefined) flags["timeout-ms"] = String(request.timeoutMs);
-  if (request.waitTimeoutMs !== undefined) flags["wait-timeout-ms"] = String(request.waitTimeoutMs);
+  if (execution.wait !== undefined) flags.wait = execution.wait;
+  if (execution.timeoutMs !== undefined) flags["timeout-ms"] = String(execution.timeoutMs);
+  if (execution.waitTimeoutMs !== undefined) flags["wait-timeout-ms"] = String(execution.waitTimeoutMs);
   return flags;
 }
 
@@ -138,7 +136,7 @@ function buildTargets(request: BuildRunRequest): BuildTarget[] {
   return [request.target ?? "StandaloneWindows64"];
 }
 
-// 多 target 构建沿用旧输出路径展开规则:占位符替换,否则按 target 追加子目录。
+// 多 target 构建先替换输出路径中的 target 标记，否则按 target 追加子目录。
 function outputForTarget(output: string | undefined, target: string): string | undefined {
   if (!output) return undefined;
   return output.includes("{target}") ? output.replace(/\{target\}/g, target) : `${output.replace(/[\\/]$/, "")}/${target}`;
@@ -153,7 +151,7 @@ async function startBuildJob(target: string, request: BuildRunRequest, context: 
   }
 
   const outputPath = resolve(output ?? "Builds/Windows/UnityCliBuild.exe");
-  const result = await startUnityJob("build", buildRunFlags(request), {
+  const result = await startUnityJob("build", buildRunFlags(request, context.execution), {
     dataDir: context.dataDir,
     store: context.jobStore,
     runner: context.jobRunner,
@@ -204,14 +202,14 @@ export default defineTool<BuildRunRequest, BuildRunResult>({
   summary: "Trigger a Unity batchmode player build as a long-running job.",
   description: "Trigger a Unity batchmode player build as a long-running job. Returns a job ID; poll job status/logs instead of rerunning. This writes build output and can import/compile assets.",
   group: "build",
-  destructiveHint: false,
+  destructiveHint: true,
   sideEffects: ["build-output-write", "asset-import", "compile"],
   playModeSupport: "editor-only",
   handler: "job",
   supportStatus: "batch-job",
   examples: [
-    { description: "Start a Windows build job", argv: ["tools", "run", "build.run", "--input", "{\"project\":\".\",\"target\":\"StandaloneWindows64\",\"output\":\"Builds/App.exe\"}"] },
-    { description: "Start multi-platform build jobs", argv: ["tools", "run", "build.run", "--input", "{\"project\":\".\",\"targets\":\"StandaloneWindows64,WebGL\",\"output\":\"Builds/{target}/Player\"}"] }
+    { description: "Start a Windows build job", argv: ["tools", "run", "build.run", "--project", ".", "--input", "{\"target\":\"StandaloneWindows64\",\"output\":\"Builds/App.exe\"}", "--yes"] },
+    { description: "Start multi-platform build jobs", argv: ["tools", "run", "build.run", "--input", "{\"targets\":\"StandaloneWindows64,WebGL\",\"output\":\"Builds/{target}/Player\"}", "--yes"] }
   ],
   async execute(request, context) {
     return startBuildRun(request, context);

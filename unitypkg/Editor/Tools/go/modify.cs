@@ -8,8 +8,6 @@ namespace UnityCli
 {
     /// <summary>
     /// go.modify — 修改一个或多个 GameObject 的名称/active/标签/层/绝对变换。
-    /// 对齐旧 GameObjectModify handler;session-affecting。targets[] 批量修改为 all-or-none。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class GameObjectModifyTool : IUnityCliTool<GameObjectModifyTool.Request, GameObjectModifyTool.Result>
     {
@@ -61,7 +59,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             GameObjectToolSupport.EnsureEditorNotBusy("go.modify");
             // 先完整校验,避免前半成功后半失败的部分写入
@@ -71,22 +69,22 @@ namespace UnityCli
             if (targets.Count == 1)
             {
                 var gameObject = targets[0];
-                Undo.RecordObject(gameObject.transform, "unity_cli go.modify");
-                Undo.RecordObject(gameObject, "unity_cli go.modify");
+                UnityCliSceneMutation.RecordObject(gameObject.transform, "go.modify");
+                UnityCliSceneMutation.RecordObject(gameObject, "go.modify");
                 GameObjectToolSupport.ApplyGameObjectMutations(gameObject, request.NewName, request.Active, request.TagValue, request.LayerValue,
                     request.X, request.Y, request.Z, request.RotationX, request.RotationY, request.RotationZ, request.ScaleX, request.ScaleY, request.ScaleZ);
-                EditorSceneManager.MarkSceneDirty(gameObject.scene);
-                return new Result
+                UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     GameObject = GameObjectToolSupport.BuildGameObjectDetail(gameObject),
                     PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "go.modify", Target = GameObjectToolSupport.HierarchyPath(gameObject) } }
-                };
+                });
             }
 
             foreach (var gameObject in targets)
             {
-                Undo.RecordObject(gameObject.transform, "unity_cli go.modify batch");
-                Undo.RecordObject(gameObject, "unity_cli go.modify batch");
+                UnityCliSceneMutation.RecordObject(gameObject.transform, "go.modify batch");
+                UnityCliSceneMutation.RecordObject(gameObject, "go.modify batch");
             }
             var details = new List<GameObjectDetail>();
             var effects = new List<GameObjectPlannedEffect>();
@@ -94,11 +92,11 @@ namespace UnityCli
             {
                 GameObjectToolSupport.ApplyGameObjectMutations(gameObject, request.NewName, request.Active, request.TagValue, request.LayerValue,
                     request.X, request.Y, request.Z, request.RotationX, request.RotationY, request.RotationZ, request.ScaleX, request.ScaleY, request.ScaleZ);
-                EditorSceneManager.MarkSceneDirty(gameObject.scene);
+                UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
                 details.Add(GameObjectToolSupport.BuildGameObjectDetail(gameObject));
                 effects.Add(new GameObjectPlannedEffect { Type = "go.modify", Target = GameObjectToolSupport.HierarchyPath(gameObject) });
             }
-            return new Result { GameObjects = details, ModifiedCount = details.Count, PlannedEffects = effects };
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { GameObjects = details, ModifiedCount = details.Count, PlannedEffects = effects });
         }
 
         // go.modify 支持 targets[] 批量修改;先完整解析,避免部分写入

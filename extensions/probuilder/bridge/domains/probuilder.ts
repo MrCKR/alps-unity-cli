@@ -23,7 +23,7 @@ export const probuilderBridgeSpecs: BridgeCommandSpec[] = markToolsOnly([
 
   // ─── Face Operations ──────────────────────────────────
   { group: "probuilder", command: "extrude-faces", bridgeCommand: "project-tool.run", toolName: "probuilder.extrude-faces", buildArgs: probuilderTargetWithIndicesArgs, supportsJob: true },
-  { group: "probuilder", command: "delete-faces", bridgeCommand: "project-tool.run", toolName: "probuilder.delete-faces", buildArgs: probuilderTargetWithIndicesArgs, supportsJob: true, destructiveHint: true },
+  { group: "probuilder", command: "delete-faces", bridgeCommand: "project-tool.run", toolName: "probuilder.delete-faces", buildArgs: probuilderTargetWithIndicesArgs, supportsJob: true },
   { group: "probuilder", command: "detach-faces", bridgeCommand: "project-tool.run", toolName: "probuilder.detach-faces", buildArgs: probuilderDetachFacesArgs, supportsJob: true },
   { group: "probuilder", command: "merge-faces", bridgeCommand: "project-tool.run", toolName: "probuilder.merge-faces", buildArgs: probuilderTargetWithIndicesArgs, supportsJob: true },
   { group: "probuilder", command: "subdivide", bridgeCommand: "project-tool.run", toolName: "probuilder.subdivide", buildArgs: probuilderTargetWithOptionalIndicesArgs, supportsJob: true },
@@ -40,8 +40,8 @@ export const probuilderBridgeSpecs: BridgeCommandSpec[] = markToolsOnly([
   { group: "probuilder", command: "connect-elements", bridgeCommand: "project-tool.run", toolName: "probuilder.connect-elements", buildArgs: probuilderConnectArgs, supportsJob: true },
 
   // ─── Mesh Combine / Merge ─────────────────────────────
-  { group: "probuilder", command: "combine-meshes", bridgeCommand: "project-tool.run", toolName: "probuilder.combine-meshes", buildArgs: probuilderMultiTargetArgs, supportsJob: true, destructiveHint: true },
-  { group: "probuilder", command: "merge-objects", bridgeCommand: "project-tool.run", toolName: "probuilder.merge-objects", buildArgs: probuilderMergeObjectsArgs, supportsJob: true, destructiveHint: true },
+  { group: "probuilder", command: "combine-meshes", bridgeCommand: "project-tool.run", toolName: "probuilder.combine-meshes", buildArgs: probuilderMultiTargetArgs, supportsJob: true },
+  { group: "probuilder", command: "merge-objects", bridgeCommand: "project-tool.run", toolName: "probuilder.merge-objects", buildArgs: probuilderMergeObjectsArgs, supportsJob: true },
   { group: "probuilder", command: "duplicate-and-flip", bridgeCommand: "project-tool.run", toolName: "probuilder.duplicate-and-flip", buildArgs: probuilderTargetWithOptionalIndicesArgs, supportsJob: true },
   { group: "probuilder", command: "create-polygon", bridgeCommand: "project-tool.run", toolName: "probuilder.create-polygon", buildArgs: probuilderCreatePolygonArgs, supportsJob: true },
 

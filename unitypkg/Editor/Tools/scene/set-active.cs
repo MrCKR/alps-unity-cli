@@ -7,8 +7,6 @@ namespace UnityCli
 {
     /// <summary>
     /// scene.set-active — 在已加载场景中设置激活场景。目标场景必须已加载。
-    /// 对齐旧 SceneSetActive handler;session-affecting。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class SceneSetActiveTool : IUnityCliTool<SceneSetActiveTool.Request, SceneSetActiveTool.Result>
     {
@@ -45,7 +43,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             SceneToolSupport.EnsureEditorNotBusy("scene.set-active");
             var path = SceneToolSupport.ResolveScenePath(request.Path ?? request.Name, true);
@@ -55,7 +53,7 @@ namespace UnityCli
                 if (string.Equals(SceneToolSupport.NormalizeAssetPath(scene.path), path, System.StringComparison.OrdinalIgnoreCase))
                 {
                     EditorSceneManager.SetActiveScene(scene);
-                    return new Result
+                    return new System.Threading.Tasks.ValueTask<Result>(new Result
                     {
                         Scene = SceneToolSupport.BuildSceneInfo(scene),
                         RequestedPath = path,
@@ -63,7 +61,7 @@ namespace UnityCli
                         {
                             new ScenePlannedEffect { Type = "scene.set-active", Path = SceneToolSupport.NormalizeAssetPath(scene.path) ?? path }
                         }
-                    };
+                    });
                 }
             }
             throw new UnityCliBridge.BridgeCommandException("E_SCENE_NOT_OPEN", "Scene is not currently open: " + path, "Run context read scene.opened, then scene.load if needed.");

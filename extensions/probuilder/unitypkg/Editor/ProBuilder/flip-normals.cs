@@ -30,6 +30,7 @@ namespace UnityCli.ProBuilder
             Description = "Flip the normals of selected faces on a ProBuilder mesh. When faceIndices is omitted, all faces are flipped.",
             Group = "probuilder",
             DestructiveHint = false,
+            SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 10000,
@@ -42,31 +43,35 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            var go = ProBuilderInput.ResolveTarget(request.Target);
             if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("flip-normals", "No ProBuilderMesh on target.");
 
-            int[] faceIndices = request.FaceIndices?.Select(i => (int)i).ToArray();
             var faceCount = ProBuilderReflection.GetFaceCount(mesh);
-            Undo.RecordObject(go, "ProBuilder Flip Normals");
+            if (faceCount < 1)
+                throw ProBuilderErrors.OperationFailed("flip-normals", "Target has no readable faces.");
+            int[] faceIndices = request.FaceIndices?.Select(i => (int)i).Distinct().ToArray();
+            if (faceIndices == null || faceIndices.Length == 0)
+                faceIndices = Enumerable.Range(0, faceCount).ToArray();
+            if (ProBuilderReflection.GetFacesByIndices(mesh, faceIndices) == null)
+                throw ProBuilderErrors.SchemaInvalid("faceIndices contains an invalid face index.");
 
-            if (faceIndices != null && faceIndices.Length > 0)
-                ProBuilderReflection.FlipFaces(mesh, faceIndices);
-            else
-                ProBuilderReflection.FlipFaces(mesh, Enumerable.Range(0, faceCount).ToArray());
+            Undo.RecordObject(go, "ProBuilder Flip Normals");
+            if (!ProBuilderReflection.FlipFaces(mesh, faceIndices))
+                throw ProBuilderErrors.OperationFailed("flip-normals", "ProBuilder 5.x Face.Reverse failed.");
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
-            var flipped = faceIndices != null ? faceIndices.Length : faceCount;
-            return new Result { FlippedCount = flipped };
+            var flipped = faceIndices.Length;
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { FlippedCount = flipped });
         }
     }
 }

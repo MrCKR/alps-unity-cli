@@ -13,12 +13,12 @@
  * 6. Data directory exists
  */
 
-import { builtinContextDescriptors } from "./context/index.js";
+import { builtinContextDescriptors, loadContextCatalog, shouldLoadLiveContextCatalog, type ContextCatalogRuntime } from "./contexts/catalog.js";
+import type { ContextDescriptor } from "./contexts/types.js";
 import { getString, getBoolean } from "./args.js";
 import { access, readFile, stat } from "node:fs/promises";
 import { join } from "node:path";
 import { discoverProjectTools, shouldDiscoverProjectTools, type ProjectToolRuntime } from "./project-tool-discovery.js";
-import { discoverProjectContexts, shouldDiscoverContexts as shouldDiscoverProjectContexts, type ProjectContextRuntime, type ContextDescriptor } from "./project-context-discovery.js";
 import { readInstances, type UnityInstance } from "./instances.js";
 import { executeBridgePayload, type BridgeRuntime } from "./bridge/index.js";
 import { builtinToolMetadata, filterToolsByGroup } from "./tools/metadata/index.js";
@@ -30,7 +30,7 @@ import { bridgeCommandRegistry } from "./bridge/index.js";
 import { failure, success } from "./output.js";
 import type { CliResult } from "./types.js";
 
-export interface DoctorRuntime extends BridgeRuntime, ProjectToolRuntime, ProjectContextRuntime {
+export interface DoctorRuntime extends BridgeRuntime, ProjectToolRuntime, ContextCatalogRuntime {
   dataDir: string;
 }
 
@@ -100,7 +100,7 @@ export async function handleDoctorCommand(
   checks.push(await checkProBuilderExtension(flags));
 
   // Built-in and project Context discovery diagnostics.
-  checks.push(checkContextDiscovery(flags, runtime));
+  checks.push(await checkContextDiscovery(flags, runtime));
   checks.push(checkExtensionRegistry());
   checks.push(await checkProjectContextDiscovery(flags, runtime, requestId));
 
@@ -199,18 +199,23 @@ async function checkBridgeConnectivity(
   try {
     const result = await executeBridgePayload(
       requestId,
-      "diagnose.preflight",
-      {},
+      "project-tool.run",
+      { name: "diagnose.preflight", input: {} },
       { "bridge-endpoint": endpoint },
       runtime
     );
 
     if (result.ok) {
+      const wrapperData = result.data;
+      const bridgeResponse = wrapperData && typeof wrapperData === "object" && !Array.isArray(wrapperData)
+        && (wrapperData as Record<string, unknown>).result && typeof (wrapperData as Record<string, unknown>).result === "object"
+        ? (wrapperData as Record<string, unknown>).result
+        : wrapperData;
       return {
         name: "bridge_connectivity",
         status: "pass",
         message: `Bridge reachable at ${endpoint}.`,
-        details: { endpoint, bridgeResponse: result.data }
+        details: { endpoint, bridgeResponse }
       };
     }
 
@@ -381,7 +386,7 @@ async function checkUnifiedDiscovery(flags: Record<string, string | boolean>, ru
 }
 
 async function checkProjectContextDiscovery(flags: Record<string, string | boolean>, runtime: DoctorRuntime, requestId: string): Promise<DoctorCheck> {
-  const includeCustom = shouldDiscoverProjectContexts(flags, runtime);
+  const includeCustom = await shouldLoadLiveContextCatalog(flags, runtime);
   if (!includeCustom) {
     return {
       name: "project_context_discovery",
@@ -391,7 +396,7 @@ async function checkProjectContextDiscovery(flags: Record<string, string | boole
     };
   }
 
-  const discovery = await discoverProjectContexts(flags, runtime, `${requestId}_context`, { requireBridge: false });
+  const discovery = await loadContextCatalog(flags, runtime, `${requestId}_context`, { requireLive: false });
   if (!discovery.ok) {
     return {
       name: "project_context_discovery",
@@ -402,19 +407,21 @@ async function checkProjectContextDiscovery(flags: Record<string, string | boole
   }
 
   // Count categories from project custom contexts
-  const projectContexts = discovery.contexts.filter((c) => c.source === "project");
-  const categories = [...new Set(projectContexts.map((c) => c.category))];
+  const liveContexts = discovery.contexts.filter((context) => !builtinContextDescriptors().some((local) => local.name === context.name));
+  const projectContexts = liveContexts.filter((context) => context.source === "project");
+  const categories = [...new Set(projectContexts.map((context) => context.category))];
   const conflictCount = countContextConflicts(discovery.contexts);
-  const unavailableCount = projectContexts.filter((c) => c.supportStatus === "unavailable").length;
+  const unavailableCount = liveContexts.filter((context) => context.available === false || context.supportStatus === "unavailable").length;
+  const builtInCount = liveContexts.filter((context) => context.source === "built-in").length;
 
   const status: DoctorCheck["status"] = conflictCount > 0 || unavailableCount > 0 ? "warn" : "pass";
   return {
     name: "project_context_discovery",
     status,
     message: status === "pass"
-      ? `Context discovery available: ${discovery.builtInCount} built-in, ${discovery.projectCustomCount} project custom (mode: ${discovery.mode}).`
-      : `Context discovery available: ${discovery.builtInCount} built-in, ${discovery.projectCustomCount} project custom, but ${unavailableCount} unavailable, ${conflictCount} conflict(s) (mode: ${discovery.mode}).`,
-    details: { mode: discovery.mode, builtInCount: discovery.builtInCount, projectCustomCount: discovery.projectCustomCount, categories, unavailableCount, conflictCount }
+      ? `Context discovery available: ${builtInCount} built-in, ${projectContexts.length} project custom (mode: bridge).`
+      : `Context discovery available: ${builtInCount} built-in, ${projectContexts.length} project custom, but ${unavailableCount} unavailable, ${conflictCount} conflict(s) (mode: bridge).`,
+    details: { mode: discovery.live ? "bridge" : "skipped", builtInCount, projectCustomCount: projectContexts.length, categories, unavailableCount, conflictCount }
   };
 }
 
@@ -583,10 +590,10 @@ async function checkExtensionAvailability(flags: Record<string, string | boolean
   };
 }
 
-function checkContextDiscovery(flags: Record<string, string | boolean>, runtime: DoctorRuntime): DoctorCheck {
+async function checkContextDiscovery(flags: Record<string, string | boolean>, runtime: DoctorRuntime): Promise<DoctorCheck> {
   const contexts = builtinContextDescriptors();
   const localCount = contexts.length;
-  const liveDiscoveryEnabled = shouldDiscoverProjectContexts(flags, runtime);
+  const liveDiscoveryEnabled = await shouldLoadLiveContextCatalog(flags, runtime);
   if (localCount === 0) {
     return {
       name: "context_discovery",

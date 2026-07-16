@@ -8,8 +8,6 @@ namespace UnityCli
 {
     /// <summary>
     /// shader.create — 创建 Shader 资产(.shader/.shadergraph)。拒绝覆盖(除非 overwrite)。
-    /// 对齐旧 ShaderCreate handler;session-affecting(asset-write, shader-recompile)。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class ShaderCreateTool : IUnityCliTool<ShaderCreateTool.Request, ShaderCreateTool.Result>
     {
@@ -34,10 +32,10 @@ namespace UnityCli
             Description = "Create a new Shader asset at an Assets/*.shader path. With no content, a default unlit UnityCli/ shader is generated. For .shadergraph, content is required (pass a ShaderGraph JSON payload). Refuses to overwrite an existing shader unless overwrite=true. Creating a shader triggers recompilation.",
             Group = "shader",
             Version = "1.0.0",
-            DestructiveHint = false,
+            DestructiveHint = true,
             SideEffects = new[] { "asset-write", "shader-recompile" },
             Target = "editor",
-            PlayModeSupport = "session-affecting",
+            PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 30000,
             MaxTimeoutMs = 600000,
             Examples = new[]
@@ -46,7 +44,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             ShaderToolSupport.EnsureEditorNotBusy("shader.create");
             var path = ShaderToolSupport.RequireShaderPath(request.Path);
@@ -69,11 +67,11 @@ namespace UnityCli
             AssetToolSupport.WriteTextAsset(path, content, overwrite);
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
             AssetDatabase.SaveAssets();
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Shader = ShaderToolSupport.BuildShaderInfo(path, AssetDatabase.LoadAssetAtPath<Shader>(path), false),
                 PlannedEffects = new List<ShaderPlannedEffect> { new ShaderPlannedEffect { Type = "shader.create", Path = path, Refresh = true } }
-            };
+            });
         }
     }
 }

@@ -8,8 +8,6 @@ namespace UnityCli
 {
     /// <summary>
     /// asset.search-built-in — 查找内置资源(Resources/ 与 Packages/ 路径),可按类型过滤。
-    /// 对齐旧 AssetSearchBuiltIn handler;只读,分页。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class AssetSearchBuiltInTool : IUnityCliTool<AssetSearchBuiltInTool.Request, AssetSearchBuiltInTool.Result>
     {
@@ -53,7 +51,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var keyword = request.Keyword ?? request.Search;
             var typeFilter = request.Type;
@@ -83,12 +81,12 @@ namespace UnityCli
                     Name = System.IO.Path.GetFileNameWithoutExtension(assetPath)
                 });
             }
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Command = "asset.search-built-in",
                 Count = results.Count,
                 Assets = results
-            };
+            });
         }
     }
 }

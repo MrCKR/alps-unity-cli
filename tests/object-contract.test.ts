@@ -37,9 +37,9 @@ test("object tools are contract-discovered and expose expected live descriptor f
       summary: "Patch serialized object data.",
       description: "Patch serialized object data.",
       group: "object",
-      destructiveHint: true,
+      destructiveHint: false,
       supportsDryRun: true,
-      playModeSupport: "runtime-only",
+      playModeSupport: "session-affecting",
       inputSchema: { type: "object", properties: { pathPatches: { type: "array" }, jsonPatch: { type: "array" } } }
     })
   );
@@ -66,9 +66,9 @@ test("object tools are contract-discovered and expose expected live descriptor f
 
   const modify = tools.get("object.modify")!;
   const modifyProps = modify.inputSchema.properties as Record<string, unknown>;
-  assert.equal(modify.destructiveHint, true);
+  assert.equal(modify.destructiveHint, false);
   assert.equal(modify.supportsDryRun, true);
-  assert.equal(modify.playModeSupport, "runtime-only");
+  assert.equal(modify.playModeSupport, "session-affecting");
   assert.equal(modify.riskLevel, "high");
   assert.ok(modifyProps.pathPatches);
   assert.ok(modifyProps.jsonPatch);
@@ -89,15 +89,15 @@ test("contract entries exist for object tools with present C# handler", () => {
   }
 });
 
-test("destructive security policy covers object.modify", () => {
+test("object.modify stays out of destructive security policy because it changes scene memory only", () => {
   const commands = new Set(destructiveCommands().map((entry) => entry.command));
-  assert.ok(commands.has("object.modify"));
+  assert.equal(commands.has("object.modify"), false);
 });
 
-test("C# RegisterCommand calls removed for object commands (migrated to IUnityCliTool)", async () => {
+test("object commands are exposed by typed C# tools", async () => {
   const allSource = await readEditorCsSources();
   for (const command of ["object.get-data", "object.modify"]) {
-    assert.ok(!allSource.includes(`RegisterCommand(registry, "${command}"`), `${command} should NOT be registered (migrated to IUnityCliTool)`);
+    assert.ok(allSource.includes(`Name = "${command}"`), `${command} should expose its public tool name`);
   }
 });
 
@@ -109,7 +109,24 @@ test("C# infrastructure files exist for ObjectRef, serializer and patch", async 
   assert.ok(names.includes("UnityCliObjectPatch.cs"));
 });
 
-test("object.modify migrated to IUnityCliTool with dry-run support", async () => {
+test("object patch accepts only slash-separated member paths", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliObjectPatch.cs", import.meta.url), "utf8");
+  assert.match(source, /path\.Split\('\/'\)/);
+  assert.match(source, /pathPatches path must use '\/' between member segments/);
+  assert.doesNotMatch(source, /向后兼容|a\.b.*兼容|var sep = path\.IndexOf/);
+});
+
+test("object patch writes nested value types back through their parent chain", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliObjectPatch.cs", import.meta.url), "utf8");
+  assert.match(source, /List<NavigationFrame>/);
+  assert.match(source, /current\.GetType\(\)\.IsValueType/);
+  assert.match(source, /WriteBackValueType\(frames\[i\]\.Parent, frames\[i\]\.Segment, current, path\)/);
+  assert.match(source, /property\.SetValue\(parent, ConvertValue\(value, property\.PropertyType\), null\)/);
+  assert.match(source, /list\[segment\.Index\] = value/);
+  assert.match(source, /dictionary\[segment\.Name\] = value/);
+});
+
+test("object.modify implements IUnityCliTool with dry-run support", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Tools/object/modify.cs", import.meta.url), "utf8");
   assert.match(source, /class ObjectModifyTool/, "ObjectModifyTool should exist");
   assert.match(source, /DryRun/, "object.modify should support dry-run");
@@ -121,6 +138,23 @@ test("C# object serializer implements path aggregate and viewQuery conflict", as
   assert.match(serializer, /BuildPathReadAggregate[\s\S]*TypeName = "UnityCli\.PathReadAggregate"/, "paths should return a stable aggregate envelope");
   assert.match(serializer, /TryReadPath[\s\S]*ReadPathSegment[\s\S]*ReadIndexer/, "paths should read exact nested members and indexers");
   assert.match(supportSource, /E_OBJECT_READ_SCOPE_CONFLICT[\s\S]*paths and viewQuery are mutually exclusive/, "object serializer options should reject paths and viewQuery together");
+});
+
+test("C# object serializer represents non-finite dynamic numbers without invalid JSON", async () => {
+  const serializer = await readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliObjectSerializer.cs", import.meta.url), "utf8");
+  assert.match(serializer, /JsonNumberData\(double value\)/);
+  assert.match(serializer, /double\.IsNaN\(value\)[\s\S]*return "NaN"/);
+  assert.match(serializer, /double\.IsPositiveInfinity\(value\)[\s\S]*return "Infinity"/);
+  assert.match(serializer, /double\.IsNegativeInfinity\(value\)[\s\S]*return "-Infinity"/);
+  assert.match(serializer, /value is float single[\s\S]*JsonNumberData\(single\)/);
+});
+
+test("C# paged capabilities return nextCursor in the same numeric domain as cursor", async () => {
+  const files = await listCsFiles(new URL("../unitypkg/Editor/", import.meta.url));
+  const source = (await Promise.all(files.map((file) => readFile(file, "utf8")))).join("\n");
+  assert.doesNotMatch(source, /string NextCursor\s*\{/);
+  assert.doesNotMatch(source, /NextCursor\s*=.*ToString\(/);
+  assert.match(source, /long\? NextCursor\s*\{/);
 });
 
 test("no duplicate main entry: go.inspect stays lightweight, object.get-data is the deep reader", async () => {

@@ -4,28 +4,28 @@ export interface BridgeRuntime {
   bridgeExecute?: (payload: BridgeRequest) => Promise<BridgeResponse>;
 }
 
-export interface BridgeRequest {
-  requestId: string;
-  command: string;
-  args: Record<string, unknown>;
-  dryRun?: boolean;
-  security?: Record<string, unknown>;
-}
+import type {
+  BridgeRequest as ProtocolBridgeRequest,
+  Envelope as ProtocolEnvelope,
+  ToolError
+} from "../protocol/envelope.js";
 
-export interface BridgeError {
-  code?: string;
-  message?: string;
-  [key: string]: unknown;
-}
+export type BridgeRequest = ProtocolBridgeRequest<Record<string, unknown>>;
 
-export interface BridgeResponse {
-  ok?: boolean;
-  data?: Record<string, unknown>;
-  error?: BridgeError;
-  nextActions?: string[];
-}
+export type BridgeError = ToolError<Record<string, unknown>>;
+
+export type BridgeResponse = ProtocolEnvelope<Record<string, unknown>, Record<string, unknown>>;
 
 export type BridgeFlags = Record<string, string | boolean>;
+
+/** 生成 destructive proof 所需的最小 descriptor；动态 Tool 必须传入 live 值。 */
+export interface BridgeSecurityDescriptor {
+  name: string;
+  destructiveHint: boolean;
+  supportsDryRun: boolean;
+  bridgeCommand: string;
+  liveDescriptorFingerprint?: string;
+}
 
 export interface BridgeArgContext {
   command: string;

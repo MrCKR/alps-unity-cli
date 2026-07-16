@@ -9,8 +9,6 @@ namespace UnityCli
 {
     /// <summary>
     /// scene.hierarchy — 读取激活场景的轻量分页层级:parent/深度/名称过滤/组件预览。
-    /// 对齐旧 SceneHierarchy handler;只读。层级收集逻辑自包含复刻(不可复用 GameObject 域私有 helper)。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class SceneHierarchyTool : IUnityCliTool<SceneHierarchyTool.Request, SceneHierarchyTool.Result>
     {
@@ -71,7 +69,7 @@ namespace UnityCli
             public long ReturnedCount { get; set; }
             public long PageSize { get; set; }
             public long Cursor { get; set; }
-            public string NextCursor { get; set; }
+            public long? NextCursor { get; set; }
             public bool HasMore { get; set; }
             public bool Truncated { get; set; }
         }
@@ -95,7 +93,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var scene = SceneManager.GetActiveScene();
             var parent = request.Parent;
@@ -133,7 +131,7 @@ namespace UnityCli
 
             var total = allItems.Count;
             var page = allItems.Skip(cursor).Take(pageSize).ToList();
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Scene = new SceneSummary { Name = scene.name, Path = scene.path },
                 Parent = parent,
@@ -145,7 +143,7 @@ namespace UnityCli
                 IncludeComponents = includeComponents,
                 Items = page,
                 PageInfo = BuildPageInfo(pageSize, cursor, total, page.Count)
-            };
+            });
         }
 
         // 按深度/名称/inactive 策略收集层级项;分页在调用方统一处理。
@@ -249,7 +247,7 @@ namespace UnityCli
 
         private static PageInfo BuildPageInfo(int pageSize, int cursor, int totalCount, int returnedCount)
         {
-            var next = cursor + returnedCount < totalCount ? (cursor + returnedCount).ToString(System.Globalization.CultureInfo.InvariantCulture) : null;
+            long? next = cursor + returnedCount < totalCount ? (long?)(cursor + returnedCount) : null;
             return new PageInfo
             {
                 Total = totalCount,

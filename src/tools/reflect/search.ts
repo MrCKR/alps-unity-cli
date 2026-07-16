@@ -1,9 +1,11 @@
 import { defineTool } from "../define.js";
-import { runReflectHandler } from "./shared.js";
+import { searchReflect } from "../../services/reflect-service.js";
+import type { AnyJson } from "../../schema/any-json.js";
 
 export interface ReflectSearchRequest {
   query: string;
   reflectDir?: string;
+  unityVersion?: string;
   pageSize?: number;
   cursor?: string;
   format?: string;
@@ -20,13 +22,13 @@ export interface ReflectSearchResult {
   command: string;
   mode: string;
   requiresUnity: boolean;
-  source: Record<string, unknown>;
-  unityVersion: Record<string, unknown>;
-  assemblies: Record<string, unknown>[];
-  diagnostics: Record<string, unknown>[];
+  source: Record<string, AnyJson>;
+  unityVersion: Record<string, AnyJson>;
+  assemblies: Record<string, AnyJson>[];
+  diagnostics: Record<string, AnyJson>[];
   query: string;
   format: string;
-  items: Record<string, unknown>[];
+  items: Record<string, AnyJson>[];
   pageInfo: ReflectSearchPageInfo;
   text?: string;
 }
@@ -42,10 +44,11 @@ export default defineTool<ReflectSearchRequest, ReflectSearchResult>({
   supportStatus: "cli-only",
   target: "editor",
   examples: [
-    { description: "Search for Render-related members", argv: ["tools", "run", "reflect.search", "--input", "{\"query\":\"Render\",\"reflectDir\":\".cache/unity-reflect\",\"pageSize\":10}"] }
+    { description: "Search for Render-related members", argv: ["tools", "run", "reflect.search", "--input", "{\"query\":\"Render\",\"reflectDir\":\".cache/unity-reflect\",\"pageSize\":10}"] },
+    { description: "Search reflection data as text", argv: ["tools", "run", "reflect.search", "--input", "{\"query\":\"Camera\",\"reflectDir\":\".cache/unity-reflect\",\"pageSize\":10,\"format\":\"text\"}"] }
   ],
-  /** 搜索离线反射 cache 并保留旧分页语义；不连接 Unity Editor。 */
+  /** 搜索离线反射 cache 中的类型和成员；service 负责排序与 cursor 分页。 */
   execute(request, context) {
-    return runReflectHandler<ReflectSearchResult>("search", request.query, request as ReflectSearchRequest & Record<string, unknown>, context);
+    return searchReflect(request, { dataDir: context.dataDir ?? context.artifactDir });
   }
 });

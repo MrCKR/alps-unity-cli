@@ -6,8 +6,6 @@ namespace UnityCli
 {
     /// <summary>
     /// shader.info — 读取 Shader 资产摘要(含编译诊断)。
-    /// 对齐旧 ShaderInfo handler;只读。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class ShaderInfoTool : IUnityCliTool<ShaderInfoTool.Request, ShaderInfoTool.Result>
     {
@@ -40,11 +38,11 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var path = ShaderToolSupport.ResolveShaderPath(request.Path ?? request.Target);
             var shader = ShaderToolSupport.LoadShaderLikeAsset(path) as Shader;
-            return new Result { Shader = ShaderToolSupport.BuildShaderInfo(path, shader, false) };
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Shader = ShaderToolSupport.BuildShaderInfo(path, shader, false) });
         }
     }
 }

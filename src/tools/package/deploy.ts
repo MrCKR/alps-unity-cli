@@ -1,6 +1,5 @@
 import { resolve } from "node:path";
-import { refreshOpenEditor } from "../../cli-commands/package.js";
-import type { Runtime } from "../../cli-commands/types.js";
+import { refreshPackageEditor } from "../../cli-commands/package.js";
 import { deployPackageSource } from "../../package-manager.js";
 import { defineTool, type ToolContext } from "../define.js";
 
@@ -8,8 +7,6 @@ export interface PackageDeployRequest {
   source: string;
   packageName?: string;
   project?: string;
-  dryRun?: boolean;
-  bridgeEndpoint?: string;
 }
 
 export interface PackageDeployPlannedEffect {
@@ -55,46 +52,23 @@ export interface PackageDeployResult {
   nextActions?: string[];
 }
 
-type PackageDeployFlags = Record<string, string | boolean>;
-
-// 构造旧 package live refresh helper 使用的 CLI flag 形态。
-function buildPackageDeployFlags(request: PackageDeployRequest): PackageDeployFlags {
-  const flags: PackageDeployFlags = {};
-  if (request.project !== undefined) flags.project = request.project;
-  if (request.bridgeEndpoint !== undefined) flags["bridge-endpoint"] = request.bridgeEndpoint;
-  return flags;
-}
-
-// 复用旧 refreshOpenEditor 所需 runtime 字段，保持 live refresh 结果不漂移。
-function legacyRuntimeFromContext(context: ToolContext): Runtime {
-  return {
-    dataDir: context.dataDir ?? context.projectPath,
-    store: context.jobStore,
-    runner: context.jobRunner,
-    bridgeExecute: context.bridgeExecute,
-    bridgeEndpoint: context.bridgeEndpoint,
-    projectTools: context.projectTools,
-    projectContexts: context.projectContexts
-  } as Runtime;
-}
-
-// 部署本地 package 源目录；destructive 确认由 tools run 分发层在进入 defineTool 前完成。
+/** 部署本地 package 源目录；安全确认由统一 dispatcher 完成。 */
 async function runPackageDeploy(request: PackageDeployRequest, context: ToolContext): Promise<PackageDeployResult> {
   const projectPath = resolve(request.project ?? context.projectPath);
   const deployed = await deployPackageSource(projectPath, request.source, {
     packageName: request.packageName,
-    dryRun: request.dryRun === true
+    dryRun: context.execution.dryRun === true
   });
 
   if (deployed.dryRun) {
     return { action: "deploy", status: "dry_run", ...deployed };
   }
 
-  const liveRefresh = await refreshOpenEditor(
-    context.requestId,
-    buildPackageDeployFlags(request),
-    legacyRuntimeFromContext(context)
-  );
+  const liveRefresh = await refreshPackageEditor(context.requestId, context.bridgeEndpoint, {
+    dataDir: context.dataDir ?? context.projectPath,
+    bridgeExecute: context.bridgeExecute,
+    bridgeEndpoint: context.bridgeEndpoint
+  });
 
   return {
     action: "deploy",
@@ -119,7 +93,7 @@ export default defineTool<PackageDeployRequest, PackageDeployResult>({
   handler: "hybrid",
   supportStatus: "bridge-job",
   examples: [
-    { description: "Preview deploying a local package", argv: ["tools", "run", "package.deploy", "--input", "{\"source\":\"D:/workspace/my-package\"}", "--dry-run"] }
+    { description: "Preview deploying a local package", argv: ["tools", "run", "package.deploy", "--input", "{\"source\":\"./Packages/my-package\"}", "--dry-run"] }
   ],
   async execute(request, context) {
     return runPackageDeploy(request, context);

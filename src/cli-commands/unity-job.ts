@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, renameSync } from "node:fs";
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { getBoolean, getNumber, getString } from "../args.js";
@@ -6,53 +6,82 @@ import { failure, success } from "../output.js";
 import { discoverUnity } from "../platform.js";
 import type { CliResult, JobKind, JobRecord } from "../types.js";
 import type { Runtime } from "./types.js";
+import type { JobRunner } from "../job-runner.js";
+import { StructuredToolError } from "../tools/errors.js";
 
-/**
- * Check if the project is currently open in the Unity Editor by looking for the lock file.
- * Unity creates `Temp/UnityLockfile` when a project is open; stale files may remain after crashes.
- */
+/** 检查 UnityLockfile 是否被进程持有；可原子改名的残留文件不构成 active lock。 */
 export function isProjectLocked(projectPath: string): boolean {
-  return existsSync(resolve(projectPath, "Temp", "UnityLockfile"));
+  const lockPath = resolve(projectPath, "Temp", "UnityLockfile");
+  if (!existsSync(lockPath)) return false;
+  const probePath = `${lockPath}.unity-cli-probe-${process.pid}-${Date.now()}`;
+  let moved = false;
+  try {
+    renameSync(lockPath, probePath);
+    moved = true;
+    renameSync(probePath, lockPath);
+    moved = false;
+    return false;
+  } catch {
+    if (moved) {
+      try { renameSync(probePath, lockPath); } catch { }
+    }
+    return true;
+  }
 }
 
 const terminalStatuses = new Set(["succeeded", "failed", "cancelled", "timeout"]);
 
-export async function startUnityJob(kind: JobKind, flags: Record<string, string | boolean>, runtime: Runtime, requestId: string, unityArgs: string[], result: Record<string, unknown>): Promise<CliResult> {
-  const projectPath = resolve(getString(flags, "project") ?? process.cwd());
-  const unityPath = getString(flags, "unity") ?? discoverUnity();
+export interface UnityJobRequest {
+  kind: JobKind;
+  requestId: string;
+  project?: string;
+  unity?: string;
+  args: string[];
+  result: Record<string, unknown>;
+  timeoutMs?: number;
+  wait?: boolean;
+  waitTimeoutMs?: number;
+}
+
+/** 使用明确参数启动 Unity batchmode，并返回 job 业务数据。 */
+export async function runUnityJob(request: UnityJobRequest, runner: JobRunner): Promise<Record<string, unknown>> {
+  const projectPath = resolve(request.project ?? process.cwd());
+  const unityPath = request.unity ?? discoverUnity();
   if (!unityPath) {
-    return failure(requestId, "UNITY_NOT_FOUND", "Unity.exe was not found.", ["Pass --unity <path-to-Unity.exe> or set UNITY_EXE."]);
+    throw new StructuredToolError("UNITY_NOT_FOUND", "Unity.exe was not found.", ["Pass --unity <path-to-Unity.exe> or set UNITY_EXE."]);
   }
 
-  // Pre-flight: check if the project is locked by another Unity instance.
-  // Unity batchmode cannot open a project that is already open in the Editor;
-  // it will hang or exit immediately with empty output, leading to confusing timeouts.
   if (isProjectLocked(projectPath)) {
-    return failure(requestId, "UNITY_BUSY", `Cannot start Unity batchmode: the project is currently open in the Unity Editor (${projectPath}).`, [
+    throw new StructuredToolError("UNITY_BUSY", `Cannot start Unity batchmode: the project is currently open in the Unity Editor (${projectPath}).`, [
       "Close the Unity Editor and retry.",
-      "If Unity is not running, delete the stale lock file: <project>/Temp/UnityLockfile",
-      `Run 'unity_cli jobs status <jobId>' to check existing jobs.`
+      "Wait for the process holding <project>/Temp/UnityLockfile to exit, then retry",
+      "Run 'unity_cli jobs status <jobId>' to check existing jobs."
     ], {
       projectPath,
-      kind,
+      kind: request.kind,
       lockFilePath: resolve(projectPath, "Temp", "UnityLockfile")
     });
   }
 
-  if (typeof result.resultPath === "string") {
-    await mkdir(dirname(result.resultPath), { recursive: true });
+  if (typeof request.result.resultPath === "string") {
+    await mkdir(dirname(request.result.resultPath), { recursive: true });
   }
 
-  const timeoutMs = getNumber(flags, "timeout-ms");
-  const job = await runtime.runner.start({ kind, projectPath, unityPath, args: unityArgs, timeoutMs, requestId, result });
-  if (!getBoolean(flags, "wait")) {
-    return success(requestId, await summarizeJob(job));
-  }
+  const job = await runner.start({
+    kind: request.kind,
+    projectPath,
+    unityPath,
+    args: request.args,
+    timeoutMs: request.timeoutMs,
+    requestId: request.requestId,
+    result: request.result
+  });
+  if (!request.wait) return summarizeJob(job);
 
-  const waitTimeoutMs = getNumber(flags, "wait-timeout-ms") ?? timeoutMs ?? 600000;
-  const waited = await runtime.runner.wait(job.id, waitTimeoutMs);
+  const waitTimeoutMs = request.waitTimeoutMs ?? request.timeoutMs ?? 600000;
+  const waited = await runner.wait(job.id, waitTimeoutMs);
   if (!terminalStatuses.has(waited.status)) {
-    return failure(requestId, "E_EXECUTION_TIMEOUT", `Job did not reach a terminal state within ${waitTimeoutMs}ms.`, [
+    throw new StructuredToolError("E_EXECUTION_TIMEOUT", `Job did not reach a terminal state within ${waitTimeoutMs}ms.`, [
       `Run unity_cli jobs status ${job.id}.`,
       `Run unity_cli jobs logs ${job.id}.`,
       `Run unity_cli jobs cancel ${job.id} --yes if the Unity process should be stopped.`
@@ -65,7 +94,29 @@ export async function startUnityJob(kind: JobKind, flags: Record<string, string 
       domainReloadObserved: false
     });
   }
-  return success(requestId, await summarizeJob(waited));
+  return summarizeJob(waited);
+}
+
+export async function startUnityJob(kind: JobKind, flags: Record<string, string | boolean>, runtime: Runtime, requestId: string, unityArgs: string[], result: Record<string, unknown>): Promise<CliResult> {
+  try {
+    const data = await runUnityJob({
+      kind,
+      requestId,
+      project: getString(flags, "project"),
+      unity: getString(flags, "unity"),
+      args: unityArgs,
+      result,
+      timeoutMs: getNumber(flags, "timeout-ms"),
+      wait: getBoolean(flags, "wait"),
+      waitTimeoutMs: getNumber(flags, "wait-timeout-ms")
+    }, runtime.runner);
+    return success(requestId, data);
+  } catch (error) {
+    if (error instanceof StructuredToolError) {
+      return failure(requestId, error.code, error.message, error.nextActions, error.details);
+    }
+    throw error;
+  }
 }
 
 export async function summarizeJob(job: JobRecord): Promise<Record<string, unknown>> {

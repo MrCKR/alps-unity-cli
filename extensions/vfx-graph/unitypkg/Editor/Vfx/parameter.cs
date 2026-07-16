@@ -1,4 +1,5 @@
 #if UNITY_EDITOR
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEditor;
@@ -62,7 +63,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             VfxToolSupport.EnsureEditorReady("vfx.parameter");
             var visualEffectType = VfxToolSupport.RequireVisualEffectType();
@@ -73,7 +74,7 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException(
                     "E_VFX_COMPONENT_NOT_FOUND",
                     "VisualEffect component not found on target: " + GameObjectToolSupport.HierarchyPath(gameObject),
-                    "Pass add=true to vfx.effect or choose a target with VisualEffect.");
+                    "Use vfx.effect.add or choose a target with VisualEffect.");
             }
 
             var parameterType = (request.Type ?? "float").Trim().ToLowerInvariant();
@@ -143,16 +144,16 @@ namespace UnityCli
                     "Check the parameter name and type match the VFX Graph exposed parameters.");
             }
 
-            EditorUtility.SetDirty(component);
+            UnityCliSceneMutation.MarkSceneObjectDirty(component);
             VfxToolSupport.MarkSceneDirty(gameObject);
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
                 ParameterName = request.Name,
                 ParameterType = parameterType,
                 PlannedEffects = effects,
                 LogPath = ctx.LogPath
-            };
+            });
         }
 
         private static void Invoke(Type owner, Component component, string methodName, System.Type[] signature, params object[] args)

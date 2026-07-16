@@ -7,8 +7,6 @@ namespace UnityCli
 {
     /// <summary>
     /// prefab.create — 从源 GameObject 或 Prefab 资产创建新 Prefab。拒绝覆盖(除非 overwrite)。
-    /// 对齐旧 PrefabCreate handler;session-affecting(asset-write)。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class PrefabCreateTool : IUnityCliTool<PrefabCreateTool.Request, PrefabCreateTool.Result>
     {
@@ -37,10 +35,10 @@ namespace UnityCli
             Description = "Create a new Assets/*.prefab. When source is an Assets/*.prefab path, the asset is copied; otherwise source is resolved as a scene GameObject (name, hierarchy path, or instance id) and saved as a prefab. Refuses to overwrite an existing prefab unless overwrite=true.",
             Group = "prefab",
             Version = "1.0.0",
-            DestructiveHint = false,
+            DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",
-            PlayModeSupport = "session-affecting",
+            PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 30000,
             MaxTimeoutMs = 600000,
             Examples = new[]
@@ -49,7 +47,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             PrefabToolSupport.EnsureEditorNotBusy("prefab.create");
             var source = request.Source ?? request.Target;
@@ -78,13 +76,13 @@ namespace UnityCli
                     throw new UnityCliBridge.BridgeCommandException("E_PREFAB_CREATE_FAILED", "Failed to copy Prefab asset to: " + path, "Check destination path and Unity Console diagnostics.");
                 }
                 AssetDatabase.SaveAssets();
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Prefab = PrefabToolSupport.BuildPrefabInfo(path, PrefabToolSupport.LoadPrefabAsset(path), null, true),
                     Source = source,
                     Mode = "copy",
                     PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.create", Path = path, Source = source } }
-                };
+                });
             }
 
             // 源是场景 GameObject:保存为 Prefab
@@ -103,13 +101,13 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_PREFAB_CREATE_FAILED", "Failed to create Prefab at: " + path, "Check destination path, scene object validity and Unity Console diagnostics.");
             }
             AssetDatabase.SaveAssets();
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Prefab = PrefabToolSupport.BuildPrefabInfo(path, PrefabToolSupport.LoadPrefabAsset(path), null, true),
                 Source = source,
                 Mode = "scene",
                 PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.create", Path = path, Source = source } }
-            };
+            });
         }
     }
 }

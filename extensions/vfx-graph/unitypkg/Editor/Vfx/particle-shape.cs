@@ -41,7 +41,7 @@ namespace UnityCli
             Description = "Update the shape module of an existing ParticleSystem. Supports enabled, shapeType, radius, angle, arc, length, box axes, and randomDirection.",
             Group = "vfx",
             Version = "1.0.0",
-            DestructiveHint = true,
+            DestructiveHint = false,
             SideEffects = new[] { "particle-shape-edit" },
             Target = "editor",
             PlayModeSupport = "supported",
@@ -54,7 +54,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             VfxToolSupport.EnsureEditorReady("vfx.particle-shape");
             var particleSystem = VfxToolSupport.ResolveParticleSystem(request.Target);
@@ -100,19 +100,19 @@ namespace UnityCli
             }
             if (request.BoxX.HasValue)
             {
-                shape.box = new Vector3((float)request.BoxX.Value, shape.box.y, shape.box.z);
+                shape.scale = new Vector3((float)request.BoxX.Value, shape.scale.y, shape.scale.z);
             }
             if (request.BoxY.HasValue)
             {
-                shape.box = new Vector3(shape.box.x, (float)request.BoxY.Value, shape.box.z);
+                shape.scale = new Vector3(shape.scale.x, (float)request.BoxY.Value, shape.scale.z);
             }
             if (request.BoxZ.HasValue)
             {
-                shape.box = new Vector3(shape.box.x, shape.box.y, (float)request.BoxZ.Value);
+                shape.scale = new Vector3(shape.scale.x, shape.scale.y, (float)request.BoxZ.Value);
             }
             if (request.BoxX.HasValue || request.BoxY.HasValue || request.BoxZ.HasValue)
             {
-                effects.Add(VfxToolSupport.Effect("vfx.particle-shape", "box", VfxToolSupport.Number(shape.box.x) + "," + VfxToolSupport.Number(shape.box.y) + "," + VfxToolSupport.Number(shape.box.z)));
+                effects.Add(VfxToolSupport.Effect("vfx.particle-shape", "box", VfxToolSupport.Number(shape.scale.x) + "," + VfxToolSupport.Number(shape.scale.y) + "," + VfxToolSupport.Number(shape.scale.z)));
             }
             if (request.RandomDirection.HasValue)
             {
@@ -120,9 +120,9 @@ namespace UnityCli
                 effects.Add(VfxToolSupport.Effect("vfx.particle-shape", "randomDirection", VfxToolSupport.Bool(shape.randomDirection)));
             }
 
-            EditorUtility.SetDirty(particleSystem);
+            UnityCliSceneMutation.MarkSceneObjectDirty(particleSystem);
             VfxToolSupport.MarkSceneDirty(particleSystem.gameObject);
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Target = GameObjectToolSupport.BuildGameObjectRef(particleSystem.gameObject),
                 Shape = new VfxParticleShapeInfo
@@ -133,12 +133,12 @@ namespace UnityCli
                     Angle = shape.angle,
                     Arc = shape.arc,
                     Length = shape.length,
-                    Box = new Vector3Data(shape.box),
+                    Box = new Vector3Data(shape.scale),
                     RandomDirection = shape.randomDirection
                 },
                 PlannedEffects = effects,
                 LogPath = ctx.LogPath
-            };
+            });
         }
     }
 }

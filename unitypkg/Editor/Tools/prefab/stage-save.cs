@@ -6,8 +6,6 @@ namespace UnityCli
 {
     /// <summary>
     /// prefab.stage-save — 保存当前 Prefab Stage 的改动到磁盘。editor-only。
-    /// 对齐旧 PrefabStageSave handler;session-affecting(asset-write)。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class PrefabStageSaveTool : IUnityCliTool<PrefabStageSaveTool.Request, PrefabStageSaveTool.Result>
     {
@@ -29,7 +27,7 @@ namespace UnityCli
             Description = "Save the currently open Prefab Stage's edits back to its Assets/*.prefab. Requires a Prefab Stage to be open (run prefab.stage-open first). Optionally pass the expected path to guard against saving the wrong prefab.",
             Group = "prefab",
             Version = "1.0.0",
-            DestructiveHint = false,
+            DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",
             PlayModeSupport = "editor-only",
@@ -41,7 +39,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             PrefabToolSupport.EnsureEditorNotBusy("prefab.stage-save");
             var stage = PrefabToolSupport.RequireCurrentPrefabStage(request.Path);
@@ -51,11 +49,11 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_PREFAB_STAGE_SAVE_FAILED", "Failed to save Prefab Stage: " + path, "Check Unity Console and UnityCliBridge.log.");
             }
             AssetDatabase.SaveAssets();
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Stage = new PrefabStageInfo { Action = "save", Path = path, Dirty = false },
                 PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.stage-save", Path = path } }
-            };
+            });
         }
     }
 }

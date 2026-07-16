@@ -4,19 +4,19 @@ import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 export const assetBridgeSpecs: BridgeCommandSpec[] = [
   { group: "asset", command: "search", bridgeCommand: "project-tool.run", toolName: "asset.search", buildArgs: assetQueryArgs },
   { group: "asset", command: "info", bridgeCommand: "project-tool.run", toolName: "asset.info", buildArgs: assetQueryArgs },
-  { group: "asset", command: "create", bridgeCommand: "project-tool.run", toolName: "asset.create", buildArgs: assetMutationArgs },
-  { group: "asset", command: "mkdir", bridgeCommand: "project-tool.run", toolName: "asset.create", buildArgs: assetMutationArgs },
-  { group: "asset", command: "import", bridgeCommand: "project-tool.run", toolName: "asset.import", buildArgs: assetMutationArgs },
-  { group: "asset", command: "modify", bridgeCommand: "project-tool.run", toolName: "asset.modify", buildArgs: assetMutationArgs },
-  { group: "asset", command: "delete", bridgeCommand: "project-tool.run", toolName: "asset.delete", buildArgs: assetMutationArgs },
-  { group: "asset", command: "duplicate", bridgeCommand: "project-tool.run", toolName: "asset.duplicate", buildArgs: assetMutationArgs },
-  { group: "asset", command: "move", bridgeCommand: "project-tool.run", toolName: "asset.move", buildArgs: assetMutationArgs },
-  { group: "asset", command: "rename", bridgeCommand: "project-tool.run", toolName: "asset.rename", buildArgs: assetMutationArgs },
+  { group: "asset", command: "create", bridgeCommand: "project-tool.run", toolName: "asset.create", buildArgs: assetMutationArgs, destructiveHint: true },
+  { group: "asset", command: "mkdir", bridgeCommand: "project-tool.run", toolName: "asset.create", buildArgs: assetMutationArgs, destructiveHint: true },
+  { group: "asset", command: "import", bridgeCommand: "project-tool.run", toolName: "asset.import", buildArgs: assetMutationArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "asset", command: "modify", bridgeCommand: "project-tool.run", toolName: "asset.modify", buildArgs: assetMutationArgs, destructiveHint: true },
+  { group: "asset", command: "delete", bridgeCommand: "project-tool.run", toolName: "asset.delete", buildArgs: assetMutationArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "asset", command: "duplicate", bridgeCommand: "project-tool.run", toolName: "asset.duplicate", buildArgs: assetMutationArgs, destructiveHint: true },
+  { group: "asset", command: "move", bridgeCommand: "project-tool.run", toolName: "asset.move", buildArgs: assetMutationArgs, destructiveHint: true },
+  { group: "asset", command: "rename", bridgeCommand: "project-tool.run", toolName: "asset.rename", buildArgs: assetMutationArgs, destructiveHint: true },
   { group: "asset", command: "search-built-in", bridgeCommand: "project-tool.run", toolName: "asset.search-built-in", buildArgs: assetSearchBuiltInArgs },
   { group: "asset", command: "get-data", bridgeCommand: "project-tool.run", toolName: "asset.get-data", buildArgs: assetGetDataArgs },
   { group: "asset", command: "get-components", bridgeCommand: "project-tool.run", toolName: "asset.get-components", buildArgs: assetGetComponentsArgs },
   { group: "asset", command: "preview", bridgeCommand: "project-tool.run", toolName: "asset.preview", buildArgs: assetPreviewArgs },
-  { group: "asset", command: "refresh", bridgeCommand: "project-tool.run", toolName: "asset.refresh", buildArgs: assetRefreshArgs, supportsDryRun: true, supportsJob: true }
+  { group: "asset", command: "refresh", bridgeCommand: "project-tool.run", toolName: "asset.refresh", buildArgs: assetRefreshArgs, supportsJob: true, supportsDryRun: true }
 ];
 
 /** 读取 tools run --input 中无法映射为简单 flag 的结构化字段。 */
@@ -94,7 +94,6 @@ function assetRefreshArgs({ flags, positionalTarget }: Parameters<BridgeCommandS
   return compactArgs({
     path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "asset-path") ?? structured.path ?? structured.assetPath,
     forceUpdate: boolFlag(flags, "force-update") ?? structured.forceUpdate,
-    importRecursive: boolFlag(flags, "import-recursive") ?? structured.importRecursive,
-    dryRun: boolFlag(flags, "dry-run") ?? structured.dryRun
+    importRecursive: boolFlag(flags, "import-recursive") ?? structured.importRecursive
   });
 }

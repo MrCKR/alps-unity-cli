@@ -12,7 +12,6 @@ namespace UnityCli
     /// <summary>
     /// screenshot 域 IUnityCliTool 共享的基础设施 helper:渲染纹理、contact sheet、内联 base64。
     /// 仅供 screenshot 域自包含工具复用;复用 CameraToolSupport 的路径/格式/捕获 helper。
-    /// 设计依据:.plan/工具统一形态.md(自包含工具共享只读 helper)。
     /// </summary>
     public static class ScreenshotToolSupport
     {

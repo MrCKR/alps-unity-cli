@@ -1,20 +1,22 @@
 #if UNITY_EDITOR
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace UnityCli
 {
     /// <summary>
     /// component.get — 深读单个 Component,支持 paths/viewQuery 互斥的 token-safe 读取。
-    /// 对齐旧 ComponentGet handler;只读。通过 ctx.InputJson 构建 BridgeRequest 复用 ObjectRefResolver/ObjectSerializer。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class ComponentGetTool : IUnityCliTool<ComponentGetTool.Request, ComponentGetTool.Result>
     {
-        public sealed class Request
+        public sealed class Request : IUnityCliObjectReferenceInput, IUnityCliObjectSerializationInput
         {
             public int? InstanceId { get; set; }
             public string Path { get; set; }
             public string Name { get; set; }
+            public string Target { get; set; }
+            public string AssetPath { get; set; }
+            public string Guid { get; set; }
             public int? ComponentInstanceId { get; set; }
             public int? ComponentIndex { get; set; }
             public string Component { get; set; }
@@ -24,6 +26,8 @@ namespace UnityCli
             public bool? IncludeFields { get; set; }
             public bool? IncludeProperties { get; set; }
             public bool? DeepSerialization { get; set; }
+            public List<string> Paths { get; set; }
+            [UnityCliAnyJson] public object ViewQuery { get; set; }
             public string NamePattern { get; set; }
         }
 
@@ -33,7 +37,7 @@ namespace UnityCli
             public string TypeName { get; set; }
             public long ComponentInstanceId { get; set; }
             public GameObjectRef GameObject { get; set; }
-            public object Data { get; set; }
+            [UnityCliAnyJson] public object Data { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -55,22 +59,19 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            // 通过原始输入 JSON 构建 BridgeRequest,复用 ObjectRefResolver 组件解析(ObjectRefResolver 是 internal nested)
-            var bridgeRequest = UnityCliBridge.BridgeRequest.Parse(ctx.InputJson);
-            var component = UnityCliBridge.ObjectRefResolver.ResolveComponent(bridgeRequest);
-            var options = GameObjectToolSupport.BuildSerializerOptions(bridgeRequest);
-            var memberJson = UnityCliBridge.ObjectSerializer.Serialize(component, options);
-            return new Result
+            var component = UnityCliBridge.ObjectRefResolver.ResolveComponent(request);
+            var options = GameObjectToolSupport.BuildSerializerOptions(request);
+            var data = UnityCliBridge.ObjectSerializer.Serialize(component, options);
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Command = "component.get",
                 TypeName = component.GetType().FullName,
                 ComponentInstanceId = component.GetInstanceID(),
                 GameObject = GameObjectToolSupport.BuildGameObjectRef(component.gameObject),
-                // ObjectSerializer 输出为动态 JSON 树;解析为嵌套结构供框架序列化(IDictionary 支持)
-                Data = GameObjectToolSupport.ParseJsonToObject(memberJson)
-            };
+                Data = data
+            });
         }
     }
 }

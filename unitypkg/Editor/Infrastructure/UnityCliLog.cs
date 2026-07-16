@@ -1,28 +1,8 @@
 #if UNITY_EDITOR
 using System;
-using System.CodeDom.Compiler;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
-using System.Linq;
-using System.Net;
-using System.Reflection;
-using System.Text;
-using System.Text.RegularExpressions;
-using System.Threading;
-using System.Threading.Tasks;
-using Microsoft.CSharp;
-using UnityEditor;
-using UnityEditor.SceneManagement;
-using UnityEngine;
-using UnityEngine.Rendering;
-using UnityEngine.SceneManagement;
-using UnityEngine.UIElements;
-using UiButton = UnityEngine.UI.Button;
-using UiCanvasScaler = UnityEngine.UI.CanvasScaler;
-using UiGraphicRaycaster = UnityEngine.UI.GraphicRaycaster;
-using UiImage = UnityEngine.UI.Image;
-using UiText = UnityEngine.UI.Text;
 
 namespace UnityCli
 {
@@ -44,7 +24,8 @@ namespace UnityCli
             {
                 var path = RuntimeDiagnosticsPath();
                 Directory.CreateDirectory(Path.GetDirectoryName(path));
-                File.WriteAllText(path, RuntimeDiagnosticsJson(phase));
+                // 诊断文件是实际 artifact 边界，因此在此处进行唯一一次序列化。
+                File.WriteAllText(path, UnityCliSerializer.Serialize(RuntimeDiagnosticsData(phase)));
                 WriteLog("bridge_runtime_loaded phase=" + phase + " listenerId=" + ListenerId + " diagnosticsFingerprint=" + BridgeDiagnosticsFingerprint + " assemblyMvid=" + AssemblyMvid() + " packageName=" + BridgePackageName() + " packageAssetPath=" + BridgePackageAssetPath() + " packageResolvedPath=" + BridgePackageResolvedPath());
             }
             catch (Exception exception)
@@ -53,29 +34,15 @@ namespace UnityCli
             }
         }
 
-        private static string RuntimeDiagnosticsJson(string phase)
+        private static Dictionary<string, object> RuntimeDiagnosticsData(string phase)
         {
-            return new UnityCliJsonWriter().BeginObject()
-                .Prop("ok", true)
-                .Prop("phase", phase)
-                .Prop("diagnosticsFingerprint", BridgeDiagnosticsFingerprint)
-                .Prop("listenerId", ListenerId)
-                .Prop("loadedAt", BridgeLoadedAtUtc.ToString("O", CultureInfo.InvariantCulture))
-                .Prop("bridgeLogPath", LogPath())
-                .Prop("port", (long)port)
-                .PropObject("assembly", w =>
-                {
-                    w.Prop("fullName", typeof(UnityCliBridge).Assembly.FullName)
-                        .Prop("location", AssemblyLocation(typeof(UnityCliBridge).Assembly))
-                        .Prop("moduleVersionId", AssemblyMvid());
-                })
-                .PropObject("package", w =>
-                {
-                    w.Prop("name", BridgePackageName())
-                        .Prop("assetPath", BridgePackageAssetPath())
-                        .Prop("resolvedPath", BridgePackageResolvedPath());
-                })
-                .EndObject().ToString();
+            return new Dictionary<string, object>
+            {
+                { "ok", true }, { "phase", phase }, { "diagnosticsFingerprint", BridgeDiagnosticsFingerprint }, { "listenerId", ListenerId },
+                { "loadedAt", BridgeLoadedAtUtc.ToString("O", CultureInfo.InvariantCulture) }, { "bridgeLogPath", LogPath() }, { "port", (long)port },
+                { "assembly", new Dictionary<string, object> { { "fullName", typeof(UnityCliBridge).Assembly.FullName }, { "location", AssemblyLocation(typeof(UnityCliBridge).Assembly) }, { "moduleVersionId", AssemblyMvid() } } },
+                { "package", new Dictionary<string, object> { { "name", BridgePackageName() }, { "assetPath", BridgePackageAssetPath() }, { "resolvedPath", BridgePackageResolvedPath() } } }
+            };
         }
 
         private static void WriteLog(string line)
@@ -86,9 +53,7 @@ namespace UnityCli
                 Directory.CreateDirectory(Path.GetDirectoryName(path));
                 File.AppendAllText(path, DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture) + " " + line + Environment.NewLine);
             }
-            catch
-            {
-            }
+            catch { }
         }
     }
 }

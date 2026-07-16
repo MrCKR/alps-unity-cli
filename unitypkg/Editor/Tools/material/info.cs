@@ -5,8 +5,6 @@ namespace UnityCli
 {
     /// <summary>
     /// material.info — 读取 Material 摘要(shader/属性/纹理引用/依赖),支持 namePattern 轻量读取。
-    /// 对齐旧 MaterialInfo handler;只读。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class MaterialInfoTool : IUnityCliTool<MaterialInfoTool.Request, MaterialInfoTool.Result>
     {
@@ -42,16 +40,16 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var path = MaterialToolSupport.RequireMaterialPath(request.Path ?? request.Material);
             var material = MaterialToolSupport.LoadMaterialAsset(path);
             var nameFilter = MaterialToolSupport.ParseNameFilter(request.NamePattern);
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Material = MaterialToolSupport.BuildMaterialInfo(path, material, nameFilter),
                 NameFilterApplied = nameFilter != null
-            };
+            });
         }
     }
 }

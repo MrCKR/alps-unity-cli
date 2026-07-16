@@ -17,18 +17,21 @@ const EXPECTED_CINEMACHINE_TOOLS = [
   "cinemachine.body",
   "cinemachine.aim",
   "cinemachine.noise",
-  "cinemachine.brain",
+  "cinemachine.brain.ensure",
+  "cinemachine.brain.status",
   "cinemachine.force-camera",
   "cinemachine.release-override",
-  "cinemachine.extension"
+  "cinemachine.extension.list",
+  "cinemachine.extension.add",
+  "cinemachine.extension.remove"
 ] as const;
 
-test("Cinemachine extension manifest exposes exactly 13 single-action tools", () => {
+test("Cinemachine extension manifest exposes exactly 16 single-action tools", () => {
   const contributionNames = builtinExtensionToolContributions()
     .filter((tool) => tool.extensionId === "cinemachine")
     .map((tool) => tool.name)
     .sort();
-  assert.equal(contributionNames.length, 13);
+  assert.equal(contributionNames.length, 16);
   assert.deepEqual(contributionNames, [...EXPECTED_CINEMACHINE_TOOLS].sort());
 
   const manifest = builtinExtensionMetadata().find((entry) => entry.id === "cinemachine");
@@ -48,7 +51,7 @@ test("Cinemachine manifest contributions document package gate and extension own
 
 test("Cinemachine bridge specs route through project-tool.run with toolName", () => {
   const specs = bridgeCommandRegistry.specs().filter((spec) => spec.group === "cinemachine");
-  assert.equal(specs.length, 13);
+  assert.equal(specs.length, 16);
   assert.ok(specs.every((spec) => spec.bridgeCommand === "project-tool.run"));
   assert.ok(specs.every((spec) => spec.toolsOnly === true));
   assert.deepEqual(specs.map((spec) => spec.toolName).sort(), [...EXPECTED_CINEMACHINE_TOOLS].sort());
@@ -67,11 +70,11 @@ test("Cinemachine tools have matching command contracts", () => {
     assert.equal(contract?.group, "cinemachine", `${name}: contract group mismatch`);
     assert.equal(contract?.handler_type, name === "cinemachine.create" ? "hybrid" : "bridge", `${name}: contract handler mismatch`);
     assert.equal(contract?.csharp_handler, "present", `${name}: C# handler should be present`);
-    assert.equal(contract?.destructive, name === "cinemachine.extension", `${name}: destructive contract mismatch`);
+    assert.equal(contract?.destructive, false, `${name}: Cinemachine session operations must be non-destructive`);
   }
 });
 
-test("Cinemachine C# extension is self-contained and no longer uses legacy Commands registration", () => {
+test("Cinemachine C# extension uses self-contained typed tool files", () => {
   assert.equal(existsSync("extensions/cinemachine/unitypkg/Editor/Commands/CinemachineCommands.cs"), false);
 
   const registrySource = readFileSync("unitypkg/Editor/Bridge/BridgeCommandRegistry.cs", "utf8");
@@ -82,7 +85,14 @@ test("Cinemachine C# extension is self-contained and no longer uses legacy Comma
   assert.match(supportSource, /FindReleaseCameraOverrideMethod/);
   assert.match(supportSource, /FindPublicInstanceMethod\(Type ownerType, string methodName, params Type\[] parameterTypes\)/);
   assert.match(supportSource, /GetPipelineComponent\(Component camera, string stage\)/);
+  assert.match(supportSource, /DestroyCinemachineComponent/);
+  assert.match(supportSource, /AddCinemachineComponent/);
+  assert.match(supportSource, /MakeGenericMethod\(newType\)\.Invoke\(camera, null\)/);
   assert.match(supportSource, /ForceOverrideAvailable/);
+  assert.match(supportSource, /ComponentTypeAliases/);
+  assert.match(supportSource, /"CinemachineRotationComposer", new\[\] \{ "CinemachineComposer" \}/);
+  assert.match(supportSource, /"CinemachineFollow", new\[\] \{ "CinemachineTransposer" \}/);
+  assert.match(supportSource, /"CinemachineSplineDolly", new\[\] \{ "CinemachineTrackedDolly" \}/);
 
   const expectedFiles = [
     "ping.cs",
@@ -94,12 +104,24 @@ test("Cinemachine C# extension is self-contained and no longer uses legacy Comma
     "body.cs",
     "aim.cs",
     "noise.cs",
-    "brain.cs",
-    "extension.cs",
+    "brain-ensure.cs",
+    "brain-status.cs",
+    "extension-list.cs",
+    "extension-add.cs",
+    "extension-remove.cs",
     "force-camera.cs",
     "release-override.cs"
   ];
   for (const file of expectedFiles) {
     assert.equal(existsSync(`extensions/cinemachine/unitypkg/Editor/Cinemachine/${file}`), true, `${file} should exist`);
   }
+});
+
+test("cinemachine.create rejects an unsupported preset before scene mutation", () => {
+  const source = readFileSync("extensions/cinemachine/unitypkg/Editor/Cinemachine/create.cs", "utf8");
+  const validationIndex = source.indexOf("E_CINEMACHINE_PRESET_INVALID");
+  const mutationIndex = source.indexOf("new GameObject(cameraName)");
+  assert.ok(validationIndex >= 0, "invalid preset must return a stable error code");
+  assert.ok(mutationIndex > validationIndex, "preset validation must precede GameObject creation");
+  assert.match(source, /Pass one of: follow, third_person, freelook, dolly, static, top_down, side_scroller/);
 });

@@ -24,13 +24,13 @@ namespace UnityCli
             Examples = new[] { new ToolExample { Description = "Check profiler status", Input = new Request { } } }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx) => new Result
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default) => new System.Threading.Tasks.ValueTask<Result>(new Result
         {
             Profiler = ProfilerToolSupport.BuildProfilerState(),
             Modules = ProfilerToolSupport.BuildProfilerModules(),
             Platform = Application.platform.ToString(),
             FrameTimingAvailable = ProfilerToolSupport.IsFrameTimingAvailable()
-        };
+        });
     }
 }
 #endif

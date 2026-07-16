@@ -1,39 +1,20 @@
-# URP 工具
+# URP Tools
 
-Universal Render Pipeline 扩展工具集。提供渲染器特性管理、Volume 配置和管线设置。
+The extension contributes independent tools for the active Universal Render Pipeline asset.
 
-## 工具列表
+| Tool | Description |
+| --- | --- |
+| `urp.feature.list` | List Renderer Features. |
+| `urp.feature.add` | Add one Renderer Feature. |
+| `urp.feature.toggle` | Enable or disable one Renderer Feature. |
+| `urp.feature.configure` | Set one Renderer Feature property. |
+| `urp.feature.remove` | Remove one Renderer Feature. |
+| `urp.volume.list` | List scene-session volumes. |
+| `urp.volume.create` | Create a scene-session volume. |
+| `urp.volume.info` | Read one scene-session volume. |
+| `urp.volume.add-effect` | Add one effect to an in-memory profile. |
+| `urp.volume.set` | Set one effect parameter. |
+| `urp.settings.get` | Read active pipeline asset settings. |
+| `urp.settings.set` | Set one active pipeline asset setting. |
 
-| 工具 | 说明 |
-|------|------|
-| `urp.feature` | 列出/添加/移除/切换/配置 URP 渲染器特性 |
-| `urp.volume` | 列出/创建/配置 URP Volume 组件及其 Profile 效果 |
-| `urp.settings` | 读写 URP 管线资产设置（renderScale、HDR、MSAA、阴影距离等） |
-
-## 前置条件
-
-- Unity 项目需使用 URP 作为当前渲染管线
-- 需安装 `com.unity.render-pipelines.universal` 包
-
-## 发现与使用
-
-```bash
-# 列出 URP 工具
-unity-cli tools group list urp
-
-# 列出渲染器特性
-unity-cli urp feature --action list
-
-# 创建全局 URP Volume
-unity-cli urp volume --action create --is-global --name GlobalVolume
-
-# 读取管线设置
-unity-cli urp settings
-```
-
-## 依赖缺失时的行为
-
-当目标 Unity 项目未使用 URP 时：
-- 工具标记为 `unavailable`
-- 返回 `E_URP_PACKAGE_NOT_FOUND` 错误码
-- `nextActions` 提示安装 `com.unity.render-pipelines.universal`
+The project must install `com.unity.render-pipelines.universal` and select an active `UniversalRenderPipelineAsset`.

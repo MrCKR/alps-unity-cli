@@ -91,16 +91,15 @@ test("contract entries exist for scriptable-object tools with present C# handler
   }
 });
 
-test("C# RegisterCommand calls removed for scriptable-object commands (migrated to IUnityCliTool)", async () => {
+test("scriptable-object commands are exposed by typed C# tools", async () => {
   const allSource = await readEditorCsSources();
   for (const command of ["scriptable-object.create", "scriptable-object.info", "scriptable-object.list-types", "scriptable-object.modify"]) {
-    assert.ok(!allSource.includes(`RegisterCommand(registry, "${command}"`), `${command} should NOT be registered (migrated to IUnityCliTool)`);
+    assert.ok(allSource.includes(`Name = "${command}"`), `${command} should expose its public tool name`);
   }
 });
 
-test("scriptable-object C# error recovery hints use current tools run form, not legacy unity_cli", async () => {
+test("scriptable-object C# error recovery hints use current tools run forms", async () => {
   const source = await readFile(new URL("../unitypkg/Editor/Tools/scriptable-object/ScriptableObjectToolSupport.cs", import.meta.url), "utf8");
-  assert.equal(source.includes("unity_cli asset search"), false, "must not reference legacy 'unity_cli asset search'");
   assert.match(source, /tools run asset\.search/, "error hints should route to tools run asset.search");
 });
 

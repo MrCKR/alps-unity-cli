@@ -1,22 +1,14 @@
-import type { CliError } from "./output.js";
+import type { Envelope, ToolError } from "./protocol/envelope.js";
 
 export type JobKind = "refresh" | "test" | "build" | "package" | "code" | "bridge" | "profiler" | "probuilder";
 
-export type JobStatus = "queued" | "running" | "succeeded" | "failed" | "cancelled" | "timeout";
+export type JobStatus = "queued" | "running" | "cancelling" | "succeeded" | "failed" | "cancelled" | "timeout";
 
-export type { CliError };
+/** CLI 内部名称仅作为唯一 wire envelope 的类型别名。 */
+export type CliResult<T = unknown, TDetails = unknown> = Envelope<T, TDetails>;
 
-export interface CliResult<T = unknown> {
-  ok: boolean;
-  requestId: string;
-  curInstances?: string;
-  data?: T;
-  warnings?: string[];
-  logsRef?: string;
-  jobId?: string;
-  durationMs?: number;
-  error?: CliError;
-}
+/** CLI 内部名称仅作为唯一 wire error 的类型别名。 */
+export type CliError<TDetails = unknown> = ToolError<TDetails>;
 
 export interface JobRecord {
   id: string;

@@ -31,23 +31,24 @@ namespace UnityCli.Contexts.Project
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "static"
+            RefreshBehavior = "static",
+            Examples = new[] { new ContextExample { Description = "Read project metadata", Input = new Request { } } }
         };
 
         /// <summary>
         /// 读取项目路径、项目名、Unity 版本、运行平台和 Assets 路径；只读，不触发 import/refresh。
-        /// </summary>
-        public Result Read(Request request, UnityCliProjectToolContext ctx)
+    /// </summary>
+        public System.Threading.Tasks.ValueTask<Result> ReadAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var projectRoot = Path.GetDirectoryName(Application.dataPath);
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 ProjectRoot = projectRoot,
                 ProjectName = Path.GetFileName(projectRoot),
                 UnityVersion = Application.unityVersion,
                 Platform = Application.platform.ToString(),
                 AssetsPath = Application.dataPath
-            };
+            });
         }
     }
 }

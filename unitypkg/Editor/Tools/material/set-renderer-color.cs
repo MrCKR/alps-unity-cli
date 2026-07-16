@@ -9,8 +9,6 @@ namespace UnityCli
 {
     /// <summary>
     /// material.set-renderer-color — 通过 MaterialPropertyBlock 设置 Renderer 实例颜色,不改共享 Material。
-    /// 对齐旧 MaterialSetRendererColor handler;session-affecting(scene-modify)。支持 dryRun。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class MaterialSetRendererColorTool : IUnityCliTool<MaterialSetRendererColorTool.Request, MaterialSetRendererColorTool.Result>
     {
@@ -22,7 +20,6 @@ namespace UnityCli
             public string Color { get; set; }
             public string Value { get; set; }
             public int? Slot { get; set; }
-            public bool? DryRun { get; set; }
         }
 
         public sealed class Result
@@ -56,7 +53,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             MaterialToolSupport.EnsureEditorNotBusy("material.set-renderer-color");
             var target = request.Target ?? request.Name;
@@ -70,9 +67,9 @@ namespace UnityCli
             }
             var color = MaterialToolSupport.ParseColor(colorValue);
             var slot = request.Slot;
-            if (request.DryRun == true)
+            if (ctx.DryRun)
             {
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Command = "material.set-renderer-color",
                     DryRun = true,
@@ -80,15 +77,15 @@ namespace UnityCli
                     Property = propertyName,
                     Color = new MaterialColor { R = color.r, G = color.g, B = color.b, A = color.a },
                     PlannedEffects = new List<MaterialPlannedEffect> { new MaterialPlannedEffect { Type = "material.set-renderer-color", Target = GameObjectToolSupport.HierarchyPath(gameObject), Property = propertyName } }
-                };
+                });
             }
             var block = new MaterialPropertyBlock();
             if (slot.HasValue) renderer.GetPropertyBlock(block, slot.Value); else renderer.GetPropertyBlock(block);
             block.SetColor(propertyName, color);
             if (slot.HasValue) renderer.SetPropertyBlock(block, slot.Value); else renderer.SetPropertyBlock(block);
-            EditorUtility.SetDirty(renderer);
-            EditorSceneManager.MarkSceneDirty(gameObject.scene);
-            return new Result
+            UnityCliSceneMutation.MarkSceneObjectDirty(renderer);
+            UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Command = "material.set-renderer-color",
                 Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
@@ -96,7 +93,7 @@ namespace UnityCli
                 Slot = slot,
                 Color = new MaterialColor { R = color.r, G = color.g, B = color.b, A = color.a },
                 PlannedEffects = new List<MaterialPlannedEffect> { new MaterialPlannedEffect { Type = "material.set-renderer-color", Target = GameObjectToolSupport.HierarchyPath(gameObject), Property = propertyName } }
-            };
+            });
         }
     }
 }

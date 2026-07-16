@@ -3,8 +3,6 @@ namespace UnityCli
 {
     /// <summary>
     /// texture.info — 读取纹理资产摘要与导入设置。
-    /// 对齐旧 TextureInfo handler;只读。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class TextureInfoTool : IUnityCliTool<TextureInfoTool.Request, TextureInfoTool.Result>
     {
@@ -38,15 +36,15 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var path = TextureToolSupport.ResolveTexturePath(request.Path ?? request.Target);
             var texture = TextureToolSupport.LoadTextureAsset(path);
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Texture = TextureToolSupport.BuildTextureInfo(path, texture),
                 ImportSettings = TextureToolSupport.BuildTextureImportSettings(TextureToolSupport.RequireTextureImporter(path))
-            };
+            });
         }
     }
 }

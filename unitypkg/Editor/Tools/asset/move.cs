@@ -6,8 +6,6 @@ namespace UnityCli
 {
     /// <summary>
     /// asset.move — 移动资产到新 Assets/ 路径。
-    /// 对齐旧 AssetMove handler;session-affecting(asset-write)。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class AssetMoveTool : IUnityCliTool<AssetMoveTool.Request, AssetMoveTool.Result>
     {
@@ -32,10 +30,10 @@ namespace UnityCli
             Description = "Move an existing Assets/ asset to a new Assets/ path through AssetDatabase.MoveAsset. Use asset.rename to change only the filename within the same directory.",
             Group = "asset",
             Version = "1.0.0",
-            DestructiveHint = false,
+            DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",
-            PlayModeSupport = "session-affecting",
+            PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 30000,
             MaxTimeoutMs = 600000,
             Examples = new[]
@@ -44,7 +42,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             AssetToolSupport.EnsureEditorNotBusy("asset.move");
             var source = AssetToolSupport.RequireExistingAssetPath(request.Source ?? request.Path);
@@ -56,12 +54,12 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_ASSET_MOVE_FAILED", "Failed to move asset: " + error, "Check source, destination and Unity Console diagnostics.");
             }
             AssetDatabase.Refresh();
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Asset = AssetToolSupport.BuildAssetDetail(destination),
                 Source = source,
                 PlannedEffects = new List<AssetPlannedEffect> { new AssetPlannedEffect { Type = "asset.move", Path = destination, Source = source } }
-            };
+            });
         }
     }
 }

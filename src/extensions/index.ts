@@ -35,11 +35,15 @@ export {
   URP_MANIFEST,
   HDRP_MANIFEST,
   BUILTIN_EXTENSION_MANIFESTS
-} from "./registry-data.js";
+} from "./.generated-registry-data.js";
 export {
   readInstalledUnityPackages,
   resolveExtensionAvailabilityForProject
 } from "./project-resolver.js";
+export {
+  checkExtensionBundles,
+  readExtensionPhysicalStates
+} from "./installer.js";
 export {
   registerBuiltinExtensionContributions,
   isBuiltinExtensionContributionsRegistered

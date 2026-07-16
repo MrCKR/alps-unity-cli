@@ -8,8 +8,6 @@ namespace UnityCli
 {
     /// <summary>
     /// go.create — 创建场景 GameObject,可选 Unity 原型/父级/简单变换/标签/层/active。
-    /// 对齐旧 GameObjectCreate handler;session-affecting。父级/原型/标签/层在变更前校验。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class GameObjectCreateTool : IUnityCliTool<GameObjectCreateTool.Request, GameObjectCreateTool.Result>
     {
@@ -58,7 +56,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             GameObjectToolSupport.EnsureEditorNotBusy("go.create");
             var name = request.Name ?? request.Target ?? "GameObject";
@@ -80,13 +78,13 @@ namespace UnityCli
             if (parentTransform != null) gameObject.transform.SetParent(parentTransform, false);
             GameObjectToolSupport.ApplyGameObjectMutations(gameObject, null, request.Active, request.TagValue, request.LayerValue,
                 request.X, request.Y, request.Z, request.RotationX, request.RotationY, request.RotationZ, request.ScaleX, request.ScaleY, request.ScaleZ);
-            Undo.RegisterCreatedObjectUndo(gameObject, "unity_cli go.create");
-            EditorSceneManager.MarkSceneDirty(gameObject.scene);
-            return new Result
+            UnityCliSceneMutation.RegisterCreatedObject(gameObject, "go.create");
+            UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 GameObject = GameObjectToolSupport.BuildGameObjectDetail(gameObject),
                 PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "go.create", Target = GameObjectToolSupport.HierarchyPath(gameObject) } }
-            };
+            });
         }
     }
 }

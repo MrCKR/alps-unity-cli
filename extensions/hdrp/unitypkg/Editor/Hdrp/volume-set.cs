@@ -1,0 +1,26 @@
+#if UNITY_EDITOR
+using System.Collections.Generic;
+
+namespace UnityCli
+{
+    /// <summary>hdrp.volume.set：修改 HDRP Volume 内存 profile 中的效果参数。</summary>
+    public sealed class HdrpVolumeSetTool : IUnityCliTool<HdrpVolumeSetTool.Request, HdrpVolumeSetTool.Result>
+    {
+        public sealed class Request { [UnityCliRequired] public string Target { get; set; } [UnityCliRequired] public string EffectType { get; set; } [UnityCliRequired] public string Property { get; set; } [UnityCliRequired] public string Value { get; set; } }
+        public sealed class Result { public string Command { get; set; } public GameObjectRef Target { get; set; } public string EffectType { get; set; } public string Property { get; set; } public string Value { get; set; } public List<HdrpPlannedEffect> PlannedEffects { get; set; } public string LogPath { get; set; } }
+        public ToolDescriptor Describe() => new()
+        {
+            Name = "hdrp.volume.set", Summary = "Set a scalar serialized parameter on a scene-session HDRP Volume effect.",
+            Description = "Sets property on effectType in the target HDRP Volume's in-memory profile. property is a SerializedProperty path such as intensity.m_Value. Only scalar serialized values are supported. The profile and scene remain unsaved. Requires com.unity.render-pipelines.high-definition and an active HDRenderPipelineAsset.",
+            Group = "hdrp", Version = "1.0.0", DestructiveHint = false, RequiresPackages = new[] { "com.unity.render-pipelines.high-definition" }, SideEffects = new[] { "scene-modify", "volume-profile-edit" }, Target = "editor", PlayModeSupport = "session-affecting", DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
+            Examples = new[] { new ToolExample { Description = "Set Bloom intensity", Input = new Request { Target = "GlobalVolume", EffectType = "Bloom", Property = "intensity.m_Value", Value = "1.5" } } }
+        };
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
+        {
+            GameObjectToolSupport.EnsureEditorNotBusy("hdrp.volume.set"); HdrpToolSupport.EnsureHdrpAvailable();
+            var target = HdrpVolumeOperations.Set(request.Target, request.EffectType, request.Property, request.Value, "E_HDRP", HdrpToolSupport.FindVolumeEffectType, HdrpToolSupport.SetSerializedPropertyValue);
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Command = "hdrp.volume.set", Target = GameObjectToolSupport.BuildGameObjectRef(target), EffectType = request.EffectType, Property = request.Property, Value = request.Value, PlannedEffects = new List<HdrpPlannedEffect> { new HdrpPlannedEffect { Type = "hdrp.volume.set", Target = GameObjectToolSupport.HierarchyPath(target), EffectType = request.EffectType, Property = request.Property, Value = request.Value } }, LogPath = ctx.LogPath });
+        }
+    }
+}
+#endif

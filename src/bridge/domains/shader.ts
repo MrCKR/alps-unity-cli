@@ -4,14 +4,14 @@ import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 export const shaderBridgeSpecs: BridgeCommandSpec[] = [
   { group: "shader", command: "info", bridgeCommand: "project-tool.run", toolName: "shader.info", buildArgs: shaderArgs },
   { group: "shader", command: "read", bridgeCommand: "project-tool.run", toolName: "shader.read", buildArgs: shaderArgs },
-  { group: "shader", command: "create", bridgeCommand: "project-tool.run", toolName: "shader.create", buildArgs: shaderArgs },
-  { group: "shader", command: "update", bridgeCommand: "project-tool.run", toolName: "shader.update", buildArgs: shaderArgs },
-  { group: "shader", command: "delete", bridgeCommand: "project-tool.run", toolName: "shader.delete", buildArgs: shaderArgs, supportsDryRun: true },
+  { group: "shader", command: "create", bridgeCommand: "project-tool.run", toolName: "shader.create", buildArgs: shaderArgs, destructiveHint: true },
+  { group: "shader", command: "update", bridgeCommand: "project-tool.run", toolName: "shader.update", buildArgs: shaderArgs, destructiveHint: true },
+  { group: "shader", command: "delete", bridgeCommand: "project-tool.run", toolName: "shader.delete", buildArgs: shaderArgs, destructiveHint: true, supportsDryRun: true },
   { group: "shader", command: "list", bridgeCommand: "project-tool.run", toolName: "shader.list", buildArgs: shaderListArgs },
   { group: "shader", command: "get-data", bridgeCommand: "project-tool.run", toolName: "shader.get-data", buildArgs: shaderArgs }
 ];
 
-// 读取 tools run --input 中无法映射为简单 flag 的结构化字段（content/source/name 等）
+// 读取 tools run --input 中无法映射为简单 flag 的结构化字段。
 function structuredInput(flags: BridgeFlags): Record<string, unknown> {
   const raw = typeof flags.__structuredInput === "string" ? flags.__structuredInput : undefined;
   if (!raw) return {};
@@ -38,11 +38,11 @@ function numberField(flags: BridgeFlags, key: string): number | undefined {
   return typeof value === "number" ? value : undefined;
 }
 
-// 解析 shader 源码内容：优先 --content / --content-file，再回退结构化 content / source 别名
+// 解析 shader 源码内容：支持 --content、--content-file 与结构化 content。
 async function resolveShaderContent(flags: BridgeFlags): Promise<string | undefined> {
   const flagged = await contentFlag(flags);
   if (flagged !== undefined) return flagged;
-  return stringField(flags, "content") ?? stringField(flags, "source");
+  return stringField(flags, "content");
 }
 
 async function shaderArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Promise<Record<string, unknown>> {

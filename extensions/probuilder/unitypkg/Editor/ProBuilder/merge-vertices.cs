@@ -21,7 +21,8 @@ namespace UnityCli.ProBuilder
 
         public sealed class Result
         {
-            public long MergedVertexCount { get; set; }
+            public long MergedToIndex { get; set; }
+            public long SourceVertexCount { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -31,6 +32,7 @@ namespace UnityCli.ProBuilder
             Description = "Merge selected vertices on a ProBuilder mesh into a single vertex. Requires at least 2 vertex indices. When collapseToFirst is true, merged vertices collapse to the first selected index.",
             Group = "probuilder",
             DestructiveHint = false,
+            SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 10000,
@@ -43,27 +45,32 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            var go = ProBuilderInput.ResolveTarget(request.Target);
             if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("merge-vertices", "No ProBuilderMesh on target.");
 
-            int[] vertexIndices = request.VertexIndices?.Select(i => (int)i).ToArray();
+            int[] vertexIndices = request.VertexIndices?.Select(i => (int)i).Distinct().ToArray();
+            var vertexCount = ProBuilderReflection.GetVertexCount(mesh);
             if (vertexIndices == null || vertexIndices.Length < 2)
-                throw ProBuilderErrors.SchemaInvalid("At least 2 vertexIndices required for merge-vertices.");
+                throw ProBuilderErrors.SchemaInvalid("At least 2 unique vertexIndices are required for merge-vertices.");
+            if (vertexCount < 0 || vertexIndices.Any(index => index < 0 || index >= vertexCount))
+                throw ProBuilderErrors.SchemaInvalid("vertexIndices contains an invalid vertex index.");
 
             Undo.RecordObject(go, "ProBuilder Merge Vertices");
-            var merged = ProBuilderReflection.MergeVerticesWithCollapse(mesh, vertexIndices, request.CollapseToFirst);
+            var mergedToIndex = ProBuilderReflection.MergeVerticesWithCollapse(mesh, vertexIndices, request.CollapseToFirst);
+            if (mergedToIndex < 0)
+                throw ProBuilderErrors.OperationFailed("merge-vertices", "ProBuilder 5.x VertexEditing.MergeVertices failed.");
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
-            return new Result { MergedVertexCount = merged };
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { MergedToIndex = mergedToIndex, SourceVertexCount = vertexIndices.Length });
         }
     }
 }

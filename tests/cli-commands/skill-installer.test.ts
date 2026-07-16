@@ -70,7 +70,7 @@ test("parseAgentList throws for unknown agent kind", () => {
   });
 });
 
-test("parseAgentList rejects legacy .agent directory name", () => {
+test("parseAgentList rejects unsupported .agent directory name", () => {
   assert.throws(() => parseAgentList(".agent"), (error: unknown) => {
     assert.ok(error instanceof SkillInstallerError);
     assert.equal(error.code, "UNKNOWN_AGENT_KIND");

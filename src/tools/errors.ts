@@ -9,8 +9,29 @@ export class StructuredToolError extends Error {
     readonly code: string,
     message: string,
     readonly nextActions: string[] = [],
-    readonly details?: Record<string, unknown>
+    readonly details?: Record<string, unknown>,
+    readonly transient?: boolean,
+    readonly retryAfterMs?: number
   ) {
     super(message);
+  }
+
+  /** 跨内部抽象边界转发完整错误语义，不丢失 wire retry 元数据。 */
+  static from(error: {
+    code: string;
+    message: string;
+    nextActions?: string[];
+    details?: unknown;
+    transient?: boolean;
+    retryAfterMs?: number;
+  }): StructuredToolError {
+    return new StructuredToolError(
+      error.code,
+      error.message,
+      error.nextActions ?? [],
+      error.details as Record<string, unknown> | undefined,
+      error.transient,
+      error.retryAfterMs
+    );
   }
 }

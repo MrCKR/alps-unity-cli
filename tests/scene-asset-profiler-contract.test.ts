@@ -3,7 +3,23 @@ import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { findCommandContract } from "../src/contracts/command-contract.js";
-import { contractToolNames, readCsSources } from "./helpers/csharp-test-helpers.js";
+import { contractToolNames, listCsFiles, readCsSources } from "./helpers/csharp-test-helpers.js";
+
+const ONE_CAPABILITY_DOMAINS = ["scene", "asset", "build", "animation", "package", "graphics", "physics", "profiler"];
+
+async function oneCapabilityToolNames(domain: string): Promise<string[]> {
+  const files = await listCsFiles(new URL(`../unitypkg/Editor/Tools/${domain}/`, import.meta.url));
+  const names: string[] = [];
+  for (const file of files) {
+    const source = await readFile(file, "utf8");
+    if (!/:\s*IUnityCliTool\s*</.test(source)) continue;
+    assert.equal((source.match(/:\s*IUnityCliTool\s*</g) ?? []).length, 1, `${file.pathname} must implement exactly one Tool`);
+    const name = /ToolDescriptor\s+Describe\(\)\s*=>\s*new\(\)\s*\{\s*Name\s*=\s*"([a-z0-9][a-z0-9.-]*)"/.exec(source)?.[1];
+    assert.ok(name, `${file.pathname} must expose a Tool descriptor name`);
+    if (name.split(".")[0] === domain) names.push(name);
+  }
+  return names.sort();
+}
 
 /**
  * 跨域契约测试收敛为两类：
@@ -18,7 +34,8 @@ test("cross-domain new tools keep contract entries with present C# handlers", ()
     "asset.search-built-in", "asset.get-data", "asset.get-components", "asset.preview", "asset.refresh",
     "shader.list", "shader.get-data", "texture.generate",
     "console.get", "console.clear", "editor.selection.set", "editor.active-tool.set", "package.embed",
-    "build.scenes", "build.platform", "build.profiles", "build.settings",
+    "build.scene.list", "build.scene.add", "build.scene.remove", "build.scene.enable", "build.scene.disable",
+    "build.platform.get", "build.platform.set", "build.profile.list", "build.profile.create", "build.profile.switch", "build.profile.modify", "build.settings.get", "build.settings.set",
     "physics.raycast-all", "physics.linecast", "physics.shapecast", "physics.validate", "physics.assign-material"
   ];
   for (const name of newTools) {
@@ -30,16 +47,22 @@ test("cross-domain new tools keep contract entries with present C# handlers", ()
 
 test("asset/search scene/hierarchy go/find and editor/console sources keep current implementation", async () => {
   const assetSource = await readCsSources(new URL("../unitypkg/Editor/Tools/asset/", import.meta.url));
+  const assetSupportSource = await readFile(new URL("../unitypkg/Editor/Tools/asset/AssetToolSupport.cs", import.meta.url), "utf8");
   const sceneSource = await readCsSources(new URL("../unitypkg/Editor/Tools/scene/", import.meta.url));
   const goSource = await readCsSources(new URL("../unitypkg/Editor/Tools/go/", import.meta.url));
-  const editorSource = await readFile(new URL("../unitypkg/Editor/Tools/editor/action-tools.cs", import.meta.url), "utf8");
+  const consoleSource = await readFile(new URL("../unitypkg/Editor/Tools/console/get.cs", import.meta.url), "utf8");
+  const menuSource = await readFile(new URL("../unitypkg/Editor/Tools/editor/menu.cs", import.meta.url), "utf8");
 
   assert.match(assetSource, /AssetToolSupport\.NormalizeAssetSearchFolders\(request\.Path, request\.SearchInFolders\)/);
   assert.match(assetSource, /AssetDatabase\.FindAssets\(resolvedFilter, searchInFolders\.Length == 0 \? null : searchInFolders\)/);
-  assert.match(assetSource, /class AssetGetDataTool : IUnityCliTool[\s\S]*Data = GameObjectToolSupport\.ParseJsonToObject\(memberJson\)/);
+  assert.match(assetSource, /class AssetGetDataTool : IUnityCliTool/);
   assert.match(assetSource, /class AssetGetComponentsTool : IUnityCliTool[\s\S]*PageInfo = new AssetPageInfo/);
   assert.match(assetSource, /class AssetRefreshTool : IUnityCliTool[\s\S]*AssetDatabase\.(Refresh|ImportAsset)/);
   assert.match(assetSource, /class AssetPreviewTool : IUnityCliTool[\s\S]*AssetPreview\.GetAssetPreview/);
+  const assetExists = assetSupportSource.slice(assetSupportSource.indexOf("public static bool AssetExists"), assetSupportSource.indexOf("public static void CreateAssetDirectory"));
+  assert.match(assetExists, /File\.Exists\(fullPath\)/);
+  assert.match(assetExists, /AssetDatabase\.LoadMainAssetAtPath\(assetPath\) != null/);
+  assert.doesNotMatch(assetExists, /AssetPathToGUID/);
   assert.doesNotMatch(assetSource, /unity_cli asset/);
 
   assert.match(sceneSource, /class SceneHierarchyTool : IUnityCliTool</);
@@ -51,30 +74,29 @@ test("asset/search scene/hierarchy go/find and editor/console sources keep curre
   assert.match(goSource, /SearchGameObjects\(searchMethod, searchTerm, includeInactive\)[\s\S]*PageInfo = new GoPageInfo/);
   assert.match(goSource, /ResolveUniqueTarget[\s\S]*FindObjectsOfType<GameObject>\(true\)/);
   assert.match(goSource, /ResolveComponentType\(string componentName\)/);
-  assert.match(goSource, /ValidateMutationInputs[\s\S]*ResolveModifyTargets\(request\)[\s\S]*Undo\.RecordObject/);
+  assert.match(goSource, /ValidateMutationInputs[\s\S]*ResolveModifyTargets\(request\)[\s\S]*UnityCliSceneMutation\.RecordObject/);
   assert.match(goSource, /GameObject look-at requires a lookAt target[\s\S]*go\.look-at --input/);
   assert.doesNotMatch(goSource, /unity_cli scene hierarchy/);
 
-  assert.match(editorSource, /class EditorConsoleTool : IUnityCliTool[\s\S]*Use console\.clear to clear\./);
-  assert.match(editorSource, /class EditorMenuTool : IUnityCliTool[\s\S]*ExecuteMenuItem\(r\.Path\)/);
-  assert.match(editorSource, /class ConsoleGetTool : IUnityCliTool</);
-  assert.match(editorSource, /Skip\(cursor\)\.Take\(count\)/);
-  assert.doesNotMatch(editorSource, /unity_cli editor menu/);
+  assert.match(consoleSource, /class ConsoleGetTool : IUnityCliTool/);
+  assert.match(consoleSource, /Skip\(cursor\)\.Take\(count\)/);
+  assert.match(menuSource, /class EditorMenuTool : IUnityCliTool[\s\S]*ExecuteMenuItem\(r\.Path\)/);
+  assert.doesNotMatch(menuSource, /unity_cli editor menu/);
 });
 
 test("build/animation/package sources keep current typed-result flows", async () => {
-  const scenesSource = await readFile(new URL("../unitypkg/Editor/Tools/build/scenes.cs", import.meta.url), "utf8");
-  const settingsSource = await readFile(new URL("../unitypkg/Editor/Tools/build/settings.cs", import.meta.url), "utf8");
-  const clipSource = await readFile(new URL("../unitypkg/Editor/Tools/animation/clip-tools.cs", import.meta.url), "utf8");
-  const supportSource = await readFile(new URL("../unitypkg/Editor/Tools/animation/AnimationToolSupport.cs", import.meta.url), "utf8");
-  const runtimeSource = await readFile(new URL("../unitypkg/Editor/Tools/animation/animator-runtime.cs", import.meta.url), "utf8");
-  const controllerSource = await readFile(new URL("../unitypkg/Editor/Tools/animation/controller-tools.cs", import.meta.url), "utf8");
+  const buildSource = await readCsSources(new URL("../unitypkg/Editor/Tools/build/", import.meta.url));
+  const animationSource = await readCsSources(new URL("../unitypkg/Editor/Tools/animation/", import.meta.url));
+  const controllerSource = await readCsSources(new URL("../unitypkg/Editor/Tools/controller/", import.meta.url));
   const packageBridgeSpec = await readFile(new URL("../src/bridge/domains/package.js", import.meta.url), "utf8");
-  const packageSource = await readFile(new URL("../unitypkg/Editor/Tools/editor/action-tools.cs", import.meta.url), "utf8");
-  const animationSource = `${clipSource}\n${supportSource}\n${runtimeSource}\n${controllerSource}`;
+  const packageSource = await readFile(new URL("../unitypkg/Editor/Tools/package/embed.cs", import.meta.url), "utf8");
 
-  assert.match(scenesSource, /class BuildScenesTool : IUnityCliTool[\s\S]*return new Result \{ Command = "build\.scenes"/);
-  assert.match(settingsSource, /class BuildSettingsTool : IUnityCliTool[\s\S]*return BuildResult\(\)/);
+  assert.match(buildSource, /class BuildSceneListTool : IUnityCliTool/);
+  assert.match(buildSource, /Name = "build\.scene\.add"/);
+  assert.match(buildSource, /Name = "build\.profile\.create"/);
+  assert.match(buildSource, /class BuildSettingsGetTool : IUnityCliTool/);
+  assert.match(buildSource, /Name = "build\.settings\.set"/);
+  assert.doesNotMatch(buildSource, /public string Action/);
 
   assert.match(animationSource, /AnimationUtility\.GetCurveBindings\(clip\)/);
   assert.match(animationSource, /AnimationUtility\.GetAnimationEvents\(clip\)/);
@@ -82,33 +104,34 @@ test("build/animation/package sources keep current typed-result flows", async ()
   assert.match(animationSource, /AnimationUtility\.SetAnimationClipSettings\(clip, settings\)/);
   assert.match(animationSource, /if \(r\.LoopTime\.HasValue\) settings\.loopTime = r\.LoopTime\.Value/);
   assert.match(animationSource, /if \(!string\.IsNullOrEmpty\(r\.WrapMode\) && System\.Enum\.TryParse<WrapMode>\(r\.WrapMode, true, out var wm\)\) clip\.wrapMode = wm/);
-  assert.match(animationSource, /public static AnimatorControllerParameter\[\] AnimatorParameterDefinitions\(Animator animator\)/);
-  assert.match(animationSource, /return controller == null \|\| controller\.parameters == null \? new AnimatorControllerParameter\[0\] : controller\.parameters;/);
-  assert.match(animationSource, /var hasRuntime = animator\.parameterCount > 0;/);
-  assert.match(animationSource, /var effectiveLayerCount = animator\.layerCount > 0 \? animator\.layerCount : controllerLayers\.Length;/);
-  assert.match(animationSource, /ControllerCreateBlendTree1DTool[\s\S]*E_STATE_EXISTS/);
-  assert.match(animationSource, /ControllerCreateBlendTree2DTool[\s\S]*E_STATE_EXISTS/);
-  assert.match(animationSource, /ControllerGetInfoTool[\s\S]*Parameters = parameters/);
+  assert.match(controllerSource, /ControllerCreateBlendTree1DTool[\s\S]*E_STATE_EXISTS/);
+  assert.match(controllerSource, /ControllerCreateBlendTree2DTool[\s\S]*E_STATE_EXISTS/);
+  assert.match(controllerSource, /ControllerGetInfoTool[\s\S]*Parameters = parameters/);
   assert.doesNotMatch(controllerSource, /controller get-info <path>/);
   assert.doesNotMatch(controllerSource, /animation\.clip action=create/);
 
-  assert.match(packageBridgeSpec, /packageEmbedArgs[\s\S]*packageId/);
+  assert.match(packageBridgeSpec, /packageEmbedArgs[\s\S]*stringField\(flags, "packageId"\)/);
   assert.match(packageBridgeSpec, /dryRun: boolFlag\(flags, "dry-run"\) \?\? boolField\(flags, "dryRun"\)/);
   assert.match(packageSource, /class PackageEmbedTool : IUnityCliTool/);
   assert.match(packageSource, /PackageClient\.Embed is not available/);
   assert.match(packageSource, /PlannedEffects = new List<EditorPlannedEffect> \{ new EditorPlannedEffect \{ Type = "package\.embed"/);
 });
 
-test("group counts for build/graphics/physics stay aligned with contract discovery", () => {
-  assert.ok(contractToolNames("build").includes("build.scenes"));
-  assert.ok(contractToolNames("build").includes("build.platform"));
-  assert.ok(contractToolNames("build").includes("build.profiles"));
-  assert.ok(contractToolNames("build").includes("build.settings"));
-  assert.equal(contractToolNames("graphics").length, 28);
-  assert.ok(contractToolNames("physics").includes("physics.raycast-all"));
-  assert.ok(contractToolNames("physics").includes("physics.linecast"));
-  assert.ok(contractToolNames("physics").includes("physics.shapecast"));
-  assert.ok(contractToolNames("physics").includes("physics.validate"));
+test("one-capability source, contract, and bridge spec sets are bidirectionally aligned", async () => {
+  for (const domain of ONE_CAPABILITY_DOMAINS) {
+    const sourceNames = await oneCapabilityToolNames(domain);
+    const contractNames = contractToolNames(domain)
+      .filter((name) => findCommandContract(name)?.csharp_handler === "present");
+    const specNames = [...new Set(bridgeCommandRegistry.specs()
+      .filter((spec) => spec.group === domain && spec.toolName)
+      .map((spec) => spec.toolName!))]
+      .sort();
+    assert.deepEqual(contractNames, sourceNames, `${domain} contract must enumerate current one-capability files`);
+    assert.deepEqual(specNames, sourceNames, `${domain} bridge spec must enumerate current one-capability files`);
+  }
+  assert.equal(contractToolNames("build").filter((name) => findCommandContract(name)?.csharp_handler === "present").length, 13);
+  assert.equal(contractToolNames("graphics").filter((name) => findCommandContract(name)?.csharp_handler === "present").length, 26);
+  assert.equal(contractToolNames("physics").filter((name) => findCommandContract(name)?.csharp_handler === "present").length, 15);
 });
 
 test("bridge specs resolve for all new domain 4-8 tools", () => {
@@ -124,10 +147,10 @@ test("bridge specs resolve for all new domain 4-8 tools", () => {
     ["shader", "list", "project-tool.run"],
     ["texture", "generate", "project-tool.run"],
     ["console", "get", "project-tool.run", "console.get"],
-    ["package", "embed", "package.embed"],
+    ["package", "embed", "project-tool.run", "package.embed"],
     ["editor", "selection-set", "project-tool.run", "editor.selection.set"],
-    ["build", "scenes", "project-tool.run"],
-    ["build", "profiles", "project-tool.run"],
+    ["build", "scene-list", "project-tool.run", "build.scene.list"],
+    ["build", "profile-list", "project-tool.run", "build.profile.list"],
     ["physics", "validate", "project-tool.run", "physics.validate"],
     ["physics", "assign-material", "project-tool.run", "physics.assign-material"]
   ] as const;

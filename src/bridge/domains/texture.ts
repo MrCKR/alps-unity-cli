@@ -3,12 +3,12 @@ import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const textureBridgeSpecs: BridgeCommandSpec[] = [
   { group: "texture", command: "info", bridgeCommand: "project-tool.run", toolName: "texture.info", buildArgs: textureArgs },
-  { group: "texture", command: "create", bridgeCommand: "project-tool.run", toolName: "texture.create", buildArgs: textureArgs },
+  { group: "texture", command: "create", bridgeCommand: "project-tool.run", toolName: "texture.create", buildArgs: textureArgs, destructiveHint: true },
   { group: "texture", command: "sprite", bridgeCommand: "project-tool.run", toolName: "texture.sprite", buildArgs: textureArgs },
-  { group: "texture", command: "modify", bridgeCommand: "project-tool.run", toolName: "texture.modify", buildArgs: textureArgs, supportsDryRun: true },
-  { group: "texture", command: "delete", bridgeCommand: "project-tool.run", toolName: "texture.delete", buildArgs: textureArgs, supportsDryRun: true },
+  { group: "texture", command: "modify", bridgeCommand: "project-tool.run", toolName: "texture.modify", buildArgs: textureArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "texture", command: "delete", bridgeCommand: "project-tool.run", toolName: "texture.delete", buildArgs: textureArgs, destructiveHint: true, supportsDryRun: true },
   { group: "texture", command: "import-settings", bridgeCommand: "project-tool.run", toolName: "texture.import-settings", buildArgs: textureArgs },
-  { group: "texture", command: "generate", bridgeCommand: "project-tool.run", toolName: "texture.generate", buildArgs: textureGenerateArgs, supportsDryRun: true }
+  { group: "texture", command: "generate", bridgeCommand: "project-tool.run", toolName: "texture.generate", buildArgs: textureGenerateArgs, destructiveHint: true, supportsDryRun: true }
 ];
 
 // 读取 tools run --input 中无法映射为简单 flag 的结构化字段（width/height/enum/bool 等）

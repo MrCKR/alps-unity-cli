@@ -146,7 +146,15 @@ namespace UnityCli
             return null;
         }
 
-        // ── Render Stats 版本适配 ──
+        /// <summary>构造 ReflectionProbe 摘要 DTO。</summary>
+        public static ReflectionProbeInfo BuildReflectionProbeInfo(ReflectionProbe probe)
+        {
+#if UNITY_2023_2_OR_NEWER
+            return new ReflectionProbeInfo { Mode = probe.mode.ToString(), Resolution = probe.resolution, Bounces = probe.bounces, Hdr = probe.hdr, Importance = probe.importance, Size = new Vector3Data(probe.size), Center = new Vector3Data(probe.center) };
+#else
+            return new ReflectionProbeInfo { Mode = probe.mode.ToString(), Resolution = probe.resolution, Bounces = RenderSettings.reflectionBounces, Hdr = probe.hdr, Importance = probe.importance, Size = new Vector3Data(probe.size), Center = new Vector3Data(probe.center) };
+#endif
+        }
 
         private struct RenderStatsSnapshot
         {

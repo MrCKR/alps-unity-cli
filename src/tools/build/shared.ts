@@ -9,6 +9,13 @@ export interface BuildJobIdRequest {
   job?: string;
 }
 
+export interface BuildJobCancellation {
+  mode: string;
+  description: string;
+  cancelCommand: string;
+  domainReloadObserved: boolean;
+}
+
 /** 解析 build jobId,保持 build.status/build.cancel 的别名语义一致。 */
 export function resolveBuildJobId(request: BuildJobIdRequest): string {
   const value = request.jobId ?? request.id ?? request.job;

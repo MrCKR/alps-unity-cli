@@ -6,8 +6,6 @@ namespace UnityCli
 {
     /// <summary>
     /// scene.list-opened — 列出当前已加载(打开)场景:name/path/buildIndex/loaded/dirty/isActive。
-    /// 只读工具,对齐旧 SceneListOpened handler。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class SceneListOpenedTool : IUnityCliTool<SceneListOpenedTool.Request, SceneListOpenedTool.Result>
     {
@@ -51,7 +49,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var scenes = new List<OpenedScene>();
             var active = SceneManager.GetActiveScene();
@@ -68,12 +66,12 @@ namespace UnityCli
                     IsActive = scene == active
                 });
             }
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Scenes = scenes,
                 Count = (long)SceneManager.sceneCount,
                 ActiveScene = active.name
-            };
+            });
         }
     }
 }

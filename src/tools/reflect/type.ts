@@ -1,5 +1,6 @@
 import { defineTool } from "../define.js";
-import { runReflectHandler } from "./shared.js";
+import { getReflectType } from "../../services/reflect-service.js";
+import type { AnyJson } from "../../schema/any-json.js";
 
 export interface ReflectTypeRequest {
   name: string;
@@ -12,13 +13,13 @@ export interface ReflectTypeResult {
   command: string;
   mode: string;
   requiresUnity: boolean;
-  source: Record<string, unknown>;
-  unityVersion: Record<string, unknown>;
-  assemblies: Record<string, unknown>[];
-  diagnostics: Record<string, unknown>[];
+  source: Record<string, AnyJson>;
+  unityVersion: Record<string, AnyJson>;
+  assemblies: Record<string, AnyJson>[];
+  diagnostics: Record<string, AnyJson>[];
   name: string;
   format: string;
-  type: Record<string, unknown>;
+  type: Record<string, AnyJson>;
   text?: string;
 }
 
@@ -33,10 +34,11 @@ export default defineTool<ReflectTypeRequest, ReflectTypeResult>({
   supportStatus: "cli-only",
   target: "editor",
   examples: [
-    { description: "Read a type's member names", argv: ["tools", "run", "reflect.type", "--input", "{\"name\":\"UnityEngine.Camera\",\"reflectDir\":\".cache/unity-reflect\",\"format\":\"text\"}"] }
+    { description: "Read a type's member names", argv: ["tools", "run", "reflect.type", "--input", "{\"name\":\"UnityEngine.Camera\",\"reflectDir\":\".cache/unity-reflect\",\"format\":\"text\"}"] },
+    { description: "Read a type as JSON", argv: ["tools", "run", "reflect.type", "--input", "{\"name\":\"UnityEngine.Camera\",\"reflectDir\":\".cache/unity-reflect\",\"format\":\"json\"}"] }
   ],
-  /** 读取离线反射 cache 中的 type 详情；不连接 Unity Editor。 */
+  /** 读取离线反射 cache 中的 type 详情；service 只执行文件读取和筛选。 */
   execute(request, context) {
-    return runReflectHandler<ReflectTypeResult>("type", request.name, request as ReflectTypeRequest & Record<string, unknown>, context);
+    return getReflectType(request, { dataDir: context.dataDir ?? context.artifactDir });
   }
 });

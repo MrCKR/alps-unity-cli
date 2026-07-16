@@ -7,29 +7,31 @@ namespace UnityCli
 {
     /// <summary>
     /// object.modify — 修改任意 Unity Object:支持 pathPatches 与 jsonPatch (Merge Patch)。
-    /// 内置工具(原 RegisterCommand 形态)迁移为 IUnityCliTool 自包含。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class ObjectModifyTool : IUnityCliTool<ObjectModifyTool.Request, ObjectModifyTool.Result>
     {
-        public sealed class Request
+        public sealed class Request : IUnityCliObjectReferenceInput, IUnityCliObjectSerializationInput
         {
-            public long? InstanceId { get; set; }
+            public int? InstanceId { get; set; }
             public string AssetPath { get; set; }
             public string Guid { get; set; }
             public string Path { get; set; }
             public string Name { get; set; }
-            public string PathPatches { get; set; }
-            public string JsonPatch { get; set; }
+            public string Target { get; set; }
+            public int? ComponentInstanceId { get; set; }
+            public int? ComponentIndex { get; set; }
+            public string Component { get; set; }
+            public string ComponentType { get; set; }
+            [UnityCliAnyJson] public List<object> PathPatches { get; set; }
+            [UnityCliAnyJson] public object JsonPatch { get; set; }
             public int? MaxDepth { get; set; }
             public int? MaxArrayItems { get; set; }
             public bool? IncludeFields { get; set; }
             public bool? IncludeProperties { get; set; }
             public bool? DeepSerialization { get; set; }
             public List<string> Paths { get; set; }
-            public object ViewQuery { get; set; }
+            [UnityCliAnyJson] public object ViewQuery { get; set; }
             public string NamePattern { get; set; }
-            public bool DryRun { get; set; }
         }
 
         public sealed class Result
@@ -39,9 +41,9 @@ namespace UnityCli
             public long InstanceId { get; set; }
             public string TypeName { get; set; }
             public List<string> ChangedPaths { get; set; }
-            public object UpdatedData { get; set; }
+            [UnityCliAnyJson] public object UpdatedData { get; set; }
             public List<string> Logs { get; set; }
-            public object Audit { get; set; }
+            [UnityCliAnyJson] public object Audit { get; set; }
             public List<PlannedEffect> PlannedEffects { get; set; }
         }
 
@@ -69,32 +71,33 @@ namespace UnityCli
             MaxTimeoutMs = 600000,
             Examples = new[]
             {
-                new ToolExample { Description = "Modify by pathPatches", Input = new Request { InstanceId = 12345, PathPatches = "[{\"path\":\"m_Color\",\"value\":\"#FF0000\"}]" } }
+                new ToolExample { Description = "Modify by pathPatches", Input = new Request { Path = "Player", PathPatches = new List<object> { new Dictionary<string, object> { { "path", "name" }, { "value", "PlayerModified" } } } } }
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             ObjectToolSupport.EnsureEditorNotBusy("object.modify");
-            var bridgeRequest = UnityCliBridge.BridgeRequest.Parse(ctx.InputJson);
-            var target = UnityCliBridge.ObjectRefResolver.ResolveObject(bridgeRequest);
+            var target = UnityCliBridge.ObjectRefResolver.ResolveObject(request);
+            if (EditorApplication.isPlaying && EditorUtility.IsPersistent(target))
+            {
+                throw new UnityCliBridge.BridgeCommandException("E_TOOL_PLAYMODE_UNAVAILABLE", "object.modify cannot modify persistent assets during Play Mode.", "Target a scene object or exit Play Mode before modifying an asset.");
+            }
 
-            var pathPatchesJson = bridgeRequest.RawJsonArg("pathPatches");
-            var jsonPatchJson = bridgeRequest.RawJsonArg("jsonPatch");
-            if (string.IsNullOrEmpty(pathPatchesJson) && string.IsNullOrEmpty(jsonPatchJson))
+            if ((request.PathPatches == null || request.PathPatches.Count == 0) && request.JsonPatch == null)
             {
                 throw new UnityCliBridge.BridgeCommandException("E_OBJECT_PATCH_REQUIRED",
                     "object.modify requires pathPatches or jsonPatch.",
                     "Pass --input '{\"instanceId\":123,\"pathPatches\":[{\"path\":\"m_Color\",\"value\":\"#FF0000\"}]}' or jsonPatch merge.");
             }
 
-            var hasPathPatches = !string.IsNullOrEmpty(pathPatchesJson);
-            var hasJsonPatch = !string.IsNullOrEmpty(jsonPatchJson);
+            var hasPathPatches = request.PathPatches != null && request.PathPatches.Count > 0;
+            var hasJsonPatch = request.JsonPatch != null;
 
             // dry-run 预览:不修改对象
-            if (bridgeRequest.DryRun)
+            if (ctx.DryRun)
             {
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Command = "object.modify",
                     DryRun = true,
@@ -104,18 +107,18 @@ namespace UnityCli
                     {
                         new PlannedEffect { Type = "object.modify", Target = target.name, HasPathPatches = hasPathPatches, HasJsonPatch = hasJsonPatch }
                     }
-                };
+                });
             }
 
             // 执行顺序:jsonPatch → pathPatches
             UnityCliBridge.ObjectPatch.PatchResult result = null;
-            if (!string.IsNullOrEmpty(jsonPatchJson))
+            if (request.JsonPatch != null)
             {
-                result = UnityCliBridge.ObjectPatch.ApplyMergePatch(target, jsonPatchJson);
+                result = UnityCliBridge.ObjectPatch.ApplyMergePatch(target, request.JsonPatch);
             }
-            if (!string.IsNullOrEmpty(pathPatchesJson))
+            if (hasPathPatches)
             {
-                var pathResult = UnityCliBridge.ObjectPatch.ApplyPathPatches(target, pathPatchesJson);
+                var pathResult = UnityCliBridge.ObjectPatch.ApplyPathPatches(target, request.PathPatches);
                 if (result == null) result = pathResult;
                 else
                 {
@@ -124,25 +127,25 @@ namespace UnityCli
                 }
             }
 
-            // 标记脏(场景对象)
-            if (target is Component c && c.gameObject != null) EditorUtility.SetDirty(c);
-            if (target is GameObject go) EditorUtility.SetDirty(go);
-            if (target is UnityEngine.Object uo) EditorUtility.SetDirty(uo);
+            // Edit Mode 中同时持久化 asset dirty；Play Mode helper 不写任何 Editor dirty 状态。
+            UnityCliSceneMutation.MarkSceneObjectDirty(target);
+            if (target is Component c && c.gameObject != null) UnityCliSceneMutation.MarkSceneDirty(c.gameObject.scene);
+            if (target is GameObject go) UnityCliSceneMutation.MarkSceneDirty(go.scene);
 
             // 回读更新后数据
-            var options = ObjectToolSupport.BuildSerializerOptions(bridgeRequest);
-            var afterJson = UnityCliBridge.ObjectSerializer.Serialize(target, options);
+            var options = ObjectToolSupport.BuildSerializerOptions(request);
+            var updatedData = UnityCliBridge.ObjectSerializer.Serialize(target, options);
 
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Command = "object.modify",
                 InstanceId = target.GetInstanceID(),
                 TypeName = target.GetType().FullName,
                 ChangedPaths = result.ChangedPaths,
-                UpdatedData = UnityCliToolJson.Parse(afterJson),
+                UpdatedData = updatedData,
                 Logs = result.Logs,
-                Audit = UnityCliToolJson.Parse(UnityCliBridge.ObjectPatch.ResultToJson(result))
-            };
+                Audit = UnityCliBridge.ObjectPatch.ResultData(result)
+            });
         }
     }
 }

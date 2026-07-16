@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
+using UnityEngine;
 using UnityEditor;
 
 namespace UnityCli
@@ -30,7 +31,7 @@ namespace UnityCli
             Description = "Update the main module of an existing ParticleSystem. Supports duration, start lifetime, start speed, start size, start color, rotation, gravity, maxParticles, loop, playOnAwake, simulationSpace, and scalingMode.",
             Group = "vfx",
             Version = "1.0.0",
-            DestructiveHint = true,
+            DestructiveHint = false,
             SideEffects = new[] { "particle-main-edit" },
             Target = "editor",
             PlayModeSupport = "supported",
@@ -43,7 +44,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             VfxToolSupport.EnsureEditorReady("vfx.particle-main");
             var particleSystem = VfxToolSupport.ResolveParticleSystem(request.Target);
@@ -57,15 +58,15 @@ namespace UnityCli
 
             var effects = new List<VfxPlannedEffect>();
             VfxToolSupport.ApplyParticleMainFields(particleSystem, request, "vfx.particle-main", effects);
-            EditorUtility.SetDirty(particleSystem);
+            UnityCliSceneMutation.MarkSceneObjectDirty(particleSystem);
             VfxToolSupport.MarkSceneDirty(particleSystem.gameObject);
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Target = GameObjectToolSupport.BuildGameObjectRef(particleSystem.gameObject),
                 ParticleSystem = VfxToolSupport.BuildParticleSystemInfo(particleSystem),
                 PlannedEffects = effects,
                 LogPath = ctx.LogPath
-            };
+            });
         }
     }
 }

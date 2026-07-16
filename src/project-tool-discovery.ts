@@ -2,6 +2,7 @@ import { getBoolean, getString } from "./args.js";
 import { executeBridgeCommand, type BridgeRuntime } from "./bridge/index.js";
 import { inferPlayModeSupport, normalizeToolMetadata, type PlayModeSupport, type ResolvedToolMetadata, type ToolHandler, type ToolMetadata, type ToolSupportStatus } from "./tools/metadata/index.js";
 import type { CliResult } from "./types.js";
+import type { AnyJson } from "./schema/any-json.js";
 
 export interface ProjectToolRuntime extends Partial<BridgeRuntime> {
   projectTools?: ToolMetadata[];
@@ -70,14 +71,19 @@ export function projectDescriptorToToolMetadata(value: unknown): ResolvedToolMet
     inputSchema: objectProp(descriptor, "inputSchema") ?? {},
     outputSchema: objectProp(descriptor, "outputSchema"),
     destructiveHint: booleanProp(descriptor, "destructiveHint") ?? false,
+    sideEffects: stringArrayProp(descriptor, "sideEffects"),
+    supportsDryRun: booleanProp(descriptor, "supportsDryRun"),
     playModeSupport: playModeSupportProp(descriptor, "playModeSupport"),
     timeoutMs: numberProp(descriptor, "defaultTimeoutMs") ?? numberProp(descriptor, "timeoutMs"),
     permissions: stringArrayProp(descriptor, "permissions"),
+    requiresPackages: stringArrayProp(descriptor, "requiresPackages"),
+    examples: toolExamplesProp(descriptor, "examples", name),
     handler: toolHandlerProp(descriptor, "handler"),
     supportStatus: toolSupportStatusProp(descriptor, "supportStatus"),
     target,
     available: booleanProp(descriptor, "available") ?? undefined,
-    source: toolSourceProp(descriptor, "source")
+    source: toolSourceProp(descriptor, "source"),
+    liveDescriptorFingerprint: descriptorFingerprintProp(descriptor)
   });
 }
 
@@ -136,9 +142,37 @@ function objectProp(record: Record<string, unknown>, key: string): Record<string
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
+function descriptorFingerprintProp(record: Record<string, unknown>): string | undefined {
+  const fingerprint = record.fingerprint;
+  if (typeof fingerprint === "string" && fingerprint.length > 0) return fingerprint;
+  if (fingerprint && typeof fingerprint === "object" && !Array.isArray(fingerprint)) return stringProp(fingerprint as Record<string, unknown>, "value");
+  return undefined;
+}
+
 function stringArrayProp(record: Record<string, unknown>, key: string): string[] | undefined {
   const value = record[key];
   return Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : undefined;
+}
+
+/** 保留 live descriptor 的 typed 示例，供 describe 直接指导 custom Tool 调用。 */
+function toolExamplesProp(record: Record<string, unknown>, key: string, toolName: string): ToolMetadata["examples"] {
+  const value = record[key];
+  if (!Array.isArray(value)) return undefined;
+  return value.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const example = item as Record<string, unknown>;
+    const description = stringProp(example, "description");
+    if (!description) return [];
+    const input = objectProp(example, "input") as AnyJson | undefined;
+    const explicitArgv = stringArrayProp(example, "argv");
+    const execution = objectProp(example, "execution");
+    const dryRun = execution?.dryRun === true;
+    const timeoutMs = numberProp(execution ?? {}, "timeoutMs");
+    // execution 是命令层提示，argv 追加 flag，绝不混入业务 input。
+    const argv = explicitArgv ?? ["tools", "run", toolName, "--input", JSON.stringify(input ?? {}), ...(dryRun ? ["--dry-run"] : []), ...(timeoutMs !== undefined ? ["--timeout-ms", String(timeoutMs)] : [])];
+    const output = stringProp(example, "output");
+    return [{ description, argv, ...(input ? { input } : {}), ...((dryRun || timeoutMs !== undefined) ? { execution: { ...(dryRun ? { dryRun: true } : {}), ...(timeoutMs !== undefined ? { timeoutMs } : {}) } } : {}), ...(output ? { output } : {}) }];
+  });
 }
 
 function toolSourceProp(record: Record<string, unknown>, key: string): ToolMetadata["source"] | undefined {
@@ -159,7 +193,8 @@ export function groupFromName(name: string): string {
 export async function discoverRuntimeTools(
   flags: Record<string, string | boolean>,
   runtime: ProjectToolRuntime,
-  requestId: string
+  requestId: string,
+  options: { requireBridge?: boolean } = {}
 ): Promise<ProjectToolDiscovery> {
   if (runtime.projectTools) {
     const runtimeTools = runtime.projectTools
@@ -168,7 +203,7 @@ export async function discoverRuntimeTools(
     return { ok: true, tools: runtimeTools, mode: "runtime" };
   }
 
-  if (!shouldDiscoverProjectTools(flags, runtime)) {
+  if (!options.requireBridge && !shouldDiscoverProjectTools(flags, runtime)) {
     return { ok: true, tools: [], mode: "skipped" };
   }
 

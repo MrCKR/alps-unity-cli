@@ -32,21 +32,21 @@ namespace UnityCli
         private const int Port = 47392;
         private static readonly object QueueLock = new object();
         private static readonly string[] CameraCommands = { "camera.list", "camera.info", "camera.screenshot", "camera.create", "camera.target", "camera.lens", "camera.multiview" };
-        private static readonly string[] SceneCommands = { "scene.active", "scene.hierarchy", "scene.build-settings", "scene.screenshot", "scene.create", "scene.load", "scene.save" };
+        private static readonly string[] SceneCommands = { "scene.active", "scene.hierarchy", "scene.build-settings", "scene.create", "scene.load", "scene.save" };
         private static readonly string[] GameObjectCommands = { "go.find", "go.inspect", "go.create", "go.modify", "go.duplicate", "go.move-relative", "go.look-at", "go.delete", "component.add", "component.remove", "component.set" };
         private static readonly string[] AssetCommands = { "asset.search", "asset.info", "asset.create", "asset.import", "asset.modify", "asset.delete", "asset.duplicate", "asset.move", "asset.rename", "asset.refresh" };
         private static readonly string[] DiagnoseCommands = { "diagnose.preflight" };
-        private static readonly string[] ScreenshotCommands = { "screenshot.capture", "screenshot.game-view", "screenshot.scene-view", "screenshot.isolated-object", "screenshot.orbit", "screenshot.surround" };
+        private static readonly string[] ScreenshotCommands = { "screenshot.game-view", "screenshot.scene-view", "screenshot.isolated-object", "screenshot.orbit", "screenshot.surround" };
         private static readonly string[] PrefabCommands = { "prefab.info", "prefab.hierarchy", "prefab.create", "prefab.modify", "prefab.stage-open", "prefab.stage-save", "prefab.stage-close" };
         private static readonly string[] UiCommands = { "ui.canvas.create", "ui.text.create", "ui.button.create", "ui.image.create", "ui.document.info", "ui.document.create", "ui.hierarchy" };
         private static readonly string[] MaterialCommands = { "material.info", "material.create", "material.assign", "material.set" };
-        private static readonly string[] GraphicsCommands = { "graphics.quality", "graphics.settings", "graphics.pipeline", "graphics.volume", "graphics.screenshot", "graphics.bake-start", "graphics.bake-cancel", "graphics.bake-status", "graphics.bake-clear", "graphics.bake-reflection-probe", "graphics.bake-settings", "graphics.light-probe-group", "graphics.reflection-probe", "graphics.probe-positions", "graphics.stats", "graphics.stats-counters", "graphics.stats-memory", "graphics.scene-debug", "graphics.skybox-get", "graphics.skybox-set-material", "graphics.skybox-set-properties", "graphics.skybox-set-ambient", "graphics.skybox-set-fog", "graphics.skybox-set-reflection", "graphics.skybox-set-sun", "graphics.pipeline-settings", "graphics.pipeline-quality", "graphics.pipeline-info" };
-        private static readonly string[] PhysicsCommands = { "physics.settings", "physics.collision-matrix", "physics.material", "physics.assign-material", "physics.joint", "physics.force", "physics.overlap", "physics.rigidbody", "physics.raycast", "physics.simulation", "physics.raycast-all", "physics.linecast", "physics.shapecast", "physics.validate" };
+        private static readonly string[] GraphicsCommands = { "graphics.quality", "graphics.settings", "graphics.volume", "graphics.bake-start", "graphics.bake-cancel", "graphics.bake-status", "graphics.bake-clear", "graphics.bake-reflection-probe", "graphics.bake-settings", "graphics.light-probe-group", "graphics.reflection-probe", "graphics.probe-positions", "graphics.stats", "graphics.stats-counters", "graphics.stats-memory", "graphics.scene-debug", "graphics.skybox-get", "graphics.skybox-set-material", "graphics.skybox-set-properties", "graphics.skybox-set-ambient", "graphics.skybox-set-fog", "graphics.skybox-set-reflection", "graphics.skybox-set-sun", "graphics.pipeline-settings", "graphics.pipeline-quality", "graphics.pipeline-info" };
+        private static readonly string[] PhysicsCommands = { "physics.settings", "physics.collision-matrix", "physics.material", "physics.assign-material", "physics.joint.add", "physics.joint.remove", "physics.force", "physics.overlap", "physics.rigidbody", "physics.raycast", "physics.simulation", "physics.raycast-all", "physics.linecast", "physics.shapecast", "physics.validate" };
         private static readonly string[] ProfilerCommands = { "profiler.start", "profiler.stop", "profiler.pause", "profiler.counter", "profiler.memory", "profiler.frame", "profiler.capture", "profiler.export", "profiler.status" };
         private static readonly string[] AnimationCommands = { "animation.clip", "animation.clip.create", "animation.clip.modify", "animation.state", "animation.play", "animation.stop", "animator.get-info", "animator.get-parameter", "animator.set-parameter", "animator.crossfade", "animator.set-speed", "animator.set-enabled", "controller.create", "controller.add-state", "controller.add-transition", "controller.add-parameter", "controller.get-info", "controller.assign", "controller.add-layer", "controller.remove-layer", "controller.set-layer-weight", "controller.create-blend-tree-1d", "controller.create-blend-tree-2d", "controller.add-blend-tree-child" };
         private static readonly string[] ShaderCommands = { "shader.info", "shader.read", "shader.create", "shader.update" };
         private static readonly string[] TextureCommands = { "texture.info", "texture.create", "texture.sprite", "texture.import-settings" };
-        private static readonly string[] EditorCommands = { "editor.state", "editor.play", "editor.pause", "editor.stop", "editor.undo", "editor.redo", "editor.resolution", "editor.menu", "editor.compile", "editor.console", "project.tag", "project.layer" };
+        private static readonly string[] EditorCommands = { "editor.state", "editor.play", "editor.pause", "editor.stop", "editor.undo", "editor.redo", "editor.resolution", "editor.menu", "editor.compile", "editor.console", "project.tag.add", "project.tag.remove", "project.layer.add", "project.layer.remove" };
         private static readonly string[] ScriptableObjectCommands = { "scriptable-object.create", "scriptable-object.info", "scriptable-object.list-types", "scriptable-object.modify" };
         private static readonly string[] CodeCommands = { "code.exec" };
         private static readonly string[] ProjectToolCommands = { "project-tool.list", "project-tool.run" };
@@ -54,7 +54,6 @@ namespace UnityCli
         private static readonly string[] ContextCommands = { "context.list", "context.describe", "context.read" };
         private static readonly string[] ExtensionCommands = { "extension.status" };
         private const string BridgeDiagnosticsFingerprint = "health-fingerprint-play-mode-guard-v3";
-        private const string DestructiveCommandFingerprint = "destructive-safety-v1";
         private static readonly BridgeCommandRegistry CommandRegistry = CreateCommandRegistry();
         private static readonly string ListenerId = Guid.NewGuid().ToString("N");
         private static readonly DateTime BridgeLoadedAtUtc = DateTime.UtcNow;
@@ -64,9 +63,8 @@ namespace UnityCli
         private static volatile bool domainReloading;
         private static int port;
         private static double nextHeartbeatAt;
-        private static BridgeWorkItem currentWorkItem;
-        private static readonly string DeferredResponseMarker = "\0DEFERRED";
-        private static readonly List<BridgeWorkItem> DeferredItems = new List<BridgeWorkItem>();
+        private static readonly CancellationTokenSource BridgeLifetime = new CancellationTokenSource();
+        private static CancellationTokenSource runtimeSession = new CancellationTokenSource();
 
         // Cached EditorApplication state — updated on the main thread by ProcessQueuedWork,
         // read by HandleHttpCore on background thread pool threads.
@@ -79,11 +77,14 @@ namespace UnityCli
 
         static UnityCliBridge()
         {
+            // AssetImportWorker 不是可寻址 Editor 实例，不得启动 listener 或写入 instance registry。
+            if (AssetDatabase.IsAssetImportWorkerProcess()) return;
             WriteRuntimeLoadDiagnostics("static_constructor");
             EditorApplication.update += ProcessQueuedWork;
             AssemblyReloadEvents.beforeAssemblyReload += OnBeforeAssemblyReload;
             AssemblyReloadEvents.afterAssemblyReload += OnAfterAssemblyReload;
             EditorApplication.quitting += UnregisterAndStop;
+            EditorApplication.playModeStateChanged += OnBridgePlayModeStateChanged;
             domainReloading = false;
             StopStaleBridgeListeners();
             StartListener();
@@ -116,7 +117,9 @@ namespace UnityCli
         private static void OnBeforeAssemblyReload()
         {
             domainReloading = true;
-            CancelDeferredWork();
+            BridgeLifetime.Cancel();
+            CancelQueuedWork();
+            CancelPendingWaits("E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", "Wait for domain reload to complete and retry.", 10000);
             RegisterInstance("stale");
             StopListener();
         }
@@ -135,8 +138,37 @@ namespace UnityCli
 
         private static void UnregisterAndStop()
         {
+            BridgeLifetime.Cancel();
+            CancelQueuedWork();
+            CancelPendingWaits("E_UNITY_QUITTING", "Unity Editor is quitting.", "Restart Unity and retry the request.", 5000);
             DeleteInstanceRegistration();
             StopListener();
+        }
+
+        private static void OnBridgePlayModeStateChanged(PlayModeStateChange state)
+        {
+            if (state == PlayModeStateChange.ExitingPlayMode)
+            {
+                runtimeSession.Cancel();
+                runtimeSession.Dispose();
+                runtimeSession = new CancellationTokenSource();
+            }
+        }
+
+        private static CancellationTokenSource CreateExecutionLifetime(UnityCli.Protocol.BridgeRequest request, CancellationToken clientAbort = default)
+        {
+            var tokens = new List<CancellationToken> { BridgeLifetime.Token };
+            if (request != null && string.Equals(request.Command, "runtime-tool.run", StringComparison.Ordinal)) tokens.Add(runtimeSession.Token);
+            if (clientAbort.CanBeCanceled) tokens.Add(clientAbort);
+            return CancellationTokenSource.CreateLinkedTokenSource(tokens.ToArray());
+        }
+
+        private static CancellationTokenSource CreateExecutionTimeout(UnityCli.Protocol.BridgeRequest request)
+        {
+            var source = CreateExecutionLifetime(request);
+            var timeoutMs = request == null || request.Execution == null ? null : request.Execution.TimeoutMs;
+            if (timeoutMs.HasValue && timeoutMs.Value > 0) source.CancelAfter(TimeSpan.FromMilliseconds(Math.Min(timeoutMs.Value, int.MaxValue)));
+            return source;
         }
 
         private static void StopListener()
@@ -157,70 +189,99 @@ namespace UnityCli
             started = false;
         }
 
-        public static int ExecuteBatchCommand(string requestId, string command, string argsJson)
+        /// <summary>
+        /// 在 batchmode 主线程上执行最终 Bridge 协议，并允许工具通过中央 scheduler 跨帧等待。
+        /// </summary>
+        public static async Task<int> ExecuteBatchCommandAsync(string requestJson)
         {
-            var rawArgs = string.IsNullOrEmpty(argsJson) ? "{}" : argsJson;
-            var isEnvelope = string.Equals(JsonRawProperty(rawArgs, "__unityCliBridgeEnvelope"), "true", StringComparison.OrdinalIgnoreCase);
-            var commandArgs = isEnvelope ? JsonRawProperty(rawArgs, "args") : rawArgs;
-            if (string.IsNullOrEmpty(commandArgs)) commandArgs = "{}";
-            var dryRun = JsonRawProperty(rawArgs, "dryRun");
-            var security = isEnvelope ? JsonRawProperty(rawArgs, "security") : null;
-            var w = new UnityCliJsonWriter().BeginObject()
-                .Prop("requestId", requestId)
-                .Prop("command", command)
-                .PropRaw("args", commandArgs);
-            if (!string.IsNullOrEmpty(dryRun))
-            {
-                w.PropRaw("dryRun", dryRun);
-            }
-            if (!string.IsNullOrEmpty(security))
-            {
-                w.PropRaw("security", security);
-            }
-            w.EndObject();
-            var body = w.ToString();
-            var response = string.Empty;
+            string response;
             try
             {
-                response = Execute(BridgeRequest.Parse(body));
+                var request = UnityCli.Protocol.BridgeRequest.DeserializeStrict(requestJson);
+                using (var timeout = CreateExecutionTimeout(request))
+                {
+                    response = await Execute(request, timeout.Token);
+                }
+            }
+            catch (FormatException exception)
+            {
+                response = UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
+                    string.Empty,
+                    "E_SCHEMA_INVALID",
+                    "Bridge request JSON does not match the protocol schema.",
+                    new Dictionary<string, object> { { "path", "$" }, { "expected", "BridgeRequest" }, { "actual", exception.Message } },
+                    new[] { "Send a complete final BridgeRequest JSON value." }));
             }
             catch (BridgeCommandException exception)
             {
-                if (exception.Transient)
-                {
-                    response = TransientErrorJson(exception.Code, exception.Message, exception.NextAction ?? "Check output path, package availability and UnityCliBridge.log.", exception.RetryAfterMs > 0 ? exception.RetryAfterMs : 5000);
-                }
-                else
-                {
-                    response = ErrorJson(exception.Code, exception.Message, exception.NextAction ?? "Check output path, package availability and UnityCliBridge.log.");
-                }
+                response = SerializeBridgeExceptionEnvelope(string.Empty, exception);
             }
             catch (Exception exception)
             {
-                response = ErrorJson("E_BRIDGE_COMMAND_FAILED", exception.Message, "Check Unity Console and UnityCliBridge.log.");
+                response = UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
+                    string.Empty, "E_BRIDGE_COMMAND_FAILED", exception.Message, nextActions: new[] { "Check Unity Console and UnityCliBridge.log." }));
             }
             Console.WriteLine("UNITY_CLI_BRIDGE_RESULT " + response);
             return response.Contains("\"ok\":true") ? 0 : 1;
         }
 
-        private static string Execute(BridgeRequest request)
+        /// <summary>
+        /// 确保 batchmode 已安装中央主线程同步上下文；update 驱动仅由 Bridge 注册一次。
+        /// </summary>
+        internal static void EnsureScheduler()
+        {
+            UnityCliWaitScheduler.EnsureMainThreadSynchronizationContext();
+        }
+
+        private static async ValueTask<string> Execute(UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)
+        {
+            try
+            {
+                var data = await ExecuteData(request, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
+                return UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Success(request.RequestId, data));
+            }
+            catch (BridgeCommandException exception)
+            {
+                return SerializeBridgeExceptionEnvelope(request.RequestId, exception);
+            }
+            catch (OperationCanceledException)
+            {
+                return UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
+                    request.RequestId,
+                    "E_EXECUTION_TIMEOUT",
+                    "Bridge request execution was cancelled or timed out.",
+                    nextActions: new[] { "Retry with a larger execution.timeoutMs after Unity is responsive." },
+                    transient: true));
+            }
+            catch (Exception exception)
+            {
+                return UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
+                    request.RequestId,
+                    "E_BRIDGE_COMMAND_FAILED",
+                    exception.Message,
+                    nextActions: new[] { "Check Unity Console and UnityCliBridge.log." }));
+            }
+        }
+
+        private static async ValueTask<object> ExecuteData(UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)
         {
             WriteLog("execute requestId=" + request.RequestId + " command=" + request.Command);
 
             if (domainReloading)
             {
-                return TransientErrorJson("E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", "Wait for domain reload to complete and retry.", 10000);
+                throw new BridgeCommandException("E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", null, new[] { "Wait for domain reload to complete and retry." }, true, 10000);
             }
 
             var allowedDuringCompileOrImport = request.Command == "editor.compile";
             if (EditorApplication.isCompiling && !allowedDuringCompileOrImport)
             {
-                return TransientErrorJson("E_UNITY_COMPILING", "Unity Editor is compiling scripts.", "Wait for Unity to finish compiling and retry.", 5000);
+                throw new BridgeCommandException("E_UNITY_COMPILING", "Unity Editor is compiling scripts.", null, new[] { "Wait for Unity to finish compiling and retry." }, true, 5000);
             }
 
             if (EditorApplication.isUpdating && !allowedDuringCompileOrImport)
             {
-                return TransientErrorJson("E_UNITY_IMPORTING", "Unity Editor is importing assets.", "Wait for Unity to finish importing and retry.", 5000);
+                throw new BridgeCommandException("E_UNITY_IMPORTING", "Unity Editor is importing assets.", null, new[] { "Wait for Unity to finish importing and retry." }, true, 5000);
             }
 
             if (EditorApplication.isPlayingOrWillChangePlaymode)
@@ -242,142 +303,38 @@ namespace UnityCli
                 if (!EditorApplication.isPlaying && !allowedDuringPlayModeTransition)
                 {
                     WriteLog("execute_play_mode_guard_blocked_transition requestId=" + request.RequestId + " command=" + request.Command + " isPlaying=" + Bool(EditorApplication.isPlaying));
-                    return TransientErrorJson("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode. (execute-guard-v3)", "Wait for Play mode transition to complete and retry.", 3000);
+                    throw new BridgeCommandException("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode. (execute-guard-v3)", null, new[] { "Wait for Play mode transition to complete and retry." }, true, 3000);
                 }
                 WriteLog("execute_play_mode_guard_allowed requestId=" + request.RequestId + " command=" + request.Command + " isPlaying=" + Bool(EditorApplication.isPlaying));
             }
 
-            if (RequiresDestructiveSecurityProof(request.Command) && !request.DryRun && !request.SecurityConfirmed(DestructiveCommandFingerprint))
+            // 动态 Tool 必须先解析 live descriptor，再按实际 tool name 与 wrapper command 校验证明。
+            // 此处仅处理直接任意代码入口，wrapper 的确认由已注册 descriptor 二次门禁。
+            if (RequiresDestructiveSecurityProof(request.Command)
+                && !(request.Execution != null && request.Execution.DryRun == true)
+                && !request.SecurityConfirmed(request.Command, true, true, request.Command))
             {
-                return ErrorJson("E_DESTRUCTIVE_CONFIRMATION_REQUIRED", "Destructive command requires CLI confirmation and fingerprint proof: " + request.Command, "Rerun through unity_cli with --yes so the request includes destructive security proof.");
+                throw new BridgeCommandException("E_DESTRUCTIVE_CONFIRMATION_REQUIRED", "Destructive command requires CLI confirmation and fingerprint proof: " + request.Command, "Rerun the same tools run command with --yes so the request includes destructive security proof.");
             }
 
-            var response = CommandRegistry.Execute(request);
-            if (response != null)
-            {
-                return response;
-            }
-
-            return ErrorJson("E_BRIDGE_COMMAND_UNSUPPORTED", "Unsupported bridge command: " + request.Command, "Upgrade the Unity CLI Bridge package or use a registered CLI command.");
+            cancellationToken.ThrowIfCancellationRequested();
+            return await CommandRegistry.ExecuteAsync(request, cancellationToken);
         }
 
         private static bool RequiresDestructiveSecurityProof(string command)
         {
-            return command == "asset.delete"
-                || command == "animation.clip.create"
-                || command == "animation.clip.modify"
-                || command == "scene.save"
-                || command == "code.exec"
-                || command == "editor.menu"
-                || command == "reflection.method.call"
-                || command == "screenshot.surround";
+            return string.Equals(command, "code.exec", StringComparison.Ordinal);
         }
 
-        /// <summary>
-        /// Starts a deferred wait that checks a condition each frame via EditorApplication.update.
-        /// The BridgeWorkItem is completed when the condition is met or the timeout elapses.
-        /// The calling command handler should return DeferredResponseMarker.
-        /// This replaces Thread.Sleep-based polling loops with non-blocking frame-based waits
-        /// that do not block the Unity main thread.
-        /// </summary>
-        private static string StartDeferredWait(
-            BridgeWorkItem item,
-            Func<bool> condition,
-            int timeoutMs,
-            Func<string> onSuccess,
-            string timeoutErrorCode,
-            string timeoutErrorMessage,
-            string timeoutNextAction)
+        private static void CancelPendingWaits(string code, string message, string nextAction, int retryAfterMs)
         {
-            var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
-            EditorApplication.CallbackFunction waiter = null;
-            waiter = () =>
-            {
-                try
-                {
-                    if (condition())
-                    {
-                        EditorApplication.update -= waiter;
-                        UnregisterDeferredItem(item);
-                        item.Response = onSuccess();
-                        item.Completed.Set();
-                        WriteLog("deferred_wait_completed requestId=" + item.Request.RequestId + " command=" + item.Request.Command);
-                        return;
-                    }
-                    if (DateTime.UtcNow > deadline)
-                    {
-                        EditorApplication.update -= waiter;
-                        UnregisterDeferredItem(item);
-                        item.Response = ErrorJson(timeoutErrorCode, timeoutErrorMessage, timeoutNextAction);
-                        item.Completed.Set();
-                        WriteLog("deferred_wait_timeout requestId=" + item.Request.RequestId + " command=" + item.Request.Command + " errorCode=" + timeoutErrorCode);
-                        return;
-                    }
-                }
-                catch (BridgeCommandException exception)
-                {
-                    EditorApplication.update -= waiter;
-                    UnregisterDeferredItem(item);
-                    if (exception.Transient)
-                    {
-                        item.Response = TransientErrorJson(exception.Code, exception.Message, exception.NextAction ?? "Check Unity Console and UnityCliBridge.log.", exception.RetryAfterMs > 0 ? exception.RetryAfterMs : 5000);
-                    }
-                    else
-                    {
-                        item.Response = ErrorJson(exception.Code, exception.Message, exception.NextAction ?? "Check Unity Console and UnityCliBridge.log.");
-                    }
-                    item.Completed.Set();
-                    WriteLog("deferred_wait_exception requestId=" + item.Request.RequestId + " command=" + item.Request.Command + " error=" + exception.Code);
-                }
-                catch (Exception exception)
-                {
-                    EditorApplication.update -= waiter;
-                    UnregisterDeferredItem(item);
-                    item.Response = ErrorJson("E_BRIDGE_COMMAND_FAILED", exception.Message, "Check Unity Console and UnityCliBridge.log.");
-                    item.Completed.Set();
-                    WriteLog("deferred_wait_exception requestId=" + item.Request.RequestId + " command=" + item.Request.Command + " error=" + exception.GetType().Name);
-                }
-            };
-            item.MarkDeferred();
-            lock (DeferredItems)
-            {
-                DeferredItems.Add(item);
-            }
-            EditorApplication.update += waiter;
-            WriteLog("deferred_wait_started requestId=" + item.Request.RequestId + " command=" + item.Request.Command + " timeoutMs=" + timeoutMs.ToString(CultureInfo.InvariantCulture));
-            return DeferredResponseMarker;
-        }
-
-        private static void UnregisterDeferredItem(BridgeWorkItem item)
-        {
-            lock (DeferredItems)
-            {
-                DeferredItems.Remove(item);
-            }
-        }
-
-        /// <summary>
-        /// Called from OnBeforeAssemblyReload to clean up any pending deferred work items.
-        /// Removes EditorApplication.update callbacks and signals each deferred item with
-        /// a transient domain reload error so the HTTP thread does not hang.
-        /// </summary>
-        private static void CancelDeferredWork()
-        {
-            List<BridgeWorkItem> snapshot;
-            lock (DeferredItems)
-            {
-                snapshot = new List<BridgeWorkItem>(DeferredItems);
-                DeferredItems.Clear();
-            }
-            foreach (var item in snapshot)
-            {
-                if (!item.Completed.IsSet)
-                {
-                    item.Response = TransientErrorJson("E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", "Wait for domain reload to complete and retry.", 10000);
-                    item.Completed.Set();
-                    WriteLog("deferred_wait_cancelled_domain_reload requestId=" + item.Request.RequestId + " command=" + item.Request.Command);
-                }
-            }
+            UnityCliWaitScheduler.CancelAll(new BridgeCommandException(
+                code,
+                message,
+                null,
+                new[] { nextAction },
+                transient: true,
+                retryAfterMs: retryAfterMs));
         }
     }
 }

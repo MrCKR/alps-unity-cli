@@ -6,6 +6,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFile } from "node:fs/promises";
 import { execute } from "../src/cli.js";
+import { projectDescriptorToToolMetadata } from "../src/project-tool-discovery.js";
 import { JobRunner } from "../src/job-runner.js";
 import { JobStore } from "../src/job-store.js";
 import type { BridgeRequest } from "../src/bridge/index.js";
@@ -20,6 +21,21 @@ async function makeRuntime() {
   const store = new JobStore(dataDir);
   return { dataDir, store, runner: new JobRunner(store, dataDir) };
 }
+
+test("live Tool example execution metadata becomes CLI flags without entering input", () => {
+  const tool = projectDescriptorToToolMetadata({
+    name: "sample.preview",
+    summary: "Preview a sample operation.",
+    description: "Preview a sample operation.",
+    group: "sample",
+    inputSchema: { type: "object", properties: { path: { type: "string" } }, required: ["path"], additionalProperties: false },
+    destructiveHint: false,
+    examples: [{ description: "Preview a path", input: { path: "Assets/Test.asset" }, execution: { dryRun: true, timeoutMs: 5000 } }]
+  });
+  assert.ok(tool);
+  assert.deepEqual(tool.examples?.[0].input, { path: "Assets/Test.asset" });
+  assert.deepEqual(tool.examples?.[0].argv, ["tools", "run", "sample.preview", "--input", "{\"path\":\"Assets/Test.asset\"}", "--dry-run", "--timeout-ms", "5000"]);
+});
 
 test("tools group list <sample> --include-custom discovers Unity project custom descriptors through the bridge", async () => {
   const runtime = await makeRuntime();
@@ -42,11 +58,11 @@ test("tools group list <sample> --include-custom discovers Unity project custom 
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: { tools: [customDescriptor] } };
+      return { ok: true as const, requestId: payload.requestId, data: { tools: [customDescriptor] } };
     }
   });
 
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   assert.equal(requests.length, 1);
   assert.equal(requests[0].command, "project-tool.list");
   const data = result.data as { tools: Array<{ name: string; source: string; playModeSupport?: string }> };
@@ -59,8 +75,9 @@ test("tools describe resolves custom descriptor without hand-written CLI metadat
   const runtime = await makeRuntime();
   const result = await execute(["tools", "describe", "sample.echo"], {
     ...runtime,
-    bridgeExecute: async () => ({
+    bridgeExecute: async (payload) => ({
       ok: true,
+      requestId: payload.requestId,
       data: {
         tools: [{
           name: "sample.echo",
@@ -75,7 +92,7 @@ test("tools describe resolves custom descriptor without hand-written CLI metadat
     })
   });
 
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as Record<string, unknown>;
   assert.equal(data.name, "sample.echo");
   assert.equal(data.source, "project");
@@ -90,8 +107,9 @@ test("tools describe infers runtime route for target=runtime project descriptors
   const runtime = await makeRuntime();
   const result = await execute(["tools", "describe", "runtime.wait"], {
     ...runtime,
-    bridgeExecute: async () => ({
+    bridgeExecute: async (payload) => ({
       ok: true,
+      requestId: payload.requestId,
       data: {
         tools: [{
           name: "runtime.wait",
@@ -107,7 +125,7 @@ test("tools describe infers runtime route for target=runtime project descriptors
     })
   });
 
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as Record<string, unknown>;
   assert.equal(data.name, "runtime.wait");
   assert.equal(data.source, "project");
@@ -117,43 +135,27 @@ test("tools describe infers runtime route for target=runtime project descriptors
   assert.equal(data.availabilityScope, "playModeSession");
 });
 
-test("Unity C# custom tool registry supports IUnityCliTool interface descriptors and sample Editor tool", async () => {
+test("Unity C# custom tool registry supports IUnityCliTool interface descriptors", async () => {
   const registry = await readFile(new URL("../../unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs", import.meta.url), "utf8");
+  const runtimeExecutor = await readFile(new URL("../../unitypkg/Editor/Infrastructure/UnityCliRuntimeExecutor.cs", import.meta.url), "utf8");
+  const protocolRequest = await readFile(new URL("../../unitypkg/Editor/Infrastructure/UnityCliProtocolRequest.cs", import.meta.url), "utf8");
   const interfaceFile = await readFile(new URL("../../unitypkg/Editor/ProjectTools/IUnityCliTool.cs", import.meta.url), "utf8");
-  const sample = await readFile(new URL("../../unitypkg/Editor/Samples/SampleEchoTool.cs", import.meta.url), "utf8");
 
-  // 新形态:IUnityCliTool<TReq,TRes> 泛型接口声明工具
   assert.match(interfaceFile, /interface IUnityCliTool<TReq, TRes>/);
   assert.match(interfaceFile, /ToolDescriptor Describe\(\)/);
-  assert.match(interfaceFile, /TRes Execute\(TReq request, UnityCliProjectToolContext ctx\)/);
-
-  // registry 扫描 IUnityCliTool<,> 实现类(与旧 attribute 并存)
+  assert.match(interfaceFile, /ValueTask<TRes> ExecuteAsync\(TReq request, UnityCliProjectToolContext ctx, CancellationToken ct = default\)/);
   assert.match(registry, /TryRegisterInterfaceProjectTool/);
   assert.match(registry, /typeof\(IUnityCliTool<,>\)/);
   assert.match(registry, /UnityCliSchemaDeriver\.DeriveSchema/);
-
-  // SampleEchoTool 新形态:实现 IUnityCliTool,不再用 attribute
-  assert.match(sample, /class SampleEchoTool : IUnityCliTool</);
-  assert.match(sample, /public ToolDescriptor Describe\(\)/);
-  assert.match(sample, /public Result Execute\(Request request, UnityCliProjectToolContext ctx\)/);
-  assert.match(sample, /\[UnityCliRequired\] public string Message/);
-  assert.doesNotMatch(sample, /\[UnityCliTool\(/);
-  assert.doesNotMatch(sample, /InputSchema\s*=\s*"/);
-  assert.doesNotMatch(sample, /manifest\.json|config\.json|\.yaml|\.yml/);
-});
-
-test("SampleContext custom context is not registered as a tool", async () => {
-  const sampleContext = await readFile(new URL("../../unitypkg/Editor/Samples/SampleContext.cs", import.meta.url), "utf8");
-  const registry = await readFile(new URL("../../unitypkg/Editor/ProjectTools/ProjectToolRegistry.cs", import.meta.url), "utf8");
-
-  // SampleContext 使用 Context 接口形态,不再用任何 tool/context attribute。
-  assert.match(sampleContext, /IUnityCliContext</);
-  assert.doesNotMatch(sampleContext, /\[UnityCliContext\(/);
-  assert.doesNotMatch(sampleContext, /\[UnityCliTool\(/);
-  assert.doesNotMatch(sampleContext, /IUnityCliTool</);
-
-  // 工具注册表不再扫 attribute,只扫 IUnityCliTool<,> 接口实现类
-  assert.doesNotMatch(registry, /typeof\(UnityCliToolAttribute\)/);
-  assert.doesNotMatch(registry, /typeof\(UnityCliContextAttribute\)/);
-  assert.match(registry, /typeof\(IUnityCliTool<,>\)/);
+  assert.match(registry, /\[UnityCliAnyJson\] public object Input \{ get; set; \}/);
+  assert.match(runtimeExecutor, /\[UnityCliAnyJson\] public object Input \{ get; set; \}/);
+  assert.match(registry, /request\.ExecutionTimeoutMs\(definition\.DefaultTimeoutMs, definition\.MaxTimeoutMs\)/);
+  assert.match(runtimeExecutor, /request\.ExecutionTimeoutMs\(definition\.DefaultTimeoutMs, definition\.MaxTimeoutMs\)/);
+  assert.match(registry, /ProjectToolEffectsData\(definition, result\)/);
+  assert.match(registry, /"declaredSideEffects"/);
+  assert.match(registry, /"plannedEffectCount"/);
+  assert.match(registry, /var fileWrites = fileWritesDeclared \? ProjectToolEffectPaths\(plannedEffects\) : Array\.Empty<string>\(\)/);
+  assert.doesNotMatch(registry, /args\.TimeoutMs|ProjectToolExecutionArgs/);
+  assert.doesNotMatch(runtimeExecutor, /args\.TimeoutMs/);
+  assert.match(protocolRequest, /public int ExecutionTimeoutMs\(int fallback, int maximum\)/);
 });

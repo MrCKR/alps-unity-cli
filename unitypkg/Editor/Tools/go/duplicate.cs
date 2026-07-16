@@ -8,8 +8,6 @@ namespace UnityCli
 {
     /// <summary>
     /// go.duplicate — 复制场景中的 GameObject,可指定新名称或父级。
-    /// 对齐旧 GameObjectDuplicate handler;session-affecting。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class GameObjectDuplicateTool : IUnityCliTool<GameObjectDuplicateTool.Request, GameObjectDuplicateTool.Result>
     {
@@ -46,7 +44,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             GameObjectToolSupport.EnsureEditorNotBusy("go.duplicate");
             if (string.IsNullOrEmpty(request.Target))
@@ -56,16 +54,16 @@ namespace UnityCli
             var source = GameObjectToolSupport.ResolveUniqueTarget(request.Target, "GameObject duplicate requires a target.");
             var parentTransform = string.IsNullOrEmpty(request.Parent) ? source.transform.parent : GameObjectToolSupport.ResolveUniqueTarget(request.Parent, "Parent GameObject is required.").transform;
             var duplicate = UnityEngine.Object.Instantiate(source);
-            Undo.RegisterCreatedObjectUndo(duplicate, "unity_cli go.duplicate");
+            UnityCliSceneMutation.RegisterCreatedObject(duplicate, "go.duplicate");
             duplicate.name = request.NewName ?? request.Name ?? (source.name + " Copy");
             duplicate.transform.SetParent(parentTransform, true);
             duplicate.transform.SetSiblingIndex(source.transform.GetSiblingIndex() + 1);
-            EditorSceneManager.MarkSceneDirty(duplicate.scene);
-            return new Result
+            UnityCliSceneMutation.MarkSceneDirty(duplicate.scene);
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 GameObject = GameObjectToolSupport.BuildGameObjectDetail(duplicate),
                 PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "go.duplicate", Target = GameObjectToolSupport.HierarchyPath(duplicate) } }
-            };
+            });
         }
     }
 }

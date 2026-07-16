@@ -122,72 +122,157 @@
     ],
     "contexts": [
       {
-        "key": "probuilder.scene",
-        "description": "Read ProBuilder mesh objects, face/edge/vertex selection context, and editable mesh state in the current scene.",
-        "category": "probuilder",
-        "inputSchema": {
-          "type": "object",
-          "properties": {
-            "namePattern": {
-              "type": "string",
-              "description": "Optional case-insensitive substring filter for ProBuilder GameObject names or hierarchy paths."
-            },
-            "pageSize": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 200,
-              "default": 50,
-              "description": "Maximum number of ProBuilder mesh objects to return in this read."
-            }
-          }
-        },
-        "outputSchema": {
-          "type": "object",
-          "properties": {
-            "installed": { "type": "boolean" },
-            "sceneCount": { "type": "integer" },
-            "objectCount": { "type": "integer" },
-            "selectedObjectCount": { "type": "integer" },
-            "pageSize": { "type": "integer" },
-            "truncated": { "type": "boolean" },
-            "objects": { "type": "array", "items": { "type": "object" } },
-            "selection": { "type": "object" }
-          }
-        },
-        "target": "editor",
-        "availabilityScope": "editorSession",
-        "playModeSupport": "supported",
-        "refreshBehavior": "onDemand"
+        "key": "probuilder.scene"
       }
     ],
     "csharpEntries": [
       {
-        "type": "UnityCli.ProBuilder.ProBuilderUtilityTools",
-        "description": "Bridge handlers for ProBuilder ping, mesh-info, and validate-mesh."
+        "type": "UnityCli.ProBuilder.AppendVerticesToEdgeTool",
+        "description": "Live capability implementation."
       },
       {
-        "type": "UnityCli.ProBuilder.ProBuilderShapeTools",
-        "description": "Bridge handlers for ProBuilder create-shape and create-poly-shape."
+        "type": "UnityCli.ProBuilder.AutoSmoothTool",
+        "description": "Live capability implementation."
       },
       {
-        "type": "UnityCli.ProBuilder.ProBuilderMeshEditTools",
-        "description": "Bridge handlers for ProBuilder face, edge, and mesh editing operations."
+        "type": "UnityCli.ProBuilder.BevelEdgesTool",
+        "description": "Live capability implementation."
       },
       {
-        "type": "UnityCli.ProBuilder.ProBuilderVertexTools",
-        "description": "Bridge handlers for ProBuilder vertex operations."
+        "type": "UnityCli.ProBuilder.BridgeEdgesTool",
+        "description": "Live capability implementation."
       },
       {
-        "type": "UnityCli.ProBuilder.ProBuilderSelectionTools",
-        "description": "Bridge handlers for ProBuilder selection and material/color/UV operations."
+        "type": "UnityCli.ProBuilder.CenterPivotTool",
+        "description": "Live capability implementation."
       },
       {
-        "type": "UnityCli.ProBuilder.ProBuilderSmoothingTools",
-        "description": "Bridge handlers for ProBuilder smoothing, pivot, transform, and repair operations."
+        "type": "UnityCli.ProBuilder.CombineMeshesTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.ConnectElementsTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.ConvertToProBuilderTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.CreatePolygonTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.CreatePolyShapeTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.CreateShapeTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.DeleteFacesTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.DetachFacesTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.DuplicateAndFlipTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.ExtrudeEdgesTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.ExtrudeFacesTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.FlipNormalsTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.FreezeTransformTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.InsertVertexTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.MergeFacesTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.MergeObjectsTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.MergeVerticesTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.MeshInfoTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.MoveVerticesTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.PingTool",
+        "description": "Live capability implementation."
       },
       {
         "type": "UnityCli.ProBuilder.ProBuilderSceneContext",
-        "description": "Read-only context for ProBuilder scene mesh objects, counts, and selection state."
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.RepairMeshTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.SelectFacesTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.SetFaceColorTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.SetFaceMaterialTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.SetFaceUvsTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.SetPivotTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.SetSmoothingTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.SplitVerticesTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.SubdivideTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.ValidateMeshTool",
+        "description": "Live capability implementation."
+      },
+      {
+        "type": "UnityCli.ProBuilder.WeldVerticesTool",
+        "description": "Live capability implementation."
       }
     ]
   },
@@ -198,5 +283,10 @@
       "unitypkg/",
       "docs/"
     ]
-  }
+  },
+  "tags": [
+    "modeling",
+    "3d",
+    "level-design"
+  ]
 }

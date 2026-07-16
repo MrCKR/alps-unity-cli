@@ -5,8 +5,6 @@ namespace UnityCli
 {
     /// <summary>
     /// go.inspect — 查看单个 GameObject 的摘要(id/name/path/active/tag/layer/transform/components/children)。
-    /// 对齐旧 GameObjectInspect handler;只读。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class GameObjectInspectTool : IUnityCliTool<GameObjectInspectTool.Request, GameObjectInspectTool.Result>
     {
@@ -41,11 +39,11 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var target = request.Target ?? request.Name ?? request.Path ?? request.Id;
             var gameObject = GameObjectToolSupport.ResolveUniqueTarget(target, "GameObject inspect requires a target.");
-            return new Result { GameObject = GameObjectToolSupport.BuildGameObjectDetail(gameObject) };
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { GameObject = GameObjectToolSupport.BuildGameObjectDetail(gameObject) });
         }
     }
 }

@@ -26,13 +26,18 @@ namespace UnityCli
             }
 
             /// <summary>应用 pathPatches：每项 {path, value, op}。op 默认 replace，支持 replace/add/remove。</summary>
-            public static PatchResult ApplyPathPatches(object target, string pathPatchesJson)
+            public static PatchResult ApplyPathPatches(object target, IList pathPatches)
             {
                 var result = new PatchResult();
-                if (string.IsNullOrEmpty(pathPatchesJson)) return result;
-                var patches = ParseArray(pathPatchesJson);
-                foreach (var patch in patches)
+                if (pathPatches == null) return result;
+                foreach (var patchValue in pathPatches)
                 {
+                    var patch = patchValue as Dictionary<string, object>;
+                    if (patch == null)
+                    {
+                        result.Logs.Add("skipped: patch must be an object");
+                        continue;
+                    }
                     var path = GetField(patch, "path") as string;
                     var op = (GetField(patch, "op") as string) ?? "replace";
                     var hasValue = HasField(patch, "value");
@@ -48,11 +53,10 @@ namespace UnityCli
             }
 
             /// <summary>应用 JSON Merge Patch (RFC 7386)：递归合并对象字段。</summary>
-            public static PatchResult ApplyMergePatch(object target, string mergePatchJson)
+            public static PatchResult ApplyMergePatch(object target, object mergePatch)
             {
                 var result = new PatchResult();
-                if (string.IsNullOrEmpty(mergePatchJson)) return result;
-                var patch = ParseObject(mergePatchJson);
+                var patch = mergePatch as Dictionary<string, object>;
                 if (patch == null) return result;
                 ApplyMergePatchRecursive(target, patch, "$", result);
                 return result;
@@ -87,32 +91,50 @@ namespace UnityCli
             }
 
             /// <summary>
-            /// 应用单条 pathPatch。对齐 IvanMurzak ReflectorNet 路径语法:
-            /// slash 分隔(fieldA/fieldB)、[i] 数组索引、[key] 字典键、前导 #/ 去除。
-            /// 同时兼容 dot 分隔(fieldA.fieldB)以保持向后兼容。
+            /// 应用单条 pathPatch。路径使用 slash 分隔(fieldA/fieldB)，支持 [i] 数组索引、[key] 字典键和可选 #/ 前缀。
             /// </summary>
             private static void ApplyPathPatch(object target, string path, string op, object value, bool hasValue, PatchResult result)
             {
                 var normalized = (path ?? string.Empty).Trim();
                 if (normalized.StartsWith("#/", StringComparison.Ordinal)) normalized = normalized.Substring(2);
-                else if (normalized.StartsWith("#", StringComparison.Ordinal)) normalized = normalized.Substring(1);
+                if (normalized.IndexOf('.') >= 0)
+                {
+                    throw new BridgeCommandException(
+                        "E_SCHEMA_INVALID",
+                        "pathPatches path must use '/' between member segments: " + path,
+                        "Use paths such as transform/localPosition or items/[0]/name.");
+                }
                 var segments = ParsePathSegments(normalized);
                 if (segments.Count == 0)
                 {
                     result.Logs.Add("skipped: empty path");
                     return;
                 }
+
+                var frames = new List<NavigationFrame>();
                 object current = target;
                 for (var i = 0; i < segments.Count - 1; i++)
                 {
-                    current = NavigateStep(current, segments[i]);
+                    var parent = current;
+                    current = NavigateStep(parent, segments[i]);
                     if (current == null)
                     {
                         result.Logs.Add("skipped: " + path + " (intermediate null at segment " + i + ")");
                         return;
                     }
+                    frames.Add(new NavigationFrame { Parent = parent, Segment = segments[i] });
                 }
+
+                var changedCount = result.ChangedPaths.Count;
                 SetAtLeaf(current, segments[segments.Count - 1], value, hasValue, path, result);
+                if (result.ChangedPaths.Count == changedCount) return;
+
+                // Reflection 修改 struct 时只会改变 boxed copy；沿导航链逐层写回，直到到达 reference parent。
+                for (var i = frames.Count - 1; i >= 0 && current != null && current.GetType().IsValueType; i--)
+                {
+                    WriteBackValueType(frames[i].Parent, frames[i].Segment, current, path);
+                    current = frames[i].Parent;
+                }
             }
 
             private struct PathSegment
@@ -122,16 +144,54 @@ namespace UnityCli
                 public int Index;
             }
 
-            /// <summary>
-            /// 把路径解析为段序列。支持 "a/b"、"a.b"(兼容)、"a/[0]/c"、"config/[timeout]"、"arr[0]"。
-            /// </summary>
+            private struct NavigationFrame
+            {
+                public object Parent;
+                public PathSegment Segment;
+            }
+
+            /// <summary>把已修改的 struct 写回其 member、list index 或 dictionary key 容器。</summary>
+            private static void WriteBackValueType(object parent, PathSegment segment, object value, string path)
+            {
+                if (parent != null && segment.Kind == "member")
+                {
+                    var type = parent.GetType();
+                    var property = type.GetProperty(segment.Name, BindingFlags.Instance | BindingFlags.Public);
+                    if (property != null && property.CanWrite)
+                    {
+                        property.SetValue(parent, ConvertValue(value, property.PropertyType), null);
+                        return;
+                    }
+                    var field = type.GetField(segment.Name, BindingFlags.Instance | BindingFlags.Public);
+                    if (field != null)
+                    {
+                        field.SetValue(parent, ConvertValue(value, field.FieldType));
+                        return;
+                    }
+                }
+                else if (parent is IList list && segment.Kind == "index" && segment.Index >= 0 && segment.Index < list.Count)
+                {
+                    list[segment.Index] = value;
+                    return;
+                }
+                else if (parent is IDictionary dictionary && segment.Kind == "key" && dictionary.Contains(segment.Name))
+                {
+                    dictionary[segment.Name] = value;
+                    return;
+                }
+
+                throw new BridgeCommandException(
+                    "E_SCHEMA_INVALID",
+                    "pathPatches cannot write the modified value type back through path: " + path,
+                    "Patch a writable parent member, list element, or dictionary entry.");
+            }
+
+            /// <summary>把 slash 路径解析为 member、index 与 dictionary key 段。</summary>
             private static List<PathSegment> ParsePathSegments(string path)
             {
                 var segments = new List<PathSegment>();
                 if (string.IsNullOrEmpty(path)) return segments;
-                // 含 / 则按 / 分隔(对齐 Ivan);否则按 . 分隔(向后兼容)
-                var sep = path.IndexOf('/') >= 0 ? '/' : '.';
-                var rawParts = path.Split(sep);
+                var rawParts = path.Split('/');
                 foreach (var raw in rawParts)
                 {
                     if (string.IsNullOrEmpty(raw)) continue;
@@ -385,143 +445,6 @@ namespace UnityCli
                 return dict != null && dict.TryGetValue(key, out v) ? ToFloat(v) : fallback;
             }
 
-            // ── 简易 JSON 解析（复用 BridgeRequest 的正则不足，这里用轻量解析器处理嵌套） ──
-            internal static List<Dictionary<string, object>> ParseArray(string json)
-            {
-                var result = new List<Dictionary<string, object>>();
-                var trimmed = (json ?? "").Trim();
-                if (trimmed.Length < 2 || trimmed[0] != '[') return result;
-                var index = 1;
-                SkipWhite(trimmed, ref index);
-                while (index < trimmed.Length && trimmed[index] != ']')
-                {
-                    var obj = ParseObjectAt(trimmed, ref index);
-                    if (obj != null) result.Add(obj);
-                    SkipWhite(trimmed, ref index);
-                    if (index < trimmed.Length && trimmed[index] == ',') { index++; SkipWhite(trimmed, ref index); }
-                }
-                return result;
-            }
-
-            internal static Dictionary<string, object> ParseObject(string json)
-            {
-                var trimmed = (json ?? "").Trim();
-                if (trimmed.Length < 2 || trimmed[0] != '{') return null;
-                var index = 1;
-                return ParseObjectAt(trimmed, ref index);
-            }
-
-            private static Dictionary<string, object> ParseObjectAt(string json, ref int index)
-            {
-                SkipWhite(json, ref index);
-                if (index >= json.Length || json[index] != '{') return null;
-                index++;
-                var dict = new Dictionary<string, object>();
-                SkipWhite(json, ref index);
-                while (index < json.Length && json[index] != '}')
-                {
-                    var key = ParseString(json, ref index);
-                    SkipWhite(json, ref index);
-                    if (index < json.Length && json[index] == ':') index++;
-                    SkipWhite(json, ref index);
-                    var value = ParseValue(json, ref index);
-                    if (key != null) dict[key] = value;
-                    SkipWhite(json, ref index);
-                    if (index < json.Length && json[index] == ',') { index++; SkipWhite(json, ref index); }
-                }
-                if (index < json.Length && json[index] == '}') index++;
-                return dict;
-            }
-
-            private static object ParseValue(string json, ref int index)
-            {
-                SkipWhite(json, ref index);
-                if (index >= json.Length) return null;
-                var ch = json[index];
-                if (ch == '"') return ParseString(json, ref index);
-                if (ch == '{') return ParseObjectAt(json, ref index);
-                if (ch == '[') return ParseArrayAt(json, ref index);
-                if (ch == '-' || char.IsDigit(ch)) return ParseNumber(json, ref index);
-                if (MatchLiteral(json, ref index, "true")) return true;
-                if (MatchLiteral(json, ref index, "false")) return false;
-                if (MatchLiteral(json, ref index, "null")) return null;
-                return null;
-            }
-
-            private static List<object> ParseArrayAt(string json, ref int index)
-            {
-                index++;
-                var list = new List<object>();
-                SkipWhite(json, ref index);
-                while (index < json.Length && json[index] != ']')
-                {
-                    list.Add(ParseValue(json, ref index));
-                    SkipWhite(json, ref index);
-                    if (index < json.Length && json[index] == ',') { index++; SkipWhite(json, ref index); }
-                }
-                if (index < json.Length && json[index] == ']') index++;
-                return list;
-            }
-
-            private static string ParseString(string json, ref int index)
-            {
-                SkipWhite(json, ref index);
-                if (index >= json.Length || json[index] != '"') return null;
-                index++;
-                var start = index;
-                var sb = new System.Text.StringBuilder();
-                while (index < json.Length)
-                {
-                    var c = json[index++];
-                    if (c == '"') return sb.ToString();
-                    if (c == '\\' && index < json.Length)
-                    {
-                        var e = json[index++];
-                        switch (e)
-                        {
-                            case '"': sb.Append('"'); break;
-                            case '\\': sb.Append('\\'); break;
-                            case '/': sb.Append('/'); break;
-                            case 'n': sb.Append('\n'); break;
-                            case 'r': sb.Append('\r'); break;
-                            case 't': sb.Append('\t'); break;
-                            default: sb.Append(e); break;
-                        }
-                    }
-                    else sb.Append(c);
-                }
-                return sb.ToString();
-            }
-
-            private static object ParseNumber(string json, ref int index)
-            {
-                var start = index;
-                if (json[index] == '-') index++;
-                while (index < json.Length && (char.IsDigit(json[index]) || json[index] == '.' || json[index] == 'e' || json[index] == 'E' || json[index] == '+' || json[index] == '-'))
-                    index++;
-                var text = json.Substring(start, index - start);
-                if (text.Contains(".") || text.Contains("e") || text.Contains("E"))
-                {
-                    double d;
-                    return double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out d) ? (object)d : null;
-                }
-                long l;
-                return long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out l) ? (object)l : null;
-            }
-
-            private static bool MatchLiteral(string json, ref int index, string literal)
-            {
-                if (index + literal.Length > json.Length) return false;
-                if (string.CompareOrdinal(json, index, literal, 0, literal.Length) != 0) return false;
-                index += literal.Length;
-                return true;
-            }
-
-            private static void SkipWhite(string json, ref int index)
-            {
-                while (index < json.Length && char.IsWhiteSpace(json[index])) index++;
-            }
-
             private static object GetField(Dictionary<string, object> dict, string name)
             {
                 object v;
@@ -533,24 +456,15 @@ namespace UnityCli
                 return dict != null && dict.ContainsKey(name);
             }
 
-            /// <summary>将 PatchResult 序列化为 audit JSON。</summary>
-            public static string ResultToJson(PatchResult result)
+            /// <summary>构造补丁审计值树，保留路径、日志与每项结构化审计记录。</summary>
+            public static Dictionary<string, object> ResultData(PatchResult result)
             {
-                var w = new UnityCliJsonWriter().BeginObject();
-                w.PropArray("changedPaths", arr => { foreach (var p in result.ChangedPaths) arr.Value(p); });
-                w.PropArray("logs", arr => { foreach (var l in result.Logs) arr.Value(l); });
-                w.PropArray("audit", arr =>
+                return new Dictionary<string, object>
                 {
-                    foreach (var entry in result.AuditEntries)
-                    {
-                        var dict = entry as Dictionary<string, object>;
-                        if (dict == null) continue;
-                        arr.BeginObject();
-                        foreach (var kv in dict) { arr.Prop(kv.Key, Convert.ToString(kv.Value, CultureInfo.InvariantCulture)); }
-                        arr.EndObject();
-                    }
-                });
-                return w.EndObject().ToString();
+                    { "changedPaths", result.ChangedPaths },
+                    { "logs", result.Logs },
+                    { "audit", result.AuditEntries }
+                };
             }
         }
     }

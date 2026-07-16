@@ -1,9 +1,11 @@
 import { defineTool } from "../define.js";
-import { runReflectHandler } from "./shared.js";
+import { getReflectMember } from "../../services/reflect-service.js";
+import type { AnyJson } from "../../schema/any-json.js";
 
 export interface ReflectMemberRequest {
   member: string;
   reflectDir?: string;
+  unityVersion?: string;
   format?: string;
 }
 
@@ -11,14 +13,14 @@ export interface ReflectMemberResult {
   command: string;
   mode: string;
   requiresUnity: boolean;
-  source: Record<string, unknown>;
-  unityVersion: Record<string, unknown>;
-  assemblies: Record<string, unknown>[];
-  diagnostics: Record<string, unknown>[];
+  source: Record<string, AnyJson>;
+  unityVersion: Record<string, AnyJson>;
+  assemblies: Record<string, AnyJson>[];
+  diagnostics: Record<string, AnyJson>[];
   target: string;
   format: string;
-  type: Record<string, unknown>;
-  member: Record<string, unknown>;
+  type: Record<string, AnyJson>;
+  member: Record<string, AnyJson>;
   text?: string;
 }
 
@@ -33,10 +35,11 @@ export default defineTool<ReflectMemberRequest, ReflectMemberResult>({
   supportStatus: "cli-only",
   target: "editor",
   examples: [
-    { description: "Read one member's full signature", argv: ["tools", "run", "reflect.member", "--input", "{\"member\":\"UnityEngine.Camera.Render\",\"reflectDir\":\".cache/unity-reflect\",\"format\":\"text\"}"] }
+    { description: "Read one member's full signature", argv: ["tools", "run", "reflect.member", "--input", "{\"member\":\"UnityEngine.Camera.Render\",\"reflectDir\":\".cache/unity-reflect\",\"format\":\"text\"}"] },
+    { description: "Read one member as JSON", argv: ["tools", "run", "reflect.member", "--input", "{\"member\":\"UnityEngine.Camera.Render\",\"reflectDir\":\".cache/unity-reflect\",\"format\":\"json\"}"] }
   ],
-  /** 读取离线反射 cache 中的单个成员签名；不连接 Unity Editor。 */
+  /** 读取离线反射 cache 中的单个成员签名；service 只执行文件读取和筛选。 */
   execute(request, context) {
-    return runReflectHandler<ReflectMemberResult>("member", request.member, request as ReflectMemberRequest & Record<string, unknown>, context);
+    return getReflectMember(request, { dataDir: context.dataDir ?? context.artifactDir });
   }
 });

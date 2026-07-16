@@ -1,28 +1,9 @@
 #if UNITY_EDITOR
 using System;
-using System.CodeDom.Compiler;
 using System.Collections.Generic;
-using System.Globalization;
-using System.IO;
-using System.Linq;
-using System.Net;
 using System.Reflection;
-using System.Text;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
-using Microsoft.CSharp;
-using UnityEditor;
-using UnityEditor.SceneManagement;
-using UnityEngine;
-using UnityEngine.Rendering;
-using UnityEngine.SceneManagement;
-using UnityEngine.UIElements;
-using UiButton = UnityEngine.UI.Button;
-using UiCanvasScaler = UnityEngine.UI.CanvasScaler;
-using UiGraphicRaycaster = UnityEngine.UI.GraphicRaycaster;
-using UiImage = UnityEngine.UI.Image;
-using UiText = UnityEngine.UI.Text;
 
 namespace UnityCli
 {
@@ -32,27 +13,44 @@ namespace UnityCli
         {
             private readonly Dictionary<string, BridgeCommandDefinition> commands = new Dictionary<string, BridgeCommandDefinition>(StringComparer.Ordinal);
 
-            public void Register(string command, string domain, bool destructive, int timeoutMs, Func<BridgeRequest, string> handler)
+            public void Register<TInput>(
+                string command,
+                string domain,
+                bool destructive,
+                int timeoutMs,
+                Func<TInput, CancellationToken, ValueTask<object>> handler)
             {
-                if (string.IsNullOrEmpty(command))
-                {
-                    throw new ArgumentException("Bridge command registration requires a command name.", "command");
-                }
-                if (handler == null)
-                {
-                    throw new ArgumentNullException("handler");
-                }
-                commands[command] = new BridgeCommandDefinition(command, domain, destructive, timeoutMs, handler);
+                if (string.IsNullOrWhiteSpace(command)) throw new ArgumentException("Bridge command registration requires a command name.", "command");
+                if (handler == null) throw new ArgumentNullException("handler");
+                if (commands.ContainsKey(command)) throw new InvalidOperationException("Duplicate bridge command registration: " + command);
+                commands.Add(command, new BridgeCommandDefinition(
+                    command,
+                    domain,
+                    destructive,
+                    timeoutMs,
+                    typeof(TInput),
+                    async (input, cancellationToken) => await handler((TInput)input, cancellationToken)));
             }
 
-            public string Execute(BridgeRequest request)
+            public async ValueTask<object> ExecuteAsync(UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)
             {
                 BridgeCommandDefinition definition;
                 if (request == null || !commands.TryGetValue(request.Command, out definition))
+                    throw new BridgeCommandException("E_BRIDGE_COMMAND_UNSUPPORTED", "Unsupported bridge command: " + (request == null ? string.Empty : request.Command), "Upgrade the Unity CLI Bridge package or use a registered CLI command.");
+                cancellationToken.ThrowIfCancellationRequested();
+                object input;
+                if (definition.InputType == typeof(UnityCli.Protocol.BridgeRequest))
                 {
-                    return null;
+                    input = request;
                 }
-                return definition.Handler(request);
+                else
+                {
+                    var inputJson = UnityCliSerializer.Serialize(request.Input ?? new Dictionary<string, object>());
+                    var schemaError = ValidateTypedInput(definition.InputType, inputJson);
+                    if (schemaError != null) throw SchemaValidationException(schemaError);
+                    input = UnityCliSerializer.Deserialize(inputJson, definition.InputType);
+                }
+                return await definition.Handler(input, cancellationToken);
             }
 
             public bool IsMutating(string command)
@@ -64,12 +62,13 @@ namespace UnityCli
 
         private sealed class BridgeCommandDefinition
         {
-            public BridgeCommandDefinition(string command, string domain, bool destructive, int timeoutMs, Func<BridgeRequest, string> handler)
+            public BridgeCommandDefinition(string command, string domain, bool destructive, int timeoutMs, Type inputType, Func<object, CancellationToken, ValueTask<object>> handler)
             {
                 Command = command;
                 Domain = domain;
                 Destructive = destructive;
                 TimeoutMs = timeoutMs;
+                InputType = inputType;
                 Handler = handler;
             }
 
@@ -77,13 +76,15 @@ namespace UnityCli
             public string Domain { get; private set; }
             public bool Destructive { get; private set; }
             public int TimeoutMs { get; private set; }
-            public Func<BridgeRequest, string> Handler { get; private set; }
+            public Type InputType { get; private set; }
+            public Func<object, CancellationToken, ValueTask<object>> Handler { get; private set; }
         }
 
         private static BridgeCommandRegistry CreateCommandRegistry()
         {
             var registry = new BridgeCommandRegistry();
             RegisterInstalledExtensionCommands(registry);
+            RegisterPackageRefreshCommand(registry);
             RegisterCodeExecCommand(registry);
             RegisterProjectToolCommands(registry);
             RegisterRuntimeToolCommands(registry);
@@ -91,28 +92,73 @@ namespace UnityCli
             return registry;
         }
 
-        private static void RegisterCommand(BridgeCommandRegistry registry, string command, string domain, bool destructive, Func<BridgeRequest, string> handler)
+        private static void RegisterCommand(BridgeCommandRegistry registry, string command, string domain, bool destructive, Func<UnityCli.Protocol.BridgeRequest, object> handler)
         {
-            registry.Register(command, domain, destructive, destructive ? 60000 : 30000, handler);
+            registry.Register<UnityCli.Protocol.BridgeRequest>(
+                command,
+                domain,
+                destructive,
+                destructive ? 60000 : 30000,
+                (request, cancellationToken) =>
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return new ValueTask<object>(NormalizeCommandResult(handler(request)));
+                });
         }
 
-        /// <summary>
-        /// 通过方法名反射注册已复制到项目中的可选 extension 命令，避免 core 静态引用可选包代码。
-        /// </summary>
+        private static object NormalizeCommandResult(object result)
+        {
+            var serialized = result as string;
+            if (serialized == null) return result;
+            var envelope = UnityCliSerializer.Parse(serialized) as IDictionary<string, object>;
+            object okValue;
+            if (envelope == null || !envelope.TryGetValue("ok", out okValue) || !(okValue is bool)) return UnityCliSerializer.Parse(serialized);
+            if ((bool)okValue)
+            {
+                object data;
+                return envelope.TryGetValue("data", out data) ? data : null;
+            }
+            object errorValue;
+            var error = envelope.TryGetValue("error", out errorValue) ? errorValue as IDictionary<string, object> : null;
+            if (error == null) throw new BridgeCommandException("E_BRIDGE_COMMAND_FAILED", "Bridge command returned an invalid error envelope.");
+            object code;
+            object message;
+            object details;
+            object actions;
+            error.TryGetValue("code", out code);
+            error.TryGetValue("message", out message);
+            error.TryGetValue("details", out details);
+            error.TryGetValue("nextActions", out actions);
+            throw new BridgeCommandException(
+                Convert.ToString(code),
+                Convert.ToString(message),
+                details,
+                StringValues(actions));
+        }
+
+        private static IEnumerable<string> StringValues(object value)
+        {
+            var items = value as System.Collections.IEnumerable;
+            if (items == null) return Array.Empty<string>();
+            var result = new List<string>();
+            foreach (var item in items)
+            {
+                var text = Convert.ToString(item);
+                if (!string.IsNullOrWhiteSpace(text)) result.Add(text);
+            }
+            return result;
+        }
+
         private static void RegisterInstalledExtensionCommands(BridgeCommandRegistry registry)
         {
-            var methodNames = new string[0];
+            var methodNames = Array.Empty<string>();
             foreach (var methodName in methodNames)
             {
                 var method = typeof(UnityCliBridge).GetMethod(methodName, BindingFlags.Static | BindingFlags.NonPublic);
-                if (method == null)
-                {
-                    continue;
-                }
+                if (method == null) throw new InvalidOperationException("Installed extension bridge registration method is missing: " + methodName);
                 method.Invoke(null, new object[] { registry });
             }
         }
     }
 }
 #endif
-

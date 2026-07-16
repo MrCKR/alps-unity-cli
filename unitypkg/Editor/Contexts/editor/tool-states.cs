@@ -49,13 +49,14 @@ namespace UnityCli.Contexts.Editor
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "live"
+            RefreshBehavior = "live",
+            Examples = new[] { new ContextExample { Description = "Read transform tool and snap settings", Input = new Request { } } }
         };
 
         /// <summary>
         /// 读取 transform 工具与 snap 设置；只观察状态，不切换工具、不修改网格或吸附设置。
-        /// </summary>
-        public Result Read(Request request, UnityCliProjectToolContext ctx)
+    /// </summary>
+        public System.Threading.Tasks.ValueTask<Result> ReadAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var snapSettingsType = FindType("UnityEditor.EditorSnapSettings");
             var moveSnapEnabled = snapSettingsType != null ? BoolMemberValue(snapSettingsType, null, "snapMoveEnabled") : null;
@@ -65,7 +66,7 @@ namespace UnityCli.Contexts.Editor
             var rotationSnap = snapSettingsType != null ? FloatMemberValue(snapSettingsType, null, "rotationSnap") : null;
             var scaleSnap = snapSettingsType != null ? FloatMemberValue(snapSettingsType, null, "scaleSnap") : null;
 
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Transform = new TransformState
                 {
@@ -83,7 +84,7 @@ namespace UnityCli.Contexts.Editor
                     ScaleSnap = scaleSnapEnabled.HasValue && scaleSnapEnabled.Value && scaleSnap.HasValue ? scaleSnap.Value : 0f
                 },
                 GridAvailable = snapSettingsType != null
-            };
+            });
         }
 
         // 在当前 AppDomain 中查找 Unity 内部类型；找不到时返回 null，让输出降级为 gridAvailable=false。

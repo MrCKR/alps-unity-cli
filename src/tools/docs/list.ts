@@ -31,7 +31,8 @@ export default defineTool<DocsListRequest, DocsListResult>({
   handler: "offline",
   supportStatus: "cli-only",
   examples: [
-    { description: "List built-in CLI doc topics", argv: ["tools", "run", "docs.list", "--input", "{}"] }
+    { description: "List built-in CLI doc topics", argv: ["tools", "run", "docs.list", "--input", "{}"] },
+    { description: "List topics as text", argv: ["tools", "run", "docs.list", "--input", "{\"format\":\"text\"}"] }
   ],
   /** 列出内置文档 topic；projectTools 来自运行时发现结果,用于保留自定义工具 topic。 */
   execute(request, context) {

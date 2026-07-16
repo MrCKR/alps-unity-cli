@@ -6,8 +6,6 @@ namespace UnityCli
 {
     /// <summary>
     /// camera.list — 列出场景中所有 Camera 组件的摘要信息。
-    /// 对齐旧 CameraListJson handler;只读。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class CameraListTool : IUnityCliTool<CameraListTool.Request, CameraListTool.Result>
     {
@@ -40,7 +38,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var cameras = Camera.allCameras;
             var list = new List<CameraInfo>();
@@ -48,7 +46,7 @@ namespace UnityCli
             {
                 list.Add(CameraToolSupport.BuildCameraInfo(camera));
             }
-            return new Result { Cameras = list, Count = list.Count };
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Cameras = list, Count = list.Count });
         }
     }
 }

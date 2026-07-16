@@ -20,7 +20,7 @@ const bridgeOnlyEntries = new Map([
   ["project-tool.list", { handler_type: "bridge", destructive: false }],
   ["project-tool.run", { handler_type: "bridge", destructive: false }],
   ["runtime-tool.list", { handler_type: "bridge", destructive: false }],
-  ["runtime-tool.run", { handler_type: "bridge", destructive: true }]
+  ["runtime-tool.run", { handler_type: "bridge", destructive: false }]
 ]);
 
 const entries = new Map();
@@ -56,8 +56,7 @@ for (const spec of bridgeCommandRegistry.specs()) {
     continue;
   }
 
-  // 新语义:TS metadata 只覆盖 TS 本地工具。其余 bridge specs(尤其 project-tool.run 包装的 C# built-in/extension 工具)
-  // 由 bridge registry 直接补 contract entry。
+  // TS-local metadata 与 Bridge specs 共同提供公开 command contract 来源。
   entries.set(key, {
     bridgeCommand: key,
     group: spec.group,

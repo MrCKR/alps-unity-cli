@@ -42,11 +42,11 @@ namespace UnityCli.Cinemachine
             Examples = new[]
             {
                 new ToolExample { Description = "切换 Body 组件", Input = new Request { Target = "PlayerCam", Body = "CinemachineFollow" } },
-                new ToolExample { Description = "配置现有 Body 属性", Input = new Request { Target = "PlayerCam", Property = "Damping", Value = "0.5" } }
+                new ToolExample { Description = "配置现有 Body 属性", Input = new Request { Target = "PlayerCam", Property = "m_XDamping", Value = "0.5" } }
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             CinemachineToolSupport.EnsureEditorReady("cinemachine.body");
             CinemachineToolSupport.EnsureCinemachineAvailable();
@@ -105,13 +105,13 @@ namespace UnityCli.Cinemachine
             }
 
             CinemachineToolSupport.MarkDirty(gameObject);
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Cinemachine = CinemachineToolSupport.BuildPackageStatus(),
                 Object = CinemachineToolSupport.BuildObjectInfo(gameObject),
                 PlannedEffects = effects,
                 LogPath = ctx.LogPath
-            };
+            });
         }
     }
 }

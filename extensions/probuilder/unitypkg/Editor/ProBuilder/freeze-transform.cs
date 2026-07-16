@@ -29,6 +29,7 @@ namespace UnityCli.ProBuilder
             Description = "Bake the current transform into the ProBuilder mesh vertices, then reset the transform to identity (position zero, rotation identity, scale one). Vertex positions are transformed to world space before the reset.",
             Group = "probuilder",
             DestructiveHint = false,
+            SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 10000,
@@ -41,12 +42,12 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            var go = ProBuilderInput.ResolveTarget(request.Target);
             if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
@@ -88,7 +89,7 @@ namespace UnityCli.ProBuilder
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
-            return new Result { BakedVertexCount = vertexCount };
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { BakedVertexCount = vertexCount });
         }
     }
 }

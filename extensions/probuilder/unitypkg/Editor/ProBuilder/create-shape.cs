@@ -45,6 +45,7 @@ namespace UnityCli.ProBuilder
             Description = "Create a ProBuilder primitive shape in the scene. Supports Cube, Cylinder, Sphere, Plane, Cone, Torus, Pipe, Arch, Stair, CurvedStair, Door, Prism. Optionally set position and dimensions.",
             Group = "probuilder",
             DestructiveHint = false,
+            SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 10000,
@@ -58,7 +59,7 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
@@ -72,16 +73,7 @@ namespace UnityCli.ProBuilder
 
             var go = ProBuilderReflection.CreateShape(shapeType, position, Quaternion.identity);
             if (go == null)
-            {
-                // 回退:创建 Unity 基本体并转换
-                var shape = NormalizeShape(shapeType);
-                var primitive = CreateUnityPrimitive(shape);
-                if (primitive == null)
-                    throw ProBuilderErrors.OperationFailed("create-shape", "Failed to create shape: " + shapeType);
-                go = primitive;
-                go.transform.position = position;
-                ProBuilderReflection.AddProBuilderMesh(go);
-            }
+                throw ProBuilderErrors.OperationFailed("create-shape", "ProBuilder 5.x ShapeGenerator.CreateShape failed for shape: " + shapeType);
 
             go.name = name;
 
@@ -99,7 +91,7 @@ namespace UnityCli.ProBuilder
             EditorSceneManager.MarkSceneDirty(go.scene);
 
             var hasPbMesh = ProBuilderReflection.HasProBuilderMesh(go);
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Object = new ObjectRef
                 {
@@ -109,18 +101,10 @@ namespace UnityCli.ProBuilder
                     Shape = shapeType,
                     HasProBuilderMesh = hasPbMesh
                 }
-            };
+            });
         }
 
         private const string SupportedShapeValues = "Cube, Cylinder, Sphere, Plane, Cone, Torus, Pipe, Arch, Stair, CurvedStair, Door, Prism";
-
-        private static string NormalizeShape(string shapeType)
-        {
-            var s = (shapeType ?? "Cube").Trim();
-            if (string.Equals(s, "box", StringComparison.OrdinalIgnoreCase)) return "Cube";
-            if (string.Equals(s, "quad", StringComparison.OrdinalIgnoreCase)) return "Plane";
-            return s;
-        }
 
         /// <summary>验证 shapeType 与公开 descriptor enum 一致,避免未知值静默创建错误形状。</summary>
         private static bool IsSupportedShape(string shapeType)
@@ -142,19 +126,6 @@ namespace UnityCli.ProBuilder
                     return true;
                 default:
                     return false;
-            }
-        }
-
-        private static GameObject CreateUnityPrimitive(string shape)
-        {
-            switch (shape.ToLowerInvariant())
-            {
-                case "cube": return GameObject.CreatePrimitive(PrimitiveType.Cube);
-                case "sphere": return GameObject.CreatePrimitive(PrimitiveType.Sphere);
-                case "cylinder": return GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                case "plane": return GameObject.CreatePrimitive(PrimitiveType.Plane);
-                case "cone": return GameObject.CreatePrimitive(PrimitiveType.Capsule); // 最近似
-                default: return null;
             }
         }
 

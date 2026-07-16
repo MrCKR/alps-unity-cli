@@ -93,7 +93,7 @@ test("component tools are contract-discovered and expose expected live descripto
   assert.equal(add.playModeSupport, "session-affecting");
   assert.deepEqual(add.sideEffects, ["component-add", "scene-modify"]);
   assert.ok(add.outputSchema);
-  assert.ok(add.examples?.some((example) => example.argv.includes("--input")));
+  assert.ok(add.examples?.some((example) => example.argv?.includes("--input")));
 
   const remove = tools.get("component.remove")!;
   assert.equal(remove.destructiveHint, false);
@@ -104,7 +104,7 @@ test("component tools are contract-discovered and expose expected live descripto
   assert.equal(set.playModeSupport, "session-affecting");
   assert.deepEqual(set.sideEffects, ["component-modify", "scene-modify"]);
   assert.ok(set.outputSchema);
-  assert.ok(set.examples?.some((example) => example.argv.includes("--input")));
+  assert.ok(set.examples?.some((example) => example.argv?.includes("--input")));
 
   const get = tools.get("component.get")!;
   const getProps = get.inputSchema.properties as Record<string, unknown>;
@@ -161,6 +161,12 @@ test("component.modify is not in the destructive security policy", () => {
   assert.equal(commands.has("component.modify"), false);
 });
 
+test("component.modify descriptor example uses slash patch paths", async () => {
+  const source = await (await import("node:fs/promises")).readFile(new URL("../unitypkg/Editor/Tools/component/modify.cs", import.meta.url), "utf8");
+  assert.match(source, /\{ "path", "localPosition\/x" \}/);
+  assert.doesNotMatch(source, /\{ "path", "localPosition\.x" \}/);
+});
+
 test("C# handlers exist for component deep commands (RegisterCommand or IUnityCliTool)", async () => {
   const allSource = await readEditorCsSources();
   for (const command of ["component.get", "component.modify", "component.list-types"]) {
@@ -174,8 +180,11 @@ test("C# component lifecycle handlers support properties and indexed duplicate c
   const toolSource = await (await import("node:fs/promises")).readFile(new URL("../unitypkg/Editor/Tools/component/add.cs", import.meta.url), "utf8");
   const supportSource = await (await import("node:fs/promises")).readFile(new URL("../unitypkg/Editor/Tools/go/GameObjectToolSupport.cs", import.meta.url), "utf8");
   const setSource = await (await import("node:fs/promises")).readFile(new URL("../unitypkg/Editor/Tools/component/set.cs", import.meta.url), "utf8");
-  assert.match(supportSource, /ComponentPropertiesJson/);
-  assert.match(supportSource, /BuildComponentPropertyChanges/);
+  assert.match(toolSource, /\[UnityCliAnyJson\]\s+public Dictionary<string, object> Properties/);
+  assert.match(setSource, /\[UnityCliAnyJson\]\s+public object Value/);
+  assert.match(supportSource, /BuildComponentPropertyChanges\(Type componentType, Dictionary<string, object> properties\)/);
+  assert.match(supportSource, /ObjectPatch\.ConvertValue\(value, type\)/);
+  assert.doesNotMatch(supportSource, /JsonRawProperty|ComponentPropertiesJson|ParseJsonToObject/);
   assert.match(setSource, /ComponentIndex/);
   assert.match(supportSource, /ResolveComponent\(GameObject gameObject, string componentName, int\? componentIndex\)/);
   assert.match(supportSource, /AllowsMultipleComponents/);
@@ -189,7 +198,7 @@ test("C# component lifecycle handlers support properties and indexed duplicate c
 test("C# component deep handlers return typed Result via IUnityCliTool", async () => {
   const { readFile } = await import("node:fs/promises");
   const getSource = await readFile(new URL("../unitypkg/Editor/Tools/component/get.cs", import.meta.url), "utf8");
-  assert.match(getSource, /BuildSerializerOptions\(bridgeRequest\)/, "component.get should build shared serializer options");
+  assert.match(getSource, /BuildSerializerOptions\(request\)/, "component.get should build shared serializer options from its typed request DTO");
   assert.match(getSource, /ObjectSerializer\.Serialize\(component, options\)/, "component.get should serialize the component");
   const modifySource = await readFile(new URL("../unitypkg/Editor/Tools/component/modify.cs", import.meta.url), "utf8");
   assert.match(modifySource, /DryRun/, "component.modify should support dry-run");

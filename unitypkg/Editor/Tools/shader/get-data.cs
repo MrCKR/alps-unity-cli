@@ -9,8 +9,6 @@ namespace UnityCli
 {
     /// <summary>
     /// shader.get-data — 读取 Shader 属性/subshaders/passes/编译消息。可按 path 或 name(Shader.Find)解析。
-    /// 对齐旧 ShaderGetData handler;只读。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class ShaderGetDataTool : IUnityCliTool<ShaderGetDataTool.Request, ShaderGetDataTool.Result>
     {
@@ -59,7 +57,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var path = request.Path ?? request.AssetPath;
             Shader shader;
@@ -111,7 +109,7 @@ namespace UnityCli
                 ? ShaderToolSupport.BuildSubshaders(shader, includeSourceCode, maxSubshaders, maxPasses)
                 : new List<ShaderSubshader>();
 
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Command = "shader.get-data",
                 Name = shader.name,
@@ -125,7 +123,7 @@ namespace UnityCli
                 Properties = properties,
                 SubshaderDataAvailable = ShaderToolSupport.SubshaderDataAvailable(shader),
                 Subshaders = subshaders
-            };
+            });
         }
     }
 }

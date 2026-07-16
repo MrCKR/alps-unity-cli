@@ -6,8 +6,6 @@ namespace UnityCli
 {
     /// <summary>
     /// prefab.stage-open — 在 Prefab Stage 中打开 Assets/*.prefab。editor-only。
-    /// 对齐旧 PrefabStageOpen handler;session-affecting。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class PrefabStageOpenTool : IUnityCliTool<PrefabStageOpenTool.Request, PrefabStageOpenTool.Result>
     {
@@ -41,7 +39,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             PrefabToolSupport.EnsureEditorNotBusy("prefab.stage-open");
             var path = PrefabToolSupport.RequirePrefabPath(request.Path);
@@ -56,11 +54,11 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_PREFAB_STAGE_OPEN_FAILED", "Failed to open Prefab Stage: " + path, "Check Unity Console and UnityCliBridge.log.");
             }
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Stage = new PrefabStageInfo { Action = "open", Path = path, Dirty = false },
                 PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.stage-open", Path = path } }
-            };
+            });
         }
     }
 }

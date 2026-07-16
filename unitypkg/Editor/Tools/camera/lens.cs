@@ -8,8 +8,6 @@ namespace UnityCli
 {
     /// <summary>
     /// camera.lens — 更新 Camera 镜头/投影设置:FOV、正交模式/尺寸、近/远裁剪面、清屏标志、深度。
-    /// 对齐旧 CameraLens handler;session-affecting。非法 clearFlags 返回 E_CAMERA_CLEAR_FLAGS_INVALID。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class CameraLensTool : IUnityCliTool<CameraLensTool.Request, CameraLensTool.Result>
     {
@@ -50,7 +48,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (string.IsNullOrEmpty(request.Target))
             {
@@ -99,8 +97,8 @@ namespace UnityCli
                 camera.depth = (float)request.Depth.Value;
                 effects.Add(new CameraPlannedEffect { Type = "camera.lens", Property = "depth", Value = camera.depth.ToString(System.Globalization.CultureInfo.InvariantCulture) });
             }
-            EditorUtility.SetDirty(camera);
-            return new Result { Camera = CameraToolSupport.BuildCameraInfo(camera), PlannedEffects = effects };
+            UnityCliSceneMutation.MarkSceneObjectDirty(camera);
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Camera = CameraToolSupport.BuildCameraInfo(camera), PlannedEffects = effects });
         }
     }
 }

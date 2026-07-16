@@ -1,165 +1,285 @@
 #if UNITY_EDITOR
 using System;
+using System.Collections;
 using System.Collections.Generic;
-using System.Globalization;
+using System.Linq;
 using System.Reflection;
-using System.Text;
 
 namespace UnityCli
 {
     /// <summary>
-    /// schema 派生器:从 C# Request/Result 类型反射派生 JSON Schema。
-    ///
-    /// 设计依据:.plan/自定义工具定义规范.md 第四节(schema 派生:类型即真相)
-    /// - required 修饰(C# required 属性)→ schema required
-    /// - 可空(? / Nullable)→ 可选,描述 proto3 null 省略语义
-    /// - string → {"type":"string"}; number(double/float/int/long) → {"type":"number"} 或 integer
-    /// - bool → {"type":"boolean"}
-    /// - 嵌套 DTO → {"type":"object","properties":{...}}
-    /// - 数组/List → {"type":"array","items":{...}}
-    /// - Describe 无法染指 schema,单一真相 = 类型
+    /// 从 C# Request/Result 类型派生严格 JSON Schema。未知动态类型必须显式标记 AnyJson。
     /// </summary>
     internal static class UnityCliSchemaDeriver
     {
-        /// <summary>派生一个类型的 JSON Schema(根对象形式)。</summary>
+        /// <summary>派生根类型 schema；递归 DTO 通过 $defs/$ref 表达。</summary>
         public static string DeriveSchema(Type type)
         {
-            var builder = new StringBuilder();
-            WriteTypeSchema(builder, type, new HashSet<Type>(TypeIdentityComparer.Instance));
-            return builder.ToString();
+            if (type == null) throw new ArgumentNullException("type");
+            var definitions = new SortedDictionary<string, object>(StringComparer.Ordinal);
+            var schema = BuildSchema(type, "$", definitions, null, true);
+            var root = schema as IDictionary<string, object>;
+            if (root != null && definitions.Count > 0)
+            {
+                root["$defs"] = definitions.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal);
+            }
+            return UnityCliSerializer.Serialize(schema);
         }
 
-        // 写一个类型的 schema。ancestors 用于检测递归引用(避免无限嵌套)。
-        private static void WriteTypeSchema(StringBuilder builder, Type type, HashSet<Type> ancestors)
+        /// <summary>按 CLR 类型递归构造 schema；不支持类型立即抛错，禁止回退为空 schema。</summary>
+        private static object BuildSchema(Type rawType, string path, SortedDictionary<string, object> definitions, MemberInfo member, bool inlineRoot)
         {
-            if (type == null || type == typeof(object))
+            var anyJson = member != null && member.IsDefined(typeof(UnityCliAnyJsonAttribute), true);
+            if (rawType == null) throw Unsupported(path, "<null>");
+            if (anyJson)
             {
-                builder.Append("{}");
-                return;
+                Type anyDictionaryValue;
+                if (TryDictionaryValueType(rawType, out anyDictionaryValue))
+                    return new Dictionary<string, object> { { "type", "object" }, { "additionalProperties", AnyJsonSchema() } };
+                Type anyElement;
+                if (TryElementType(rawType, out anyElement))
+                    return new Dictionary<string, object> { { "type", "array" }, { "items", AnyJsonSchema() } };
+                return AnyJsonSchema();
             }
 
-            // 可空值类型:取底层
-            var underlying = Nullable.GetUnderlyingType(type);
-            if (underlying != null) type = underlying;
-
-            // 字符串
-            if (type == typeof(string)) { builder.Append("{\"type\":\"string\"}"); return; }
-            // 布尔
-            if (type == typeof(bool)) { builder.Append("{\"type\":\"boolean\"}"); return; }
-            // 整数
-            if (type == typeof(int) || type == typeof(long)) { builder.Append("{\"type\":\"integer\"}"); return; }
-            // 数字
-            if (type == typeof(double) || type == typeof(float) || type == typeof(decimal)) { builder.Append("{\"type\":\"number\"}"); return; }
-
-            // 数组/List<T>
-            Type elementType = null;
-            if (type.IsArray) elementType = type.GetElementType();
-            else if (type.IsGenericType && type.GetGenericTypeDefinition() == typeof(List<>)) elementType = type.GetGenericArguments()[0];
-            else if (typeof(System.Collections.IList).IsAssignableFrom(type) && type.IsGenericType) elementType = type.GetGenericArguments()[0];
-
-            if (elementType != null)
+            var nullableType = Nullable.GetUnderlyingType(rawType);
+            if (nullableType != null)
             {
-                builder.Append("{\"type\":\"array\",\"items\":");
-                WriteTypeSchema(builder, elementType, ancestors);
-                builder.Append('}');
-                return;
-            }
-
-            // 嵌套 DTO:写 object + properties + required
-            WriteObjectSchema(builder, type, ancestors);
-        }
-
-        // 写对象 schema:反射 public 属性
-        private static void WriteObjectSchema(StringBuilder builder, Type type, HashSet<Type> ancestors)
-        {
-            // 递归引用保护
-            if (ancestors.Contains(type))
-            {
-                builder.Append("{}");
-                return;
-            }
-            ancestors.Add(type);
-
-            builder.Append("{\"type\":\"object\",\"properties\":{");
-            var first = true;
-            var required = new List<string>();
-            var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-
-            foreach (var prop in properties)
-            {
-                if (!prop.CanRead) continue;
-                if (!first) builder.Append(',');
-                first = false;
-
-                var camelName = ToCamelCase(prop.Name);
-                WriteString(builder, camelName);
-                builder.Append(':');
-
-                var propType = prop.PropertyType;
-                var isRequired = IsRequired(prop);
-                var isNullable = IsNullable(propType, prop);
-
-                WriteTypeSchema(builder, propType, ancestors);
-
-                if (isRequired) required.Add(camelName);
-            }
-
-            builder.Append('}');
-
-            if (required.Count > 0)
-            {
-                builder.Append(",\"required\":[");
-                for (var i = 0; i < required.Count; i++)
+                if (member != null && member.IsDefined(typeof(UnityCliRequiredAttribute), true))
+                    return BuildSchema(nullableType, path, definitions, null, false);
+                return new Dictionary<string, object>
                 {
-                    if (i > 0) builder.Append(',');
-                    WriteString(builder, required[i]);
-                }
-                builder.Append(']');
+                    { "oneOf", new object[] { BuildSchema(nullableType, path, definitions, null, false), new Dictionary<string, object> { { "type", "null" } } } }
+                };
             }
 
-            builder.Append('}');
-            ancestors.Remove(type);
+            if (rawType == typeof(object)) throw Unsupported(path, rawType.FullName);
+            if (rawType == typeof(string) || rawType == typeof(char)) return TypeSchema("string");
+            if (rawType == typeof(bool)) return TypeSchema("boolean");
+            if (IsInteger(rawType)) return IntegerSchema(rawType);
+            if (IsNumber(rawType)) return TypeSchema("number");
+            if (rawType.IsEnum)
+            {
+                return new Dictionary<string, object>
+                {
+                    { "type", "string" },
+                    { "enum", Enum.GetNames(rawType) }
+                };
+            }
+
+            Type dictionaryValueType;
+            if (TryDictionaryValueType(rawType, out dictionaryValueType))
+            {
+                return new Dictionary<string, object>
+                {
+                    { "type", "object" },
+                    { "additionalProperties", BuildSchema(dictionaryValueType, path + ".*", definitions, member, false) }
+                };
+            }
+
+            Type elementType;
+            if (TryElementType(rawType, out elementType))
+            {
+                return new Dictionary<string, object>
+                {
+                    { "type", "array" },
+                    { "items", BuildSchema(elementType, path + "[]", definitions, member, false) }
+                };
+            }
+
+            if (rawType.IsPointer || rawType.IsByRef || rawType.IsGenericTypeDefinition || rawType.IsInterface || rawType.IsAbstract)
+                throw Unsupported(path, rawType.FullName);
+
+            if (inlineRoot) return BuildObjectSchema(rawType, path, definitions);
+
+            var definitionName = DefinitionName(rawType);
+            if (!definitions.ContainsKey(definitionName))
+            {
+                definitions[definitionName] = new Dictionary<string, object>();
+                definitions[definitionName] = BuildObjectSchema(rawType, path, definitions);
+            }
+            return new Dictionary<string, object> { { "$ref", "#/$defs/" + EscapeJsonPointer(definitionName) } };
         }
 
-        // C# required 修饰符(required 关键字)→ schema 必填
-        private static bool IsRequired(PropertyInfo prop)
+        /// <summary>派生 DTO 的 properties/required，并默认拒绝未知字段。</summary>
+        private static Dictionary<string, object> BuildObjectSchema(Type type, string path, SortedDictionary<string, object> definitions)
         {
-            // Unity 2022.3 默认 C# 9.0 不支持 required 关键字,改用 [UnityCliRequired] 特性显式标记。
-            // 必填判定:属性带 [UnityCliRequired] 特性 → required。
-            return prop.IsDefined(typeof(UnityCliRequiredAttribute), true);
+            if (!type.IsValueType && type.GetConstructor(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic, null, Type.EmptyTypes, null) == null)
+                throw Unsupported(path, type.FullName + " (DTO requires a parameterless constructor)");
+            var properties = new SortedDictionary<string, object>(StringComparer.Ordinal);
+            var required = new List<string>();
+            var members = SerializableMembers(type);
+            if (members.Count == 0 && (type.Namespace == "System" || (type.Namespace != null && type.Namespace.StartsWith("System.", StringComparison.Ordinal))))
+                throw Unsupported(path, type.FullName + " (framework type has no serializable protocol members)");
+            foreach (var member in members)
+            {
+                var name = ToCamelCase(member.Name);
+                properties[name] = BuildSchema(MemberType(member), path + "." + name, definitions, member, false);
+                if (member.IsDefined(typeof(UnityCliRequiredAttribute), true)) required.Add(name);
+            }
+
+            var schema = new Dictionary<string, object>
+            {
+                { "type", "object" },
+                { "properties", properties.ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.Ordinal) },
+                { "additionalProperties", false }
+            };
+            if (required.Count > 0) schema["required"] = required.ToArray();
+            return schema;
         }
 
-        // 可空:Nullable<T> → 可空。引用类型默认可空(开发者可用 [UnityCliRequired] 标记必填);值类型非 Nullable → 非可空。
-        private static bool IsNullable(Type type, PropertyInfo prop)
+        /// <summary>返回可参与协议的 public instance 属性和字段。</summary>
+        internal static IReadOnlyList<MemberInfo> SerializableMembers(Type type)
         {
-            if (Nullable.GetUnderlyingType(type) != null) return true;
-            if (!type.IsValueType) return true;
-            return false;
+            var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Where(property => property.CanRead && property.CanWrite && property.GetIndexParameters().Length == 0)
+                .Cast<MemberInfo>();
+            var fields = type.GetFields(BindingFlags.Public | BindingFlags.Instance)
+                .Where(field => !field.IsStatic && !field.IsInitOnly)
+                .Cast<MemberInfo>();
+            return properties.Concat(fields).OrderBy(member => ToCamelCase(member.Name), StringComparer.Ordinal).ToArray();
         }
 
-        private static string ToCamelCase(string name)
+        /// <summary>读取协议成员的 CLR 类型。</summary>
+        internal static Type MemberType(MemberInfo member)
+        {
+            var property = member as PropertyInfo;
+            if (property != null) return property.PropertyType;
+            var field = member as FieldInfo;
+            if (field != null) return field.FieldType;
+            throw new ArgumentException("Unsupported member: " + member, "member");
+        }
+
+        /// <summary>设置 DTO 属性或字段值。</summary>
+        internal static void SetMemberValue(MemberInfo member, object target, object value)
+        {
+            var property = member as PropertyInfo;
+            if (property != null)
+            {
+                if (!property.CanWrite) return;
+                property.SetValue(target, value, null);
+                return;
+            }
+            var field = member as FieldInfo;
+            if (field != null) field.SetValue(target, value);
+        }
+
+        /// <summary>读取 DTO 属性或字段值。</summary>
+        internal static object GetMemberValue(MemberInfo member, object target)
+        {
+            var property = member as PropertyInfo;
+            if (property != null) return property.GetValue(target, null);
+            return ((FieldInfo)member).GetValue(target);
+        }
+
+        internal static string ToCamelCase(string name)
         {
             if (string.IsNullOrEmpty(name)) return name;
             if (name.Length == 1) return name.ToLowerInvariant();
             if (char.IsLower(name[0])) return name;
-            var chars = name.ToCharArray();
-            chars[0] = char.ToLowerInvariant(chars[0]);
-            return new string(chars);
+            return char.ToLowerInvariant(name[0]) + name.Substring(1);
         }
 
-        private static void WriteString(StringBuilder builder, string value)
+        internal static bool TryDictionaryValueType(Type type, out Type valueType)
         {
-            builder.Append('"');
-            builder.Append(value);
-            builder.Append('"');
+            valueType = null;
+            var candidate = DictionaryInterface(type);
+            if (candidate == null) return false;
+            var arguments = candidate.GetGenericArguments();
+            if (arguments[0] != typeof(string)) throw Unsupported("$", type.FullName + " (dictionary key must be string)");
+            valueType = arguments[1];
+            var concreteType = typeof(Dictionary<,>).MakeGenericType(typeof(string), valueType);
+            if (!type.IsAssignableFrom(concreteType))
+                throw Unsupported("$", type.FullName + " (dictionary cannot be assigned from Dictionary<string, TValue>)");
+            return true;
         }
 
-        // 类型比较器(按 Type 本身)
-        private sealed class TypeIdentityComparer : IEqualityComparer<Type>
+        internal static bool TryElementType(Type type, out Type elementType)
         {
-            public static readonly TypeIdentityComparer Instance = new TypeIdentityComparer();
-            public bool Equals(Type x, Type y) { return ReferenceEquals(x, y); }
-            public int GetHashCode(Type obj) { return obj == null ? 0 : System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj); }
+            elementType = null;
+            if (type.IsArray)
+            {
+                elementType = type.GetElementType();
+                return true;
+            }
+            if (type == typeof(string) || TryDictionaryValueType(type, out _)) return false;
+            var enumerable = type.GetInterfaces().Concat(new[] { type })
+                .FirstOrDefault(candidate => candidate.IsGenericType && candidate.GetGenericTypeDefinition() == typeof(IEnumerable<>));
+            if (enumerable == null) return false;
+            elementType = enumerable.GetGenericArguments()[0];
+            var listType = typeof(List<>).MakeGenericType(elementType);
+            if (!type.IsAssignableFrom(listType))
+                throw Unsupported("$", type.FullName + " (collection cannot be assigned from List<T>)");
+            return true;
+        }
+
+        internal static bool IsInteger(Type type)
+        {
+            return type == typeof(byte) || type == typeof(sbyte) || type == typeof(short) || type == typeof(ushort)
+                || type == typeof(int) || type == typeof(uint) || type == typeof(long) || type == typeof(ulong);
+        }
+
+        internal static bool IsNumber(Type type)
+        {
+            return type == typeof(float) || type == typeof(double) || type == typeof(decimal);
+        }
+
+        private static Type DictionaryInterface(Type type)
+        {
+            return type.GetInterfaces().Concat(new[] { type })
+                .FirstOrDefault(candidate => candidate.IsGenericType &&
+                    (candidate.GetGenericTypeDefinition() == typeof(IDictionary<,>) || candidate.GetGenericTypeDefinition() == typeof(IReadOnlyDictionary<,>)));
+        }
+
+        private static Dictionary<string, object> TypeSchema(string type)
+        {
+            return new Dictionary<string, object> { { "type", type } };
+        }
+
+        private static Dictionary<string, object> IntegerSchema(Type type)
+        {
+            decimal minimum;
+            decimal maximum;
+            IntegerRange(type, out minimum, out maximum);
+            return new Dictionary<string, object>
+            {
+                { "type", "integer" },
+                { "minimum", minimum },
+                { "maximum", maximum }
+            };
+        }
+
+        internal static void IntegerRange(Type type, out decimal minimum, out decimal maximum)
+        {
+            if (type == typeof(byte)) { minimum = byte.MinValue; maximum = byte.MaxValue; return; }
+            if (type == typeof(sbyte)) { minimum = sbyte.MinValue; maximum = sbyte.MaxValue; return; }
+            if (type == typeof(short)) { minimum = short.MinValue; maximum = short.MaxValue; return; }
+            if (type == typeof(ushort)) { minimum = ushort.MinValue; maximum = ushort.MaxValue; return; }
+            if (type == typeof(int)) { minimum = int.MinValue; maximum = int.MaxValue; return; }
+            if (type == typeof(uint)) { minimum = uint.MinValue; maximum = uint.MaxValue; return; }
+            if (type == typeof(long)) { minimum = long.MinValue; maximum = long.MaxValue; return; }
+            minimum = ulong.MinValue;
+            maximum = ulong.MaxValue;
+        }
+
+        private static Dictionary<string, object> AnyJsonSchema()
+        {
+            return new Dictionary<string, object> { { "x-unityCliAnyJson", true } };
+        }
+
+        private static string DefinitionName(Type type)
+        {
+            return (type.FullName ?? type.Name).Replace('+', '.');
+        }
+
+        private static string EscapeJsonPointer(string value)
+        {
+            return value.Replace("~", "~0").Replace("/", "~1");
+        }
+
+        private static InvalidOperationException Unsupported(string path, string type)
+        {
+            return new InvalidOperationException("Unsupported schema type at " + path + ": " + type + ". Add [UnityCliAnyJson] only when the field intentionally accepts arbitrary JSON.");
         }
     }
 }

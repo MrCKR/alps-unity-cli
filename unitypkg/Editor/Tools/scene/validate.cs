@@ -8,8 +8,6 @@ namespace UnityCli
 {
     /// <summary>
     /// scene.validate — 校验场景:缺失脚本、null 引用、Build Settings 包含。
-    /// 对齐旧 SceneValidate handler;只读。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class SceneValidateTool : IUnityCliTool<SceneValidateTool.Request, SceneValidateTool.Result>
     {
@@ -48,7 +46,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var scene = SceneManager.GetActiveScene();
             var path = request.Path;
@@ -101,9 +99,9 @@ namespace UnityCli
             }
             if (!inBuildSettings && !string.IsNullOrEmpty(scene.path))
             {
-                nextActions.Add("Add the scene to Build Settings via build.scenes --action add --path " + scene.path);
+                nextActions.Add("Add the scene to Build Settings with build.scene.add using path " + scene.path);
             }
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Scene = scene.name,
                 Path = scene.path,
@@ -113,7 +111,7 @@ namespace UnityCli
                 InBuildSettings = inBuildSettings,
                 Issues = issues,
                 NextActions = nextActions
-            };
+            });
         }
     }
 }

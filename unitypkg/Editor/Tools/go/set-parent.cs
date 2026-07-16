@@ -8,8 +8,6 @@ namespace UnityCli
 {
     /// <summary>
     /// go.set-parent — 将 GameObject 重新父级化到另一个 GameObject 或脱离到场景根。支持 dryRun。
-    /// 对齐旧 GameObjectSetParent handler;session-affecting。worldPositionStays 默认 true。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class GameObjectSetParentTool : IUnityCliTool<GameObjectSetParentTool.Request, GameObjectSetParentTool.Result>
     {
@@ -18,7 +16,6 @@ namespace UnityCli
             public string Target { get; set; }
             public string Parent { get; set; }
             public bool? WorldPositionStays { get; set; }
-            public bool? DryRun { get; set; }
         }
 
         public sealed class Result
@@ -47,12 +44,12 @@ namespace UnityCli
             MaxTimeoutMs = 600000,
             Examples = new[]
             {
-                new ToolExample { Description = "Dry-run reparent by hierarchy path", Input = new Request { Target = "Player/Sword", Parent = "Player/RightHand", WorldPositionStays = true, DryRun = true } },
+                new ToolExample { Description = "Dry-run reparent by hierarchy path", Input = new Request { Target = "Player/Sword", Parent = "Player/RightHand", WorldPositionStays = true }, Execution = new ToolExampleExecution { DryRun = true } },
                 new ToolExample { Description = "Detach to root by hierarchy path", Input = new Request { Target = "Player/Sword" } }
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             GameObjectToolSupport.EnsureEditorNotBusy("go.set-parent");
             if (string.IsNullOrEmpty(request.Target))
@@ -63,28 +60,27 @@ namespace UnityCli
             var parentName = request.Parent;
             var worldPositionStays = request.WorldPositionStays ?? true;
             var newParent = string.IsNullOrEmpty(parentName) ? null : GameObjectToolSupport.ResolveUniqueTarget(parentName, "Parent GameObject is required.").transform;
-            if (request.DryRun == true)
+            if (ctx.DryRun)
             {
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Command = "go.set-parent",
                     DryRun = true,
                     Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
                     Parent = parentName ?? "<root>",
                     PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "go.set-parent", Parent = parentName ?? "<root>" } }
-                };
+                });
             }
-            Undo.SetTransformParent(gameObject.transform, newParent, "go.set-parent");
-            gameObject.transform.SetParent(newParent, worldPositionStays);
-            EditorSceneManager.MarkSceneDirty(gameObject.scene);
-            return new Result
+            UnityCliSceneMutation.SetParent(gameObject.transform, newParent, "go.set-parent", worldPositionStays);
+            UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Command = "go.set-parent",
                 Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
                 Parent = parentName ?? "<root>",
                 WorldPositionStays = worldPositionStays,
                 PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "go.set-parent" } }
-            };
+            });
         }
     }
 }

@@ -9,8 +9,6 @@ namespace UnityCli
 {
     /// <summary>
     /// component.remove — 从 GameObject 删除一个或多个非 Transform Component,支持 componentIndex 精确选择。
-    /// 对齐旧 ComponentRemove handler;session-affecting。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class ComponentRemoveTool : IUnityCliTool<ComponentRemoveTool.Request, ComponentRemoveTool.Result>
     {
@@ -52,7 +50,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             GameObjectToolSupport.EnsureEditorNotBusy("component.remove");
             var gameObject = ComponentAddTool.ResolveTarget(request.Target, "Component remove requires a target.");
@@ -76,15 +74,15 @@ namespace UnityCli
                 foreach (var component in targets)
                 {
                     removed.Add(GameObjectToolSupport.BuildComponentSummary(component));
-                    Undo.DestroyObjectImmediate(component);
+                    UnityCliSceneMutation.DestroyObject(component);
                 }
-                EditorSceneManager.MarkSceneDirty(gameObject.scene);
+                UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
                 var effects = new List<GameObjectPlannedEffect>();
                 foreach (var name in request.Components)
                 {
                     effects.Add(new GameObjectPlannedEffect { Type = "component.remove", Target = GameObjectToolSupport.HierarchyPath(gameObject), Component = name });
                 }
-                return new Result { Target = targetRef, Components = removed, RemovedCount = removed.Count, PlannedEffects = effects };
+                return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = targetRef, Components = removed, RemovedCount = removed.Count, PlannedEffects = effects });
             }
 
             // 单组件删除模式
@@ -96,15 +94,15 @@ namespace UnityCli
             }
             EnsureNotTransform(singleComponent, componentName);
             var singleRemoved = GameObjectToolSupport.BuildComponentSummary(singleComponent);
-            Undo.DestroyObjectImmediate(singleComponent);
-            EditorSceneManager.MarkSceneDirty(gameObject.scene);
-            return new Result
+            UnityCliSceneMutation.DestroyObject(singleComponent);
+            UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Target = targetRef,
                 Component = singleRemoved,
                 ComponentIndex = request.ComponentIndex.HasValue ? request.ComponentIndex.Value.ToString(CultureInfo.InvariantCulture) : null,
                 PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "component.remove", Target = GameObjectToolSupport.HierarchyPath(gameObject), Component = componentName } }
-            };
+            });
         }
 
         private static void EnsureNotTransform(Component component, string name)

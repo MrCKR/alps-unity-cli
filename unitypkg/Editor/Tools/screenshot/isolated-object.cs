@@ -7,7 +7,6 @@ namespace UnityCli
 {
     /// <summary>
     /// screenshot.isolated-object — 在临时相机中隔离渲染单个对象。
-    /// 内置工具(原 RegisterCommand 形态)迁移为 IUnityCliTool 自包含。
     /// </summary>
     public class ScreenshotIsolatedObjectTool : IUnityCliTool<ScreenshotIsolatedObjectTool.Request, ScreenshotIsolatedObjectTool.Result>
     {
@@ -32,7 +31,7 @@ namespace UnityCli
             Description = "Render a single GameObject in isolation using a temporary camera with a solid background. Resolves the target by hierarchy path/name. Editor-only (creates a temporary Camera).",
             Group = "screenshot",
             Version = "1.0.0",
-            DestructiveHint = false,
+            DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",
             PlayModeSupport = "editor-only",
@@ -41,7 +40,7 @@ namespace UnityCli
             Examples = new[] { new ToolExample { Description = "Isolate an object", Input = new Request { Target = "Player", Path = "Assets/Shots/player.png" } } }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var go = UnityCliBridge.ObjectRefResolver.FindGameObjectByPath(request.Target);
             if (go == null)
@@ -93,7 +92,7 @@ namespace UnityCli
                 Width = width, Height = height, Quality = 95, Source = "isolated-object", Target = go.name
             };
             ScreenshotToolSupport.MaybeAppendInline(result, bytes, width, height, format == "jpg" ? "image/jpeg" : "image/png", request.InlineBase64);
-            return result;
+            return new System.Threading.Tasks.ValueTask<Result>(result);
         }
     }
 }

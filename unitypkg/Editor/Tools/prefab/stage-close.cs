@@ -5,16 +5,13 @@ using UnityEditor;
 namespace UnityCli
 {
     /// <summary>
-    /// prefab.stage-close — 关闭当前 Prefab Stage,可选先保存。editor-only。
-    /// 对齐旧 PrefabStageClose handler;session-affecting。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
+    /// prefab.stage-close - 关闭没有未保存修改的 Prefab Stage。
     /// </summary>
     public class PrefabStageCloseTool : IUnityCliTool<PrefabStageCloseTool.Request, PrefabStageCloseTool.Result>
     {
         public sealed class Request
         {
             public string Path { get; set; }
-            public bool? Save { get; set; }
         }
 
         public sealed class Result
@@ -26,8 +23,8 @@ namespace UnityCli
         public ToolDescriptor Describe() => new()
         {
             Name = "prefab.stage-close",
-            Summary = "Close the currently open Prefab Stage, optionally saving first.",
-            Description = "Close the currently open Prefab Stage. If the stage has unsaved changes, pass save=true to save before closing, or run prefab.stage-save first; otherwise the close is refused to avoid losing edits.",
+            Summary = "Close the currently open Prefab Stage after verifying it has no unsaved changes.",
+            Description = "Close the currently open Prefab Stage without saving. If the stage has unsaved changes, the call fails with E_PREFAB_DIRTY_CONFLICT; run prefab.stage-save first, then call this tool again.",
             Group = "prefab",
             Version = "1.0.0",
             DestructiveHint = false,
@@ -38,34 +35,28 @@ namespace UnityCli
             MaxTimeoutMs = 600000,
             Examples = new[]
             {
-                new ToolExample { Description = "Close the open Prefab Stage", Input = new Request { } },
-                new ToolExample { Description = "Save and close", Input = new Request { Save = true } }
+                new ToolExample { Description = "Close the open Prefab Stage", Input = new Request { } }
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             PrefabToolSupport.EnsureEditorNotBusy("prefab.stage-close");
             var stage = PrefabToolSupport.RequireCurrentPrefabStage(request.Path);
             var path = PrefabToolSupport.StageAssetPath(stage);
-            var save = request.Save ?? false;
-            if (PrefabToolSupport.StageIsDirty(stage) && !save)
+            if (PrefabToolSupport.StageIsDirty(stage))
             {
-                throw new UnityCliBridge.BridgeCommandException("E_PREFAB_DIRTY_CONFLICT", "Prefab Stage has unsaved changes: " + path, "Run tools run prefab.stage-close --input '{\"path\":\"<path>\",\"save\":true}' or tools run prefab.stage-save before closing.");
-            }
-            if (save && !PrefabToolSupport.SavePrefabStage(stage))
-            {
-                throw new UnityCliBridge.BridgeCommandException("E_PREFAB_STAGE_SAVE_FAILED", "Failed to save Prefab Stage before close: " + path, "Check Unity Console and UnityCliBridge.log.");
+                throw new UnityCliBridge.BridgeCommandException("E_PREFAB_DIRTY_CONFLICT", "Prefab Stage has unsaved changes: " + path, "Run tools run prefab.stage-save, then retry prefab.stage-close.");
             }
             if (!PrefabToolSupport.ClosePrefabStage())
             {
                 throw new UnityCliBridge.BridgeCommandException("E_PREFAB_STAGE_CLOSE_FAILED", "Failed to close Prefab Stage: " + path, "Close the Prefab Stage in Unity or check UnityCliBridge.log.");
             }
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Stage = new PrefabStageInfo { Action = "close", Path = path, Dirty = false },
                 PlannedEffects = new List<PrefabPlannedEffect> { new PrefabPlannedEffect { Type = "prefab.stage-close", Path = path } }
-            };
+            });
         }
     }
 }

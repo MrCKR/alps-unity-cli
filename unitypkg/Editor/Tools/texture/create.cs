@@ -9,8 +9,6 @@ namespace UnityCli
 {
     /// <summary>
     /// texture.create — 从源文件或内联生成的纯色纹理创建纹理资产,并可应用导入设置。
-    /// 对齐旧 TextureCreate handler;session-affecting(asset-write)。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class TextureCreateTool : IUnityCliTool<TextureCreateTool.Request, TextureCreateTool.Result>
     {
@@ -47,10 +45,10 @@ namespace UnityCli
             Description = "Create a texture asset at an Assets/ path. With source, copies an existing file (absolute or Assets/ path); otherwise generates a solid-color PNG/JPG from width/height/color. Refuses to overwrite unless overwrite=true. Import settings (textureType/readable/mipmap/sRGB/wrapMode/filterMode/compression/maxTextureSize) are applied after import.",
             Group = "texture",
             Version = "1.0.0",
-            DestructiveHint = false,
+            DestructiveHint = true,
             SideEffects = new[] { "asset-write", "asset-import" },
             Target = "editor",
-            PlayModeSupport = "session-affecting",
+            PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 30000,
             MaxTimeoutMs = 600000,
             Examples = new[]
@@ -59,7 +57,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             TextureToolSupport.EnsureEditorNotBusy("texture.create");
             var path = TextureToolSupport.RequireTexturePath(request.Path);
@@ -98,12 +96,12 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_IMPORT_FAILED", "Texture import did not produce a Texture2D asset: " + path, "Check texture file contents and Unity Console diagnostics.");
             }
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Texture = TextureToolSupport.BuildTextureInfo(path, texture),
                 ImportSettings = TextureToolSupport.BuildTextureImportSettings(TextureToolSupport.RequireTextureImporter(path)),
                 PlannedEffects = new List<TexturePlannedEffect> { new TexturePlannedEffect { Type = "texture.create", Path = path, Refresh = true } }
-            };
+            });
         }
 
         private static void CopyTextureSource(string source, string destinationPath, bool overwrite)

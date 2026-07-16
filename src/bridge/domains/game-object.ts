@@ -1,4 +1,4 @@
-import { boolFlag, compactArgs, numberFlag, stringFlag, targetArgs } from "../args.js";
+import { boolFlag, compactArgs, floatFlag, numberFlag, stringFlag, targetArgs } from "../args.js";
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const gameObjectBridgeSpecs: BridgeCommandSpec[] = [
@@ -9,13 +9,13 @@ export const gameObjectBridgeSpecs: BridgeCommandSpec[] = [
   { group: "go", command: "duplicate", bridgeCommand: "project-tool.run", toolName: "go.duplicate", buildArgs: gameObjectArgs },
   { group: "go", command: "move-relative", bridgeCommand: "project-tool.run", toolName: "go.move-relative", buildArgs: gameObjectArgs },
   { group: "go", command: "look-at", bridgeCommand: "project-tool.run", toolName: "go.look-at", buildArgs: gameObjectArgs },
-  { group: "go", command: "delete", bridgeCommand: "project-tool.run", toolName: "go.delete", buildArgs: gameObjectArgs },
-  { group: "go", command: "set-parent", bridgeCommand: "project-tool.run", toolName: "go.set-parent", buildArgs: gameObjectArgs },
+  { group: "go", command: "delete", bridgeCommand: "project-tool.run", toolName: "go.delete", buildArgs: gameObjectArgs, supportsDryRun: true },
+  { group: "go", command: "set-parent", bridgeCommand: "project-tool.run", toolName: "go.set-parent", buildArgs: gameObjectArgs, supportsDryRun: true },
   { group: "component", command: "add", bridgeCommand: "project-tool.run", toolName: "component.add", buildArgs: componentArgs },
   { group: "component", command: "remove", bridgeCommand: "project-tool.run", toolName: "component.remove", buildArgs: componentArgs },
   { group: "component", command: "set", bridgeCommand: "project-tool.run", toolName: "component.set", buildArgs: componentArgs },
   { group: "component", command: "get", bridgeCommand: "project-tool.run", toolName: "component.get", buildArgs: componentDeepArgs },
-  { group: "component", command: "modify", bridgeCommand: "project-tool.run", toolName: "component.modify", buildArgs: componentDeepArgs },
+  { group: "component", command: "modify", bridgeCommand: "project-tool.run", toolName: "component.modify", buildArgs: componentDeepArgs, supportsDryRun: true },
   { group: "component", command: "list-types", bridgeCommand: "project-tool.run", toolName: "component.list-types", buildArgs: componentListTypesArgs }
 ];
 
@@ -71,18 +71,18 @@ function gameObjectArgs({ command, flags, positionalTarget }: Parameters<BridgeC
     layerValue: stringFlag(flags, "layer-value") ?? stringFlag(flags, "set-layer") ?? stringValue(structured.layerValue),
     tagValue: stringFlag(flags, "tag-value") ?? stringFlag(flags, "set-tag") ?? stringValue(structured.tagValue),
     primitive: stringFlag(flags, "primitive") ?? stringValue(structured.primitive),
-    x: stringFlag(flags, "x") ?? numberValue(position?.x),
-    y: stringFlag(flags, "y") ?? numberValue(position?.y),
-    z: stringFlag(flags, "z") ?? numberValue(position?.z),
-    offsetX: stringFlag(flags, "offset-x") ?? stringFlag(flags, "dx") ?? numberValue(offset?.x),
-    offsetY: stringFlag(flags, "offset-y") ?? stringFlag(flags, "dy") ?? numberValue(offset?.y),
-    offsetZ: stringFlag(flags, "offset-z") ?? stringFlag(flags, "dz") ?? numberValue(offset?.z),
-    rotationX: stringFlag(flags, "rotation-x") ?? numberValue(rotation?.x),
-    rotationY: stringFlag(flags, "rotation-y") ?? numberValue(rotation?.y),
-    rotationZ: stringFlag(flags, "rotation-z") ?? numberValue(rotation?.z),
-    scaleX: stringFlag(flags, "scale-x") ?? numberValue(scale?.x),
-    scaleY: stringFlag(flags, "scale-y") ?? numberValue(scale?.y),
-    scaleZ: stringFlag(flags, "scale-z") ?? numberValue(scale?.z),
+    x: floatFlag(flags, "x") ?? numberValue(position?.x),
+    y: floatFlag(flags, "y") ?? numberValue(position?.y),
+    z: floatFlag(flags, "z") ?? numberValue(position?.z),
+    offsetX: floatFlag(flags, "offset-x") ?? floatFlag(flags, "dx") ?? numberValue(offset?.x),
+    offsetY: floatFlag(flags, "offset-y") ?? floatFlag(flags, "dy") ?? numberValue(offset?.y),
+    offsetZ: floatFlag(flags, "offset-z") ?? floatFlag(flags, "dz") ?? numberValue(offset?.z),
+    rotationX: floatFlag(flags, "rotation-x") ?? numberValue(rotation?.x),
+    rotationY: floatFlag(flags, "rotation-y") ?? numberValue(rotation?.y),
+    rotationZ: floatFlag(flags, "rotation-z") ?? numberValue(rotation?.z),
+    scaleX: floatFlag(flags, "scale-x") ?? numberValue(scale?.x),
+    scaleY: floatFlag(flags, "scale-y") ?? numberValue(scale?.y),
+    scaleZ: floatFlag(flags, "scale-z") ?? numberValue(scale?.z),
     worldPositionStays: boolFlag(flags, "world-position-stays") ?? boolValue(structured.worldPositionStays),
     dryRun: boolFlag(flags, "dry-run") ?? boolFlag(flags, "preflight") ?? boolValue(structured.dryRun)
   });

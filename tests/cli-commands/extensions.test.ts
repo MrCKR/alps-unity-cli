@@ -12,8 +12,14 @@ import { tmpdir } from "node:os";
 
 import { handleExtensionsCommand } from "../../src/cli-commands/extensions.js";
 import { readInstalledExtensions, writeInstalledExtensions } from "../../src/cli-commands/extensions.js";
+import type { CliResult } from "../../src/types.js";
 
 const requestId = "test_req_ext_cmd_001";
+
+function dataOf(result: CliResult): unknown {
+  assert.ok(result.ok);
+  return result.data;
+}
 
 // ── Test runtime ────────────────────────────────────────────────────────────
 
@@ -61,7 +67,7 @@ test("extensions list returns all five extensions with availability", async () =
   const project = await makeProjectDir({ "com.unity.probuilder": "5.2.0" });
   try {
     const result = await handleExtensionsCommand("list", [], { project }, emptyRuntime, requestId);
-    assert.equal(result.ok, true);
+    assert.ok(result.ok);
     const data = result.data as { count: number; extensions: Array<{ id: string; availability: string }> };
     assert.equal(data.count, 5);
     const probuilder = data.extensions.find((e) => e.id === "probuilder")!;
@@ -80,7 +86,7 @@ test("extensions list marks enabled extensions", async () => {
   );
   try {
     const result = await handleExtensionsCommand("list", [], { project }, emptyRuntime, requestId);
-    const data = result.data as { extensions: Array<{ id: string; enabled: boolean }> };
+    const data = dataOf(result) as { extensions: Array<{ id: string; enabled: boolean }> };
     const probuilder = data.extensions.find((e) => e.id === "probuilder")!;
     assert.equal(probuilder.enabled, true);
     const vfx = data.extensions.find((e) => e.id === "vfx-graph")!;
@@ -94,7 +100,7 @@ test("extensions list includes unity package ids", async () => {
   const project = await makeProjectDir({});
   try {
     const result = await handleExtensionsCommand("list", [], { project }, emptyRuntime, requestId);
-    const data = result.data as { extensions: Array<{ id: string; unityPackages: Array<{ packageId: string }> }> };
+    const data = dataOf(result) as { extensions: Array<{ id: string; unityPackages: Array<{ packageId: string }> }> };
     const probuilder = data.extensions.find((e) => e.id === "probuilder")!;
     assert.equal(probuilder.unityPackages[0].packageId, "com.unity.probuilder");
     const hdrp = data.extensions.find((e) => e.id === "hdrp")!;
@@ -108,7 +114,7 @@ test("extensions list includes nextActions for unavailable extensions", async ()
   const project = await makeProjectDir({});
   try {
     const result = await handleExtensionsCommand("list", [], { project }, emptyRuntime, requestId);
-    const data = result.data as { extensions: Array<{ id: string; availability: string; nextActions: string[] }> };
+    const data = dataOf(result) as { extensions: Array<{ id: string; availability: string; nextActions: string[] }> };
     const probuilder = data.extensions.find((e) => e.id === "probuilder")!;
     assert.equal(probuilder.availability, "unavailable");
     assert.ok(probuilder.nextActions.length > 0);
@@ -125,7 +131,7 @@ test("extensions install enables an extension and writes state", async () => {
   const project = await makeProjectDir({ "com.unity.probuilder": "5.2.0" });
   try {
     const result = await handleExtensionsCommand("install", ["probuilder"], { project }, emptyRuntime, requestId);
-    assert.equal(result.ok, true);
+    assert.ok(result.ok);
     const data = result.data as { status: string; extensionId: string };
     assert.equal(data.status, "installed");
     assert.equal(data.extensionId, "probuilder");
@@ -143,7 +149,7 @@ test("extensions install on already-installed returns already_installed", async 
   try {
     await handleExtensionsCommand("install", ["probuilder"], { project }, emptyRuntime, requestId);
     const result = await handleExtensionsCommand("install", ["probuilder"], { project }, emptyRuntime, requestId);
-    assert.equal(result.ok, true);
+    assert.ok(result.ok);
     const data = result.data as { status: string };
     assert.equal(data.status, "already_installed");
   } finally {
@@ -156,7 +162,7 @@ test("extensions install creates a Unity extension directory package", async () 
   const project = await makeProjectDir({ "com.unity.probuilder": "5.2.0" });
   try {
     const result = await handleExtensionsCommand("install", ["probuilder"], { project }, emptyRuntime, requestId);
-    assert.equal(result.ok, true);
+    assert.ok(result.ok);
     const data = result.data as { targetRoot: string; fileCount: number };
     assert.ok(data.targetRoot.endsWith(join("Packages", "com.unity_cli", "Extensions", "probuilder")));
     assert.ok(data.fileCount > 0);
@@ -192,7 +198,7 @@ test("extensions install unknown extension fails with UNKNOWN_EXTENSION", async 
   const project = await makeProjectDir({});
   try {
     const result = await handleExtensionsCommand("install", ["nonexistent"], { project }, emptyRuntime, requestId);
-    assert.equal(result.ok, false);
+    assert.ok(!result.ok);
     assert.equal(result.error?.code, "UNKNOWN_EXTENSION");
   } finally {
     await rm(project, { recursive: true, force: true });
@@ -203,7 +209,7 @@ test("extensions install without name fails with EXTENSION_NAME_REQUIRED", async
   const project = await makeProjectDir({});
   try {
     const result = await handleExtensionsCommand("install", [], { project }, emptyRuntime, requestId);
-    assert.equal(result.ok, false);
+    assert.ok(!result.ok);
     assert.equal(result.error?.code, "EXTENSION_NAME_REQUIRED");
   } finally {
     await rm(project, { recursive: true, force: true });
@@ -212,7 +218,7 @@ test("extensions install without name fails with EXTENSION_NAME_REQUIRED", async
 
 test("extensions install without project fails with PROJECT_PATH_REQUIRED", async () => {
   const result = await handleExtensionsCommand("install", ["probuilder"], {}, emptyRuntime, requestId);
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "PROJECT_PATH_REQUIRED");
 });
 
@@ -220,7 +226,7 @@ test("extensions install with missing Unity dep fails without copying bundle", a
   const project = await makeProjectDir({});
   try {
     const result = await handleExtensionsCommand("install", ["cinemachine"], { project }, emptyRuntime, requestId);
-    assert.equal(result.ok, false);
+    assert.ok(!result.ok);
     assert.equal(result.error?.code, "E_EXTENSION_DEPENDENCY_MISSING");
     assert.ok((result.error?.nextActions ?? []).some((a) => a.includes("Unity Package Manager")));
     assert.ok((result.error?.nextActions ?? []).some((a) => a.includes("extensions install cinemachine")));
@@ -236,7 +242,7 @@ test("extensions remove disables an installed extension", async () => {
   try {
     await handleExtensionsCommand("install", ["probuilder"], { project }, emptyRuntime, requestId);
     const result = await handleExtensionsCommand("remove", ["probuilder"], { project }, emptyRuntime, requestId);
-    assert.equal(result.ok, true);
+    assert.ok(result.ok);
     const data = result.data as { status: string; extensionId: string };
     assert.equal(data.status, "removed");
 
@@ -252,7 +258,7 @@ test("extensions remove on non-installed fails with EXTENSION_NOT_INSTALLED", as
   const project = await makeProjectDir({});
   try {
     const result = await handleExtensionsCommand("remove", ["probuilder"], { project }, emptyRuntime, requestId);
-    assert.equal(result.ok, false);
+    assert.ok(!result.ok);
     assert.equal(result.error?.code, "EXTENSION_NOT_INSTALLED");
   } finally {
     await rm(project, { recursive: true, force: true });
@@ -263,7 +269,7 @@ test("extensions remove without name fails with EXTENSION_NAME_REQUIRED", async 
   const project = await makeProjectDir({});
   try {
     const result = await handleExtensionsCommand("remove", [], { project }, emptyRuntime, requestId);
-    assert.equal(result.ok, false);
+    assert.ok(!result.ok);
     assert.equal(result.error?.code, "EXTENSION_NAME_REQUIRED");
   } finally {
     await rm(project, { recursive: true, force: true });
@@ -272,7 +278,7 @@ test("extensions remove without name fails with EXTENSION_NAME_REQUIRED", async 
 
 test("extensions remove without project fails with PROJECT_PATH_REQUIRED", async () => {
   const result = await handleExtensionsCommand("remove", ["probuilder"], {}, emptyRuntime, requestId);
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "PROJECT_PATH_REQUIRED");
 });
 
@@ -283,7 +289,7 @@ test("extensions doctor reports healthy when all consistent", async () => {
   try {
     await handleExtensionsCommand("install", ["probuilder"], { project }, emptyRuntime, requestId);
     const result = await handleExtensionsCommand("doctor", [], { project }, emptyRuntime, requestId);
-    assert.equal(result.ok, true);
+    assert.ok(result.ok);
     const data = result.data as { healthy: boolean; issues: string[] };
     // ProBuilder installed & enabled = healthy for that extension.
     // Other extensions have deps not installed but are not enabled, so no issue.
@@ -298,7 +304,7 @@ test("extensions doctor flags enabled extension with missing Unity deps", async 
   const project = await makeProjectDir({}, ["probuilder"]);
   try {
     const result = await handleExtensionsCommand("doctor", [], { project }, emptyRuntime, requestId);
-    assert.equal(result.ok, true);
+    assert.ok(result.ok);
     const data = result.data as { healthy: boolean; issues: string[]; checks: Array<{ id: string; issues: string[] }> };
     assert.equal(data.healthy, false);
     assert.ok(data.issues.length > 0);
@@ -314,7 +320,7 @@ test("extensions doctor flags available extension not enabled", async () => {
   const project = await makeProjectDir({ "com.unity.probuilder": "5.2.0" });
   try {
     const result = await handleExtensionsCommand("doctor", [], { project }, emptyRuntime, requestId);
-    assert.equal(result.ok, true);
+    assert.ok(result.ok);
     const data = result.data as { healthy: boolean; checks: Array<{ id: string; issues: string[] }> };
     assert.equal(data.healthy, false);
     const probuilderCheck = data.checks.find((c) => c.id === "probuilder")!;
@@ -326,7 +332,7 @@ test("extensions doctor flags available extension not enabled", async () => {
 
 test("extensions doctor without project fails with PROJECT_PATH_REQUIRED", async () => {
   const result = await handleExtensionsCommand("doctor", [], {}, emptyRuntime, requestId);
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "PROJECT_PATH_REQUIRED");
 });
 
@@ -334,7 +340,7 @@ test("extensions doctor detects unknown enabled extensions", async () => {
   const project = await makeProjectDir({}, ["nonexistent-extension"]);
   try {
     const result = await handleExtensionsCommand("doctor", [], { project }, emptyRuntime, requestId);
-    assert.equal(result.ok, true);
+    assert.ok(result.ok);
     const data = result.data as { healthy: boolean; checks: Array<{ id: string; issues: string[] }> };
     assert.equal(data.healthy, false);
     const unknownCheck = data.checks.find((c) => c.id === "nonexistent-extension")!;
@@ -349,7 +355,7 @@ test("extensions doctor detects unknown enabled extensions", async () => {
 
 test("extensions unknown command fails with UNKNOWN_EXTENSIONS_COMMAND", async () => {
   const result = await handleExtensionsCommand("frobnicate", [], {}, emptyRuntime, requestId);
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "UNKNOWN_EXTENSIONS_COMMAND");
 });
 
@@ -357,7 +363,7 @@ test("extensions with no command defaults to list", async () => {
   const project = await makeProjectDir({});
   try {
     const result = await handleExtensionsCommand(undefined, [], { project }, emptyRuntime, requestId);
-    assert.equal(result.ok, true);
+    assert.ok(result.ok);
     const data = result.data as { command: string };
     assert.equal(data.command, "extensions.list");
   } finally {

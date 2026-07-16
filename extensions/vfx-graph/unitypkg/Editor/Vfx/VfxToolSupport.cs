@@ -70,7 +70,7 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException(
                     "E_VFX_GRAPH_PATH_REQUIRED",
                     "Pass an Assets/*.vfx path.",
-                    "Use unity_cli tools run vfx.graph --input '{\"path\":\"Assets/VFX/Effect.vfx\"}'.");
+                    "Use unity_cli tools run vfx.graph.info --input '{\"path\":\"Assets/VFX/Effect.vfx\"}'.");
             }
 
             if (!path.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase) || !path.EndsWith(".vfx", StringComparison.OrdinalIgnoreCase))
@@ -167,7 +167,7 @@ namespace UnityCli
         {
             if (gameObject != null && gameObject.scene.IsValid())
             {
-                EditorSceneManager.MarkSceneDirty(gameObject.scene);
+                UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
             }
         }
 
@@ -248,7 +248,7 @@ namespace UnityCli
                 var exactFile = Path.Combine(searchPath, templateName + ".vfx");
                 if (File.Exists(exactFile))
                 {
-                    return ToAssetPath(exactFile);
+                    return ToPackageAssetPath(exactFile, packageInfo.resolvedPath, packageInfo.name);
                 }
 
                 foreach (var file in Directory.GetFiles(searchPath, "*.vfx", SearchOption.AllDirectories))
@@ -256,13 +256,13 @@ namespace UnityCli
                     var name = Path.GetFileNameWithoutExtension(file);
                     if (string.Equals(name, templateName, StringComparison.OrdinalIgnoreCase))
                     {
-                        return ToAssetPath(file);
+                        return ToPackageAssetPath(file, packageInfo.resolvedPath, packageInfo.name);
                     }
 
                     var relative = file.Substring(searchPath.Length).TrimStart(Path.DirectorySeparatorChar, '/');
                     if (string.Equals(relative, templateName + ".vfx", StringComparison.OrdinalIgnoreCase))
                     {
-                        return ToAssetPath(file);
+                        return ToPackageAssetPath(file, packageInfo.resolvedPath, packageInfo.name);
                     }
                 }
             }
@@ -421,87 +421,87 @@ namespace UnityCli
             }
         }
 
-        public static void ApplyTrailRendererFields(TrailRenderer trail, TrailRendererFields request, List<VfxPlannedEffect> effects)
+        public static void ApplyTrailRendererFields(TrailRenderer trail, TrailRendererFields request, List<VfxPlannedEffect> effects, string toolName)
         {
             if (request.Time.HasValue)
             {
                 trail.time = (float)request.Time.Value;
-                effects.Add(Effect("vfx.trail", "time", Number(trail.time)));
+                effects.Add(Effect(toolName, "time", Number(trail.time)));
             }
             if (request.StartWidth.HasValue)
             {
                 trail.startWidth = (float)request.StartWidth.Value;
-                effects.Add(Effect("vfx.trail", "startWidth", Number(trail.startWidth)));
+                effects.Add(Effect(toolName, "startWidth", Number(trail.startWidth)));
             }
             if (request.EndWidth.HasValue)
             {
                 trail.endWidth = (float)request.EndWidth.Value;
-                effects.Add(Effect("vfx.trail", "endWidth", Number(trail.endWidth)));
+                effects.Add(Effect(toolName, "endWidth", Number(trail.endWidth)));
             }
             if (request.WidthMultiplier.HasValue)
             {
                 trail.widthMultiplier = (float)request.WidthMultiplier.Value;
-                effects.Add(Effect("vfx.trail", "widthMultiplier", Number(trail.widthMultiplier)));
+                effects.Add(Effect(toolName, "widthMultiplier", Number(trail.widthMultiplier)));
             }
             if (request.WidthCurve != null && request.WidthCurve.Count > 0)
             {
                 trail.widthCurve = BuildCurve(request.WidthCurve);
-                effects.Add(Effect("vfx.trail", "widthCurve", "keys=" + request.WidthCurve.Count.ToString(CultureInfo.InvariantCulture)));
+                effects.Add(Effect(toolName, "widthCurve", "keys=" + request.WidthCurve.Count.ToString(CultureInfo.InvariantCulture)));
             }
             if (!string.IsNullOrWhiteSpace(request.StartColor))
             {
                 trail.startColor = GraphicsToolSupport.ParseColor(request.StartColor);
-                effects.Add(Effect("vfx.trail", "startColor", request.StartColor));
+                effects.Add(Effect(toolName, "startColor", request.StartColor));
             }
             if (!string.IsNullOrWhiteSpace(request.EndColor))
             {
                 trail.endColor = GraphicsToolSupport.ParseColor(request.EndColor);
-                effects.Add(Effect("vfx.trail", "endColor", request.EndColor));
+                effects.Add(Effect(toolName, "endColor", request.EndColor));
             }
             if (request.ColorGradient != null && request.ColorGradient.Count > 0)
             {
                 trail.colorGradient = BuildGradient(request.ColorGradient);
-                effects.Add(Effect("vfx.trail", "colorGradient", "keys=" + request.ColorGradient.Count.ToString(CultureInfo.InvariantCulture)));
+                effects.Add(Effect(toolName, "colorGradient", "keys=" + request.ColorGradient.Count.ToString(CultureInfo.InvariantCulture)));
             }
             if (!string.IsNullOrWhiteSpace(request.Material))
             {
                 trail.sharedMaterial = ResolveOptionalMaterial(request.Material);
-                effects.Add(Effect("vfx.trail", "material", trail.sharedMaterial == null ? "null" : AssetDatabase.GetAssetPath(trail.sharedMaterial)));
+                effects.Add(Effect(toolName, "material", trail.sharedMaterial == null ? "null" : AssetDatabase.GetAssetPath(trail.sharedMaterial)));
             }
             if (request.MinVertexDistance.HasValue)
             {
                 trail.minVertexDistance = (float)request.MinVertexDistance.Value;
-                effects.Add(Effect("vfx.trail", "minVertexDistance", Number(trail.minVertexDistance)));
+                effects.Add(Effect(toolName, "minVertexDistance", Number(trail.minVertexDistance)));
             }
             if (request.Autodestruct.HasValue)
             {
                 trail.autodestruct = request.Autodestruct.Value;
-                effects.Add(Effect("vfx.trail", "autodestruct", Bool(trail.autodestruct)));
+                effects.Add(Effect(toolName, "autodestruct", Bool(trail.autodestruct)));
             }
             if (request.Emitting.HasValue)
             {
                 trail.emitting = request.Emitting.Value;
-                effects.Add(Effect("vfx.trail", "emitting", Bool(trail.emitting)));
+                effects.Add(Effect(toolName, "emitting", Bool(trail.emitting)));
             }
             if (!string.IsNullOrWhiteSpace(request.Alignment))
             {
                 trail.alignment = ParseEnum<LineAlignment>(request.Alignment, "E_TRAIL_ALIGNMENT_INVALID", "Use View or TransformZ.");
-                effects.Add(Effect("vfx.trail", "alignment", trail.alignment.ToString()));
+                effects.Add(Effect(toolName, "alignment", trail.alignment.ToString()));
             }
             if (!string.IsNullOrWhiteSpace(request.TextureMode))
             {
                 trail.textureMode = ParseEnum<LineTextureMode>(request.TextureMode, "E_TRAIL_TEXTURE_MODE_INVALID", "Use Stretch, Tile, DistributePerSegment, or RepeatPerSegment.");
-                effects.Add(Effect("vfx.trail", "textureMode", trail.textureMode.ToString()));
+                effects.Add(Effect(toolName, "textureMode", trail.textureMode.ToString()));
             }
             if (request.NumCornerVertices.HasValue)
             {
                 trail.numCornerVertices = request.NumCornerVertices.Value;
-                effects.Add(Effect("vfx.trail", "numCornerVertices", trail.numCornerVertices.ToString(CultureInfo.InvariantCulture)));
+                effects.Add(Effect(toolName, "numCornerVertices", trail.numCornerVertices.ToString(CultureInfo.InvariantCulture)));
             }
             if (request.NumCapVertices.HasValue)
             {
                 trail.numCapVertices = request.NumCapVertices.Value;
-                effects.Add(Effect("vfx.trail", "numCapVertices", trail.numCapVertices.ToString(CultureInfo.InvariantCulture)));
+                effects.Add(Effect(toolName, "numCapVertices", trail.numCapVertices.ToString(CultureInfo.InvariantCulture)));
             }
         }
 
@@ -845,7 +845,7 @@ namespace UnityCli
                     Angle = shape.angle,
                     Arc = shape.arc,
                     Length = shape.length,
-                    Box = new Vector3Data(shape.box),
+                    Box = new Vector3Data(shape.scale),
                     RandomDirection = shape.randomDirection
                 },
                 Modules = new VfxParticleModulesInfo
@@ -1078,14 +1078,15 @@ namespace UnityCli
             };
         }
 
-        private static string ToAssetPath(string fullPath)
+        /// <summary>把 PackageCache/embedded package 的物理路径转换为 AssetDatabase 可识别的 Packages 路径。</summary>
+        private static string ToPackageAssetPath(string fullPath, string resolvedPath, string packageName)
         {
-            var projectRoot = AssetToolSupport.ProjectRoot();
-            if (fullPath.StartsWith(projectRoot, StringComparison.OrdinalIgnoreCase))
-            {
-                return fullPath.Substring(projectRoot.Length).TrimStart(Path.DirectorySeparatorChar, '/').Replace('\\', '/');
-            }
-            return fullPath.Replace('\\', '/');
+            if (string.IsNullOrEmpty(fullPath) || string.IsNullOrEmpty(resolvedPath) || string.IsNullOrEmpty(packageName)) return null;
+            var normalizedRoot = resolvedPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (!fullPath.StartsWith(normalizedRoot + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
+                && !fullPath.StartsWith(normalizedRoot + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)) return null;
+            var relative = fullPath.Substring(normalizedRoot.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar).Replace('\\', '/');
+            return "Packages/" + packageName + "/" + relative;
         }
 
         private static bool PackageManifestContains(string packageName)

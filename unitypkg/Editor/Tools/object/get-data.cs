@@ -5,25 +5,28 @@ namespace UnityCli
 {
     /// <summary>
     /// object.get-data — 读取任意 UnityEngine.Object 的深序列化数据。只读。
-    /// 内置工具(原 RegisterCommand 形态)迁移为 IUnityCliTool 自包含。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class ObjectGetDataTool : IUnityCliTool<ObjectGetDataTool.Request, ObjectGetDataTool.Result>
     {
-        public sealed class Request
+        public sealed class Request : IUnityCliObjectReferenceInput, IUnityCliObjectSerializationInput
         {
-            public long? InstanceId { get; set; }
+            public int? InstanceId { get; set; }
             public string AssetPath { get; set; }
             public string Guid { get; set; }
             public string Path { get; set; }
             public string Name { get; set; }
+            public string Target { get; set; }
+            public int? ComponentInstanceId { get; set; }
+            public int? ComponentIndex { get; set; }
+            public string Component { get; set; }
+            public string ComponentType { get; set; }
             public int? MaxDepth { get; set; }
             public int? MaxArrayItems { get; set; }
             public bool? IncludeFields { get; set; }
             public bool? IncludeProperties { get; set; }
             public bool? DeepSerialization { get; set; }
             public List<string> Paths { get; set; }
-            public object ViewQuery { get; set; }
+            [UnityCliAnyJson] public object ViewQuery { get; set; }
             public string NamePattern { get; set; }
         }
 
@@ -32,7 +35,7 @@ namespace UnityCli
             public string Command { get; set; }
             public string TypeName { get; set; }
             public long InstanceId { get; set; }
-            public object Data { get; set; }
+            [UnityCliAnyJson] public object Data { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -49,24 +52,22 @@ namespace UnityCli
             MaxTimeoutMs = 600000,
             Examples = new[]
             {
-                new ToolExample { Description = "Read object data by instanceId", Input = new Request { InstanceId = 12345 } }
+                new ToolExample { Description = "Read object data by hierarchy path", Input = new Request { Path = "Player" } }
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            // 用 BridgeRequest.Parse 从 InputJson 构造 BridgeRequest,复用 ObjectRefResolver 的完整解析逻辑
-            var bridgeRequest = UnityCliBridge.BridgeRequest.Parse(ctx.InputJson);
-            var target = UnityCliBridge.ObjectRefResolver.ResolveObject(bridgeRequest);
-            var options = ObjectToolSupport.BuildSerializerOptions(bridgeRequest);
-            var memberJson = UnityCliBridge.ObjectSerializer.Serialize(target, options);
-            return new Result
+            var target = UnityCliBridge.ObjectRefResolver.ResolveObject(request);
+            var options = ObjectToolSupport.BuildSerializerOptions(request);
+            var data = UnityCliBridge.ObjectSerializer.Serialize(target, options);
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Command = "object.get-data",
                 TypeName = target.GetType().FullName,
                 InstanceId = target.GetInstanceID(),
-                Data = UnityCliToolJson.Parse(memberJson)
-            };
+                Data = data
+            });
         }
     }
 }

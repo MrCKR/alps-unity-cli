@@ -5,12 +5,6 @@ using System.Reflection;
 
 namespace UnityCli
 {
-    /// <summary>
-    /// profiler.hierarchy — 读取单帧单线程 CPU 调用树(marker tree)。
-    /// 迁移自旧 RegisterCommand(ProfilerCommands.ProfilerHierarchy)为 IUnityCliTool 自包含。
-    /// 通过 ProfilerDriver.GetHierarchyFrameDataView 拿 HierarchyFrameDataView,递归 GetItemChildren
-    /// 输出 id/name/depth/ms/childCount/childrenTruncated,以 top/depth 限定广度与深度防止单帧树过大。
-    /// </summary>
     public class ProfilerHierarchyTool : IUnityCliTool<ProfilerHierarchyTool.Request, ProfilerHierarchyTool.Result>
     {
         public sealed class Request
@@ -53,11 +47,11 @@ namespace UnityCli
             Examples = new[]
             {
                 new ToolExample { Description = "Latest frame main-thread top markers", Input = new Request { Top = 20, Depth = 5 } },
-                new ToolExample { Description = "Specific frame/thread", Input = new Request { Frame = 100, Thread = 0 } }
+                new ToolExample { Description = "Latest frame on the main thread", Input = new Request { Frame = -1, Thread = 0 } }
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var driverType = ProfilerToolSupport.FindType("UnityEditorInternal.ProfilerDriver");
             if (driverType == null)
@@ -73,7 +67,6 @@ namespace UnityCli
             var top = Math.Max(1, Math.Min(request.Top ?? 20, 5000));
             var maxDepth = Math.Max(1, Math.Min(request.Depth ?? 5, 32));
 
-            // Unity 2022.3 当前类型位于 UnityEditor.Profiling;保留旧命名空间作为兼容回退
             var hierarchyViewType = ProfilerToolSupport.FindType("UnityEditor.Profiling.HierarchyFrameDataView")
                 ?? ProfilerToolSupport.FindType("UnityEditorInternal.HierarchyFrameDataView")
                 ?? ProfilerToolSupport.FindType("UnityEngine.Profiling.HierarchyFrameDataView");
@@ -111,7 +104,7 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_PROFILER_HIERARCHY_UNAVAILABLE",
                     "Failed to acquire hierarchy frame data: " + exception.Message,
-                    HierarchyDetailsJson(frame, threadIndex),
+                    HierarchyDetails(frame, threadIndex),
                     new[] { "Make sure the Profiler has recorded frames; pass profiler.start then profiler.stop, then query a recorded frame (or omit frame to use the latest)." });
             }
             if (view == null)
@@ -130,7 +123,7 @@ namespace UnityCli
             }
 
             var resolvedFrame = frame < 0 ? (int)hierarchyViewType.GetProperty("frameIndex").GetValue(view, null) : frame;
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Command = "profiler.hierarchy",
                 Frame = resolvedFrame,
@@ -138,7 +131,7 @@ namespace UnityCli
                 Top = top,
                 Depth = maxDepth,
                 RootItems = BuildHierarchyItems(view, hierarchyViewType, 0, top, maxDepth, 0)
-            };
+            });
         }
 
         // 递归构建调用树节点:按 top 限制每层子项数量、depth 限制最大深度,避免单帧树过大
@@ -187,16 +180,15 @@ namespace UnityCli
             return result;
         }
 
-        // 错误 details:辅助定位 frame/thread/profilerRecording 状态。
-        private static string HierarchyDetailsJson(int frame, int threadIndex)
+        private static ProfilerHierarchyDetails HierarchyDetails(int frame, int threadIndex)
         {
-            return UnityCliSerializer.Serialize(new ProfilerHierarchyDetails
+            return new ProfilerHierarchyDetails
             {
                 Command = "profiler.hierarchy",
                 Frame = frame,
                 Thread = threadIndex,
                 ProfilerRecording = ProfilerToolSupport.GetProfilerSessionEnabled()
-            });
+            };
         }
     }
 }

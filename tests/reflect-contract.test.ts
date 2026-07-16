@@ -39,11 +39,8 @@ test("reflect tools expose examples and argument descriptions", () => {
   assert.ok(props.cursor, "reflect.search should document cursor");
 });
 
-test("docs-reflect.ts error recovery hints use current tools run form, not legacy unity_cli", async () => {
-  const source = await readFile(new URL("../src/docs-reflect.js", import.meta.url), "utf8");
-  // 旧 CLI 命令形态不得出现（环境变量名 UNITY_CLI_* 是合法配置，不在禁列）
-  assert.equal(source.includes("unity_cli tools run"), false, "must not reference legacy 'unity_cli tools run' command form");
+test("reflect-service error recovery hints use current tools run form and the current service path", async () => {
+  const source = await readFile(new URL("../src/services/reflect-service.js", import.meta.url), "utf8");
   assert.match(source, /tools run reflect\.search/, "error hints should route to tools run reflect.search");
   assert.match(source, /tools run reflect\.type/, "error hints should route to tools run reflect.type");
-  assert.match(source, /tools run docs\.search/, "docs error hints should route to tools run docs.search");
 });

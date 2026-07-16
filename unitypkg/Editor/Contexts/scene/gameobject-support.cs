@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System;
+using System.Collections.Generic;
 using System.Globalization;
 using System.Reflection;
 using UnityEditor;
@@ -9,23 +10,7 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
-        // 解析 scene.gameobject* Context 的目标 GameObject；只读，不修改层级或 Selection。
-        private static GameObject ResolveSceneContextGameObject(BridgeRequest request)
-        {
-            var inputJson = request.RawJsonArg("input");
-            var target = request.StringArg("target") ?? SceneContextInputStringArg(inputJson, "name");
-            var id = request.OptionalIntArg("id");
-            var path = request.StringArg("path");
-            return ResolveSceneContextGameObject(target, id, path);
-        }
-
-        // context.read 顶层 name 保留给 Context 名；业务 name alias 只能从 input 对象读取。
-        private static string SceneContextInputStringArg(string inputJson, string name)
-        {
-            return JsonStringProperty(inputJson, name);
-        }
-
-        // 供 DTO fallback 路径复用的字段级解析；id > path > target，与 legacy handler 保持一致。
+        // 按 id、path、target 顺序解析场景对象；只读层级，不修改 Selection。
         private static GameObject ResolveSceneContextGameObject(string target, int? id, string path)
         {
             GameObject gameObject = null;
@@ -34,10 +19,7 @@ namespace UnityCli
             else if (!string.IsNullOrEmpty(target))
             {
                 var resolution = ResolveGameObjectTarget(target);
-                if (resolution.Matches.Count == 1)
-                {
-                    gameObject = resolution.Target;
-                }
+                if (resolution.Matches.Count == 1) gameObject = resolution.Target;
                 else if (resolution.Matches.Count > 1)
                 {
                     throw new BridgeCommandException("E_TARGET_AMBIGUOUS", "Multiple GameObjects matched context target: " + target, "Pass a hierarchy path or instance id for disambiguation.");
@@ -50,49 +32,46 @@ namespace UnityCli
             return gameObject;
         }
 
-        // 生成 scene.gameobject.components 的详细组件数组，包含可读属性预览。
-        private static string SceneContextComponentDetailsJson(GameObject gameObject)
+        // 读取单个组件的公开属性预览；getter 失败时跳过该属性。
+        private static Dictionary<string, object> SceneContextComponentReadableProperties(Component component)
         {
-            var writer = new UnityCliJsonWriter().BeginArray();
-            foreach (var component in gameObject.GetComponents<Component>())
-            {
-                writer.RawValue(SceneContextComponentDetailJson(component));
-            }
-            return writer.EndArray().ToString();
-        }
-
-        // 生成单个组件详情；MissingScript 复用组件摘要 shape。
-        private static string SceneContextComponentDetailJson(Component component)
-        {
-            if (component == null) return ComponentSummaryJson(component);
-            return new UnityCliJsonWriter().BeginObject()
-                .PropRaw("type", UnityCliSerializer.Serialize(component.GetType().Name))
-                .PropRaw("fullName", UnityCliSerializer.Serialize(component.GetType().FullName))
-                .PropRaw("enabled", UnityCliSerializer.Serialize(ComponentEnabled(component)))
-                .PropRaw("properties", SceneContextComponentReadablePropertiesJson(component))
-                .EndObject()
-                .ToString();
-        }
-
-        // 读取组件 public 可读属性为字符串预览；单个属性失败不影响整个 Context。
-        private static string SceneContextComponentReadablePropertiesJson(Component component)
-        {
-            var writer = new UnityCliJsonWriter().BeginObject();
+            var values = new Dictionary<string, object>();
             foreach (var property in component.GetType().GetProperties(BindingFlags.Instance | BindingFlags.Public))
             {
                 if (!property.CanRead || property.GetIndexParameters().Length > 0) continue;
                 try
                 {
                     var value = property.GetValue(component, null);
-                    if (value == null) writer.PropNull(property.Name);
-                    else writer.PropRaw(property.Name, UnityCliSerializer.Serialize(Convert.ToString(value, CultureInfo.InvariantCulture)));
+                    values[property.Name] = value == null ? null : Convert.ToString(value, CultureInfo.InvariantCulture);
                 }
                 catch
                 {
-                    // 某些 Unity 属性 getter 依赖内部状态，失败时跳过该属性，保持 Context 可恢复。
+                    // Unity getter 可能依赖不可用的内部状态，属性级失败不影响其余只读结果。
                 }
             }
-            return writer.EndObject().ToString();
+            return values;
+        }
+
+        // 直接构造组件 DTO，避免 Context 内出现序列化往返。
+        private static List<SceneGameObjectComponentsContext.ComponentInfo> SceneContextComponentDetails(GameObject gameObject, bool includeProperties)
+        {
+            var items = new List<SceneGameObjectComponentsContext.ComponentInfo>();
+            foreach (var component in gameObject.GetComponents<Component>())
+            {
+                if (component == null)
+                {
+                    items.Add(new SceneGameObjectComponentsContext.ComponentInfo { Type = "MissingScript", Enabled = false });
+                    continue;
+                }
+                items.Add(new SceneGameObjectComponentsContext.ComponentInfo
+                {
+                    Type = component.GetType().Name,
+                    FullName = component.GetType().FullName,
+                    Enabled = ComponentEnabled(component),
+                    Properties = includeProperties ? SceneContextComponentReadableProperties(component) : null
+                });
+            }
+            return items;
         }
     }
 }

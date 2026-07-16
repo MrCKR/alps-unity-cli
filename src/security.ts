@@ -1,11 +1,18 @@
+import { createHash } from "node:crypto";
 import { createInterface } from "node:readline/promises";
 import { stdin, stdout } from "node:process";
 import { getBoolean } from "./args.js";
 import { failure } from "./output.js";
 import type { CliResult } from "./types.js";
 
-export const DESTRUCTIVE_COMMAND_FINGERPRINT = "destructive-safety-v1";
 export const CONFIRMED_FLAG = "__destructiveConfirmed";
+
+export interface SecurityProof {
+  confirmed: boolean;
+  toolName: string;
+  descriptorFingerprint: string;
+  inputSha256: string;
+}
 
 export interface DestructiveGuardOptions {
   command: string;
@@ -70,12 +77,40 @@ export async function confirmDestructiveExecution(
   });
 }
 
-export function destructiveSecurityProof(flags: Record<string, string | boolean>): Record<string, unknown> {
+export function canonicalJson(value: unknown): string {
+  if (value === null) return "null";
+  if (typeof value === "string" || typeof value === "boolean") return JSON.stringify(value);
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) throw new TypeError("Canonical JSON does not support non-finite numbers.");
+    return Object.is(value, -0) ? "0" : JSON.stringify(value);
+  }
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (typeof value === "object") {
+    const record = value as Record<string, unknown>;
+    const entries = Object.keys(record)
+      .filter((key) => record[key] !== undefined)
+      .sort()
+      .map((key) => `${JSON.stringify(key)}:${canonicalJson(record[key])}`);
+    return `{${entries.join(",")}}`;
+  }
+  throw new TypeError(`Canonical JSON does not support ${typeof value}.`);
+}
+
+export function sha256CanonicalJson(value: unknown): string {
+  return createHash("sha256").update(canonicalJson(value), "utf8").digest("hex");
+}
+
+export function destructiveSecurityProof(
+  flags: Record<string, string | boolean>,
+  toolName: string,
+  descriptor: unknown,
+  input: unknown
+): SecurityProof {
   return {
-    destructive: true,
     confirmed: isDestructiveConfirmed(flags),
-    confirmedBy: getBoolean(flags, "yes") ? "--yes" : flags[CONFIRMED_FLAG] === true ? "interactive" : "none",
-    destructiveFingerprint: DESTRUCTIVE_COMMAND_FINGERPRINT
+    toolName,
+    descriptorFingerprint: sha256CanonicalJson(descriptor),
+    inputSha256: sha256CanonicalJson(input)
   };
 }
 

@@ -1,5 +1,6 @@
 import { defineTool } from "../define.js";
-import { runDocsHandler } from "./shared.js";
+import { getDocs } from "../../services/docs-service.js";
+import type { AnyJson } from "../../schema/any-json.js";
 
 export interface DocsGetRequest {
   api: string;
@@ -14,12 +15,12 @@ export interface DocsGetResult {
   command: string;
   mode: string;
   requiresUnity: boolean;
-  source: Record<string, unknown>;
-  unityVersion: Record<string, unknown>;
+  source: Record<string, AnyJson>;
+  unityVersion: Record<string, AnyJson>;
   api: string;
   format: string;
-  doc: Record<string, unknown>;
-  diagnostics?: Record<string, unknown>[];
+  doc: Record<string, AnyJson>;
+  diagnostics?: Record<string, AnyJson>[];
   text?: string;
 }
 
@@ -34,10 +35,11 @@ export default defineTool<DocsGetRequest, DocsGetResult>({
   supportStatus: "cli-only",
   target: "editor",
   examples: [
-    { description: "Read cached Camera docs", argv: ["tools", "run", "docs.get", "--input", "{\"api\":\"UnityEngine.Camera\",\"docsDir\":\".cache/unity-docs\",\"format\":\"text\"}"] }
+    { description: "Read cached Camera docs", argv: ["tools", "run", "docs.get", "--input", "{\"api\":\"UnityEngine.Camera\",\"docsDir\":\".cache/unity-docs\",\"format\":\"text\"}"] },
+    { description: "Read cached docs without network fallback", argv: ["tools", "run", "docs.get", "--input", "{\"api\":\"UnityEngine.Camera\",\"docsDir\":\".cache/unity-docs\",\"format\":\"json\",\"offlineOnly\":true}"] }
   ],
-  /** 读取离线 Unity API 文档；旧 handler 负责 cache 解析和 online fallback。 */
+  /** 读取 Unity API 文档；service 负责离线 cache、错误转换和只读 online fallback。 */
   execute(request, context) {
-    return runDocsHandler<DocsGetResult>("get", request.api, request as DocsGetRequest & Record<string, unknown>, context);
+    return getDocs(request, { dataDir: context.dataDir ?? context.artifactDir, fetch: context.fetch });
   }
 });

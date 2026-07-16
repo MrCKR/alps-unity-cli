@@ -32,38 +32,39 @@ namespace UnityCli.Contexts.Prefab
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "live"
+            RefreshBehavior = "live",
+            Examples = new[] { new ContextExample { Description = "Read the current Prefab Stage", Input = new Request { } } }
         };
 
         /// <summary>
         /// 读取 Prefab Stage 当前状态；只读，不打开、保存、关闭或修改 Prefab。
-        /// </summary>
-        public Result Read(Request request, UnityCliProjectToolContext ctx)
+    /// </summary>
+        public System.Threading.Tasks.ValueTask<Result> ReadAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var prefabStage = PrefabStageUtility.GetCurrentPrefabStage();
             if (prefabStage == null)
             {
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     IsOpen = false,
                     AssetPath = null,
                     PrefabRootName = null,
                     Mode = null,
                     IsDirty = false
-                };
+                });
             }
 
             var type = prefabStage.GetType();
             var sceneValue = type.GetProperty("scene")?.GetValue(prefabStage);
             var root = type.GetProperty("prefabContentsRoot")?.GetValue(prefabStage);
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 IsOpen = true,
                 AssetPath = type.GetProperty("assetPath")?.GetValue(prefabStage)?.ToString(),
                 PrefabRootName = root is GameObject gameObject ? gameObject.name : null,
                 Mode = type.GetProperty("mode")?.GetValue(prefabStage)?.ToString(),
                 IsDirty = sceneValue is UnityEngine.SceneManagement.Scene scene && scene.isDirty
-            };
+            });
         }
     }
 }

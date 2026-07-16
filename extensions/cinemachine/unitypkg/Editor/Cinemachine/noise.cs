@@ -48,7 +48,7 @@ namespace UnityCli.Cinemachine
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             CinemachineToolSupport.EnsureEditorReady("cinemachine.noise");
             CinemachineToolSupport.EnsureCinemachineAvailable();
@@ -69,23 +69,23 @@ namespace UnityCli.Cinemachine
                         "The noise component may have already been removed.");
                 }
 
-                Undo.DestroyObjectImmediate(existing);
+                UnityCliSceneMutation.DestroyObject(existing);
                 CinemachineToolSupport.MarkDirty(gameObject);
                 effects.Add(new CinemachinePlannedEffect
                 {
                     Type = "cinemachine.noise.remove",
                     Target = GameObjectToolSupport.HierarchyPath(gameObject)
                 });
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Cinemachine = CinemachineToolSupport.BuildPackageStatus(),
                     Object = CinemachineToolSupport.BuildObjectInfo(gameObject),
                     PlannedEffects = effects,
                     LogPath = ctx.LogPath
-                };
+                });
             }
 
-            var noise = gameObject.GetComponent(noiseType) ?? Undo.AddComponent(gameObject, noiseType);
+            var noise = gameObject.GetComponent(noiseType) ?? UnityCliSceneMutation.AddComponent(gameObject, noiseType);
 
             if (!string.IsNullOrWhiteSpace(request.NoiseProfile))
             {
@@ -134,13 +134,13 @@ namespace UnityCli.Cinemachine
             }
 
             CinemachineToolSupport.MarkDirty(gameObject);
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Cinemachine = CinemachineToolSupport.BuildPackageStatus(),
                 Object = CinemachineToolSupport.BuildObjectInfo(gameObject),
                 PlannedEffects = effects,
                 LogPath = ctx.LogPath
-            };
+            });
         }
     }
 }

@@ -34,7 +34,7 @@ export default defineTool<PackageStatusRequest, PackageStatusResult>({
   handler: "offline",
   supportStatus: "cli-only",
   examples: [
-    { description: "Show package status", argv: ["tools", "run", "package.status", "--input", "{\"project\":\"D:/workspace/alps-unity-cli/Dev/UnityProject\"}"] }
+    { description: "Show package status", argv: ["tools", "run", "package.status", "--input", "{\"project\":\"./Dev/UnityProject\"}"] }
   ],
   /** 汇总 manifest/lock 快照，不触发 Unity Editor 或 PackageManager resolve。 */
   async execute(request, context) {

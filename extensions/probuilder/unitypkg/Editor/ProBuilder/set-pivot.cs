@@ -37,6 +37,7 @@ namespace UnityCli.ProBuilder
             Description = "Set the pivot point of a ProBuilder mesh to a specific X/Y/Z position. When a coordinate is omitted, the current transform position component is used.",
             Group = "probuilder",
             DestructiveHint = false,
+            SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 10000,
@@ -49,12 +50,12 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            var go = ProBuilderInput.ResolveTarget(request.Target);
             if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
@@ -70,10 +71,10 @@ namespace UnityCli.ProBuilder
             go.transform.position = newPivot;
             EditorSceneManager.MarkSceneDirty(go.scene);
 
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 NewPivotPosition = new Vec3 { X = x, Y = y, Z = z }
-            };
+            });
         }
     }
 }

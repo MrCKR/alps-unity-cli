@@ -2,44 +2,64 @@ import { boolFlag, compactArgs, floatFlag, numberFlag, stringFlag, targetArgs } 
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const vfxBridgeSpecs: BridgeCommandSpec[] = markToolsOnly([
-  { group: "vfx", command: "graph", bridgeCommand: "project-tool.run", toolName: "vfx.graph", buildArgs: vfxGraphArgs },
-  { group: "vfx", command: "effect", bridgeCommand: "project-tool.run", toolName: "vfx.effect", buildArgs: vfxEffectArgs },
+  { group: "vfx", command: "graph.info", bridgeCommand: "project-tool.run", toolName: "vfx.graph.info", buildArgs: vfxGraphInfoArgs },
+  { group: "vfx", command: "graph.create", bridgeCommand: "project-tool.run", toolName: "vfx.graph.create", buildArgs: vfxGraphCreateArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "vfx", command: "effect.info", bridgeCommand: "project-tool.run", toolName: "vfx.effect.info", buildArgs: vfxTargetArgs },
+  { group: "vfx", command: "effect.add", bridgeCommand: "project-tool.run", toolName: "vfx.effect.add", buildArgs: vfxEffectGraphArgs },
+  { group: "vfx", command: "effect.assign", bridgeCommand: "project-tool.run", toolName: "vfx.effect.assign", buildArgs: vfxEffectGraphArgs },
   { group: "vfx", command: "parameter", bridgeCommand: "project-tool.run", toolName: "vfx.parameter", buildArgs: vfxParameterArgs },
-  { group: "vfx", command: "control", bridgeCommand: "project-tool.run", toolName: "vfx.control", buildArgs: vfxControlArgs },
+  { group: "vfx", command: "control.play", bridgeCommand: "project-tool.run", toolName: "vfx.control.play", buildArgs: vfxTargetArgs },
+  { group: "vfx", command: "control.stop", bridgeCommand: "project-tool.run", toolName: "vfx.control.stop", buildArgs: vfxTargetArgs },
+  { group: "vfx", command: "control.pause", bridgeCommand: "project-tool.run", toolName: "vfx.control.pause", buildArgs: vfxTargetArgs },
+  { group: "vfx", command: "control.reinitialize", bridgeCommand: "project-tool.run", toolName: "vfx.control.reinitialize", buildArgs: vfxTargetArgs },
+  { group: "vfx", command: "control.set-rate", bridgeCommand: "project-tool.run", toolName: "vfx.control.set-rate", buildArgs: vfxControlRateArgs },
+  { group: "vfx", command: "control.set-seed", bridgeCommand: "project-tool.run", toolName: "vfx.control.set-seed", buildArgs: vfxControlSeedArgs },
   { group: "vfx", command: "event", bridgeCommand: "project-tool.run", toolName: "vfx.event", buildArgs: vfxEventArgs },
-  { group: "vfx", command: "template", bridgeCommand: "project-tool.run", toolName: "vfx.template", buildArgs: vfxTemplateArgs },
+  { group: "vfx", command: "template.list", bridgeCommand: "project-tool.run", toolName: "vfx.template.list", buildArgs: vfxEmptyArgs },
+  { group: "vfx", command: "template.create", bridgeCommand: "project-tool.run", toolName: "vfx.template.create", buildArgs: vfxTemplateCreateArgs, destructiveHint: true, supportsDryRun: true },
   { group: "vfx", command: "particle-create", bridgeCommand: "project-tool.run", toolName: "vfx.particle-create", buildArgs: vfxParticleArgs },
   { group: "vfx", command: "particle-info", bridgeCommand: "project-tool.run", toolName: "vfx.particle-info", buildArgs: vfxParticleInfoArgs },
   { group: "vfx", command: "particle-main", bridgeCommand: "project-tool.run", toolName: "vfx.particle-main", buildArgs: vfxParticleMainArgs },
   { group: "vfx", command: "particle-emission", bridgeCommand: "project-tool.run", toolName: "vfx.particle-emission", buildArgs: vfxParticleEmissionArgs },
   { group: "vfx", command: "particle-shape", bridgeCommand: "project-tool.run", toolName: "vfx.particle-shape", buildArgs: vfxParticleShapeArgs },
-  { group: "vfx", command: "particle-play", bridgeCommand: "project-tool.run", toolName: "vfx.particle-play", buildArgs: vfxParticlePlayArgs },
+  { group: "vfx", command: "particle.play", bridgeCommand: "project-tool.run", toolName: "vfx.particle.play", buildArgs: vfxParticleActionArgs },
+  { group: "vfx", command: "particle.stop", bridgeCommand: "project-tool.run", toolName: "vfx.particle.stop", buildArgs: vfxParticleStopArgs },
+  { group: "vfx", command: "particle.pause", bridgeCommand: "project-tool.run", toolName: "vfx.particle.pause", buildArgs: vfxParticleActionArgs },
+  { group: "vfx", command: "particle.clear", bridgeCommand: "project-tool.run", toolName: "vfx.particle.clear", buildArgs: vfxParticleActionArgs },
   { group: "vfx", command: "particle-module", bridgeCommand: "project-tool.run", toolName: "vfx.particle-module", buildArgs: vfxParticleModuleArgs },
   { group: "vfx", command: "line-create", bridgeCommand: "project-tool.run", toolName: "vfx.line-create", buildArgs: vfxLineCreateArgs },
   { group: "vfx", command: "line-positions", bridgeCommand: "project-tool.run", toolName: "vfx.line-positions", buildArgs: vfxLinePositionsArgs },
-  { group: "vfx", command: "trail", bridgeCommand: "project-tool.run", toolName: "vfx.trail", buildArgs: vfxTrailArgs }
+  { group: "vfx", command: "trail.create", bridgeCommand: "project-tool.run", toolName: "vfx.trail.create", buildArgs: vfxTrailCreateArgs },
+  { group: "vfx", command: "trail.set", bridgeCommand: "project-tool.run", toolName: "vfx.trail.set", buildArgs: vfxTrailSetArgs }
 ]);
 
 function markToolsOnly(specs: BridgeCommandSpec[]): BridgeCommandSpec[] {
   return specs.map((spec) => ({ ...spec, toolsOnly: true }));
 }
 
-function vfxGraphArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+function vfxGraphInfoArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  const structured = structuredInput(flags);
+  return compactArgs({ path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "graph") ?? stringValue(structured.path) });
+}
+
+function vfxGraphCreateArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   const structured = structuredInput(flags);
   return compactArgs({
     path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "graph") ?? stringValue(structured.path),
-    action: stringFlag(flags, "action") ?? stringFlag(flags, "op") ?? stringValue(structured.action) ?? (boolValue(structured.create) || flags.create ? "create" : undefined),
-    create: boolValue(structured.create),
     overwrite: boolFlag(flags, "overwrite") ?? boolValue(structured.overwrite)
   });
 }
 
-function vfxEffectArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+function vfxTargetArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  const structured = structuredInput(flags);
+  return compactArgs({ target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") ?? stringValue(structured.target) });
+}
+
+function vfxEffectGraphArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   const structured = structuredInput(flags);
   return compactArgs({
     target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") ?? stringValue(structured.target),
-    graph: stringFlag(flags, "graph") ?? stringFlag(flags, "path") ?? stringValue(structured.graph),
-    add: boolFlag(flags, "add") ?? boolValue(structured.add)
+    graph: stringFlag(flags, "graph") ?? stringFlag(flags, "path") ?? stringValue(structured.graph)
   });
 }
 
@@ -65,12 +85,18 @@ function vfxParameterArgs({ flags, positionalTarget }: Parameters<BridgeCommandS
   });
 }
 
-function vfxControlArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+function vfxControlRateArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   const structured = structuredInput(flags);
   return compactArgs({
     target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") ?? stringValue(structured.target),
-    action: stringFlag(flags, "action") ?? stringFlag(flags, "op") ?? stringValue(structured.action),
-    rate: floatFlag(flags, "rate") ?? numberValue(structured.rate),
+    rate: floatFlag(flags, "rate") ?? numberValue(structured.rate)
+  });
+}
+
+function vfxControlSeedArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  const structured = structuredInput(flags);
+  return compactArgs({
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") ?? stringValue(structured.target),
     seed: numberFlag(flags, "seed") ?? numberValue(structured.seed),
     resetSeedOnPlay: boolFlag(flags, "reset-seed-on-play") ?? boolValue(structured.resetSeedOnPlay)
   });
@@ -89,7 +115,11 @@ function vfxEventArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec[
   });
 }
 
-function vfxTemplateArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+function vfxEmptyArgs(): Record<string, unknown> {
+  return {};
+}
+
+function vfxTemplateCreateArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   const structured = structuredInput(flags);
   return compactArgs({
     path: positionalTarget ?? stringFlag(flags, "path") ?? stringValue(structured.path),
@@ -166,11 +196,18 @@ function vfxParticleShapeArgs({ flags, positionalTarget }: Parameters<BridgeComm
   });
 }
 
-function vfxParticlePlayArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+function vfxParticleActionArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   const structured = structuredInput(flags);
   return compactArgs({
     target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") ?? stringValue(structured.target),
-    action: stringFlag(flags, "action") ?? stringFlag(flags, "op") ?? stringValue(structured.action),
+    withChildren: boolFlag(flags, "with-children") ?? boolValue(structured.withChildren)
+  });
+}
+
+function vfxParticleStopArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  const structured = structuredInput(flags);
+  return compactArgs({
+    target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") ?? stringValue(structured.target),
     withChildren: boolFlag(flags, "with-children") ?? boolValue(structured.withChildren),
     stopBehavior: stringFlag(flags, "stop-behavior") ?? stringValue(structured.stopBehavior)
   });
@@ -251,12 +288,18 @@ function vfxLinePositionsArgs({ flags, positionalTarget }: Parameters<BridgeComm
   });
 }
 
-function vfxTrailArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+function vfxTrailCreateArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   const structured = structuredInput(flags);
-  return compactArgs({
-    target: positionalTarget ?? stringFlag(flags, "target") ?? stringValue(structured.target),
-    name: stringFlag(flags, "name") ?? stringValue(structured.name),
-    create: boolFlag(flags, "create") ?? boolValue(structured.create),
+  return compactArgs({ name: positionalTarget ?? stringFlag(flags, "name") ?? stringValue(structured.name), ...vfxTrailFields(flags, structured) });
+}
+
+function vfxTrailSetArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
+  const structured = structuredInput(flags);
+  return compactArgs({ target: positionalTarget ?? stringFlag(flags, "target") ?? stringValue(structured.target), ...vfxTrailFields(flags, structured) });
+}
+
+function vfxTrailFields(flags: BridgeFlags, structured: Record<string, unknown>): Record<string, unknown> {
+  return {
     time: floatFlag(flags, "time") ?? numberValue(structured.time),
     startWidth: floatFlag(flags, "start-width") ?? numberValue(structured.startWidth),
     endWidth: floatFlag(flags, "end-width") ?? numberValue(structured.endWidth),
@@ -273,7 +316,7 @@ function vfxTrailArgs({ flags, positionalTarget }: Parameters<BridgeCommandSpec[
     textureMode: stringFlag(flags, "texture-mode") ?? stringValue(structured.textureMode),
     numCornerVertices: numberFlag(flags, "num-corner-vertices") ?? numberValue(structured.numCornerVertices),
     numCapVertices: numberFlag(flags, "num-cap-vertices") ?? numberValue(structured.numCapVertices)
-  });
+  };
 }
 
 function structuredInput(flags: BridgeFlags): Record<string, unknown> {

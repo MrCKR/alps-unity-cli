@@ -1,19 +1,18 @@
-import { boolFlag, compactArgs, numberFlag, queryArgs, screenshotArgs, stringFlag } from "../args.js";
+import { boolFlag, compactArgs, numberFlag, queryArgs, stringFlag } from "../args.js";
 import type { BridgeCommandSpec } from "../types.js";
 
 export const sceneBridgeSpecs: BridgeCommandSpec[] = [
   { group: "scene", command: "active", bridgeCommand: "project-tool.run", toolName: "scene.active", buildArgs: ({ flags }) => queryArgs(flags) },
   { group: "scene", command: "hierarchy", bridgeCommand: "project-tool.run", toolName: "scene.hierarchy", buildArgs: sceneHierarchyArgs },
   { group: "scene", command: "build-settings", bridgeCommand: "project-tool.run", toolName: "scene.build-settings", buildArgs: ({ flags }) => queryArgs(flags) },
-  { group: "scene", command: "screenshot", bridgeCommand: "project-tool.run", toolName: "scene.screenshot", buildArgs: ({ flags, positionalTarget }) => screenshotArgs(flags, positionalTarget) },
-  { group: "scene", command: "create", bridgeCommand: "project-tool.run", toolName: "scene.create", buildArgs: sceneFileArgs },
+  { group: "scene", command: "create", bridgeCommand: "project-tool.run", toolName: "scene.create", buildArgs: sceneFileArgs, destructiveHint: true },
   { group: "scene", command: "load", bridgeCommand: "project-tool.run", toolName: "scene.load", buildArgs: sceneFileArgs },
-  { group: "scene", command: "save", bridgeCommand: "project-tool.run", toolName: "scene.save", destructiveHint: true, supportsDryRun: true, buildArgs: sceneFileArgs },
-  { group: "scene", command: "unload", bridgeCommand: "project-tool.run", toolName: "scene.unload", buildArgs: sceneFileArgs },
+  { group: "scene", command: "save", bridgeCommand: "project-tool.run", toolName: "scene.save", buildArgs: sceneFileArgs, destructiveHint: true, supportsDryRun: true },
+  { group: "scene", command: "unload", bridgeCommand: "project-tool.run", toolName: "scene.unload", buildArgs: sceneFileArgs, destructiveHint: true, supportsDryRun: true },
   { group: "scene", command: "set-active", bridgeCommand: "project-tool.run", toolName: "scene.set-active", buildArgs: sceneFileArgs },
   { group: "scene", command: "list-opened", bridgeCommand: "project-tool.run", toolName: "scene.list-opened", buildArgs: ({ flags }) => queryArgs(flags) },
   { group: "scene", command: "data", bridgeCommand: "project-tool.run", toolName: "scene.data", buildArgs: sceneDataArgs },
-  { group: "scene", command: "move-object", bridgeCommand: "project-tool.run", toolName: "scene.move-object", buildArgs: sceneMoveObjectArgs },
+  { group: "scene", command: "move-object", bridgeCommand: "project-tool.run", toolName: "scene.move-object", buildArgs: sceneMoveObjectArgs, supportsDryRun: true },
   { group: "scene", command: "validate", bridgeCommand: "project-tool.run", toolName: "scene.validate", buildArgs: sceneValidateArgs },
   { group: "scene", command: "view-frame", bridgeCommand: "project-tool.run", toolName: "scene.view-frame", buildArgs: ({ flags }) => { const s = structuredInput(flags); return compactArgs({ target: stringFlag(flags, "target") ?? stringValue(s.target), path: stringFlag(flags, "path") ?? stringValue(s.path), frameAll: boolFlag(flags, "frame-all") ?? boolValue(s.frameAll) }); } }
 ];

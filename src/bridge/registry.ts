@@ -79,8 +79,7 @@ export class BridgeCommandRegistry {
    */
   public registerSpecs(specs: BridgeCommandSpec[]): void {
     for (const spec of specs) {
-      // 破坏性/ dry-run 策略:优先按 bridgeCommand 匹配;project-tool.run 路由的工具按 toolName(原始工具名)回退匹配,
-      // 确保 asset.delete / scene.save 等迁移为 project-tool.run 后仍能从 security-policy 取得 destructiveHint/supportsDryRun。
+      // project-tool.run 是内部路由，风险身份由公开 toolName 决定；其余命令直接使用 bridgeCommand。
       const policy = securityPolicyForCommand(spec.bridgeCommand)
         ?? (spec.toolName ? securityPolicyForCommand(spec.toolName) : undefined);
       if (policy) {

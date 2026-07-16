@@ -12,7 +12,6 @@ namespace UnityCli
     /// camera 域 IUnityCliTool 共享的基础设施 helper:相机解析、相机信息构造、
     /// 截图捕获、清屏标志解析、忙状态拦截。仅供 camera 域自包含工具复用;
     /// 不实现 IUnityCliTool,不参与工具发现。
-    /// 设计依据:.plan/工具统一形态.md(自包含工具共享只读 helper,handler 逻辑各自内聚)。
     /// </summary>
     public static class CameraToolSupport
     {
@@ -27,7 +26,7 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_UNITY_IMPORTING", "Unity Editor is importing assets.", "Wait for Unity to finish importing and retry.", transient: true, retryAfterMs: 5000);
             }
-            if (EditorApplication.isPlayingOrWillChangePlaymode && !EditorApplication.isPlaying)
+            if (UnityCliBridge.IsPlayModeChanging())
             {
                 throw new UnityCliBridge.BridgeCommandException("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode.", "Wait for Play mode transition to complete and retry.", transient: true, retryAfterMs: 3000);
             }

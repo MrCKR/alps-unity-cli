@@ -8,8 +8,6 @@ namespace UnityCli
 {
     /// <summary>
     /// asset.rename — 重命名资产(不改目录)。禁止路径分隔符。
-    /// 对齐旧 AssetRename handler;session-affecting(asset-write)。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class AssetRenameTool : IUnityCliTool<AssetRenameTool.Request, AssetRenameTool.Result>
     {
@@ -33,10 +31,10 @@ namespace UnityCli
             Description = "Rename an existing Assets/ asset file in place. The name must not include path separators; use asset.move to change directories.",
             Group = "asset",
             Version = "1.0.0",
-            DestructiveHint = false,
+            DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",
-            PlayModeSupport = "session-affecting",
+            PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 30000,
             MaxTimeoutMs = 600000,
             Examples = new[]
@@ -45,7 +43,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             AssetToolSupport.EnsureEditorNotBusy("asset.rename");
             var path = AssetToolSupport.RequireExistingAssetPath(request.Path);
@@ -70,12 +68,12 @@ namespace UnityCli
             {
                 renamedPath = AssetToolSupport.NormalizeAssetPath(Path.Combine(Path.GetDirectoryName(path) ?? "Assets", name));
             }
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Asset = AssetToolSupport.BuildAssetDetail(renamedPath),
                 Source = path,
                 PlannedEffects = new List<AssetPlannedEffect> { new AssetPlannedEffect { Type = "asset.rename", Path = renamedPath, Source = path } }
-            };
+            });
         }
     }
 }

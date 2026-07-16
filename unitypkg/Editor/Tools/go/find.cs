@@ -10,8 +10,6 @@ namespace UnityCli
 {
     /// <summary>
     /// go.find — 按名称/标签/层/组件/层级路径/实例ID 搜索 GameObject,可选优先 Prefab Stage。
-    /// 对齐旧 GameObjectFind handler;只读,分页。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class GameObjectFindTool : IUnityCliTool<GameObjectFindTool.Request, GameObjectFindTool.Result>
     {
@@ -64,7 +62,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var searchTerm = request.SearchTerm ?? request.Query ?? request.Target ?? request.Name ?? request.Tag ?? request.Layer ?? request.Component ?? request.Path ?? request.Id;
             if (string.IsNullOrEmpty(searchTerm))
@@ -92,8 +90,8 @@ namespace UnityCli
             var matches = prefabStageOpen ? prefabStageMatches.Concat(sceneMatches).ToList() : sceneMatches;
             var total = matches.Count;
             var page = matches.Skip(cursor).Take(pageSize).ToList();
-            var nextCursor = cursor + page.Count < total ? (cursor + page.Count).ToString(CultureInfo.InvariantCulture) : null;
-            return new Result
+            long? nextCursor = cursor + page.Count < total ? (long?)(cursor + page.Count) : null;
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Query = searchTerm,
                 SearchMethod = searchMethod,
@@ -103,7 +101,7 @@ namespace UnityCli
                 MatchCount = total,
                 Items = page.ConvertAll(BuildItem),
                 PageInfo = new GoPageInfo { PageSize = pageSize, Cursor = cursor, NextCursor = nextCursor, Total = total }
-            };
+            });
         }
 
         private static string InferSearchMethod(Request request)

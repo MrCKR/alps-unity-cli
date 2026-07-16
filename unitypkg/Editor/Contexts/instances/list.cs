@@ -41,13 +41,14 @@ namespace UnityCli.Contexts.Instances
             Target = "editor",
             AvailabilityScope = "always",
             PlayModeSupport = "supported",
-            RefreshBehavior = "live"
+            RefreshBehavior = "live",
+            Examples = new[] { new ContextExample { Description = "Read the current Bridge instance", Input = new Request { } } }
         };
 
         /// <summary>
-        /// 读取当前 Bridge listener 的只读摘要；通过窄反射兼容旧私有字段，不扩展公开注册表 API。
-        /// </summary>
-        public Result Read(Request request, UnityCliProjectToolContext ctx)
+        /// 读取当前 Bridge listener 的只读摘要；通过窄反射读取 Bridge 自身的实例字段。
+    /// </summary>
+        public System.Threading.Tasks.ValueTask<Result> ReadAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var listenerId = ReadBridgeStringField("ListenerId") ?? "unknown";
             var bridgePort = ReadBridgeIntField("port");
@@ -67,14 +68,14 @@ namespace UnityCli.Contexts.Instances
                 }
             };
 
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Instances = instances,
                 Count = instances.Count
-            };
+            });
         }
 
-        // 读取 UnityCliBridge 私有静态字符串字段；仅用于保留 legacy context 输出兼容性。
+        // 读取 UnityCliBridge 私有静态字符串字段，供实例摘要使用。
         private static string ReadBridgeStringField(string name)
         {
             var field = typeof(UnityCliBridge).GetField(name, BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public);

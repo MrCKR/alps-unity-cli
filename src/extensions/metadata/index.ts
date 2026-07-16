@@ -6,7 +6,7 @@
  * 运行时从 live bridge 获取。
  */
 
-import { BUILTIN_EXTENSION_MANIFESTS } from "../registry-data.js";
+import { BUILTIN_EXTENSION_MANIFESTS } from "../.generated-registry-data.js";
 import type { ExtensionMetadata } from "./types.js";
 
 export type { ExtensionMetadata } from "./types.js";

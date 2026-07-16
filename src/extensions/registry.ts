@@ -6,7 +6,7 @@
  * knows about and whether they are available in a given project.
  */
 
-import { BUILTIN_EXTENSION_MANIFESTS } from "./registry-data.js";
+import { BUILTIN_EXTENSION_MANIFESTS } from "./.generated-registry-data.js";
 import type {
   ExtensionId,
   ExtensionManifest,

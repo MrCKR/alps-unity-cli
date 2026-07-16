@@ -1,14 +1,86 @@
 import { getBoolean, getNumber, getString } from "../args.js";
+import { resolve } from "node:path";
 import { bridgeCommandRegistry, executeBridgePayload } from "../bridge/index.js";
 import { dismissUnityLaunchDialog, DISMISS_BUTTON_LABEL, LAUNCH_DIALOG_TITLE_FRAGMENTS } from "../launch-dialog-dismiss.js";
 import { durationMsFrom, failure, success } from "../output.js";
 import type { CliResult } from "../types.js";
 import type { Runtime } from "./types.js";
-import { startUnityJob } from "./unity-job.js";
+import { runUnityJob, startUnityJob } from "./unity-job.js";
+import { ensurePackageBridge } from "../package-manager.js";
+import type { BridgeRuntime } from "../bridge/index.js";
+import type { JobRunner } from "../job-runner.js";
+import { StructuredToolError } from "../tools/errors.js";
+
+export interface AssetRefreshServiceRequest {
+  path?: string;
+  forceUpdate?: boolean;
+  importRecursive?: boolean;
+  project?: string;
+  unity?: string;
+  wait?: boolean;
+  waitTimeoutMs?: number;
+  bridgeEndpoint?: string;
+  instance?: string;
+  job?: boolean;
+  dryRun?: boolean;
+}
+
+export interface AssetRefreshRuntime extends BridgeRuntime {
+  dataDir: string;
+  runner?: JobRunner;
+}
+
+/** 根据 job 选项直接执行 live Bridge 或 batchmode Bridge job。 */
+export async function executeAssetRefresh(request: AssetRefreshServiceRequest, runtime: AssetRefreshRuntime, requestId: string): Promise<Record<string, unknown>> {
+  const input = compact({ path: request.path, forceUpdate: request.forceUpdate, importRecursive: request.importRecursive, dryRun: request.dryRun });
+  if (!request.job) {
+    const result = await executeBridgePayload(requestId, "project-tool.run", { name: "asset.refresh", input }, compact({
+      "bridge-endpoint": request.bridgeEndpoint ?? runtime.bridgeEndpoint,
+      instance: request.instance,
+      "dry-run": request.dryRun
+    }) as Record<string, string | boolean>, runtime);
+    if (!result.ok) {
+      throw StructuredToolError.from(result.error ?? { code: "ASSET_REFRESH_FAILED", message: "asset.refresh failed." });
+    }
+    return (result.data ?? {}) as Record<string, unknown>;
+  }
+
+  if (!runtime.runner) {
+    throw new StructuredToolError("E_TOOL_HANDLER_UNSUPPORTED", "Tool \"asset.refresh\" requires a job runner runtime for batchmode execution.");
+  }
+  const projectPath = resolve(request.project ?? process.cwd());
+  const bridge = await ensurePackageBridge(projectPath);
+  const payload = {
+    command: "project-tool.run",
+    requestId,
+    input: { name: "asset.refresh", input },
+    ...(request.dryRun ? { execution: { dryRun: true } } : {})
+  };
+  return runUnityJob({
+    kind: "bridge",
+    requestId,
+    project: projectPath,
+    unity: request.unity,
+    args: ["-executeMethod", "UnityCli.UnityCliBatch.RunBridgeCommand", "-unityCliBridgeRequest", JSON.stringify(payload)],
+    result: {
+      command: "asset.refresh",
+      bridgeCommand: "project-tool.run",
+      mode: "bridge-job",
+      execution: { channel: "batchmode", exitState: "queued" },
+      supportsJob: true,
+      args: input,
+      dryRun: request.dryRun === true,
+      bridge
+    },
+    wait: request.wait,
+    waitTimeoutMs: request.waitTimeoutMs
+  }, runtime.runner);
+}
 
 const DEFAULT_COMPILE_WAIT_TIMEOUT_MS = 45_000;
-const MAX_COMPILE_WAIT_TIMEOUT_MS = 55_000;
+const MAX_COMPILE_WAIT_TIMEOUT_MS = 180_000;
 const DEFAULT_COMPILE_POLL_INTERVAL_MS = 1_000;
+const COMPILE_DIAGNOSTIC_RETRY_CODES = new Set(["BRIDGE_CONNECTION_FAILED", "E_TARGET_STALE", "E_TARGET_UNREACHABLE", "E_UNITY_DOMAIN_RELOAD"]);
 
 export function handleEditor(command: string | undefined, flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult> | undefined {
   if (command === "refresh") {
@@ -16,7 +88,7 @@ export function handleEditor(command: string | undefined, flags: Record<string, 
   }
 
   if (command === "compile-diagnostics") {
-    return handleCompileDiagnostics(flags, runtime, requestId);
+    return handleCompileDiagnosticsCli(flags, runtime, requestId);
   }
 
   if (command === "launch-dialog.dismiss") {
@@ -61,66 +133,97 @@ interface ConsoleItem {
   line?: number;
 }
 
+export interface CompileDiagnosticsRequest {
+  refresh?: boolean;
+  path?: string;
+  forceUpdate?: boolean;
+  importRecursive?: boolean;
+  waitReady?: boolean;
+  waitTimeoutMs?: number;
+  pollIntervalMs?: number;
+  type?: string;
+  filter?: string;
+  count?: number;
+  dryRun?: boolean;
+  job?: boolean;
+  bridgeEndpoint?: string;
+  instance?: string;
+  retry?: number;
+}
+
 /** 编排 live Editor 编译诊断：刷新资产、等待空闲、读取 Console。 */
-async function handleCompileDiagnostics(flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult> {
-  const startedAt = Date.now();
-  if (getBoolean(flags, "job")) {
-    return failure(requestId, "E_TOOL_JOB_UNSUPPORTED", "editor.compile-diagnostics is a live Editor orchestration tool and does not support --job.", [
+export async function runCompileDiagnostics(input: CompileDiagnosticsRequest, runtime: Runtime, requestId: string): Promise<Record<string, unknown>> {
+  if (input.job) {
+    throw new StructuredToolError("E_TOOL_JOB_UNSUPPORTED", "editor.compile-diagnostics is a live Editor orchestration tool and does not support --job.", [
       "Remove --job and run against a live Unity Editor instance.",
       "Use editor.refresh for batchmode refresh jobs when you do not need live Console diagnostics."
     ]);
   }
-  const waitTimeoutMs = clampInteger(getNumber(flags, "wait-timeout-ms") ?? getNumber(flags, "waitTimeoutMs") ?? getNumber(flags, "timeout-ms") ?? getNumber(flags, "timeoutMs"), DEFAULT_COMPILE_WAIT_TIMEOUT_MS, 0, MAX_COMPILE_WAIT_TIMEOUT_MS);
-  const pollIntervalMs = clampInteger(getNumber(flags, "poll-interval-ms") ?? getNumber(flags, "pollIntervalMs"), DEFAULT_COMPILE_POLL_INTERVAL_MS, 0, 5_000);
-  const count = clampInteger(getNumber(flags, "count") ?? getNumber(flags, "console-count") ?? getNumber(flags, "consoleCount"), 100, 1, 500);
-  const refresh = optionalBoolean(flags, "refresh") ?? true;
-  const waitReady = optionalBoolean(flags, "wait-ready") ?? optionalBoolean(flags, "waitReady") ?? true;
-  const path = getString(flags, "path") ?? getString(flags, "asset-path") ?? getString(flags, "assetPath");
-  const filter = getString(flags, "filter") ?? getString(flags, "search");
-  const consoleType = getString(flags, "type") ?? getString(flags, "level") ?? "error";
-  const forceUpdate = optionalBoolean(flags, "force-update") ?? optionalBoolean(flags, "forceUpdate");
-  const importRecursive = optionalBoolean(flags, "import-recursive") ?? optionalBoolean(flags, "importRecursive");
+  const waitTimeoutMs = clampInteger(input.waitTimeoutMs, DEFAULT_COMPILE_WAIT_TIMEOUT_MS, 0, MAX_COMPILE_WAIT_TIMEOUT_MS);
+  const pollIntervalMs = clampInteger(input.pollIntervalMs, DEFAULT_COMPILE_POLL_INTERVAL_MS, 0, 5_000);
+  const count = clampInteger(input.count, 100, 1, 500);
+  const refresh = input.refresh ?? true;
+  const waitReady = input.waitReady ?? true;
+  const path = input.path;
+  const filter = input.filter;
+  const consoleType = input.type ?? "error";
+  const forceUpdate = input.forceUpdate;
+  const importRecursive = input.importRecursive;
+  const execution = compact({ "bridge-endpoint": input.bridgeEndpoint, instance: input.instance, retry: input.retry === undefined ? undefined : String(input.retry) }) as Record<string, string | boolean>;
 
-  if (getBoolean(flags, "dry-run")) {
-    return success(requestId, {
+  if (input.dryRun) {
+    return {
       command: "editor.compile-diagnostics",
       dryRun: true,
       status: "dry_run",
       plannedEffects: compileDiagnosticsPlannedEffects({ refresh, waitReady, path, forceUpdate, importRecursive, waitTimeoutMs, consoleType, filter, count }),
       nextActions: ["Rerun without --dry-run to refresh assets, wait for Unity to become idle, and read Console compile diagnostics."]
-    });
+    };
+  }
+
+  const modeStep = await executeBridgeWithTransientRetry("playmode-guard", "context.read", { name: "editor.state", input: {} }, execution, runtime, requestId, waitTimeoutMs, pollIntervalMs);
+  if (!modeStep.result.ok) {
+    const error = modeStep.result.error;
+    throw error ? StructuredToolError.from(error) : new StructuredToolError("E_EDITOR_STATE_UNAVAILABLE", "Unable to read Editor state before compile diagnostics.");
+  }
+  const editorState = recordData(bridgeStepData(modeStep.result.data).state);
+  const playMode = recordData(editorState.playMode);
+  if (playMode.isPlaying === true || playMode.isPlayingOrWillChangePlaymode === true) {
+    throw new StructuredToolError("E_TOOL_PLAYMODE_UNAVAILABLE", "Tool editor.compile-diagnostics is editor-only and cannot run while Unity is in Play Mode.", [
+      "Exit Play Mode before refreshing assets and collecting compile diagnostics."
+    ], { toolName: "editor.compile-diagnostics", playModeSupport: "editor-only", isPlaying: true });
   }
 
   let refreshStep: BridgeStepResult | undefined;
   if (refresh) {
-    refreshStep = await executeBridgeWithTransientRetry("refresh", "asset.refresh", compact({ path, forceUpdate, importRecursive }), flags, runtime, requestId, waitTimeoutMs, pollIntervalMs);
+    refreshStep = await executeBridgeWithTransientRetry("refresh", "asset.refresh", compact({ path, forceUpdate, importRecursive }), execution, runtime, requestId, waitTimeoutMs, pollIntervalMs);
     if (!refreshStep.result.ok) {
-      return compileDiagnosticsStepFailure(requestId, "refresh", refreshStep.result, { attempts: { refresh: refreshStep.attempts } });
+      compileDiagnosticsStepFailure("refresh", refreshStep.result, { attempts: { refresh: refreshStep.attempts } });
     }
   }
 
   let waitStep: BridgeStepResult | undefined;
   if (waitReady) {
-    waitStep = await executeBridgeWithTransientRetry("wait", "context.read", { name: "editor.state", input: { waitReady: true, timeoutMs: waitTimeoutMs }, waitReady: true, timeoutMs: waitTimeoutMs }, flags, runtime, requestId, waitTimeoutMs, pollIntervalMs);
+    waitStep = await executeBridgeWithTransientRetry("wait", "context.read", { name: "editor.state", input: { waitReady: true } }, execution, runtime, requestId, waitTimeoutMs, pollIntervalMs);
     if (!waitStep.result.ok) {
-      return compileDiagnosticsStepFailure(requestId, "wait", waitStep.result, { refresh: summarizeResult(refreshStep?.result), attempts: { refresh: refreshStep?.attempts ?? 0, wait: waitStep.attempts } });
+      compileDiagnosticsStepFailure("wait", waitStep.result, { refresh: summarizeResult(refreshStep?.result), attempts: { refresh: refreshStep?.attempts ?? 0, wait: waitStep.attempts } });
     }
   }
 
-  const consoleStep = await executeBridgeWithTransientRetry("console", "console.get", compact({ type: consoleType, filter, count, cursor: 0 }), flags, runtime, requestId, waitTimeoutMs, pollIntervalMs);
+  const consoleStep = await executeBridgeWithTransientRetry("console", "console.get", compact({ type: consoleType, filter, count, cursor: 0 }), execution, runtime, requestId, waitTimeoutMs, pollIntervalMs);
   if (!consoleStep.result.ok) {
-    return compileDiagnosticsStepFailure(requestId, "console", consoleStep.result, { refresh: summarizeResult(refreshStep?.result), wait: summarizeResult(waitStep?.result), attempts: { refresh: refreshStep?.attempts ?? 0, wait: waitStep?.attempts ?? 0, console: consoleStep.attempts } });
+    compileDiagnosticsStepFailure("console", consoleStep.result, { refresh: summarizeResult(refreshStep?.result), wait: summarizeResult(waitStep?.result), attempts: { refresh: refreshStep?.attempts ?? 0, wait: waitStep?.attempts ?? 0, console: consoleStep.attempts } });
   }
 
   const consoleData = bridgeStepData(consoleStep.result.data);
   const items = consoleItems(consoleData.items);
   const compileDiagnostics = items.filter(isCompileDiagnostic).map(normalizeConsoleItem);
   const consoleErrorCount = items.filter((item) => stringValue(item.type).toLowerCase() === "error").length;
-  const waitTimedOut = bridgeStepData(waitStep?.result.data).timedOut === true;
+  const waitTimedOut = waitStep?.result.ok ? bridgeStepData(waitStep.result.data).timedOut === true : false;
   const total = numberValue(consoleData.total) ?? numberValue(recordData(consoleData.pageInfo).total) ?? items.length;
   const status = compileDiagnostics.length > 0 ? "compile_errors" : waitTimedOut ? "wait_timeout" : consoleErrorCount > 0 ? "console_errors" : "clean";
 
-  return success(requestId, {
+  return {
     command: "editor.compile-diagnostics",
     status,
     refresh: refresh ? summarizeResult(refreshStep?.result) : { skipped: true },
@@ -143,7 +246,34 @@ async function handleCompileDiagnostics(flags: Record<string, string | boolean>,
     },
     attempts: { refresh: refreshStep?.attempts ?? 0, wait: waitStep?.attempts ?? 0, console: consoleStep.attempts },
     nextActions: compileDiagnosticsNextActions(status, total, items.length)
-  }, { durationMs: durationMsFrom(startedAt) });
+  };
+}
+
+async function handleCompileDiagnosticsCli(flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult> {
+  const startedAt = Date.now();
+  try {
+    const data = await runCompileDiagnostics({
+      refresh: optionalBoolean(flags, "refresh"),
+      path: getString(flags, "path") ?? getString(flags, "asset-path") ?? getString(flags, "assetPath"),
+      forceUpdate: optionalBoolean(flags, "force-update") ?? optionalBoolean(flags, "forceUpdate"),
+      importRecursive: optionalBoolean(flags, "import-recursive") ?? optionalBoolean(flags, "importRecursive"),
+      waitReady: optionalBoolean(flags, "wait-ready") ?? optionalBoolean(flags, "waitReady"),
+      waitTimeoutMs: getNumber(flags, "wait-timeout-ms") ?? getNumber(flags, "waitTimeoutMs") ?? getNumber(flags, "timeout-ms") ?? getNumber(flags, "timeoutMs"),
+      pollIntervalMs: getNumber(flags, "poll-interval-ms") ?? getNumber(flags, "pollIntervalMs"),
+      type: getString(flags, "type") ?? getString(flags, "level"),
+      filter: getString(flags, "filter") ?? getString(flags, "search"),
+      count: getNumber(flags, "count") ?? getNumber(flags, "console-count") ?? getNumber(flags, "consoleCount"),
+      dryRun: getBoolean(flags, "dry-run"),
+      job: getBoolean(flags, "job"),
+      bridgeEndpoint: getString(flags, "bridge-endpoint"),
+      instance: getString(flags, "instance"),
+      retry: getNumber(flags, "retry")
+    }, runtime, requestId);
+    return success(requestId, data, { durationMs: durationMsFrom(startedAt) });
+  } catch (error) {
+    if (error instanceof StructuredToolError) return failure(requestId, error.code, error.message, error.nextActions, error.details);
+    throw error;
+  }
 }
 
 /** 对 transient Unity busy/compile/import/domain reload 结果做 CLI 侧重试。 */
@@ -155,7 +285,8 @@ async function executeBridgeWithTransientRetry(label: string, command: string, a
     attempts += 1;
     const routed = routeBridgeStep(command, args);
     lastResult = await executeBridgePayload(`${requestId}_${label}_${attempts}`, routed.command, routed.args, flags, runtime);
-    if (lastResult.ok || lastResult.error?.transient !== true || timeoutMs === 0) {
+    const retryable = !lastResult.ok && (lastResult.error.transient === true || COMPILE_DIAGNOSTIC_RETRY_CODES.has(lastResult.error.code));
+    if (lastResult.ok || !retryable || timeoutMs === 0) {
       return { result: lastResult, attempts };
     }
     const remainingMs = timeoutMs - durationMsFrom(startedAt);
@@ -166,25 +297,27 @@ async function executeBridgeWithTransientRetry(label: string, command: string, a
   } while (true);
 }
 
-/** 将已迁移的子步骤桥接命令转为 project-tool.run 包装，保持 hybrid 编排与 tools run 主路由一致。 */
+/** 按 Bridge registry 将工具名转换为实际命令与 typed input。 */
 function routeBridgeStep(command: string, args: Record<string, unknown>): { command: string; args: Record<string, unknown> } {
   const spec = bridgeCommandRegistry.specs().find((entry) => entry.toolName === command || entry.bridgeCommand === command);
   if (!spec?.toolName) return { command, args };
   return { command: spec.bridgeCommand, args: { name: spec.toolName, input: args } };
 }
 
-/** 解包 project-tool.run 子步骤的业务结果，兼容未迁移的直接 bridge data。 */
+/** 提取 project-tool.run 或直接 Bridge 调用的业务数据。 */
 function bridgeStepData(value: unknown): Record<string, unknown> {
   const data = recordData(value);
-  return data.command === "project-tool.run" ? recordData(data.result) : data;
+  return data.command === "project-tool.run" || data.command === "context.read" ? recordData(data.result) : data;
 }
 
-/** 将子步骤失败包装为 editor.compile-diagnostics 的结构化失败。 */
-function compileDiagnosticsStepFailure(requestId: string, step: string, result: CliResult, partial: Record<string, unknown>): CliResult {
-  return failure(requestId, `E_COMPILE_DIAGNOSTICS_${step.toUpperCase()}_FAILED`, `editor.compile-diagnostics failed during ${step}: ${result.error?.message ?? "unknown error"}`, [
+/** 将子步骤失败转换为编排级结构化错误。 */
+function compileDiagnosticsStepFailure(step: string, result: CliResult, partial: Record<string, unknown>): never {
+  const cause = result.ok ? result.data : result.error;
+  const message = result.ok ? "unknown error" : result.error.message;
+  throw new StructuredToolError(`E_COMPILE_DIAGNOSTICS_${step.toUpperCase()}_FAILED`, `editor.compile-diagnostics failed during ${step}: ${message}`, [
     "Run tools run editor.state or context read editor.state to inspect current Unity busy state.",
     "Fix Bridge connectivity or Unity compile/import errors, then rerun editor.compile-diagnostics."
-  ], { step, cause: result.error ?? result.data, ...partial });
+  ], { step, cause, ...partial }, result.ok ? undefined : result.error.transient, result.ok ? undefined : result.error.retryAfterMs);
 }
 
 /** 生成 dry-run plannedEffects，明确不会清空 Console 或保存项目文件。 */

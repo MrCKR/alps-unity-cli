@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { parseArgs, getBoolean, getString } from "./args.js";
 import { registerBuiltinExtensionContributions } from "./extensions/index.js";
 import { handleExtensionsCommand } from "./cli-commands/extensions.js";
-import { handleContextCommand } from "./context/commands.js";
+import { handleContextCommand } from "./contexts/commands.js";
 import { handleInit } from "./cli-commands/package.js";
 import { handleBatch } from "./cli-commands/batch.js";
 import { handleJob } from "./cli-commands/job.js";
@@ -16,9 +16,9 @@ import { JobRunner } from "./job-runner.js";
 import { JobStore } from "./job-store.js";
 import { createRequestId, failure, printResult, success } from "./output.js";
 import { defaultDataDir, ensureWindows } from "./platform.js";
-import { handleToolsCommand } from "./tools.js";
+import { handleToolsCommand } from "./tools/commands.js";
 import { handleDoctorCommand } from "./doctor.js";
-import { currentInstanceProjectPath, handleInstancesCommand, handleTargetCommand } from "./instances.js";
+import { handleInstancesCommand, handleTargetCommand } from "./instances.js";
 import { confirmDestructiveExecution } from "./security.js";
 import type { CliResult } from "./types.js";
 
@@ -52,11 +52,11 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
     }
 
     if (getBoolean(parsed.flags, "version")) {
-      return withCurrentInstancePath(await success(requestId, { version: await packageVersion() }), parsed.flags, runtime);
+      return success(requestId, { version: await packageVersion() });
     }
 
     if (!group || getBoolean(parsed.flags, "help")) {
-      return withCurrentInstancePath(success(requestId, help()), parsed.flags, runtime);
+      return success(requestId, help());
     }
 
     ensureWindows();
@@ -70,11 +70,10 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
       requestId
     });
     if (cliResult) {
-      return withCurrentInstancePath(cliResult, parsed.flags, runtime);
+      return cliResult;
     }
 
-    // Bridge registry 仅是内部路由，不再作为顶层执行入口(README Project Baseline)。
-    // 旧顶层入口(scene active、go find、camera list、package list、build run 等)已迁移为 tools run。
+    // Bridge registry 是内部能力路由，公开 Unity 能力统一从 tools run 进入。
     return failure(requestId, "UNKNOWN_COMMAND", `Unknown command: ${argv.join(" ")}`, [
       "Top-level commands are: tools, context, extensions, init, target, instances, jobs, batch, doctor.",
       "Run unity_cli tools group to discover Unity tools, then unity_cli tools run <tool> --input <json>.",
@@ -92,14 +91,6 @@ export async function execute(argv: string[], runtime = createRuntime()): Promis
 function createRuntime(dataDir = defaultDataDir()): Runtime {
   const store = new JobStore(dataDir);
   return { dataDir, store, runner: new JobRunner(store, dataDir) };
-}
-
-async function withCurrentInstancePath<T>(result: CliResult<T>, flags: Record<string, string | boolean>, runtime: Runtime): Promise<CliResult<T>> {
-  if (!result.ok) {
-    return result;
-  }
-  const projectPath = await currentInstanceProjectPath(flags, runtime.dataDir);
-  return projectPath ? { ...result, curInstances: projectPath } : result;
 }
 
 async function runJobWorker(flags: Record<string, string | boolean>, requestId: string): Promise<CliResult> {
@@ -235,7 +226,9 @@ function help(): Record<string, unknown> {
       "target current",
       "target set <id|alias|projectHash|projectPathPrefix>",
       "target clear",
-      "target alias list|set|unset",
+      "target alias list",
+      "target alias set <instanceId> <alias> [--force]",
+      "target alias unset <alias>",
       "instances list",
       "instances prune --yes",
       "jobs status|logs|describe|cancel <jobId>",
@@ -246,7 +239,7 @@ function help(): Record<string, unknown> {
     options: [
       "--raw  Print the same JSON envelope as compact single-line JSON for pipes and scripts."
     ],
-    note: "Top-level commands are: tools, context, extensions, init, target, instances, jobs, batch, doctor. Unity capabilities (scene, asset, package, build, test, docs, reflect, editor, physics, profiler, ...) are exposed via `tools run <tool> --input <json>` and `context read <name>`. CLI control-plane state uses `target`, `instances`, `jobs`, `batch`, and `doctor`. `--instance <id|alias>` (alias `--target`) applies to every bridge-backed subcommand: tools group/list/describe/run/search, context list/describe/read, and diagnose.capabilities. In multi-instance scenarios prefer `--instance <alias>` (set via `target alias set`) over a mutable global active target, so each caller is bound to its own project."
+    note: "Top-level commands are: tools, context, extensions, init, target, instances, jobs, batch, doctor. Unity capabilities (scene, asset, package, build, test, docs, reflect, editor, physics, profiler, ...) are exposed via `tools run <tool> --input <json>` and `context read <name>`. CLI control-plane state uses `target`, `instances`, `jobs`, `batch`, and `doctor`. `--instance <id|alias>` (alias `--target`) applies to every bridge-backed subcommand: tools group/list/describe/run/search, context list/describe/read, and diagnose.capabilities. When the caller already knows an exact instance, pass `--instance` on every bridge-backed command; do not call `target set`, because it persists mutable global active-target state and adds no binding beyond explicit `--instance`. In multi-instance scenarios prefer an alias set via `target alias set` and pass it through `--instance`. Descriptor `examples[].argv` is a JSON token array, not a shell command string. In PowerShell, wrap inline `--input` JSON in single quotes, or use `--input-file` for complex input."
   };
 }
 export function isCliEntryPoint(metaUrl: string, argvPath: string | undefined): boolean {

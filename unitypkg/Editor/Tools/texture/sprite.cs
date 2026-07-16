@@ -7,8 +7,6 @@ namespace UnityCli
 {
     /// <summary>
     /// texture.sprite — 把纹理导入为 Sprite,可设置 spriteMode/pixelsPerUnit/pivot/切片。
-    /// 对齐旧 TextureSprite handler;session-affecting(asset-import)。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class TextureSpriteTool : IUnityCliTool<TextureSpriteTool.Request, TextureSpriteTool.Result>
     {
@@ -43,7 +41,7 @@ namespace UnityCli
             DestructiveHint = false,
             SideEffects = new[] { "asset-import" },
             Target = "editor",
-            PlayModeSupport = "session-affecting",
+            PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 30000,
             MaxTimeoutMs = 600000,
             Examples = new[]
@@ -52,7 +50,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             TextureToolSupport.EnsureEditorNotBusy("texture.sprite");
             var path = TextureToolSupport.ResolveTexturePath(request.Path ?? request.Target);
@@ -94,14 +92,14 @@ namespace UnityCli
             {
                 sliceOutputs.Add(new TextureSliceOutput { Name = slice.name, X = slice.rect.x, Y = slice.rect.y, Width = slice.rect.width, Height = slice.rect.height });
             }
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Texture = TextureToolSupport.BuildTextureInfo(path, TextureToolSupport.LoadTextureAsset(path)),
                 ImportSettings = TextureToolSupport.BuildTextureImportSettings(TextureToolSupport.RequireTextureImporter(path)),
                 SliceCount = slices.Length,
                 Slices = sliceOutputs,
                 PlannedEffects = new List<TexturePlannedEffect> { new TexturePlannedEffect { Type = "texture.sprite", Path = path, Refresh = true } }
-            };
+            });
         }
     }
 }

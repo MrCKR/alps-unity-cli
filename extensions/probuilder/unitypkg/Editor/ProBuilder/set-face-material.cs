@@ -28,9 +28,10 @@ namespace UnityCli.ProBuilder
         {
             Name = "probuilder.set-face-material",
             Summary = "Assign a material asset to selected faces of a ProBuilder mesh.",
-            Description = "Assign a material to selected faces of a ProBuilder mesh. The material is loaded from MaterialPath via AssetDatabase. When faceIndices is omitted, all faces are assigned. Falls back to applying the material to the MeshRenderer when per-face assignment is unavailable.",
+            Description = "Assign a material asset to selected faces with the ProBuilder 5.x ProBuilderMesh.SetMaterial API. The material is loaded from materialPath. When faceIndices is omitted, all faces are assigned.",
             Group = "probuilder",
             DestructiveHint = false,
+            SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 10000,
@@ -43,12 +44,12 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            var go = ProBuilderInput.ResolveTarget(request.Target);
             if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
@@ -64,39 +65,20 @@ namespace UnityCli.ProBuilder
                 throw ProBuilderErrors.OperationFailed("set-face-material", "Material not found at path: " + materialPath);
 
             int[] faceIndices = request.FaceIndices?.Select(i => (int)i).ToArray();
-            var faceCount = ProBuilderReflection.GetFaceCount(mesh);
-
-            Undo.RecordObject(go, "ProBuilder Set Face Material");
-
-            // 通过反射调用 ProBuilderMesh.SetMaterial 进行逐面材质分配
             var faces = faceIndices != null && faceIndices.Length > 0
                 ? ProBuilderReflection.GetFacesByIndices(mesh, faceIndices)
                 : ProBuilderReflection.GetAllFaces(mesh);
+            if (faces == null || faces.Length == 0)
+                throw ProBuilderErrors.OperationFailed("set-face-material", "No faces found on target.");
 
-            if (faces != null && faces.Length > 0)
-            {
-                var setOk = ProBuilderReflection.SetFaceMaterial(mesh, faces, material);
-                if (!setOk)
-                {
-                    // 回退:将材质应用到整个 renderer
-                    var renderer = go.GetComponent<MeshRenderer>();
-                    if (renderer != null)
-                    {
-                        var materials = renderer.sharedMaterials;
-                        if (materials.Length == 0)
-                            materials = new Material[] { material };
-                        else
-                            materials[0] = material;
-                        renderer.sharedMaterials = materials;
-                    }
-                }
-            }
+            Undo.RecordObject(go, "ProBuilder Set Face Material");
+            if (!ProBuilderReflection.SetFaceMaterial(mesh, faces, material))
+                throw ProBuilderErrors.OperationFailed("set-face-material", "ProBuilder 5.x ProBuilderMesh.SetMaterial failed.");
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
-            var assigned = faces != null ? faces.Length : (faceIndices != null ? faceIndices.Length : faceCount);
-            return new Result { AssignedFaceCount = assigned };
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { AssignedFaceCount = faces.Length });
         }
     }
 }

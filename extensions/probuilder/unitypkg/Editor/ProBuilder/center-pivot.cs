@@ -35,6 +35,7 @@ namespace UnityCli.ProBuilder
             Description = "Center the pivot point of a ProBuilder mesh to its bounds center. Requires a Renderer component on the target to compute bounds.",
             Group = "probuilder",
             DestructiveHint = false,
+            SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 10000,
@@ -47,12 +48,12 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            var go = ProBuilderInput.ResolveTarget(request.Target);
             if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
@@ -73,11 +74,11 @@ namespace UnityCli.ProBuilder
             var newPivot = go.transform.position;
             var offset = newPivot - oldPivot;
 
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 PivotOffset = new Vec3 { X = offset.x, Y = offset.y, Z = offset.z },
                 NewPosition = new Vec3 { X = newPivot.x, Y = newPivot.y, Z = newPivot.z }
-            };
+            });
         }
     }
 }

@@ -5,8 +5,6 @@ namespace UnityCli
 {
     /// <summary>
     /// scene.active — 返回当前激活场景的 name/path/buildIndex/isLoaded/isDirty。
-    /// 内置工具(原 RegisterCommand 形态)迁移为 IUnityCliTool 自包含。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class SceneActiveTool : IUnityCliTool<SceneActiveTool.Request, SceneActiveTool.Result>
     {
@@ -42,17 +40,17 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var scene = SceneManager.GetActiveScene();
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Name = scene.name,
                 Path = NormalizeAssetPath(scene.path),
                 BuildIndex = scene.buildIndex,
                 IsLoaded = scene.isLoaded,
                 IsDirty = scene.isDirty
-            };
+            });
         }
 
         private static string NormalizeAssetPath(string path)

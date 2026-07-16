@@ -47,13 +47,14 @@ namespace UnityCli.Contexts.Editor
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "on-demand"
+            RefreshBehavior = "on-demand",
+            Examples = new[] { new ContextExample { Description = "List open Editor windows", Input = new Request { } } }
         };
 
         /// <summary>
         /// 读取当前 EditorWindow 清单；只观察 UI 状态，不打开、关闭或聚焦窗口。
-        /// </summary>
-        public Result Read(Request request, UnityCliProjectToolContext ctx)
+    /// </summary>
+        public System.Threading.Tasks.ValueTask<Result> ReadAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var entries = new List<WindowInfo>();
             foreach (var window in Resources.FindObjectsOfTypeAll<EditorWindow>())
@@ -78,11 +79,11 @@ namespace UnityCli.Contexts.Editor
                 });
             }
 
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Windows = entries.ToArray(),
                 Count = entries.Count
-            };
+            });
         }
     }
 }

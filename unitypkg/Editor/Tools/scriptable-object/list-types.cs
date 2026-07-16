@@ -9,8 +9,6 @@ namespace UnityCli
 {
     /// <summary>
     /// scriptable-object.list-types — 列出当前 Editor domain 中可创建的 ScriptableObject 类型。只读。
-    /// 内置工具(原 RegisterCommand 形态)迁移为 IUnityCliTool 自包含。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class ScriptableObjectListTypesTool : IUnityCliTool<ScriptableObjectListTypesTool.Request, ScriptableObjectListTypesTool.Result>
     {
@@ -33,8 +31,8 @@ namespace UnityCli
         public sealed class PageInfo
         {
             public long PageSize { get; set; }
-            public string Cursor { get; set; }
-            public string NextCursor { get; set; }
+            public long Cursor { get; set; }
+            public long? NextCursor { get; set; }
             public long Total { get; set; }
         }
 
@@ -56,7 +54,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var namePattern = request.NamePattern;
             var assemblyPattern = request.AssemblyPattern;
@@ -88,18 +86,18 @@ namespace UnityCli
             {
                 items.Add(ScriptableObjectToolSupport.BuildTypeEntry(types[i]));
             }
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Count = total,
                 Items = items,
                 PageInfo = new PageInfo
                 {
                     PageSize = pageSize,
-                    Cursor = cursor.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                    NextCursor = end < total ? end.ToString(System.Globalization.CultureInfo.InvariantCulture) : null,
+                    Cursor = cursor,
+                    NextCursor = end < total ? (long?)end : null,
                     Total = total
                 }
-            };
+            });
         }
     }
 }

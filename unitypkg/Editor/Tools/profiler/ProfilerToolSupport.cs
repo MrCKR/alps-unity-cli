@@ -15,7 +15,6 @@ namespace UnityCli
     /// profiler 域 IUnityCliTool 共享的基础设施 helper:Profiler 状态反射、帧计时、
     /// 内存计数器、模块列表、Frame Debugger 反射。仅供 profiler 域自包含工具复用;
     /// 不实现 IUnityCliTool,不参与工具发现。
-    /// 设计依据:.plan/工具统一形态.md(自包含工具共享只读 helper)。
     /// </summary>
     public static class ProfilerToolSupport
     {
@@ -29,17 +28,27 @@ namespace UnityCli
         /// </summary>
         public static Type FindType(string fullName)
         {
+            if (string.IsNullOrEmpty(fullName)) return null;
+            try
+            {
+                var direct = Type.GetType(fullName, false);
+                if (direct != null) return direct;
+            }
+            catch { }
+
+            var separator = fullName.IndexOf(',');
+            var typeName = separator < 0 ? fullName : fullName.Substring(0, separator).Trim();
             foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
             {
                 Type type = null;
-                try { type = assembly.GetType(fullName, false); } catch { }
+                try { type = assembly.GetType(typeName, false); } catch { }
                 if (type != null) return type;
             }
             return null;
         }
 
         /// <summary>
-        /// 反射读取类型静态/实例成员的 string 值(属性优先,回退字段)。
+        /// 反射读取类型静态/实例 string 成员，属性与字段均可作为当前 API 成员。
         /// 供 profiler.rendering-stats 读取 UnityEditor.UnityStats 字段等场景复用。
         /// </summary>
         public static string StringMemberValue(Type type, object instance, string memberName)
@@ -419,6 +428,10 @@ namespace UnityCli
 
     public sealed class ProfilerCounterEntry
     {
+        // 供严格 schema 推导器实例化 DTO。
+        public ProfilerCounterEntry() { }
+
+        // 构造一次 profiler counter 采样结果。
         public ProfilerCounterEntry(string category, string name, double value, string unit) { Category = category; Name = name; Value = value; Unit = unit; }
         public string Category { get; set; }
         public string Name { get; set; }

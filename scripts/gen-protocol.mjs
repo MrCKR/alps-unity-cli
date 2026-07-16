@@ -60,9 +60,13 @@ function mapType(node, typeParams, sourceFile) {
     return name;
   }
 
-  // 字面量类型/union 兜底 -> string
-  if (ts.isLiteralTypeNode(node)) return "string";
-  if (ts.isUnionTypeNode(node)) return "string";
+  // boolean/string 字面量按其基础类型生成。
+  if (ts.isLiteralTypeNode(node)) {
+    if (node.literal.kind === ts.SyntaxKind.TrueKeyword || node.literal.kind === ts.SyntaxKind.FalseKeyword) return "bool";
+    if (ts.isStringLiteral(node.literal)) return "string";
+    if (ts.isNumericLiteral(node.literal)) return "double";
+  }
+  if (ts.isUnionTypeNode(node)) return "object";
   return "object";
 }
 
@@ -94,15 +98,16 @@ function emitClass(interfaceDecl, sourceFile) {
 
     const csharpType = mapType(member.type, typeParams, sourceFile);
     const isOptional = !!member.questionToken;
-    // 可选 -> 可空(引用/值类型均加 ?);序列化器对 null 省略(proto3 语义)
-    const nullableSuffix = isOptional ? "?" : "";
+    // Unity 2022.3 的 C# 9 编译环境不启用 nullable reference types。
+    const isValueType = csharpType === "bool" || csharpType === "double" || csharpType === "int" || csharpType === "long" || csharpType === "float";
+    const nullableSuffix = isOptional && isValueType ? "?" : "";
     const pascalName = toPascalCase(propName);
 
     propLines.push(`        public ${csharpType}${nullableSuffix} ${pascalName} { get; set; }`);
   }
 
   // 只返回类块,由调用方统一包装 namespace/文件头
-  return `    public sealed class ${className}\n    {\n${propLines.join("\n")}\n    }`;
+  return `    public sealed partial class ${className}\n    {\n${propLines.join("\n")}\n    }`;
 }
 
 // ─── 主流程 ──────────────────────────────────────────────────────────────

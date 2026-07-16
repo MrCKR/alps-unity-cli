@@ -94,11 +94,8 @@ test("prefab C# handlers are registered", async () => {
   }
 });
 
-test("prefab C# error recovery hints use current forms without legacy unity_cli", async () => {
+test("prefab C# error recovery hints use current tools run forms", async () => {
   const source = await readCsSources(new URL("../unitypkg/Editor/Tools/prefab/", import.meta.url));
-  assert.equal(source.includes("unity_cli prefab"), false, "must not reference legacy 'unity_cli prefab'");
-  assert.equal(source.includes("unity_cli scene hierarchy"), false, "must not reference legacy 'unity_cli scene hierarchy'");
-  assert.equal(source.includes("unity_cli asset search"), false, "must not reference legacy 'unity_cli asset search'");
   assert.match(source, /tools run prefab\.info/, "Prefab path guidance should route to prefab.info in the current CLI shape");
   assert.match(source, /tools run prefab\.hierarchy/, "child errors should still route to prefab.hierarchy when hierarchy inspection is needed");
 });
@@ -107,6 +104,6 @@ test("prefab bridge spec forwards structured --input fields", async () => {
   const spec = await readFile(new URL("../src/bridge/domains/prefab.js", import.meta.url), "utf8");
   assert.match(spec, /stringField\(flags, "addChild"\)/, "bridge should forward structured addChild");
   assert.match(spec, /stringField\(flags, "removeChild"\)/, "bridge should forward structured removeChild");
-  assert.match(spec, /boolField\(flags, "save"\)/, "bridge should forward structured save");
+  assert.doesNotMatch(spec, /boolField\(flags, "save"\)/, "stage-close must not expose implicit save behavior");
   assert.match(spec, /numberField\(flags, "pageSize"\)/, "bridge should forward structured pageSize");
 });

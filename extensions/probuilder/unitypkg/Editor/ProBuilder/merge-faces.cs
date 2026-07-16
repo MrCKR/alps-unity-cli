@@ -20,8 +20,9 @@ namespace UnityCli.ProBuilder
 
         public sealed class Result
         {
-            public long MergedFaceIndex { get; set; }
-            public long MergedFaceCount { get; set; }
+            public long BeforeFaceCount { get; set; }
+            public long AfterFaceCount { get; set; }
+            public long MergedSourceFaceCount { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -31,6 +32,7 @@ namespace UnityCli.ProBuilder
             Description = "Merge selected faces of a ProBuilder mesh into a single face. Requires at least 2 face indices.",
             Group = "probuilder",
             DestructiveHint = false,
+            SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 10000,
@@ -43,34 +45,40 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            var go = ProBuilderInput.ResolveTarget(request.Target);
             if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("merge-faces", "No ProBuilderMesh on target.");
 
-            int[] faceIndices = request.FaceIndices?.Select(i => (int)i).ToArray();
+            int[] faceIndices = request.FaceIndices?.Select(i => (int)i).Distinct().ToArray();
             if (faceIndices == null || faceIndices.Length < 2)
-                throw ProBuilderErrors.SchemaInvalid("At least 2 faceIndices required for merge.");
+                throw ProBuilderErrors.SchemaInvalid("At least 2 unique faceIndices are required for merge.");
+            if (ProBuilderReflection.GetFacesByIndices(mesh, faceIndices) == null)
+                throw ProBuilderErrors.SchemaInvalid("faceIndices contains an invalid face index.");
 
             var beforeCount = ProBuilderReflection.GetFaceCount(mesh);
             Undo.RecordObject(go, "ProBuilder Merge Faces");
 
-            ProBuilderReflection.MergeFaces(mesh, faceIndices);
+            if (!ProBuilderReflection.MergeFaces(mesh, faceIndices))
+                throw ProBuilderErrors.OperationFailed("merge-faces", "ProBuilder 5.x MergeElements.Merge failed.");
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
             var afterCount = ProBuilderReflection.GetFaceCount(mesh);
-            return new Result
+            if (beforeCount < 0 || afterCount != beforeCount - faceIndices.Length + 1)
+                throw ProBuilderErrors.OperationFailed("merge-faces", "Face count did not match a single merged face result.");
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                MergedFaceIndex = afterCount > 0 ? afterCount - 1 : 0,
-                MergedFaceCount = beforeCount - afterCount + 1
-            };
+                BeforeFaceCount = beforeCount,
+                AfterFaceCount = afterCount,
+                MergedSourceFaceCount = faceIndices.Length
+            });
         }
     }
 }

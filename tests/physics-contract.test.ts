@@ -10,7 +10,8 @@ const PHYSICS_COMMANDS = [
   "physics.assign-material",
   "physics.collision-matrix",
   "physics.force",
-  "physics.joint",
+  "physics.joint.add",
+  "physics.joint.remove",
   "physics.linecast",
   "physics.material",
   "physics.overlap",
@@ -23,7 +24,7 @@ const PHYSICS_COMMANDS = [
   "physics.validate"
 ];
 
-test("physics group exposes the 14 tools via contract discovery", () => {
+test("physics group exposes the independent tools via contract discovery", () => {
   assert.deepEqual(contractToolNames("physics"), [...PHYSICS_COMMANDS].sort());
 });
 
@@ -41,7 +42,8 @@ test("physics live descriptors expose representative semantics", async () => {
     makeLiveTool({ name: "physics.collision-matrix", summary: "Read or update collision matrix.", description: "Read or update the full 32-layer collision matrix.", group: "physics", playModeSupport: "session-affecting", sideEffects: ["scene-modify"], inputSchema: { type: "object", properties: {} } }),
     makeLiveTool({ name: "physics.material", summary: "Mutate physics materials.", description: "Mutate physics materials.", group: "physics", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] }),
     makeLiveTool({ name: "physics.assign-material", summary: "Assign a physics material.", description: "Assign a physics material.", group: "physics", supportsDryRun: true, playModeSupport: "session-affecting", sideEffects: ["scene-modify"], inputSchema: { type: "object", required: ["target", "materialPath"], properties: { target: { type: "string" }, materialPath: { type: "string" } } } }),
-    makeLiveTool({ name: "physics.joint", summary: "Mutate joints.", description: "Mutate joints; supports action=remove.", group: "physics", playModeSupport: "session-affecting", sideEffects: ["scene-modify"], inputSchema: { type: "object", properties: { action: { type: "string" } } } }),
+    makeLiveTool({ name: "physics.joint.add", summary: "Add a joint.", description: "Add or configure a Joint component.", group: "physics", supportsDryRun: true, playModeSupport: "supported", sideEffects: ["scene-modify"], inputSchema: { type: "object", required: ["target"], properties: { target: { type: "string" } } } }),
+    makeLiveTool({ name: "physics.joint.remove", summary: "Remove a joint.", description: "Remove matching Joint components.", group: "physics", supportsDryRun: true, playModeSupport: "supported", sideEffects: ["scene-modify"], inputSchema: { type: "object", required: ["target"], properties: { target: { type: "string" } } } }),
     makeLiveTool({ name: "physics.rigidbody", summary: "Read or mutate rigidbody state.", description: "Read rigidbody state without adding or modifying components.", group: "physics", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] })
   );
 
@@ -57,7 +59,7 @@ test("physics live descriptors expose representative semantics", async () => {
   assert.ok(force.sideEffects?.includes("runtime-state"));
   assert.equal(tools.get("physics.simulation")?.playModeSupport, "runtime-only");
 
-  for (const name of ["physics.settings", "physics.collision-matrix", "physics.material", "physics.assign-material", "physics.joint", "physics.rigidbody"]) {
+  for (const name of ["physics.settings", "physics.collision-matrix", "physics.material", "physics.assign-material", "physics.rigidbody"]) {
     const tool = tools.get(name)!;
     assert.equal(tool.playModeSupport, "session-affecting", `${name} session-affecting`);
     assert.ok(tool.sideEffects?.length, `${name} side effects`);
@@ -73,9 +75,13 @@ test("physics live descriptors expose representative semantics", async () => {
   assert.ok(assign.sideEffects?.includes("scene-modify"));
   assert.deepEqual(assign.inputSchema.required, ["target", "materialPath"]);
 
-  const joint = tools.get("physics.joint")!;
-  assert.ok((joint.inputSchema.properties as Record<string, unknown>).action);
-  assert.match(joint.description, /action=remove/);
+  for (const name of ["physics.joint.add", "physics.joint.remove"]) {
+    const joint = tools.get(name)!;
+    assert.equal(joint.playModeSupport, "supported");
+    assert.equal(joint.supportsDryRun, true);
+    assert.ok((joint.inputSchema.properties as Record<string, unknown>).target);
+    assert.equal((joint.inputSchema.properties as Record<string, unknown>).action, undefined);
+  }
 
   assert.match(tools.get("physics.overlap")?.description ?? "", /mode 2d/i);
   assert.match(tools.get("physics.shapecast")?.description ?? "", /CircleCast\/BoxCast\/CapsuleCast/);
@@ -83,7 +89,7 @@ test("physics live descriptors expose representative semantics", async () => {
 });
 
 test("bridge specs resolve for physics tools", () => {
-  for (const [cmd, expected] of [["settings", "physics.settings"], ["collision-matrix", "physics.collision-matrix"], ["material", "physics.material"], ["assign-material", "physics.assign-material"], ["joint", "physics.joint"], ["force", "physics.force"], ["overlap", "physics.overlap"], ["rigidbody", "physics.rigidbody"], ["raycast", "physics.raycast"], ["simulation", "physics.simulation"], ["raycast-all", "physics.raycast-all"], ["linecast", "physics.linecast"], ["shapecast", "physics.shapecast"], ["validate", "physics.validate"]] as const) {
+  for (const [cmd, expected] of [["settings", "physics.settings"], ["collision-matrix", "physics.collision-matrix"], ["material", "physics.material"], ["assign-material", "physics.assign-material"], ["joint-add", "physics.joint.add"], ["joint-remove", "physics.joint.remove"], ["force", "physics.force"], ["overlap", "physics.overlap"], ["rigidbody", "physics.rigidbody"], ["raycast", "physics.raycast"], ["simulation", "physics.simulation"], ["raycast-all", "physics.raycast-all"], ["linecast", "physics.linecast"], ["shapecast", "physics.shapecast"], ["validate", "physics.validate"]] as const) {
     const spec = bridgeCommandRegistry.lookup("physics", cmd);
     assert.equal(spec?.bridgeCommand, "project-tool.run", `physics ${cmd} should route via project-tool.run`);
     assert.equal(spec?.toolName, expected, `physics ${cmd} toolName should match`);
@@ -107,16 +113,25 @@ test("physics C# handlers are registered", async () => {
   }
 });
 
-test("physics C# has no legacy unity_cli command form", async () => {
-  const source = await readCsSources(new URL("../unitypkg/Editor/Tools/physics/", import.meta.url));
-  assert.equal(source.includes("unity_cli "), false, "must not reference legacy 'unity_cli ' command form");
-});
-
 test("physics.validate C# wraps result in structured tool result", async () => {
-  const source = await readFile(new URL("../unitypkg/Editor/Tools/physics/simulation-validate.cs", import.meta.url), "utf8");
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/physics/validate.cs", import.meta.url), "utf8");
   assert.match(source, /class PhysicsValidateTool : IUnityCliTool</, "PhysicsValidateTool should exist");
   assert.match(source, /public sealed class Result/, "physics.validate should expose a structured result DTO");
-  assert.match(source, /public Result Execute\(Request request, UnityCliProjectToolContext ctx\)/, "physics.validate should return structured business fields");
+  assert.match(source, /public System\.Threading\.Tasks\.ValueTask<Result> ExecuteAsync\(Request request, UnityCliProjectToolContext ctx, System\.Threading\.CancellationToken ct = default\)/, "physics.validate should return structured business fields through the unified async signature");
+});
+
+test("physics.rigidbody mutation reports the attached component", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/physics/rigidbody.cs", import.meta.url), "utf8");
+  assert.match(source, /HasRigidbody = true,\s*Rigidbody = PhysicsToolSupport\.BuildRigidbodyInfo\(rigidbody\)/, "mutation result must report the post-operation component state");
+  assert.doesNotMatch(source, /attached\)/, "missing-component guidance must remain executable and well-formed");
+});
+
+test("physics.joint.add re-resolves the component after mode-safe attachment", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/physics/joint/add.cs", import.meta.url), "utf8");
+  assert.match(source, /UnityCliSceneMutation\.AddComponent\(target, type\)/);
+  assert.match(source, /var joint = target\.GetComponent\(type\) as Joint/);
+  assert.match(source, /E_PHYSICS_JOINT_ADD_FAILED/);
+  assert.match(source, /ct\.ThrowIfCancellationRequested\(\)/);
 });
 
 test("physics bridge spec forwards structured --input fields", async () => {
@@ -126,5 +141,6 @@ test("physics bridge spec forwards structured --input fields", async () => {
   assert.match(spec, /boolField\(flags, "useGravity"\)/, "bridge should forward structured useGravity");
   assert.match(spec, /stringField\(flags, "shape"\)/, "bridge should forward structured shape");
   assert.match(spec, /stringField\(flags, "materialPath"\)/, "bridge should forward structured materialPath");
-  assert.match(spec, /stringField\(flags, "action"\)/, "bridge should forward structured joint action");
+  assert.match(spec, /stringField\(flags, "connectedBody"\)/, "bridge should forward structured joint connected body");
+  assert.doesNotMatch(spec, /stringField\(flags, "action"\)/, "bridge must not forward a joint action router field");
 });

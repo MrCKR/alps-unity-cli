@@ -8,7 +8,6 @@ namespace UnityCli
 {
     /// <summary>
     /// screenshot.scene-view — 捕获激活 SceneView 到文件。
-    /// 内置工具(原 RegisterCommand 形态)迁移为 IUnityCliTool 自包含。
     /// </summary>
     public class ScreenshotSceneViewTool : IUnityCliTool<ScreenshotSceneViewTool.Request, ScreenshotSceneViewTool.Result>
     {
@@ -32,7 +31,7 @@ namespace UnityCli
             Description = "Capture the active SceneView camera to a PNG/JPG file. Returns E_SCENE_VIEW_NOT_AVAILABLE when no SceneView is open.",
             Group = "screenshot",
             Version = "1.0.0",
-            DestructiveHint = false,
+            DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",
             PlayModeSupport = "supported",
@@ -41,7 +40,7 @@ namespace UnityCli
             Examples = new[] { new ToolExample { Description = "Capture scene view", Input = new Request { Path = "Assets/Shots/scene.png" } } }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var sceneView = SceneView.lastActiveSceneView;
             if (sceneView == null || sceneView.camera == null)
@@ -93,7 +92,7 @@ namespace UnityCli
                 Source = "scene-view", Target = "SceneView.camera"
             };
             ScreenshotToolSupport.MaybeAppendInline(result, bytes, width, height, format == "jpg" ? "image/jpeg" : "image/png", request.InlineBase64);
-            return result;
+            return new System.Threading.Tasks.ValueTask<Result>(result);
         }
     }
 }

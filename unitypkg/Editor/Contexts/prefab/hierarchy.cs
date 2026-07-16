@@ -9,125 +9,89 @@ namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
-        /// <summary>
-        /// prefab.hierarchy 内置 Context：分页读取 Prefab 资产层级，不打开或修改 Prefab Stage。
-        /// </summary>
-        public sealed class PrefabHierarchyContext : IUnityCliContext<PrefabHierarchyContext.Request, PrefabHierarchyContext.Result>, IUnityCliBuiltInRawBridgeContext
+        /// <summary>prefab.hierarchy 内置 Context：分页只读 Prefab 资产层级。</summary>
+        public sealed class PrefabHierarchyContext : IUnityCliContext<PrefabHierarchyContext.Request, PrefabHierarchyContext.Result>
         {
-            public sealed class Request
-            {
-                [UnityCliRequired]
-                public string Path { get; set; }
-                public int PageSize { get; set; }
-                public int Cursor { get; set; }
-            }
-
-            public sealed class Result
-            {
-                public PrefabInfoContext.PrefabSummary Prefab { get; set; }
-                public List<HierarchyItem> Items { get; set; }
-                public PageInfo PageInfo { get; set; }
-            }
-
+            public sealed class Request { [UnityCliRequired] public string Path { get; set; } public int PageSize { get; set; } public int Cursor { get; set; } }
+            public sealed class Result { public PrefabInfoContext.PrefabSummary Prefab { get; set; } public List<HierarchyItem> Items { get; set; } public PageInfo PageInfo { get; set; } }
             public sealed class HierarchyItem
             {
-                public long Id { get; set; }
-                public string Name { get; set; }
-                public string Path { get; set; }
-                public bool Active { get; set; }
-                public bool ActiveInHierarchy { get; set; }
-                public string Tag { get; set; }
-                public long Layer { get; set; }
-                public long ChildCount { get; set; }
-                public bool ChildrenTruncated { get; set; }
-                public long ComponentCount { get; set; }
-                public List<string> ComponentTypes { get; set; }
-                public List<string> Components { get; set; }
+                public long Id { get; set; } public string Name { get; set; } public string Path { get; set; } public bool Active { get; set; } public bool ActiveInHierarchy { get; set; }
+                public string Tag { get; set; } public long Layer { get; set; } public long ChildCount { get; set; } public bool ChildrenTruncated { get; set; }
+                public long ComponentCount { get; set; } public List<string> ComponentTypes { get; set; } public List<string> Components { get; set; }
             }
+            public sealed class PageInfo { public long PageSize { get; set; } public long Cursor { get; set; } public bool HasNextCursor { get; set; } public long? NextCursor { get; set; } public long Total { get; set; } }
 
-            public sealed class PageInfo
-            {
-                public long PageSize { get; set; }
-                public long Cursor { get; set; }
-                public string NextCursor { get; set; }
-                public long Total { get; set; }
-            }
-
+            // 返回 Context 的发现元数据。
             public ContextDescriptor Describe() => new ContextDescriptor
             {
-                Name = "prefab.hierarchy",
-                Summary = "Read a paged Prefab asset hierarchy without opening or modifying Prefab Stage.",
+                Name = "prefab.hierarchy", Summary = "Read a paged Prefab asset hierarchy without opening or modifying Prefab Stage.",
                 Description = "Read-only paged hierarchy for one Assets/*.prefab path. Loads the Prefab contents only for inspection, returns the Prefab summary, hierarchy item page, and pageInfo cursor data, then unloads the temporary contents. Does not open Prefab Stage, save assets, or modify the Prefab.",
-                Category = "prefab",
-                Version = "1.0.0",
-                Source = "built-in",
-                Target = "editor",
-                AvailabilityScope = "editorSession",
-                PlayModeSupport = "supported",
-                RefreshBehavior = "on-demand"
+                Category = "prefab", Version = "1.0.0", Source = "built-in", Target = "editor", AvailabilityScope = "editorSession", PlayModeSupport = "supported", RefreshBehavior = "on-demand",
+                Examples = new[] { new ContextExample { Description = "Read the first Prefab hierarchy page", Input = new Request { Path = "Assets/Prefabs/Player.prefab", PageSize = 50 } }, new ContextExample { Description = "Read a later Prefab hierarchy page", Input = new Request { Path = "Assets/Prefabs/Player.prefab", PageSize = 50, Cursor = 50 } } }
             };
 
-            /// <summary>
-            /// 同步 fallback 读取；生产 Bridge 注册路径会优先调用 ReadRaw 保留 legacy JSON shape。
-            /// </summary>
-            public Result Read(Request request, UnityCliProjectToolContext ctx)
+            /// <summary>临时加载 Prefab contents 读取层级，并保证卸载。</summary>
+            public System.Threading.Tasks.ValueTask<Result> ReadAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
             {
                 var path = RequirePrefabPath(request == null ? null : request.Path);
                 LoadPrefabAsset(path);
-                var pageSize = Math.Max(1, request == null ? 100 : request.PageSize == 0 ? 100 : request.PageSize);
+                var pageSize = Math.Max(1, request == null || request.PageSize == 0 ? 100 : request.PageSize);
                 var cursor = Math.Max(0, request == null ? 0 : request.Cursor);
-                var payload = PrefabHierarchyPayloadJson(path, pageSize, cursor);
-                return UnityCliSerializer.Deserialize(payload, typeof(Result)) as Result;
-            }
-
-            /// <summary>
-            /// 返回 legacy raw payload，并透传 Prefab path/asset 校验的结构化错误。
-            /// </summary>
-            public string ReadRaw(BridgeRequest request, UnityCliProjectToolContext ctx)
-            {
+                var root = PrefabUtility.LoadPrefabContents(path);
                 try
                 {
-                    var path = RequirePrefabPath(request.StringArg("path"));
-                    LoadPrefabAsset(path);
-                    var pageSize = Math.Max(1, request.IntArg("pageSize", 100));
-                    var cursor = Math.Max(0, request.IntArg("cursor", 0));
-                    return SuccessJson(PrefabHierarchyPayloadJson(path, pageSize, cursor));
+                    var items = new List<HierarchyItem>();
+                    var total = CountPrefabHierarchy(root.transform);
+                    var visited = 0;
+                    CollectPrefabHierarchy(root.transform, items, cursor, pageSize, ref visited);
+                    var hasNext = cursor + items.Count < total;
+                    var result = new Result
+                    {
+                        Prefab = PrefabSummaryFrom(path, root, root, true), Items = items,
+                        PageInfo = new PageInfo { PageSize = pageSize, Cursor = cursor, HasNextCursor = hasNext, NextCursor = hasNext ? (long?)(cursor + items.Count) : null, Total = total }
+                    };
+                    return new System.Threading.Tasks.ValueTask<Result>(result);
                 }
-                catch (BridgeCommandException exception)
+                finally
                 {
-                    return BridgeExceptionErrorJson(exception);
+                    PrefabUtility.UnloadPrefabContents(root);
                 }
             }
         }
 
-        // 临时加载 Prefab contents 读取 hierarchy；finally 保证卸载，避免污染 Prefab Stage。
-        // legacy shape anchor: PropRaw("prefab", PrefabAssetJson(path, root, root)) + PropArray("items") + PropObject("pageInfo")
-        private static string PrefabHierarchyPayloadJson(string path, int pageSize, int cursor)
+        // 统计完整 Prefab 层级节点数。
+        private static int CountPrefabHierarchy(Transform transform)
         {
-            var root = PrefabUtility.LoadPrefabContents(path);
-            try
+            var count = 1;
+            foreach (Transform child in transform) count += CountPrefabHierarchy(child);
+            return count;
+        }
+
+        // 深度优先收集指定游标页，达到页大小后停止。
+        private static void CollectPrefabHierarchy(Transform transform, List<PrefabHierarchyContext.HierarchyItem> items, int cursor, int pageSize, ref int visited)
+        {
+            if (visited >= cursor && items.Count < pageSize) items.Add(PrefabHierarchyItemFrom(transform));
+            visited++;
+            foreach (Transform child in transform)
             {
-                var items = new List<string>();
-                var total = CountHierarchy(root.transform);
-                CollectHierarchy(root.transform, items, cursor, pageSize, new Counter());
-                var nextCursor = cursor + items.Count < total ? (cursor + items.Count).ToString(CultureInfo.InvariantCulture) : null;
-                var writer = new UnityCliJsonWriter().BeginObject()
-                    .PropRaw("prefab", PrefabAssetJson(path, root, root))
-                    .PropArray("items", arr => { foreach (var item in items) { arr.RawValue(item); } })
-                    .PropObject("pageInfo", pageInfo =>
-                    {
-                        pageInfo.PropRaw("pageSize", UnityCliSerializer.Serialize((long)pageSize))
-                            .PropRaw("cursor", UnityCliSerializer.Serialize((long)cursor));
-                        if (nextCursor == null) pageInfo.PropNull("nextCursor");
-                        else pageInfo.PropRaw("nextCursor", UnityCliSerializer.Serialize(nextCursor));
-                        pageInfo.PropRaw("total", UnityCliSerializer.Serialize((long)total));
-                    });
-                return writer.EndObject().ToString();
+                if (items.Count >= pageSize) return;
+                CollectPrefabHierarchy(child, items, cursor, pageSize, ref visited);
             }
-            finally
+        }
+
+        // 将单个 Transform 映射为层级项，不递归展开子项。
+        private static PrefabHierarchyContext.HierarchyItem PrefabHierarchyItemFrom(Transform transform)
+        {
+            var componentTypes = new List<string>();
+            foreach (var component in transform.GetComponents<Component>()) componentTypes.Add(component == null ? "MissingScript" : component.GetType().Name);
+            var gameObject = transform.gameObject;
+            return new PrefabHierarchyContext.HierarchyItem
             {
-                PrefabUtility.UnloadPrefabContents(root);
-            }
+                Id = gameObject.GetInstanceID(), Name = gameObject.name, Path = HierarchyPath(gameObject), Active = gameObject.activeSelf, ActiveInHierarchy = gameObject.activeInHierarchy,
+                Tag = gameObject.tag, Layer = gameObject.layer, ChildCount = transform.childCount, ChildrenTruncated = transform.childCount > 0,
+                ComponentCount = componentTypes.Count, ComponentTypes = componentTypes, Components = new List<string>(componentTypes)
+            };
         }
     }
 }

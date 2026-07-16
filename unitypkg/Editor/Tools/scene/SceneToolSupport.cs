@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System;
+using System.Collections.Generic;
 using System.IO;
 using UnityEditor;
 using UnityEngine;
@@ -11,7 +12,6 @@ namespace UnityCli
     /// scene 域 IUnityCliTool 共享的基础设施 helper:路径规范化、场景信息构造、
     /// 资产目录创建、忙状态拦截、场景路径解析。仅供 scene 域自包含工具复用;
     /// 不实现 IUnityCliTool,不参与工具发现。
-    /// 设计依据:.plan/工具统一形态.md(自包含工具共享只读 helper,handler 逻辑各自内聚)。
     /// </summary>
     public static class SceneToolSupport
     {
@@ -70,7 +70,7 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_UNITY_IMPORTING", "Unity Editor is importing assets.", "Wait for Unity to finish importing and retry.", transient: true, retryAfterMs: 5000);
             }
-            if (EditorApplication.isPlayingOrWillChangePlaymode && !EditorApplication.isPlaying)
+            if (UnityCliBridge.IsPlayModeChanging())
             {
                 throw new UnityCliBridge.BridgeCommandException("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode.", "Wait for Play mode transition to complete and retry.", transient: true, retryAfterMs: 3000);
             }
@@ -80,8 +80,40 @@ namespace UnityCli
             }
         }
 
+        /// <summary>优先校验显式 path；仅给出 name 时按场景资产文件名精确解析，拒绝 0 个或多个匹配。</summary>
+        internal static string ResolveExistingScenePath(string path, string name)
+        {
+            if (!string.IsNullOrWhiteSpace(path)) return ResolveScenePath(path, true);
+
+            var normalizedName = NormalizeAssetPath(name);
+            if (string.IsNullOrEmpty(normalizedName)) return ResolveScenePath(null, true);
+            if (normalizedName.StartsWith("Assets/", StringComparison.OrdinalIgnoreCase)) return ResolveScenePath(normalizedName, true);
+
+            var sceneName = Path.GetFileNameWithoutExtension(normalizedName);
+            var matches = new List<string>();
+            foreach (var guid in AssetDatabase.FindAssets("t:Scene"))
+            {
+                var candidate = NormalizeAssetPath(AssetDatabase.GUIDToAssetPath(guid));
+                if (!string.IsNullOrEmpty(candidate)
+                    && candidate.EndsWith(".unity", StringComparison.OrdinalIgnoreCase)
+                    && string.Equals(Path.GetFileNameWithoutExtension(candidate), sceneName, StringComparison.OrdinalIgnoreCase))
+                {
+                    matches.Add(candidate);
+                }
+            }
+            matches.Sort(StringComparer.OrdinalIgnoreCase);
+            if (matches.Count == 0)
+            {
+                throw new UnityCliBridge.BridgeCommandException("E_SCENE_NOT_FOUND", "Scene asset name not found: " + normalizedName, "Run tools run asset.search --input '{\"filter\":\"t:Scene\"}' or pass an existing Assets/*.unity path.");
+            }
+            if (matches.Count > 1)
+            {
+                throw new UnityCliBridge.BridgeCommandException("E_SCENE_AMBIGUOUS", "Multiple scene assets matched name " + normalizedName + ": " + string.Join(", ", matches.ToArray()), "Pass the exact Assets/*.unity path.");
+            }
+            return matches[0];
+        }
+
         // 解析并校验 Assets/*.unity 场景路径;requireExisting=true 时还要求资产已存在。
-        // pathOrName 通常是 request.Path ?? request.Name,与旧 ScenePathFromRequest 语义一致。
         internal static string ResolveScenePath(string pathOrName, bool requireExisting)
         {
             var path = NormalizeAssetPath(pathOrName);
@@ -138,4 +170,3 @@ namespace UnityCli
     }
 }
 #endif
-

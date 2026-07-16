@@ -5,14 +5,11 @@
  * ProBuilder API via reflection, rather than approximating the operation
  * with cube fallbacks, full-refresh stubs, or fake return counts.
  *
- * Source: ProBuilder 真实行为验证与近似实现修复
- * 冻结正文决策 #10 要求 ProBuilder 必须实现对齐参考项目 ProBuilder 工具能力.
- *
- * Stage 3 迁移后,每个工具一个文件(IUnityCliTool<,> 泛型接口自包含形态)。
- * 本测试读取拆分后的单工具文件做字符串断言,锁定真实 API 调用行为。
+ * Each tool is implemented in a self-contained IUnityCliTool<,> file.
+ * These source assertions verify the required ProBuilder API calls.
  *
  * Verified behaviors:
- * - create-poly-shape no longer degrades to a cube; uses CreateShapeFromPolygon
+ * - create-poly-shape uses CreateShapeFromPolygon
  * - extrude-edges actually selects edges and extrudes via ExtrudeElements
  * - bridge-edges calls AppendElements.Bridge (not just RefreshMesh)
  * - connect-elements calls ConnectElements.Connect
@@ -33,7 +30,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -47,7 +44,7 @@ function readPb(name: string): string {
 const REFLECTION_SRC = readPb("ProBuilderReflection.cs");
 const INPUT_SRC = readPb("ProBuilderInput.cs");
 
-// Stage 3 迁移后,每个工具一个文件。变量读取对应的单工具文件。
+// 每个变量读取对应的单工具文件。
 const CREATE_SHAPE_SRC = readPb("create-shape.cs");
 const CREATE_POLY_SHAPE_SRC = readPb("create-poly-shape.cs");
 const EXTRUDE_EDGES_SRC = readPb("extrude-edges.cs");
@@ -72,11 +69,29 @@ const FREEZE_TRANSFORM_SRC = readPb("freeze-transform.cs");
 const MESH_INFO_SRC = readPb("mesh-info.cs");
 const REPAIR_MESH_SRC = readPb("repair-mesh.cs");
 
+test("ProBuilder production C# contains no compatibility or semantic degradation path", () => {
+  const sources = readdirSync(PB_DIR)
+    .filter((name) => name.endsWith(".cs"))
+    .map((name) => ({ name, source: readPb(name) }));
+  const forbidden = [
+    /\bfallback\b/i,
+    /回退|近似/,
+    /\blegacy(?:Method|Fallback|Adapter|Path|Implementation)\b/i,
+    /Mesh\.CombineMeshes|CreatePrimitive|InsertVertexOnEdge\([^\r\n]*null/,
+    /hasColors|sharedMaterials\s*=/
+  ];
+
+  for (const { name, source } of sources) {
+    for (const pattern of forbidden) {
+      assert.doesNotMatch(source, pattern, `${name}: must fail closed on the current ProBuilder API`);
+    }
+  }
+});
+
 // ─── Reflection helper coverage ────────────────────────────────────────
 
 test("ProBuilderReflection resolves all MeshOperations types used by reference project", () => {
-  // These types are the backbone of real ProBuilder operations and must be
-  // resolvable via reflection so handlers can call the real APIs.
+  // 这些类型是实际 ProBuilder 操作的基础，必须通过可重试 resolver 调用真实 API。
   const requiredTypes = [
     "ExtrudeElementsType",
     "BevelType",
@@ -84,24 +99,20 @@ test("ProBuilderReflection resolves all MeshOperations types used by reference p
     "AppendElementsType",
     "ConnectElementsType",
     "MergeElementsType",
+    "SubdivisionType",
     "CombineMeshesType",
     "VertexEditingType",
     "MeshImporterType",
+    "MeshImportSettingsType",
     "ElementSelectionType",
-    "PivotLocationType",
-    "AxisType"
+    "PivotLocationType"
   ];
 
   for (const typeName of requiredTypes) {
-    // Field declaration
+    // optional assembly 晚加载时不得永久缓存 null。
     assert.ok(
-      REFLECTION_SRC.includes(`Lazy<Type> ${typeName} =`),
-      `ProBuilderReflection must declare ${typeName} field`
-    );
-    // Public accessor
-    assert.ok(
-      REFLECTION_SRC.includes(`Get${typeName}()`),
-      `ProBuilderReflection must expose Get${typeName}() accessor`
+      REFLECTION_SRC.includes(`RetryingType ${typeName} =`),
+      `ProBuilderReflection must declare retryable ${typeName} field`
     );
   }
 });
@@ -135,11 +146,14 @@ test("ProBuilderReflection exposes real ProBuilder API call wrappers", () => {
     "MoveVerticesByOffset",
     "RemoveDegenerateTriangles",
     "RemoveUnusedVertices",
-    "ConvertViaMeshImporter",
+    "CountDegenerateFaces",
+    "CountUnusedVertices",
+    "ConvertToProBuilderMesh",
     "CombineMeshesViaReflection",
-    "DetachFacesViaExtrudeElements",
-    "MergeFacesViaMergeElements",
-    "DeleteFacesViaDeleteElements",
+    "DeleteFaces",
+    "MergeFaces",
+    "SubdivideFaces",
+    "SelectFaces",
     "SetFaceColor",
     "SetFaceMaterial",
     "ComputeFaceNormal",
@@ -169,45 +183,26 @@ test("ProBuilderReflection edge helpers use shared vertex lookup for deduplicati
 
 // ─── Input parsing helpers ─────────────────────────────────────────────
 
-test("ProBuilderInput parses edge vertex pairs and point arrays", () => {
-  // The reference project accepts edges as [{a,b},...] and points as [{x,y,z},...].
-  // Our input parser must support these formats for real edge/point operations.
-  assert.ok(INPUT_SRC.includes("struct EdgePair"), "must define EdgePair struct");
-  assert.ok(INPUT_SRC.includes("EdgePairArrayArg"), "must parse edge pair arrays");
-  assert.ok(INPUT_SRC.includes("EdgeArg"), "must parse single edge pairs");
-  assert.ok(INPUT_SRC.includes("Vector3ListArg"), "must parse Vector3 point arrays");
-});
-
-test("ProBuilderInput EdgePair parsing extracts a and b fields", () => {
-  // Verify the input parsing supports the {a:X,b:Y} format used by the bridge.
-  // We check for the method names and struct rather than exact regex patterns,
-  // since the escaping differs between TS source and compiled JS.
-  assert.ok(
-    INPUT_SRC.includes("EdgePairArrayArg"),
-    "EdgePairArrayArg must be defined"
-  );
-  assert.ok(
-    INPUT_SRC.includes("EdgeArg"),
-    "EdgeArg must be defined"
-  );
-  assert.ok(
-    INPUT_SRC.includes("struct EdgePair"),
-    "EdgePair struct must be defined"
-  );
+test("ProBuilder edge and point inputs use typed request DTOs", () => {
+  assert.match(INPUT_SRC, /struct EdgePair[\s\S]*public int a;[\s\S]*public int b;/);
+  assert.match(EXTRUDE_EDGES_SRC, /public List<EdgeRef> Edges \{ get; set; \}/);
+  assert.match(EXTRUDE_EDGES_SRC, /request\.Edges\?\.Select\(e => new ProBuilderInput\.EdgePair \{ a = \(int\)e\.A, b = \(int\)e\.B \}\)/);
+  assert.match(CREATE_POLY_SHAPE_SRC, /\[UnityCliRequired\] public List<Point3D> Points \{ get; set; \}/);
+  assert.doesNotMatch(INPUT_SRC, /EdgePairArrayArg|EdgeArg|Vector3ListArg|RawJsonArg/);
 });
 
 // ─── create-shape: descriptor enum must match runtime validation ───────
 
-test("create-shape rejects unsupported shapeType before fallback creation", () => {
-  // 公开 descriptor 暴露 shapeType enum，因此 Unity 侧必须先拒绝非 enum 值，不能创建默认 Cube。
+test("create-shape rejects unsupported shapeType without semantic degradation", () => {
+  // 公开 descriptor 暴露 shapeType enum，Unity 侧必须先拒绝非 enum 值。
   assert.ok(CREATE_SHAPE_SRC.includes("IsSupportedShape"), "create-shape must validate shapeType against the public enum");
   assert.ok(CREATE_SHAPE_SRC.includes("ProBuilderErrors.SchemaInvalid"), "unsupported shapeType must return E_SCHEMA_INVALID");
   assert.ok(
     CREATE_SHAPE_SRC.indexOf("IsSupportedShape") < CREATE_SHAPE_SRC.indexOf("ProBuilderReflection.CreateShape"),
     "create-shape must validate shapeType before calling ProBuilder API"
   );
-  assert.ok(CREATE_SHAPE_SRC.includes("default: return null;"), "fallback primitive creation must not default unknown shapes to Cube");
-  assert.ok(!CREATE_SHAPE_SRC.includes("default: return GameObject.CreatePrimitive(PrimitiveType.Cube);"), "unknown shape fallback must not create Cube");
+  assert.doesNotMatch(CREATE_SHAPE_SRC, /CreatePrimitive|CreateUnityPrimitive|NormalizeShape/);
+  assert.match(CREATE_SHAPE_SRC, /ProBuilder 5\.x ShapeGenerator\.CreateShape failed/);
 });
 
 // ─── create-poly-shape: must use CreateShapeFromPolygon, not cube ──────
@@ -229,7 +224,7 @@ test("create-poly-shape uses CreateShapeFromPolygon instead of cube fallback", (
     CREATE_POLY_SHAPE_SRC.includes("points.Count < 3"),
     "create-poly-shape must validate at least 3 points"
   );
-  // Stage 3 新形态从 request.Points 解析点集(替代旧 Vector3ListArg)
+  // 点集来自 typed request.Points。
   assert.ok(
     CREATE_POLY_SHAPE_SRC.includes("request.Points"),
     "create-poly-shape must parse points from request"
@@ -245,7 +240,7 @@ test("extrude-edges selects edges and calls ExtrudeElements.Extrude", () => {
     EXTRUDE_EDGES_SRC.includes("ExtrudeEdgesBySelection"),
     "extrude-edges must call ExtrudeEdgesBySelection"
   );
-  // Stage 3 新形态从 request.Edges 转 ProBuilderInput.EdgePair
+  // typed request.Edges 转为 ProBuilderInput.EdgePair。
   assert.ok(
     EXTRUDE_EDGES_SRC.includes("EdgePair"),
     "extrude-edges must accept edge vertex pairs"
@@ -271,7 +266,7 @@ test("bridge-edges calls AppendElements.Bridge instead of stub", () => {
     BRIDGE_EDGES_SRC.includes("ProBuilderReflection.BridgeEdges"),
     "bridge-edges must call ProBuilderReflection.BridgeEdges"
   );
-  // Stage 3 新形态从 request.EdgeA/EdgeB 取边
+  // 两条边来自 typed request.EdgeA/EdgeB。
   assert.ok(
     BRIDGE_EDGES_SRC.includes("request.EdgeA"),
     "bridge-edges must parse edgeA from request"
@@ -360,10 +355,8 @@ test("append-vertices-to-edge calls AppendElements.AppendVerticesToEdge", () => 
 
 // ─── insert-vertex: must support edge pairs and face index ─────────────
 
-test("insert-vertex supports edge pairs and face index (not null edge)", () => {
-  // OLD: always passed null as the edge to InsertVertexOnEdge.
-  // NEW: must parse edge or faceIndex.
-  // Stage 3 新形态从 request.Edge 取边(替代旧 EdgeArg)
+test("insert-vertex requires exactly one edge or face seed", () => {
+  // 边来自 typed request.Edge，面来自 faceIndex。
   assert.ok(
     INSERT_VERTEX_SRC.includes("request.Edge"),
     "insert-vertex must parse edge from request"
@@ -376,14 +369,10 @@ test("insert-vertex supports edge pairs and face index (not null edge)", () => {
     INSERT_VERTEX_SRC.includes("InsertVertexInFace"),
     "insert-vertex must call InsertVertexInFace when faceIndex is provided"
   );
-
-  // The fallback path with InsertVertexOnEdge(mesh, null, point) is acceptable
-  // as a last resort when neither edge nor faceIndex is provided, but it
-  // must not be the primary/only code path.
-  assert.ok(
-    INSERT_VERTEX_SRC.includes("if (request.Edge != null)"),
-    "insert-vertex must check for edge first before falling back"
-  );
+  assert.match(INSERT_VERTEX_SRC, /Pass exactly one of edge or faceIndex/);
+  assert.doesNotMatch(INSERT_VERTEX_SRC, /InsertVertexOnEdge\(mesh, null/);
+  assert.match(INSERT_VERTEX_SRC, /Inserted = true/);
+  assert.doesNotMatch(INSERT_VERTEX_SRC, /vertexCountAfter <= vertexCountBefore/);
 });
 
 // ─── move-vertices: must offset positions, not set-all-to-same ─────────
@@ -411,7 +400,7 @@ test("merge-vertices uses VertexEditing.MergeVertices with collapseToFirst", () 
     MERGE_VERTICES_SRC.includes("MergeVerticesWithCollapse"),
     "merge-vertices must call MergeVerticesWithCollapse"
   );
-  // Stage 3 新形态用 request.CollapseToFirst 属性
+  // 合并策略由 request.CollapseToFirst 指定。
   assert.ok(
     MERGE_VERTICES_SRC.includes("CollapseToFirst"),
     "merge-vertices must support collapseToFirst parameter"
@@ -487,15 +476,20 @@ test("select-faces supports direction-based selection (not just flood)", () => {
     SELECT_FACES_SRC.includes("forward"),
     "select-faces must support 'forward' direction alias"
   );
+  assert.match(SELECT_FACES_SRC, /SeedFaceIndices/);
+  assert.match(SELECT_FACES_SRC, /ProBuilderReflection\.SelectFaces/);
+  assert.match(REFLECTION_SRC, /current = UnionFaceArrays\(current, neighboring\)/);
 });
 
 // ─── convert-to-probuilder: must use MeshImporter ───────────────────────
 
-test("convert-to-probuilder uses MeshImporter.Import", () => {
+test("convert-to-probuilder uses the exact MeshImporter path", () => {
   assert.ok(
-    CONVERT_SRC.includes("ConvertViaMeshImporter"),
-    "convert-to-probuilder must call ConvertViaMeshImporter"
+    CONVERT_SRC.includes("ConvertToProBuilderMesh"),
+    "convert-to-probuilder must call ConvertToProBuilderMesh"
   );
+  assert.match(REFLECTION_SRC, /GetConstructor\(new\[\] \{ typeof\(GameObject\) \}\)/);
+  assert.match(REFLECTION_SRC, /GetMethod\("Import", new\[\] \{ MeshImportSettingsType\.Value \}\)/);
 });
 
 // ─── freeze-transform: must bake positions into vertices ───────────────
@@ -528,7 +522,7 @@ test("mesh-info reports real vertex and face counts", () => {
     MESH_INFO_SRC.includes("GetFaceCount"),
     "mesh-info must report real face count"
   );
-  // Stage 3 新形态用嵌套 DTO 表示 bounds(替代旧 BoundsJson helper)
+  // bounds 使用嵌套 DTO 表示。
   assert.ok(
     MESH_INFO_SRC.includes("bounds.center"),
     "mesh-info must report real bounds from renderer"

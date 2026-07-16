@@ -33,6 +33,7 @@ namespace UnityCli.ProBuilder
             Description = "Extrude selected faces of a ProBuilder mesh by a given distance. When faceIndices is omitted, all faces are extruded. Method controls extrude direction: vertex (default) or faceNormal.",
             Group = "probuilder",
             DestructiveHint = false,
+            SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 10000,
@@ -45,12 +46,12 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            var go = ProBuilderInput.ResolveTarget(request.Target);
             if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
@@ -67,20 +68,22 @@ namespace UnityCli.ProBuilder
                 ? ProBuilderReflection.GetFacesByIndices(mesh, faceIndices)
                 : ProBuilderReflection.GetAllFaces(mesh);
 
-            if (faces != null)
-            {
-                ProBuilderReflection.Extrude(mesh, faces, distance, method);
-                ProBuilderReflection.RefreshMesh(mesh);
-            }
+            if (faces == null || faces.Length == 0)
+                throw ProBuilderErrors.OperationFailed("extrude-faces", "No valid faces found on target.");
+            if (!ProBuilderReflection.Extrude(mesh, faces, distance, method))
+                throw ProBuilderErrors.OperationFailed("extrude-faces", "ProBuilder 5.x ExtrudeElements.Extrude failed.");
+            ProBuilderReflection.RefreshMesh(mesh);
 
             var afterVertexCount = ProBuilderReflection.GetVertexCount(mesh);
+            if (beforeVertexCount < 0 || afterVertexCount <= beforeVertexCount)
+                throw ProBuilderErrors.OperationFailed("extrude-faces", "Extrude completed without increasing vertex count.");
             EditorSceneManager.MarkSceneDirty(go.scene);
 
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 ModifiedFaceCount = faces?.Length ?? 0,
                 NewVertexCount = afterVertexCount - beforeVertexCount
-            };
+            });
         }
     }
 }

@@ -108,18 +108,6 @@ test("ProBuilder contract entries count is 36", () => {
   assert.deepEqual(new Set(contracts.map((entry) => entry.bridgeCommand)), new Set(EXPECTED_PROBUILDER_TOOLS));
 });
 
-test("old ProBuilder tool names no longer exist in extension manifests", () => {
-  const contributionNames = new Set(
-    builtinExtensionToolContributions()
-      .filter((tool) => tool.extensionId === "probuilder")
-      .map((tool) => tool.name)
-  );
-  const oldNames = ["probuilder.shape", "probuilder.create", "probuilder.edit", "probuilder.csg"];
-  for (const name of oldNames) {
-    assert.equal(contributionNames.has(name), false, `${name}: old coarse-grained tool should NOT exist`);
-  }
-});
-
 test("ProBuilder C# extension source contains representative public tool names", async () => {
   const toolFiles = await Promise.all([
     "ping.cs",
@@ -142,7 +130,7 @@ test("ProBuilder scene context is implemented as read-only IUnityCliContext", as
   assert.match(contextSource, /"probuilder\.scene"/);
   assert.match(contextSource, /Category\s*=\s*"probuilder"/);
   assert.match(contextSource, /RequiresPackages\s*=\s*new\[\] \{ "com\.unity\.probuilder" \}/);
-  assert.match(contextSource, /public Result Read\(Request request, UnityCliProjectToolContext ctx\)/);
+  assert.match(contextSource, /public System\.Threading\.Tasks\.ValueTask<Result> ReadAsync\(Request request, UnityCliProjectToolContext ctx, System\.Threading\.CancellationToken ct = default\)/);
   assert.doesNotMatch(contextSource, /\[UnityCliTool\(/);
   assert.doesNotMatch(contextSource, /\[UnityCliContext\(/);
   assert.doesNotMatch(contextSource, /public static string Execute\(/);

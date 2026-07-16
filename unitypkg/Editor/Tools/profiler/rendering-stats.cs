@@ -5,7 +5,6 @@ namespace UnityCli
 {
     /// <summary>
     /// profiler.rendering-stats — 读取 UnityEditor.UnityStats 渲染采样统计。
-    /// 迁移自旧 RegisterCommand(ProfilerCommands.ProfilerRenderingStats)为 IUnityCliTool 自包含。
     /// UnityStats 字段只在 Game View 实际渲染帧被填充;非渲染帧返回 null,available=false 并给出 diagnostics。
     /// </summary>
     public class ProfilerRenderingStatsTool : IUnityCliTool<ProfilerRenderingStatsTool.Request, ProfilerRenderingStatsTool.Result>
@@ -46,13 +45,13 @@ namespace UnityCli
             Examples = new[] { new ToolExample { Description = "Read rendering stats", Input = new Request { } } }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             // UnityStats 是 internal Editor 类型,不同 Unity 版本/反射策略下可能取不到
             var statsType = ProfilerToolSupport.FindType("UnityEditor.UnityStats");
             if (statsType == null)
             {
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Command = "profiler.rendering-stats",
                     Available = false,
@@ -62,7 +61,7 @@ namespace UnityCli
                         "Use a Unity 2022.x Editor where UnityEditor.UnityStats is reachable via reflection.",
                         "For per-frame GPU/render counts prefer profiler.frame or profiler.hierarchy while the Profiler is recording."
                     }
-                };
+                });
             }
 
             var stats = new RenderingStats();
@@ -91,7 +90,7 @@ namespace UnityCli
                     "For stable per-frame timings use profiler.frame (FrameTimingManager) or profiler.hierarchy."
                 };
             }
-            return result;
+            return new System.Threading.Tasks.ValueTask<Result>(result);
         }
 
         // 按 UnityStats 成员名把反射读到的 string 值赋给 DTO 对应字段

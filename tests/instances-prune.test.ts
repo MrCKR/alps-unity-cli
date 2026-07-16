@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { createServer, type Server } from "node:http";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -12,6 +12,7 @@ import { readInstances, writeInstances, selectInstanceForFlags, type UnityInstan
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
 let healthEndpoint = "http://127.0.0.1:47392";
+const staleEndpoint = "http://127.0.0.1:1";
 let healthServer: Server | undefined;
 
 test.before(async () => {
@@ -31,8 +32,9 @@ async function makeRuntime() {
 async function startHealthServer(): Promise<string> {
   healthServer = createServer((request, response) => {
     if (request.url === "/health") {
+      const expectedTargetId = request.headers["x-unity-cli-expected-target-id"];
       response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({ ok: true, status: "healthy" }));
+      response.end(JSON.stringify({ ok: true, requestId: "", data: { bridge: "unity_cli", target: { id: expectedTargetId } } }));
       return;
     }
     response.writeHead(404);
@@ -58,34 +60,55 @@ function makeInstance(overrides: Partial<UnityInstance> = {}): UnityInstance {
   };
 }
 
+test("Unity instance heartbeat publishes registry files atomically", async () => {
+  const source = await readFile("unitypkg/Editor/Infrastructure/UnityCliInstanceRegistry.cs", "utf8");
+  assert.match(source, /private static void WriteRegistryTextAtomically\(/);
+  assert.match(source, /File\.Replace\(temporaryPath, path, null\)/);
+  assert.match(source, /File\.Move\(temporaryPath, path\)/);
+  assert.match(source, /WriteRegistryTextAtomically\(InstancePath\(\), UnityCliSerializer\.Serialize\(instanceData\)\)/);
+  assert.match(source, /WriteRegistryTextAtomically\(RegistryPath\(\), UnityCliSerializer\.Serialize\(registryData\)\)/);
+  assert.doesNotMatch(source, /File\.WriteAllText\(InstancePath\(\)/);
+  assert.doesNotMatch(source, /File\.WriteAllText\(RegistryPath\(\)/);
+});
+
+test("instance registry readers retry Windows sharing conflicts", async () => {
+  const source = await readFile("src/instances.ts", "utf8");
+  assert.match(source, /REGISTRY_READ_RETRY_DELAYS_MS = \[5, 10, 20, 40\]/);
+  assert.match(source, /\(retryMissing && code === "ENOENT"\) \|\| code === "EBUSY" \|\| code === "EPERM" \|\| code === "EACCES"/);
+  assert.match(source, /readRegistryText\(join\(dir, name\), true\)/);
+  assert.match(source, /readRegistryText\(registryPath\(dataDir\)\)/);
+  assert.match(source, /instances = await readInstances\(dataDir, Date\.now\(\), \{ useCache: true \}\)/);
+  assert.match(source, /error instanceof SyntaxError \|\| isRegistryTransientReadError\(error\)/);
+});
+
 test("instances prune requires explicit confirmation", async () => {
   const runtime = await makeRuntime();
-  await writeInstances(runtime.dataDir, [makeInstance({ instanceId: "inst_stale", lastHeartbeatAt: new Date(Date.now() - 60000).toISOString() })]);
+  await writeInstances(runtime.dataDir, [makeInstance({ instanceId: "inst_stale", bridgeEndpoint: staleEndpoint, lastHeartbeatAt: new Date(Date.now() - 60000).toISOString() })]);
 
   const result = await execute(["instances", "prune"], runtime);
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "E_DESTRUCTIVE_CONFIRMATION_REQUIRED");
 });
 
-test("instances prune removes stale instances and reports count", async () => {
+test("instances prune removes stale registry records without terminating Editor processes", async () => {
   const runtime = await makeRuntime();
   const staleTime = new Date(Date.now() - 60000).toISOString();
   await writeInstances(runtime.dataDir, [
     makeInstance({ instanceId: "inst_healthy", lastHeartbeatAt: new Date().toISOString() }),
-    makeInstance({ instanceId: "inst_stale1", lastHeartbeatAt: staleTime }),
-    makeInstance({ instanceId: "inst_stale2", lastHeartbeatAt: staleTime })
+    makeInstance({ instanceId: "inst_stale1", bridgeEndpoint: staleEndpoint, processId: process.pid, lastHeartbeatAt: staleTime }),
+    makeInstance({ instanceId: "inst_stale2", bridgeEndpoint: staleEndpoint, lastHeartbeatAt: staleTime })
   ]);
 
   const result = await execute(["instances", "prune", "--yes"], runtime);
-  assert.equal(result.ok, true);
-  const data = result.data as { removed: number; remaining: number; staleCleaned: Array<{ instanceId: string; pid: number | null; killed: boolean }> };
+  assert.ok(result.ok);
+  const data = result.data as { removed: number; remaining: number; staleCleaned: Array<{ instanceId: string; pid: number | null; registryDeleted: boolean }> };
   assert.equal(data.removed, 2);
   assert.equal(data.remaining, 1);
 
-  // staleCleaned should have entries for the stale instances
   assert.equal(data.staleCleaned.length, 2);
-  assert.equal(data.staleCleaned[0].instanceId, "inst_stale1");
-  assert.equal(data.staleCleaned[1].instanceId, "inst_stale2");
+  assert.deepEqual(data.staleCleaned[0], { instanceId: "inst_stale1", pid: process.pid, registryDeleted: true });
+  assert.deepEqual(data.staleCleaned[1], { instanceId: "inst_stale2", pid: null, registryDeleted: true });
+  assert.doesNotThrow(() => process.kill(process.pid, 0));
 });
 
 test("instances prune reports 0 removed when all instances are healthy", async () => {
@@ -96,7 +119,7 @@ test("instances prune reports 0 removed when all instances are healthy", async (
   ]);
 
   const result = await execute(["instances", "prune", "--yes"], runtime);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as { removed: number; remaining: number };
   assert.equal(data.removed, 0);
   assert.equal(data.remaining, 2);
@@ -106,11 +129,11 @@ test("instances prune reports 0 remaining when all instances are stale", async (
   const runtime = await makeRuntime();
   const staleTime = new Date(Date.now() - 60000).toISOString();
   await writeInstances(runtime.dataDir, [
-    makeInstance({ instanceId: "inst_stale", lastHeartbeatAt: staleTime })
+    makeInstance({ instanceId: "inst_stale", bridgeEndpoint: staleEndpoint, lastHeartbeatAt: staleTime })
   ]);
 
   const result = await execute(["instances", "prune", "--yes"], runtime);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as { removed: number; remaining: number };
   assert.equal(data.removed, 1);
   assert.equal(data.remaining, 0);
@@ -121,7 +144,7 @@ test("instances prune on empty registry returns 0 removed", async () => {
   await writeInstances(runtime.dataDir, []);
 
   const result = await execute(["instances", "prune", "--yes"], runtime);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as { removed: number; remaining: number };
   assert.equal(data.removed, 0);
   assert.equal(data.remaining, 0);
@@ -132,11 +155,11 @@ test("instances list returns all instances with status", async () => {
   const staleTime = new Date(Date.now() - 60000).toISOString();
   await writeInstances(runtime.dataDir, [
     makeInstance({ instanceId: "inst_healthy" }),
-    makeInstance({ instanceId: "inst_stale", lastHeartbeatAt: staleTime })
+    makeInstance({ instanceId: "inst_stale", bridgeEndpoint: staleEndpoint, lastHeartbeatAt: staleTime })
   ]);
 
   const result = await execute(["instances", "list"], runtime);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as { instances: UnityInstance[] };
   assert.equal(data.instances.length, 2);
 
@@ -151,7 +174,7 @@ test("doctor command is routed correctly via CLI execute", async () => {
   await writeInstances(runtime.dataDir, []);
 
   const result = await execute(["doctor"], runtime);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as { command: string; summary: string; checks: Array<{ name: string; status: string }> };
   assert.equal(data.command, "doctor");
   assert.ok(data.checks.length >= 1);
@@ -161,7 +184,7 @@ test("job status returns error when job ID is missing", async () => {
   const runtime = await makeRuntime();
 
   const result = await execute(["jobs", "status"], runtime);
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "JOB_ID_REQUIRED");
 });
 
@@ -169,7 +192,7 @@ test("job logs returns error when job ID is missing", async () => {
   const runtime = await makeRuntime();
 
   const result = await execute(["jobs", "logs"], runtime);
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "JOB_ID_REQUIRED");
 });
 
@@ -177,7 +200,7 @@ test("job cancel returns error when job ID is missing", async () => {
   const runtime = await makeRuntime();
 
   const result = await execute(["jobs", "cancel", "--yes"], runtime);
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "JOB_ID_REQUIRED");
 });
 
@@ -185,7 +208,7 @@ test("job status returns not found for unknown job ID", async () => {
   const runtime = await makeRuntime();
 
   const result = await execute(["jobs", "status", "job_nonexistent"], runtime);
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "JOB_NOT_FOUND");
 });
 
@@ -193,7 +216,7 @@ test("job logs returns not found for unknown job ID", async () => {
   const runtime = await makeRuntime();
 
   const result = await execute(["jobs", "logs", "job_nonexistent"], runtime);
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "JOB_NOT_FOUND");
 });
 test("control-plane duplicate tools and contexts are not exposed", async () => {

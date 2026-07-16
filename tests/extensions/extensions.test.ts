@@ -4,7 +4,7 @@
 
 import assert from "node:assert/strict";
 import test from "node:test";
-import { mkdtemp, writeFile, mkdir } from "node:fs/promises";
+import { mkdtemp, readFile, writeFile, mkdir } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 
@@ -22,7 +22,7 @@ import {
   URP_MANIFEST,
   HDRP_MANIFEST,
   BUILTIN_EXTENSION_MANIFESTS
-} from "../../src/extensions/registry-data.js";
+} from "../../src/extensions/index.js";
 
 import {
   loadAllExtensionDescriptors,
@@ -329,14 +329,8 @@ test("loadExtensionDescriptor loads a specific extension", () => {
   assert.equal(desc.availability.status, "available");
   assert.equal(desc.tools.length, 36);
   assert.equal(desc.contexts.length, 1);
-  assert.equal(desc.contexts[0].key, "probuilder.scene");
-  assert.equal(desc.contexts[0].category, "probuilder");
-  const inputProps = schemaProperties(desc.contexts[0].inputSchema);
-  const outputProps = schemaProperties(desc.contexts[0].outputSchema);
-  assert.ok(inputProps.pageSize);
-  assert.ok(inputProps.namePattern);
-  assert.ok(outputProps.objects);
-  assert.equal(desc.csharpEntries.length, 7);
+  assert.deepEqual(desc.contexts[0], { key: "probuilder.scene" });
+  assert.equal(desc.csharpEntries.length, 37);
   assert.ok(desc.csharpEntries.some((entry) => entry.type === "UnityCli.ProBuilder.ProBuilderSceneContext"));
 });
 
@@ -383,11 +377,12 @@ test("collectAvailableTools returns available extension tools and built-in VFX c
   });
   const toolNames = tools.map((t) => t.name);
   assert.equal(toolNames.filter((name) => name.startsWith("probuilder.")).length, 36);
-  assert.equal(toolNames.filter((name) => name.startsWith("vfx.")).length, 10);
+  assert.equal(toolNames.filter((name) => name.startsWith("vfx.")).length, 14);
   assert.ok(toolNames.includes("vfx.particle-create"));
   assert.ok(toolNames.includes("vfx.line-create"));
-  assert.ok(toolNames.includes("vfx.trail"));
-  assert.ok(!toolNames.includes("vfx.graph"));
+  assert.ok(toolNames.includes("vfx.trail.create"));
+  assert.ok(toolNames.includes("vfx.trail.set"));
+  assert.ok(tools.filter((tool) => tool.name.startsWith("vfx.")).every((tool) => !(tool.requiresPackages ?? []).includes("com.unity.visualeffectgraph")));
 });
 
 test("collectAvailableTools returns built-in VFX component tools when optional packages are absent", () => {
@@ -399,11 +394,15 @@ test("collectAvailableTools returns built-in VFX component tools when optional p
     "vfx.particle-main",
     "vfx.particle-emission",
     "vfx.particle-shape",
-    "vfx.particle-play",
+    "vfx.particle.play",
+    "vfx.particle.stop",
+    "vfx.particle.pause",
+    "vfx.particle.clear",
     "vfx.particle-module",
     "vfx.line-create",
     "vfx.line-positions",
-    "vfx.trail"
+    "vfx.trail.create",
+    "vfx.trail.set"
   ]);
 });
 
@@ -418,9 +417,9 @@ test("collectAllTools includes unavailable extension tools with availability fla
   assert.equal(probuilderTools.length, 36);
   assert.ok(probuilderTools.every((t) => t.available));
 
-  // Cinemachine has 13 tools in its manifest.
+  // Cinemachine exposes one descriptor per operation.
   const cinemachineTools = tools.filter((t) => t.extensionId === "cinemachine");
-  assert.equal(cinemachineTools.length, 13);
+  assert.equal(cinemachineTools.length, 16);
   assert.ok(cinemachineTools.every((t) => !t.available)); // Not installed
 });
 
@@ -433,11 +432,7 @@ test("collectAvailableContexts returns implemented contexts from available exten
     "com.unity.visualeffectgraph": "14.0.0"
   });
   const probuilderScene = contexts.find((c) => c.key === "probuilder.scene");
-  assert.ok(probuilderScene);
-  assert.match(probuilderScene.description, /Read ProBuilder mesh objects/);
-  assert.equal(probuilderScene.category, "probuilder");
-  assert.ok(schemaProperties(probuilderScene.inputSchema).pageSize);
-  assert.ok(schemaProperties(probuilderScene.outputSchema).objects);
+  assert.deepEqual(probuilderScene, { key: "probuilder.scene" });
   assert.ok(!contexts.some((c) => c.key === "vfx.assets"));
 });
 
@@ -448,9 +443,11 @@ test("collectAvailableCSharpEntries returns entries from available extensions", 
     "com.unity.visualeffectgraph": "14.0.0"
   });
   assert.ok(entries.some((e) => e.type.startsWith("UnityCli.ProBuilder.")));
-  assert.ok(entries.some((e) => e.type === "UnityCli.VfxGraphTool"));
-  assert.ok(entries.some((e) => e.type === "UnityCli.VfxTrailTool"));
-  assert.equal(entries.filter((e) => e.type.startsWith("UnityCli.Vfx")).length, 16);
+  assert.ok(entries.some((e) => e.type === "UnityCli.VfxGraphInfoTool"));
+  assert.ok(entries.some((e) => e.type === "UnityCli.VfxGraphCreateTool"));
+  assert.ok(entries.some((e) => e.type === "UnityCli.VfxTrailCreateTool"));
+  assert.ok(entries.some((e) => e.type === "UnityCli.VfxTrailSetTool"));
+  assert.equal(entries.filter((e) => e.type.startsWith("UnityCli.Vfx")).length, 29);
 });
 
 // ── extensionAvailabilitySummary ───────────────────────────────────────────
@@ -597,33 +594,27 @@ test("ProBuilder manifest has correct tool contributions", () => {
   assert.ok(!toolNames.includes("probuilder.csg"));
 });
 
-test("VFX Graph manifest has correct tool contributions", () => {
-  assert.equal(VFX_GRAPH_MANIFEST.contributions.tools!.length, 16);
+test("VFX Graph manifest has one contribution per operation", () => {
+  assert.equal(VFX_GRAPH_MANIFEST.contributions.tools!.length, 29);
   const toolNames = VFX_GRAPH_MANIFEST.contributions.tools!.map((t) => t.name);
-  assert.deepEqual(toolNames, [
-    "vfx.graph",
-    "vfx.effect",
-    "vfx.parameter",
-    "vfx.control",
-    "vfx.event",
-    "vfx.template",
-    "vfx.particle-create",
-    "vfx.particle-info",
-    "vfx.particle-main",
-    "vfx.particle-emission",
-    "vfx.particle-shape",
-    "vfx.particle-play",
-    "vfx.particle-module",
-    "vfx.line-create",
-    "vfx.line-positions",
-    "vfx.trail"
-  ]);
+  assert.ok(toolNames.includes("vfx.graph.info"));
+  assert.ok(toolNames.includes("vfx.graph.create"));
+  assert.ok(toolNames.includes("vfx.effect.info"));
+  assert.ok(toolNames.includes("vfx.effect.add"));
+  assert.ok(toolNames.includes("vfx.effect.assign"));
+  assert.ok(toolNames.includes("vfx.control.set-seed"));
+  assert.ok(toolNames.includes("vfx.particle.play"));
+  assert.ok(toolNames.includes("vfx.particle.clear"));
+  assert.ok(toolNames.includes("vfx.template.list"));
+  assert.ok(toolNames.includes("vfx.template.create"));
+  assert.ok(toolNames.includes("vfx.trail.create"));
+  assert.ok(toolNames.includes("vfx.trail.set"));
   const graphOnly = VFX_GRAPH_MANIFEST.contributions.tools!.filter((t) => t.requiresPackages?.includes("com.unity.visualeffectgraph"));
-  assert.deepEqual(graphOnly.map((t) => t.name), ["vfx.graph", "vfx.effect", "vfx.parameter", "vfx.control", "vfx.event", "vfx.template"]);
+  assert.equal(graphOnly.length, 15);
 });
 
-test("Cinemachine manifest has 13 tools and no unimplemented contexts", () => {
-  assert.equal(CINEMACHINE_MANIFEST.contributions.tools!.length, 13);
+test("Cinemachine manifest has split tools and no unimplemented contexts", () => {
+  assert.equal(CINEMACHINE_MANIFEST.contributions.tools!.length, 16);
   assert.equal(CINEMACHINE_MANIFEST.contributions.contexts!.length, 0);
   const toolNames = CINEMACHINE_MANIFEST.contributions.tools!.map((t) => t.name);
   assert.ok(toolNames.includes("cinemachine.ping"));
@@ -631,13 +622,29 @@ test("Cinemachine manifest has 13 tools and no unimplemented contexts", () => {
   assert.ok(toolNames.includes("cinemachine.release-override"));
 });
 
-test("URP manifest has 3 tools and no unimplemented contexts", () => {
-  assert.equal(URP_MANIFEST.contributions.tools!.length, 3);
+test("render-pipeline volume setters support Unity 2022 generic TryGet API", async () => {
+  for (const file of [
+    "extensions/urp/unitypkg/Editor/Urp/UrpToolSupport.cs",
+    "extensions/hdrp/unitypkg/Editor/Hdrp/HdrpToolSupport.cs"
+  ]) {
+    const source = await readFile(file, "utf8");
+    assert.match(source, /profile\.components\.FirstOrDefault/);
+    assert.doesNotMatch(source, /GetMethod\("TryGet"/);
+  }
+});
+
+test("URP manifest has one tool per feature, volume, and settings operation", () => {
+  assert.equal(URP_MANIFEST.contributions.tools!.length, 12);
+  assert.deepEqual(URP_MANIFEST.contributions.tools!.filter((tool) => tool.name.startsWith("urp.feature.")).map((tool) => tool.name), ["urp.feature.list", "urp.feature.add", "urp.feature.toggle", "urp.feature.configure", "urp.feature.remove"]);
+  assert.deepEqual(URP_MANIFEST.contributions.tools!.filter((tool) => tool.name.startsWith("urp.volume.")).map((tool) => tool.name), ["urp.volume.list", "urp.volume.create", "urp.volume.info", "urp.volume.add-effect", "urp.volume.set"]);
+  assert.deepEqual(URP_MANIFEST.contributions.tools!.filter((tool) => tool.name.startsWith("urp.settings.")).map((tool) => tool.name), ["urp.settings.get", "urp.settings.set"]);
   assert.equal(URP_MANIFEST.contributions.contexts!.length, 0);
 });
 
-test("HDRP manifest has 2 tools and no unimplemented contexts", () => {
-  assert.equal(HDRP_MANIFEST.contributions.tools!.length, 2);
+test("HDRP manifest has one tool per volume and settings operation", () => {
+  assert.equal(HDRP_MANIFEST.contributions.tools!.length, 7);
+  assert.deepEqual(HDRP_MANIFEST.contributions.tools!.filter((tool) => tool.name.startsWith("hdrp.volume.")).map((tool) => tool.name), ["hdrp.volume.list", "hdrp.volume.create", "hdrp.volume.info", "hdrp.volume.add-effect", "hdrp.volume.set"]);
+  assert.deepEqual(HDRP_MANIFEST.contributions.tools!.filter((tool) => tool.name.startsWith("hdrp.settings.")).map((tool) => tool.name), ["hdrp.settings.get", "hdrp.settings.set"]);
   assert.equal(HDRP_MANIFEST.contributions.contexts!.length, 0);
 });
 
@@ -661,6 +668,25 @@ test("built-in manifests declare Unity directory install layout", () => {
   for (const manifest of BUILTIN_EXTENSION_MANIFESTS) {
     assert.equal(manifest.unityInstall?.layout, "directory", `${manifest.id} should install as a Unity extension directory`);
     assert.deepEqual(manifest.unityInstall?.include, ["extension.json", "unitypkg/", "docs/"]);
+  }
+});
+
+test("each extension compiles in its own Editor assembly", async () => {
+  const assemblyFiles = new Map([
+    ["cinemachine", "UnityCli.Extensions.Cinemachine.Editor.asmdef"],
+    ["hdrp", "UnityCli.Extensions.Hdrp.Editor.asmdef"],
+    ["probuilder", "UnityCli.Extensions.ProBuilder.Editor.asmdef"],
+    ["urp", "UnityCli.Extensions.Urp.Editor.asmdef"],
+    ["vfx-graph", "UnityCli.Extensions.VfxGraph.Editor.asmdef"]
+  ]);
+
+  for (const [extensionId, fileName] of assemblyFiles) {
+    const path = join(process.cwd(), "extensions", extensionId, "unitypkg", fileName);
+    const assembly = JSON.parse(await readFile(path, "utf8")) as { references?: string[]; includePlatforms?: string[] };
+    assert.ok(assembly.references?.includes("UnityCli.Editor"), `${extensionId} must reference the core Editor assembly`);
+    assert.deepEqual(assembly.includePlatforms, ["Editor"]);
+    const requiresCoreRuntime = extensionId === "urp" || extensionId === "hdrp";
+    assert.equal(assembly.references?.includes("Unity.RenderPipelines.Core.Runtime"), requiresCoreRuntime);
   }
 });
 

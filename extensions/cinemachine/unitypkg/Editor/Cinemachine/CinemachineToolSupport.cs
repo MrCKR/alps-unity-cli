@@ -27,6 +27,17 @@ namespace UnityCli.Cinemachine
             { "side_scroller", new[] { "CinemachinePositionComposer",  null } }
         };
 
+        // 对外接受 CM3 组件名称；CM2 项目自动落到语义等价的 pipeline component。
+        private static readonly Dictionary<string, string[]> ComponentTypeAliases = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "CinemachineFollow", new[] { "CinemachineTransposer" } },
+            { "CinemachineRotationComposer", new[] { "CinemachineComposer" } },
+            { "CinemachineThirdPersonFollow", new[] { "Cinemachine3rdPersonFollow" } },
+            { "CinemachineOrbitalFollow", new[] { "CinemachineOrbitalTransposer" } },
+            { "CinemachineSplineDolly", new[] { "CinemachineTrackedDolly" } },
+            { "CinemachinePositionComposer", new[] { "CinemachineFramingTransposer" } }
+        };
+
         private static Type cameraType;
         private static Type brainType;
         private static Type extensionBaseType;
@@ -165,7 +176,7 @@ namespace UnityCli.Cinemachine
             throw new UnityCliBridge.BridgeCommandException(
                 "E_CINEMACHINE_BRAIN_NOT_FOUND",
                 "GameObject does not have CinemachineBrain: " + GameObjectToolSupport.HierarchyPath(target),
-                "Use cinemachine.brain with action=ensure to add one.");
+                "Use cinemachine.brain.ensure to add one.");
         }
 
         public static GameObject ResolveBrainOwner(string target)
@@ -184,7 +195,7 @@ namespace UnityCli.Cinemachine
             throw new UnityCliBridge.BridgeCommandException(
                 "E_CINEMACHINE_BRAIN_NOT_FOUND",
                 "No CinemachineBrain found in the scene.",
-                "Use cinemachine.brain with action=ensure to add one.");
+                "Use cinemachine.brain.ensure to add one.");
         }
 
         public static GameObject FindOrCreateBrainOwnerCandidate()
@@ -289,11 +300,19 @@ namespace UnityCli.Cinemachine
             {
                 return;
             }
+
+            // Cinemachine 2.x 通过泛型 pipeline API 管理隐藏子对象；直接 AddComponent 会破坏其它 stage。
+            var cameraMethods = camera.GetType().GetMethods(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+            var destroy = cameraMethods.FirstOrDefault(method => method.Name == "DestroyCinemachineComponent" && method.IsGenericMethodDefinition && method.GetParameters().Length == 0);
             if (existing != null)
             {
-                Undo.DestroyObjectImmediate(existing);
+                if (destroy != null) destroy.MakeGenericMethod(existing.GetType()).Invoke(camera, null);
+                else UnityCliSceneMutation.DestroyObject(existing);
             }
-            Undo.AddComponent(gameObject, newType);
+
+            var add = cameraMethods.FirstOrDefault(method => method.Name == "AddCinemachineComponent" && method.IsGenericMethodDefinition && method.GetParameters().Length == 0);
+            if (add != null) add.MakeGenericMethod(newType).Invoke(camera, null);
+            else UnityCliSceneMutation.AddComponent(gameObject, newType);
         }
 
         public static Component GetPipelineComponent(Component camera, string stage)
@@ -361,6 +380,29 @@ namespace UnityCli.Cinemachine
                 return null;
             }
 
+            var direct = FindComponentType(typeName);
+            if (direct != null)
+            {
+                return direct;
+            }
+
+            if (ComponentTypeAliases.TryGetValue(typeName, out var aliases))
+            {
+                foreach (var alias in aliases)
+                {
+                    var compatible = FindComponentType(alias);
+                    if (compatible != null)
+                    {
+                        return compatible;
+                    }
+                }
+            }
+            return null;
+        }
+
+        /// <summary>在当前 Cinemachine assembly 与已加载程序集内解析一个具体组件类型。</summary>
+        private static Type FindComponentType(string typeName)
+        {
             if (cameraType != null)
             {
                 var assemblyType = cameraType.Assembly.GetType("Unity.Cinemachine." + typeName)
@@ -502,7 +544,7 @@ namespace UnityCli.Cinemachine
         {
             if (gameObject.scene.IsValid())
             {
-                EditorSceneManager.MarkSceneDirty(gameObject.scene);
+                UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
             }
         }
 

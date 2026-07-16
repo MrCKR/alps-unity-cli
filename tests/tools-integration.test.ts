@@ -19,7 +19,7 @@ async function makeRuntime() {
 test("integration: offline tools group via execute() only shows TS-local groups", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["tools", "group"], runtime);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
 
   const data = result.data as Record<string, unknown>;
   assert.equal(data.command, "tools.group");
@@ -33,7 +33,7 @@ test("integration: offline tools group via execute() only shows TS-local groups"
 test("integration: live-discovered built-in group list via execute()", async () => {
   const runtime = { ...(await makeRuntime()), projectTools: [sceneHierarchyTool()] };
   const result = await execute(["tools", "group", "list", "scene"], runtime);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
 
   const data = result.data as Record<string, unknown>;
   assert.equal(data.command, "tools.group.list");
@@ -45,7 +45,7 @@ test("integration: live-discovered built-in group list via execute()", async () 
 test("integration: live-discovered extension tool search via execute()", async () => {
   const runtime = { ...(await makeRuntime()), projectTools: [probuilderPingTool()] };
   const result = await execute(["tools", "search", "probuilder"], runtime);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
 
   const data = result.data as Record<string, unknown>;
   assert.equal(data.command, "tools.search");
@@ -56,7 +56,7 @@ test("integration: live-discovered extension tool search via execute()", async (
 test("integration: live-discovered C# describe via execute()", async () => {
   const runtime = { ...(await makeRuntime()), projectTools: [sceneHierarchyTool()] };
   const result = await execute(["tools", "describe", "scene.hierarchy"], runtime);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
 
   const data = result.data as Record<string, unknown>;
   assert.equal(data.name, "scene.hierarchy");
@@ -68,14 +68,14 @@ test("integration: live-discovered C# describe via execute()", async () => {
 test("integration: unregistered tools subcommand returns unknown-command error", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["tools", "catalog"], runtime);
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "UNKNOWN_TOOLS_COMMAND");
 });
 
 test("integration: capabilities via execute()", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["tools", "run", "diagnose.capabilities"], runtime);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
 
   const data = result.data as Record<string, unknown>;
   assert.equal(data.command, "diagnose.capabilities");
@@ -92,9 +92,9 @@ test("integration: docs built-in topics via canonical docs command", async () =>
   const topic = await execute(["tools", "run", "docs.topic", "package"], runtime);
   const missing = await execute(["tools", "run", "docs.topic", "missing-topic"], runtime);
 
-  assert.equal(list.ok, true);
-  assert.equal(topic.ok, true);
-  assert.equal(missing.ok, false);
+  assert.ok(list.ok);
+  assert.ok(topic.ok);
+  assert.ok(!missing.ok);
   assert.equal((list.data as { command: string }).command, "docs.list");
   assert.match((list.data as { text: string }).text, /package/);
   assert.equal((topic.data as { command: string; topic: string }).command, "docs.topic");
@@ -112,9 +112,9 @@ test("integration: package read tools run through tools entrypoint", async () =>
   const status = await execute(["tools", "run", "package.status", "--project", project], runtime);
   const info = await execute(["tools", "run", "package.info", "com.example.tool", "--project", project], runtime);
 
-  assert.equal(list.ok, true);
-  assert.equal(status.ok, true);
-  assert.equal(info.ok, true);
+  assert.ok(list.ok);
+  assert.ok(status.ok);
+  assert.ok(info.ok);
   const listData = list.data as { packages: Array<{ name: string; requestedVersion?: string }> };
   const statusData = status.data as { packageCount: number };
   const infoData = info.data as { package: { name: string; requestedVersion?: string } };
@@ -127,6 +127,6 @@ test("integration: package read tools run through tools entrypoint", async () =>
 test("integration: tools describe nonexistent returns E_TOOL_NOT_FOUND_FOR_TARGET via execute()", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["tools", "describe", "nonexistent.tool"], runtime);
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "E_TOOL_NOT_FOUND_FOR_TARGET");
 });

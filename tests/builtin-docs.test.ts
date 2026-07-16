@@ -53,7 +53,7 @@ test("buildTopics formats custom tool lines", () => {
 
 test("listBuiltinDocs includes runtime custom topics", () => {
   const result = listBuiltinDocs({}, { projectTools: [customTool()] }, requestId);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
 
   const data = result.data as { topics: Array<{ key: string; toolCount: number }> };
   const topic = data.topics.find((candidate) => candidate.key === "terrain-tools");
@@ -62,7 +62,7 @@ test("listBuiltinDocs includes runtime custom topics", () => {
 
 test("getBuiltinDocTopic returns runtime custom topic", () => {
   const result = getBuiltinDocTopic("terrain-tools", {}, { projectTools: [customTool()] }, requestId);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
 
   const data = result.data as { topic: string; tools: string[] };
   assert.equal(data.topic, "terrain-tools");

@@ -35,6 +35,7 @@ namespace UnityCli.ProBuilder
             Description = "Set the vertex color of selected faces on a ProBuilder mesh. Color is specified as R/G/B/A components (0-1). When faceIndices is omitted, all faces are colored.",
             Group = "probuilder",
             DestructiveHint = false,
+            SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 10000,
@@ -47,12 +48,12 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            var go = ProBuilderInput.ResolveTarget(request.Target);
             if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
@@ -71,24 +72,14 @@ namespace UnityCli.ProBuilder
 
             Undo.RecordObject(go, "ProBuilder Set Face Color");
 
-            // 通过反射调用 ProBuilderMesh.SetFaceColor
             var colored = ProBuilderReflection.SetFaceColor(mesh, faces, color);
             if (!colored)
-            {
-                // 回退:尝试直接在网格上设置顶点颜色
-                try
-                {
-                    var hasColorsProp = ProBuilderReflection.GetProBuilderMeshType()?.GetProperty("hasColors");
-                    if (hasColorsProp != null && hasColorsProp.CanWrite)
-                        hasColorsProp.SetValue(mesh, true);
-                }
-                catch (Exception) { }
-            }
+                throw ProBuilderErrors.OperationFailed("set-face-color", "ProBuilder 5.x ProBuilderMesh.SetFaceColor failed.");
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
-            return new Result { ColoredFaceCount = faces.Length };
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { ColoredFaceCount = faces.Length });
         }
     }
 }

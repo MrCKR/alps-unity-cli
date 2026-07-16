@@ -14,11 +14,14 @@ Unity Cinemachine 智能相机系统的 CLI 工具集。提供可用性检测、
 | `cinemachine.blend` | 读写 CinemachineBrain 的 DefaultBlend（风格 + 时长） |
 | `cinemachine.body` | 切换或配置 Body 管线组件（CinemachineFollow, CinemachinePositionComposer 等） |
 | `cinemachine.aim` | 切换或配置 Aim 管线组件（CinemachineRotationComposer, CinemachineHardLookAt 等） |
-| `cinemachine.noise` | 添加/配置/移除多通道 Perlin 噪声组件 |
-| `cinemachine.brain` | 确保 Brain 挂载或报告 Brain 混合状态 |
+| `cinemachine.noise` | 添加、配置或移除多通道 Perlin 噪声组件 |
+| `cinemachine.brain.ensure` | 确保目标相机挂载 CinemachineBrain |
+| `cinemachine.brain.status` | 读取 Brain 及当前活动虚拟相机状态 |
 | `cinemachine.force-camera` | 调用 CinemachineBrain.SetCameraOverride 强制切到目标虚拟相机，并返回 overrideId |
 | `cinemachine.release-override` | 使用 overrideId 释放上一条强制相机 override |
-| `cinemachine.extension` | 列出/添加/移除 CinemachineExtension 派生组件 |
+| `cinemachine.extension.list` | 列出目标上的 CinemachineExtension 派生组件 |
+| `cinemachine.extension.add` | 添加 CinemachineExtension 派生组件 |
+| `cinemachine.extension.remove` | 移除 CinemachineExtension 派生组件 |
 
 ## 前置条件
 
@@ -28,26 +31,17 @@ Unity Cinemachine 智能相机系统的 CLI 工具集。提供可用性检测、
 ## 发现与使用
 
 ```bash
-# 列出 Cinemachine 工具（需要 --project 指向已安装 Cinemachine 的 Unity 项目）
-unity-cli tools group list cinemachine
+# 列出 Cinemachine 工具
+unity_cli tools group list cinemachine --project <project-path>
+
+# 调用前读取完整 schema、preset 集合和 examples
+unity_cli tools describe cinemachine.create --project <project-path>
 
 # 检测 Cinemachine 可用性
-unity-cli tools run cinemachine.ping --project <project-path>
+unity_cli tools run cinemachine.ping --project <project-path> --input '{}'
 
-# 创建跟随相机
-unity-cli tools run cinemachine.create follow --name PlayerCam --follow Player
-
-# 设置镜头 FOV
-unity-cli tools run cinemachine.lens PlayerCam --field-of-view 60
-
-# 强制 Brain 切到虚拟相机，并记录返回的 overrideId
-unity-cli tools run cinemachine.force-camera CloseupCam --brain "Main Camera"
-
-# 释放强制相机 override
-unity-cli tools run cinemachine.release-override --input "{\"overrideId\":12,\"brain\":\"Main Camera\"}"
-
-# 切换 Body 组件
-unity-cli tools run cinemachine.body PlayerCam --body CinemachineFollow
+# 创建跟随相机；非法 preset 返回 E_CINEMACHINE_PRESET_INVALID，且不会创建对象
+unity_cli tools run cinemachine.create --project <project-path> --input '{"preset":"follow","name":"PlayerCam","follow":"Player"}'
 ```
 
 ## 依赖缺失时的行为

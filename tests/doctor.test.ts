@@ -31,8 +31,9 @@ function makeRuntime(dataDir: string, bridgeExecute?: DoctorRuntime["bridgeExecu
 async function startHealthServer(): Promise<string> {
   healthServer = createServer((request, response) => {
     if (request.url === "/health") {
+      const expectedTargetId = request.headers["x-unity-cli-expected-target-id"];
       response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({ ok: true, status: "healthy" }));
+      response.end(JSON.stringify({ ok: true, requestId: "", data: { bridge: "unity_cli", target: { id: expectedTargetId } } }));
       return;
     }
     response.writeHead(404);
@@ -62,12 +63,14 @@ test("doctor returns all-pass when registry has healthy instance and bridge is r
   const dataDir = await makeDataDir();
   await writeInstances(dataDir, [makeInstance()]);
 
+  const bridgeCommands: string[] = [];
   const runtime = makeRuntime(dataDir, async (payload) => {
-    return { ok: true, data: { command: payload.command, status: "ok" } };
+    bridgeCommands.push(payload.command);
+    return { ok: true as const, requestId: payload.requestId, data: { command: payload.command, status: "ok" } };
   });
 
   const result = await handleDoctorCommand({}, runtime, "req_doctor_1");
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as { summary: string; checks: DoctorCheck[] };
   // extension_availability warns when no --project is provided.
   assert.equal(data.summary, "warn");
@@ -81,6 +84,7 @@ test("doctor returns all-pass when registry has healthy instance and bridge is r
 
   const bridgeCheck = data.checks.find((c) => c.name === "bridge_connectivity");
   assert.equal(bridgeCheck?.status, "pass");
+  assert.equal(bridgeCommands[0], "project-tool.run");
 
   const discoveryCheck = data.checks.find((c) => c.name === "unified_tool_discovery");
   assert.equal(discoveryCheck?.status, "pass");
@@ -97,7 +101,7 @@ test("doctor returns warn when instance registry is empty", async () => {
   const runtime = makeRuntime(dataDir);
 
   const result = await handleDoctorCommand({}, runtime, "req_doctor_2");
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as { summary: string; checks: DoctorCheck[]; suggestions: string[] };
   assert.equal(data.summary, "warn");
 
@@ -113,11 +117,11 @@ test("doctor returns warn when instance registry is empty", async () => {
 test("doctor returns fail when all instances are stale", async () => {
   const dataDir = await makeDataDir();
   const staleTime = new Date(Date.now() - 60000).toISOString();
-  await writeInstances(dataDir, [makeInstance({ lastHeartbeatAt: staleTime })]);
+  await writeInstances(dataDir, [makeInstance({ bridgeEndpoint: "http://127.0.0.1:1", lastHeartbeatAt: staleTime })]);
 
   const runtime = makeRuntime(dataDir);
   const result = await handleDoctorCommand({}, runtime, "req_doctor_3");
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as { summary: string; checks: DoctorCheck[] };
   assert.equal(data.summary, "fail");
 
@@ -125,16 +129,16 @@ test("doctor returns fail when all instances are stale", async () => {
   assert.equal(healthyCheck?.status, "fail");
 });
 
-test("doctor returns fail when bridge is unreachable", async () => {
+test("doctor returns fail when bridge is unreachable", async (payload) => {
   const dataDir = await makeDataDir();
   await writeInstances(dataDir, [makeInstance()]);
 
-  const runtime = makeRuntime(dataDir, async () => {
-    return { ok: false, error: { code: "BRIDGE_CONNECTION_FAILED", message: "Connection refused" } };
+  const runtime = makeRuntime(dataDir, async (payload) => {
+    return { ok: false as const, requestId: payload.requestId, error: { code: "BRIDGE_CONNECTION_FAILED", message: "Connection refused", nextActions: [], transient: false, retryAfterMs: 0 } };
   });
 
   const result = await handleDoctorCommand({}, runtime, "req_doctor_4");
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as { summary: string; checks: DoctorCheck[] };
   assert.equal(data.summary, "fail");
 
@@ -147,7 +151,7 @@ test("doctor returns warn when data directory does not exist", async () => {
   const runtime = makeRuntime(dataDir);
 
   const result = await handleDoctorCommand({}, runtime, "req_doctor_5");
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as { summary: string; checks: DoctorCheck[] };
 
   const dirCheck = data.checks.find((c) => c.name === "data_directory");
@@ -159,7 +163,7 @@ test("doctor returns pass for job store when no jobs have been run", async () =>
   const runtime = makeRuntime(dataDir);
 
   const result = await handleDoctorCommand({}, runtime, "req_doctor_6");
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as { checks: DoctorCheck[] };
 
   const jobStoreCheck = data.checks.find((c) => c.name === "job_store");
@@ -186,7 +190,7 @@ test("doctor returns pass for job store when jobs exist", async () => {
 
   const runtime = makeRuntime(dataDir);
   const result = await handleDoctorCommand({}, runtime, "req_doctor_7");
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as { checks: DoctorCheck[] };
 
   const jobStoreCheck = data.checks.find((c) => c.name === "job_store");
@@ -200,7 +204,7 @@ test("doctor config integrity check warns on missing projectHash", async () => {
 
   const runtime = makeRuntime(dataDir);
   const result = await handleDoctorCommand({}, runtime, "req_doctor_8");
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as { checks: DoctorCheck[] };
 
   const configCheck = data.checks.find((c) => c.name === "config_integrity");
@@ -216,6 +220,7 @@ test("doctor surfaces bridge custom tool fingerprint summary", async () => {
   const runtime = makeRuntime(dataDir, async (payload) => {
     return {
       ok: true,
+      requestId: payload.requestId,
       data: {
         command: payload.command,
         status: "ok",
@@ -225,7 +230,7 @@ test("doctor surfaces bridge custom tool fingerprint summary", async () => {
   });
 
   const result = await handleDoctorCommand({}, runtime, "req_doctor_fingerprint");
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as { summary: string; checks: DoctorCheck[]; suggestions: string[] };
   assert.equal(data.summary, "fail");
 
@@ -250,7 +255,7 @@ test("doctor reports runtime custom tools in unified discovery", async () => {
   };
 
   const result = await handleDoctorCommand({}, runtime, "req_doctor_custom_runtime");
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as { checks: DoctorCheck[] };
   const discoveryCheck = data.checks.find((c) => c.name === "unified_tool_discovery");
   assert.equal(discoveryCheck?.status, "pass");
@@ -263,11 +268,11 @@ test("doctor uses --bridge-endpoint flag when provided", async () => {
   let capturedEndpoint = "";
 
   const runtime = makeRuntime(dataDir, async (payload) => {
-    return { ok: true, data: { command: payload.command, status: "ok" } };
+    return { ok: true as const, requestId: payload.requestId, data: { command: payload.command, status: "ok" } };
   });
 
   const result = await handleDoctorCommand({ "bridge-endpoint": "http://127.0.0.1:9999" }, runtime, "req_doctor_9");
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as { checks: DoctorCheck[] };
 
   const bridgeCheck = data.checks.find((c) => c.name === "bridge_connectivity");
@@ -278,11 +283,11 @@ test("doctor uses --bridge-endpoint flag when provided", async () => {
 test("doctor provides actionable suggestions when checks fail", async () => {
   const dataDir = await makeDataDir();
   const staleTime = new Date(Date.now() - 60000).toISOString();
-  await writeInstances(dataDir, [makeInstance({ lastHeartbeatAt: staleTime })]);
+  await writeInstances(dataDir, [makeInstance({ bridgeEndpoint: "http://127.0.0.1:1", lastHeartbeatAt: staleTime })]);
 
   const runtime = makeRuntime(dataDir);
   const result = await handleDoctorCommand({}, runtime, "req_doctor_10");
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as { suggestions: string[] };
 
   assert.ok(data.suggestions.some((s) => s.includes("prune") || s.includes("Reopen")));
@@ -293,11 +298,11 @@ test("doctor includes context_discovery check when bridge is reachable", async (
   await writeInstances(dataDir2, [makeInstance()]);
 
   const runtime2 = makeRuntime(dataDir2, async (payload) => {
-    return { ok: true, data: { command: payload.command, status: "ok" } };
+    return { ok: true as const, requestId: payload.requestId, data: payload.command === "context.list" ? { contexts: [] } : { command: payload.command, status: "ok" } };
   });
 
   const result = await handleDoctorCommand({}, runtime2, "req_doctor_ctx_1");
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as { summary: string; checks: DoctorCheck[] };
 
   const contextCheck = data.checks.find((c) => c.name === "project_context_discovery");
@@ -312,21 +317,28 @@ test("doctor context_discovery reports project custom contexts from runtime", as
   const runtime: DoctorRuntime = {
     dataDir,
     bridgeExecute: async (payload) => {
-      return { ok: true, data: { command: payload.command, status: "ok" } };
+      return { ok: true as const, requestId: payload.requestId, data: { command: payload.command, status: "ok" } };
     },
     projectContexts: [
       {
         name: "sample.project-summary",
-        description: "Sample project summary context",
+        summary: "Read a sample project summary.",
+        description: "Read a sample project summary without changing project state.",
         category: "sample",
         source: "project",
-        inputSchema: { type: "object" }
+        target: "editor",
+        availabilityScope: "editorSession",
+        playModeSupport: "supported",
+        inputSchema: { type: "object", properties: {}, additionalProperties: false },
+        outputSchema: { type: "object", properties: {}, additionalProperties: false },
+        examples: [{ description: "Read the summary.", input: {} }],
+        cliCommand: "context read sample.project-summary"
       }
     ]
   };
 
   const result = await handleDoctorCommand({ "include-custom": true }, runtime, "req_doctor_ctx_2");
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as { checks: DoctorCheck[] };
 
   const contextCheck = data.checks.find((c) => c.name === "project_context_discovery");
@@ -344,6 +356,7 @@ test("doctor project_context_fingerprint reports blocked as fail", async () => {
   const runtime = makeRuntime(dataDir, async (payload) => {
     return {
       ok: true,
+      requestId: payload.requestId,
       data: {
         command: payload.command,
         status: "ok",
@@ -355,7 +368,7 @@ test("doctor project_context_fingerprint reports blocked as fail", async () => {
   });
 
   const result = await handleDoctorCommand({}, runtime, "req_doctor_ctx_fp_1");
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as { checks: DoctorCheck[]; suggestions: string[] };
 
   const fpCheck = data.checks.find((c) => c.name === "project_context_fingerprint");
@@ -375,6 +388,7 @@ test("doctor project_context_fingerprint reports warnCount as warn", async () =>
   const runtime = makeRuntime(dataDir, async (payload) => {
     return {
       ok: true,
+      requestId: payload.requestId,
       data: {
         command: payload.command,
         status: "ok",
@@ -386,7 +400,7 @@ test("doctor project_context_fingerprint reports warnCount as warn", async () =>
   });
 
   const result = await handleDoctorCommand({}, runtime, "req_doctor_ctx_fp_2");
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as { checks: DoctorCheck[] };
 
   const fpCheck = data.checks.find((c) => c.name === "project_context_fingerprint");
@@ -401,6 +415,7 @@ test("doctor project_context_fingerprint reports pass when all match", async () 
   const runtime = makeRuntime(dataDir, async (payload) => {
     return {
       ok: true,
+      requestId: payload.requestId,
       data: {
         command: payload.command,
         status: "ok",
@@ -412,7 +427,7 @@ test("doctor project_context_fingerprint reports pass when all match", async () 
   });
 
   const result = await handleDoctorCommand({}, runtime, "req_doctor_ctx_fp_3");
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as { checks: DoctorCheck[] };
 
   const fpCheck = data.checks.find((c) => c.name === "project_context_fingerprint");
@@ -427,22 +442,29 @@ test("doctor context_discovery suggestions never suggest tools run", async () =>
   const runtime: DoctorRuntime = {
     dataDir,
     bridgeExecute: async (payload) => {
-      return { ok: true, data: { command: payload.command, status: "ok" } };
+      return { ok: true as const, requestId: payload.requestId, data: { command: payload.command, status: "ok" } };
     },
     projectContexts: [
       {
         name: "conflict.context",
-        description: "Duplicate context",
+        summary: "Read an unavailable project context.",
+        description: "Read an unavailable project context without changing project state.",
         category: "test",
         source: "project",
-        inputSchema: { type: "object" },
+        target: "editor",
+        availabilityScope: "editorSession",
+        playModeSupport: "supported",
+        inputSchema: { type: "object", properties: {}, additionalProperties: false },
+        outputSchema: { type: "object", properties: {}, additionalProperties: false },
+        examples: [{ description: "Read the context.", input: {} }],
+        cliCommand: "context read conflict.context",
         supportStatus: "unavailable"
       }
     ]
   };
 
   const result = await handleDoctorCommand({ "include-custom": true }, runtime, "req_doctor_ctx_suggest");
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const data = result.data as { suggestions: string[] };
 
   // No suggestion should mention "tools run" as a custom context fix

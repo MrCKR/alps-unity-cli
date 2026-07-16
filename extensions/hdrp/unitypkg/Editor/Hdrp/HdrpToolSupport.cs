@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Reflection;
 using UnityEditor;
 using UnityEngine;
@@ -77,15 +78,16 @@ namespace UnityCli
             InitializeTypes();
             if (s_volumeType == null || volumeComponent == null) return null;
 
-            var profileProp = s_volumeType.GetProperty("profile", BindingFlags.Instance | BindingFlags.Public);
-            if (profileProp != null)
+            // 优先读取 sharedProfile，避免 profile getter 创建的运行时 clone 在下一轮 fixture 删除源资产后变成 MissingReference。
+            var sharedProp = s_volumeType.GetProperty("sharedProfile", BindingFlags.Instance | BindingFlags.Public);
+            if (sharedProp != null)
             {
-                var profile = profileProp.GetValue(volumeComponent, null) as UnityEngine.Object;
-                if (profile != null) return profile;
+                var sharedProfile = sharedProp.GetValue(volumeComponent, null) as UnityEngine.Object;
+                if (sharedProfile != null) return sharedProfile;
             }
 
-            var sharedProp = s_volumeType.GetProperty("sharedProfile", BindingFlags.Instance | BindingFlags.Public);
-            return sharedProp != null ? sharedProp.GetValue(volumeComponent, null) as UnityEngine.Object : null;
+            var profileProp = s_volumeType.GetProperty("profile", BindingFlags.Instance | BindingFlags.Public);
+            return profileProp != null ? profileProp.GetValue(volumeComponent, null) as UnityEngine.Object : null;
         }
 
         public static List<VolumeInfo> ListVolumes(string targetName)
@@ -174,7 +176,7 @@ namespace UnityCli
                 }
                 catch
                 {
-                    // 保持旧行为：不可读属性直接跳过。
+                    // 不可读属性不参与结果。
                 }
             }
 
@@ -236,6 +238,98 @@ namespace UnityCli
             var typeName = pipeline.GetType().FullName ?? string.Empty;
             return typeName.IndexOf("HighDefinition", StringComparison.OrdinalIgnoreCase) >= 0
                 || typeName.IndexOf("HDRP", StringComparison.OrdinalIgnoreCase) >= 0;
+        }
+    }
+
+    internal static class HdrpVolumeOperations
+    {
+        internal sealed class CreatedVolume
+        {
+            public GameObject GameObject { get; set; }
+            public bool IsGlobal { get; set; }
+        }
+
+        public static void RequireTarget(string target, string operation)
+        {
+            if (string.IsNullOrEmpty(target)) throw new UnityCliBridge.BridgeCommandException("E_HDRP_VOLUME_TARGET_REQUIRED", operation + " requires a target.", "Pass the target Volume GameObject name, hierarchy path, or instance id.");
+        }
+
+        public static CreatedVolume Create(string name, bool? isGlobal, double? priority, double? weight, string defaultPrefix, string errorPrefix)
+        {
+            var volumeType = HdrpToolSupport.VolumeType;
+            var profileType = HdrpToolSupport.VolumeProfileType;
+            if (volumeType == null || profileType == null) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_VOLUME_SYSTEM_NOT_FOUND", "Volume system types not found.", "Ensure the render pipeline package is fully imported.");
+            var gameObject = new GameObject(string.IsNullOrEmpty(name) ? defaultPrefix + "Volume" : name);
+            var volume = gameObject.AddComponent(volumeType);
+            var global = isGlobal ?? true;
+            SetField(volumeType, volume, "isGlobal", global);
+            if (priority.HasValue) SetField(volumeType, volume, "priority", (float)priority.Value);
+            if (weight.HasValue) SetField(volumeType, volume, "weight", (float)weight.Value);
+            var profile = ScriptableObject.CreateInstance(profileType);
+            profile.name = gameObject.name + "Profile";
+            AssignProfile(volumeType, volume, profile, errorPrefix);
+            UnityCliSceneMutation.RegisterCreatedObject(gameObject, "UnityCli " + defaultPrefix + " Volume Create");
+            UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+            return new CreatedVolume { GameObject = gameObject, IsGlobal = global };
+        }
+
+        public static GameObject AddEffect(string target, string effectTypeName, string errorPrefix, Func<string, Type> findEffectType)
+        {
+            RequireTarget(target, "add-effect");
+            if (string.IsNullOrEmpty(effectTypeName)) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_EFFECT_TYPE_REQUIRED", "add-effect requires effectType.", "Pass a VolumeComponent-derived type name.");
+            var gameObject = ResolveVolume(target, errorPrefix);
+            var effectType = findEffectType(effectTypeName);
+            if (effectType == null) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_EFFECT_TYPE_NOT_FOUND", "Volume effect type not found: " + effectTypeName, "Ensure the effect type is correct and the render pipeline package is fully imported.");
+            var profile = HdrpToolSupport.GetVolumeProfile(gameObject.GetComponent(HdrpToolSupport.VolumeType));
+            var addMethod = HdrpToolSupport.VolumeProfileType.GetMethod("Add", new[] { typeof(Type), typeof(bool) });
+            if (profile == null || addMethod == null) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_VOLUME_PROFILE_NOT_FOUND", "The target Volume has no writable in-memory profile.", "Create a Volume with hdrp.volume.create or assign a profile before adding an effect.");
+            addMethod.Invoke(profile, new object[] { effectType, true });
+            UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+            return gameObject;
+        }
+
+        public static GameObject Set(string target, string effectTypeName, string propertyPath, string value, string errorPrefix, Func<string, Type> findEffectType, Action<SerializedProperty, string> setValue)
+        {
+            RequireTarget(target, "set");
+            if (string.IsNullOrEmpty(effectTypeName)) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_EFFECT_TYPE_REQUIRED", "set requires effectType.", "Pass a VolumeComponent-derived type name.");
+            if (string.IsNullOrEmpty(propertyPath) || string.IsNullOrEmpty(value)) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_VOLUME_PROPERTY_REQUIRED", "set requires property and value.", "Pass a SerializedProperty path in property and the new value as a string.");
+            var gameObject = ResolveVolume(target, errorPrefix);
+            var effectType = findEffectType(effectTypeName);
+            if (effectType == null) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_EFFECT_TYPE_NOT_FOUND", "Volume effect type not found: " + effectTypeName, "Ensure the effect type is correct and the render pipeline package is fully imported.");
+            var profile = HdrpToolSupport.GetVolumeProfile(gameObject.GetComponent(HdrpToolSupport.VolumeType)) as VolumeProfile;
+            if (profile == null) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_VOLUME_PROFILE_NOT_FOUND", "The target Volume has no readable in-memory profile.", "Create a Volume and add the requested effect before setting it.");
+            // Unity 2022 通过运行时 effect type 在 VolumeProfile.components 中定位实例。
+            var effect = profile.components.FirstOrDefault(component => component != null && effectType.IsInstanceOfType(component));
+            if (effect == null) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_VOLUME_EFFECT_NOT_FOUND", "The requested effect is not present: " + effectTypeName, "Add the effect with hdrp.volume.add-effect before setting it.");
+            using (var serialized = new SerializedObject(effect))
+            {
+                var property = serialized.FindProperty(propertyPath);
+                if (property == null) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_VOLUME_PROPERTY_NOT_FOUND", "Volume effect property not found: " + propertyPath, "Pass a valid SerializedProperty path for the effect.");
+                setValue(property, value);
+                serialized.ApplyModifiedProperties();
+            }
+            UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+            return gameObject;
+        }
+
+        private static GameObject ResolveVolume(string target, string errorPrefix)
+        {
+            var gameObject = GameObjectToolSupport.ResolveUniqueTarget(target, "A Volume target is required.");
+            if (HdrpToolSupport.VolumeType == null || gameObject.GetComponent(HdrpToolSupport.VolumeType) == null) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_VOLUME_NOT_FOUND", "Volume component not found on target: " + target, "Pass a target GameObject that has a Volume component.");
+            return gameObject;
+        }
+
+        private static void SetField(Type type, Component component, string name, object value)
+        {
+            var field = type.GetField(name, BindingFlags.Instance | BindingFlags.Public);
+            if (field != null) field.SetValue(component, value);
+        }
+
+        private static void AssignProfile(Type volumeType, Component volume, UnityEngine.Object profile, string errorPrefix)
+        {
+            var property = volumeType.GetProperty("profile", BindingFlags.Instance | BindingFlags.Public) ?? volumeType.GetProperty("sharedProfile", BindingFlags.Instance | BindingFlags.Public);
+            if (property == null || !property.CanWrite) throw new UnityCliBridge.BridgeCommandException(errorPrefix + "_VOLUME_PROFILE_ASSIGN_FAILED", "The Volume profile cannot be assigned.", "Use a supported render pipeline version with a writable Volume profile.");
+            property.SetValue(volume, profile, null);
         }
     }
 

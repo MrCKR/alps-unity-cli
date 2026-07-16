@@ -10,8 +10,6 @@ namespace UnityCli
 {
     /// <summary>
     /// component.list-types — 枚举当前项目可用的 Component 类型,支持 keyword 过滤与分页。
-    /// 对齐旧 ComponentListTypes handler;只读。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class ComponentListTypesTool : IUnityCliTool<ComponentListTypesTool.Request, ComponentListTypesTool.Result>
     {
@@ -49,7 +47,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var keyword = request.Keyword ?? request.Search;
             var pageSize = Math.Max(1, Math.Min(request.PageSize ?? 100, 500));
@@ -71,7 +69,7 @@ namespace UnityCli
             types.Sort((a, b) => string.Compare(a.FullName, b.FullName, StringComparison.Ordinal));
             var total = types.Count;
             var page = types.Skip(cursor).Take(pageSize).ToList();
-            var nextCursor = cursor + page.Count < total ? (cursor + page.Count).ToString(CultureInfo.InvariantCulture) : null;
+            long? nextCursor = cursor + page.Count < total ? (long?)(cursor + page.Count) : null;
             var result = new Result
             {
                 Command = "component.list-types",
@@ -79,7 +77,7 @@ namespace UnityCli
                 Types = page.ConvertAll(t => new ComponentTypeInfo { FullName = t.FullName, Name = t.Name, Assembly = t.Assembly.GetName().Name, Namespace = t.Namespace }),
                 PageInfo = new GoPageInfo { PageSize = pageSize, Cursor = cursor, NextCursor = nextCursor, Total = total }
             };
-            return result;
+            return new System.Threading.Tasks.ValueTask<Result>(result);
         }
     }
 

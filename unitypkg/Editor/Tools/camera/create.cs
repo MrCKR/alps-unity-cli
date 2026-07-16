@@ -8,8 +8,6 @@ namespace UnityCli
 {
     /// <summary>
     /// camera.create — 在激活场景创建 Camera GameObject,可设置父级/变换/投影/清屏/深度/MainCamera 标签。
-    /// 对齐旧 CameraCreate handler;session-affecting。父级与枚举输入在变更前校验,避免半成品对象。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class CameraCreateTool : IUnityCliTool<CameraCreateTool.Request, CameraCreateTool.Result>
     {
@@ -52,7 +50,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             CameraToolSupport.EnsureEditorNotBusy("camera.create");
             var name = string.IsNullOrEmpty(request.Name) ? "Camera" : request.Name;
@@ -83,16 +81,16 @@ namespace UnityCli
             {
                 gameObject.tag = "MainCamera";
             }
-            EditorUtility.SetDirty(gameObject);
-            EditorSceneManager.MarkSceneDirty(gameObject.scene);
-            return new Result
+            UnityCliSceneMutation.MarkSceneObjectDirty(gameObject);
+            UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Camera = CameraToolSupport.BuildCameraInfo(camera),
                 PlannedEffects = new List<CameraPlannedEffect>
                 {
                     new CameraPlannedEffect { Type = "camera.create", Target = name }
                 }
-            };
+            });
         }
     }
 }

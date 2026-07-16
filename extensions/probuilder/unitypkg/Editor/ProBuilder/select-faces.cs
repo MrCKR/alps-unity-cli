@@ -15,7 +15,8 @@ namespace UnityCli.ProBuilder
         {
             [UnityCliRequired] public string Target { get; set; }
             public string Direction { get; set; }                   // 可选:north/south/east/west/up/down
-            public long? Grow { get; set; }                         // 可选
+            public List<long> SeedFaceIndices { get; set; }         // grow/flood/loop/ring 的种子面
+            public long? Grow { get; set; }                         // 可选:增长迭代次数
             public bool Flood { get; set; }                         // 默认 false
             public bool Loop { get; set; }                          // 默认 false
             public bool Ring { get; set; }                          // 默认 false
@@ -29,8 +30,8 @@ namespace UnityCli.ProBuilder
         public ToolDescriptor Describe() => new()
         {
             Name = "probuilder.select-faces",
-            Summary = "Select faces on a ProBuilder mesh by direction, grow, flood, loop, or ring criteria.",
-            Description = "Select faces on a ProBuilder mesh using direction/grow/flood/loop/ring criteria. Flood selects all faces. Direction selects faces whose normals match a cardinal direction. Grow/loop/ring fall back to all faces when the ElementSelection API is unavailable.",
+            Summary = "Resolve ProBuilder face indices by direction or the 5.x ElementSelection grow, flood, loop, and ring APIs.",
+            Description = "Return matching face indices without changing Unity selection. Choose exactly one mode. Direction matches cardinal normals. Grow, loop, and ring require seedFaceIndices; flood uses seeds when provided and otherwise returns all faces.",
             Group = "probuilder",
             DestructiveHint = false,
             Target = "editor",
@@ -46,12 +47,12 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            var go = ProBuilderInput.ResolveTarget(request.Target);
             if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
@@ -67,45 +68,15 @@ namespace UnityCli.ProBuilder
             var loop = request.Loop;
             var ring = request.Ring;
 
+            var modeCount = (!string.IsNullOrEmpty(direction) ? 1 : 0) + (grow.HasValue ? 1 : 0) + (flood ? 1 : 0) + (loop ? 1 : 0) + (ring ? 1 : 0);
+            if (modeCount != 1)
+                throw ProBuilderErrors.SchemaInvalid("Choose exactly one of direction, grow, flood, loop, or ring.");
+
             var selectedIndices = new List<int>();
-
-            // Flood:选择所有面
-            if (flood)
+            if (!string.IsNullOrEmpty(direction))
             {
-                for (int i = 0; i < allFaces.Length; i++)
-                    selectedIndices.Add(i);
-            }
-            else if (!string.IsNullOrEmpty(direction))
-            {
-                // 按方向选择:选择法线匹配该方向的面
-                Vector3 targetDir;
-                switch (direction.ToLowerInvariant())
-                {
-                    case "north":
-                    case "forward":
-                    case "front":
-                        targetDir = Vector3.forward; break;
-                    case "south":
-                    case "back":
-                    case "backward":
-                        targetDir = Vector3.back; break;
-                    case "east":
-                    case "right":
-                        targetDir = Vector3.right; break;
-                    case "west":
-                    case "left":
-                        targetDir = Vector3.left; break;
-                    case "up":
-                    case "top":
-                        targetDir = Vector3.up; break;
-                    case "down":
-                    case "bottom":
-                        targetDir = Vector3.down; break;
-                    default:
-                        throw ProBuilderErrors.SchemaInvalid($"Unknown direction '{direction}'. Valid: north/south/east/west/up/down.");
-                }
-
-                var tolerance = 0.7f; // ~45 度
+                var targetDir = ParseDirection(direction);
+                const float tolerance = 0.7f;
                 for (int i = 0; i < allFaces.Length; i++)
                 {
                     var normal = ProBuilderReflection.ComputeFaceNormal(mesh, allFaces.GetValue(i));
@@ -113,22 +84,28 @@ namespace UnityCli.ProBuilder
                         selectedIndices.Add(i);
                 }
             }
-            else if (grow.HasValue || loop || ring)
+            else if (flood && (request.SeedFaceIndices == null || request.SeedFaceIndices.Count == 0))
             {
-                // Grow/loop/ring 需要 ElementSelection API;不可用时回退到全部面
-                var elementSelectionType = ProBuilderReflection.GetElementSelectionType();
-                if (elementSelectionType == null)
-                {
-                    for (int i = 0; i < allFaces.Length; i++)
-                        selectedIndices.Add(i);
-                }
-                else
-                {
-                    // ElementSelection 较复杂;目前安全回退为全部面
-                    // 真正的 loop/ring/grow 需要种子面
-                    for (int i = 0; i < allFaces.Length; i++)
-                        selectedIndices.Add(i);
-                }
+                for (int i = 0; i < allFaces.Length; i++)
+                    selectedIndices.Add(i);
+            }
+            else
+            {
+                if (request.SeedFaceIndices == null || request.SeedFaceIndices.Count == 0)
+                    throw ProBuilderErrors.SchemaInvalid("seedFaceIndices is required for grow, seeded flood, loop, and ring.");
+                if (grow.HasValue && grow.Value < 1)
+                    throw ProBuilderErrors.SchemaInvalid("grow must be at least 1.");
+
+                var seedIndices = request.SeedFaceIndices.ConvertAll(value => (int)value).ToArray();
+                var seeds = ProBuilderReflection.GetFacesByIndices(mesh, seedIndices);
+                if (seeds == null || seeds.Length != seedIndices.Length)
+                    throw ProBuilderErrors.SchemaInvalid("seedFaceIndices contains an invalid face index.");
+
+                var operation = grow.HasValue ? "grow" : flood ? "flood" : loop ? "loop" : "ring";
+                var selectedFaces = ProBuilderReflection.SelectFaces(mesh, seeds, operation, (int)(grow ?? 1));
+                if (selectedFaces == null)
+                    throw ProBuilderErrors.OperationFailed("select-faces", "ProBuilder 5.x ElementSelection failed for operation: " + operation);
+                selectedIndices.AddRange(ResolveFaceIndices(allFaces, selectedFaces));
             }
 
             selectedIndices.Sort();
@@ -137,7 +114,46 @@ namespace UnityCli.ProBuilder
             var resultIndices = new List<long>();
             foreach (var idx in selectedIndices) resultIndices.Add(idx);
 
-            return new Result { FaceIndices = resultIndices };
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { FaceIndices = resultIndices });
+        }
+
+        /// <summary>将公开方向名称映射为 Unity 局部空间方向。</summary>
+        private static Vector3 ParseDirection(string direction)
+        {
+            switch (direction.ToLowerInvariant())
+            {
+                case "north":
+                case "forward":
+                case "front": return Vector3.forward;
+                case "south":
+                case "back":
+                case "backward": return Vector3.back;
+                case "east":
+                case "right": return Vector3.right;
+                case "west":
+                case "left": return Vector3.left;
+                case "up":
+                case "top": return Vector3.up;
+                case "down":
+                case "bottom": return Vector3.down;
+                default: throw ProBuilderErrors.SchemaInvalid($"Unknown direction '{direction}'. Valid: north/south/east/west/up/down.");
+            }
+        }
+
+        /// <summary>把 ElementSelection 返回的 Face 引用映射回稳定面索引。</summary>
+        private static List<int> ResolveFaceIndices(Array allFaces, Array selectedFaces)
+        {
+            var indices = new List<int>();
+            foreach (var selected in selectedFaces)
+            {
+                for (var index = 0; index < allFaces.Length; index++)
+                {
+                    if (!ReferenceEquals(allFaces.GetValue(index), selected)) continue;
+                    indices.Add(index);
+                    break;
+                }
+            }
+            return indices;
         }
     }
 }

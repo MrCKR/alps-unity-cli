@@ -10,7 +10,7 @@ const requestId = "test_req_caps_001";
 test("capabilities without bridge returns TS-local static capabilities only", async () => {
   const runtime: BridgeRuntime = {};
   const result = await handleCapabilitiesCommand({}, runtime, requestId);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
 
   const data = result.data as Record<string, unknown>;
   assert.equal(data.mode, "offline");
@@ -18,7 +18,7 @@ test("capabilities without bridge returns TS-local static capabilities only", as
 
   const staticData = data.static as Record<string, unknown>;
   const groups = staticData.groups as Record<string, number>;
-  assert.equal(staticData.toolCount, 34);
+  assert.equal(staticData.toolCount, 37);
   assert.ok(groups.docs > 0, "docs group should stay offline-visible");
   assert.ok(groups.tools > 0, "tools group should stay offline-visible");
   assert.equal(groups.scene, undefined, "scene group should require live discovery");
@@ -39,10 +39,10 @@ test("capabilities without bridge returns TS-local static capabilities only", as
 
 test("capabilities with bridge returns hybrid result", async () => {
   const runtime: BridgeRuntime = {
-    bridgeExecute: async () => ({ ok: true, data: { status: "ok", bridgeVersion: "1.0" } })
+    bridgeExecute: async (payload) => ({ ok: true as const, requestId: payload.requestId, data: { status: "ok", bridgeVersion: "1.0" } })
   };
   const result = await handleCapabilitiesCommand({}, runtime, requestId);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
 
   const data = result.data as Record<string, unknown>;
   assert.equal(data.mode, "hybrid");
@@ -51,10 +51,10 @@ test("capabilities with bridge returns hybrid result", async () => {
 
 test("capabilities with bridge error falls back to offline", async () => {
   const runtime: BridgeRuntime = {
-    bridgeExecute: async () => ({ ok: false, error: { code: "BRIDGE_ERROR", message: "not available" } })
+    bridgeExecute: async (payload) => ({ ok: false as const, requestId: payload.requestId, error: { code: "BRIDGE_ERROR", message: "not available", nextActions: [], transient: false, retryAfterMs: 0 } })
   };
   const result = await handleCapabilitiesCommand({}, runtime, requestId);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
 
   const data = result.data as Record<string, unknown>;
   assert.equal(data.mode, "offline");
@@ -71,7 +71,7 @@ test("capabilities includes live-discovered built-in, extension and project tool
   };
 
   const result = await handleCapabilitiesCommand({}, runtime, requestId);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
 
   const data = result.data as Record<string, unknown>;
   const staticData = data.static as Record<string, unknown>;
@@ -89,7 +89,7 @@ test("capabilities includes live-discovered built-in, extension and project tool
 
 test("capabilities static data includes schemaFeatures", async () => {
   const result = await handleCapabilitiesCommand({}, {}, requestId);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
 
   const data = result.data as Record<string, unknown>;
   const staticData = data.static as Record<string, unknown>;
@@ -111,15 +111,22 @@ test("capabilities includes customContexts when project contexts are available",
     projectContexts: [
       {
         name: "sample.project-summary",
-        description: "Sample project summary context",
+        summary: "Read a sample project summary.",
+        description: "Read a sample project summary without changing project state.",
         category: "sample",
         source: "project",
-        inputSchema: { type: "object" }
+        target: "editor",
+        availabilityScope: "editorSession",
+        playModeSupport: "supported",
+        inputSchema: { type: "object", properties: {}, additionalProperties: false },
+        outputSchema: { type: "object", properties: {}, additionalProperties: false },
+        examples: [{ description: "Read the sample project summary.", argv: ["context", "read", "sample.project-summary", "--input", "{}"], input: {} }],
+        cliCommand: "context read sample.project-summary"
       }
     ]
   };
   const result = await handleCapabilitiesCommand({ "include-custom": true }, runtime, requestId);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
 
   const data = result.data as Record<string, unknown>;
   const customCtx = data.customContexts as { mode: string; count: number; categories: string[] };
@@ -130,8 +137,9 @@ test("capabilities includes customContexts when project contexts are available",
 
 test("capabilities passes bridge customContexts summary as runtimeCustomContexts", async () => {
   const runtime: BridgeRuntime & ProjectContextRuntime = {
-    bridgeExecute: async () => ({
+    bridgeExecute: async (payload) => ({
       ok: true,
+      requestId: payload.requestId,
       data: {
         status: "ok",
         bridgeVersion: "1.0",
@@ -145,7 +153,7 @@ test("capabilities passes bridge customContexts summary as runtimeCustomContexts
     })
   };
   const result = await handleCapabilitiesCommand({}, runtime, requestId);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
 
   const data = result.data as Record<string, unknown>;
   assert.equal(data.mode, "hybrid");

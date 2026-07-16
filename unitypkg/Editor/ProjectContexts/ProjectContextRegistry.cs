@@ -8,6 +8,8 @@ using System.Reflection;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 using UnityEditor;
 using UnityEngine;
 
@@ -62,312 +64,123 @@ namespace UnityCli
             "ArtifactKinds"
         };
 
-        // ── Registry storage ──
-
-        private static readonly Dictionary<string, UnityCliContextDefinition> ProjectContexts =
-            new Dictionary<string, UnityCliContextDefinition>(StringComparer.Ordinal);
-
+        private static readonly Dictionary<string, RegisteredContext> Contexts =
+            new Dictionary<string, RegisteredContext>(StringComparer.Ordinal);
+        private static Dictionary<string, RegisteredContext> discoveryContexts;
+        private static Dictionary<string, RegisteredContext> ProjectContexts { get { return Contexts; } }
         private static bool projectContextsDiscovered;
 
-        // ── Built-in context descriptors ──
-        // (Placeholder: the actual built-in context definitions will be populated
-        // by the existing bridge context code. For now, we store them in a parallel
-        // dictionary so context.list/describe/read can merge built-in + project.)
-
-        private static readonly Dictionary<string, Dictionary<string, object>> BuiltInContextDescriptors =
-            new Dictionary<string, Dictionary<string, object>>(StringComparer.Ordinal);
-
-        private static readonly Dictionary<string, BuiltInContextDefinition> InterfaceBuiltInContexts =
-            new Dictionary<string, BuiltInContextDefinition>(StringComparer.Ordinal);
-
-        // ── Registration ──
-
-        /// <summary>
-        /// Register a project custom context definition. Enforces:
-        /// - name + description + Read delegate required
-        /// - Source=project (fixed)
-        /// - No destructive/write descriptor fields
-        /// - Source guard on handler source
-        /// - Name conflict detection against built-in contexts
-        /// - Fingerprint computation
-        /// </summary>
-        public static void RegisterProjectContext(UnityCliContextDefinition definition)
+        private static void RegisterContext(RegisteredContext definition)
         {
             if (definition == null || string.IsNullOrEmpty(definition.Name) || string.IsNullOrEmpty(definition.Description))
-            {
-                throw new ArgumentException("Custom context registration requires a non-null definition with name and description.");
-            }
-            if (definition.Read == null)
-            {
-                throw new ArgumentException("Custom context registration requires a Read delegate for context: " + definition.Name);
-            }
+                throw new ArgumentException("Context registration requires name and description.");
+            if (definition.ReadAsync == null || definition.RequestType == null || definition.ResultType == null)
+                throw new ArgumentException("Context registration requires request/result types and a typed async invoker: " + definition.Name);
+            var target = discoveryContexts ?? Contexts;
+            if (target.ContainsKey(definition.Name)) throw new InvalidOperationException("Duplicate context registration: " + definition.Name);
 
-            // ── Fixed descriptor constraints ──
-            definition.Source = "project";
-
-            // ── Reject forbidden descriptor fields (write/destructive semantics) ──
-            foreach (var field in ContextForbiddenDescriptorFields)
-            {
-                if (definition.GetType().GetProperty(field) != null)
-                {
-                    var value = definition.GetType().GetProperty(field).GetValue(definition);
-                    if (value != null)
-                    {
-                        var stringValue = value as string;
-                        var boolValue = value as bool?;
-                        var arrayValue = value as string[];
-                        if (boolValue == true || !string.IsNullOrEmpty(stringValue) || (arrayValue != null && arrayValue.Length > 0))
-                        {
-                            throw new ArgumentException(
-                                "Custom context " + definition.Name + " declares write/destructive semantics via " + field +
-                                ". Custom contexts are strictly read-only and must not modify Unity state.",
-                                field);
-                        }
-                    }
-                }
-            }
-
-            // ── Name conflict detection ──
-            if (BuiltInContextDescriptors.ContainsKey(definition.Name))
-            {
-                throw new ArgumentException(
-                    "Custom context name conflict: project context '" + definition.Name +
-                    "' conflicts with a built-in context. Use a unique name that does not overlap with built-in contexts.",
-                    "Name");
-            }
-
-            // ── Defaults ──
             definition.Category = string.IsNullOrEmpty(definition.Category) ? "custom" : definition.Category;
             definition.Version = string.IsNullOrEmpty(definition.Version) ? "1.0.0" : definition.Version;
-            definition.InputSchema = string.IsNullOrEmpty(definition.InputSchema) ? "{}" : definition.InputSchema;
-            definition.OutputSchema = string.IsNullOrEmpty(definition.OutputSchema) ? "{}" : definition.OutputSchema;
+            if (string.IsNullOrWhiteSpace(definition.InputSchema) || string.IsNullOrWhiteSpace(definition.OutputSchema))
+                throw new ArgumentException("Context registration requires schemas derived from request/result types: " + definition.Name);
             definition.Target = string.IsNullOrEmpty(definition.Target) ? "editor" : definition.Target;
-            definition.AvailabilityScope = string.IsNullOrEmpty(definition.AvailabilityScope)
-                ? (definition.Target == "runtime" ? "playModeSession" : "editorSession")
-                : definition.AvailabilityScope;
+            definition.AvailabilityScope = string.IsNullOrEmpty(definition.AvailabilityScope) ? (definition.Target == "runtime" ? "playModeSession" : "editorSession") : definition.AvailabilityScope;
             definition.PlayModeSupport = NormalizeProjectContextPlayModeSupport(definition.PlayModeSupport, definition.Target);
             definition.RefreshBehavior = string.IsNullOrEmpty(definition.RefreshBehavior) ? "onDemand" : definition.RefreshBehavior;
-            definition.RequiresPackages = definition.RequiresPackages ?? new string[0];
+            definition.RequiresPackages = definition.RequiresPackages ?? Array.Empty<string>();
             definition.RegisteredBy = string.IsNullOrEmpty(definition.RegisteredBy) ? "unity-editor-package" : definition.RegisteredBy;
             definition.DescriptorSource = string.IsNullOrEmpty(definition.DescriptorSource) ? "IUnityCliContext" : definition.DescriptorSource;
 
-            // ── Source guard on handler source ──
-            if (!string.IsNullOrEmpty(definition.Method))
+            if (definition.Source == "project" && !string.IsNullOrEmpty(definition.Method))
             {
-                var handlerSource = ProjectContextHandlerSource(definition);
-                var guardViolation = ProjectContextSourceGuardCheck(handlerSource, definition.Name);
-                if (guardViolation != null)
-                {
-                    throw new ArgumentException(
-                        "Custom context " + definition.Name + " handler source contains forbidden write-semantic token: " +
-                        guardViolation +
-                        ". Custom contexts must not perform writes, modify state, or invoke destructive operations.",
-                        guardViolation);
-                }
+                var violation = ProjectContextSourceGuardCheck(ProjectContextHandlerSource(definition), definition.Name);
+                if (violation != null) throw new ArgumentException("Custom context " + definition.Name + " contains forbidden write-semantic token: " + violation, violation);
+                RefreshProjectContextFingerprint(definition, null);
             }
-
-            // ── Fingerprint ──
-            RefreshProjectContextFingerprint(definition, null);
-
-            ProjectContexts[definition.Name] = definition;
-            WriteLog("custom_context_registered name=" + definition.Name +
-                " source=" + definition.Source +
-                " fingerprint=" + definition.Fingerprint);
+            target.Add(definition.Name, definition);
+            WriteLog("context_registered name=" + definition.Name + " source=" + definition.Source);
         }
 
-        // ── Discovery ──
+        private static void DiscoverProjectContexts() { DiscoverContexts(); }
 
-        private static void DiscoverProjectContexts()
+        private static void DiscoverContexts()
         {
             if (projectContextsDiscovered) return;
-            projectContextsDiscovered = true;
-
-            // Populate built-in context descriptors from ContextCommands.BuiltInContexts
-            PopulateBuiltInContextDescriptors();
-
-            var discoveredTypes = new List<Tuple<Assembly, Type>>();
-            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            var pending = new Dictionary<string, RegisteredContext>(StringComparer.Ordinal);
+            try
             {
-                Type[] types;
-                try { types = assembly.GetTypes(); }
-                catch (ReflectionTypeLoadException exception) { types = exception.Types; }
-                catch { continue; }
-
-                foreach (var type in types)
+                discoveryContexts = pending;
+                if (registryOwnership == null) registryOwnership = RegistryOwnershipResolver.Load();
+                foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
                 {
-                    if (type == null) continue;
-                    discoveredTypes.Add(Tuple.Create(assembly, type));
+                    Type[] types;
+                    try { types = assembly.GetTypes(); }
+                    catch (ReflectionTypeLoadException exception) { types = exception.Types; }
+                    catch (Exception exception) { throw new InvalidOperationException("Unable to inspect assembly " + assembly.FullName + ".", exception); }
+                    foreach (var type in types) if (type != null) TryRegisterInterfaceContext(assembly, type);
                 }
+                Contexts.Clear();
+                foreach (var item in pending) Contexts.Add(item.Key, item.Value);
+                projectContextsDiscovered = true;
             }
-
-            foreach (var item in discoveredTypes)
+            catch (Exception exception)
             {
-                TryRegisterInterfaceContext(item.Item1, item.Item2, true);
+                throw new BridgeCommandException("E_REGISTRY_UNHEALTHY", "Context registry discovery failed: " + exception.Message,
+                    new Dictionary<string, object> { { "registry", "contexts" } },
+                    new[] { "Fix the extension manifest or context implementation, then retry discovery.", "Run unity_cli extensions doctor --project <path> to inspect extension installation state." }, true, 1000);
             }
-            foreach (var item in discoveredTypes)
+            finally
             {
-                TryRegisterInterfaceContext(item.Item1, item.Item2, false);
+                discoveryContexts = null;
             }
         }
 
-        // ── 新形态:IUnityCliContext<TReq,TRes> 泛型接口实现类发现与注册 ──
-        // 设计依据:.plan/Context形态.md(实现接口即声明只读 Context;Source=built-in 进入内置表,否则进入项目自定义表)。
-        private static void TryRegisterInterfaceContext(Assembly assembly, Type type, bool builtInOnly)
+        private static void TryRegisterInterfaceContext(Assembly assembly, Type type)
         {
             if (type == null || type.IsAbstract || type.IsInterface) return;
-
-            Type contextInterface = null;
-            Type reqType = null;
-            Type resType = null;
-            foreach (var iface in type.GetInterfaces())
-            {
-                if (iface.IsGenericType && iface.GetGenericTypeDefinition() == typeof(IUnityCliContext<,>))
-                {
-                    contextInterface = iface;
-                    var args = iface.GetGenericArguments();
-                    reqType = args[0];
-                    resType = args[1];
-                    break;
-                }
-            }
+            var contextInterface = type.GetInterfaces().FirstOrDefault(iface => iface.IsGenericType && iface.GetGenericTypeDefinition() == typeof(IUnityCliContext<,>));
             if (contextInterface == null) return;
-
-            object instance;
-            try
-            {
-                instance = Activator.CreateInstance(type);
-            }
-            catch (Exception exception)
-            {
-                WriteLog("context_registration_skipped type=" + type.FullName + " reason=instantiation_failed err=" + exception.GetType().Name);
-                return;
-            }
-
-            ContextDescriptor descriptor = null;
-            try
-            {
-                var describeMethod = type.GetMethod("Describe", Type.EmptyTypes);
-                if (describeMethod == null)
-                {
-                    WriteLog("context_registration_skipped type=" + type.FullName + " reason=missing_describe");
-                    return;
-                }
-                descriptor = describeMethod.Invoke(instance, null) as ContextDescriptor;
-            }
-            catch (Exception exception)
-            {
-                WriteLog("context_registration_skipped type=" + type.FullName + " reason=describe_failed err=" + exception.GetType().Name);
-                return;
-            }
+            var args = contextInterface.GetGenericArguments();
+            var instance = Activator.CreateInstance(type);
+            var descriptor = type.GetMethod("Describe", Type.EmptyTypes).Invoke(instance, null) as ContextDescriptor;
             if (descriptor == null || string.IsNullOrEmpty(descriptor.Name) || string.IsNullOrEmpty(descriptor.Description))
-            {
-                WriteLog("context_registration_skipped type=" + type.FullName + " reason=descriptor_incomplete");
-                return;
-            }
-
-            var isBuiltIn = string.Equals(descriptor.Source, "built-in", StringComparison.OrdinalIgnoreCase);
-            if (builtInOnly != isBuiltIn) return;
-
-            var inputSchema = UnityCliSchemaDeriver.DeriveSchema(reqType);
-            var outputSchema = UnityCliSchemaDeriver.DeriveSchema(resType);
-            var readMethod = contextInterface.GetMethod("Read");
-
-            if (isBuiltIn)
-            {
-                RegisterInterfaceBuiltInContext(new BuiltInContextDefinition
-                {
-                    Name = descriptor.Name,
-                    Summary = string.IsNullOrEmpty(descriptor.Summary) ? descriptor.Description : descriptor.Summary,
-                    Description = descriptor.Description,
-                    Category = string.IsNullOrEmpty(descriptor.Category) ? "built-in" : descriptor.Category,
-                    Source = "built-in",
-                    RefreshBehavior = string.IsNullOrEmpty(descriptor.RefreshBehavior) ? "on-demand" : descriptor.RefreshBehavior,
-                    Target = string.IsNullOrEmpty(descriptor.Target) ? "editor" : descriptor.Target,
-                    AvailabilityScope = string.IsNullOrEmpty(descriptor.AvailabilityScope) ? "editorSession" : descriptor.AvailabilityScope,
-                    Handler = "bridge",
-                    InputSchema = string.IsNullOrEmpty(inputSchema) ? "{}" : inputSchema,
-                    OutputSchema = string.IsNullOrEmpty(outputSchema) ? "{}" : outputSchema,
-                    RequiresPackages = descriptor.RequiresPackages,
-                    ReadHandler = delegate(BridgeRequest request)
-                    {
-                        var args = request.DeserializeArgs<ContextRouteArgs>();
-                        var inputJson = request.RawJsonArg("input") ?? "{}";
-                        var context = new UnityCliProjectToolContext
-                        {
-                            RequestId = request.RequestId,
-                            ProjectPath = args.ProjectPath ?? ProjectRoot(),
-                            InputJson = inputJson,
-                            LogPath = LogPath()
-                        };
-                        // 少数内置 Context 需要复用 Bridge 控制流(例如 deferred marker);项目自定义 Context 不走此旁路。
-                        var rawBridgeContext = instance as IUnityCliBuiltInRawBridgeContext;
-                        if (rawBridgeContext != null)
-                        {
-                            return rawBridgeContext.ReadRaw(request, context);
-                        }
-                        var typedRequest = UnityCliSerializer.Deserialize(inputJson, reqType);
-                        var result = readMethod.Invoke(instance, new object[] { typedRequest, context });
-                        return SuccessJson(result == null ? "null" : UnityCliSerializer.Serialize(result));
-                    }
-                });
-                WriteLog("built_in_context_registered name=" + descriptor.Name + " source=IUnityCliContext type=" + type.FullName);
-                return;
-            }
-
-            try
-            {
-                RegisterProjectContext(new UnityCliContextDefinition
-                {
-                    Name = descriptor.Name,
-                    Summary = string.IsNullOrEmpty(descriptor.Summary) ? descriptor.Description : descriptor.Summary,
-                    Description = descriptor.Description,
-                    Category = string.IsNullOrEmpty(descriptor.Category) ? "custom" : descriptor.Category,
-                    Version = string.IsNullOrEmpty(descriptor.Version) ? "1.0.0" : descriptor.Version,
-                    InputSchema = string.IsNullOrEmpty(inputSchema) ? "{}" : inputSchema,
-                    OutputSchema = string.IsNullOrEmpty(outputSchema) ? "{}" : outputSchema,
-                    Target = string.IsNullOrEmpty(descriptor.Target) ? "editor" : descriptor.Target,
-                    AvailabilityScope = descriptor.AvailabilityScope,
-                    PlayModeSupport = descriptor.PlayModeSupport,
-                    RefreshBehavior = descriptor.RefreshBehavior,
-                    RequiresPackages = descriptor.RequiresPackages ?? new string[0],
-                    RegisteredBy = "unity-editor-package",
-                    DescriptorSource = "IUnityCliContext",
-                    Assembly = assembly.GetName().Name,
-                    Method = type.FullName + ".Read",
-                    Fingerprint = descriptor.Fingerprint,
-                    PinnedFingerprint = descriptor.Fingerprint,
-                    ExpectedFingerprint = descriptor.Fingerprint,
-                    Read = delegate(UnityCliProjectToolContext context)
-                    {
-                        var typedRequest = UnityCliSerializer.Deserialize(context.InputJson, reqType);
-                        var result = readMethod.Invoke(instance, new object[] { typedRequest, context });
-                        return result == null ? "null" : UnityCliSerializer.Serialize(result);
-                    }
-                });
-                WriteLog("custom_context_registered name=" + descriptor.Name + " source=IUnityCliContext type=" + type.FullName);
-            }
-            catch (ArgumentException exception)
-            {
-                WriteLog("custom_context_registration_failed name=" + descriptor.Name +
-                    " reason=" + exception.Message);
-            }
+                throw new InvalidOperationException("Context descriptor is incomplete: " + type.FullName);
+            var factory = typeof(UnityCliBridge).GetMethod("RegisterTypedContext", BindingFlags.Static | BindingFlags.NonPublic).MakeGenericMethod(args[0], args[1]);
+            factory.Invoke(null, new[] { instance, descriptor, assembly, type });
         }
 
-        private static void RegisterInterfaceBuiltInContext(BuiltInContextDefinition definition)
+        private static void RegisterTypedContext<TReq, TRes>(object instance, ContextDescriptor descriptor, Assembly assembly, Type implementationType)
         {
-            if (definition == null || string.IsNullOrEmpty(definition.Name) || string.IsNullOrEmpty(definition.Description) || definition.ReadHandler == null)
+            var context = (IUnityCliContext<TReq, TRes>)instance;
+            var source = registryOwnership.Resolve(implementationType);
+            RegisterContext(new RegisteredContext
             {
-                throw new ArgumentException("Built-in context registration requires name, description, and ReadHandler.");
-            }
-            definition.Source = "built-in";
-            definition.InputSchema = string.IsNullOrEmpty(definition.InputSchema) ? "{}" : definition.InputSchema;
-            definition.OutputSchema = string.IsNullOrEmpty(definition.OutputSchema) ? "{}" : definition.OutputSchema;
-            definition.Target = string.IsNullOrEmpty(definition.Target) ? "editor" : definition.Target;
-            definition.AvailabilityScope = string.IsNullOrEmpty(definition.AvailabilityScope) ? "editorSession" : definition.AvailabilityScope;
-            definition.Handler = string.IsNullOrEmpty(definition.Handler) ? "bridge" : definition.Handler;
-            definition.RequiresPackages = definition.RequiresPackages ?? new string[0];
-            InterfaceBuiltInContexts[definition.Name] = definition;
-            AddBuiltInContextDescriptor(definition);
+                Name = descriptor.Name,
+                Summary = string.IsNullOrEmpty(descriptor.Summary) ? descriptor.Description : descriptor.Summary,
+                Description = descriptor.Description,
+                Category = string.IsNullOrEmpty(descriptor.Category) ? (source == "built-in" ? "built-in" : "custom") : descriptor.Category,
+                Version = string.IsNullOrEmpty(descriptor.Version) ? "1.0.0" : descriptor.Version,
+                InputSchema = UnityCliSchemaDeriver.DeriveSchema(typeof(TReq)),
+                OutputSchema = UnityCliSchemaDeriver.DeriveSchema(typeof(TRes)),
+                Source = source,
+                Target = string.IsNullOrEmpty(descriptor.Target) ? "editor" : descriptor.Target,
+                AvailabilityScope = descriptor.AvailabilityScope,
+                PlayModeSupport = descriptor.PlayModeSupport,
+                RefreshBehavior = descriptor.RefreshBehavior,
+                Examples = descriptor.Examples ?? Array.Empty<ContextExample>(),
+                RequiresPackages = descriptor.RequiresPackages ?? Array.Empty<string>(),
+                RegisteredBy = source == "extension" ? "extension-manifest" : "unity-editor-package",
+                DescriptorSource = "IUnityCliContext",
+                Assembly = assembly.GetName().Name,
+                Method = implementationType.FullName + ".ReadAsync",
+                Fingerprint = descriptor.Fingerprint,
+                PinnedFingerprint = descriptor.Fingerprint,
+                ExpectedFingerprint = descriptor.Fingerprint,
+                Descriptor = descriptor,
+                RequestType = typeof(TReq),
+                ResultType = typeof(TRes),
+                ReadAsync = async (request, executionContext, cancellationToken) => (object)await context.ReadAsync((TReq)request, executionContext, cancellationToken)
+            });
         }
 
         // ── Source Guard ──
@@ -389,7 +202,7 @@ namespace UnityCli
             return null;
         }
 
-        private static string ProjectContextHandlerSource(UnityCliContextDefinition definition)
+        private static string ProjectContextHandlerSource(RegisteredContext definition)
         {
             try
             {
@@ -433,7 +246,7 @@ namespace UnityCli
         }
 
         private static ProjectContextFingerprintCheck RefreshProjectContextFingerprint(
-            UnityCliContextDefinition definition, string requestedMode)
+            RegisteredContext definition, string requestedMode)
         {
             var descriptor = ProjectContextDescriptorFingerprintMaterial(definition);
             definition.DescriptorSha256 = Sha256Hex(descriptor);
@@ -485,7 +298,7 @@ namespace UnityCli
             return ContextFingerprintDefaultMode;
         }
 
-        private static string ProjectContextDescriptorFingerprintMaterial(UnityCliContextDefinition definition)
+        private static string ProjectContextDescriptorFingerprintMaterial(RegisteredContext definition)
         {
             return "name=" + (definition.Name ?? string.Empty)
                 + "\nsummary=" + (definition.Summary ?? definition.Description ?? string.Empty)
@@ -514,7 +327,7 @@ namespace UnityCli
             return string.Equals(target, "runtime", StringComparison.OrdinalIgnoreCase) ? "runtime-only" : "supported";
         }
 
-        private static string ProjectContextHandlerFingerprintMaterial(UnityCliContextDefinition definition)
+        private static string ProjectContextHandlerFingerprintMaterial(RegisteredContext definition)
         {
             return "assembly=" + (definition.Assembly ?? string.Empty)
                 + "\nmethod=" + (definition.Method ?? string.Empty)
@@ -563,54 +376,9 @@ namespace UnityCli
             return Regex.Replace(name ?? "project-context", "[^A-Za-z0-9_.-]", "_");
         }
 
-        private static string ProjectContextFingerprintJson(UnityCliContextDefinition definition)
+        private static Dictionary<string, object> ProjectContextFingerprintData(RegisteredContext definition)
         {
-            return new UnityCliJsonWriter().BeginObject()
-                .Prop("algorithm", ContextFingerprintAlgorithm)
-                .Prop("value", definition.Fingerprint)
-                .Prop("expected", definition.ExpectedFingerprint)
-                .Prop("status", definition.FingerprintStatus)
-                .Prop("mode", definition.FingerprintMode)
-                .Prop("message", definition.FingerprintMessage)
-                .Prop("descriptorSha256", definition.DescriptorSha256)
-                .Prop("handlerSha256", definition.HandlerSha256)
-                .EndObject()
-                .ToString();
-        }
-
-        // ── Populate built-in context descriptors from ContextCommands ──
-
-        private static void PopulateBuiltInContextDescriptors()
-        {
-            foreach (var ctx in BuiltInContexts)
-            {
-                AddBuiltInContextDescriptor(ctx);
-            }
-        }
-
-        private static void AddBuiltInContextDescriptor(BuiltInContextDefinition ctx)
-        {
-            var descriptor = new Dictionary<string, object>(StringComparer.Ordinal)
-            {
-                { "name", ctx.Name },
-                { "summary", string.IsNullOrEmpty(ctx.Summary) ? ctx.Description : ctx.Summary },
-                { "description", ctx.Description },
-                { "source", ctx.Source ?? "built-in" },
-                { "category", ctx.Category ?? "" },
-                { "target", ctx.Target ?? "editor" },
-                { "availabilityScope", ctx.AvailabilityScope ?? "editorSession" },
-                { "playModeSupport", "supported" },
-                { "supportStatus", string.Equals(ctx.Handler, "offline", StringComparison.Ordinal) ? "cli-only" : "live-bridge" },
-                { "cliCommand", "context read " + ctx.Name },
-                { "inputSchema", string.IsNullOrEmpty(ctx.InputSchema) ? "{}" : ctx.InputSchema },
-                { "outputSchema", string.IsNullOrEmpty(ctx.OutputSchema) ? "{}" : ctx.OutputSchema },
-                { "refreshBehavior", string.IsNullOrEmpty(ctx.RefreshBehavior) ? "on-demand" : ctx.RefreshBehavior },
-            };
-            if (ctx.RequiresPackages != null && ctx.RequiresPackages.Length > 0)
-            {
-                descriptor["requiresPackages"] = ctx.RequiresPackages;
-            }
-            BuiltInContextDescriptors[ctx.Name] = descriptor;
+            return new Dictionary<string, object> { { "algorithm", ContextFingerprintAlgorithm }, { "value", definition.Fingerprint }, { "expected", definition.ExpectedFingerprint }, { "status", definition.FingerprintStatus }, { "mode", definition.FingerprintMode }, { "message", definition.FingerprintMessage }, { "descriptorSha256", definition.DescriptorSha256 }, { "handlerSha256", definition.HandlerSha256 } };
         }
 
         // ── Bridge commands: context.list, context.describe, context.read ──
@@ -619,7 +387,7 @@ namespace UnityCli
         {
             RegisterCommand(registry, "context.list", "context", false, ContextList);
             RegisterCommand(registry, "context.describe", "context", false, ContextDescribe);
-            RegisterCommand(registry, "context.read", "context", false, ContextRead);
+            registry.Register<UnityCli.Protocol.BridgeRequest>("context.read", "context", false, 30000, ContextRead);
         }
 
         /// <summary>
@@ -627,37 +395,29 @@ namespace UnityCli
         /// Built-in contexts first, project custom contexts second.
         /// Play Mode: allowed as read-only query.
         /// </summary>
-        private static string ContextList(BridgeRequest request)
+        private static object ContextList(UnityCli.Protocol.BridgeRequest request)
         {
-            DiscoverProjectContexts();
-            var items = new List<string>();
-
-            // Built-in contexts first
-            foreach (var pair in BuiltInContextDescriptors.OrderBy(p => p.Key, StringComparer.Ordinal))
+            DiscoverContexts();
+            var items = Contexts.Values
+                .OrderBy(context => context.Source, StringComparer.Ordinal)
+                .ThenBy(context => context.Name, StringComparer.Ordinal)
+                .Select(ContextDescriptorData)
+                .ToList();
+            return new Dictionary<string, object>
             {
-                items.Add(BuiltInContextDescriptorJson(pair.Key, pair.Value));
-            }
-
-            // Project custom contexts second
-            foreach (var pair in ProjectContexts.OrderBy(p => p.Key, StringComparer.Ordinal))
-            {
-                items.Add(ProjectContextDefinitionJson(pair.Value));
-            }
-
-            var data = new UnityCliJsonWriter().BeginObject()
-                .PropArray("contexts", arr => { foreach (var item in items) { arr.RawValue(item); } })
-                .Prop("totalCount", items.Count)
-                .Prop("builtInCount", BuiltInContextDescriptors.Count)
-                .Prop("projectCustomCount", ProjectContexts.Count)
-                .Prop("logPath", LogPath())
-                .EndObject()
-                .ToString();
-            return SuccessJson(data);
+                { "contexts", items },
+                { "totalCount", items.Count },
+                { "builtInCount", Contexts.Values.Count(context => context.Source == "built-in") },
+                { "extensionCount", Contexts.Values.Count(context => context.Source == "extension") },
+                { "projectCustomCount", Contexts.Values.Count(context => context.Source == "project") },
+                { "logPath", LogPath() }
+            };
         }
 
         private sealed class ContextRouteArgs
         {
             public string Name { get; set; }
+            [UnityCliAnyJson] public object Input { get; set; }
             public string FingerprintMode { get; set; }
             public string ProjectPath { get; set; }
         }
@@ -668,36 +428,17 @@ namespace UnityCli
         /// Name conflict: project custom with same name as built-in is rejected at registration,
         /// so this lookup is always unambiguous.
         /// </summary>
-        private static string ContextDescribe(BridgeRequest request)
+        private static object ContextDescribe(UnityCli.Protocol.BridgeRequest request)
         {
-            DiscoverProjectContexts();
+            DiscoverContexts();
             var args = request.DeserializeArgs<ContextRouteArgs>();
-            var name = args.Name;
-            if (string.IsNullOrEmpty(name))
-            {
-                return ErrorJson("E_CONTEXT_NAME_REQUIRED",
-                    "context.describe requires a context name.",
-                    "Pass a valid context name from context.list output.");
-            }
-
-            // Built-in first — return full descriptor from ContextCommands
-            var builtInCtx = FindBuiltInContext(name);
-            if (builtInCtx != null)
-            {
-                return SuccessJson(ContextDescriptorJson(builtInCtx));
-            }
-
-            // Project custom second
-            if (ProjectContexts.ContainsKey(name))
-            {
-                var definition = ProjectContexts[name];
-                RefreshProjectContextFingerprint(definition, args.FingerprintMode);
-                return SuccessJson(ProjectContextDefinitionJson(definition));
-            }
-
-            return ErrorJson("E_CONTEXT_NOT_FOUND",
-                "Context not found: " + name,
-                "Run context.list to see available contexts.");
+            if (string.IsNullOrEmpty(args.Name))
+                throw new BridgeCommandException("E_CONTEXT_NAME_REQUIRED", "context.describe requires a context name.", "Pass a valid context name from context.list output.");
+            RegisteredContext definition;
+            if (!Contexts.TryGetValue(args.Name, out definition))
+                throw new BridgeCommandException("E_CONTEXT_NOT_FOUND", "Context not found: " + args.Name, "Run context.list to see available contexts.");
+            if (definition.Source == "project") RefreshProjectContextFingerprint(definition, args.FingerprintMode);
+            return ContextDescriptorData(definition);
         }
 
         /// <summary>
@@ -707,219 +448,146 @@ namespace UnityCli
         /// For project custom contexts, runs fingerprint check and source-guarded handler.
         /// Play Mode: allowed as read-only query.
         /// </summary>
-        private static string ContextRead(BridgeRequest request)
+        private static async ValueTask<object> ContextRead(UnityCli.Protocol.BridgeRequest request, CancellationToken cancellationToken)
         {
-            DiscoverProjectContexts();
+            DiscoverContexts();
             var args = request.DeserializeArgs<ContextRouteArgs>();
-            var name = args.Name;
-            if (string.IsNullOrEmpty(name))
+            if (string.IsNullOrEmpty(args.Name))
+                throw new BridgeCommandException("E_CONTEXT_NAME_REQUIRED", "context.read requires a context name.", "Pass a valid context name from context.list output.");
+            RegisteredContext definition;
+            if (!Contexts.TryGetValue(args.Name, out definition))
+                throw new BridgeCommandException("E_CONTEXT_NOT_FOUND", "Context not found: " + args.Name, "Run context.list to see available contexts.");
+
+            if (definition.Source == "project")
             {
-                return ErrorJson("E_CONTEXT_NAME_REQUIRED",
-                    "context.read requires a context name.",
-                    "Pass a valid context name from context.list output.");
+                var fingerprint = RefreshProjectContextFingerprint(definition, args.FingerprintMode);
+                if (fingerprint.Blocked)
+                    throw new BridgeCommandException("E_CONTEXT_FINGERPRINT_MISMATCH", fingerprint.Message, ContextFingerprintDetails(definition), new[] { "Review the registered context code, then update its fingerprint or use warn mode when policy allows." });
             }
 
-            // Built-in first — delegate to ContextCommands.BuiltInContexts read handlers
-            var builtInCtx = FindBuiltInContext(name);
-            if (builtInCtx != null)
-            {
-                try
-                {
-                    return builtInCtx.ReadHandler(request);
-                }
-                catch (Exception exception)
-                {
-                    return ErrorJson("E_CONTEXT_READ_FAILED",
-                        "Built-in context read failed for " + name + ": " + exception.Message,
-                        "Check Unity Console and UnityCliBridge.log.");
-                }
-            }
-
-            // Project custom second
-            if (!ProjectContexts.ContainsKey(name))
-            {
-                return ErrorJson("E_CONTEXT_NOT_FOUND",
-                    "Context not found: " + name,
-                    "Run context.list to see available contexts.");
-            }
-
-            var definition = ProjectContexts[name];
-
-            // ── Fingerprint check ──
-            var fingerprintCheck = RefreshProjectContextFingerprint(
-                definition, args.FingerprintMode);
-            if (fingerprintCheck.Blocked)
-            {
-                WriteLog("custom_context_fingerprint_blocked requestId=" + request.RequestId +
-                    " name=" + name +
-                    " expected=" + fingerprintCheck.Expected +
-                    " actual=" + fingerprintCheck.Actual);
-                return ErrorJsonWithDetails("E_CONTEXT_FINGERPRINT_MISMATCH",
-                    fingerprintCheck.Message,
-                    ProjectContextFingerprintDetailsJson(definition),
-                    "Review the registered custom context descriptor/handler code, " +
-                    "then update the expected fingerprint or rerun with --fingerprint-mode warn.");
-            }
-            if (fingerprintCheck.Warn)
-            {
-                WriteLog("custom_context_fingerprint_warn requestId=" + request.RequestId +
-                    " name=" + name +
-                    " expected=" + fingerprintCheck.Expected +
-                    " actual=" + fingerprintCheck.Actual);
-            }
-
-            // ── Input basic validation ──
             var inputJson = request.RawJsonArg("input") ?? "{}";
-            if (!string.IsNullOrEmpty(inputJson))
-            {
-                var trimmed = inputJson.Trim();
-                if (!trimmed.StartsWith("{", StringComparison.Ordinal) ||
-                    !trimmed.EndsWith("}", StringComparison.Ordinal))
-                {
-                    return ErrorJson("E_CONTEXT_INPUT_INVALID",
-                        "Context read input must be a JSON object.",
-                        "Pass input as a valid JSON object, e.g. {} or {\"key\":\"value\"}.");
-                }
-            }
-
-            // ── Execute handler ──
-            string resultJson;
+            var schemaError = ValidateTypedInput(definition.RequestType, inputJson);
+            if (schemaError != null) throw SchemaValidationException(schemaError);
+            object result;
+            var startedAt = DateTime.UtcNow;
             try
             {
-                WriteLog("custom_context_read requestId=" + request.RequestId + " name=" + name);
-                resultJson = definition.Read(new UnityCliProjectToolContext
+                var typedInput = UnityCliSerializer.Deserialize(inputJson, definition.RequestType);
+                result = await definition.ReadAsync(typedInput, new UnityCliProjectToolContext
                 {
                     RequestId = request.RequestId,
                     ProjectPath = args.ProjectPath ?? ProjectRoot(),
-                    InputJson = inputJson,
-                    LogPath = LogPath()
-                });
+                    LogPath = LogPath(),
+                    Wait = CreateWaiter(request.RequestId, args.Name),
+                    CancellationToken = cancellationToken
+                }, cancellationToken);
+                cancellationToken.ThrowIfCancellationRequested();
             }
+            catch (BridgeCommandException) { throw; }
             catch (TargetInvocationException exception)
             {
                 var inner = exception.InnerException ?? exception;
-                return ErrorJson("E_CONTEXT_HANDLER_FAILED",
-                    inner.GetType().Name + ": " + inner.Message,
-                    "Check Unity Console and UnityCliBridge.log with the returned requestId.");
+                var bridgeError = inner as BridgeCommandException;
+                if (bridgeError != null) throw bridgeError;
+                throw new BridgeCommandException("E_CONTEXT_HANDLER_FAILED", inner.GetType().Name + ": " + inner.Message, "Check Unity Console and UnityCliBridge.log with the returned requestId.");
             }
             catch (Exception exception)
             {
-                return ErrorJson("E_CONTEXT_HANDLER_FAILED",
-                    exception.GetType().Name + ": " + exception.Message,
-                    "Check Unity Console and UnityCliBridge.log with the returned requestId.");
+                throw new BridgeCommandException("E_CONTEXT_HANDLER_FAILED", exception.GetType().Name + ": " + exception.Message, "Check Unity Console and UnityCliBridge.log with the returned requestId.");
             }
 
-            // ── Unified response envelope ──
-            var startedAt = DateTime.UtcNow;
-            var data = new UnityCliJsonWriter().BeginObject()
-                .Prop("command", "context.read")
-                .PropObject("context", ctx =>
-                {
-                    ctx.Prop("name", definition.Name)
-                        .Prop("version", definition.Version)
-                        .Prop("source", definition.Source);
-                })
-                .PropObject("execution", execution =>
-                {
-                    execution.Prop("channel", "live")
-                        .Prop("startedAt", startedAt.ToString("O", CultureInfo.InvariantCulture))
-                        .Prop("exitState", "completed");
-                })
-                .PropRaw("result", resultJson)
-                .PropObject("logs", logs => logs.Prop("bridge", LogPath()))
-                .EndObject()
-                .ToString();
-            return SuccessJson(data);
+            return new Dictionary<string, object>
+            {
+                { "command", "context.read" },
+                { "context", new Dictionary<string, object> { { "name", args.Name }, { "version", definition.Version }, { "source", definition.Source } } },
+                { "execution", new Dictionary<string, object> { { "channel", "live" }, { "startedAt", startedAt.ToString("O", CultureInfo.InvariantCulture) }, { "exitState", "completed" } } },
+                { "result", result },
+                { "logs", new Dictionary<string, object> { { "bridge", LogPath() } } }
+            };
         }
 
         // ── JSON serialization helpers ──
 
-        private static string ProjectContextDefinitionJson(UnityCliContextDefinition definition)
+        private static Dictionary<string, object> ContextDescriptorData(RegisteredContext definition)
         {
-            return new UnityCliJsonWriter().BeginObject()
-                .Prop("name", definition.Name)
-                .Prop("summary", string.IsNullOrEmpty(definition.Summary) ? definition.Description : definition.Summary)
-                .Prop("description", definition.Description)
-                .Prop("category", definition.Category)
-                .Prop("version", definition.Version)
-                .PropRaw("inputSchema", definition.InputSchema)
-                .PropRaw("outputSchema", definition.OutputSchema)
-                .Prop("source", definition.Source)
-                .Prop("target", definition.Target)
-                .Prop("availabilityScope", definition.AvailabilityScope)
-                .Prop("playModeSupport", definition.PlayModeSupport)
-                .Prop("refreshBehavior", definition.RefreshBehavior)
-                .PropRaw("requiresPackages", StringArrayJson(definition.RequiresPackages))
-                .Prop("supportStatus", "live-bridge")
-                .Prop("cliCommand", "context read " + definition.Name)
-                .Prop("descriptorSource", definition.DescriptorSource)
-                .Prop("registeredBy", definition.RegisteredBy)
-                .Prop("assembly", definition.Assembly)
-                .Prop("method", definition.Method)
-                .PropRaw("fingerprint", ProjectContextFingerprintJson(definition))
-                .EndObject()
-                .ToString();
-        }
-
-        private static string BuiltInContextDescriptorJson(string name, Dictionary<string, object> descriptor)
-        {
-            var w = new UnityCliJsonWriter().BeginObject()
-                .Prop("name", name)
-                .Prop("source", "built-in");
-            if (descriptor != null)
+            var data = new Dictionary<string, object>
             {
-                foreach (var pair in descriptor)
-                {
-                    if (pair.Value is string s)
-                    {
-                        if (string.Equals(pair.Key, "inputSchema", StringComparison.Ordinal) || string.Equals(pair.Key, "outputSchema", StringComparison.Ordinal)) w.PropRaw(pair.Key, string.IsNullOrEmpty(s) ? "{}" : s);
-                        else w.Prop(pair.Key, s);
-                    }
-                    else if (pair.Value is bool b) w.Prop(pair.Key, b);
-                    else if (pair.Value is int i) w.Prop(pair.Key, i);
-                    else if (pair.Value is string[] array) w.PropArray(pair.Key, arr => { foreach (var item in array) arr.Value(item); });
-                }
-            }
-            w.EndObject();
-            return w.ToString();
+                { "name", definition.Name },
+                { "summary", string.IsNullOrEmpty(definition.Summary) ? definition.Description : definition.Summary },
+                { "description", definition.Description },
+                { "category", definition.Category },
+                { "version", definition.Version },
+                { "inputSchema", UnityCliSerializer.Parse(definition.InputSchema) },
+                { "outputSchema", UnityCliSerializer.Parse(definition.OutputSchema) },
+                { "source", definition.Source },
+                { "target", definition.Target },
+                { "availabilityScope", definition.AvailabilityScope },
+                { "playModeSupport", definition.PlayModeSupport },
+                { "refreshBehavior", definition.RefreshBehavior },
+                { "examples", definition.Examples },
+                { "requiresPackages", definition.RequiresPackages },
+                { "supportStatus", "live-bridge" },
+                { "cliCommand", "context read " + definition.Name }
+            };
+            if (definition.Source == "project") data["fingerprint"] = ProjectContextFingerprintData(definition);
+            return data;
         }
 
-        private static string ProjectContextFingerprintDetailsJson(UnityCliContextDefinition definition)
+        private static Dictionary<string, object> ContextFingerprintDetails(RegisteredContext definition)
         {
-            return new UnityCliJsonWriter().BeginObject()
-                .Prop("context", definition.Name)
-                .PropRaw("fingerprint", ProjectContextFingerprintJson(definition))
-                .EndObject()
-                .ToString();
+            return new Dictionary<string, object>
+            {
+                { "context", definition.Name },
+                { "fingerprint", ProjectContextFingerprintData(definition) }
+            };
         }
 
-        private static string ProjectContextFingerprintSummaryJson()
+        private static int CountTopLevelJsonArrayItems(string json)
         {
-            var items = new List<string>();
+            var parsed = UnityCliSerializer.Parse(string.IsNullOrWhiteSpace(json) ? "[]" : json) as System.Collections.ICollection;
+            return parsed == null ? 0 : parsed.Count;
+        }
+
+        private static Dictionary<string, object> ProjectContextFingerprintSummary()
+        {
+            var items = new List<object>();
             var blocked = 0;
             var warn = 0;
-            foreach (var pair in ProjectContexts)
+            foreach (var pair in Contexts.Where(pair => pair.Value.Source == "project"))
             {
                 var definition = pair.Value;
                 RefreshProjectContextFingerprint(definition, null);
                 if (definition.FingerprintStatus == "blocked") blocked++;
                 if (definition.FingerprintStatus == "warn") warn++;
-                items.Add(new UnityCliJsonWriter().BeginObject()
-                    .Prop("name", definition.Name)
-                    .PropRaw("fingerprint", ProjectContextFingerprintJson(definition))
-                    .EndObject()
-                    .ToString());
+                items.Add(new Dictionary<string, object>
+                {
+                    { "name", definition.Name },
+                    { "fingerprint", new Dictionary<string, object>
+                        {
+                            { "algorithm", ContextFingerprintAlgorithm },
+                            { "value", definition.Fingerprint },
+                            { "expected", definition.ExpectedFingerprint },
+                            { "status", definition.FingerprintStatus },
+                            { "mode", definition.FingerprintMode },
+                            { "message", definition.FingerprintMessage },
+                            { "descriptorSha256", definition.DescriptorSha256 },
+                            { "handlerSha256", definition.HandlerSha256 }
+                        }
+                    }
+                });
             }
-            items.Sort(StringComparer.Ordinal);
-            return new UnityCliJsonWriter().BeginObject()
-                .Prop("algorithm", ContextFingerprintAlgorithm)
-                .Prop("mode", NormalizeProjectContextFingerprintMode(null))
-                .Prop("contextCount", ProjectContexts.Count)
-                .Prop("blockedCount", blocked)
-                .Prop("warnCount", warn)
-                .PropArray("contexts", arr => { foreach (var item in items) { arr.RawValue(item); } })
-                .EndObject()
-                .ToString();
+            items.Sort((left, right) => StringComparer.Ordinal.Compare(
+                ((Dictionary<string, object>)left)["name"] as string,
+                ((Dictionary<string, object>)right)["name"] as string));
+            return new Dictionary<string, object>
+            {
+                { "algorithm", ContextFingerprintAlgorithm },
+                { "mode", NormalizeProjectContextFingerprintMode(null) },
+                { "contextCount", (long)Contexts.Values.Count(context => context.Source == "project") },
+                { "blockedCount", (long)blocked },
+                { "warnCount", (long)warn },
+                { "contexts", items }
+            };
         }
     }
 }

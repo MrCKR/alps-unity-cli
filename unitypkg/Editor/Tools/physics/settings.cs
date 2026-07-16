@@ -6,8 +6,6 @@ namespace UnityCli
 {
     /// <summary>
     /// physics.settings — 读取/写入 Physics 与 Physics2D 全局设置(gravity/contactOffset/solverIterations/queries/autoSimulation)。
-    /// 对齐旧 PhysicsSettingsCommand handler。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class PhysicsSettingsTool : IUnityCliTool<PhysicsSettingsTool.Request, PhysicsSettingsTool.Result>
     {
@@ -38,13 +36,13 @@ namespace UnityCli
             Name = "physics.settings",
             Summary = "Read and update Physics and Physics2D global settings (gravity, contact offset, solver iterations, queries, auto simulation).",
             Description = "Read and update Physics and Physics2D global settings. Pass individual fields to update; omit all to read current values. Supports a generic property/value pair for gravityY, defaultContactOffset, queriesHitTriggers.",
-            Group = "physics", Version = "1.0.0", DestructiveHint = false, SideEffects = new[] { "settings-write" },
+            Group = "physics", Version = "1.0.0", DestructiveHint = true, SideEffects = new[] { "settings-write" },
             Target = "editor", PlayModeSupport = "supported",
             DefaultTimeoutMs = 30000, MaxTimeoutMs = 600000,
             Examples = new[] { new ToolExample { Description = "Read physics settings", Input = new Request { } } }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var effects = new List<PhysicsPlannedEffect>();
             if (request.Gravity.HasValue)
@@ -101,7 +99,7 @@ namespace UnityCli
             {
                 ApplyGenericPhysicsSetting(request.Property, request.Value, effects);
             }
-            return new Result { Physics = PhysicsToolSupport.BuildPhysicsSettings(), PlannedEffects = effects };
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Physics = PhysicsToolSupport.BuildPhysicsSettings(), PlannedEffects = effects });
         }
 
         // 通用 property/value 物理设置写入

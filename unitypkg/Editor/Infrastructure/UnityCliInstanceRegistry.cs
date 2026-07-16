@@ -74,15 +74,43 @@ namespace UnityCli
             return Path.Combine(InstancesDir(), InstanceId() + ".json");
         }
 
+        // 同目录原子替换 registry 文件，避免 heartbeat 原地截断时让并发 CLI 短暂丢失 target。
+        private static void WriteRegistryTextAtomically(string path, string content)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(path));
+            var temporaryPath = path + "." + System.Diagnostics.Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture) + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                File.WriteAllText(temporaryPath, content, Encoding.UTF8);
+                for (var attempt = 0; ; attempt++)
+                {
+                    try
+                    {
+                        if (File.Exists(path)) File.Replace(temporaryPath, path, null);
+                        else File.Move(temporaryPath, path);
+                        return;
+                    }
+                    catch (IOException) when (attempt < 4)
+                    {
+                        Thread.Sleep(10 * (attempt + 1));
+                    }
+                }
+            }
+            finally
+            {
+                if (File.Exists(temporaryPath)) File.Delete(temporaryPath);
+            }
+        }
+
         private static void RegisterInstance(string status)
         {
             try
             {
                 Directory.CreateDirectory(InstancesDir());
                 DeleteSupersededInstanceFiles();
-                var instanceJson = InstanceJson(status);
-                File.WriteAllText(InstancePath(), instanceJson, Encoding.UTF8);
-                WriteRegistryFile(instanceJson);
+                var instanceData = InstanceData(status);
+                WriteRegistryTextAtomically(InstancePath(), UnityCliSerializer.Serialize(instanceData));
+                WriteRegistryFile(instanceData);
                 WriteLog("instance_registered id=" + InstanceId() + " status=" + status + " endpoint=http://127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture) + " listenerId=" + ListenerId + " diagnosticsFingerprint=" + BridgeDiagnosticsFingerprint + " assemblyMvid=" + AssemblyMvid() + " packageName=" + BridgePackageName() + " packageAssetPath=" + BridgePackageAssetPath() + " packageResolvedPath=" + BridgePackageResolvedPath());
             }
             catch (Exception exception)
@@ -108,34 +136,31 @@ namespace UnityCli
             }
         }
 
-        private static void WriteRegistryFile(string instanceJson)
+        private static void WriteRegistryFile(Dictionary<string, object> instanceData)
         {
             Directory.CreateDirectory(DataDir());
-            var existing = File.Exists(RegistryPath()) ? File.ReadAllText(RegistryPath()) : string.Empty;
-            var items = new List<string>();
-            foreach (Match match in Regex.Matches(existing, "\\{\\s*\\\"instanceId\\\"[\\s\\S]*?\\\"last(?:Heartbeat|Seen)At\\\"\\s*:\\s*\\\"(?:\\\\.|[^\\\"])*\\\"\\s*\\}"))
+            var items = new List<object>();
+            if (File.Exists(RegistryPath()))
             {
-                var item = match.Value;
-                if (!ShouldRemoveRegistration(item))
+                var registry = UnityCliSerializer.Parse(File.ReadAllText(RegistryPath())) as Dictionary<string, object>;
+                object existingInstances;
+                var existing = registry != null && registry.TryGetValue("instances", out existingInstances) ? existingInstances as List<object> : null;
+                foreach (var item in existing ?? new List<object>())
                 {
-                    items.Add(item);
+                    var registration = item as Dictionary<string, object>;
+                    if (registration != null && !ShouldRemoveRegistration(registration)) items.Add(registration);
                 }
             }
-            if (!string.IsNullOrEmpty(instanceJson))
+            if (instanceData != null)
             {
-                items.Add(instanceJson);
+                items.Add(instanceData);
             }
-            var w = new UnityCliJsonWriter().BeginObject()
-                .Prop("version", 1L)
-                .PropArray("instances", arr =>
-                {
-                    foreach (var item in items)
-                    {
-                        arr.RawValue(item);
-                    }
-                })
-                .EndObject();
-            File.WriteAllText(RegistryPath(), w.ToString(), Encoding.UTF8);
+            var registryData = new Dictionary<string, object>
+            {
+                { "version", 1L },
+                { "instances", items }
+            };
+            WriteRegistryTextAtomically(RegistryPath(), UnityCliSerializer.Serialize(registryData));
         }
 
         private const double StaleRegistrationSeconds = 30.0;
@@ -170,102 +195,70 @@ namespace UnityCli
             }
         }
 
-        // 判断注册 JSON 是否属于当前项目且已被当前注册取代。
+        // 判断结构化注册项是否属于当前项目且已被当前注册取代。
         private static bool ShouldRemoveRegistration(string json)
         {
-            if (!Regex.IsMatch(json, "\\\"projectHash\\\"\\s*:\\s*" + Regex.Escape(Quote(ProjectHash()))))
-            {
-                return false;
-            }
+            return ShouldRemoveRegistration(UnityCliSerializer.Parse(json) as Dictionary<string, object>);
+        }
 
-            var pid = RegistrationPid(json);
-            if (pid.HasValue && pid.Value == System.Diagnostics.Process.GetCurrentProcess().Id)
-            {
-                return true;
-            }
+        private static bool ShouldRemoveRegistration(Dictionary<string, object> registration)
+        {
+            object projectHash;
+            if (registration == null || !registration.TryGetValue("projectHash", out projectHash)
+                || !string.Equals(projectHash as string, ProjectHash(), StringComparison.Ordinal)) return false;
 
-            var timestamp = RegistrationTimestamp(json);
+            var pid = RegistrationPid(registration);
+            if (pid.HasValue && pid.Value == System.Diagnostics.Process.GetCurrentProcess().Id) return true;
+
+            var timestamp = RegistrationTimestamp(registration);
             return timestamp.HasValue && DateTime.UtcNow - timestamp.Value.ToUniversalTime() > TimeSpan.FromSeconds(StaleRegistrationSeconds);
         }
 
-        // 从注册 JSON 中解析 Unity 进程 ID，兼容 processId 与旧 pid 字段。
-        private static int? RegistrationPid(string json)
+        // 从结构化注册项读取 Unity 进程 ID。
+        private static int? RegistrationPid(Dictionary<string, object> registration)
         {
-            var match = Regex.Match(json, "\\\"(?:processId|pid)\\\"\\s*:\\s*(\\d+)(?=\\s*[,}])");
-            int value;
-            return match.Success && int.TryParse(match.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out value) ? (int?)value : null;
+            object value;
+            if (!registration.TryGetValue("processId", out value)) registration.TryGetValue("pid", out value);
+            try { return value == null ? (int?)null : Convert.ToInt32(value, CultureInfo.InvariantCulture); }
+            catch (Exception) { return null; }
         }
 
-        // 从注册 JSON 中解析最近心跳时间，优先 lastSeenAt，兼容 lastHeartbeatAt。
-        private static DateTime? RegistrationTimestamp(string json)
+        // 从结构化注册项读取最近心跳时间。
+        private static DateTime? RegistrationTimestamp(Dictionary<string, object> registration)
         {
-            var match = Regex.Match(json, "\\\"last(?:Seen|Heartbeat)At\\\"\\s*:\\s*\\\"((?:\\\\.|[^\\\"])*)\\\"");
-            DateTime value;
-            return match.Success && DateTime.TryParse(match.Groups[1].Value, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out value) ? (DateTime?)value : null;
+            object value;
+            if (!registration.TryGetValue("lastSeenAt", out value)) registration.TryGetValue("lastHeartbeatAt", out value);
+            DateTime timestamp;
+            return value is string text && DateTime.TryParse(text, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out timestamp) ? (DateTime?)timestamp : null;
         }
 
-        private static string InstanceJson(string status)
+        private static Dictionary<string, object> InstanceData(string status)
         {
             var now = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture);
             var endpoint = "http://127.0.0.1:" + port.ToString(CultureInfo.InvariantCulture);
-            return new UnityCliJsonWriter().BeginObject()
-                .Prop("instanceId", InstanceId())
-                .Prop("projectName", Path.GetFileName(ProjectRoot()))
-                .Prop("projectPath", ProjectRoot())
-                .Prop("projectHash", ProjectHash())
-                .Prop("processId", (long)System.Diagnostics.Process.GetCurrentProcess().Id)
-                .Prop("pid", (long)System.Diagnostics.Process.GetCurrentProcess().Id)
-                .Prop("host", "127.0.0.1")
-                .Prop("port", (long)port)
-                .Prop("bridgeEndpoint", endpoint)
-                .Prop("unityVersion", Application.unityVersion)
-                .Prop("packageVersion", BridgeBuildStamp())
-                .Prop("packageName", BridgePackageName())
-                .Prop("packageAssetPath", BridgePackageAssetPath())
-                .Prop("packageResolvedPath", BridgePackageResolvedPath())
-                .Prop("capabilitiesHash", BridgeBuildStamp())
-                .Prop("bridgeDiagnosticsFingerprint", BridgeDiagnosticsFingerprint)
-                .Prop("bridgeListenerId", ListenerId)
-                .Prop("bridgeAssemblyMvid", AssemblyMvid())
-                .Prop("status", status == "healthy" ? "ready" : status)
-                .PropRaw("editorState", EditorStateSummaryJson())
-                .PropRaw("playModeState", PlayModeStateJson())
-                .Prop("runtimeSessionId", currentPlayModeSessionId ?? string.Empty)
-                .Prop("toolCatalogFingerprint", runtimeToolCatalogFingerprint ?? string.Empty)
-                .Prop("registryVersion", runtimeRegistryVersion.ToString(CultureInfo.InvariantCulture))
-                .Prop("registeredAt", now)
-                .Prop("lastSeenAt", now)
-                .Prop("lastHeartbeatAt", now)
-                .EndObject().ToString();
+            return new Dictionary<string, object> {
+                { "instanceId", InstanceId() }, { "projectName", Path.GetFileName(ProjectRoot()) }, { "projectPath", ProjectRoot() }, { "projectHash", ProjectHash() },
+                { "processId", (long)System.Diagnostics.Process.GetCurrentProcess().Id }, { "pid", (long)System.Diagnostics.Process.GetCurrentProcess().Id }, { "host", "127.0.0.1" }, { "port", (long)port }, { "bridgeEndpoint", endpoint },
+                { "unityVersion", Application.unityVersion }, { "packageVersion", BridgeBuildStamp() }, { "packageName", BridgePackageName() }, { "packageAssetPath", BridgePackageAssetPath() }, { "packageResolvedPath", BridgePackageResolvedPath() },
+                { "capabilitiesHash", BridgeBuildStamp() }, { "bridgeDiagnosticsFingerprint", BridgeDiagnosticsFingerprint }, { "bridgeListenerId", ListenerId }, { "bridgeAssemblyMvid", AssemblyMvid() }, { "status", status == "healthy" ? "ready" : status },
+                { "editorState", EditorStateSummaryData() }, { "playModeState", PlayModeStateData() }, { "runtimeSessionId", currentPlayModeSessionId ?? string.Empty }, { "toolCatalogFingerprint", runtimeToolCatalogFingerprint ?? string.Empty },
+                { "registryVersion", runtimeRegistryVersion.ToString(CultureInfo.InvariantCulture) }, { "registeredAt", now }, { "lastSeenAt", now }, { "lastHeartbeatAt", now }
+            };
         }
 
-        private static string TargetContextJson()
+        private static Dictionary<string, object> TargetContextData()
         {
-            return new UnityCliJsonWriter().BeginObject()
-                .Prop("id", InstanceId())
-                .PropNull("alias")
-                .Prop("projectPath", ProjectRoot())
-                .EndObject().ToString();
+            return new Dictionary<string, object> { { "id", InstanceId() }, { "alias", null }, { "projectPath", ProjectRoot() } };
         }
 
-        private static string EditorStateSummaryJson()
+        private static Dictionary<string, object> EditorStateSummaryData()
         {
-            return new UnityCliJsonWriter().BeginObject()
-                .Prop("busy", EditorApplication.isCompiling || EditorApplication.isUpdating || BuildPipeline.isBuildingPlayer || domainReloading)
-                .Prop("compiling", EditorApplication.isCompiling)
-                .Prop("updating", EditorApplication.isUpdating)
-                .Prop("building", BuildPipeline.isBuildingPlayer)
-                .Prop("domainReloading", domainReloading)
-                .EndObject().ToString();
+            return new Dictionary<string, object> { { "busy", EditorApplication.isCompiling || EditorApplication.isUpdating || BuildPipeline.isBuildingPlayer || domainReloading }, { "compiling", EditorApplication.isCompiling }, { "updating", EditorApplication.isUpdating }, { "building", BuildPipeline.isBuildingPlayer }, { "domainReloading", domainReloading } };
         }
 
-        private static string PlayModeStateJson()
+        private static Dictionary<string, object> PlayModeStateData()
         {
-            return new UnityCliJsonWriter().BeginObject()
-                .Prop("isPlaying", EditorApplication.isPlaying)
-                .Prop("isPaused", EditorApplication.isPaused)
-                .Prop("isPlayingOrWillChangePlaymode", EditorApplication.isPlayingOrWillChangePlaymode)
-                .EndObject().ToString();
+            return new Dictionary<string, object> { { "isPlaying", EditorApplication.isPlaying }, { "isPaused", EditorApplication.isPaused }, { "isPlayingOrWillChangePlaymode", EditorApplication.isPlayingOrWillChangePlaymode } };
         }
     }
 }

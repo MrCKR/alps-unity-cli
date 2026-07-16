@@ -3,9 +3,9 @@ import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const materialBridgeSpecs: BridgeCommandSpec[] = [
   { group: "material", command: "info", bridgeCommand: "project-tool.run", toolName: "material.info", buildArgs: materialArgs },
-  { group: "material", command: "create", bridgeCommand: "project-tool.run", toolName: "material.create", buildArgs: materialArgs },
+  { group: "material", command: "create", bridgeCommand: "project-tool.run", toolName: "material.create", buildArgs: materialArgs, destructiveHint: true },
   { group: "material", command: "assign", bridgeCommand: "project-tool.run", toolName: "material.assign", buildArgs: materialArgs },
-  { group: "material", command: "set", bridgeCommand: "project-tool.run", toolName: "material.set", buildArgs: materialArgs },
+  { group: "material", command: "set", bridgeCommand: "project-tool.run", toolName: "material.set", buildArgs: materialArgs, destructiveHint: true },
   { group: "material", command: "set-renderer-color", bridgeCommand: "project-tool.run", toolName: "material.set-renderer-color", buildArgs: materialArgs, supportsDryRun: true }
 ];
 
@@ -49,13 +49,9 @@ function materialArgs({ command, flags, positionalTarget }: Parameters<BridgeCom
   if (command === "material.set") {
     const structured = structuredInput(flags);
     return compactArgs({
-      path: positionalTarget ?? stringFlag(flags, "path") ?? stringFlag(flags, "material") ?? structured.path,
+      path: positionalTarget ?? stringFlag(flags, "path") ?? structured.path,
       property: stringFlag(flags, "property") ?? structured.property,
       value: stringFlag(flags, "value") ?? valueString(structured.value),
-      color: stringFlag(flags, "color") ?? valueString(structured.color),
-      floatValue: stringFlag(flags, "float-value") ?? valueString(structured.floatValue),
-      vector: stringFlag(flags, "vector") ?? valueString(structured.vector),
-      texture: stringFlag(flags, "texture") ?? valueString(structured.texture),
       type: stringFlag(flags, "type") ?? structured.type
     });
   }

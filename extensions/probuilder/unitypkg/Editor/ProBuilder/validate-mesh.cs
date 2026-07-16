@@ -1,7 +1,5 @@
 #if UNITY_EDITOR
-using System;
 using System.Collections.Generic;
-using System.Globalization;
 using UnityEditor;
 using UnityEngine;
 
@@ -20,8 +18,8 @@ namespace UnityCli.ProBuilder
         public sealed class Result
         {
             public bool Healthy { get; set; }
-            public long DegenerateTriangles { get; set; }
-            public long UnusedVertices { get; set; }
+            public long DegenerateFaceCount { get; set; }
+            public long UnusedVertexCount { get; set; }
             public List<string> Issues { get; set; }
         }
 
@@ -44,12 +42,12 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            var go = ProBuilderInput.ResolveTarget(request.Target);
             if (go == null)
                 throw ProBuilderErrors.TargetNotFound(request.Target);
 
@@ -57,39 +55,22 @@ namespace UnityCli.ProBuilder
             if (mesh == null)
                 throw ProBuilderErrors.OperationFailed("validate-mesh", "GameObject does not have a ProBuilderMesh component.");
 
-            var validationResult = ProBuilderReflection.Validate(mesh);
+            var degenerateFaceCount = ProBuilderReflection.CountDegenerateFaces(mesh);
+            var unusedVertexCount = ProBuilderReflection.CountUnusedVertices(mesh);
+            if (degenerateFaceCount < 0 || unusedVertexCount < 0)
+                throw ProBuilderErrors.OperationFailed("validate-mesh", "Failed to query ProBuilder 5.x mesh validation data.");
+
             var issues = new List<string>();
-            var degenerate = 0;
-            var unused = 0;
+            if (degenerateFaceCount > 0) issues.Add("Mesh contains faces with degenerate triangles.");
+            if (unusedVertexCount > 0) issues.Add("Mesh contains unused vertices.");
 
-            if (validationResult != null)
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                try
-                {
-                    var resultType = validationResult.GetType();
-                    var degProp = resultType.GetProperty("degenerateTriangles");
-                    if (degProp != null) degenerate = Convert.ToInt32(degProp.GetValue(validationResult), CultureInfo.InvariantCulture);
-                    var unusedProp = resultType.GetProperty("unusedVertices");
-                    if (unusedProp != null) unused = Convert.ToInt32(unusedProp.GetValue(validationResult), CultureInfo.InvariantCulture);
-                    var issuesProp = resultType.GetProperty("issues");
-                    if (issuesProp != null)
-                    {
-                        var issuesArr = issuesProp.GetValue(validationResult) as IEnumerable<string>;
-                        if (issuesArr != null) issues.AddRange(issuesArr);
-                    }
-                }
-                catch (Exception) { }
-            }
-
-            var healthy = degenerate == 0 && unused == 0 && issues.Count == 0;
-
-            return new Result
-            {
-                Healthy = healthy,
-                DegenerateTriangles = degenerate,
-                UnusedVertices = unused,
+                Healthy = degenerateFaceCount == 0 && unusedVertexCount == 0,
+                DegenerateFaceCount = degenerateFaceCount,
+                UnusedVertexCount = unusedVertexCount,
                 Issues = issues
-            };
+            });
         }
     }
 }

@@ -6,8 +6,6 @@ namespace UnityCli
 {
     /// <summary>
     /// texture.import-settings — 应用 TextureImporter 设置(textureType/readable/mipmap/wrapMode 等)。
-    /// 对齐旧 TextureImportSettings handler;session-affecting(asset-import)。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class TextureImportSettingsTool : IUnityCliTool<TextureImportSettingsTool.Request, TextureImportSettingsTool.Result>
     {
@@ -45,7 +43,7 @@ namespace UnityCli
             DestructiveHint = false,
             SideEffects = new[] { "asset-import" },
             Target = "editor",
-            PlayModeSupport = "session-affecting",
+            PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 30000,
             MaxTimeoutMs = 600000,
             Examples = new[]
@@ -54,7 +52,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             TextureToolSupport.EnsureEditorNotBusy("texture.import-settings");
             var path = TextureToolSupport.ResolveTexturePath(request.Path ?? request.Target);
@@ -75,13 +73,13 @@ namespace UnityCli
             var texture = TextureToolSupport.LoadTextureAsset(path);
             var effects = new List<TexturePlannedEffect>();
             if (changed) effects.Add(new TexturePlannedEffect { Type = "texture.import-settings", Path = path });
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Texture = TextureToolSupport.BuildTextureInfo(path, texture),
                 ImportSettings = TextureToolSupport.BuildTextureImportSettings(TextureToolSupport.RequireTextureImporter(path)),
                 Changed = changed,
                 PlannedEffects = effects
-            };
+            });
         }
 
         private static TextureSettings BuildSettings(Request request)

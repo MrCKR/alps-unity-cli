@@ -16,14 +16,13 @@ const SCENE_COMMANDS = [
   "scene.load",
   "scene.move-object",
   "scene.save",
-  "scene.screenshot",
   "scene.set-active",
   "scene.unload",
   "scene.validate",
   "scene.view-frame"
 ];
 
-test("scene group is contract-discovered with 14 tools", () => {
+test("scene group is contract-discovered with 13 tools", () => {
   assert.deepEqual(contractToolNames("scene"), [...SCENE_COMMANDS].sort());
 });
 
@@ -36,7 +35,6 @@ test("scene live descriptors expose expected read/write semantics", async () => 
     makeLiveTool({ name: "scene.create", summary: "Create a scene.", description: "Create a scene.", group: "scene", playModeSupport: "session-affecting", sideEffects: ["scene-modify"] }),
     makeLiveTool({ name: "scene.save", summary: "Save a scene.", description: "Save a scene.", group: "scene", destructiveHint: true, supportsDryRun: true, playModeSupport: "session-affecting" }),
     makeLiveTool({ name: "scene.unload", summary: "Unload a scene.", description: "Unload a scene.", group: "scene", supportsDryRun: true, playModeSupport: "session-affecting" }),
-    makeLiveTool({ name: "scene.screenshot", summary: "Capture a scene screenshot.", description: "Capture a scene screenshot.", group: "scene", playModeSupport: "editor-only" }),
     makeLiveTool({ name: "scene.view-frame", summary: "Frame the Scene view.", description: "Frame the Scene view.", group: "scene", playModeSupport: "editor-only" })
   );
 
@@ -60,13 +58,11 @@ test("scene live descriptors expose expected read/write semantics", async () => 
   assert.equal(unload.destructiveHint, false);
   assert.equal(unload.supportsDryRun, true);
 
-  for (const name of ["scene.screenshot", "scene.view-frame"]) {
-    assert.equal(tools.get(name)?.playModeSupport, "editor-only", `${name} editor-only`);
-  }
+  assert.equal(tools.get("scene.view-frame")?.playModeSupport, "editor-only");
 });
 
 test("bridge specs resolve for scene tools", () => {
-  for (const [cmd, toolName] of [["active", "scene.active"], ["build-settings", "scene.build-settings"], ["screenshot", "scene.screenshot"], ["create", "scene.create"], ["load", "scene.load"], ["save", "scene.save"], ["unload", "scene.unload"], ["set-active", "scene.set-active"], ["list-opened", "scene.list-opened"], ["data", "scene.data"], ["view-frame", "scene.view-frame"]] as const) {
+  for (const [cmd, toolName] of [["active", "scene.active"], ["build-settings", "scene.build-settings"], ["create", "scene.create"], ["load", "scene.load"], ["save", "scene.save"], ["unload", "scene.unload"], ["set-active", "scene.set-active"], ["list-opened", "scene.list-opened"], ["data", "scene.data"], ["view-frame", "scene.view-frame"]] as const) {
     const spec = bridgeCommandRegistry.lookup("scene", cmd);
     assert.equal(spec?.bridgeCommand, "project-tool.run", `scene ${cmd} should route via project-tool.run`);
     assert.equal(spec?.toolName, toolName, `scene ${cmd} toolName should match`);
@@ -90,12 +86,23 @@ test("scene C# handlers are registered", async () => {
   }
 });
 
-test("scene C# error recovery hints use current tools run form, not legacy unity_cli", async () => {
+test("scene C# error recovery hints use current tools run forms", async () => {
   const source = await readCsSources(new URL("../unitypkg/Editor/Tools/scene/", import.meta.url));
-  assert.equal(source.includes("unity_cli scene"), false, "must not reference legacy 'unity_cli scene'");
-  assert.equal(source.includes("unity_cli asset search"), false, "must not reference legacy 'unity_cli asset search'");
   assert.match(source, /tools run scene\.save/, "error hints should route to tools run scene.save");
   assert.match(source, /tools run asset\.search/, "error hints should route to tools run asset.search");
+});
+
+test("scene.load resolves a unique scene asset name before opening", async () => {
+  const support = await readFile(new URL("../unitypkg/Editor/Tools/scene/SceneToolSupport.cs", import.meta.url), "utf8");
+  const load = await readFile(new URL("../unitypkg/Editor/Tools/scene/load.cs", import.meta.url), "utf8");
+  assert.match(support, /ResolveExistingScenePath\(string path, string name\)/);
+  assert.match(support, /AssetDatabase\.FindAssets\("t:Scene"\)/);
+  assert.match(support, /E_SCENE_AMBIGUOUS/);
+  assert.match(load, /ResolveExistingScenePath\(request\.Path, request\.Name\)/);
+  assert.match(load, /Summary = "Load or reload one scene; EditMode reload discards unsaved in-memory scene state\."/);
+  assert.match(load, /OpenSceneMode\.Single, replacing the currently open scene state without saving scene assets/);
+  assert.match(load, /avoids traversing unrelated shared Undo history/);
+  assert.match(load, /Input = new Request \{ Name = "Main" \}/);
 });
 
 test("scene.list-opened and scene.data are IUnityCliTool returning typed Result", async () => {

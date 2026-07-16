@@ -61,37 +61,16 @@ namespace UnityCli
 
         private static string BridgeHealthJson()
         {
-            var data = new UnityCliJsonWriter().BeginObject()
-                .Prop("bridge", "unity_cli")
-                .PropRaw("target", TargetContextJson())
-                .Prop("port", port)
-                .Prop("route", "POST /bridge/execute")
-                .Prop("buildStamp", BridgeBuildStamp())
-                .Prop("diagnosticsFingerprint", BridgeDiagnosticsFingerprint)
-                .Prop("listenerId", ListenerId)
-                .Prop("loadedAt", BridgeLoadedAtUtc.ToString("O", CultureInfo.InvariantCulture))
-                .PropObject("assembly", assembly =>
-                {
-                    assembly.Prop("fullName", typeof(UnityCliBridge).Assembly.FullName)
-                        .Prop("location", AssemblyLocation(typeof(UnityCliBridge).Assembly))
-                        .Prop("moduleVersionId", AssemblyMvid());
-                })
-                .PropObject("package", package =>
-                {
-                    package.Prop("name", BridgePackageName())
-                        .Prop("assetPath", BridgePackageAssetPath())
-                        .Prop("resolvedPath", BridgePackageResolvedPath());
-                })
-                .PropObject("diagnostics", diagnostics =>
-                {
-                    diagnostics.Prop("executeStageLogs", true)
-                        .Prop("contentLengthBoundedRead", true)
-                        .Prop("runtimeLoadFile", RuntimeDiagnosticsPath());
-                })
-                .PropRaw("capabilities", CapabilitiesJson())
-                .EndObject()
-                .ToString();
-            return UnityCliEnvelope.Success(data);
+            var data = new Dictionary<string, object>
+            {
+                { "bridge", "unity_cli" }, { "target", TargetContextData() }, { "port", port }, { "route", "POST /bridge/execute" }, { "buildStamp", BridgeBuildStamp() },
+                { "diagnosticsFingerprint", BridgeDiagnosticsFingerprint }, { "listenerId", ListenerId }, { "loadedAt", BridgeLoadedAtUtc.ToString("O", CultureInfo.InvariantCulture) },
+                { "assembly", new Dictionary<string, object> { { "fullName", typeof(UnityCliBridge).Assembly.FullName }, { "location", AssemblyLocation(typeof(UnityCliBridge).Assembly) }, { "moduleVersionId", AssemblyMvid() } } },
+                { "package", new Dictionary<string, object> { { "name", BridgePackageName() }, { "assetPath", BridgePackageAssetPath() }, { "resolvedPath", BridgePackageResolvedPath() } } },
+                { "diagnostics", new Dictionary<string, object> { { "executeStageLogs", true }, { "contentLengthBoundedRead", true }, { "runtimeLoadFile", RuntimeDiagnosticsPath() } } },
+                { "capabilities", CapabilitiesData() }
+            };
+            return UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Success(string.Empty, data));
         }
 
         private static string AssemblyMvid()
@@ -197,7 +176,36 @@ namespace UnityCli
             catch (Exception exception)
             {
                 WriteLog("handle_http_unhandled " + exception.GetType().Name + ": " + exception.Message);
-                TryWriteErrorJson(context, "E_BRIDGE_INTERNAL_ERROR", "Unhandled bridge error: " + exception.Message, "Check UnityCliBridge.log for details.");
+                TryWriteSerializeErrorEnvelope(context, "E_BRIDGE_INTERNAL_ERROR", "Unhandled bridge error: " + exception.Message, "Check UnityCliBridge.log for details.");
+            }
+        }
+
+        private static async Task WatchClientDisconnect(HttpListenerContext context, BridgeWorkItem item, CancellationToken stop)
+        {
+            // HttpListener 不暴露连接 abort token；响应流关闭/不可写是可观测的断连信号。
+            while (!stop.IsCancellationRequested && !item.Completed.IsSet)
+            {
+                try
+                {
+                    if (!context.Response.OutputStream.CanWrite)
+                    {
+                        WriteLog("bridge_client_disconnected requestId=" + item.Request.RequestId + " command=" + item.Request.Command);
+                        item.CancelClientDisconnected();
+                        return;
+                    }
+                }
+                catch (ObjectDisposedException)
+                {
+                    item.CancelClientDisconnected();
+                    return;
+                }
+                catch (HttpListenerException)
+                {
+                    item.CancelClientDisconnected();
+                    return;
+                }
+                try { await Task.Delay(100, stop); }
+                catch (OperationCanceledException) { return; }
             }
         }
 
@@ -211,7 +219,11 @@ namespace UnityCli
 
             if (context.Request.HttpMethod != "POST" || context.Request.Url.AbsolutePath != "/bridge/execute")
             {
-                WriteJson(context, UnityCliEnvelope.Error("E_BRIDGE_ROUTE_NOT_FOUND", "Expected POST /bridge/execute.", "Use POST /bridge/execute or GET /health."), 404);
+                WriteJson(context, UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
+                    string.Empty,
+                    "E_BRIDGE_ROUTE_NOT_FOUND",
+                    "Expected POST /bridge/execute.",
+                    nextActions: new[] { "Use POST /bridge/execute or GET /health." })), 404);
                 return;
             }
 
@@ -225,10 +237,30 @@ namespace UnityCli
             catch (Exception exception)
             {
                 WriteLog("read_body_failed " + exception.GetType().Name + ": " + exception.Message);
-                WriteJson(context, ErrorJson("E_BRIDGE_READ_BODY_FAILED", "Failed to read request body: " + exception.Message, "The request stream may have been closed due to a domain reload. Retry the request."), 200);
+                WriteJson(context, SerializeErrorEnvelope("E_BRIDGE_READ_BODY_FAILED", "Failed to read request body: " + exception.Message, "The request stream may have been closed due to a domain reload. Retry the request."), 200);
                 return;
             }
-            var request = BridgeRequest.Parse(body);
+            UnityCli.Protocol.BridgeRequest request;
+            try
+            {
+                request = UnityCli.Protocol.BridgeRequest.DeserializeStrict(body);
+            }
+            catch (Exception exception) when (exception is FormatException || exception is OverflowException || exception is InvalidCastException)
+            {
+                var details = new Dictionary<string, object>
+                {
+                    { "path", "$" },
+                    { "expected", "BridgeRequest" },
+                    { "actual", exception.Message }
+                };
+                WriteJson(context, UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
+                    string.Empty,
+                    "E_SCHEMA_INVALID",
+                    "Bridge request JSON does not match the protocol schema.",
+                    details,
+                    new[] { "Send command, requestId, input, execution, and security using their declared JSON types." })), 200);
+                return;
+            }
             WriteLog("bridge_request_body_read requestId=" + request.RequestId + " command=" + request.Command + " bytes=" + Encoding.UTF8.GetByteCount(body ?? string.Empty).ToString(CultureInfo.InvariantCulture));
 
             // Check for transient Unity state before queuing the request.
@@ -236,18 +268,18 @@ namespace UnityCli
             // so the CLI can retry-after instead of waiting 60s for a timeout.
             if (domainReloading)
             {
-                WriteJson(context, TransientErrorJson("E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", "Wait for domain reload to complete and retry.", 10000), 200);
+                WriteJson(context, SerializeTransientErrorEnvelope(request.RequestId, "E_UNITY_DOMAIN_RELOAD", "Unity Editor is reloading assemblies (domain reload).", "Wait for domain reload to complete and retry.", 10000), 200);
                 return;
             }
             var allowedDuringCompileOrImport = request.Command == "editor.compile";
             if (cachedIsCompiling && !allowedDuringCompileOrImport)
             {
-                WriteJson(context, TransientErrorJson("E_UNITY_COMPILING", "Unity Editor is compiling scripts.", "Wait for Unity to finish compiling and retry.", 5000), 200);
+                WriteJson(context, SerializeTransientErrorEnvelope(request.RequestId, "E_UNITY_COMPILING", "Unity Editor is compiling scripts.", "Wait for Unity to finish compiling and retry.", 5000), 200);
                 return;
             }
             if (cachedIsUpdating && !allowedDuringCompileOrImport)
             {
-                WriteJson(context, TransientErrorJson("E_UNITY_IMPORTING", "Unity Editor is importing assets.", "Wait for Unity to finish importing and retry.", 5000), 200);
+                WriteJson(context, SerializeTransientErrorEnvelope(request.RequestId, "E_UNITY_IMPORTING", "Unity Editor is importing assets.", "Wait for Unity to finish importing and retry.", 5000), 200);
                 return;
             }
             if (cachedIsPlayingOrWillChangePlaymode)
@@ -272,7 +304,7 @@ namespace UnityCli
                 if (!cachedIsPlaying && !allowedDuringPlayModeTransition)
                 {
                     WriteLog("http_play_mode_guard_blocked_transition requestId=" + request.RequestId + " command=" + request.Command);
-                    WriteJson(context, TransientErrorJson("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode. (http-guard-v3)", "Wait for Play mode transition to complete and retry.", 3000), 200);
+                    WriteJson(context, SerializeTransientErrorEnvelope(request.RequestId, "E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode. (http-guard-v3)", "Wait for Play mode transition to complete and retry.", 3000), 200);
                     return;
                 }
                 WriteLog("http_play_mode_guard_allowed requestId=" + request.RequestId + " command=" + request.Command + " cachedIsPlaying=" + Bool(cachedIsPlaying));
@@ -287,45 +319,50 @@ namespace UnityCli
             }
             WriteLog("bridge_request_enqueued requestId=" + request.RequestId + " command=" + request.Command + " queueDepth=" + queueDepth.ToString(CultureInfo.InvariantCulture));
 
-            var timeout = TimeSpan.FromSeconds(60);
-            if (!item.Completed.Wait(timeout))
+            using (var monitorStop = new CancellationTokenSource())
             {
-                if (item.CancelBeforeStart())
+                _ = WatchClientDisconnect(context, item, monitorStop.Token);
+                try
                 {
-                    WriteLog("bridge_request_timeout_cancelled requestId=" + request.RequestId + " command=" + request.Command);
-                    WriteJson(context, TransientErrorJson("E_UNITY_BUSY", "Unity Editor did not start the bridge request within 60 seconds; the request was cancelled before execution.", "No Unity side effects were applied. Wait for Unity to finish compiling/importing and retry.", 5000), 200);
-                    return;
-                }
+                    // queue start deadline 与 handler execution timeout 独立，排队时间不消耗工具执行预算。
+                    var queueSignal = WaitHandle.WaitAny(new[] { item.Started.WaitHandle, item.Completed.WaitHandle }, 60000);
+                    if (queueSignal == WaitHandle.WaitTimeout)
+                    {
+                        item.CancelBeforeStart();
+                        WriteLog("bridge_queue_start_timeout requestId=" + request.RequestId + " command=" + request.Command);
+                        WriteJson(context, SerializeTransientErrorEnvelope(request.RequestId, "E_QUEUE_START_TIMEOUT", "Unity Editor did not start the bridge request before the queue deadline.", "No Unity side effects were applied. Wait for Unity to become responsive and retry.", 5000), 200);
+                        return;
+                    }
+                    if (queueSignal == 1)
+                    {
+                        WriteJson(context, item.Response ?? SerializeTransientErrorEnvelope(request.RequestId, "E_EXECUTION_CANCELLED", "Bridge request was cancelled before execution.", "Retry after Unity is ready.", 1000), 200);
+                        return;
+                    }
 
-                if (item.Completed.IsSet)
+                    var requestedTimeoutMs = request.Execution == null ? null : request.Execution.TimeoutMs;
+                    var executionHttpDeadline = TimeSpan.FromMilliseconds(requestedTimeoutMs.HasValue && requestedTimeoutMs.Value > 0
+                        ? Math.Min(requestedTimeoutMs.Value + 5000, int.MaxValue)
+                        : 65000);
+                    if (!item.Completed.Wait(executionHttpDeadline))
+                    {
+                        item.Cancel();
+                        WriteLog("bridge_execution_timeout requestId=" + request.RequestId + " command=" + request.Command);
+                        WriteJson(context, UnityCliSerializer.Serialize(UnityCli.Protocol.ProtocolEnvelopeFactory.Error(
+                            request.RequestId,
+                            "E_EXECUTION_TIMEOUT",
+                            "Unity Editor did not finish the bridge request before the execution deadline; execution was cancelled.",
+                            nextActions: new[] { "Retry with a larger execution.timeoutMs after Unity is responsive." },
+                            transient: true)), 200);
+                        return;
+                    }
+
+                    WriteJson(context, item.Response ?? SerializeTransientErrorEnvelope(request.RequestId, "E_EXECUTION_CANCELLED", "Bridge request completed without a response.", "Check UnityCliBridge.log before retrying.", 1000), 200);
+                }
+                finally
                 {
-                    WriteJson(context, item.Response ?? TransientErrorJson("E_UNITY_BUSY", "Unity Editor did not finish the bridge request within 60 seconds.", "Wait for Unity to finish compiling/importing and retry.", 5000), 200);
-                    return;
+                    monitorStop.Cancel();
                 }
-
-                item.MarkTimedOut();
-                WriteLog("bridge_request_timeout_started requestId=" + request.RequestId + " command=" + request.Command + " mutating=" + IsMutatingCommand(request.Command));
-                if (IsMutatingCommand(request.Command))
-                {
-                    var running = new UnityCliJsonWriter().BeginObject()
-                        .Prop("status", "running")
-                        .Prop("requestId", request.RequestId)
-                        .Prop("command", request.Command)
-                        .Prop("timeoutSeconds", 60)
-                        .Prop("sideEffectSemantics", "started-before-http-timeout")
-                        .Prop("message", "Unity started this mutating request before the HTTP wait timeout; it may still complete. This is not a failure envelope. Inspect logPath and requestId before retrying.")
-                        .Prop("logPath", LogPath())
-                        .EndObject()
-                        .ToString();
-                    WriteJson(context, SuccessJson(running), 200);
-                    return;
-                }
-
-                WriteJson(context, TransientErrorJson("E_UNITY_BUSY", "Unity Editor started the bridge request but did not finish within 60 seconds.", "Wait for Unity to finish compiling/importing and retry.", 5000), 200);
-                return;
             }
-
-            WriteJson(context, item.Response ?? TransientErrorJson("E_UNITY_BUSY", "Unity Editor did not finish the bridge request within 60 seconds.", "Wait for Unity to finish compiling/importing and retry.", 5000), 200);
         }
     }
 }

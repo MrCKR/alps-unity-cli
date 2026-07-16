@@ -7,8 +7,6 @@ namespace UnityCli
 {
     /// <summary>
     /// shader.update — 用新 content 覆盖 Shader 源码并重新编译。
-    /// 对齐旧 ShaderUpdate handler;session-affecting(asset-write, shader-recompile)。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class ShaderUpdateTool : IUnityCliTool<ShaderUpdateTool.Request, ShaderUpdateTool.Result>
     {
@@ -32,10 +30,10 @@ namespace UnityCli
             Description = "Overwrite an existing Assets/*.shader (or .shadergraph) source with new content and force-reimport it. The shader must already exist. Updating triggers shader recompilation; check shader.get-data diagnostics afterward.",
             Group = "shader",
             Version = "1.0.0",
-            DestructiveHint = false,
+            DestructiveHint = true,
             SideEffects = new[] { "asset-write", "shader-recompile" },
             Target = "editor",
-            PlayModeSupport = "session-affecting",
+            PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 30000,
             MaxTimeoutMs = 600000,
             Examples = new[]
@@ -44,7 +42,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             ShaderToolSupport.EnsureEditorNotBusy("shader.update");
             var path = ShaderToolSupport.ResolveShaderPath(request.Path ?? request.Target);
@@ -58,11 +56,11 @@ namespace UnityCli
             AssetToolSupport.WriteTextAsset(path, content, true);
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceUpdate);
             AssetDatabase.SaveAssets();
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Shader = ShaderToolSupport.BuildShaderInfo(path, AssetDatabase.LoadAssetAtPath<Shader>(path), false),
                 PlannedEffects = new List<ShaderPlannedEffect> { new ShaderPlannedEffect { Type = "shader.update", Path = path, Refresh = true } }
-            };
+            });
         }
     }
 }

@@ -60,13 +60,14 @@ namespace UnityCli.ProBuilder
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
             RefreshBehavior = "onDemand",
+            Examples = new[] { new ContextExample { Description = "List ProBuilder scene meshes", Input = new Request { PageSize = 50 } }, new ContextExample { Description = "Filter ProBuilder meshes by name", Input = new Request { NamePattern = "Cube", PageSize = 50 } } },
             RequiresPackages = new[] { "com.unity.probuilder" }
         };
 
         /// <summary>
         /// 读取当前场景中的 ProBuilderMesh 对象摘要和 Editor 选择状态；不修改场景、对象或资源。
         /// </summary>
-        public Result Read(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ReadAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var requestedPageSize = request != null && request.PageSize > 0 ? request.PageSize : 50;
             var pageSize = Clamp(requestedPageSize, 1, 200);
@@ -93,7 +94,7 @@ namespace UnityCli.ProBuilder
                 visibleRows.Add(rows[i]);
             }
 
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Installed = ProBuilderReflection.IsAvailable,
                 SceneCount = SceneManager.sceneCount,
@@ -107,7 +108,7 @@ namespace UnityCli.ProBuilder
                     ObjectCount = selectedProBuilderNames.Count,
                     ObjectNames = selectedProBuilderNames
                 }
-            };
+            });
         }
 
         /// <summary>

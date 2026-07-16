@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
+using UnityEngine;
 using UnityEditor;
 
 namespace UnityCli
@@ -66,7 +67,7 @@ namespace UnityCli
             Description = "Configure a named ParticleSystem module on an existing target. module supports color, size, rotation, velocity, force, noise, collision, subEmitter, textureAnimation, lights, trails, inheritVelocity, and limitVelocity. The accepted input fields depend on the selected module.",
             Group = "vfx",
             Version = "1.0.0",
-            DestructiveHint = true,
+            DestructiveHint = false,
             SideEffects = new[] { "particle-module-edit" },
             Target = "editor",
             PlayModeSupport = "supported",
@@ -79,7 +80,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             VfxToolSupport.EnsureEditorReady("vfx.particle-module");
             var particleSystem = VfxToolSupport.ResolveParticleSystem(request.Target);
@@ -100,16 +101,16 @@ namespace UnityCli
                     "Use color, size, rotation, velocity, force, noise, collision, subEmitter, textureAnimation, lights, trails, inheritVelocity, or limitVelocity.");
             }
 
-            EditorUtility.SetDirty(particleSystem);
+            UnityCliSceneMutation.MarkSceneObjectDirty(particleSystem);
             VfxToolSupport.MarkSceneDirty(particleSystem.gameObject);
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Target = GameObjectToolSupport.BuildGameObjectRef(particleSystem.gameObject),
                 Module = request.Module,
                 ParticleSystem = VfxToolSupport.BuildParticleSystemInfo(particleSystem),
                 PlannedEffects = effects,
                 LogPath = ctx.LogPath
-            };
+            });
         }
     }
 }

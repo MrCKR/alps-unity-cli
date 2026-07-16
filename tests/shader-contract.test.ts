@@ -94,10 +94,8 @@ test("shader C# handlers are registered", async () => {
   }
 });
 
-test("shader C# error recovery hints use current tools run form, not legacy unity_cli", async () => {
+test("shader C# error recovery hints use current tools run forms", async () => {
   const source = await readCsSources(new URL("../unitypkg/Editor/Tools/shader/", import.meta.url));
-  assert.equal(source.includes("unity_cli shader info"), false);
-  assert.equal(source.includes("unity_cli asset search"), false);
   assert.match(source, /tools run asset\.search/);
   assert.match(source, /tools run shader\.list/);
 });
@@ -111,10 +109,10 @@ test("shader.get-data C# returns diagnostics plus subshader structure", async ()
   assert.match(source, /AssetDatabase\.DeleteAsset/);
 });
 
-test("shader bridge spec accepts structured content and source alias for create/update", async () => {
+test("shader bridge spec accepts only structured content for create/update", async () => {
   const spec = await readFile(new URL("../src/bridge/domains/shader.js", import.meta.url), "utf8");
   assert.match(spec, /resolveShaderContent/);
-  assert.match(spec, /stringField\(flags, "source"\)/);
+  assert.doesNotMatch(spec, /stringField\(flags, "source"\)/);
   assert.match(spec, /stringField\(flags, "content"\)/);
   assert.match(spec, /includeSubshaders/);
   assert.match(spec, /maxPasses/);

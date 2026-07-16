@@ -2,14 +2,12 @@ import { resolve } from "node:path";
 import { startUnityJob } from "../../cli-commands/unity-job.js";
 import { defineTool, type ToolContext } from "../define.js";
 import { StructuredToolError } from "../errors.js";
+import type { AnyJson } from "../../schema/any-json.js";
 
 export interface TestRunRequest {
   platform?: "EditMode" | "PlayMode";
   project?: string;
   unity?: string;
-  wait?: boolean;
-  timeoutMs?: number;
-  waitTimeoutMs?: number;
 }
 
 export interface TestRunObject {}
@@ -17,7 +15,7 @@ export interface TestRunObject {}
 export interface TestRunError {
   code: string;
   message: string;
-  details?: unknown;
+  details?: AnyJson;
 }
 
 export interface TestRunCancellation {
@@ -51,14 +49,14 @@ export interface TestRunResult {
 type JobFlags = Record<string, string | boolean>;
 
 // 将 defineTool request 映射回现有 job helper 使用的 CLI flag 名称。
-function buildTestRunFlags(request: TestRunRequest): JobFlags {
+function buildTestRunFlags(request: TestRunRequest, execution: ToolContext["execution"]): JobFlags {
   const flags: JobFlags = {};
   if (request.platform !== undefined) flags.platform = request.platform;
   if (request.project !== undefined) flags.project = request.project;
   if (request.unity !== undefined) flags.unity = request.unity;
-  if (request.wait !== undefined) flags.wait = request.wait;
-  if (request.timeoutMs !== undefined) flags["timeout-ms"] = String(request.timeoutMs);
-  if (request.waitTimeoutMs !== undefined) flags["wait-timeout-ms"] = String(request.waitTimeoutMs);
+  if (execution.wait !== undefined) flags.wait = execution.wait;
+  if (execution.timeoutMs !== undefined) flags["timeout-ms"] = String(execution.timeoutMs);
+  if (execution.waitTimeoutMs !== undefined) flags["wait-timeout-ms"] = String(execution.waitTimeoutMs);
   return flags;
 }
 
@@ -70,7 +68,7 @@ async function startTestRunJob(request: TestRunRequest, context: ToolContext): P
     ]);
   }
 
-  const flags = buildTestRunFlags(request);
+  const flags = buildTestRunFlags(request, context.execution);
   const platform = request.platform ?? "EditMode";
   const resultPath = resolve(context.dataDir, "results", `${context.requestId}-test-results.xml`);
   const result = await startUnityJob("test", flags, {
@@ -101,6 +99,7 @@ export default defineTool<TestRunRequest, TestRunResult>({
   summary: "Run Unity EditMode or PlayMode tests as a batch job.",
   description: "Run Unity EditMode or PlayMode tests as a batch job. Returns a job ID that can be polled for status.",
   group: "test",
+  // 运行既有测试不写入持久化资产，也不执行调用方提供的任意代码。
   destructiveHint: false,
   sideEffects: ["session-affecting"],
   playModeSupport: "session-affecting",

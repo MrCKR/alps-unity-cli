@@ -36,6 +36,7 @@ namespace UnityCli.ProBuilder
             Description = "Create a bridge between two edges on a ProBuilder mesh. Each edge is specified as a vertex-pair {a,b}. Optionally allow non-manifold geometry.",
             Group = "probuilder",
             DestructiveHint = false,
+            SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 10000,
@@ -44,16 +45,16 @@ namespace UnityCli.ProBuilder
             ArtifactKinds = new[] { "json" },
             Examples = new[]
             {
-                new ToolExample { Description = "桥接两条边", Input = new Request { Target = "MyCube", EdgeA = new EdgeRef { A = 0, B = 1 }, EdgeB = new EdgeRef { A = 2, B = 3 } } }
+                new ToolExample { Description = "在闭合网格上桥接两条边", Input = new Request { Target = "MyCube", EdgeA = new EdgeRef { A = 0, B = 1 }, EdgeB = new EdgeRef { A = 5, B = 7 }, AllowNonManifold = true } }
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            var go = ProBuilderInput.ResolveTarget(request.Target);
             if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
@@ -71,7 +72,7 @@ namespace UnityCli.ProBuilder
             EditorSceneManager.MarkSceneDirty(go.scene);
 
             var newFaceCount = ProBuilderReflection.GetFaceCount(mesh);
-            return new Result { NewFaceCount = newFaceCount };
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { NewFaceCount = newFaceCount });
         }
     }
 }

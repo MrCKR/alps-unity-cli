@@ -7,8 +7,6 @@ namespace UnityCli
 {
     /// <summary>
     /// scriptable-object.modify — 修改 ScriptableObject 资产(单个属性或 patches[] 批量)。
-    /// 内置工具(原 RegisterCommand 形态)迁移为 IUnityCliTool 自包含。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// 复用 UnityCliBridge 内部 helper(ApplyScriptableObjectPatch/SetSerializedPropertyValue 等,
     /// 已改为 internal)避免重复复杂的 SerializedProperty 类型转换逻辑。
     /// </summary>
@@ -20,9 +18,8 @@ namespace UnityCli
             public string Path { get; set; }
             public string Target { get; set; }
             public string Property { get; set; }
-            public string Value { get; set; }
-            public string Patches { get; set; }
-            public bool DryRun { get; set; }
+            [UnityCliAnyJson] public object Value { get; set; }
+            [UnityCliAnyJson] public List<object> Patches { get; set; }
         }
 
         public sealed class Result
@@ -31,7 +28,7 @@ namespace UnityCli
             public bool DryRun { get; set; }
             public bool Changed { get; set; }
             public ScriptableObjectInfo ScriptableObject { get; set; }
-            public List<object> PatchResults { get; set; }
+            [UnityCliAnyJson] public List<object> PatchResults { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -41,67 +38,61 @@ namespace UnityCli
             Description = "Modify a ScriptableObject asset at an Assets/*.asset path. Supports a single property/value pair or patches[] with SerializedObject propertyPath/value entries (op=set or array_resize). Validates all patches before applying; any failure means no changes. Supports dry-run.",
             Group = "scriptable-object",
             Version = "1.0.0",
-            DestructiveHint = false,
+            DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",
-            PlayModeSupport = "session-affecting",
+            PlayModeSupport = "editor-only",
             SupportsDryRun = true,
             DefaultTimeoutMs = 30000,
             MaxTimeoutMs = 600000,
             Examples = new[]
             {
-                new ToolExample { Description = "Set a single property", Input = new Request { Path = "Assets/Data/Config.asset", Property = "maxItems", Value = "100" } },
-                new ToolExample { Description = "Apply patches", Input = new Request { Path = "Assets/Data/Config.asset", Patches = "[{\"propertyPath\":\"maxItems\",\"value\":100}]" } }
+                new ToolExample { Description = "Set a single property", Input = new Request { Path = "Assets/Data/Config.asset", Property = "maxItems", Value = 100 } },
+                new ToolExample { Description = "Apply patches", Input = new Request { Path = "Assets/Data/Config.asset", Patches = new List<object> { new Dictionary<string, object> { { "propertyPath", "maxItems" }, { "value", 100 } } } } }
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             ScriptableObjectToolSupport.EnsureEditorNotBusy("scriptable-object.modify");
             var path = ScriptableObjectToolSupport.RequireScriptableObjectPath(request.Path ?? request.Target);
             var asset = ScriptableObjectToolSupport.LoadScriptableObject(path);
 
-            // 用 BridgeRequest.Parse 取 patches/property/value/dryRun(结构化 JSON 字段)
-            var bridgeRequest = UnityCliBridge.BridgeRequest.Parse(ctx.InputJson);
-            var patchesJson = bridgeRequest.RawJsonArg("patches");
-
-            if (!string.IsNullOrEmpty(patchesJson))
+            if (request.Patches != null && request.Patches.Count > 0)
             {
-                return ModifyPatches(path, asset, patchesJson, bridgeRequest.DryRun);
+                return new System.Threading.Tasks.ValueTask<Result>(ModifyPatches(path, asset, request.Patches, ctx.DryRun));
             }
 
-            // 单属性修改路径
-            var property = bridgeRequest.StringArg("property");
+            var property = request.Property;
             if (string.IsNullOrEmpty(property))
             {
                 throw new UnityCliBridge.BridgeCommandException("E_SCRIPTABLE_OBJECT_PROPERTY_REQUIRED", "scriptable-object.modify requires property <name> or patches[].", "Pass a public writable field/property name, or patches with SerializedObject propertyPath/value entries.");
             }
 
-            if (bridgeRequest.DryRun)
+            if (ctx.DryRun)
             {
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     DryRun = true,
                     ScriptableObject = ScriptableObjectToolSupport.BuildScriptableObjectInfo(path, asset)
-                };
+                });
             }
 
             Undo.RecordObject(asset, "unity_cli tools run scriptable-object.modify");
-            UnityCliBridge.SetObjectMemberValue(asset, property, bridgeRequest.StringArg("value"));
+            UnityCliBridge.SetObjectMemberValue(asset, property, request.Value);
             EditorUtility.SetDirty(asset);
             AssetDatabase.SaveAssets();
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Command = "scriptable-object.modify",
                 Changed = true,
                 ScriptableObject = ScriptableObjectToolSupport.BuildScriptableObjectInfo(path, asset)
-            };
+            });
         }
 
-        // patches 批量修改:逐项验证后整体应用,任一失败不落盘
-        private static Result ModifyPatches(string path, ScriptableObject asset, string patchesJson, bool dryRun)
+        // patches 批量修改：逐项验证后整体应用，任一失败不落盘。
+        private static Result ModifyPatches(string path, ScriptableObject asset, List<object> patchItems, bool dryRun)
         {
-            var patchItems = UnityCliBridge.JsonArrayElements(patchesJson);
             if (patchItems.Count == 0)
             {
                 throw new UnityCliBridge.BridgeCommandException("E_SCRIPTABLE_OBJECT_PATCHES_INVALID", "patches must be a non-empty JSON array.", "Pass patches like [{\"propertyPath\":\"fieldName\",\"value\":123}].");
@@ -117,8 +108,8 @@ namespace UnityCli
                 bool patchOk;
                 bool patchChanged;
                 // 调用内部 helper(已改为 internal):验证/写入单个 SerializedProperty patch
-                var resultJson = UnityCliBridge.ApplyScriptableObjectPatch(so, patchItems[i], i, dryRun, out patchOk, out patchChanged);
-                results.Add(UnityCliToolJson.Parse(resultJson));
+                var patchResult = UnityCliBridge.ApplyScriptableObjectPatch(so, patchItems[i] as Dictionary<string, object>, i, dryRun, out patchOk, out patchChanged);
+                results.Add(patchResult);
                 if (!patchOk) hasFailure = true;
                 if (patchChanged) changed = true;
             }

@@ -1,5 +1,6 @@
 #if UNITY_EDITOR
 using System.Collections.Generic;
+using UnityEngine;
 using UnityEditor;
 
 namespace UnityCli
@@ -33,7 +34,7 @@ namespace UnityCli
             Description = "Update a LineRenderer's position set. Provide positions to replace the full array, or provide index plus position to patch one point in place.",
             Group = "vfx",
             Version = "1.0.0",
-            DestructiveHint = true,
+            DestructiveHint = false,
             SideEffects = new[] { "line-renderer-edit" },
             Target = "editor",
             PlayModeSupport = "supported",
@@ -46,7 +47,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             VfxToolSupport.EnsureEditorReady("vfx.line-positions");
             var line = VfxToolSupport.ResolveLineRenderer(request.Target);
@@ -79,15 +80,15 @@ namespace UnityCli
                 effects.Add(new VfxPlannedEffect { Type = "vfx.line-positions", Target = GameObjectToolSupport.HierarchyPath(line.gameObject), Property = "index", Value = request.Index.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) });
             }
 
-            EditorUtility.SetDirty(line);
+            UnityCliSceneMutation.MarkSceneObjectDirty(line);
             VfxToolSupport.MarkSceneDirty(line.gameObject);
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Target = GameObjectToolSupport.BuildGameObjectRef(line.gameObject),
                 Line = VfxToolSupport.BuildLineRendererInfo(line),
                 PlannedEffects = effects,
                 LogPath = ctx.LogPath
-            };
+            });
         }
     }
 }

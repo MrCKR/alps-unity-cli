@@ -5,7 +5,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;
-using System.Text.RegularExpressions;
 using UnityEditor;
 using UnityEditorInternal;
 using UnityEngine;
@@ -14,59 +13,44 @@ namespace UnityCli
 {
     /// <summary>
     /// go/component 域 IUnityCliTool 共享的基础设施 helper:目标解析、组件类型解析、
-    /// 属性变更、JSON 解析、向量解析、层级路径。仅供 go/component 域自包含工具复用;
+    /// typed 属性变更、值转换、向量解析、层级路径。仅供 go/component 域自包含工具复用;
     /// 不实现 IUnityCliTool,不参与工具发现。
-    /// 设计依据:.plan/工具统一形态.md(自包含工具共享只读 helper,handler 逻辑各自内聚)。
     /// </summary>
     public static class GameObjectToolSupport
     {
         // ─── 深序列化选项构造(component.get 复用) ─────────
 
-        /// <summary>从 BridgeRequest 构造 ObjectSerializer.Options;paths/viewQuery 互斥。</summary>
-        internal static UnityCliBridge.ObjectSerializer.Options BuildSerializerOptions(UnityCliBridge.BridgeRequest request)
+        /// <summary>从 UnityCli.Protocol.BridgeRequest 构造 ObjectSerializer.Options;paths/viewQuery 互斥。</summary>
+        internal static UnityCliBridge.ObjectSerializer.Options BuildSerializerOptions(IUnityCliObjectSerializationInput request)
         {
             var options = new UnityCliBridge.ObjectSerializer.Options
             {
-                MaxDepth = request.IntArg("maxDepth", 4),
-                MaxArrayItems = Math.Max(0, Math.Min(request.IntArg("maxArrayItems", 50), 1000)),
-                IncludeFields = request.BoolArg("includeFields", true),
-                IncludeProperties = request.BoolArg("includeProperties", true),
-                DeepSerialization = request.BoolArg("deepSerialization", true)
+                MaxDepth = request.MaxDepth ?? 4,
+                MaxArrayItems = Math.Max(0, Math.Min(request.MaxArrayItems ?? 50, 1000)),
+                IncludeFields = request.IncludeFields ?? true,
+                IncludeProperties = request.IncludeProperties ?? true,
+                DeepSerialization = request.DeepSerialization ?? true
             };
-            var pathsRaw = request.RawJsonArg("paths");
-            var viewQueryRaw = request.RawJsonArg("viewQuery");
-            if (!string.IsNullOrEmpty(pathsRaw) && !string.IsNullOrEmpty(viewQueryRaw))
+            if (request.Paths != null && request.Paths.Count > 0 && request.ViewQuery != null)
             {
                 throw new UnityCliBridge.BridgeCommandException("E_OBJECT_READ_SCOPE_CONFLICT", "paths and viewQuery are mutually exclusive.", "Use paths for exact member reads, or viewQuery for one filtered subtree.");
             }
-            if (!string.IsNullOrEmpty(pathsRaw))
+            if (request.Paths != null)
             {
-                options.Paths = new HashSet<string>();
-                foreach (var p in JsonStringArray(pathsRaw))
-                {
-                    var clean = p == null ? null : p.Trim();
-                    if (!string.IsNullOrEmpty(clean)) options.Paths.Add(clean);
-                }
+                options.Paths = new HashSet<string>(request.Paths.Where(path => !string.IsNullOrWhiteSpace(path)).Select(path => path.Trim()));
             }
-            if (!string.IsNullOrEmpty(viewQueryRaw))
+            var query = request.ViewQuery as Dictionary<string, object>;
+            if (query != null)
             {
-                options.ViewPath = JsonStringProperty(viewQueryRaw, "path") ?? JsonStringProperty(viewQueryRaw, "Path");
-                options.NamePattern = JsonStringProperty(viewQueryRaw, "namePattern") ?? JsonStringProperty(viewQueryRaw, "NamePattern");
-                options.TypeFilter = JsonStringProperty(viewQueryRaw, "typeFilter") ?? JsonStringProperty(viewQueryRaw, "TypeFilter");
-                var maxDepthRaw = JsonRawProperty(viewQueryRaw, "maxDepth") ?? JsonRawProperty(viewQueryRaw, "MaxDepth");
-                if (!string.IsNullOrEmpty(maxDepthRaw))
-                {
-                    int maxDepth;
-                    if (int.TryParse(maxDepthRaw.Trim('"'), NumberStyles.Integer, CultureInfo.InvariantCulture, out maxDepth))
-                    {
-                        options.MaxDepth = Math.Max(0, maxDepth);
-                    }
-                }
+                object value;
+                if (query.TryGetValue("path", out value)) options.ViewPath = value as string;
+                if (query.TryGetValue("namePattern", out value)) options.NamePattern = value as string;
+                if (query.TryGetValue("typeFilter", out value)) options.TypeFilter = value as string;
+                if (query.TryGetValue("maxDepth", out value) && value != null) options.MaxDepth = Math.Max(0, Convert.ToInt32(value, CultureInfo.InvariantCulture));
             }
-            var nameFilter = request.StringArg("namePattern");
-            if (!string.IsNullOrEmpty(nameFilter))
+            if (!string.IsNullOrEmpty(request.NamePattern))
             {
-                options.NameFilters = new HashSet<string>(nameFilter.Split(',').Select(s => s.Trim()));
+                options.NameFilters = new HashSet<string>(request.NamePattern.Split(',').Select(value => value.Trim()));
             }
             return options;
         }
@@ -78,7 +62,7 @@ namespace UnityCli
         {
             if (!string.IsNullOrEmpty(tagValue) && !IsKnownTag(tagValue))
             {
-                throw new UnityCliBridge.BridgeCommandException("E_TAG_NOT_FOUND", "Tag not found: " + tagValue, "Create the tag first with project.tag or pass an existing Unity tag.");
+                throw new UnityCliBridge.BridgeCommandException("E_TAG_NOT_FOUND", "Tag not found: " + tagValue, "Create the tag first with project.tag.add or pass an existing Unity tag.");
             }
             if (!string.IsNullOrEmpty(layerValue)) ParseLayer(layerValue);
         }
@@ -291,7 +275,7 @@ namespace UnityCli
             return null;
         }
 
-        /// <summary>按组件类型名解析 Component Type;支持短名/FullName/UnityEngine 前缀回退。</summary>
+        /// <summary>按短名、FullName 或 UnityEngine namespace 名解析 Component Type。</summary>
         public static Type ResolveComponentType(string componentName)
         {
             var type = FindType(componentName) ?? FindType("UnityEngine." + componentName) ?? FindType("UnityEngine.UI." + componentName);
@@ -337,30 +321,30 @@ namespace UnityCli
 
         // ─── 组件属性变更(复刻 component.add/set 的属性写入逻辑) ────────────
 
-        /// <summary>从 properties JSON 对象构建属性变更列表。</summary>
-        public static List<ComponentPropertyChange> BuildComponentPropertyChanges(Type componentType, string propertiesJson)
+        /// <summary>从显式 AnyJson properties 对象构建属性变更列表。</summary>
+        public static List<ComponentPropertyChange> BuildComponentPropertyChanges(Type componentType, Dictionary<string, object> properties)
         {
             var changes = new List<ComponentPropertyChange>();
-            if (string.IsNullOrEmpty(propertiesJson)) return changes;
-            foreach (var propertyName in JsonObjectPropertyNames(propertiesJson))
+            if (properties == null) return changes;
+            foreach (var property in properties)
             {
-                changes.Add(BuildComponentPropertyChange(componentType, propertyName, JsonRawProperty(propertiesJson, propertyName)));
+                changes.Add(BuildComponentPropertyChange(componentType, property.Key, property.Value));
             }
             return changes;
         }
 
-        public static ComponentPropertyChange BuildComponentPropertyChange(Type componentType, string propertyName, string rawJson)
+        public static ComponentPropertyChange BuildComponentPropertyChange(Type componentType, string propertyName, object value)
         {
             var flags = BindingFlags.Instance | BindingFlags.Public;
             var property = componentType.GetProperty(propertyName, flags);
             if (property != null && property.CanWrite)
             {
-                return new ComponentPropertyChange(propertyName, ConvertComponentJsonValue(rawJson, property.PropertyType), property.PropertyType, property, null, rawJson);
+                return new ComponentPropertyChange(propertyName, ConvertComponentValue(value, property.PropertyType), property.PropertyType, property, null, value);
             }
             var field = componentType.GetField(propertyName, flags);
             if (field != null)
             {
-                return new ComponentPropertyChange(propertyName, ConvertComponentJsonValue(rawJson, field.FieldType), field.FieldType, null, field, rawJson);
+                return new ComponentPropertyChange(propertyName, ConvertComponentValue(value, field.FieldType), field.FieldType, null, field, value);
             }
             throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_PROPERTY_NOT_FOUND", "Writable component property not found: " + propertyName, "Use component.get or type.schema to inspect writable public fields/properties.");
         }
@@ -374,316 +358,29 @@ namespace UnityCli
             }
         }
 
-        /// <summary>将 JSON 原始字面转换为组件属性的目标类型值。</summary>
-        public static object ConvertComponentJsonValue(string rawJson, Type type)
+        /// <summary>将 AnyJson 值树转换为组件属性类型；转换失败保持稳定业务错误。</summary>
+        public static object ConvertComponentValue(object value, Type type)
         {
-            var value = (rawJson ?? "null").Trim();
-            if (Nullable.GetUnderlyingType(type) != null)
+            try
             {
-                if (value == "null") return null;
-                type = Nullable.GetUnderlyingType(type);
-            }
-            if (type == typeof(string)) return JsonValueToString(value);
-            if (type == typeof(bool)) return JsonValueToBool(value);
-            if (type == typeof(int)) return (int)JsonValueToLong(value);
-            if (type == typeof(long)) return JsonValueToLong(value);
-            if (type == typeof(float)) return (float)JsonValueToDouble(value);
-            if (type == typeof(double)) return JsonValueToDouble(value);
-            if (type == typeof(Vector2)) return ParseVector2(JsonValueToString(value));
-            if (type == typeof(Vector3)) return ParseVector3(JsonValueToString(value));
-            if (type.IsEnum) return Enum.Parse(type, JsonValueToString(value) ?? string.Empty, true);
-            throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_PROPERTY_TYPE_UNSUPPORTED", "Unsupported component property type: " + type.Name, "Use component.modify for nested/object references, or simple string/bool/int/float/double/enum/Vector2/Vector3 here.");
-        }
-
-        /// <summary>从 request 的 properties/componentProperties 字段提取并校验 JSON 对象字符串。</summary>
-        public static string ComponentPropertiesJson(string propertiesJson)
-        {
-            if (string.IsNullOrEmpty(propertiesJson)) return null;
-            var trimmed = propertiesJson.Trim();
-            if (trimmed.Length >= 2 && trimmed[0] == '"' && trimmed[trimmed.Length - 1] == '"')
-            {
-                trimmed = JsonUnescape(trimmed.Substring(1, trimmed.Length - 2));
-            }
-            if (!trimmed.StartsWith("{") || !trimmed.EndsWith("}"))
-            {
-                throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_PROPERTIES_INVALID", "component properties must be a JSON object.", "Pass properties as --input '{\"properties\":{\"mass\":5}}'.");
-            }
-            return trimmed;
-        }
-
-        // ─── JSON 解析 helper(复刻 UnityCliJson 私有方法) ───────────────────
-
-        public static string JsonUnescape(string value)
-        {
-            return value.Replace("\\\"", "\"").Replace("\\\\", "\\").Replace("\\/", "/").Replace("\\n", "\n").Replace("\\r", "\r").Replace("\\t", "\t");
-        }
-
-        public static string JsonValueToString(string value)
-        {
-            if (value == "null") return null;
-            if (value.Length >= 2 && value[0] == '"' && value[value.Length - 1] == '"')
-            {
-                return JsonUnescape(value.Substring(1, value.Length - 2));
-            }
-            return value;
-        }
-
-        public static bool JsonValueToBool(string value)
-        {
-            var text = JsonValueToString(value);
-            if (string.Equals(text, "true", StringComparison.OrdinalIgnoreCase) || text == "1") return true;
-            if (string.Equals(text, "false", StringComparison.OrdinalIgnoreCase) || text == "0") return false;
-            throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_VALUE_INVALID", "Expected boolean component value but got: " + text, "Pass true/false as JSON booleans in --input.");
-        }
-
-        public static long JsonValueToLong(string value)
-        {
-            var text = JsonValueToString(value);
-            long parsed;
-            if (long.TryParse(text, NumberStyles.Integer, CultureInfo.InvariantCulture, out parsed)) return parsed;
-            throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_VALUE_INVALID", "Expected integer component value but got: " + text, "Pass a JSON number or numeric string.");
-        }
-
-        public static double JsonValueToDouble(string value)
-        {
-            var text = JsonValueToString(value);
-            double parsed;
-            if (double.TryParse(text, NumberStyles.Float, CultureInfo.InvariantCulture, out parsed)) return parsed;
-            throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_VALUE_INVALID", "Expected numeric component value but got: " + text, "Pass a JSON number or numeric string.");
-        }
-
-        public static string[] JsonStringArray(string json)
-        {
-            if (string.IsNullOrEmpty(json)) return new string[0];
-            var values = new List<string>();
-            foreach (Match match in Regex.Matches(json, "\\\"((?:\\\\.|[^\\\"])*)\\\""))
-            {
-                values.Add(JsonUnescape(match.Groups[1].Value));
-            }
-            return values.ToArray();
-        }
-
-        public static string JsonRawProperty(string json, string name)
-        {
-            if (string.IsNullOrEmpty(json) || string.IsNullOrEmpty(name)) return null;
-            var trimmed = json.Trim();
-            if (!trimmed.StartsWith("{") || !trimmed.EndsWith("}")) return null;
-            var index = 1;
-            while (index < trimmed.Length - 1)
-            {
-                while (index < trimmed.Length && (char.IsWhiteSpace(trimmed[index]) || trimmed[index] == ',')) index++;
-                if (index >= trimmed.Length - 1 || trimmed[index] != '"') return null;
-                var keyEnd = FindJsonStringEnd(trimmed, index);
-                if (keyEnd <= index) return null;
-                var key = JsonUnescape(trimmed.Substring(index + 1, keyEnd - index - 1));
-                index = keyEnd + 1;
-                while (index < trimmed.Length && char.IsWhiteSpace(trimmed[index])) index++;
-                if (index >= trimmed.Length || trimmed[index] != ':') return null;
-                index++;
-                while (index < trimmed.Length && char.IsWhiteSpace(trimmed[index])) index++;
-                var valueEnd = FindJsonValueEnd(trimmed, index);
-                if (valueEnd <= index) return null;
-                if (string.Equals(key, name, StringComparison.Ordinal)) return trimmed.Substring(index, valueEnd - index).Trim();
-                index = valueEnd;
-            }
-            return null;
-        }
-
-        public static string JsonStringProperty(string json, string name)
-        {
-            var raw = JsonRawProperty(json, name);
-            if (string.IsNullOrEmpty(raw)) return null;
-            var trimmed = raw.Trim();
-            return trimmed.Length >= 2 && trimmed[0] == '"' && trimmed[trimmed.Length - 1] == '"' ? JsonUnescape(trimmed.Substring(1, trimmed.Length - 2)) : null;
-        }
-
-        public static string[] JsonObjectPropertyNames(string json)
-        {
-            if (string.IsNullOrEmpty(json)) return new string[0];
-            var names = new List<string>();
-            var trimmed = json.Trim();
-            if (!trimmed.StartsWith("{") || !trimmed.EndsWith("}")) return names.ToArray();
-            var index = 1;
-            while (index < trimmed.Length - 1)
-            {
-                while (index < trimmed.Length && (char.IsWhiteSpace(trimmed[index]) || trimmed[index] == ',')) index++;
-                if (index >= trimmed.Length - 1 || trimmed[index] != '"') break;
-                var keyEnd = FindJsonStringEnd(trimmed, index);
-                if (keyEnd <= index) break;
-                names.Add(JsonUnescape(trimmed.Substring(index + 1, keyEnd - index - 1)));
-                index = keyEnd + 1;
-                while (index < trimmed.Length && char.IsWhiteSpace(trimmed[index])) index++;
-                if (index >= trimmed.Length || trimmed[index] != ':') break;
-                index++;
-                while (index < trimmed.Length && char.IsWhiteSpace(trimmed[index])) index++;
-                var valueEnd = FindJsonValueEnd(trimmed, index);
-                if (valueEnd <= index) break;
-                index = valueEnd;
-            }
-            return names.ToArray();
-        }
-
-        private static int FindJsonStringEnd(string json, int start)
-        {
-            var escaping = false;
-            for (var index = start + 1; index < json.Length; index++)
-            {
-                var ch = json[index];
-                if (escaping) escaping = false;
-                else if (ch == '\\') escaping = true;
-                else if (ch == '"') return index;
-            }
-            return -1;
-        }
-
-        private static int FindJsonValueEnd(string json, int start)
-        {
-            var depth = 0;
-            var inString = false;
-            var escaping = false;
-            for (var index = start; index < json.Length; index++)
-            {
-                var ch = json[index];
-                if (inString)
+                var nullableType = Nullable.GetUnderlyingType(type);
+                if (nullableType != null)
                 {
-                    if (escaping) escaping = false;
-                    else if (ch == '\\') escaping = true;
-                    else if (ch == '"') inString = false;
-                    continue;
+                    if (value == null) return null;
+                    type = nullableType;
                 }
-                if (ch == '"') { inString = true; continue; }
-                if (ch == '{' || ch == '[') { depth++; continue; }
-                if (ch == '}' || ch == ']')
-                {
-                    if (depth == 0) return index;
-                    depth--;
-                    if (depth == 0) return index + 1;
-                    continue;
-                }
-                if (depth == 0 && ch == ',') return index;
+                if (value == null && !type.IsValueType) return null;
+                return UnityCliBridge.ObjectPatch.ConvertValue(value, type);
             }
-            return json.Length;
-        }
-
-        // ─── JSON 字符串 → 嵌套结构(供 component.get/modify 嵌入动态 JSON) ──
-
-        /// <summary>将 JSON 字符串解析为嵌套 Dictionary/List/标量结构,供 Result DTO 嵌入动态 JSON。</summary>
-        public static object ParseJsonToObject(string json)
-        {
-            if (string.IsNullOrEmpty(json)) return null;
-            var index = 0;
-            return ParseJsonValue(json, ref index);
-        }
-
-        private static object ParseJsonValue(string json, ref int index)
-        {
-            while (index < json.Length && char.IsWhiteSpace(json[index])) index++;
-            if (index >= json.Length) return null;
-            var ch = json[index];
-            if (ch == '{') return ParseJsonObject(json, ref index);
-            if (ch == '[') return ParseJsonArray(json, ref index);
-            if (ch == '"') return ParseJsonString(json, ref index);
-            if (char.IsDigit(ch) || ch == '-') return ParseJsonNumber(json, ref index);
-            if (MatchLiteral(json, ref index, "true")) return true;
-            if (MatchLiteral(json, ref index, "false")) return false;
-            if (MatchLiteral(json, ref index, "null")) return null;
-            return null;
-        }
-
-        private static Dictionary<string, object> ParseJsonObject(string json, ref int index)
-        {
-            index++; // {
-            var obj = new Dictionary<string, object>();
-            while (index < json.Length && char.IsWhiteSpace(json[index])) index++;
-            if (index < json.Length && json[index] == '}') { index++; return obj; }
-            while (index < json.Length)
+            catch (Exception exception)
             {
-                while (index < json.Length && char.IsWhiteSpace(json[index])) index++;
-                var key = ParseJsonString(json, ref index);
-                while (index < json.Length && char.IsWhiteSpace(json[index])) index++;
-                if (index < json.Length && json[index] == ':') index++;
-                var value = ParseJsonValue(json, ref index);
-                obj[key] = value;
-                while (index < json.Length && char.IsWhiteSpace(json[index])) index++;
-                if (index < json.Length && json[index] == ',') { index++; continue; }
-                if (index < json.Length && json[index] == '}') { index++; return obj; }
-                break;
+                throw new UnityCliBridge.BridgeCommandException(
+                    "E_COMPONENT_VALUE_INVALID",
+                    "Component value could not be converted to " + type.Name + ": " + exception.Message,
+                    "Pass a JSON value matching the writable member type shown by component.get or type.schema.");
             }
-            return obj;
         }
 
-        private static List<object> ParseJsonArray(string json, ref int index)
-        {
-            index++; // [
-            var arr = new List<object>();
-            while (index < json.Length && char.IsWhiteSpace(json[index])) index++;
-            if (index < json.Length && json[index] == ']') { index++; return arr; }
-            while (index < json.Length)
-            {
-                arr.Add(ParseJsonValue(json, ref index));
-                while (index < json.Length && char.IsWhiteSpace(json[index])) index++;
-                if (index < json.Length && json[index] == ',') { index++; continue; }
-                if (index < json.Length && json[index] == ']') { index++; return arr; }
-                break;
-            }
-            return arr;
-        }
-
-        private static string ParseJsonString(string json, ref int index)
-        {
-            index++; // 跳过开头 "
-            var sb = new System.Text.StringBuilder();
-            while (index < json.Length)
-            {
-                var ch = json[index++];
-                if (ch == '"') return sb.ToString();
-                if (ch == '\\' && index < json.Length)
-                {
-                    var esc = json[index++];
-                    switch (esc)
-                    {
-                        case '"': sb.Append('"'); break;
-                        case '\\': sb.Append('\\'); break;
-                        case '/': sb.Append('/'); break;
-                        case 'b': sb.Append('\b'); break;
-                        case 'f': sb.Append('\f'); break;
-                        case 'n': sb.Append('\n'); break;
-                        case 'r': sb.Append('\r'); break;
-                        case 't': sb.Append('\t'); break;
-                        case 'u':
-                            if (index + 4 <= json.Length)
-                            {
-                                sb.Append((char)int.Parse(json.Substring(index, 4), NumberStyles.HexNumber, CultureInfo.InvariantCulture));
-                                index += 4;
-                            }
-                            break;
-                        default: sb.Append(esc); break;
-                    }
-                }
-                else sb.Append(ch);
-            }
-            return sb.ToString();
-        }
-
-        private static object ParseJsonNumber(string json, ref int index)
-        {
-            var start = index;
-            if (json[index] == '-') index++;
-            while (index < json.Length && char.IsDigit(json[index])) index++;
-            var isDouble = false;
-            if (index < json.Length && json[index] == '.') { isDouble = true; index++; while (index < json.Length && char.IsDigit(json[index])) index++; }
-            if (index < json.Length && (json[index] == 'e' || json[index] == 'E')) { isDouble = true; index++; if (index < json.Length && (json[index] == '+' || json[index] == '-')) index++; while (index < json.Length && char.IsDigit(json[index])) index++; }
-            var text = json.Substring(start, index - start);
-            return isDouble ? (object)double.Parse(text, CultureInfo.InvariantCulture) : (object)long.Parse(text, CultureInfo.InvariantCulture);
-        }
-
-        private static bool MatchLiteral(string json, ref int index, string literal)
-        {
-            if (index + literal.Length > json.Length) return false;
-            if (string.CompareOrdinal(json, index, literal, 0, literal.Length) != 0) return false;
-            index += literal.Length;
-            return true;
-        }
     }
 
     // ─── 共享 DTO ──────────────────────────────────────────────────────────
@@ -739,16 +436,16 @@ namespace UnityCli
     /// <summary>组件属性变更记录(name/type/value)。</summary>
     public sealed class ComponentPropertyChange
     {
-        public ComponentPropertyChange(string name, object value, Type valueType, PropertyInfo property, FieldInfo field, string rawJson)
+        public ComponentPropertyChange(string name, object value, Type valueType, PropertyInfo property, FieldInfo field, object inputValue)
         {
-            Name = name; Value = value; ValueType = valueType; Property = property; Field = field; RawJson = rawJson;
+            Name = name; Value = value; ValueType = valueType; Property = property; Field = field; InputValue = inputValue;
         }
         public string Name { get; private set; }
-        public object Value { get; private set; }
+        [UnityCliAnyJson] public object Value { get; private set; }
         public Type ValueType { get; private set; }
         public PropertyInfo Property { get; private set; }
         public FieldInfo Field { get; private set; }
-        public string RawJson { get; private set; }
+        [UnityCliAnyJson] public object InputValue { get; private set; }
     }
 
     /// <summary>变更属性摘要(name/type/value),用于 Result 序列化。</summary>
@@ -756,7 +453,7 @@ namespace UnityCli
     {
         public string Name { get; set; }
         public string Type { get; set; }
-        public object Value { get; set; }
+        [UnityCliAnyJson] public object Value { get; set; }
     }
 
     /// <summary>计划副作用项,go/component 域 mutation 工具 Result 共享。</summary>
@@ -791,7 +488,7 @@ namespace UnityCli
     {
         public long PageSize { get; set; }
         public long Cursor { get; set; }
-        public string NextCursor { get; set; }
+        public long? NextCursor { get; set; }
         public long Total { get; set; }
     }
 }

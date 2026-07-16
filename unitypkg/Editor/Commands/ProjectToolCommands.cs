@@ -31,7 +31,12 @@ namespace UnityCli
         private static void RegisterProjectToolCommands(BridgeCommandRegistry registry)
         {
             RegisterCommand(registry, "project-tool.list", "project-tool", false, ProjectToolList);
-            RegisterCommand(registry, "project-tool.run", "project-tool", true, ProjectToolRun);
+            registry.Register<UnityCli.Protocol.BridgeRequest>(
+                "project-tool.run",
+                "project-tool",
+                false,
+                60000,
+                ProjectToolRun);
         }
     }
 }

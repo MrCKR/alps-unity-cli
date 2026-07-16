@@ -7,8 +7,6 @@ namespace UnityCli
 {
     /// <summary>
     /// scene.save — 保存激活场景到磁盘。未保存场景需 --path。destructive,支持 dryRun。
-    /// 对齐旧 SceneSave handler;session-affecting。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class SceneSaveTool : IUnityCliTool<SceneSaveTool.Request, SceneSaveTool.Result>
     {
@@ -16,7 +14,6 @@ namespace UnityCli
         {
             public string Path { get; set; }
             public string Name { get; set; }
-            public bool? DryRun { get; set; }
         }
 
         public sealed class Result
@@ -38,17 +35,17 @@ namespace UnityCli
             SupportsDryRun = true,
             SideEffects = new[] { "asset-write", "scene-modify" },
             Target = "editor",
-            PlayModeSupport = "session-affecting",
+            PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 30000,
             MaxTimeoutMs = 600000,
             Examples = new[]
             {
                 new ToolExample { Description = "Save the active scene", Input = new Request { } },
-                new ToolExample { Description = "Preview saving to a path", Input = new Request { Path = "Assets/Scenes/Main.unity", DryRun = true } }
+                new ToolExample { Description = "Preview saving to a path", Input = new Request { Path = "Assets/Scenes/Main.unity" }, Execution = new ToolExampleExecution { DryRun = true } }
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             SceneToolSupport.EnsureEditorNotBusy("scene.save");
             var scene = SceneManager.GetActiveScene();
@@ -61,9 +58,9 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_SCENE_PATH_REQUIRED", "Scene save requires --path when the active scene has not been saved yet.", "Pass tools run scene.save --input '{\"path\":\"Assets/Scenes/Main.unity\"}'.");
             }
-            if (request.DryRun == true)
+            if (ctx.DryRun)
             {
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Scene = SceneToolSupport.BuildSceneInfo(scene),
                     RequestedPath = path,
@@ -72,14 +69,14 @@ namespace UnityCli
                     {
                         new ScenePlannedEffect { Type = "scene.save", Path = path, SideEffects = "none" }
                     }
-                };
+                });
             }
             SceneToolSupport.CreateAssetDirectory(path);
             if (!EditorSceneManager.SaveScene(scene, path))
             {
                 throw new UnityCliBridge.BridgeCommandException("E_SCENE_SAVE_FAILED", "Failed to save scene: " + path, "Check Unity Console diagnostics and file permissions.");
             }
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Scene = SceneToolSupport.BuildSceneInfo(SceneManager.GetActiveScene()),
                 RequestedPath = path,
@@ -87,7 +84,7 @@ namespace UnityCli
                 {
                     new ScenePlannedEffect { Type = "scene.save", Path = path }
                 }
-            };
+            });
         }
     }
 }

@@ -6,8 +6,6 @@ namespace UnityCli
 {
     /// <summary>
     /// asset.refresh — 触发 AssetDatabase 刷新或单资产导入。支持 dryRun 预览。
-    /// 对齐旧 AssetRefresh handler;session-affecting(asset-import)。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class AssetRefreshTool : IUnityCliTool<AssetRefreshTool.Request, AssetRefreshTool.Result>
     {
@@ -18,7 +16,6 @@ namespace UnityCli
             public string Target { get; set; }
             public bool? ForceUpdate { get; set; }
             public bool? ImportRecursive { get; set; }
-            public bool? DryRun { get; set; }
         }
 
         public sealed class Result
@@ -40,28 +37,29 @@ namespace UnityCli
             Version = "1.0.0",
             DestructiveHint = false,
             SupportsDryRun = true,
+            SupportsJob = true,
             SideEffects = new[] { "asset-import" },
             Target = "editor",
-            PlayModeSupport = "session-affecting",
+            PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 30000,
             MaxTimeoutMs = 600000,
             Examples = new[]
             {
                 new ToolExample { Description = "Refresh the whole database", Input = new Request { } },
-                new ToolExample { Description = "Preview reimporting one asset", Input = new Request { Path = "Assets/Textures/Icon.png", ForceUpdate = true, DryRun = true } }
+                new ToolExample { Description = "Preview reimporting one asset", Input = new Request { Path = "Assets/Textures/Icon.png", ForceUpdate = true }, Execution = new ToolExampleExecution { DryRun = true } }
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             AssetToolSupport.EnsureEditorNotBusy("asset.refresh");
             var path = request.Path ?? request.AssetPath ?? request.Target;
             var options = ImportAssetOptions.Default;
             if (request.ForceUpdate ?? false) options |= ImportAssetOptions.ForceUpdate;
             if (request.ImportRecursive ?? false) options |= ImportAssetOptions.ImportRecursive;
-            if (request.DryRun == true)
+            if (ctx.DryRun)
             {
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Command = "asset.refresh",
                     DryRun = true,
@@ -71,7 +69,7 @@ namespace UnityCli
                     {
                         new AssetPlannedEffect { Type = string.IsNullOrEmpty(path) ? "asset.refresh" : "asset.import", Path = path, SideEffects = options.ToString() }
                     }
-                };
+                });
             }
             if (string.IsNullOrEmpty(path))
             {
@@ -81,7 +79,7 @@ namespace UnityCli
             {
                 AssetDatabase.ImportAsset(AssetToolSupport.RequireAssetPath(path), options);
             }
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Command = "asset.refresh",
                 Path = path,
@@ -91,7 +89,7 @@ namespace UnityCli
                 {
                     new AssetPlannedEffect { Type = string.IsNullOrEmpty(path) ? "asset.refresh" : "asset.import", Path = path }
                 }
-            };
+            });
         }
     }
 }

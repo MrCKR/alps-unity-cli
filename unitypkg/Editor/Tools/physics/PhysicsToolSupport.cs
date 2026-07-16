@@ -10,7 +10,6 @@ namespace UnityCli
     /// physics 域 IUnityCliTool 共享的基础设施 helper:物理设置构造、刚体信息、
     /// 射线查询、碰撞解析、模式规范化。仅供 physics 域自包含工具复用;
     /// 不实现 IUnityCliTool,不参与工具发现。
-    /// 设计依据:.plan/工具统一形态.md(自包含工具共享只读 helper)。
     /// </summary>
     public static class PhysicsToolSupport
     {

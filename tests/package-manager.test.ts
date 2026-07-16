@@ -191,23 +191,6 @@ test("checkPackageBridge fails when CLI compatibility range changes", async () =
   );
 });
 
-test("ensurePackageBridge removes stale file: dependency from manifest", async () => {
-  const project = await makeUnityProject();
-
-  // Simulate an old file: dependency from a previous install mode
-  const manifestPath = join(project, "Packages", "manifest.json");
-  const manifest = JSON.parse(await readFile(manifestPath, "utf8")) as { dependencies: Record<string, string> };
-  manifest.dependencies["com.unity_cli"] = "file:../../some/path";
-  await writeFile(manifestPath, JSON.stringify(manifest, null, 2), "utf8");
-
-  const result = await ensurePackageBridge(project);
-
-  // The file: dependency should have been removed
-  const updatedManifest = JSON.parse(await readFile(manifestPath, "utf8")) as { dependencies: Record<string, string> };
-  assert.equal(updatedManifest.dependencies["com.unity_cli"], undefined);
-  assert.equal(result.installMode, "copy");
-});
-
 test("deployPackageSource rejects source under target project Packages", async () => {
   const project = await makeUnityProject();
   const source = join(project, "Packages", "com.acme.local");

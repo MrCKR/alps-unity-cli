@@ -1,0 +1,206 @@
+import { getBoolean, getString } from "../args.js";
+import { executeBridgePayload, type BridgeRuntime } from "../bridge/index.js";
+import { ExtensionRegistry } from "../extensions/index.js";
+import { hasInstanceForFlags } from "../instances.js";
+import { failure } from "../output.js";
+import type { CliResult } from "../types.js";
+import { scoreSearch } from "../util.js";
+import { validateSchema } from "../schema/validator.js";
+import "./.generated-registry.js";
+import { defineContextMetadata } from "./define.js";
+import type { ContextDescriptor, ContextFingerprint, ContextListEntry, ContextSource } from "./types.js";
+
+export interface ContextCatalogRuntime extends Partial<BridgeRuntime> {
+  dataDir?: string;
+  projectContexts?: unknown[];
+}
+
+export type ContextCatalogResult = { ok: true; contexts: ContextDescriptor[]; live: boolean } | (CliResult & { ok: false });
+
+/** 无 live 目标时只暴露生成 registry 中的 TS-local Context。 */
+export async function shouldLoadLiveContextCatalog(flags: Record<string, string | boolean>, runtime: ContextCatalogRuntime): Promise<boolean> {
+  if (getBoolean(flags, "include-custom") || runtime.projectContexts !== undefined || runtime.bridgeExecute !== undefined || runtime.bridgeEndpoint !== undefined) return true;
+  if (getString(flags, "bridge-endpoint") || getString(flags, "target") || getString(flags, "instance") || process.env.UNITY_CLI_BRIDGE_ENDPOINT) return true;
+  return typeof runtime.dataDir === "string" && hasInstanceForFlags(flags, runtime.dataDir);
+}
+
+/** 加载唯一 catalog view；任何 malformed descriptor 或 duplicate 都使 registry fail closed。 */
+export async function loadContextCatalog(
+  flags: Record<string, string | boolean>,
+  runtime: ContextCatalogRuntime,
+  requestId: string,
+  options: { requireLive?: boolean } = {}
+): Promise<ContextCatalogResult> {
+  let local: ContextDescriptor[];
+  try {
+    local = defineContextMetadata();
+  } catch (error) {
+    return unhealthy(requestId, error instanceof Error ? error.message : String(error));
+  }
+  const loadLive = options.requireLive === true || await shouldLoadLiveContextCatalog(flags, runtime);
+  if (!loadLive) return { ok: true, contexts: local, live: false };
+
+  let live: ContextDescriptor[];
+  if (runtime.projectContexts) {
+    const parsed = parseLiveDescriptors(runtime.projectContexts, requestId);
+    if (parsed.ok === false) return parsed;
+    live = parsed.contexts;
+  } else {
+    const result = await executeBridgePayload(requestId, "context.list", {}, flags, runtime);
+    if (result.ok === false) return result as CliResult & { ok: false };
+    const raw = (result.data as { contexts?: unknown } | undefined)?.contexts;
+    if (!Array.isArray(raw)) return unhealthy(requestId, "context.list response must contain a contexts array.");
+    const parsed = parseLiveDescriptors(raw, requestId);
+    if (parsed.ok === false) return parsed;
+    live = parsed.contexts;
+  }
+
+  const merged = [...local, ...live];
+  const duplicate = duplicateNames(merged);
+  if (duplicate.length > 0) return unhealthy(requestId, `Duplicate context registration: ${duplicate.join(", ")}.`, { duplicates: duplicate });
+  return { ok: true, contexts: merged, live: true };
+}
+
+export async function resolveCatalogContext(
+  name: string,
+  flags: Record<string, string | boolean>,
+  runtime: ContextCatalogRuntime,
+  requestId: string
+): Promise<{ ok: true; context?: ContextDescriptor; live: boolean } | (CliResult & { ok: false })> {
+  const local = defineContextMetadata().find((context) => context.name === name);
+  if (local) return { ok: true, context: local, live: false };
+  if (!await shouldLoadLiveContextCatalog(flags, runtime)) return { ok: true, context: undefined, live: false };
+  const catalog = await loadContextCatalog(flags, runtime, requestId, { requireLive: true });
+  return catalog.ok ? { ok: true, context: catalog.contexts.find((context) => context.name === name), live: true } : catalog;
+}
+
+export function builtinContextDescriptors(): ContextDescriptor[] {
+  return defineContextMetadata();
+}
+
+export function builtinContextCategories(): string[] {
+  return [...new Set(builtinContextDescriptors().map((context) => context.category))].sort();
+}
+
+export function findBuiltinContextByName(name: string): ContextDescriptor | undefined {
+  return builtinContextDescriptors().find((context) => context.name === name);
+}
+
+export function filterContextsByCategory(category: string): ContextDescriptor[] {
+  return builtinContextDescriptors().filter((context) => context.category === category);
+}
+
+export function searchContexts(keyword: string, contexts = builtinContextDescriptors()): ContextDescriptor[] {
+  const query = keyword.toLowerCase();
+  return contexts.filter((context) => `${context.name}\n${context.summary}\n${context.description}\n${context.category}`.toLowerCase().includes(query))
+    .sort((left, right) => scoreSearch(right.name.toLowerCase(), query) - scoreSearch(left.name.toLowerCase(), query));
+}
+
+export function toContextListEntry(context: ContextDescriptor): ContextListEntry {
+  const { name, summary, description, category, source, target, availabilityScope, playModeSupport, supportStatus, cliCommand, available, requiresPackages, extensionId } = context;
+  return { name, summary, description, category, source, target, availabilityScope, playModeSupport, supportStatus, cliCommand, available, requiresPackages, extensionId };
+}
+
+function parseLiveDescriptors(values: unknown[], requestId: string): { ok: true; contexts: ContextDescriptor[] } | (CliResult & { ok: false }) {
+  const contexts: ContextDescriptor[] = [];
+  for (let index = 0; index < values.length; index += 1) {
+    const parsed = parseLiveDescriptor(values[index]);
+    if (typeof parsed === "string") return unhealthy(requestId, `context.list contexts[${index}] ${parsed}`, { index });
+    contexts.push(parsed);
+  }
+  const duplicate = duplicateNames(contexts);
+  if (duplicate.length > 0) return unhealthy(requestId, `Duplicate live context registration: ${duplicate.join(", ")}.`, { duplicates: duplicate });
+  return { ok: true, contexts };
+}
+
+/** Bridge descriptor 不完整时拒绝整个 catalog，禁止补造 schema 或 source。 */
+export function parseLiveDescriptor(value: unknown): ContextDescriptor | string {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return "must be an object.";
+  const raw = value as Record<string, unknown>;
+  const requiredStrings = ["name", "description", "category", "source", "target", "availabilityScope", "playModeSupport"] as const;
+  for (const field of requiredStrings) if (typeof raw[field] !== "string" || raw[field].length === 0) return `is missing required field ${field}.`;
+  if (!isSource(raw.source)) return "has invalid source.";
+  if (!isTarget(raw.target)) return "has invalid target.";
+  if (!isAvailabilityScope(raw.availabilityScope)) return "has invalid availabilityScope.";
+  if (!isPlayModeSupport(raw.playModeSupport)) return "has invalid playModeSupport.";
+  if (!isSchema(raw.inputSchema)) return "is missing inputSchema.";
+  if (!isSchema(raw.outputSchema)) return "is missing outputSchema.";
+  const examples = contextExamplesProp(raw, String(raw.name), raw.inputSchema);
+  if (!examples) return "is missing valid examples.";
+
+  const ownership = extensionOwnership(String(raw.name));
+  if (raw.source === "extension" && !ownership) return "declares source=extension without a manifest owner.";
+  if (raw.source !== "extension" && ownership) return `is claimed by extension ${ownership.id} but declares source=${String(raw.source)}.`;
+  const requiresPackages = stringArray(raw.requiresPackages) ?? ownership?.requiresPackages;
+  const fp = fingerprint(raw.fingerprint);
+  return {
+    name: String(raw.name),
+    summary: typeof raw.summary === "string" && raw.summary.length > 0 ? raw.summary : String(raw.description),
+    description: String(raw.description),
+    category: String(raw.category),
+    source: raw.source,
+    target: raw.target,
+    availabilityScope: raw.availabilityScope,
+    playModeSupport: raw.playModeSupport,
+    inputSchema: raw.inputSchema,
+    outputSchema: raw.outputSchema,
+    examples,
+    cliCommand: `context read ${String(raw.name)}`,
+    ...(typeof raw.supportStatus === "string" ? { supportStatus: raw.supportStatus } : {}),
+    ...(requiresPackages ? { requiresPackages } : {}),
+    ...(ownership ? { extensionId: ownership.id } : {}),
+    ...(typeof raw.refreshBehavior === "string" ? { refreshBehavior: raw.refreshBehavior } : {}),
+    ...(typeof raw.available === "boolean" ? { available: raw.available } : {}),
+    ...(typeof raw.version === "string" ? { version: raw.version } : {}),
+    ...(fp ? { fingerprint: fp } : {})
+  };
+}
+
+/** 将 Bridge typed Context 示例归一为 CLI 可直接照抄的 argv。 */
+function contextExamplesProp(record: Record<string, unknown>, name: string, inputSchema: Record<string, unknown>): ContextDescriptor["examples"] | undefined {
+  const value = record.examples;
+  if (!Array.isArray(value) || value.length === 0) return undefined;
+  const examples = value.flatMap((item) => {
+    if (!item || typeof item !== "object" || Array.isArray(item)) return [];
+    const example = item as Record<string, unknown>;
+    if (typeof example.description !== "string" || example.description.length === 0) return [];
+    if (!isExampleInput(example.input)) return [];
+    const input = example.input;
+    if (validateSchema(inputSchema, input).length > 0) return [];
+    return [{ description: example.description, input, argv: ["context", "read", name, "--input", JSON.stringify(input)] }];
+  });
+  return examples.length === value.length ? examples : undefined;
+}
+
+function extensionOwnership(name: string): { id: string; requiresPackages: string[] } | undefined {
+  const registry = new ExtensionRegistry();
+  const owners = registry.extensionIds().filter((id) => registry.getExtension(id)?.manifest.contributions.contexts?.some((context) => context.key === name));
+  if (owners.length !== 1) return undefined;
+  const manifest = registry.getExtension(owners[0])!.manifest;
+  return { id: owners[0], requiresPackages: manifest.unityPackages.map((pkg) => pkg.packageId) };
+}
+
+function unhealthy(requestId: string, message: string, details?: Record<string, unknown>): CliResult & { ok: false } {
+  return failure(requestId, "E_CONTEXT_REGISTRY_UNHEALTHY", message, ["Fix the live context descriptor registry, then retry context discovery."], details) as CliResult & { ok: false };
+}
+
+function duplicateNames(contexts: ContextDescriptor[]): string[] {
+  const counts = new Map<string, number>();
+  for (const context of contexts) counts.set(context.name, (counts.get(context.name) ?? 0) + 1);
+  return [...counts].filter(([, count]) => count > 1).map(([name]) => name).sort();
+}
+
+function isSchema(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value) && Object.keys(value).length > 0;
+}
+
+/** 示例输入允许空 Request object；是否可调用由对应 inputSchema 决定。 */
+function isExampleInput(value: unknown): value is Record<string, unknown> {
+  return !!value && typeof value === "object" && !Array.isArray(value);
+}
+function isSource(value: unknown): value is ContextSource { return value === "built-in" || value === "extension" || value === "project"; }
+function isTarget(value: unknown): value is ContextDescriptor["target"] { return value === "editor" || value === "runtime" || value === "both"; }
+function isAvailabilityScope(value: unknown): value is ContextDescriptor["availabilityScope"] { return value === "editorSession" || value === "playModeSession" || value === "always"; }
+function isPlayModeSupport(value: unknown): value is ContextDescriptor["playModeSupport"] { return value === "supported" || value === "runtime-only" || value === "session-affecting" || value === "editor-only" || value === "unknown"; }
+function stringArray(value: unknown): string[] | undefined { return Array.isArray(value) && value.every((item) => typeof item === "string") ? value : undefined; }
+function fingerprint(value: unknown): ContextFingerprint | undefined { return value && typeof value === "object" && !Array.isArray(value) ? value as ContextFingerprint : undefined; }

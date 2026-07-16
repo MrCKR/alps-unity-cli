@@ -31,7 +31,7 @@ namespace UnityCli
             Description = "Create a new GameObject when target is omitted, ensure a ParticleSystem and ParticleSystemRenderer exist, and apply any provided main module fields such as duration, startLifetime, startSpeed, size, color, looping, and simulation space.",
             Group = "vfx",
             Version = "1.0.0",
-            DestructiveHint = true,
+            DestructiveHint = false,
             SideEffects = new[] { "scene-object-create", "component-add", "particle-main-edit" },
             Target = "editor",
             PlayModeSupport = "supported",
@@ -44,7 +44,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             VfxToolSupport.EnsureEditorReady("vfx.particle-create");
             var gameObject = string.IsNullOrWhiteSpace(request.Target)
@@ -63,15 +63,15 @@ namespace UnityCli
             }
 
             VfxToolSupport.ApplyParticleMainFields(particleSystem, request, "vfx.particle-create", effects);
-            EditorUtility.SetDirty(particleSystem);
+            UnityCliSceneMutation.MarkSceneObjectDirty(particleSystem);
             VfxToolSupport.MarkSceneDirty(gameObject);
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
                 ParticleSystem = VfxToolSupport.BuildParticleSystemInfo(particleSystem),
                 PlannedEffects = effects,
                 LogPath = ctx.LogPath
-            };
+            });
         }
     }
 }

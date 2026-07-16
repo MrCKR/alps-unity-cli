@@ -41,26 +41,25 @@ namespace UnityCli
                 public string TypeFilter;
             }
 
-            /// <summary>序列化根对象为 SerializedMember JSON，paths/viewQuery 存在时优先做范围化读取，避免大对象展开。</summary>
-            public static string Serialize(object obj, Options options)
+            /// <summary>构造 SerializedMember 值树；paths/viewQuery 存在时优先做范围化读取，避免大对象展开。</summary>
+            public static object Serialize(object obj, Options options)
             {
                 if (options == null) options = new Options();
                 if (options.Paths != null && options.Paths.Count > 0)
                 {
-                    return MemberToJson(BuildPathReadAggregate(obj, options));
+                    return MemberToData(BuildPathReadAggregate(obj, options));
                 }
                 if (!string.IsNullOrEmpty(options.ViewPath))
                 {
                     var viewRoot = TryReadPath(obj, NormalizeReadPath(options.ViewPath), out var error);
                     if (error != null)
                     {
-                        return MemberToJson(ErrorMember("$" + "." + NormalizeReadPath(options.ViewPath), error));
+                        return MemberToData(ErrorMember("$" + "." + NormalizeReadPath(options.ViewPath), error));
                     }
                     obj = viewRoot;
                 }
                 var visited = new HashSet<int>();
-                var member = ToMember(obj, string.IsNullOrEmpty(options.ViewPath) ? "$" : "$" + "." + NormalizeReadPath(options.ViewPath), obj == null ? "null" : obj.GetType().FullName, options, visited, 0);
-                return MemberToJson(member);
+                return MemberToData(ToMember(obj, string.IsNullOrEmpty(options.ViewPath) ? "$" : "$" + "." + NormalizeReadPath(options.ViewPath), obj == null ? "null" : obj.GetType().FullName, options, visited, 0));
             }
 
             /// <summary>按请求路径逐项读取，并用稳定 fields envelope 返回每个路径的结果或可恢复错误。</summary>
@@ -103,7 +102,7 @@ namespace UnityCli
                 };
             }
 
-            /// <summary>规范化 AI 常用路径语法，兼容 leading #/、$/、点路径和 / 路径。</summary>
+            /// <summary>规范化读取路径；支持 #/、$/、点路径和 slash 路径。</summary>
             private static string NormalizeReadPath(string path)
             {
                 if (string.IsNullOrEmpty(path)) return string.Empty;
@@ -326,11 +325,11 @@ namespace UnityCli
                     return member;
                 }
 
-                // 复杂对象：展开字段/属性
+                // 深度耗尽时保留类型和截断状态，不能把未知动态值伪装成字符串。
                 if (depth >= options.MaxDepth)
                 {
                     member.Truncated = true;
-                    member.Value = obj.ToString();
+                    member.Value = UnsupportedValue(type, "max-depth-reached");
                     return member;
                 }
 
@@ -456,29 +455,31 @@ namespace UnityCli
                 return System.Runtime.CompilerServices.RuntimeHelpers.GetHashCode(obj);
             }
 
-            /// <summary>Unity Object 引用摘要 JSON。</summary>
-            public static string UnityObjectRefJson(UnityEngine.Object uo)
+            /// <summary>构造 Unity Object 引用摘要值树。</summary>
+            public static Dictionary<string, object> UnityObjectRefJson(UnityEngine.Object uo)
             {
-                var w = new UnityCliJsonWriter().BeginObject();
-                w.Prop("instanceId", uo.GetInstanceID());
-                w.Prop("name", uo.name);
-                w.Prop("typeName", uo.GetType().FullName);
+                var result = new Dictionary<string, object>
+                {
+                    { "instanceId", (long)uo.GetInstanceID() },
+                    { "name", uo.name },
+                    { "typeName", uo.GetType().FullName }
+                };
                 if (uo is GameObject go)
                 {
-                    w.Prop("kind", "GameObject");
-                    w.Prop("path", GameObjectFullPath(go));
+                    result["kind"] = "GameObject";
+                    result["path"] = GameObjectFullPath(go);
                 }
                 else
                 {
-                    w.Prop("kind", uo is Component ? "Component" : "Asset");
+                    result["kind"] = uo is Component ? "Component" : "Asset";
                     var assetPath = AssetDatabase.GetAssetPath(uo);
                     if (!string.IsNullOrEmpty(assetPath))
                     {
-                        w.Prop("assetPath", NormalizeAssetPath(assetPath));
-                        w.Prop("guid", AssetDatabase.AssetPathToGUID(assetPath));
+                        result["assetPath"] = NormalizeAssetPath(assetPath);
+                        result["guid"] = AssetDatabase.AssetPathToGUID(assetPath);
                     }
                 }
-                return w.EndObject().ToString();
+                return result;
             }
 
             private static string GameObjectFullPath(GameObject go)
@@ -493,127 +494,124 @@ namespace UnityCli
                 return path;
             }
 
-            private static string MemberToJson(SerializedMember member)
+            // 将内部 SerializedMember 模型投影为稳定的 AnyJson 值树。
+            private static Dictionary<string, object> MemberToData(SerializedMember member)
             {
-                var w = new UnityCliJsonWriter().BeginObject();
-                w.Prop("path", member.Path);
-                w.Prop("typeName", member.TypeName);
-                if (member.Error != null) w.Prop("error", member.Error);
-                if (member.Truncated) w.Prop("truncated", true);
-                if (member.IsNull) w.PropNull("value");
-                else if (member.Value != null) WriteValue(w, member.Value);
-                if (member.IsUnityObject) w.PropRaw("unityObjectRef", member.UnityObjectRef);
+                var data = new Dictionary<string, object>
+                {
+                    { "path", member.Path },
+                    { "typeName", member.TypeName }
+                };
+                if (member.Error != null) data["error"] = member.Error;
+                if (member.Truncated) data["truncated"] = true;
+                if (member.IsNull) data["value"] = null;
+                else if (member.Value != null) data["value"] = ValueData(member.Value);
+                if (member.IsUnityObject) data["unityObjectRef"] = member.UnityObjectRef;
                 if (member.IsArray)
                 {
-                    w.Prop("isArray", true);
-                    w.Prop("arrayLength", (long)member.ArrayLength);
-                    w.Prop("totalCount", (long)member.ArrayLength);
-                    w.Prop("returnedCount", (long)member.ArrayItems.Count);
-                    if (member.Truncated) w.Prop("nextPath", member.Path + "[" + member.ArrayItems.Count.ToString(CultureInfo.InvariantCulture) + "]");
-                    w.PropArray("items", arr =>
-                    {
-                        foreach (var item in member.ArrayItems) arr.RawValue(MemberToJson(item));
-                    });
+                    data["isArray"] = true;
+                    data["arrayLength"] = (long)member.ArrayLength;
+                    data["totalCount"] = (long)member.ArrayLength;
+                    data["returnedCount"] = (long)member.ArrayItems.Count;
+                    if (member.Truncated) data["nextPath"] = member.Path + "[" + member.ArrayItems.Count.ToString(CultureInfo.InvariantCulture) + "]";
+                    data["items"] = member.ArrayItems.Select(MemberToData).Cast<object>().ToList();
                 }
                 if (member.IsDictionary)
                 {
-                    w.Prop("isDictionary", true);
-                    w.Prop("totalCount", (long)member.ArrayLength);
-                    w.Prop("returnedCount", (long)member.DictionaryEntries.Count);
-                    w.PropArray("entries", arr =>
+                    data["isDictionary"] = true;
+                    data["totalCount"] = (long)member.ArrayLength;
+                    data["returnedCount"] = (long)member.DictionaryEntries.Count;
+                    data["entries"] = member.DictionaryEntries.Select(entry => (object)new Dictionary<string, object>
                     {
-                        foreach (var entry in member.DictionaryEntries)
-                        {
-                            arr.BeginObject().Prop("key", entry.Key).PropRaw("value", MemberToJson(entry.Value)).EndObject();
-                        }
-                    });
+                        { "key", entry.Key }, { "value", MemberToData(entry.Value) }
+                    }).ToList();
                 }
                 if (member.Fields.Count > 0)
                 {
-                    w.PropArray("fields", arr =>
+                    data["fields"] = member.Fields.Select(field => (object)new Dictionary<string, object>
                     {
-                        foreach (var f in member.Fields) arr.BeginObject().Prop("name", f.Key).PropRaw("value", MemberToJson(f.Value)).EndObject();
-                    });
+                        { "name", field.Key }, { "value", MemberToData(field.Value) }
+                    }).ToList();
                 }
                 if (member.Props.Count > 0)
                 {
-                    w.PropArray("props", arr =>
+                    data["props"] = member.Props.Select(property =>
                     {
-                        foreach (var p in member.Props)
+                        var item = new Dictionary<string, object>
                         {
-                            arr.BeginObject().Prop("name", p.Key).PropRaw("value", MemberToJson(p.Value));
-                            if (p.Value.ReadOnly) arr.Prop("readOnly", true);
-                            if (p.Value.Writable) arr.Prop("writable", true);
-                            arr.EndObject();
-                        }
-                    });
+                            { "name", property.Key }, { "value", MemberToData(property.Value) }
+                        };
+                        if (property.Value.ReadOnly) item["readOnly"] = true;
+                        if (property.Value.Writable) item["writable"] = true;
+                        return (object)item;
+                    }).ToList();
                 }
-                return w.EndObject().ToString();
+                return data;
             }
 
-            private static void WriteValue(UnityCliJsonWriter w, object value)
+            private static object ValueData(object value)
             {
-                if (value is bool b) { w.Prop("value", b); return; }
-                if (value is int i) { w.Prop("value", (long)i); return; }
-                if (value is long l) { w.Prop("value", l); return; }
-                if (value is float f) { w.Prop("value", f); return; }
-                if (value is double d) { w.Prop("value", d); return; }
-                if (value is Enum e) { w.Prop("value", Convert.ToString(e)); return; }
-                if (value is Vector2 v2) { w.PropRaw("value", Vector2Json(v2)); return; }
-                if (value is Vector3 v3) { w.PropRaw("value", Vector3Json(v3)); return; }
-                if (value is Vector4 v4) { w.PropRaw("value", Vector4Json(v4)); return; }
-                if (value is Quaternion q) { w.PropRaw("value", QuaternionJson(q)); return; }
-                if (value is Color c) { w.PropRaw("value", ColorJson(c)); return; }
-                if (value is string s) { w.Prop("value", s); return; }
-                w.Prop("value", Convert.ToString(value, CultureInfo.InvariantCulture));
+                if (value is Enum) return Convert.ToString(value, CultureInfo.InvariantCulture);
+                if (value is Vector2 v2) return new Dictionary<string, object> { { "x", JsonNumberData(v2.x) }, { "y", JsonNumberData(v2.y) } };
+                if (value is Vector3 v3) return new Dictionary<string, object> { { "x", JsonNumberData(v3.x) }, { "y", JsonNumberData(v3.y) }, { "z", JsonNumberData(v3.z) } };
+                if (value is Vector4 v4) return new Dictionary<string, object> { { "x", JsonNumberData(v4.x) }, { "y", JsonNumberData(v4.y) }, { "z", JsonNumberData(v4.z) }, { "w", JsonNumberData(v4.w) } };
+                if (value is Quaternion q) return new Dictionary<string, object> { { "x", JsonNumberData(q.x) }, { "y", JsonNumberData(q.y) }, { "z", JsonNumberData(q.z) }, { "w", JsonNumberData(q.w) } };
+                if (value is Color c) return new Dictionary<string, object> { { "r", JsonNumberData(c.r) }, { "g", JsonNumberData(c.g) }, { "b", JsonNumberData(c.b) }, { "a", JsonNumberData(c.a) } };
+                if (value is float single) return JsonNumberData(single);
+                if (value is double number) return JsonNumberData(number);
+                if (value is string || value is bool || value is byte || value is sbyte || value is short || value is ushort
+                    || value is int || value is uint || value is long || value is ulong || value is decimal)
+                {
+                    return value;
+                }
+                // AnyJson 无法表达的 CLR 值必须显式标记，禁止 ToString() 制造可解析假象。
+                return UnsupportedValue(value.GetType(), "unsupported-dynamic-value");
             }
 
-            private static string Vector2Json(Vector2 v)
+            /// <summary>AnyJson 中以稳定字符串表达 CLR 非有限数；有限值仍保持 JSON number。</summary>
+            private static object JsonNumberData(double value)
             {
-                return new UnityCliJsonWriter().BeginObject().Prop("x", v.x).Prop("y", v.y).EndObject().ToString();
+                if (double.IsNaN(value)) return "NaN";
+                if (double.IsPositiveInfinity(value)) return "Infinity";
+                if (double.IsNegativeInfinity(value)) return "-Infinity";
+                return value;
             }
-            private static string Vector3Json(Vector3 v)
+
+            private static Dictionary<string, object> UnsupportedValue(Type type, string reason)
             {
-                return new UnityCliJsonWriter().BeginObject().Prop("x", v.x).Prop("y", v.y).Prop("z", v.z).EndObject().ToString();
-            }
-            private static string Vector4Json(Vector4 v)
-            {
-                return new UnityCliJsonWriter().BeginObject().Prop("x", v.x).Prop("y", v.y).Prop("z", v.z).Prop("w", v.w).EndObject().ToString();
-            }
-            private static string QuaternionJson(Quaternion q)
-            {
-                return new UnityCliJsonWriter().BeginObject().Prop("x", q.x).Prop("y", q.y).Prop("z", q.z).Prop("w", q.w).EndObject().ToString();
-            }
-            private static string ColorJson(Color c)
-            {
-                return new UnityCliJsonWriter().BeginObject().Prop("r", c.r).Prop("g", c.g).Prop("b", c.b).Prop("a", c.a).EndObject().ToString();
+                return new Dictionary<string, object>
+                {
+                    { "unsupported", true },
+                    { "reason", reason },
+                    { "typeName", type == null ? null : type.FullName }
+                };
             }
 
             /// <summary>SerializedMember 内存模型。</summary>
             private sealed class SerializedMember
             {
-                public string Path;
-                public string TypeName;
-                public object Value;
-                public bool IsNull;
-                public bool IsUnityObject;
-                public string UnityObjectRef;
-                public bool IsArray;
-                public bool IsDictionary;
-                public int ArrayLength;
-                public bool Truncated;
-                public string Error;
-                public bool ReadOnly;
-                public bool Writable;
-                public readonly List<KV> Fields = new List<KV>();
-                public readonly List<KV> Props = new List<KV>();
-                public readonly List<SerializedMember> ArrayItems = new List<SerializedMember>();
-                public readonly List<KV> DictionaryEntries = new List<KV>();
+                public string Path { get; set; }
+                public string TypeName { get; set; }
+                [UnityCliAnyJson] public object Value { get; set; }
+                public bool IsNull { get; set; }
+                public bool IsUnityObject { get; set; }
+                [UnityCliAnyJson] public object UnityObjectRef { get; set; }
+                public bool IsArray { get; set; }
+                public bool IsDictionary { get; set; }
+                public int ArrayLength { get; set; }
+                public bool Truncated { get; set; }
+                public string Error { get; set; }
+                public bool ReadOnly { get; set; }
+                public bool Writable { get; set; }
+                public List<KV> Fields { get; } = new List<KV>();
+                public List<KV> Props { get; } = new List<KV>();
+                public List<SerializedMember> ArrayItems { get; } = new List<SerializedMember>();
+                public List<KV> DictionaryEntries { get; } = new List<KV>();
 
                 public sealed class KV
                 {
-                    public string Key;
-                    public SerializedMember Value;
+                    public string Key { get; set; }
+                    public SerializedMember Value { get; set; }
                 }
             }
         }

@@ -24,7 +24,7 @@ namespace UnityCli
                 throw new UnityCliBridge.BridgeCommandException("E_UNITY_COMPILING", "Unity Editor is compiling scripts.", "Wait for Unity to finish compiling and retry.", transient: true, retryAfterMs: 5000);
             if (EditorApplication.isUpdating)
                 throw new UnityCliBridge.BridgeCommandException("E_UNITY_IMPORTING", "Unity Editor is importing assets.", "Wait for Unity to finish importing and retry.", transient: true, retryAfterMs: 5000);
-            if (EditorApplication.isPlayingOrWillChangePlaymode && !EditorApplication.isPlaying)
+            if (UnityCliBridge.IsPlayModeChanging())
                 throw new UnityCliBridge.BridgeCommandException("E_UNITY_BUSY", "Unity Editor is entering or exiting Play mode.", "Wait for Play mode transition to complete and retry.", transient: true, retryAfterMs: 3000);
             if (BuildPipeline.isBuildingPlayer)
                 throw new UnityCliBridge.BridgeCommandException("E_UNITY_BUSY", "Unity Editor is building the player.", "Wait for the build to complete and retry.", transient: true, retryAfterMs: 10000);
@@ -38,7 +38,7 @@ namespace UnityCli
             return new EditorStateInfo
             {
                 PlayMode = new PlayModeInfo { IsPlaying = EditorApplication.isPlaying, IsPaused = EditorApplication.isPaused, IsPlayingOrWillChangePlaymode = EditorApplication.isPlayingOrWillChangePlaymode },
-                Busy = new BusyInfo { IsBusy = EditorApplication.isCompiling || EditorApplication.isUpdating || EditorApplication.isPlayingOrWillChangePlaymode || BuildPipeline.isBuildingPlayer, Compiling = EditorApplication.isCompiling, Updating = EditorApplication.isUpdating, Building = BuildPipeline.isBuildingPlayer, PlayModeChanging = EditorApplication.isPlayingOrWillChangePlaymode },
+                Busy = new BusyInfo { IsBusy = EditorApplication.isCompiling || EditorApplication.isUpdating || UnityCliBridge.IsPlayModeChanging() || BuildPipeline.isBuildingPlayer, Compiling = EditorApplication.isCompiling, Updating = EditorApplication.isUpdating, Building = BuildPipeline.isBuildingPlayer, PlayModeChanging = UnityCliBridge.IsPlayModeChanging() },
                 ActiveScene = new ActiveSceneInfo { Name = scene.name, Path = scene.path, IsLoaded = scene.isLoaded, IsDirty = scene.isDirty },
                 PrefabStageOpen = prefabStage != null,
                 PrefabStagePath = prefabStage != null ? prefabStage.assetPath : null

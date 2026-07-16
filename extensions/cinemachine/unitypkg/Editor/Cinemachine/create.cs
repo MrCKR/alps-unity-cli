@@ -48,21 +48,32 @@ namespace UnityCli.Cinemachine
             SupportsJob = true,
             Examples = new[]
             {
-                new ToolExample { Description = "创建跟随相机", Input = new Request { Preset = "follow", Name = "PlayerCam", Follow = "Player" } },
+                new ToolExample { Description = "创建跟随相机", Input = new Request { Preset = "follow", Name = "MatrixCreatedCamera", Follow = "Player" } },
                 new ToolExample { Description = "创建 dolly 相机", Input = new Request { Preset = "dolly", Name = "DollyCam", LookAt = "Main Camera" } }
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        /// <summary>先校验 preset，再创建并配置虚拟相机，保证非法输入不会留下场景对象。</summary>
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             CinemachineToolSupport.EnsureEditorReady("cinemachine.create");
             CinemachineToolSupport.EnsureCinemachineAvailable();
 
+            request = request ?? new Request();
             var preset = string.IsNullOrWhiteSpace(request.Preset) ? "follow" : request.Preset.Trim();
+            string[] presetParts;
+            if (!CinemachineToolSupport.Presets.TryGetValue(preset, out presetParts))
+            {
+                throw new UnityCliBridge.BridgeCommandException(
+                    "E_CINEMACHINE_PRESET_INVALID",
+                    "Unsupported Cinemachine preset: " + preset,
+                    "Pass one of: follow, third_person, freelook, dolly, static, top_down, side_scroller.");
+            }
+
             var cameraName = string.IsNullOrWhiteSpace(request.Name) ? "UnityCli_CM_" + preset : request.Name.Trim();
             var gameObject = new GameObject(cameraName);
             var camera = gameObject.AddComponent(CinemachineToolSupport.CameraType);
-            Undo.RegisterCreatedObjectUndo(gameObject, "UnityCli Cinemachine Create");
+            UnityCliSceneMutation.RegisterCreatedObject(gameObject, "UnityCli Cinemachine Create");
 
             gameObject.transform.position = new Vector3(
                 (float)(request.X ?? gameObject.transform.position.x),
@@ -92,21 +103,17 @@ namespace UnityCli.Cinemachine
                 CinemachineToolSupport.SetPriority(camera, request.Priority.Value);
             }
 
-            string[] presetParts;
-            if (CinemachineToolSupport.Presets.TryGetValue(preset, out presetParts))
+            if (!string.IsNullOrWhiteSpace(presetParts[0]))
             {
-                if (!string.IsNullOrWhiteSpace(presetParts[0]))
-                {
-                    CinemachineToolSupport.SwapPipelineComponent(gameObject, camera, "Body", CinemachineToolSupport.RequireComponentType(presetParts[0], "Body"));
-                }
-                if (!string.IsNullOrWhiteSpace(presetParts[1]))
-                {
-                    CinemachineToolSupport.SwapPipelineComponent(gameObject, camera, "Aim", CinemachineToolSupport.RequireComponentType(presetParts[1], "Aim"));
-                }
+                CinemachineToolSupport.SwapPipelineComponent(gameObject, camera, "Body", CinemachineToolSupport.RequireComponentType(presetParts[0], "Body"));
+            }
+            if (!string.IsNullOrWhiteSpace(presetParts[1]))
+            {
+                CinemachineToolSupport.SwapPipelineComponent(gameObject, camera, "Aim", CinemachineToolSupport.RequireComponentType(presetParts[1], "Aim"));
             }
 
             CinemachineToolSupport.MarkDirty(gameObject);
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Cinemachine = CinemachineToolSupport.BuildPackageStatus(),
                 Object = CinemachineToolSupport.BuildObjectInfo(gameObject, preset),
@@ -120,7 +127,7 @@ namespace UnityCli.Cinemachine
                     }
                 },
                 LogPath = ctx.LogPath
-            };
+            });
         }
     }
 }

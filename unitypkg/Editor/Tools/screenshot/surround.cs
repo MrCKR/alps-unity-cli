@@ -8,7 +8,6 @@ namespace UnityCli
 {
     /// <summary>
     /// screenshot.surround — 6 角度环绕截图并生成 contact sheet。破坏性(asset-write)。
-    /// 内置工具(原 RegisterCommand 形态)迁移为 IUnityCliTool 自包含。
     /// </summary>
     public class ScreenshotSurroundTool : IUnityCliTool<ScreenshotSurroundTool.Request, ScreenshotSurroundTool.Result>
     {
@@ -23,7 +22,6 @@ namespace UnityCli
             public float? Fov { get; set; }
             public bool Overwrite { get; set; }
             public bool InlineBase64 { get; set; }
-            public bool DryRun { get; set; }
         }
 
         public sealed class Result
@@ -63,10 +61,10 @@ namespace UnityCli
             SupportsDryRun = true,
             DefaultTimeoutMs = 30000,
             MaxTimeoutMs = 600000,
-            Examples = new[] { new ToolExample { Description = "Surround a target (dry-run)", Input = new Request { Target = "Player", DryRun = true } } }
+            Examples = new[] { new ToolExample { Description = "Surround a target (dry-run)", Input = new Request { Target = "Player" }, Execution = new ToolExampleExecution { DryRun = true } } }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var go = UnityCliBridge.ObjectRefResolver.FindGameObjectByPath(request.Target);
             if (go == null)
@@ -101,15 +99,15 @@ namespace UnityCli
             if (File.Exists(contactSheetPath) && !request.Overwrite)
                 throw new UnityCliBridge.BridgeCommandException("E_OUTPUT_EXISTS", "Contact sheet output already exists: " + contactSheetPath, "Pass overwrite=true or choose a different contactSheetPath.");
 
-            if (request.DryRun)
+            if (ctx.DryRun)
             {
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Command = "screenshot.surround", DryRun = true, Target = go.name,
                     Center = new double[] { center.x, center.y, center.z }, Radius = radius,
                     ContactSheet = new ScreenshotArtifactEntry { Source = "surround-contact-sheet", Path = contactSheetPath, Width = width * 3, Height = height * 2, Format = "png" },
                     Artifacts = BuildPlannedShots(labels, shotPaths, width, height, positions)
-                };
+                });
             }
 
             Directory.CreateDirectory(outputFullDir);
@@ -164,7 +162,7 @@ namespace UnityCli
                 result.ImageHeight = height * 2;
                 result.ImageMimeType = "image/png";
             }
-            return result;
+            return new System.Threading.Tasks.ValueTask<Result>(result);
         }
 
         private static List<SurroundShot> BuildPlannedShots(string[] labels, List<string> shotPaths, int width, int height, Vector3[] positions)

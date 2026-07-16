@@ -1,5 +1,6 @@
 import { defineTool } from "../define.js";
-import { runDocsHandler } from "./shared.js";
+import { searchDocs } from "../../services/docs-service.js";
+import type { AnyJson } from "../../schema/any-json.js";
 
 export interface DocsSearchRequest {
   query: string;
@@ -23,13 +24,13 @@ export interface DocsSearchResult {
   command: string;
   mode: string;
   requiresUnity: boolean;
-  source: Record<string, unknown>;
-  unityVersion: Record<string, unknown>;
+  source: Record<string, AnyJson>;
+  unityVersion: Record<string, AnyJson>;
   query: string;
   format: string;
-  items: Record<string, unknown>[];
+  items: Record<string, AnyJson>[];
   pageInfo: DocsSearchPageInfo;
-  diagnostics?: Record<string, unknown>[];
+  diagnostics?: Record<string, AnyJson>[];
   text?: string;
 }
 
@@ -44,10 +45,11 @@ export default defineTool<DocsSearchRequest, DocsSearchResult>({
   supportStatus: "cli-only",
   target: "editor",
   examples: [
-    { description: "Search cached Unity docs", argv: ["tools", "run", "docs.search", "--input", "{\"query\":\"Camera\",\"docsDir\":\".cache/unity-docs\",\"pageSize\":5}"] }
+    { description: "Search cached Unity docs", argv: ["tools", "run", "docs.search", "--input", "{\"query\":\"Camera\",\"docsDir\":\".cache/unity-docs\",\"pageSize\":5}"] },
+    { description: "Search cached docs offline", argv: ["tools", "run", "docs.search", "--input", "{\"query\":\"Render\",\"docsDir\":\".cache/unity-docs\",\"pageSize\":5,\"offlineOnly\":true}"] }
   ],
-  /** 搜索离线 Unity API 文档；旧 handler 负责分页、online fallback 和错误语义。 */
+  /** 搜索 Unity API 文档；service 负责 cache 排序分页和只读 online fallback。 */
   execute(request, context) {
-    return runDocsHandler<DocsSearchResult>("search", request.query, request as DocsSearchRequest & Record<string, unknown>, context);
+    return searchDocs(request, { dataDir: context.dataDir ?? context.artifactDir, fetch: context.fetch });
   }
 });

@@ -2,40 +2,31 @@
   "id": "hdrp",
   "name": "High Definition Render Pipeline",
   "version": "1.0.0",
-  "description": "HDRP rendering tools: volume components and High Definition Render Pipeline asset settings.",
+  "description": "HDRP rendering tools for volume components and High Definition Render Pipeline asset settings.",
   "unityPackages": [
-    {
-      "packageId": "com.unity.render-pipelines.high-definition",
-      "displayName": "High Definition Render Pipeline"
-    }
+    { "packageId": "com.unity.render-pipelines.high-definition", "displayName": "High Definition Render Pipeline" }
   ],
   "contributions": {
     "tools": [
-      {
-        "name": "hdrp.volume"
-      },
-      {
-        "name": "hdrp.settings"
-      }
+      { "name": "hdrp.volume.list" },
+      { "name": "hdrp.volume.create" },
+      { "name": "hdrp.volume.info" },
+      { "name": "hdrp.volume.add-effect" },
+      { "name": "hdrp.volume.set" },
+      { "name": "hdrp.settings.get" },
+      { "name": "hdrp.settings.set" }
     ],
     "contexts": [],
     "csharpEntries": [
-      {
-        "type": "UnityCli.HdrpVolumeTool",
-        "description": "Self-contained HDRP volume tool."
-      },
-      {
-        "type": "UnityCli.HdrpSettingsTool",
-        "description": "Self-contained HDRP pipeline settings tool."
-      }
+      { "type": "UnityCli.HdrpVolumeListTool", "description": "Implements hdrp.volume.list." },
+      { "type": "UnityCli.HdrpVolumeInfoTool", "description": "Implements hdrp.volume.info." },
+      { "type": "UnityCli.HdrpVolumeCreateTool", "description": "Implements hdrp.volume.create." },
+      { "type": "UnityCli.HdrpVolumeAddEffectTool", "description": "Implements hdrp.volume.add-effect." },
+      { "type": "UnityCli.HdrpVolumeSetTool", "description": "Implements hdrp.volume.set." },
+      { "type": "UnityCli.HdrpSettingsGetTool", "description": "Implements hdrp.settings.get." },
+      { "type": "UnityCli.HdrpSettingsSetTool", "description": "Implements hdrp.settings.set." }
     ]
   },
-  "unityInstall": {
-    "layout": "directory",
-    "include": [
-      "extension.json",
-      "unitypkg/",
-      "docs/"
-    ]
-  }
+  "unityInstall": { "layout": "directory", "include": ["extension.json", "unitypkg/", "docs/"] },
+  "tags": ["rendering", "pipeline", "hdrp"]
 }

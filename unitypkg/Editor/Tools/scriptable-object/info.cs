@@ -3,8 +3,6 @@ namespace UnityCli
 {
     /// <summary>
     /// scriptable-object.info — 读取 ScriptableObject 资产的属性摘要。只读。
-    /// 内置工具(原 RegisterCommand 形态)迁移为 IUnityCliTool 自包含。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class ScriptableObjectInfoTool : IUnityCliTool<ScriptableObjectInfoTool.Request, ScriptableObjectInfoTool.Result>
     {
@@ -38,14 +36,14 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var path = ScriptableObjectToolSupport.RequireScriptableObjectPath(request.Path ?? request.Target);
             var asset = ScriptableObjectToolSupport.LoadScriptableObject(path);
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 ScriptableObject = ScriptableObjectToolSupport.BuildScriptableObjectInfo(path, asset)
-            };
+            });
         }
     }
 }

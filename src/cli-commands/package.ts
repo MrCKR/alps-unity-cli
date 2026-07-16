@@ -8,7 +8,10 @@ import { handlePackageInfoCommand } from "../package-info.js";
 import { discoverUnity } from "../platform.js";
 import type { CliResult } from "../types.js";
 import type { Runtime } from "./types.js";
-import { startUnityJob } from "./unity-job.js";
+import { isProjectLocked, runUnityJob } from "./unity-job.js";
+import type { BridgeRuntime } from "../bridge/index.js";
+import type { JobRunner } from "../job-runner.js";
+import { StructuredToolError } from "../tools/errors.js";
 
 export async function handleInit(flags: Record<string, string | boolean>, runtime: Runtime, requestId: string): Promise<CliResult> {
   const projectPath = resolve(getString(flags, "project") ?? process.cwd());
@@ -106,10 +109,17 @@ export async function handleInit(flags: Record<string, string | boolean>, runtim
 
     // Check extension auto-detect plan in dry-run check mode.
     if (!skillOnly) {
-      const { autoDetectExtensions, autoDetectSummary } = await import("./extension-auto-detect.js");
-      const detectResult = await autoDetectExtensions(projectPath, true);
-      result.extensions = detectResult;
-      result.extensionSummary = autoDetectSummary(detectResult);
+      const { checkExtensionBundles } = await import("../extensions/installer.js");
+      const physicalState = await checkExtensionBundles(projectPath);
+      result.extensionPhysicalState = physicalState;
+      result.extensionSummary = {
+        total: physicalState.length,
+        dependencyInstalled: physicalState.filter((item) => item.dependencyInstalled).length,
+        installed: physicalState.filter((item) => item.installed).length,
+        unhealthy: physicalState.filter((item) => !item.installed || !item.dependencyInstalled).length
+      };
+      const { autoDetectExtensions } = await import("./extension-auto-detect.js");
+      result.extensions = await autoDetectExtensions(projectPath, true);
     }
 
     return success(requestId, result);
@@ -178,20 +188,15 @@ export async function handlePackage(command: string | undefined, args: string[],
   const projectPath = resolve(getString(flags, "project") ?? process.cwd());
   const {
     PackageManagerError,
-    addScopedRegistry,
-    clearRegistry,
     installPackage,
     packageInfo,
     parsePackageSpec,
-    parseScopes,
     readSnapshot,
     removePackage,
     removePackageBridge,
-    removeScopedRegistry,
     restoreDeployedPackage,
     deployPackageSource,
     searchRegistry,
-    setRegistry,
     validatePackageName,
     validateRegistryUrl
   } = await import("../package-manager.js");
@@ -359,48 +364,6 @@ export async function handlePackage(command: string | undefined, args: string[],
     });
   }
 
-  if (command === "registry") {
-    const action = args[0] ?? getString(flags, "action") ?? "get";
-    if (action === "get") {
-      const snapshot = await readSnapshot(projectPath);
-      return success(requestId, { projectPath, manifestPath: snapshot.manifestPath, registry: snapshot.registry });
-    }
-    if (action === "set") {
-      const confirmation = await confirmManifestEdit(flags, requestId, "package.registry", "Package Registry Set");
-      if (confirmation) return confirmation;
-      return success(requestId, { projectPath, ...(await setRegistry(projectPath, validateRegistryUrl(getString(flags, "url") ?? args[1]))) });
-    }
-    if (action === "clear") {
-      const confirmation = await confirmManifestEdit(flags, requestId, "package.registry", "Package Registry Clear");
-      if (confirmation) return confirmation;
-      return success(requestId, { projectPath, ...(await clearRegistry(projectPath)) });
-    }
-    return failure(requestId, "UNKNOWN_PACKAGE_REGISTRY_COMMAND", "Expected package registry get, set or clear.");
-  }
-
-  if (command === "scoped-registry") {
-    const action = args[0] ?? getString(flags, "action") ?? "list";
-    if (action === "list") {
-      const snapshot = await readSnapshot(projectPath);
-      return success(requestId, { projectPath, manifestPath: snapshot.manifestPath, scopedRegistries: snapshot.scopedRegistries });
-    }
-    if (action === "add") {
-      const confirmation = await confirmManifestEdit(flags, requestId, "package.scoped-registry", "Package Scoped Registry Add");
-      if (confirmation) return confirmation;
-      const name = validatePackageName(getString(flags, "name") ?? args[1]);
-      const url = validateRegistryUrl(getString(flags, "url"));
-      const scopes = parseScopes(getString(flags, "scope") ?? getString(flags, "scopes"));
-      return success(requestId, { projectPath, ...(await addScopedRegistry(projectPath, { name, url, scopes })) });
-    }
-    if (action === "remove") {
-      const confirmation = await confirmManifestEdit(flags, requestId, "package.scoped-registry", "Package Scoped Registry Remove", true);
-      if (confirmation) return confirmation;
-      const name = validatePackageName(getString(flags, "name") ?? args[1]);
-      return success(requestId, { projectPath, ...(await removeScopedRegistry(projectPath, name, { force: getBoolean(flags, "force"), dryRun: getBoolean(flags, "dry-run") })) });
-    }
-    return failure(requestId, "UNKNOWN_SCOPED_REGISTRY_COMMAND", "Expected package scoped-registry list, add or remove.");
-  }
-
   // 未知子命令放行到 bridge spec 直通（如 package.embed），与 handleBuild 一致。
   // 主路由会 lookup bridgeCommandRegistry("package", command)，找不到再返回 UNKNOWN_COMMAND。
   return undefined;
@@ -412,21 +375,27 @@ export async function handlePackage(command: string | undefined, args: string[],
   }
 }
 
-/** 对旧 action 型 package 工具的写 manifest 分支执行本地确认，避免只读 action 被 --yes 阻挡。 */
-function confirmManifestEdit(flags: Record<string, string | boolean>, requestId: string, command: string, summary: string, supportsDryRun = false): Promise<CliResult | undefined> {
-  return confirmDestructiveExecution(flags, {
-    command,
-    summary,
-    destructiveHint: true,
-    supportsDryRun,
-    requestId
-  });
+export interface PackageLiveRuntime extends BridgeRuntime {
+  dataDir: string;
 }
 
-export async function refreshOpenEditor(requestId: string, flags: Record<string, string | boolean>, runtime: Runtime): Promise<Record<string, unknown>> {
-  const endpoint = getString(flags, "bridge-endpoint") ?? runtime.bridgeEndpoint ?? process.env.UNITY_CLI_BRIDGE_ENDPOINT;
-  // 只对显式配置的 bridge endpoint 或测试注入的 bridgeExecute 做 live refresh。
-  // 避免盲探默认端口导致无关已打开 Editor 改变 package job 路由。
+export interface PackageResolveRuntime extends PackageLiveRuntime {
+  runner?: JobRunner;
+}
+
+export interface PackageExecutionOptions {
+  projectPath: string;
+  unity?: string;
+  job?: boolean;
+  wait?: boolean;
+  timeoutMs?: number;
+  waitTimeoutMs?: number;
+  bridgeEndpoint?: string;
+}
+
+/** 尝试通知已打开的 Editor 刷新 package 变更。 */
+export async function refreshPackageEditor(requestId: string, bridgeEndpoint: string | undefined, runtime: PackageLiveRuntime): Promise<Record<string, unknown>> {
+  const endpoint = bridgeEndpoint ?? runtime.bridgeEndpoint ?? process.env.UNITY_CLI_BRIDGE_ENDPOINT;
   if (!endpoint && !runtime.bridgeExecute) {
     return { status: "skipped", reason: "bridge_endpoint_absent" };
   }
@@ -434,15 +403,18 @@ export async function refreshOpenEditor(requestId: string, flags: Record<string,
     return { status: "skipped", reason: "bridge_endpoint_unreachable", endpoint };
   }
   const effectiveEndpoint = endpoint ?? "http://127.0.0.1:47392";
-  const result = await executeBridgePayload(`${requestId}_refresh`, "editor.menu", { path: "Assets/Refresh", timeoutMs: 7000 }, { ...flags, "bridge-endpoint": effectiveEndpoint, __destructiveConfirmed: true }, runtime);
+  const result = await executeBridgePayload(`${requestId}_refresh`, "bridge.package.refresh", {}, {
+    "bridge-endpoint": effectiveEndpoint,
+    "timeout-ms": "15000"
+  }, runtime);
   if (result.ok) {
-    return { status: "triggered", command: "editor.menu", path: "Assets/Refresh", endpoint };
+    return { status: "triggered", command: "bridge.package.refresh", endpoint };
   }
-  return { status: "failed", command: "editor.menu", path: "Assets/Refresh", endpoint, code: result.error?.code, message: result.error?.message };
+  return { status: "failed", command: "bridge.package.refresh", endpoint, code: result.error?.code, message: result.error?.message };
 }
 
-function isProjectLocked(projectPath: string): boolean {
-  return existsSync(resolve(projectPath, "Temp", "UnityLockfile"));
+export async function refreshOpenEditor(requestId: string, flags: Record<string, string | boolean>, runtime: Runtime): Promise<Record<string, unknown>> {
+  return refreshPackageEditor(requestId, getString(flags, "bridge-endpoint"), runtime);
 }
 
 async function isBridgeReachable(endpoint: string): Promise<boolean> {
@@ -458,71 +430,84 @@ async function isBridgeReachable(endpoint: string): Promise<boolean> {
   }
 }
 
-export async function maybeResolvePackage(command: string, flags: Record<string, string | boolean>, runtime: Runtime, requestId: string, projectPath: string, result: Record<string, unknown>): Promise<CliResult> {
+/** 在 live refresh、跳过和 batch job 之间选择 package resolve 路径。 */
+export async function resolvePackageChanges(action: string, options: PackageExecutionOptions, runtime: PackageResolveRuntime, requestId: string, result: Record<string, unknown>): Promise<Record<string, unknown>> {
+  const { projectPath } = options;
   const manifestPath = join(projectPath, "Packages", "manifest.json");
   if (!existsSync(manifestPath)) {
-    return failure(requestId, "MANIFEST_NOT_FOUND", `Unity manifest not found: ${manifestPath}`, [
+    throw new StructuredToolError("MANIFEST_NOT_FOUND", `Unity manifest not found: ${manifestPath}`, [
       "Run the command from a Unity project root or pass --project <path>.",
       "package.resolve requires an existing Packages/manifest.json and does not create Unity projects."
     ], { projectPath, manifestPath, resolve: "blocked_missing_manifest" });
   }
 
-  // If a live Editor is reachable via bridge, trigger an asset refresh so it picks up the manifest change.
-  // Skip if caller already performed a bridge refresh (e.g. handleInit).
-  let liveRefresh = result.liveRefresh as Record<string, unknown> | undefined;
-  if (!liveRefresh) {
-    liveRefresh = await refreshOpenEditor(requestId, flags, runtime);
-  }
-
-  // If bridge refresh was triggered, return success — no need for Unity path or batchmode.
+  const liveRefresh = result.liveRefresh as Record<string, unknown> | undefined
+    ?? await refreshPackageEditor(requestId, options.bridgeEndpoint, runtime);
   if (liveRefresh.status === "triggered") {
-    return success(requestId, {
+    return {
       ...result,
       projectPath,
       status: result.status ?? "manifest_updated",
       resolve: "live_bridge_refresh",
       liveRefresh,
       nextActions: result.nextActions ?? ["The open Unity Editor has been notified to refresh assets. Wait for Unity to finish reimporting before using the package."]
-    });
+    };
   }
 
-  // If bridge was reachable but the refresh command failed, the Editor is open — batchmode would also fail.
   if (liveRefresh.status === "failed") {
-    return failure(requestId, "UNITY_BUSY", "The Unity Editor is open but the asset refresh command failed.", [
+    throw new StructuredToolError("UNITY_BUSY", "The Unity Editor is open but the asset refresh command failed.", [
       "Wait for Unity to finish compiling/importing and retry.",
       "If the issue persists, close the Unity Editor and retry without --bridge-endpoint.",
       "The manifest has been updated; Unity will detect the change on next domain reload or asset refresh."
-    ], {
-      projectPath,
-      resolve: "blocked_by_open_editor",
-      manifestUpdated: true,
-      liveRefresh
-    });
+    ], { projectPath, resolve: "blocked_by_open_editor", manifestUpdated: true, liveRefresh });
   }
 
-  // Bridge was not reachable — fall through to Unity path / batchmode checks.
-  const unityPath = getString(flags, "unity") ?? discoverUnity();
-  if (!unityPath && !getBoolean(flags, "job")) {
-    return success(requestId, { ...result, projectPath, status: result.status ?? "manifest_updated", resolve: "skipped", nextActions: result.nextActions ?? ["Pass --unity <path-to-Unity.exe> or set UNITY_EXE to run Unity PackageManager resolve as a job."] });
+  const unityPath = options.unity ?? discoverUnity();
+  if (!unityPath && !options.job) {
+    return { ...result, projectPath, status: result.status ?? "manifest_updated", resolve: "skipped", nextActions: result.nextActions ?? ["Pass --unity <path-to-Unity.exe> or set UNITY_EXE to run Unity PackageManager resolve as a job."] };
   }
   if (!unityPath) {
-    return failure(requestId, "UNITY_NOT_FOUND", "Unity.exe was not found.", ["Pass --unity <path-to-Unity.exe> or set UNITY_EXE."]);
+    throw new StructuredToolError("UNITY_NOT_FOUND", "Unity.exe was not found.", ["Pass --unity <path-to-Unity.exe> or set UNITY_EXE."]);
   }
-
-  // Pre-flight: check if the project is locked by another Unity instance (batchmode will fail if so).
   if (isProjectLocked(projectPath)) {
-    return failure(requestId, "UNITY_BUSY", "Cannot start Unity batchmode: the project is currently open in the Unity Editor.", [
+    throw new StructuredToolError("UNITY_BUSY", "Cannot start Unity batchmode: the project is currently open in the Unity Editor.", [
       "Close the Unity Editor and retry, or pass --bridge-endpoint <url> to trigger a live refresh.",
       "The manifest has been updated; Unity will detect the change on next domain reload or asset refresh.",
-      "If Unity is not running, delete the stale lock file: <project>/Temp/UnityLockfile"
-    ], {
-      projectPath,
-      resolve: "blocked_by_open_editor",
-      manifestUpdated: true
-    });
+      "Wait for the process holding <project>/Temp/UnityLockfile to exit, then retry"
+    ], { projectPath, resolve: "blocked_by_open_editor", manifestUpdated: true });
   }
 
+  if (!runtime.runner) {
+    throw new StructuredToolError("E_TOOL_HANDLER_UNSUPPORTED", "Package resolve requires a job runner runtime for batchmode execution.");
+  }
   const { ensurePackageBridge } = await import("../package-manager.js");
   const bridge = await ensurePackageBridge(projectPath);
-  return startUnityJob("package", flags, runtime, requestId, ["-executeMethod", "UnityCli.UnityCliBatch.ResolvePackages", "-unityCliPackageAction", command], { ...result, bridge });
+  return runUnityJob({
+    kind: "package",
+    requestId,
+    project: projectPath,
+    unity: unityPath,
+    args: ["-executeMethod", "UnityCli.UnityCliBatch.ResolvePackages", "-unityCliPackageAction", action],
+    result: { ...result, bridge },
+    timeoutMs: options.timeoutMs,
+    wait: options.wait,
+    waitTimeoutMs: options.waitTimeoutMs
+  }, runtime.runner);
+}
+
+export async function maybeResolvePackage(command: string, flags: Record<string, string | boolean>, runtime: Runtime, requestId: string, projectPath: string, result: Record<string, unknown>): Promise<CliResult> {
+  try {
+    return success(requestId, await resolvePackageChanges(command, {
+      projectPath,
+      unity: getString(flags, "unity"),
+      job: getBoolean(flags, "job"),
+      wait: getBoolean(flags, "wait"),
+      timeoutMs: Number(getString(flags, "timeout-ms")) || undefined,
+      waitTimeoutMs: Number(getString(flags, "wait-timeout-ms")) || undefined,
+      bridgeEndpoint: getString(flags, "bridge-endpoint")
+    }, runtime, requestId, result));
+  } catch (error) {
+    if (error instanceof StructuredToolError) return failure(requestId, error.code, error.message, error.nextActions, error.details);
+    throw error;
+  }
 }

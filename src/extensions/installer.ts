@@ -1,6 +1,6 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
-import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from "node:fs/promises";
+import { copyFile, mkdir, open, readdir, readFile, rename, rm, stat, writeFile, type FileHandle } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { readInstalledUnityPackages } from "./project-resolver.js";
@@ -59,6 +59,8 @@ export interface ExtensionStatusCheck {
 
 const packageName = "com.unity_cli";
 const manifestFileName = "unity_cli.extensions.manifest.json";
+const manifestLockTimeoutMs = 15_000;
+const manifestLockStaleMs = 60_000;
 
 /** 返回 extension 源码目录。 */
 export function extensionSourceRoot(extensionId: ExtensionId): string {
@@ -68,11 +70,6 @@ export function extensionSourceRoot(extensionId: ExtensionId): string {
 /** 返回 extension Unity 安装投影使用的默认相对路径。 */
 export function extensionUnityInstallIncludes(manifest: ExtensionManifest): string[] {
   return manifest.unityInstall?.include ?? ["extension.json", "unitypkg/", "docs/"];
-}
-
-/** 返回 legacy unitypkg 源码根目录；保留给旧测试和调用方。 */
-export function extensionBundleSourceRoot(extensionId: ExtensionId): string {
-  return join(extensionSourceRoot(extensionId), "unitypkg");
 }
 
 /** 返回 Unity 项目内 extension 目录安装根目录。 */
@@ -101,11 +98,17 @@ export async function readExtensionInstallManifest(projectPath: string): Promise
   }
 }
 
-/** 写入 extension 安装 manifest。 */
+/** 原子写入 extension 安装 manifest，读取方不会观察到半写文件。 */
 export async function writeExtensionInstallManifest(projectPath: string, manifest: ExtensionInstallManifest): Promise<void> {
   const manifestPath = extensionInstallManifestPath(projectPath);
+  const temporaryPath = `${manifestPath}.${process.pid}.${randomUUID()}.tmp`;
   await mkdir(dirname(manifestPath), { recursive: true });
-  await writeFile(manifestPath, `${JSON.stringify({ version: 1, extensions: manifest.extensions.sort((a, b) => a.extensionId.localeCompare(b.extensionId)) }, null, 2)}\n`, "utf8");
+  try {
+    await writeFile(temporaryPath, `${JSON.stringify({ version: 1, extensions: manifest.extensions.sort((a, b) => a.extensionId.localeCompare(b.extensionId)) }, null, 2)}\n`, "utf8");
+    await rename(temporaryPath, manifestPath);
+  } finally {
+    await rm(temporaryPath, { force: true }).catch(() => undefined);
+  }
 }
 
 /** 安装一个 extension 目录；只投影 Unity 侧文件，不安装可选 Unity package。 */
@@ -151,65 +154,69 @@ export async function installExtensionBundleUnchecked(
     throw new ExtensionInstallerError("E_EXTENSION_BUNDLE_MISSING", `Extension source directory not found: ${sourceRoot}`, ["Reinstall or rebuild the unity_cli package."]);
   }
 
-  const targetRoot = extensionInstallRoot(projectPath, manifest.id);
-  const installManifest = await readExtensionInstallManifest(projectPath);
-  const previous = installManifest.extensions.find((entry) => entry.extensionId === manifest.id);
-  if (previous) {
-    await removeManagedFiles(targetRoot, previous.files);
-  }
+  return withExtensionManifestLock(projectPath, async () => {
+    const targetRoot = extensionInstallRoot(projectPath, manifest.id);
+    const installManifest = await readExtensionInstallManifest(projectPath);
+    const previous = installManifest.extensions.find((entry) => entry.extensionId === manifest.id);
+    if (previous) {
+      await removeManagedFiles(targetRoot, previous.files);
+    }
 
-  const installIncludes = extensionUnityInstallIncludes(manifest);
-  const copiedFiles = await copyBundleProjection(sourceRoot, targetRoot, installIncludes);
-  const sourceHash = await hashBundleProjection(sourceRoot, installIncludes);
-  const entry: InstalledExtensionManifestEntry = {
-    extensionId: manifest.id,
-    version: manifest.version,
-    installedAt: new Date().toISOString(),
-    sourceHash,
-    files: copiedFiles,
-    requiresUnityPackages: manifest.unityPackages.map((pkg) => pkg.packageId),
-    copyRoot: "extension-directory",
-    layout: "directory",
-    installMode: "copy-if-package-present"
-  };
+    const installIncludes = extensionUnityInstallIncludes(manifest);
+    const copiedFiles = await copyBundleProjection(sourceRoot, targetRoot, installIncludes);
+    const sourceHash = await hashBundleProjection(sourceRoot, installIncludes);
+    const entry: InstalledExtensionManifestEntry = {
+      extensionId: manifest.id,
+      version: manifest.version,
+      installedAt: new Date().toISOString(),
+      sourceHash,
+      files: copiedFiles,
+      requiresUnityPackages: manifest.unityPackages.map((pkg) => pkg.packageId),
+      copyRoot: "extension-directory",
+      layout: "directory",
+      installMode: "copy-if-package-present"
+    };
 
-  installManifest.extensions = installManifest.extensions.filter((item) => item.extensionId !== manifest.id);
-  installManifest.extensions.push(entry);
-  await writeExtensionInstallManifest(projectPath, installManifest);
+    installManifest.extensions = installManifest.extensions.filter((item) => item.extensionId !== manifest.id);
+    installManifest.extensions.push(entry);
+    await writeExtensionInstallManifest(projectPath, installManifest);
 
-  return {
-    extensionId: manifest.id,
-    status: installedStatus,
-    projectPath: resolve(projectPath),
-    targetRoot,
-    fileCount: copiedFiles.length,
-    sourceHash,
-    files: copiedFiles
-  };
+    return {
+      extensionId: manifest.id,
+      status: installedStatus,
+      projectPath: resolve(projectPath),
+      targetRoot,
+      fileCount: copiedFiles.length,
+      sourceHash,
+      files: copiedFiles
+    };
+  });
 }
 
 /** 按 manifest 删除一个 extension 目录复制过的文件。 */
 export async function removeExtensionBundle(projectPath: string, extensionId: ExtensionId): Promise<ExtensionInstallResult> {
-  const installManifest = await readExtensionInstallManifest(projectPath);
-  const entry = installManifest.extensions.find((item) => item.extensionId === extensionId);
-  if (!entry) {
-    throw new ExtensionInstallerError("EXTENSION_NOT_INSTALLED", `Extension is not installed: ${extensionId}`, ["Run unity_cli extensions list --project <path> to inspect extension state."]);
-  }
+  return withExtensionManifestLock(projectPath, async () => {
+    const installManifest = await readExtensionInstallManifest(projectPath);
+    const entry = installManifest.extensions.find((item) => item.extensionId === extensionId);
+    if (!entry) {
+      throw new ExtensionInstallerError("EXTENSION_NOT_INSTALLED", `Extension is not installed: ${extensionId}`, ["Run unity_cli extensions list --project <path> to inspect extension state."]);
+    }
 
-  const targetRoot = extensionInstallRoot(projectPath, extensionId);
-  await removeManagedFiles(targetRoot, entry.files);
-  await removeEmptyDirectories(targetRoot);
+    const targetRoot = extensionInstallRoot(projectPath, extensionId);
+    await removeManagedFiles(targetRoot, entry.files);
+    await removeEmptyDirectories(targetRoot);
 
-  installManifest.extensions = installManifest.extensions.filter((item) => item.extensionId !== extensionId);
-  await writeExtensionInstallManifest(projectPath, installManifest);
+    installManifest.extensions = installManifest.extensions.filter((item) => item.extensionId !== extensionId);
+    await writeExtensionInstallManifest(projectPath, installManifest);
 
-  return {
-    extensionId,
-    status: "removed",
-    projectPath: resolve(projectPath),
-    targetRoot,
-    fileCount: entry.files.length
-  };
+    return {
+      extensionId,
+      status: "removed",
+      projectPath: resolve(projectPath),
+      targetRoot,
+      fileCount: entry.files.length
+    };
+  });
 }
 
 /** 检查所有 extension 的物理安装状态。 */
@@ -225,9 +232,12 @@ export async function checkExtensionBundles(projectPath: string): Promise<Extens
     const entry = installManifest.extensions.find((item) => item.extensionId === extensionId);
     const targetRoot = extensionInstallRoot(projectPath, extensionId);
     const sourceRoot = extensionSourceRoot(extensionId);
-    const sourceHash = existsSync(sourceRoot) ? await hashBundleProjection(sourceRoot, extensionUnityInstallIncludes(extension.manifest)) : undefined;
+    const includes = extensionUnityInstallIncludes(extension.manifest);
+    const sourceProjectionComplete = existsSync(sourceRoot) && includes.every((include) => existsSync(safeSourcePath(sourceRoot, include)));
+    const sourceHash = sourceProjectionComplete ? await hashBundleProjection(sourceRoot, includes) : undefined;
     const fileCheck = entry ? await checkManagedFiles(targetRoot, entry.files) : { missingFiles: [], changedFiles: [], unknownFiles: await listUnknownFiles(targetRoot, []) };
-    const outdated = Boolean(entry && sourceHash && entry.sourceHash !== sourceHash);
+    // version、投影源码 hash 和 include 文件均属于 physical install contract。
+    const outdated = Boolean(entry && (!sourceProjectionComplete || !sourceHash || entry.sourceHash !== sourceHash || entry.version !== extension.manifest.version));
     const hasUnknownFiles = fileCheck.unknownFiles.length > 0;
     const installed = Boolean(entry && fileCheck.missingFiles.length === 0 && fileCheck.changedFiles.length === 0 && !outdated && !hasUnknownFiles);
     const status = resolvePhysicalStatus(bundleAvailability, entry !== undefined, outdated, fileCheck.missingFiles, fileCheck.changedFiles, fileCheck.unknownFiles);
@@ -249,6 +259,59 @@ export async function checkExtensionBundles(projectPath: string): Promise<Extens
   }
 
   return checks;
+}
+
+/**
+ * 返回目标项目的唯一 extension physical install state 视图。
+ * 控制面和 live capability gate 均必须使用此入口，不能用 package dependency 替代安装状态。
+ */
+export async function readExtensionPhysicalStates(projectPath: string): Promise<Map<ExtensionId, ExtensionStatusCheck>> {
+  return new Map((await checkExtensionBundles(projectPath)).map((check) => [check.extensionId, check]));
+}
+
+/** 跨进程序列化同一项目的 extension 文件与 manifest 变更，防止并发 lost update。 */
+async function withExtensionManifestLock<T>(projectPath: string, action: () => Promise<T>): Promise<T> {
+  const lockPath = `${extensionInstallManifestPath(projectPath)}.lock`;
+  const deadline = Date.now() + manifestLockTimeoutMs;
+  await mkdir(dirname(lockPath), { recursive: true });
+
+  while (true) {
+    let handle: FileHandle | undefined;
+    try {
+      handle = await open(lockPath, "wx");
+      await handle.writeFile(`${JSON.stringify({ pid: process.pid, acquiredAt: new Date().toISOString() })}\n`, "utf8");
+      try {
+        return await action();
+      } finally {
+        await handle.close();
+        await rm(lockPath, { force: true });
+      }
+    } catch (error) {
+      if (handle) await handle.close().catch(() => undefined);
+      const code = (error as NodeJS.ErrnoException).code;
+      if (code !== "EEXIST") throw error;
+
+      try {
+        const lockStat = await stat(lockPath);
+        if (Date.now() - lockStat.mtimeMs > manifestLockStaleMs) {
+          await rm(lockPath, { force: true });
+          continue;
+        }
+      } catch (statError) {
+        if ((statError as NodeJS.ErrnoException).code !== "ENOENT") throw statError;
+        continue;
+      }
+
+      if (Date.now() >= deadline) {
+        throw new ExtensionInstallerError(
+          "E_EXTENSION_INSTALL_LOCK_TIMEOUT",
+          `Timed out waiting for extension install lock: ${lockPath}`,
+          ["Wait for the other extension install/remove process to finish, then retry."]
+        );
+      }
+      await new Promise((resolveDelay) => setTimeout(resolveDelay, 50));
+    }
+  }
 }
 
 async function copyBundleProjection(sourceRoot: string, targetRoot: string, includes: string[]): Promise<ManagedExtensionFile[]> {

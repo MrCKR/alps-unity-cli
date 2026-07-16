@@ -6,8 +6,6 @@ namespace UnityCli
 {
     /// <summary>
     /// scene.view-frame — 将 Editor SceneView 对准目标 GameObject 或 frame all。
-    /// 只改视口,不改场景数据。对齐旧 SceneViewFrame handler;editor-only。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class SceneViewFrameTool : IUnityCliTool<SceneViewFrameTool.Request, SceneViewFrameTool.Result>
     {
@@ -42,7 +40,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var target = request.Target ?? request.Path;
             var frameAll = request.FrameAll == true;
@@ -58,14 +56,14 @@ namespace UnityCli
                 {
                     Selection.activeGameObject = go;
                     sceneView.Frame(new Bounds(go.transform.position, Vector3.one), false);
-                    return new Result { Target = target, Framed = true };
+                    return new System.Threading.Tasks.ValueTask<Result>(new Result { Target = target, Framed = true });
                 }
             }
             if (frameAll)
             {
                 sceneView.Frame(new Bounds(Vector3.zero, new Vector3(10, 10, 10)), true);
             }
-            return new Result { Framed = true };
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Framed = true });
         }
     }
 }

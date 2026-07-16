@@ -31,6 +31,7 @@ namespace UnityCli.ProBuilder
             Description = "Subdivide selected faces of a ProBuilder mesh, increasing face count. When faceIndices is omitted, all faces are subdivided.",
             Group = "probuilder",
             DestructiveHint = false,
+            SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 10000,
@@ -43,35 +44,41 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            var go = ProBuilderInput.ResolveTarget(request.Target);
             if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("subdivide", "No ProBuilderMesh on target.");
 
-            int[] faceIndices = request.FaceIndices?.Select(i => (int)i).ToArray();
             var beforeCount = ProBuilderReflection.GetFaceCount(mesh);
-            Undo.RecordObject(go, "ProBuilder Subdivide");
+            if (beforeCount < 1)
+                throw ProBuilderErrors.OperationFailed("subdivide", "Target has no readable faces.");
+            int[] faceIndices = request.FaceIndices?.Select(i => (int)i).Distinct().ToArray();
+            if (faceIndices == null || faceIndices.Length == 0)
+                faceIndices = Enumerable.Range(0, beforeCount).ToArray();
+            if (ProBuilderReflection.GetFacesByIndices(mesh, faceIndices) == null)
+                throw ProBuilderErrors.SchemaInvalid("faceIndices contains an invalid face index.");
 
-            if (faceIndices != null && faceIndices.Length > 0)
-                ProBuilderReflection.SubdivideFaces(mesh, faceIndices);
-            else
-                ProBuilderReflection.SubdivideFaces(mesh, Enumerable.Range(0, beforeCount).ToArray());
+            Undo.RecordObject(go, "ProBuilder Subdivide");
+            if (!ProBuilderReflection.SubdivideFaces(mesh, faceIndices))
+                throw ProBuilderErrors.OperationFailed("subdivide", "ProBuilder 5.x Subdivision.Subdivide failed.");
 
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
             var afterCount = ProBuilderReflection.GetFaceCount(mesh);
-            return new Result
+            if (afterCount <= beforeCount)
+                throw ProBuilderErrors.OperationFailed("subdivide", "Subdivide completed without increasing face count.");
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 BeforeFaceCount = beforeCount,
                 AfterFaceCount = afterCount
-            };
+            });
         }
     }
 }

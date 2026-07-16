@@ -8,8 +8,6 @@ namespace UnityCli
 {
     /// <summary>
     /// scene.create — 在 Assets/*.unity 路径创建新空场景并可加载。拒绝覆盖已存在场景资产。
-    /// 对齐旧 SceneCreate handler;session-affecting。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class SceneCreateTool : IUnityCliTool<SceneCreateTool.Request, SceneCreateTool.Result>
     {
@@ -33,10 +31,10 @@ namespace UnityCli
             Description = "Create a new empty scene at an Assets/*.unity path and optionally load it. Refuses to overwrite an existing scene asset.",
             Group = "scene",
             Version = "1.0.0",
-            DestructiveHint = false,
+            DestructiveHint = true,
             SideEffects = new[] { "scene-modify", "asset-write" },
             Target = "editor",
-            PlayModeSupport = "session-affecting",
+            PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 30000,
             MaxTimeoutMs = 600000,
             Examples = new[]
@@ -45,7 +43,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             SceneToolSupport.EnsureEditorNotBusy("scene.create");
             var path = SceneToolSupport.ResolveScenePath(request.Path ?? request.Name, false);
@@ -62,7 +60,7 @@ namespace UnityCli
                     throw new UnityCliBridge.BridgeCommandException("E_SCENE_SAVE_FAILED", "Failed to save new scene: " + path, "Check destination path and Unity Console diagnostics.");
                 }
             }
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Scene = SceneToolSupport.BuildSceneInfo(SceneManager.GetActiveScene()),
                 RequestedPath = path,
@@ -70,7 +68,7 @@ namespace UnityCli
                 {
                     new ScenePlannedEffect { Type = "scene.create", Path = path }
                 }
-            };
+            });
         }
     }
 }

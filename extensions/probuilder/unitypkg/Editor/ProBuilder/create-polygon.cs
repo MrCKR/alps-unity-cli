@@ -31,6 +31,7 @@ namespace UnityCli.ProBuilder
             Description = "Create a new polygon face from selected vertices on a ProBuilder mesh. Requires at least 3 vertex indices. When unordered is true (default), ProBuilder attempts to order the vertices into a valid polygon.",
             Group = "probuilder",
             DestructiveHint = false,
+            SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 10000,
@@ -43,12 +44,12 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            var go = ProBuilderInput.ResolveTarget(request.Target);
             if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
@@ -69,7 +70,7 @@ namespace UnityCli.ProBuilder
             EditorSceneManager.MarkSceneDirty(go.scene);
 
             var faceCount = ProBuilderReflection.GetFaceCount(mesh);
-            return new Result { NewFaceIndex = faceCount - 1 };
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { NewFaceIndex = faceCount - 1 });
         }
     }
 }

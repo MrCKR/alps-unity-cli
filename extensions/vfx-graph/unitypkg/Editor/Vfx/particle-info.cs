@@ -37,7 +37,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var particleSystem = VfxToolSupport.ResolveParticleSystem(request.Target);
             if (particleSystem == null)
@@ -48,12 +48,12 @@ namespace UnityCli
                     "Pass a GameObject name / hierarchy path with a ParticleSystem component.");
             }
 
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Target = GameObjectToolSupport.BuildGameObjectRef(particleSystem.gameObject),
                 ParticleSystem = VfxToolSupport.BuildParticleSystemInfo(particleSystem),
                 LogPath = ctx.LogPath
-            };
+            });
         }
     }
 }

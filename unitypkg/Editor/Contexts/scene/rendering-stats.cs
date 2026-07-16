@@ -38,27 +38,28 @@ namespace UnityCli.Contexts.Scene
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "live"
+            RefreshBehavior = "live",
+            Examples = new[] { new ContextExample { Description = "Read rendering statistics", Input = new Request { } } }
         };
 
         /// <summary>
         /// 通过反射读取 UnityStats；Unity 内部 API 不存在时返回可恢复诊断。
-        /// </summary>
-        public Result Read(Request request, UnityCliProjectToolContext ctx)
+    /// </summary>
+        public System.Threading.Tasks.ValueTask<Result> ReadAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var statsType = FindType("UnityEditor.UnityStats");
             if (statsType == null)
             {
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Available = false,
                     Stats = null,
                     Diagnostics = "UnityStats internal API not available in this Unity version. Rendering stats cannot be read.",
                     NextActions = new[] { "Rendering stats may be available through the Stats overlay window in the Game view." }
-                };
+                });
             }
 
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Available = true,
                 Stats = new RenderingStats
@@ -70,7 +71,7 @@ namespace UnityCli.Contexts.Scene
                 },
                 Diagnostics = null,
                 NextActions = null
-            };
+            });
         }
 
         // 查找 UnityStats 内部类型；不同 Unity 版本可能不存在该类型。

@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readFile } from "node:fs/promises";
 import { bridgeCommandRegistry } from "../src/bridge/index.js";
 import { findCommandContract } from "../src/contracts/command-contract.js";
 import { destructiveCommands } from "../src/security-policy.js";
@@ -67,6 +68,18 @@ test("reflection.method.call supports instanceRef and confirmation flow", async 
   assert.equal(props.security, undefined);
 });
 
+test("reflection.method.call example is executable and overload selection is explicit", async () => {
+  const source = await readFile(new URL("../unitypkg/Editor/Tools/reflection/method/call.cs", import.meta.url), "utf8");
+  const reflection = await readFile(new URL("../unitypkg/Editor/Infrastructure/UnityCliReflection.cs", import.meta.url), "utf8");
+  assert.match(source, /TypeName = "UnityEngine\.Random", MethodName = "InitState", Args = new object\[\] \{ 12345 \}/);
+  assert.match(source, /public List<string> ParameterTypes/);
+  assert.match(source, /request\.Args, request\.ParameterTypes, request\.InstanceRef/);
+  assert.match(reflection, /private static MethodInfo ResolveCallMethod/);
+  assert.match(reflection, /E_METHOD_AMBIGUOUS/);
+  assert.doesNotMatch(reflection, /type\.GetMethod\(methodName, bindings\)/);
+  assert.doesNotMatch(source, /MethodName = "Translate"/);
+});
+
 test("bridge specs resolve for reflection and type tools", () => {
   const methodFind = bridgeCommandRegistry.lookup("reflection", "method-find");
   assert.equal(methodFind?.bridgeCommand, "project-tool.run");
@@ -89,17 +102,17 @@ test("destructive security policy covers reflection.method.call", () => {
   assert.ok(commands.has("reflection.method.call"));
 });
 
-test("C# RegisterCommand calls removed for reflection and type commands (migrated to IUnityCliTool)", async () => {
+test("reflection and type commands are exposed by typed C# tools", async () => {
   const allSource = await readEditorCsSources();
   for (const command of ["reflection.method.find", "reflection.method.call", "type.schema"]) {
-    assert.ok(!allSource.includes(`RegisterCommand(registry, "${command}"`), `${command} should NOT be registered (migrated to IUnityCliTool)`);
     assert.ok(allSource.includes(`Name = "${command}"`), `${command} should expose the public tool name through IUnityCliTool`);
   }
   assert.match(allSource, /ReflectionInvoker\.FindMethods\(/);
   assert.match(allSource, /ReflectionInvoker\.CallMethod\(/);
   assert.match(allSource, /TypeSchemaGenerator\.Generate\(/);
-  assert.match(allSource, /PropObject\("\$defs"/);
-  assert.match(allSource, /Prop\("\$ref", "#\/\$defs\//);
+  assert.match(allSource, /schema\["\$defs"\] = context\.Definitions/);
+  assert.match(allSource, /new Dictionary<string, object> \{ \{ "\$ref", "#\/\$defs\/" \+ key \} \}/);
   assert.match(allSource, /TryGetDictionaryTypes/);
   assert.match(allSource, /genericArguments/);
+  assert.doesNotMatch(allSource, /UnityCliJsonWriter/);
 });

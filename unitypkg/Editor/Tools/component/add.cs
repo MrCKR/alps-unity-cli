@@ -8,8 +8,6 @@ namespace UnityCli
 {
     /// <summary>
     /// component.add — 向 GameObject 添加 Component,可在创建后一次性设置简单公开字段/属性。
-    /// 对齐旧 ComponentAdd handler;session-affecting。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class ComponentAddTool : IUnityCliTool<ComponentAddTool.Request, ComponentAddTool.Result>
     {
@@ -17,7 +15,7 @@ namespace UnityCli
         {
             public string Target { get; set; }
             public string Component { get; set; }
-            public string Properties { get; set; }
+            [UnityCliAnyJson] public Dictionary<string, object> Properties { get; set; }
         }
 
         public sealed class Result
@@ -43,11 +41,11 @@ namespace UnityCli
             MaxTimeoutMs = 600000,
             Examples = new[]
             {
-                new ToolExample { Description = "Add Rigidbody with initial properties", Input = new Request { Target = "Player", Component = "Rigidbody", Properties = "{\"mass\":2,\"useGravity\":false}" } }
+                new ToolExample { Description = "Add Rigidbody with initial properties", Input = new Request { Target = "ComponentTarget", Component = "Rigidbody", Properties = new Dictionary<string, object> { { "mass", 2L }, { "useGravity", false } } } }
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             GameObjectToolSupport.EnsureEditorNotBusy("component.add");
             var gameObject = ResolveTarget(request.Target, "Component add requires a target.");
@@ -57,22 +55,22 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_EXISTS", "Component already exists on target: " + componentName, "Use component.set or component.modify to update existing component properties.");
             }
-            var propertyChanges = GameObjectToolSupport.BuildComponentPropertyChanges(type, GameObjectToolSupport.ComponentPropertiesJson(request.Properties));
-            var component = Undo.AddComponent(gameObject, type);
+            var propertyChanges = GameObjectToolSupport.BuildComponentPropertyChanges(type, request.Properties);
+            var component = UnityCliSceneMutation.AddComponent(gameObject, type);
             if (component == null || !type.IsInstanceOfType(component))
             {
-                if (!object.ReferenceEquals(component, null)) Undo.DestroyObjectImmediate(component);
+                if (!object.ReferenceEquals(component, null)) UnityCliSceneMutation.DestroyObject(component);
                 throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_ADD_FAILED", "Unity did not add component type: " + componentName, "The type may be restricted by Unity on this GameObject. Run component.get to inspect existing components, then choose a different component type or update the existing component.");
             }
             GameObjectToolSupport.ApplyComponentPropertyChanges(component, propertyChanges);
-            EditorSceneManager.MarkSceneDirty(gameObject.scene);
-            return new Result
+            UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Target = GameObjectToolSupport.BuildGameObjectRef(gameObject),
                 Component = GameObjectToolSupport.BuildComponentSummary(component),
                 ChangedProperties = BuildChangedProperties(propertyChanges),
                 PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "component.add", Target = GameObjectToolSupport.HierarchyPath(gameObject), Component = component.GetType().Name } }
-            };
+            });
         }
 
         internal static GameObject ResolveTarget(string target, string message)
@@ -98,7 +96,7 @@ namespace UnityCli
             var result = new List<ChangedProperty>();
             foreach (var change in changes ?? new List<ComponentPropertyChange>())
             {
-                result.Add(new ChangedProperty { Name = change.Name, Type = change.ValueType.Name, Value = GameObjectToolSupport.ParseJsonToObject(change.RawJson) });
+                result.Add(new ChangedProperty { Name = change.Name, Type = change.ValueType.Name, Value = change.InputValue });
             }
             return result;
         }

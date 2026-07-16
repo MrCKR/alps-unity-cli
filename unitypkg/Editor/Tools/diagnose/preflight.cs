@@ -1,9 +1,12 @@
 #if UNITY_EDITOR
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using UnityEditor;
+using UnityEngine;
 using UnityEngine.SceneManagement;
 
 namespace UnityCli
@@ -12,18 +15,9 @@ namespace UnityCli
     {
         /// <summary>
         /// diagnose.preflight — 聚合 Unity Editor 健康诊断。
-        /// 迁移自旧 RegisterCommand(DiagnoseCommands.DiagnosePreflightJson)为 IUnityCliTool 自包含。
         ///
-        /// 作为 UnityCliBridge 的嵌套类实现:diagnose 聚合多个 Bridge 内部 private helper
-        /// (EditorStateJson/CapabilitiesJson/DiscoverProjectTools/DiscoverProjectContexts/
-        /// ProjectToolFingerprintSummaryJson/ProjectContextFingerprintSummaryJson/port/LogPath/
-        /// ProjectTools/ProjectContexts/ProjectRoot/FindType)。嵌套类可直接访问外层 private 成员,
-        /// 无需改动任何 helper 的可见性。
-        ///
-        /// 这些 helper 返回 raw JSON 字符串,而 IUnityCliTool 的 Result 是强类型 DTO(由 UnityCliSerializer
-        /// 反射序列化,string 字段会被转义而非当嵌套对象)。因此用私有 ParseJsonToTree 把 JSON 字符串
-        /// 解析成 object 树(Dictionary/List/标量),放入 object 类型字段——UnityCliSerializer 会把
-        /// Dictionary 序列化为嵌套对象、List 序列化为数组,从而保留原有输出结构。
+        /// 作为 UnityCliBridge 的嵌套类实现，聚合 Editor 状态、capability 列表、项目工具/上下文
+        /// fingerprint 与编译诊断。所有动态字段直接构造为 Dictionary/List 值树。
         /// </summary>
         public sealed class DiagnosePreflightTool : IUnityCliTool<DiagnosePreflightTool.Request, DiagnosePreflightTool.Result>
         {
@@ -37,12 +31,11 @@ namespace UnityCli
                 public string Command { get; set; }
                 public string TargetCommand { get; set; }
                 public ProjectInfo Project { get; set; }
-                // Editor/Capabilities/Fingerprint 为 raw JSON 解析出的 object 树(运行时为 Dictionary),序列化为嵌套对象
-                public object Editor { get; set; }
+                [UnityCliAnyJson] public object Editor { get; set; }
                 public BridgeInfo Bridge { get; set; }
                 public CustomFingerprintInfo CustomTools { get; set; }
                 public CustomFingerprintInfo CustomContexts { get; set; }
-                public List<object> Checks { get; set; }
+                [UnityCliAnyJson] public List<object> Checks { get; set; }
                 public string LogPath { get; set; }
             }
 
@@ -57,12 +50,12 @@ namespace UnityCli
             {
                 public long Port { get; set; }
                 public string LogPath { get; set; }
-                public object Capabilities { get; set; }
+                [UnityCliAnyJson] public object Capabilities { get; set; }
             }
 
             public sealed class CustomFingerprintInfo
             {
-                public object Fingerprint { get; set; }
+                [UnityCliAnyJson] public object Fingerprint { get; set; }
             }
 
             public sealed class CompileStatusCheck
@@ -89,8 +82,8 @@ namespace UnityCli
                 }
             };
 
-            public Result Execute(Request request, UnityCliProjectToolContext ctx)
-            {
+            public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
+        {
                 // 触发项目自定义工具/上下文发现,确保 fingerprint 摘要反映最新注册状态
                 DiscoverProjectTools();
                 DiscoverProjectContexts();
@@ -102,10 +95,10 @@ namespace UnityCli
                     MakeCheck("sceneLoaded", scene.isLoaded),
                     MakeCheck("projectToolFingerprint", !ProjectTools.Values.Any(definition => definition.FingerprintStatus == "blocked")),
                     MakeCheck("projectContextFingerprint", !ProjectContexts.Values.Any(definition => definition.FingerprintStatus == "blocked")),
-                    ParseJsonToTree(CompileStatusJson())
+                    BuildCompileStatus()
                 };
 
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Command = "diagnose.preflight",
                     TargetCommand = request.Command,
@@ -115,18 +108,24 @@ namespace UnityCli
                         UnityVersion = Application.unityVersion,
                         ActiveScene = scene.path
                     },
-                    Editor = ParseJsonToTree(EditorStateJson()),
+                    Editor = new Dictionary<string, object>
+                    {
+                        { "busy", EditorApplication.isCompiling || EditorApplication.isUpdating || BuildPipeline.isBuildingPlayer },
+                        { "compiling", EditorApplication.isCompiling },
+                        { "updating", EditorApplication.isUpdating },
+                        { "building", BuildPipeline.isBuildingPlayer }
+                    },
                     Bridge = new BridgeInfo
                     {
                         Port = (long)port,
                         LogPath = LogPath(),
-                        Capabilities = ParseJsonToTree(CapabilitiesJson())
+                        Capabilities = BuildCapabilities()
                     },
-                    CustomTools = new CustomFingerprintInfo { Fingerprint = ParseJsonToTree(ProjectToolFingerprintSummaryJson()) },
-                    CustomContexts = new CustomFingerprintInfo { Fingerprint = ParseJsonToTree(ProjectContextFingerprintSummaryJson()) },
+                    CustomTools = new CustomFingerprintInfo { Fingerprint = ProjectToolFingerprintSummary() },
+                    CustomContexts = new CustomFingerprintInfo { Fingerprint = ProjectContextFingerprintSummary() },
                     Checks = checks,
                     LogPath = LogPath()
-                };
+                });
             }
 
             // 构造 {name, ok} 检查项(运行时 Dictionary,UnityCliSerializer 序列化为对象)
@@ -135,10 +134,49 @@ namespace UnityCli
                 return new Dictionary<string, object> { { "name", name }, { "ok", ok } };
             }
 
-            // 编译状态检查:isCompiling + 近期编译错误(通过反射 LogEntries)。原样搬迁自 DiagnoseCommands。
+            // 构造 bridge capability 列表，保持与 HTTP capability discovery 相同的域和命令集合。
+            private static List<object> BuildCapabilities()
+            {
+                var capabilities = new List<object>();
+                AddCapability(capabilities, "camera", CameraCommands);
+                AddCapability(capabilities, "scene", SceneCommands);
+                AddCapability(capabilities, "go", GameObjectCommands);
+                AddCapability(capabilities, "asset", AssetCommands);
+                AddCapability(capabilities, "diagnose", DiagnoseCommands);
+                AddCapability(capabilities, "screenshot", ScreenshotCommands);
+                AddCapability(capabilities, "prefab", PrefabCommands);
+                AddCapability(capabilities, "ui", UiCommands);
+                AddCapability(capabilities, "material", MaterialCommands);
+                AddCapability(capabilities, "graphics", GraphicsCommands);
+                AddCapability(capabilities, "physics", PhysicsCommands);
+                AddCapability(capabilities, "scriptable-object", ScriptableObjectCommands);
+                AddCapability(capabilities, "profiler", ProfilerCommands);
+                AddCapability(capabilities, "animation", AnimationCommands);
+                AddCapability(capabilities, "shader", ShaderCommands);
+                AddCapability(capabilities, "texture", TextureCommands);
+                AddCapability(capabilities, "editor", EditorCommands);
+                AddCapability(capabilities, "code", CodeCommands);
+                AddCapability(capabilities, "project-tool", ProjectToolCommands);
+                AddCapability(capabilities, "runtime-tool", RuntimeToolCommands);
+                AddCapability(capabilities, "context", ContextCommands);
+                AddCapability(capabilities, "extension", ExtensionCommands);
+                return capabilities;
+            }
+
+            private static void AddCapability(List<object> capabilities, string domain, string[] commands)
+            {
+                capabilities.Add(new Dictionary<string, object>
+                {
+                    { "domain", domain },
+                    { "route", "POST /bridge/execute" },
+                    { "commands", commands }
+                });
+            }
+
+            // 编译状态检查:isCompiling + 近期编译错误(通过反射 LogEntries)。
             // 扩展编译失败会让 Unity 持续无法完成编译、Bridge 报 E_UNITY_COMPILING,这里把状态和错误明示出来,
             // 让 doctor 能定位是"扩展编译失败"而非"bridge 不可达"。
-            private static string CompileStatusJson()
+            private static CompileStatusCheck BuildCompileStatus()
             {
                 var compiling = EditorApplication.isCompiling;
                 var hasCompileErrors = false;
@@ -148,40 +186,49 @@ namespace UnityCli
                     var logEntriesType = FindType("UnityEditor.LogEntries") ?? FindType("UnityEditorInternal.LogEntries");
                     if (logEntriesType != null)
                     {
-                        var start = logEntriesType.GetMethod("GetEntryCount", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-                        var getEntry = logEntriesType.GetMethod("GetEntryInternal", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-                        var getLines = logEntriesType.GetMethod("GetLinesAndModeInternal", BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic);
-                        if (start != null)
+                        var flags = BindingFlags.Static | BindingFlags.Public | BindingFlags.NonPublic;
+                        var start = logEntriesType.GetMethod("StartGettingEntries", flags);
+                        var end = logEntriesType.GetMethod("EndGettingEntries", flags);
+                        var count = logEntriesType.GetMethod("GetCount", flags);
+                        var getEntry = logEntriesType.GetMethod("GetEntryInternal", flags);
+                        var getLines = logEntriesType.GetMethod("GetLinesAndModeFromEntryInternal", flags)
+                            ?? logEntriesType.GetMethod("GetLinesAndModeInternal", flags);
+                        var total = start != null
+                            ? Convert.ToInt32(start.Invoke(null, Type.EmptyTypes), CultureInfo.InvariantCulture)
+                            : count == null ? 0 : Convert.ToInt32(count.Invoke(null, Type.EmptyTypes), CultureInfo.InvariantCulture);
+                        try
                         {
-                            var total = (int)start.Invoke(null, Type.EmptyTypes);
                             var inspected = 0;
                             for (var i = total - 1; i >= 0 && inspected < 60; i--, inspected++)
                             {
                                 string line = null;
-                                int mode = 0;
+                                var mode = 0;
                                 try
                                 {
-                                    if (getEntry != null)
+                                    if (getLines != null && getLines.GetParameters().Length == 4)
+                                    {
+                                        var args = new object[] { i, 1, 0, null };
+                                        getLines.Invoke(null, args);
+                                        mode = Convert.ToInt32(args[2], CultureInfo.InvariantCulture);
+                                        line = args[3] as string;
+                                    }
+                                    else if (getEntry != null && getEntry.GetParameters().Length == 4)
                                     {
                                         var args = new object[4] { i, null, null, null };
                                         getEntry.Invoke(null, args);
                                         line = args[1] as string;
-                                        mode = args[2] as int? ?? 0;
+                                        mode = args[2] == null ? 0 : Convert.ToInt32(args[2], CultureInfo.InvariantCulture);
                                     }
-                                }
-                                catch { }
-                                if (line == null && getLines != null)
-                                {
-                                    try
+                                    else if (getLines != null && getLines.GetParameters().Length == 2)
                                     {
                                         var args = new object[] { i, null };
                                         getLines.Invoke(null, args);
                                         line = args[1] as string;
                                     }
-                                    catch { }
                                 }
+                                catch { }
                                 if (string.IsNullOrEmpty(line)) continue;
-                                // 仅关注编译错误(CS####)。mode 位掩码中 bit1 为 error
+                                // 仅关注编译错误(CS####)。mode 位掩码中 bit1 为 error。
                                 var isCompileError = line.IndexOf("CS", StringComparison.OrdinalIgnoreCase) >= 0 && line.IndexOf("error", StringComparison.OrdinalIgnoreCase) >= 0;
                                 if (isCompileError || ((mode & 1) != 0 && line.IndexOf("Compile", StringComparison.OrdinalIgnoreCase) >= 0))
                                 {
@@ -190,6 +237,10 @@ namespace UnityCli
                                     if (errors.Count >= 20) break;
                                 }
                             }
+                        }
+                        finally
+                        {
+                            if (start != null && end != null) end.Invoke(null, Type.EmptyTypes);
                         }
                     }
                 }
@@ -204,7 +255,7 @@ namespace UnityCli
                 {
                     nextActions.Add("If an extension no longer compiles, remove it via unity_cli extensions remove <id> --project <path>.");
                 }
-                return UnityCliSerializer.Serialize(new CompileStatusCheck
+                return new CompileStatusCheck
                 {
                     Name = "compileStatus",
                     Ok = !compiling && !hasCompileErrors,
@@ -212,151 +263,9 @@ namespace UnityCli
                     HasCompileErrors = hasCompileErrors,
                     CompileErrors = errors,
                     NextActions = nextActions
-                });
+                };
             }
 
-            // ── 轻量 JSON → object 树解析器 ──
-            // 把 Bridge 内部 helper 返回的 raw JSON 字符串解析成 object 树,供 UnityCliSerializer
-            // 按对象/数组序列化嵌入 Result。返回 string/long/double/bool/Dictionary<string,object>/List<object>/null。
-            private static object ParseJsonToTree(string json)
-            {
-                if (string.IsNullOrEmpty(json)) return null;
-                var index = 0;
-                return ParseValue(json, ref index);
-            }
-
-            private static object ParseValue(string json, ref int index)
-            {
-                SkipWhitespace(json, ref index);
-                if (index >= json.Length) return null;
-                var ch = json[index];
-                if (ch == '"') return ParseString(json, ref index);
-                if (ch == '{') return ParseObject(json, ref index);
-                if (ch == '[') return ParseArray(json, ref index);
-                if (ch == 't' || ch == 'f') return ParseBool(json, ref index);
-                if (ch == 'n') { index += 4; return null; }
-                if (ch == '-' || char.IsDigit(ch)) return ParseNumber(json, ref index);
-                return null;
-            }
-
-            private static string ParseString(string json, ref int index)
-            {
-                index++; // 跳过开头 "
-                var chars = new List<char>();
-                while (index < json.Length)
-                {
-                    var ch = json[index++];
-                    if (ch == '"') return new string(chars.ToArray());
-                    if (ch == '\\' && index < json.Length)
-                    {
-                        var esc = json[index++];
-                        switch (esc)
-                        {
-                            case '"': chars.Add('"'); break;
-                            case '\\': chars.Add('\\'); break;
-                            case '/': chars.Add('/'); break;
-                            case 'b': chars.Add('\b'); break;
-                            case 'f': chars.Add('\f'); break;
-                            case 'n': chars.Add('\n'); break;
-                            case 'r': chars.Add('\r'); break;
-                            case 't': chars.Add('\t'); break;
-                            case 'u':
-                                if (index + 4 <= json.Length)
-                                {
-                                    chars.Add((char)int.Parse(json.Substring(index, 4), System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture));
-                                    index += 4;
-                                }
-                                break;
-                            default: chars.Add(esc); break;
-                        }
-                    }
-                    else
-                    {
-                        chars.Add(ch);
-                    }
-                }
-                return new string(chars.ToArray());
-            }
-
-            private static object ParseNumber(string json, ref int index)
-            {
-                var start = index;
-                if (json[index] == '-') index++;
-                while (index < json.Length && char.IsDigit(json[index])) index++;
-                var hasFraction = false;
-                if (index < json.Length && json[index] == '.')
-                {
-                    hasFraction = true;
-                    index++;
-                    while (index < json.Length && char.IsDigit(json[index])) index++;
-                }
-                if (index < json.Length && (json[index] == 'e' || json[index] == 'E'))
-                {
-                    hasFraction = true;
-                    index++;
-                    if (index < json.Length && (json[index] == '+' || json[index] == '-')) index++;
-                    while (index < json.Length && char.IsDigit(json[index])) index++;
-                }
-                var text = json.Substring(start, index - start);
-                // 整数用 long(保留整数输出),含小数/指数用 double
-                return hasFraction
-                    ? (object)double.Parse(text, System.Globalization.CultureInfo.InvariantCulture)
-                    : (object)long.Parse(text, System.Globalization.CultureInfo.InvariantCulture);
-            }
-
-            private static bool ParseBool(string json, ref int index)
-            {
-                if (json[index] == 't') { index += 4; return true; }
-                index += 5; return false;
-            }
-
-            private static Dictionary<string, object> ParseObject(string json, ref int index)
-            {
-                index++; // 跳过 {
-                var obj = new Dictionary<string, object>();
-                SkipWhitespace(json, ref index);
-                if (index < json.Length && json[index] == '}') { index++; return obj; }
-                while (index < json.Length)
-                {
-                    SkipWhitespace(json, ref index);
-                    var key = ParseString(json, ref index); // key
-                    SkipWhitespace(json, ref index);
-                    if (index >= json.Length || json[index] != ':') return obj;
-                    index++;
-                    var value = ParseValue(json, ref index);
-                    // 保留 value(含 null):UnityCliSerializer 的 IDictionary 分支会跳过 null value,
-                    // 与原 Prop("name", null) 写出 null 略有差异,但对诊断输出无影响
-                    obj[key] = value;
-                    SkipWhitespace(json, ref index);
-                    if (index < json.Length && json[index] == ',') { index++; continue; }
-                    if (index < json.Length && json[index] == '}') { index++; return obj; }
-                    return obj;
-                }
-                return obj;
-            }
-
-            private static List<object> ParseArray(string json, ref int index)
-            {
-                index++; // 跳过 [
-                var arr = new List<object>();
-                SkipWhitespace(json, ref index);
-                if (index < json.Length && json[index] == ']') { index++; return arr; }
-                while (index < json.Length)
-                {
-                    var value = ParseValue(json, ref index);
-                    arr.Add(value); // 保留 null 元素:UnityCliSerializer 会输出为 null
-                    SkipWhitespace(json, ref index);
-                    if (index < json.Length && json[index] == ',') { index++; continue; }
-                    if (index < json.Length && json[index] == ']') { index++; return arr; }
-                    return arr;
-                }
-                return arr;
-            }
-
-            private static void SkipWhitespace(string json, ref int index)
-            {
-                while (index < json.Length && char.IsWhiteSpace(json[index])) index++;
-            }
         }
     }
 }

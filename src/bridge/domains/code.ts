@@ -2,7 +2,7 @@ import { boolFlag, compactArgs, numberFlag, stringFlag } from "../args.js";
 import type { BridgeCommandSpec } from "../types.js";
 
 export const codeBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "code", command: "exec", bridgeCommand: "code.exec", buildArgs: codeArgs, supportsJob: true }
+  { group: "code", command: "exec", bridgeCommand: "code.exec", buildArgs: codeArgs, supportsJob: true, destructiveHint: true, supportsDryRun: true }
 ];
 
 function codeArgs({ flags }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {

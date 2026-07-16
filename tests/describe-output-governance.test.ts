@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { allRegisteredToolMetadata, findToolByName, type ResolvedToolMetadata } from "../src/tools/metadata/index.js";
-import { builtinContextDescriptors } from "../src/context/registry.js";
+import { builtinContextDescriptors } from "../src/contexts/registry.js";
 import { BUILTIN_EXTENSION_MANIFESTS } from "../src/extensions/index.js";
 import "../src/extensions/index.js";
 
@@ -11,7 +11,6 @@ const LARGE_OUTPUT_PATTERN = /\b(pageInfo|cursor|nextCursor|plannedEffects|artif
 
 const P0_EXAMPLE_TOOLS = new Set([
   "code.exec",
-  "asset.refresh",
   "package.install",
   "package.remove",
   "package.deploy",
@@ -23,7 +22,6 @@ const P0_EXAMPLE_TOOLS = new Set([
 
 const P0_OUTPUT_SCHEMA_TOOLS = new Set([
   "code.exec",
-  "asset.refresh",
   "docs.search",
   "docs.get",
   "reflect.search",
@@ -34,8 +32,7 @@ const P0_OUTPUT_SCHEMA_TOOLS = new Set([
 const LARGE_OUTPUT_TOOLS = new Set([
   "docs.search",
   "reflect.search",
-  "code.exec",
-  "asset.refresh"
+  "code.exec"
 ]);
 
 function descriptorText(tool: ResolvedToolMetadata): string {
@@ -58,6 +55,21 @@ function descriptorText(tool: ResolvedToolMetadata): string {
 function assertNoInternalSourceText(subject: string, text: string): void {
   assert.doesNotMatch(text, INTERNAL_SOURCE_PATTERN, `${subject} must not expose internal reference-project wording`);
 }
+
+test("TS-local descriptor registry owns exactly the 37 offline/hybrid tools", () => {
+  const names = allRegisteredToolMetadata().map((tool) => tool.name).sort();
+  assert.deepEqual(names, [
+    "build.cancel", "build.run", "build.status", "code.exec", "diagnose.capabilities",
+    "docs.get", "docs.list", "docs.search", "docs.topic", "editor.compile-diagnostics",
+    "editor.launch-dialog.dismiss", "editor.refresh", "package.bridge-remove", "package.deploy",
+    "package.info", "package.install", "package.list", "package.registry.clear", "package.registry.get",
+    "package.registry.set", "package.remove", "package.resolve", "package.restore", "package.scoped-registry.add",
+    "package.scoped-registry.list", "package.scoped-registry.remove", "package.search", "package.status",
+    "reflect.member", "reflect.search", "reflect.type", "test.run", "tools.describe", "tools.group",
+    "tools.group-list", "tools.run", "tools.search"
+  ]);
+  assert.equal(findToolByName("asset.refresh"), undefined, "bridge-discovered tools must not retain TS-local descriptors");
+});
 
 test("offline describe descriptors do not expose internal reference-project wording", () => {
   for (const tool of allRegisteredToolMetadata()) {

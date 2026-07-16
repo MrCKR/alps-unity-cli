@@ -13,7 +13,6 @@ namespace UnityCli
     /// asset 域 IUnityCliTool 共享的基础设施 helper:资产路径规范化、资产存在判断、
     /// 资产目录创建、文本资产写入、资产信息构造、忙状态拦截。仅供 asset 域自包含工具复用;
     /// 不实现 IUnityCliTool,不参与工具发现。
-    /// 设计依据:.plan/工具统一形态.md(自包含工具共享只读 helper,handler 逻辑各自内聚)。
     /// </summary>
     public static class AssetToolSupport
     {
@@ -41,10 +40,11 @@ namespace UnityCli
             return Path.Combine(ProjectRoot(), assetPath.Replace('/', Path.DirectorySeparatorChar));
         }
 
-        /// <summary>判断 Assets/ 路径是否存在(文件或已导入资产)。</summary>
+        /// <summary>判断 Assets/ 路径是否存在；历史 GUID 不能代表文件或已加载资产仍存在。</summary>
         public static bool AssetExists(string assetPath)
         {
-            return File.Exists(AssetFullPath(assetPath)) || !string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(assetPath));
+            var fullPath = AssetFullPath(assetPath);
+            return File.Exists(fullPath) || Directory.Exists(fullPath) || AssetDatabase.LoadMainAssetAtPath(assetPath) != null;
         }
 
         /// <summary>确保资产目录存在,缺失则创建并刷新 AssetDatabase。</summary>
@@ -225,7 +225,7 @@ namespace UnityCli
     {
         public long PageSize { get; set; }
         public long Cursor { get; set; }
-        public string NextCursor { get; set; }
+        public long? NextCursor { get; set; }
         public long Total { get; set; }
         public bool Truncated { get; set; }
     }

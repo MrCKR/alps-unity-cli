@@ -30,6 +30,7 @@ namespace UnityCli.ProBuilder
             Description = "Split shared vertices on a ProBuilder mesh into separate vertices per face. Requires at least one vertex index.",
             Group = "probuilder",
             DestructiveHint = false,
+            SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 10000,
@@ -42,27 +43,32 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            var go = ProBuilderInput.ResolveTarget(request.Target);
             if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
 
             var mesh = ProBuilderReflection.GetProBuilderMesh(go);
             if (mesh == null) throw ProBuilderErrors.OperationFailed("split-vertices", "No ProBuilderMesh on target.");
 
-            int[] vertexIndices = request.VertexIndices?.Select(i => (int)i).ToArray();
+            int[] vertexIndices = request.VertexIndices?.Select(i => (int)i).Distinct().ToArray();
+            var vertexCount = ProBuilderReflection.GetVertexCount(mesh);
             if (vertexIndices == null || vertexIndices.Length == 0)
                 throw ProBuilderErrors.SchemaInvalid("vertexIndices is required for split-vertices.");
+            if (vertexCount < 0 || vertexIndices.Any(index => index < 0 || index >= vertexCount))
+                throw ProBuilderErrors.SchemaInvalid("vertexIndices contains an invalid vertex index.");
 
             Undo.RecordObject(go, "ProBuilder Split Vertices");
             var split = ProBuilderReflection.SplitVerticesWithList(mesh, vertexIndices);
+            if (split < 0)
+                throw ProBuilderErrors.OperationFailed("split-vertices", "ProBuilder 5.x VertexEditing.SplitVertices failed.");
             ProBuilderReflection.RefreshMesh(mesh);
             EditorSceneManager.MarkSceneDirty(go.scene);
 
-            return new Result { SplitCount = split };
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { SplitCount = split });
         }
     }
 }

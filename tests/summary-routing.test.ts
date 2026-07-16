@@ -1,8 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { handleToolsCommand, type ToolsRuntime } from "../src/tools.js";
+import { handleToolsCommand, type ToolsRuntime } from "../src/tools/commands.js";
 import { allRegisteredToolMetadata } from "../src/tools/metadata/index.js";
-import { builtinContextDescriptors } from "../src/context/registry.js";
+import { builtinContextDescriptors } from "../src/contexts/registry.js";
 import { BUILTIN_EXTENSION_MANIFESTS } from "../src/extensions/index.js";
 import { probuilderPingTool, sceneHierarchyTool } from "./helpers/live-tool-fixtures.js";
 import "../src/extensions/index.js";
@@ -25,7 +25,7 @@ function assertRouteSummary(name: string, summary: string): void {
 
 test("offline tools group summaries are route-specific for TS-local groups", async () => {
   const result = await handleToolsCommand("group", [], {}, emptyRuntime, requestId);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
 
   const data = result.data as { groups: Array<{ name: string; summary: string }> };
   const groups = new Map(data.groups.map((group) => [group.name, group.summary]));
@@ -46,7 +46,7 @@ test("live-discovered C# and extension groups still get route summaries through 
   };
 
   const result = await handleToolsCommand("group", [], {}, runtime, requestId);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
 
   const data = result.data as { groups: Array<{ name: string; summary: string; source: string }> };
   const scene = data.groups.find((group) => group.name === "scene");

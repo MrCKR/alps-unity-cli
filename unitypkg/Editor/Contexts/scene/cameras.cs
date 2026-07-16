@@ -28,13 +28,14 @@ namespace UnityCli.Contexts.Scene
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "on-demand"
+            RefreshBehavior = "on-demand",
+            Examples = new[] { new ContextExample { Description = "List scene cameras", Input = new Request { } } }
         };
 
         /// <summary>
         /// 枚举 Unity 当前活跃 Camera.allCameras；只返回摘要 DTO，不修改相机或场景。
-        /// </summary>
-        public Result Read(Request request, UnityCliProjectToolContext ctx)
+    /// </summary>
+        public System.Threading.Tasks.ValueTask<Result> ReadAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var cameras = new List<CameraInfo>();
             foreach (var camera in Camera.allCameras)
@@ -42,11 +43,11 @@ namespace UnityCli.Contexts.Scene
                 cameras.Add(CameraToolSupport.BuildCameraInfo(camera));
             }
 
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Cameras = cameras,
                 Count = cameras.Count
-            };
+            });
         }
     }
 }

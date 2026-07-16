@@ -32,20 +32,21 @@ namespace UnityCli.Contexts.Editor
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "static"
+            RefreshBehavior = "static",
+            Examples = new[] { new ContextExample { Description = "Search menu item metadata", Input = new Request { Search = "Save" } } }
         };
 
         /// <summary>
         /// 返回菜单枚举限制诊断；只读，不执行任何 menu path。
-        /// </summary>
-        public Result Read(Request request, UnityCliProjectToolContext ctx)
+    /// </summary>
+        public System.Threading.Tasks.ValueTask<Result> ReadAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Items = new MenuItemInfo[0],
                 Count = 0,
-                Diagnostics = "Unity Editor menu items cannot be enumerated through a public API. Reflection on internal MenuItem cache is version-dependent and not guaranteed. This context returns an empty list; menu execution is a Tool (editor.menu), not a Context."
-            };
+                Diagnostics = "Unity Editor menu items cannot be enumerated through a public API. Reflection on internal MenuItem cache is version-dependent and not guaranteed. This context returns an empty list); menu execution is a Tool (editor.menu), not a Context."
+            });
         }
     }
 }

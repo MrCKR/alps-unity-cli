@@ -2,183 +2,128 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Threading;
+using System.Threading.Tasks;
 using UnityEditor;
+using UnityEditor.Build;
+using UnityEngine.SceneManagement;
 
 namespace UnityCli
 {
     public static partial class UnityCliBridge
     {
-        /// <summary>
-        /// editor.state 内置 Context：读取 Unity Editor 当前只读状态，并保留 waitReady deferred 语义。
-        /// </summary>
-        public sealed class EditorStateContext : IUnityCliContext<EditorStateContext.Request, EditorStateContext.Result>, IUnityCliBuiltInRawBridgeContext
+        /// <summary>editor.state 内置 Context：读取 Unity Editor 当前只读状态。</summary>
+        public sealed class EditorStateContext : IUnityCliContext<EditorStateContext.Request, EditorStateContext.Result>
         {
-            public sealed class Request
-            {
-                public bool WaitReady { get; set; }
-                public int TimeoutMs { get; set; }
-            }
-
+            public sealed class Request { public bool WaitReady { get; set; } }
             public sealed class Result
             {
                 public string SchemaVersion { get; set; }
                 public string ObservedAt { get; set; }
+                public StateInfo State { get; set; }
                 public bool TimedOut { get; set; }
                 public string Diagnostics { get; set; }
-                public StateInfo State { get; set; }
+                public List<PlannedEffect> PlannedEffects { get; set; }
             }
-
+            public sealed class PlannedEffect { public string Type { get; set; } }
             public sealed class StateInfo
             {
-                public PlayModeInfo PlayMode { get; set; }
-                public BusyInfo Busy { get; set; }
-                public ActiveSceneInfo ActiveScene { get; set; }
-                public PrefabStageInfo PrefabStage { get; set; }
-                public BridgeInfo Bridge { get; set; }
-                public RuntimeInfo Runtime { get; set; }
+                public PlayModeInfo PlayMode { get; set; } public BusyInfo Busy { get; set; } public ActiveSceneInfo ActiveScene { get; set; }
+                public bool HasPrefabStage { get; set; } public PrefabStageInfo PrefabStage { get; set; } public BridgeInfo Bridge { get; set; } public RuntimeInfo Runtime { get; set; }
             }
+            public sealed class PlayModeInfo { public bool IsPlaying { get; set; } public bool IsPaused { get; set; } public bool IsPlayingOrWillChangePlaymode { get; set; } }
+            public sealed class BusyInfo { public bool IsBusy { get; set; } public bool Compiling { get; set; } public bool Updating { get; set; } public bool Building { get; set; } public bool DomainReloading { get; set; } public bool PlayModeChanging { get; set; } }
+            public sealed class ActiveSceneInfo { public string Name { get; set; } public string Path { get; set; } public bool IsLoaded { get; set; } public bool IsDirty { get; set; } }
+            public sealed class PrefabStageInfo { public string AssetPath { get; set; } public string ScenePath { get; set; } }
+            public sealed class BridgeInfo { public string BuildStamp { get; set; } }
+            public sealed class RuntimeInfo { public string PlayModeSessionId { get; set; } public bool Ready { get; set; } public long RegistryVersion { get; set; } public string ToolCatalogFingerprint { get; set; } public List<RuntimeToolInfo> AvailableRuntimeTools { get; set; } }
+            public sealed class RuntimeToolInfo { public string Name { get; set; } public string Target { get; set; } public string AvailabilityScope { get; set; } public bool Available { get; set; } }
 
-            public sealed class PlayModeInfo
-            {
-                public bool IsPlaying { get; set; }
-                public bool IsPaused { get; set; }
-                public bool IsPlayingOrWillChangePlaymode { get; set; }
-            }
-
-            public sealed class BusyInfo
-            {
-                public bool IsBusy { get; set; }
-                public bool Compiling { get; set; }
-                public bool Updating { get; set; }
-                public bool Building { get; set; }
-                public bool DomainReloading { get; set; }
-                public bool PlayModeChanging { get; set; }
-            }
-
-            public sealed class ActiveSceneInfo
-            {
-                public string Name { get; set; }
-                public string Path { get; set; }
-                public bool IsLoaded { get; set; }
-                public bool IsDirty { get; set; }
-            }
-
-            public sealed class PrefabStageInfo
-            {
-                public string AssetPath { get; set; }
-                public string ScenePath { get; set; }
-            }
-
-            public sealed class BridgeInfo
-            {
-                public string BuildStamp { get; set; }
-            }
-
-            public sealed class RuntimeInfo
-            {
-                public string PlayModeSessionId { get; set; }
-                public bool Ready { get; set; }
-                public long RegistryVersion { get; set; }
-                public string ToolCatalogFingerprint { get; set; }
-                public List<RuntimeToolInfo> AvailableRuntimeTools { get; set; }
-            }
-
-            public sealed class RuntimeToolInfo
-            {
-                public string Name { get; set; }
-                public string Target { get; set; }
-                public string AvailabilityScope { get; set; }
-                public bool Available { get; set; }
-            }
-
+            // 返回 Context 的发现元数据。
             public ContextDescriptor Describe() => new ContextDescriptor
             {
-                Name = "editor.state",
-                Summary = "Read current Unity Editor play, busy, scene, prefab stage, bridge, and runtime session state.",
-                Description = "Read-only snapshot of current Unity Editor state: Play Mode, compile/import/build busy flags, active scene, Prefab Stage, Bridge build stamp, and runtime session status. Use this before live tools to avoid acting while Unity is busy. Pass waitReady=true to block on the main thread until Unity is no longer busy; on timeout it returns the latest snapshot with timedOut=true instead of erroring.",
-                Category = "editor",
-                Version = "1.0.0",
-                Source = "built-in",
-                Target = "editor",
-                AvailabilityScope = "editorSession",
-                PlayModeSupport = "supported",
-                RefreshBehavior = "live"
+                Name = "editor.state", Summary = "Read current Unity Editor play, busy, scene, prefab stage, bridge, and runtime session state.",
+                Description = "Read-only snapshot of current Unity Editor state: Play Mode, compile/import/build busy flags, active scene, Prefab Stage, Bridge build stamp, and runtime session status. Use this before live tools to avoid acting while Unity is busy. Pass waitReady=true to block until Unity is no longer busy; on timeout it returns the latest snapshot with timedOut=true instead of erroring.",
+                Category = "editor", Version = "1.0.0", Source = "built-in", Target = "editor", AvailabilityScope = "editorSession", PlayModeSupport = "supported", RefreshBehavior = "live",
+                Examples = new[] { new ContextExample { Description = "Read the current Editor state", Input = new Request { } }, new ContextExample { Description = "Wait for the Editor to become ready", Input = new Request { WaitReady = true } } }
             };
 
-            /// <summary>
-            /// 同步 fallback 读取；生产 Bridge 注册路径会优先调用 ReadRaw，以保留 deferred marker 控制流。
-            /// </summary>
-            public Result Read(Request request, UnityCliProjectToolContext ctx)
+            /// <summary>可选等待现有忙碌状态结束；不会请求刷新、导入或编译。</summary>
+            public async ValueTask<Result> ReadAsync(Request request, UnityCliProjectToolContext ctx, CancellationToken ct = default)
             {
-                var json = EditorStateContextEnvelopeJson(EditorStateJson(), false);
-                return UnityCliSerializer.Deserialize(json, typeof(Result)) as Result;
-            }
-
-            /// <summary>
-            /// 复用 Bridge 原始响应协议，支持 waitReady 在 busy 状态下挂起当前 BridgeWorkItem。
-            /// </summary>
-            public string ReadRaw(BridgeRequest request, UnityCliProjectToolContext ctx)
-            {
-                var waitReady = request.BoolArg("waitReady", false);
-                var timeoutMs = Math.Max(0, request.IntArg("timeoutMs", 60000));
-                var stateJson = EditorStateJson();
-                var isBusy = EditorApplication.isCompiling || EditorApplication.isUpdating || EditorApplication.isPlayingOrWillChangePlaymode || BuildPipeline.isBuildingPlayer || domainReloading;
-                // wait-ready：当前 busy 且允许延迟时，在主线程轮询到 idle，避免 AI 反复轮询消耗往返。
-                // 超时不报错，返回当前状态 + timedOut=true，让 AI 至少拿到快照。
-                if (waitReady && isBusy && currentWorkItem != null)
+                request = request ?? new Request();
+                var timedOut = false;
+                if (request.WaitReady && IsEditorBusy())
                 {
-                    var item = currentWorkItem;
-                    var deadline = DateTime.UtcNow.AddMilliseconds(timeoutMs);
-                    EditorApplication.CallbackFunction waiter = null;
-                    waiter = () =>
-                    {
-                        try
-                        {
-                            var stillBusy = EditorApplication.isCompiling || EditorApplication.isUpdating || EditorApplication.isPlayingOrWillChangePlaymode || BuildPipeline.isBuildingPlayer || domainReloading;
-                            if (!stillBusy || DateTime.UtcNow > deadline)
-                            {
-                                EditorApplication.update -= waiter;
-                                UnregisterDeferredItem(item);
-                                var timedOut = DateTime.UtcNow > deadline;
-                                item.Response = SuccessJson(EditorStateContextEnvelopeJson(EditorStateJson(), timedOut));
-                                item.Completed.Set();
-                                WriteLog("editor_state_wait_completed requestId=" + item.Request.RequestId + " timedOut=" + timedOut.ToString().ToLowerInvariant());
-                            }
-                        }
-                        catch (Exception exception)
-                        {
-                            EditorApplication.update -= waiter;
-                            UnregisterDeferredItem(item);
-                            item.Response = SuccessJson(EditorStateContextEnvelopeJson(EditorStateJson(), true));
-                            item.Completed.Set();
-                            WriteLog("editor_state_wait_exception requestId=" + item.Request.RequestId + " " + exception.GetType().Name + ": " + exception.Message);
-                        }
-                    };
-                    item.MarkDeferred();
-                    lock (DeferredItems) { DeferredItems.Add(item); }
-                    EditorApplication.update += waiter;
-                    WriteLog("editor_state_wait_started requestId=" + item.Request.RequestId + " timeoutMs=" + timeoutMs.ToString(CultureInfo.InvariantCulture));
-                    return DeferredResponseMarker;
+                    var timeoutMs = Math.Max(0, ctx == null || ctx.TimeoutMs <= 0 ? 60000 : ctx.TimeoutMs);
+                    timedOut = ctx == null || ctx.Wait == null || !await ctx.Wait.Until(() => !IsEditorBusy(), TimeSpan.FromMilliseconds(timeoutMs), ct);
                 }
-                return SuccessJson(EditorStateContextEnvelopeJson(stateJson, false));
+                return EditorStateResultFrom(timedOut);
             }
         }
 
-        // editor.state Context envelope：schemaVersion + observedAt + state + 可选 timedOut。
-        private static string EditorStateContextEnvelopeJson(string stateJson, bool timedOut)
+        // 仅当期望播放状态与当前状态不一致时，Unity 才处于 PlayMode 切换期。
+        internal static bool IsPlayModeChanging()
         {
-            var payload = new Dictionary<string, object>
+            return EditorApplication.isPlayingOrWillChangePlaymode != EditorApplication.isPlaying;
+        }
+
+        // 判断 Unity 是否处于编译、导入、构建或播放模式切换状态。
+        private static bool IsEditorBusy()
+        {
+            return EditorApplication.isCompiling || EditorApplication.isUpdating || IsPlayModeChanging() || BuildPipeline.isBuildingPlayer || domainReloading;
+        }
+
+        // 构造 Editor 状态 DTO；只读取当前内存状态和场景元数据。
+        private static EditorStateContext.Result EditorStateResultFrom(bool timedOut)
+        {
+            var scene = SceneManager.GetActiveScene();
+            var prefabStage = UnityEditor.SceneManagement.PrefabStageUtility.GetCurrentPrefabStage();
+            var result = new EditorStateContext.Result
             {
-                { "schemaVersion", "1.0" },
-                { "observedAt", DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture) },
-                { "state", UnityCliToolJson.Parse(stateJson) }
+                SchemaVersion = "1.0", ObservedAt = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture), TimedOut = timedOut,
+                Diagnostics = timedOut ? "wait-ready timed out before Unity reached idle; returned the latest snapshot." : null,
+                PlannedEffects = new List<EditorStateContext.PlannedEffect>(),
+                State = new EditorStateContext.StateInfo
+                {
+                    PlayMode = new EditorStateContext.PlayModeInfo { IsPlaying = EditorApplication.isPlaying, IsPaused = EditorApplication.isPaused, IsPlayingOrWillChangePlaymode = EditorApplication.isPlayingOrWillChangePlaymode },
+                    Busy = new EditorStateContext.BusyInfo { IsBusy = IsEditorBusy(), Compiling = EditorApplication.isCompiling, Updating = EditorApplication.isUpdating, Building = BuildPipeline.isBuildingPlayer, DomainReloading = domainReloading, PlayModeChanging = IsPlayModeChanging() },
+                    ActiveScene = new EditorStateContext.ActiveSceneInfo { Name = scene.name, Path = scene.path, IsLoaded = scene.isLoaded, IsDirty = scene.isDirty },
+                    HasPrefabStage = prefabStage != null, PrefabStage = PrefabStageInfoFrom(prefabStage),
+                    Bridge = new EditorStateContext.BridgeInfo { BuildStamp = BridgeBuildStamp() }, Runtime = RuntimeInfoFromCurrentSession()
+                }
             };
-            if (timedOut)
+            return result;
+        }
+
+        // 读取 Prefab Stage 路径；未打开 Stage 时返回无值。
+        private static EditorStateContext.PrefabStageInfo PrefabStageInfoFrom(object prefabStage)
+        {
+            if (prefabStage == null) return null;
+            var type = prefabStage.GetType();
+            var sceneValue = type.GetProperty("scene")?.GetValue(prefabStage);
+            return new EditorStateContext.PrefabStageInfo
             {
-                payload["timedOut"] = true;
-                payload["diagnostics"] = "wait-ready timed out before Unity reached idle; returned the latest snapshot.";
+                AssetPath = type.GetProperty("assetPath")?.GetValue(prefabStage)?.ToString(),
+                ScenePath = sceneValue is Scene scene ? scene.path : null
+            };
+        }
+
+        // 读取当前 runtime registry 会话，不初始化或变更运行时状态。
+        private static EditorStateContext.RuntimeInfo RuntimeInfoFromCurrentSession()
+        {
+            var tools = new List<EditorStateContext.RuntimeToolInfo>();
+            foreach (var pair in ProjectTools)
+            {
+                var definition = pair.Value;
+                if (definition.Target != "runtime" && definition.Target != "both") continue;
+                tools.Add(new EditorStateContext.RuntimeToolInfo { Name = definition.Name, Target = definition.Target, AvailabilityScope = definition.AvailabilityScope, Available = playModeReady });
             }
-            return UnityCliSerializer.Serialize(payload);
+            return new EditorStateContext.RuntimeInfo
+            {
+                PlayModeSessionId = currentPlayModeSessionId, Ready = playModeReady, RegistryVersion = runtimeRegistryVersion,
+                ToolCatalogFingerprint = runtimeToolCatalogFingerprint, AvailableRuntimeTools = tools
+            };
         }
     }
 }

@@ -8,8 +8,6 @@ namespace UnityCli
 {
     /// <summary>
     /// shader.list — 列出项目中所有 Shader 资产,可按 keyword 过滤。
-    /// 对齐旧 ShaderList handler;只读,分页。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class ShaderListTool : IUnityCliTool<ShaderListTool.Request, ShaderListTool.Result>
     {
@@ -54,7 +52,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var keyword = request.Keyword ?? request.Search;
             var guids = AssetDatabase.FindAssets("t:Shader " + (keyword ?? string.Empty));
@@ -75,12 +73,12 @@ namespace UnityCli
                     RenderQueue = shader.renderQueue
                 });
             }
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Command = "shader.list",
                 Count = results.Count,
                 Shaders = results
-            };
+            });
         }
     }
 }

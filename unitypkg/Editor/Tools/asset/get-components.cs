@@ -9,8 +9,6 @@ namespace UnityCli
 {
     /// <summary>
     /// asset.get-components — 读取 Prefab/GameObject 资产的组件摘要,避免深读整个对象图。分页+过滤。
-    /// 对齐旧 AssetGetComponents handler;只读。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class AssetGetComponentsTool : IUnityCliTool<AssetGetComponentsTool.Request, AssetGetComponentsTool.Result>
     {
@@ -80,7 +78,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var path = AssetToolSupport.RequireExistingAssetPath(request.AssetPath ?? request.Path ?? request.Target);
             var includeInactive = request.IncludeInactive ?? true;
@@ -112,8 +110,8 @@ namespace UnityCli
             {
                 page.Add(rows[i]);
             }
-            var nextCursor = cursor + page.Count < rows.Count ? (cursor + page.Count).ToString(CultureInfo.InvariantCulture) : null;
-            return new Result
+            long? nextCursor = cursor + page.Count < rows.Count ? (long?)(cursor + page.Count) : null;
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Command = "asset.get-components",
                 AssetPath = path,
@@ -139,7 +137,7 @@ namespace UnityCli
                     Total = rows.Count,
                     Truncated = nextCursor != null
                 }
-            };
+            });
         }
 
         // 构造 GameObject 在 Prefab root 下的相对路径

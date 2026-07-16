@@ -13,7 +13,6 @@ namespace UnityCli
     /// shader 域 IUnityCliTool 共享的基础设施 helper:Shader 路径校验、Shader 资产加载、
     /// 诊断/属性/SubShader 反射读取、默认 Shader 内容生成。仅供 shader 域自包含工具复用;
     /// 不实现 IUnityCliTool,不参与工具发现。
-    /// 设计依据:.plan/工具统一形态.md(自包含工具共享只读 helper,handler 逻辑各自内聚)。
     /// </summary>
     public static class ShaderToolSupport
     {

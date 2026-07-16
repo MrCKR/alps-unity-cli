@@ -1,4 +1,4 @@
-import { BUILTIN_EXTENSION_MANIFESTS } from "./registry-data.js";
+import { BUILTIN_EXTENSION_MANIFESTS } from "./.generated-registry-data.js";
 import type { ExtensionId, ExtensionManifest, ExtensionToolContribution } from "./types.js";
 
 export interface BuiltinExtensionToolContribution {

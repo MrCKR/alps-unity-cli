@@ -2,11 +2,12 @@ import { boolFlag, compactArgs, floatFlag, numberFlag, stringFlag } from "../arg
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const physicsBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "physics", command: "settings", bridgeCommand: "project-tool.run", toolName: "physics.settings", buildArgs: physicsArgs },
-  { group: "physics", command: "collision-matrix", bridgeCommand: "project-tool.run", toolName: "physics.collision-matrix", buildArgs: physicsArgs },
-  { group: "physics", command: "material", bridgeCommand: "project-tool.run", toolName: "physics.material", buildArgs: physicsArgs },
-  { group: "physics", command: "assign-material", bridgeCommand: "project-tool.run", toolName: "physics.assign-material", buildArgs: physicsArgs },
-  { group: "physics", command: "joint", bridgeCommand: "project-tool.run", toolName: "physics.joint", buildArgs: physicsArgs },
+  { group: "physics", command: "settings", bridgeCommand: "project-tool.run", toolName: "physics.settings", buildArgs: physicsArgs, destructiveHint: true },
+  { group: "physics", command: "collision-matrix", bridgeCommand: "project-tool.run", toolName: "physics.collision-matrix", buildArgs: physicsArgs, destructiveHint: true },
+  { group: "physics", command: "material", bridgeCommand: "project-tool.run", toolName: "physics.material", buildArgs: physicsArgs, destructiveHint: true },
+  { group: "physics", command: "assign-material", bridgeCommand: "project-tool.run", toolName: "physics.assign-material", buildArgs: physicsArgs, supportsDryRun: true },
+  { group: "physics", command: "joint-add", bridgeCommand: "project-tool.run", toolName: "physics.joint.add", buildArgs: physicsArgs, supportsDryRun: true },
+  { group: "physics", command: "joint-remove", bridgeCommand: "project-tool.run", toolName: "physics.joint.remove", buildArgs: physicsArgs, supportsDryRun: true },
   { group: "physics", command: "force", bridgeCommand: "project-tool.run", toolName: "physics.force", buildArgs: physicsArgs },
   { group: "physics", command: "overlap", bridgeCommand: "project-tool.run", toolName: "physics.overlap", buildArgs: physicsArgs },
   { group: "physics", command: "rigidbody", bridgeCommand: "project-tool.run", toolName: "physics.rigidbody", buildArgs: physicsArgs },
@@ -102,8 +103,11 @@ function physicsArgs({ command, flags }: Parameters<BridgeCommandSpec["buildArgs
   if (command === "physics.assign-material") {
     return compactArgs({ target: stringFlag(flags, "target") ?? stringField(flags, "target"), materialPath: stringFlag(flags, "material-path") ?? stringFlag(flags, "path") ?? stringField(flags, "materialPath") ?? stringField(flags, "path"), path: stringFlag(flags, "path") ?? stringField(flags, "path"), collider: stringFlag(flags, "collider") ?? stringField(flags, "collider"), colliderIndex: numberFlag(flags, "collider-index") ?? numberField(flags, "colliderIndex") });
   }
-  if (command === "physics.joint") {
-    return compactArgs({ target: stringFlag(flags, "target") ?? stringField(flags, "target"), type: stringFlag(flags, "type") ?? stringField(flags, "type"), action: stringFlag(flags, "action") ?? stringField(flags, "action"), connectedBody: stringFlag(flags, "connected-body") ?? stringField(flags, "connectedBody"), anchor: stringFlag(flags, "anchor") ?? stringField(flags, "anchor"), componentIndex: numberFlag(flags, "component-index") ?? numberField(flags, "componentIndex") });
+  if (command === "physics.joint.add") {
+    return compactArgs({ target: stringFlag(flags, "target") ?? stringField(flags, "target"), type: stringFlag(flags, "type") ?? stringField(flags, "type"), connectedBody: stringFlag(flags, "connected-body") ?? stringField(flags, "connectedBody") });
+  }
+  if (command === "physics.joint.remove") {
+    return compactArgs({ target: stringFlag(flags, "target") ?? stringField(flags, "target"), type: stringFlag(flags, "type") ?? stringField(flags, "type"), componentIndex: numberFlag(flags, "component-index") ?? numberField(flags, "componentIndex") });
   }
   if (command === "physics.force") {
     return compactArgs({ target: stringFlag(flags, "target") ?? stringField(flags, "target"), x: floatFlag(flags, "x") ?? numberField(flags, "x"), y: floatFlag(flags, "y") ?? numberField(flags, "y"), z: floatFlag(flags, "z") ?? numberField(flags, "z"), mode: stringFlag(flags, "mode") ?? stringField(flags, "mode"), forceType: stringFlag(flags, "force-type") ?? stringFlag(flags, "forceType") ?? stringField(flags, "forceType"), torqueX: floatFlag(flags, "torque-x") ?? numberField(flags, "torqueX"), torqueY: floatFlag(flags, "torque-y") ?? numberField(flags, "torqueY"), torqueZ: floatFlag(flags, "torque-z") ?? numberField(flags, "torqueZ"), explosionX: floatFlag(flags, "explosion-x") ?? numberField(flags, "explosionX"), explosionY: floatFlag(flags, "explosion-y") ?? numberField(flags, "explosionY"), explosionZ: floatFlag(flags, "explosion-z") ?? numberField(flags, "explosionZ"), explosionRadius: floatFlag(flags, "explosion-radius") ?? numberField(flags, "explosionRadius"), explosionForce: floatFlag(flags, "explosion-force") ?? numberField(flags, "explosionForce"), upwardsModifier: floatFlag(flags, "upwards-modifier") ?? numberField(flags, "upwardsModifier") });

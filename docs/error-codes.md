@@ -29,8 +29,8 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | 错误码 | 含义 | 恢复 |
 |--------|------|------|
 | `E_TARGET_NOT_FOUND` | 无可用目标实例 | `instances list` 检查实例 |
-| `E_TARGET_STALE` | 目标实例过期 | `instances prune` 清理后重连 |
-| `E_TARGET_UNREACHABLE` | 目标不可达 | 检查 Bridge 端点和 Unity 进程 |
+| `E_TARGET_STALE` | target ID 校验后的 health probe 暂未恢复 stale 注册 | `transient:true`；按 `retryAfterMs` 重试，持续失败再清理注册 |
+| `E_TARGET_UNREACHABLE` | `/health` 无响应、响应畸形或 target ID 不匹配 | `transient:true`；检查 Bridge 身份并按 `retryAfterMs` 重试 |
 | `E_TARGET_AMBIGUOUS` | 多个就绪实例 | `target set <id>` 显式选择 |
 
 ### Runtime / Play Mode 错误
@@ -66,7 +66,10 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | `E_PREFAB_NOT_FOUND` | Prefab 未找到 |
 | `E_PREFAB_STAGE_NOT_OPEN` | Prefab Stage 未打开 |
 | `E_CAMERA_NOT_FOUND` | 相机未找到 |
+| `E_SCENE_NOT_FOUND` | 场景 path 或唯一场景资产名未找到 |
+| `E_SCENE_AMBIGUOUS` | 场景资产名匹配多个 `.unity` 文件；改传精确 `Assets/*.unity` path |
 | `E_SCENE_VIEW_NOT_AVAILABLE` | Scene 视图不可用 |
+| `E_GAMEOBJECT_DELETE_FAILED` | GameObject 在同步删除后仍存在；按 `nextActions` 检查目标与 Unity Console |
 
 ### Package 错误
 
@@ -75,6 +78,15 @@ alps-unity-cli 使用结构化错误码，包含机器可读的 `code`、`transi
 | `E_PACKAGE_NOT_FOUND` | 包未安装 |
 | `E_PROBUILDER_PACKAGE_NOT_FOUND` | ProBuilder 包未安装 |
 | `E_VFX_PACKAGE_MISSING` | VFX Graph 包未安装 |
+| `E_CINEMACHINE_PRESET_INVALID` | `cinemachine.create` 的 preset 不在 descriptor 声明的集合中 |
+
+### Reflection 错误
+
+| 错误码 | 含义 | 恢复 |
+|--------|------|------|
+| `E_METHOD_NOT_FOUND` | 方法名或显式参数签名不存在 | 运行 `reflection.method.find` 并核对 `parameterType` |
+| `E_METHOD_AMBIGUOUS` | 多个 overload 与参数数量匹配 | 将选中签名的 `parameterType` 数组作为 `parameterTypes` 重试 |
+| `E_TYPE_NOT_FOUND` | 目标类型或参数类型不存在 | 使用完整 C# type name |
 
 ### 执行错误
 

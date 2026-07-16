@@ -1,17 +1,15 @@
-import { boolFlag, compactArgs, floatFlag, numberFlag, queryArgs, screenshotArgs, stringFlag } from "../args.js";
+import { boolFlag, compactArgs, floatFlag, numberFlag, queryArgs, stringFlag } from "../args.js";
 import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 
 export const graphicsBridgeSpecs: BridgeCommandSpec[] = [
-  { group: "graphics", command: "quality", bridgeCommand: "project-tool.run", toolName: "graphics.quality", buildArgs: graphicsArgs },
+  { group: "graphics", command: "quality", bridgeCommand: "project-tool.run", toolName: "graphics.quality", buildArgs: graphicsArgs, destructiveHint: true },
   { group: "graphics", command: "settings", bridgeCommand: "project-tool.run", toolName: "graphics.settings", buildArgs: graphicsArgs },
-  { group: "graphics", command: "screenshot", bridgeCommand: "project-tool.run", toolName: "graphics.screenshot", buildArgs: graphicsArgs },
-  { group: "graphics", command: "pipeline", bridgeCommand: "project-tool.run", toolName: "graphics.pipeline", buildArgs: graphicsArgs },
   { group: "graphics", command: "volume", bridgeCommand: "project-tool.run", toolName: "graphics.volume", buildArgs: graphicsArgs },
-  { group: "graphics", command: "bake-start", bridgeCommand: "project-tool.run", toolName: "graphics.bake-start", buildArgs: graphicsArgs },
+  { group: "graphics", command: "bake-start", bridgeCommand: "project-tool.run", toolName: "graphics.bake-start", buildArgs: graphicsArgs, destructiveHint: true },
   { group: "graphics", command: "bake-cancel", bridgeCommand: "project-tool.run", toolName: "graphics.bake-cancel", buildArgs: graphicsArgs },
   { group: "graphics", command: "bake-status", bridgeCommand: "project-tool.run", toolName: "graphics.bake-status", buildArgs: graphicsArgs },
-  { group: "graphics", command: "bake-clear", bridgeCommand: "project-tool.run", toolName: "graphics.bake-clear", buildArgs: graphicsArgs },
-  { group: "graphics", command: "bake-reflection-probe", bridgeCommand: "project-tool.run", toolName: "graphics.bake-reflection-probe", buildArgs: graphicsArgs },
+  { group: "graphics", command: "bake-clear", bridgeCommand: "project-tool.run", toolName: "graphics.bake-clear", buildArgs: graphicsArgs, destructiveHint: true },
+  { group: "graphics", command: "bake-reflection-probe", bridgeCommand: "project-tool.run", toolName: "graphics.bake-reflection-probe", buildArgs: graphicsArgs, destructiveHint: true },
   { group: "graphics", command: "bake-settings", bridgeCommand: "project-tool.run", toolName: "graphics.bake-settings", buildArgs: graphicsArgs },
   { group: "graphics", command: "light-probe-group", bridgeCommand: "project-tool.run", toolName: "graphics.light-probe-group", buildArgs: graphicsArgs },
   { group: "graphics", command: "reflection-probe", bridgeCommand: "project-tool.run", toolName: "graphics.reflection-probe", buildArgs: graphicsArgs },
@@ -22,24 +20,18 @@ export const graphicsBridgeSpecs: BridgeCommandSpec[] = [
   { group: "graphics", command: "scene-debug", bridgeCommand: "project-tool.run", toolName: "graphics.scene-debug", buildArgs: graphicsArgs },
   { group: "graphics", command: "skybox-get", bridgeCommand: "project-tool.run", toolName: "graphics.skybox-get", buildArgs: graphicsArgs },
   { group: "graphics", command: "skybox-set-material", bridgeCommand: "project-tool.run", toolName: "graphics.skybox-set-material", buildArgs: graphicsArgs },
-  { group: "graphics", command: "skybox-set-properties", bridgeCommand: "project-tool.run", toolName: "graphics.skybox-set-properties", buildArgs: graphicsArgs },
+  { group: "graphics", command: "skybox-set-properties", bridgeCommand: "project-tool.run", toolName: "graphics.skybox-set-properties", buildArgs: graphicsArgs, destructiveHint: true },
   { group: "graphics", command: "skybox-set-ambient", bridgeCommand: "project-tool.run", toolName: "graphics.skybox-set-ambient", buildArgs: graphicsArgs },
   { group: "graphics", command: "skybox-set-fog", bridgeCommand: "project-tool.run", toolName: "graphics.skybox-set-fog", buildArgs: graphicsArgs },
   { group: "graphics", command: "skybox-set-reflection", bridgeCommand: "project-tool.run", toolName: "graphics.skybox-set-reflection", buildArgs: graphicsArgs },
   { group: "graphics", command: "skybox-set-sun", bridgeCommand: "project-tool.run", toolName: "graphics.skybox-set-sun", buildArgs: graphicsArgs },
-  { group: "graphics", command: "pipeline-settings", bridgeCommand: "project-tool.run", toolName: "graphics.pipeline-settings", buildArgs: graphicsArgs },
-  { group: "graphics", command: "pipeline-quality", bridgeCommand: "project-tool.run", toolName: "graphics.pipeline-quality", buildArgs: graphicsArgs },
+  { group: "graphics", command: "pipeline-settings", bridgeCommand: "project-tool.run", toolName: "graphics.pipeline-settings", buildArgs: graphicsArgs, destructiveHint: true },
+  { group: "graphics", command: "pipeline-quality", bridgeCommand: "project-tool.run", toolName: "graphics.pipeline-quality", buildArgs: graphicsArgs, destructiveHint: true },
   { group: "graphics", command: "pipeline-info", bridgeCommand: "project-tool.run", toolName: "graphics.pipeline-info", buildArgs: graphicsArgs }
 ];
 
 function graphicsArgs({ command, flags, positionalTarget }: Parameters<BridgeCommandSpec["buildArgs"]>[0]): Record<string, unknown> {
   const s = structuredInput(flags);
-  if (command === "graphics.screenshot") {
-    return compactArgs({ ...screenshotArgs(flags, positionalTarget), includeDiagnostics: boolFlag(flags, "include-diagnostics") ?? boolField(s, "includeDiagnostics") });
-  }
-  if (command === "graphics.pipeline") {
-    return queryArgs(flags);
-  }
   if (command === "graphics.volume") {
     return compactArgs({ ...queryArgs(flags), target: positionalTarget ?? stringFlag(flags, "target") ?? stringFlag(flags, "name") ?? stringField(s, "target") });
   }

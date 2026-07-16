@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEngine;
 
@@ -10,7 +11,6 @@ namespace UnityCli
     /// <summary>
     /// object 域 IUnityCliTool 共享的基础设施 helper:序列化选项构造、对象引用解析。
     /// 仅供 object 域自包含工具复用;不实现 IUnityCliTool,不参与工具发现。
-    /// 设计依据:.plan/工具统一形态.md(自包含工具共享只读 helper)。
     /// </summary>
     internal static class ObjectToolSupport
     {
@@ -25,7 +25,7 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_UNITY_IMPORTING", "Unity Editor is importing assets.", "Wait for Unity to finish importing and retry.", transient: true, retryAfterMs: 5000);
             }
-            if (EditorApplication.isPlayingOrWillChangePlaymode && !EditorApplication.isPlaying)
+            if (UnityCliBridge.IsPlayModeChanging())
             {
                 throw new UnityCliBridge.BridgeCommandException("E_UNITY_PLAY_MODE", "Unity Editor is entering or exiting Play mode.", "Wait for Play mode transition to complete and retry.", transient: true, retryAfterMs: 3000);
             }
@@ -42,75 +42,44 @@ namespace UnityCli
         }
 
         /// <summary>
-        /// 从 BridgeRequest 构造 ObjectSerializer.Options,复刻旧 BuildSerializerOptions 逻辑。
+        /// 从 UnityCli.Protocol.BridgeRequest 构造 ObjectSerializer.Options,复刻旧 BuildSerializerOptions 逻辑。
         /// 支持 paths/viewQuery 局部读取、namePattern 过滤。
         /// </summary>
-        internal static UnityCliBridge.ObjectSerializer.Options BuildSerializerOptions(UnityCliBridge.BridgeRequest request)
+        internal static UnityCliBridge.ObjectSerializer.Options BuildSerializerOptions(IUnityCliObjectSerializationInput request)
         {
             var options = new UnityCliBridge.ObjectSerializer.Options
             {
-                MaxDepth = request.IntArg("maxDepth", 4),
-                MaxArrayItems = System.Math.Max(0, System.Math.Min(request.IntArg("maxArrayItems", 50), 1000)),
-                IncludeFields = request.BoolArg("includeFields", true),
-                IncludeProperties = request.BoolArg("includeProperties", true),
-                DeepSerialization = request.BoolArg("deepSerialization", true)
+                MaxDepth = request.MaxDepth ?? 4,
+                MaxArrayItems = System.Math.Max(0, System.Math.Min(request.MaxArrayItems ?? 50, 1000)),
+                IncludeFields = request.IncludeFields ?? true,
+                IncludeProperties = request.IncludeProperties ?? true,
+                DeepSerialization = request.DeepSerialization ?? true
             };
-            var pathsRaw = request.RawJsonArg("paths");
-            var viewQueryRaw = request.RawJsonArg("viewQuery");
-            if (!string.IsNullOrEmpty(pathsRaw) && !string.IsNullOrEmpty(viewQueryRaw))
+            if (request.Paths != null && request.Paths.Count > 0 && request.ViewQuery != null)
             {
                 throw new UnityCliBridge.BridgeCommandException("E_OBJECT_READ_SCOPE_CONFLICT", "paths and viewQuery are mutually exclusive.", "Use paths for exact member reads, or viewQuery for one filtered subtree.");
             }
-            if (!string.IsNullOrEmpty(pathsRaw))
+            if (request.Paths != null)
             {
-                options.Paths = new HashSet<string>();
-                foreach (var p in JsonStringArray(pathsRaw))
+                options.Paths = new HashSet<string>(request.Paths.Where(path => !string.IsNullOrWhiteSpace(path)).Select(path => path.Trim()));
+            }
+            var query = request.ViewQuery as Dictionary<string, object>;
+            if (query != null)
+            {
+                options.ViewPath = GetStringMember(query, "path");
+                options.NamePattern = GetStringMember(query, "namePattern");
+                options.TypeFilter = GetStringMember(query, "typeFilter");
+                object maxDepth;
+                if (query.TryGetValue("maxDepth", out maxDepth) && maxDepth != null)
                 {
-                    var clean = p == null ? null : p.Trim();
-                    if (!string.IsNullOrEmpty(clean)) options.Paths.Add(clean);
+                    options.MaxDepth = System.Math.Max(0, System.Convert.ToInt32(maxDepth, CultureInfo.InvariantCulture));
                 }
             }
-            if (!string.IsNullOrEmpty(viewQueryRaw))
+            if (!string.IsNullOrEmpty(request.NamePattern))
             {
-                var parsed = UnityCliToolJson.Parse(viewQueryRaw) as Dictionary<string, object>;
-                if (parsed != null)
-                {
-                    options.ViewPath = GetStringMember(parsed, "path") ?? GetStringMember(parsed, "Path");
-                    options.NamePattern = GetStringMember(parsed, "namePattern") ?? GetStringMember(parsed, "NamePattern");
-                    options.TypeFilter = GetStringMember(parsed, "typeFilter") ?? GetStringMember(parsed, "TypeFilter");
-                    var maxDepthRaw = GetRawMember(parsed, "maxDepth") ?? GetRawMember(parsed, "MaxDepth");
-                    if (!string.IsNullOrEmpty(maxDepthRaw))
-                    {
-                        int maxDepth;
-                        if (int.TryParse(maxDepthRaw.Trim('"'), NumberStyles.Integer, CultureInfo.InvariantCulture, out maxDepth))
-                        {
-                            options.MaxDepth = System.Math.Max(0, maxDepth);
-                        }
-                    }
-                }
-            }
-            var nameFilter = request.StringArg("namePattern");
-            if (!string.IsNullOrEmpty(nameFilter))
-            {
-                options.NameFilters = new HashSet<string>(nameFilter.Split(','));
+                options.NameFilters = new HashSet<string>(request.NamePattern.Split(',').Select(value => value.Trim()));
             }
             return options;
-        }
-
-        // 从 JSON 数组字符串提取字符串列表
-        private static List<string> JsonStringArray(string json)
-        {
-            var result = new List<string>();
-            if (string.IsNullOrEmpty(json)) return result;
-            var parsed = UnityCliToolJson.Parse(json);
-            if (parsed is List<object> list)
-            {
-                foreach (var item in list)
-                {
-                    result.Add(item as string);
-                }
-            }
-            return result;
         }
 
         private static string GetStringMember(Dictionary<string, object> obj, string key)

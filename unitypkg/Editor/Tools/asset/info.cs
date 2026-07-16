@@ -3,8 +3,6 @@ namespace UnityCli
 {
     /// <summary>
     /// asset.info — 读取资产主对象摘要(path/guid/name/type/extension/isFolder/exists/sizeBytes)。
-    /// 对齐旧 AssetInfo handler;只读。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class AssetInfoTool : IUnityCliTool<AssetInfoTool.Request, AssetInfoTool.Result>
     {
@@ -37,14 +35,14 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var path = AssetToolSupport.RequireAssetPath(request.Path ?? request.Target);
             if (!AssetToolSupport.AssetExists(path))
             {
                 throw new UnityCliBridge.BridgeCommandException("E_ASSET_NOT_FOUND", "Asset not found: " + path, "Run tools run asset.search --input '{\"query\":\"<keyword>\"}' or pass an existing Assets/* path.");
             }
-            return new Result { Asset = AssetToolSupport.BuildAssetDetail(path) };
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Asset = AssetToolSupport.BuildAssetDetail(path) });
         }
     }
 }

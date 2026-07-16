@@ -4,29 +4,56 @@
 #if UNITY_EDITOR
 namespace UnityCli.Protocol
 {
-    public sealed class Envelope
+    public sealed partial class SuccessEnvelope
     {
         public bool Ok { get; set; }
-        public string? RequestId { get; set; }
-        public ToolError? Error { get; set; }
-        public object? Data { get; set; }
+        public string RequestId { get; set; }
+        public object Data { get; set; }
+        public System.Collections.Generic.List<string> Warnings { get; set; }
+        public string LogsRef { get; set; }
+        public string JobId { get; set; }
+        public double? DurationMs { get; set; }
     }
 
-    public sealed class ToolError
+    public sealed partial class ErrorEnvelope
+    {
+        public bool Ok { get; set; }
+        public string RequestId { get; set; }
+        public ToolError Error { get; set; }
+        public double? DurationMs { get; set; }
+    }
+
+    public sealed partial class ToolError
     {
         public string Code { get; set; }
         public string Message { get; set; }
-        public object? Details { get; set; }
-        public System.Collections.Generic.List<string>? NextActions { get; set; }
-        public bool? Transient { get; set; }
-        public double? RetryAfterMs { get; set; }
+        public object Details { get; set; }
+        public System.Collections.Generic.List<string> NextActions { get; set; }
+        public bool Transient { get; set; }
+        public double RetryAfterMs { get; set; }
     }
 
-    public sealed class BridgeRequest
+    public sealed partial class BridgeExecution
+    {
+        public bool? DryRun { get; set; }
+        public double? TimeoutMs { get; set; }
+    }
+
+    public sealed partial class BridgeSecurity
+    {
+        public bool Confirmed { get; set; }
+        public string ToolName { get; set; }
+        public string DescriptorFingerprint { get; set; }
+        public string InputSha256 { get; set; }
+    }
+
+    public sealed partial class BridgeRequest
     {
         public string Command { get; set; }
-        public string? RequestId { get; set; }
-        public object? Input { get; set; }
+        public string RequestId { get; set; }
+        public object Input { get; set; }
+        public BridgeExecution Execution { get; set; }
+        public BridgeSecurity Security { get; set; }
     }
 }
 #endif

@@ -4,13 +4,13 @@ import type { BridgeCommandSpec, BridgeFlags } from "../types.js";
 export const prefabBridgeSpecs: BridgeCommandSpec[] = [
   { group: "prefab", command: "info", bridgeCommand: "project-tool.run", toolName: "prefab.info", buildArgs: prefabArgs },
   { group: "prefab", command: "hierarchy", bridgeCommand: "project-tool.run", toolName: "prefab.hierarchy", buildArgs: prefabArgs },
-  { group: "prefab", command: "create", bridgeCommand: "project-tool.run", toolName: "prefab.create", buildArgs: prefabArgs },
-  { group: "prefab", command: "modify", bridgeCommand: "project-tool.run", toolName: "prefab.modify", buildArgs: prefabArgs },
+  { group: "prefab", command: "create", bridgeCommand: "project-tool.run", toolName: "prefab.create", buildArgs: prefabArgs, destructiveHint: true },
+  { group: "prefab", command: "modify", bridgeCommand: "project-tool.run", toolName: "prefab.modify", buildArgs: prefabArgs, destructiveHint: true },
   { group: "prefab", command: "stage-open", bridgeCommand: "project-tool.run", toolName: "prefab.stage-open", buildArgs: prefabArgs },
-  { group: "prefab", command: "stage-save", bridgeCommand: "project-tool.run", toolName: "prefab.stage-save", buildArgs: prefabArgs },
+  { group: "prefab", command: "stage-save", bridgeCommand: "project-tool.run", toolName: "prefab.stage-save", buildArgs: prefabArgs, destructiveHint: true },
   { group: "prefab", command: "stage-close", bridgeCommand: "project-tool.run", toolName: "prefab.stage-close", buildArgs: prefabArgs },
   { group: "prefab", command: "instantiate", bridgeCommand: "project-tool.run", toolName: "prefab.instantiate", buildArgs: prefabInstantiateArgs, supportsDryRun: true },
-  { group: "prefab", command: "unpack", bridgeCommand: "project-tool.run", toolName: "prefab.unpack", buildArgs: prefabUnpackArgs }
+  { group: "prefab", command: "unpack", bridgeCommand: "project-tool.run", toolName: "prefab.unpack", buildArgs: prefabUnpackArgs, supportsDryRun: true }
 ];
 
 // 读取 tools run --input 中无法映射为简单 flag 的结构化字段（path/name/addChild 等）
@@ -58,7 +58,7 @@ function prefabArgs({ command, flags, positionalTarget }: Parameters<BridgeComma
     });
   }
   if (command === "prefab.stage-save" || command === "prefab.stage-close") {
-    return compactArgs({ path: positionalTarget ?? stringFlag(flags, "path") ?? stringField(flags, "path"), save: boolFlag(flags, "save") ?? boolField(flags, "save") });
+    return compactArgs({ path: positionalTarget ?? stringFlag(flags, "path") ?? stringField(flags, "path") });
   }
   return compactArgs({
     ...queryArgs(flags),

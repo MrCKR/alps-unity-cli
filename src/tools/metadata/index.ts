@@ -11,7 +11,7 @@
 import { bridgeCommandRegistry } from "../../bridge/index.js";
 import { validateBridgeRegistryContracts, validateToolMetadataContracts } from "../../contracts/command-contract.js";
 import { scoreSearch } from "../../util.js";
-import "../registry.js";
+import "../.generated-registry.js";
 import { defineToolMetadata } from "../define.js";
 import { builtinExtensionGroupNames } from "../../extensions/tool-manifest.js";
 import type { PlayModeSupport, ResolvedToolMetadata, ToolMetadata, ToolSource } from "./types.js";
@@ -42,7 +42,7 @@ export function normalizeToolMetadata(tool: ToolMetadata, source: ToolSource = "
   return normalized;
 }
 
-/** 推导迁移期默认 Play Mode 语义，显式 metadata 可覆盖。 */
+/** 根据执行目标和副作用推导默认 Play Mode 语义。 */
 export function inferPlayModeSupport(tool: ToolMetadata): PlayModeSupport {
   const handler = toolHandler(tool);
   if (tool.target === "runtime" || handler === "bridge-runtime") return "runtime-only";
@@ -62,25 +62,11 @@ if (process.env.UNITY_CLI_GENERATING_CONTRACT !== "1") {
   validateBridgeRegistryContracts(bridgeCommandRegistry, EXTENSION_GROUPS);
 }
 
-/** Extension tool metadata offline is intentionally empty. Extension tools require a live bridge for full descriptors. */
-export function registerExtensionTools(_tools: ToolMetadata[]): void {
-  // no-op: extension tools no longer register TS metadata duplicates
-}
-
-export function validateExtensionToolMetadata(): void {
-  // no-op: extension manifests + bridge specs are validated elsewhere
-}
-
 /** Return TS-local tool metadata only. C# built-in/extension/project tools require a live bridge. */
 export function builtinToolMetadata(): ResolvedToolMetadata[] {
   const tools = localTsTools();
   validateBuiltinTools(tools, false);
   return tools.map((tool) => normalizeToolMetadata(tool, tool.source ?? "built-in"));
-}
-
-/** Offline extension tool metadata is intentionally empty. */
-export function extensionToolMetadata(): ResolvedToolMetadata[] {
-  return [];
 }
 
 /** Return all locally registered metadata entries (TS-local only). */

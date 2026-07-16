@@ -5,8 +5,6 @@ namespace UnityCli
 {
     /// <summary>
     /// camera.info — 获取单个 Camera 的序列化设置。
-    /// 对齐旧 CameraInfo handler;只读。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class CameraInfoTool : IUnityCliTool<CameraInfoTool.Request, CameraInfoTool.Result>
     {
@@ -38,14 +36,14 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var camera = CameraToolSupport.ResolveCamera(request.Target);
             if (camera == null)
             {
                 throw new UnityCliBridge.BridgeCommandException("E_CAMERA_NOT_FOUND", "Camera not found: " + request.Target, "Run tools run camera.list, then retry with a camera name, hierarchy path, or instance id from the result.");
             }
-            return new Result { Camera = CameraToolSupport.BuildCameraInfo(camera) };
+            return new System.Threading.Tasks.ValueTask<Result>(new Result { Camera = CameraToolSupport.BuildCameraInfo(camera) });
         }
     }
 }

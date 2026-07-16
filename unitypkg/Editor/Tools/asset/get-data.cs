@@ -5,12 +5,10 @@ namespace UnityCli
 {
     /// <summary>
     /// asset.get-data — 资产深读:底层复用 ObjectSerializer,支持 paths/viewQuery 互斥的 token-safe 读取。
-    /// 对齐旧 AssetGetData handler;只读。通过 ctx.InputJson 构建 BridgeRequest 复用 ObjectSerializer。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class AssetGetDataTool : IUnityCliTool<AssetGetDataTool.Request, AssetGetDataTool.Result>
     {
-        public sealed class Request
+        public sealed class Request : IUnityCliObjectSerializationInput
         {
             public string AssetPath { get; set; }
             public string Path { get; set; }
@@ -19,6 +17,8 @@ namespace UnityCli
             public bool? IncludeFields { get; set; }
             public bool? IncludeProperties { get; set; }
             public bool? DeepSerialization { get; set; }
+            public System.Collections.Generic.List<string> Paths { get; set; }
+            [UnityCliAnyJson] public object ViewQuery { get; set; }
             public string NamePattern { get; set; }
         }
 
@@ -28,7 +28,7 @@ namespace UnityCli
             public string AssetPath { get; set; }
             public string Guid { get; set; }
             public string TypeName { get; set; }
-            public object Data { get; set; }
+            [UnityCliAnyJson] public object Data { get; set; }
         }
 
         public ToolDescriptor Describe() => new()
@@ -49,7 +49,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var path = AssetToolSupport.RequireAssetPath(request.AssetPath ?? request.Path);
             if (!AssetToolSupport.AssetExists(path))
@@ -61,19 +61,17 @@ namespace UnityCli
             {
                 throw new UnityCliBridge.BridgeCommandException("E_ASSET_LOAD_FAILED", "Asset main object could not be loaded: " + path, "Run asset.info to confirm the asset type, or use a more specific tool for folders/importers.");
             }
-            // 通过原始输入 JSON 构建 BridgeRequest,复用 ObjectSerializer.Options 构造(paths/viewQuery 互斥校验)
-            var bridgeRequest = UnityCliBridge.BridgeRequest.Parse(ctx.InputJson);
-            var options = GameObjectToolSupport.BuildSerializerOptions(bridgeRequest);
-            var memberJson = UnityCliBridge.ObjectSerializer.Serialize(asset, options);
-            return new Result
+            var options = GameObjectToolSupport.BuildSerializerOptions(request);
+            var data = UnityCliBridge.ObjectSerializer.Serialize(asset, options);
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Command = "asset.get-data",
                 AssetPath = path,
                 Guid = AssetDatabase.AssetPathToGUID(path),
                 TypeName = asset.GetType().FullName,
-                // ObjectSerializer 输出为动态 JSON 树;解析为嵌套结构供框架序列化(IDictionary 支持)
-                Data = GameObjectToolSupport.ParseJsonToObject(memberJson)
-            };
+                // ObjectSerializer 输出为动态 JSON 树);解析为嵌套结构供框架序列化(IDictionary 支持)
+                Data = data
+            });
         }
     }
 }

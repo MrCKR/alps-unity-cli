@@ -3,7 +3,9 @@ using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Reflection;
+using System.Security.Cryptography;
 using System.Text;
 
 namespace UnityCli
@@ -11,13 +13,12 @@ namespace UnityCli
     /// <summary>
     /// 反射驱动的协议序列化器(CLI 投递的隐藏桥接 helper)。
     ///
-    /// 设计依据:.plan/协议框架.md
     /// - Serialize(object):反射 public 属性 → camelCase JSON;null/可空默认值省略(proto3 语义);必填值类型始终输出。
     /// - Deserialize&lt;T&gt;(string):JSON → token tree → 反射填充 T。
-    /// - 演进自 UnityCliJsonWriter(复用其转义逻辑),但独立为反射驱动,替代散落各处的 .Prop() 手拼。
-    /// - 对外隐藏:不进 describe/help/docs/公开 API,仅 Bridge 内部桥接基础设施。
+    /// - 序列化、反序列化与 canonical hash 共用同一套严格 JSON 语义。
+    /// - CLR public 仅供独立 Extension assembly 复用，不进入 describe/help/docs/公开 CLI 契约。
     /// </summary>
-    internal static class UnityCliSerializer
+    public static class UnityCliSerializer
     {
         // ─── 序列化 ────────────────────────────────────────────────────────
 
@@ -28,12 +29,11 @@ namespace UnityCli
         public static string Serialize(object value)
         {
             var builder = new StringBuilder();
-            WriteValue(builder, value, forceObject: false);
+            WriteValue(builder, value);
             return builder.ToString();
         }
 
-        // 写一个值。forceObject=true 时,即使是基本类型也按其属性展开(用于根对象)。
-        private static void WriteValue(StringBuilder builder, object value, bool forceObject)
+        private static void WriteValue(StringBuilder builder, object value)
         {
             if (value == null)
             {
@@ -43,84 +43,63 @@ namespace UnityCli
 
             var type = value.GetType();
 
-            // 基本类型直接输出
-            if (type == typeof(string)) { WriteString(builder, (string)value); return; }
+            // 基本类型和 enum 直接输出。
+            if (type == typeof(string) || type == typeof(char)) { WriteString(builder, Convert.ToString(value, CultureInfo.InvariantCulture)); return; }
             if (type == typeof(bool)) { builder.Append(((bool)value) ? "true" : "false"); return; }
-            if (type == typeof(double)) { WriteNumber(builder, (double)value); return; }
-            if (type == typeof(float)) { WriteNumber(builder, (float)value); return; }
-            if (type == typeof(long)) { builder.Append(((long)value).ToString(CultureInfo.InvariantCulture)); return; }
-            if (type == typeof(int)) { builder.Append(((int)value).ToString(CultureInfo.InvariantCulture)); return; }
+            if (type.IsEnum) { WriteString(builder, Enum.GetName(type, value)); return; }
+            if (UnityCliSchemaDeriver.IsInteger(type)) { builder.Append(Convert.ToString(value, CultureInfo.InvariantCulture)); return; }
+            if (type == typeof(decimal)) { builder.Append(((decimal)value).ToString(CultureInfo.InvariantCulture)); return; }
+            if (type == typeof(double) || type == typeof(float)) { WriteNumber(builder, Convert.ToDouble(value, CultureInfo.InvariantCulture)); return; }
 
-            // 可空值类型:有值则输出底层,无值(null)已在上面返回
-            var underlying = Nullable.GetUnderlyingType(type);
-            if (underlying != null) { WriteValue(builder, value, forceObject); return; }
-
-            // 列表/数组
-            if (value is IList list)
-            {
-                builder.Append('[');
-                for (var i = 0; i < list.Count; i++)
-                {
-                    if (i > 0) builder.Append(',');
-                    WriteValue(builder, list[i], false);
-                }
-                builder.Append(']');
-                return;
-            }
-
-            // 字典:按 key-value 对输出(供工具 Result 嵌入已解析的任意 JSON 结构)
+            // 字典必须先于 IEnumerable 处理。
             if (value is IDictionary dict)
             {
                 builder.Append('{');
-                var firstEntry = true;
-                foreach (DictionaryEntry entry in dict)
+                var entries = new List<DictionaryEntry>();
+                foreach (DictionaryEntry entry in dict) entries.Add(entry);
+                entries.Sort((left, right) => string.CompareOrdinal(Convert.ToString(left.Key, CultureInfo.InvariantCulture), Convert.ToString(right.Key, CultureInfo.InvariantCulture)));
+                for (var index = 0; index < entries.Count; index++)
                 {
-                    if (entry.Value == null) continue;
-                    if (!firstEntry) builder.Append(',');
-                    firstEntry = false;
-                    WriteString(builder, Convert.ToString(entry.Key, CultureInfo.InvariantCulture));
+                    if (index > 0) builder.Append(',');
+                    WriteString(builder, Convert.ToString(entries[index].Key, CultureInfo.InvariantCulture));
                     builder.Append(':');
-                    WriteValue(builder, entry.Value, false);
+                    WriteValue(builder, entries[index].Value);
                 }
                 builder.Append('}');
                 return;
             }
 
-            // DTO/POCO:反射属性
+            if (value is IEnumerable enumerable)
+            {
+                builder.Append('[');
+                var first = true;
+                foreach (var item in enumerable)
+                {
+                    if (!first) builder.Append(',');
+                    first = false;
+                    WriteValue(builder, item);
+                }
+                builder.Append(']');
+                return;
+            }
+
             WriteObject(builder, value, type);
         }
 
-        // 写对象:反射 public 属性,camelCase 键,null 省略,必填值类型始终输出。
+        // 写对象：属性和字段共用 schema deriver 的协议成员集合，null 按 proto3 语义省略。
         private static void WriteObject(StringBuilder builder, object value, Type type)
         {
             builder.Append('{');
             var first = true;
-            var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-            foreach (var prop in properties)
+            foreach (var member in UnityCliSchemaDeriver.SerializableMembers(type))
             {
-                // 只处理有 getter 的 public 属性
-                if (!prop.CanRead) continue;
-
-                var propValue = prop.GetValue(value, null);
-                var propType = prop.PropertyType;
-
-                // null 省略(proto3 语义):引用类型或可空值类型为 null 时跳过
-                if (propValue == null)
-                {
-                    // 引用类型 null → 跳过;可空值类型 null → 跳过
-                    // (必填值类型不会有 null)
-                    continue;
-                }
-
-                // 可空值类型:取底层值判断是否默认。可空值类型为默认(如 bool? false)时是否省略?
-                // 协议:可选字段(可空)省略 null;有值时输出(即使 false/0)。
-                // 必填值类型(非可空):始终输出(即使默认值)。
-
+                var memberValue = UnityCliSchemaDeriver.GetMemberValue(member, value);
+                if (memberValue == null) continue;
                 if (!first) builder.Append(',');
                 first = false;
-                WriteString(builder, ToCamelCase(prop.Name));
+                WriteString(builder, ToCamelCase(member.Name));
                 builder.Append(':');
-                WriteValue(builder, propValue, false);
+                WriteValue(builder, memberValue);
             }
             builder.Append('}');
         }
@@ -164,15 +143,15 @@ namespace UnityCli
 
         private static void WriteNumber(StringBuilder builder, double value)
         {
-            if (double.IsNaN(value) || double.IsInfinity(value)) { builder.Append("null"); return; }
+            if (double.IsNaN(value) || double.IsInfinity(value))
+                throw new FormatException("JSON does not support non-finite numbers.");
             builder.Append(value.ToString("R", CultureInfo.InvariantCulture));
         }
 
         // ─── 反序列化 ──────────────────────────────────────────────────────
 
         /// <summary>
-        /// 将 JSON 反序列化为 T。基于轻量 token tree 解析器(演进自 UnityCliJsonWriter 的 parser),
-        /// 再反射填充 T 的 public 属性。废除 BridgeRequest 的正则刮 JSON。
+        /// 将 JSON 严格解析为 token tree，再反射填充 T 的 public 协议成员。
         /// </summary>
         public static T Deserialize<T>(string json)
         {
@@ -182,10 +161,36 @@ namespace UnityCli
         /// <summary>非泛型重载:用运行时 Type 反序列化(供 registry 在泛型类型参数为 Type 变量时使用)。</summary>
         public static object Deserialize(string json, Type targetType)
         {
-            if (string.IsNullOrEmpty(json)) return GetDefault(targetType);
+            if (string.IsNullOrWhiteSpace(json)) throw new FormatException("JSON payload is empty.");
             var index = 0;
             var token = ParseToken(json, ref index);
+            if (token == null) throw new FormatException("JSON payload is malformed.");
+            SkipWhitespace(json, ref index);
+            if (index != json.Length) throw new FormatException("JSON payload contains trailing tokens.");
             return ConvertToken(token, targetType);
+        }
+
+        public static object Parse(string json)
+        {
+            return Deserialize(json, typeof(object));
+        }
+
+        public static string Canonicalize(object value)
+        {
+            var builder = new StringBuilder();
+            WriteCanonicalValue(builder, value);
+            return builder.ToString();
+        }
+
+        public static string Sha256Canonical(object value)
+        {
+            using (var sha256 = SHA256.Create())
+            {
+                var bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(Canonicalize(value)));
+                var builder = new StringBuilder(bytes.Length * 2);
+                foreach (var valueByte in bytes) builder.Append(valueByte.ToString("x2", CultureInfo.InvariantCulture));
+                return builder.ToString();
+            }
         }
 
         // ─── token tree ───────────────────────────────────────────────────
@@ -223,9 +228,10 @@ namespace UnityCli
             {
                 var ch = json[index++];
                 if (ch == '"') return new Token { Type = TokenType.String, StringValue = sb.ToString() };
+                if (ch < 0x20) throw new FormatException("JSON string contains an unescaped control character.");
                 if (ch == '\\')
                 {
-                    if (index >= json.Length) break;
+                    if (index >= json.Length) throw new FormatException("JSON string ends with an incomplete escape.");
                     var esc = json[index++];
                     switch (esc)
                     {
@@ -238,14 +244,14 @@ namespace UnityCli
                         case 'r': sb.Append('\r'); break;
                         case 't': sb.Append('\t'); break;
                         case 'u':
-                            if (index + 4 <= json.Length)
-                            {
-                                var hex = json.Substring(index, 4);
-                                sb.Append((char)int.Parse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture));
-                                index += 4;
-                            }
+                            if (index + 4 > json.Length) throw new FormatException("JSON unicode escape is incomplete.");
+                            var hex = json.Substring(index, 4);
+                            int codePoint;
+                            if (!int.TryParse(hex, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out codePoint)) throw new FormatException("JSON unicode escape is invalid.");
+                            sb.Append((char)codePoint);
+                            index += 4;
                             break;
-                        default: sb.Append(esc); break;
+                        default: throw new FormatException("JSON escape is invalid: \\" + esc + ".");
                     }
                 }
                 else
@@ -253,20 +259,39 @@ namespace UnityCli
                     sb.Append(ch);
                 }
             }
-            return new Token { Type = TokenType.String, StringValue = sb.ToString() };
+            throw new FormatException("JSON string is not terminated.");
         }
 
         private static Token ParseNumberToken(string json, ref int index)
         {
             var start = index;
             if (json[index] == '-') index++;
-            while (index < json.Length && char.IsDigit(json[index])) index++;
-            if (index < json.Length && json[index] == '.') { index++; while (index < json.Length && char.IsDigit(json[index])) index++; }
+            if (index >= json.Length) throw new FormatException("JSON number is incomplete.");
+            if (json[index] == '0')
+            {
+                index++;
+                if (index < json.Length && json[index] >= '0' && json[index] <= '9')
+                    throw new FormatException("JSON number cannot contain a leading zero.");
+            }
+            else
+            {
+                if (json[index] < '1' || json[index] > '9') throw new FormatException("JSON number is malformed.");
+                while (index < json.Length && json[index] >= '0' && json[index] <= '9') index++;
+            }
+            if (index < json.Length && json[index] == '.')
+            {
+                index++;
+                var fractionStart = index;
+                while (index < json.Length && json[index] >= '0' && json[index] <= '9') index++;
+                if (index == fractionStart) throw new FormatException("JSON number fraction requires a digit.");
+            }
             if (index < json.Length && (json[index] == 'e' || json[index] == 'E'))
             {
                 index++;
                 if (index < json.Length && (json[index] == '+' || json[index] == '-')) index++;
-                while (index < json.Length && char.IsDigit(json[index])) index++;
+                var exponentStart = index;
+                while (index < json.Length && json[index] >= '0' && json[index] <= '9') index++;
+                if (index == exponentStart) throw new FormatException("JSON number exponent requires a digit.");
             }
             return new Token { Type = TokenType.Number, StringValue = json.Substring(start, index - start) };
         }
@@ -280,19 +305,21 @@ namespace UnityCli
             while (index < json.Length)
             {
                 SkipWhitespace(json, ref index);
-                var keyToken = ParseStringToken(json, ref index); // key
-                if (keyToken == null) return null;
+                if (index >= json.Length || json[index] != '"') throw new FormatException("JSON object key must be a string.");
+                var keyToken = ParseStringToken(json, ref index);
                 SkipWhitespace(json, ref index);
-                if (index >= json.Length || json[index] != ':') return null;
+                if (index >= json.Length || json[index] != ':') throw new FormatException("JSON object key must be followed by ':'.");
                 index++;
                 var valueToken = ParseToken(json, ref index);
-                obj[keyToken.StringValue] = valueToken;
+                if (valueToken == null) throw new FormatException("JSON object value is malformed.");
+                if (obj.ContainsKey(keyToken.StringValue)) throw new FormatException("JSON object contains duplicate field: " + keyToken.StringValue + ".");
+                obj.Add(keyToken.StringValue, valueToken);
                 SkipWhitespace(json, ref index);
                 if (index < json.Length && json[index] == ',') { index++; continue; }
                 if (index < json.Length && json[index] == '}') { index++; return new Token { Type = TokenType.Object, ObjectValue = obj }; }
-                return null;
+                throw new FormatException("JSON object is missing ',' or '}'.");
             }
-            return null;
+            throw new FormatException("JSON object is not terminated.");
         }
 
         private static Token ParseArrayToken(string json, ref int index)
@@ -304,13 +331,14 @@ namespace UnityCli
             while (index < json.Length)
             {
                 var valueToken = ParseToken(json, ref index);
+                if (valueToken == null) throw new FormatException("JSON array value is malformed.");
                 arr.Add(valueToken);
                 SkipWhitespace(json, ref index);
                 if (index < json.Length && json[index] == ',') { index++; continue; }
                 if (index < json.Length && json[index] == ']') { index++; return new Token { Type = TokenType.Array, ArrayValue = arr }; }
-                return null;
+                throw new FormatException("JSON array is missing ',' or ']'.");
             }
-            return null;
+            throw new FormatException("JSON array is not terminated.");
         }
 
         private static bool MatchLiteral(string json, ref int index, string literal)
@@ -323,82 +351,230 @@ namespace UnityCli
 
         private static void SkipWhitespace(string json, ref int index)
         {
-            while (index < json.Length && char.IsWhiteSpace(json[index])) index++;
+            while (index < json.Length)
+            {
+                var ch = json[index];
+                if (ch != ' ' && ch != '\t' && ch != '\r' && ch != '\n') break;
+                index++;
+            }
         }
 
         // ─── token → 目标类型 ─────────────────────────────────────────────
 
         private static object ConvertToken(Token token, Type targetType)
         {
-            if (token == null || token.Type == TokenType.Null) return GetDefault(targetType);
-
-            var underlying = Nullable.GetUnderlyingType(targetType);
-            var effectiveType = underlying ?? targetType;
-
-            if (effectiveType == typeof(string)) return token.Type == TokenType.String ? token.StringValue : null;
-            if (effectiveType == typeof(bool)) return token.Type == TokenType.True ? true : (token.Type == TokenType.False ? false : Convert.ToBoolean(token.StringValue, CultureInfo.InvariantCulture));
-            if (effectiveType == typeof(double)) return token.Type == TokenType.Number ? double.Parse(token.StringValue, CultureInfo.InvariantCulture) : 0.0;
-            if (effectiveType == typeof(float)) return token.Type == TokenType.Number ? float.Parse(token.StringValue, CultureInfo.InvariantCulture) : 0f;
-            if (effectiveType == typeof(long)) return token.Type == TokenType.Number ? long.Parse(token.StringValue, CultureInfo.InvariantCulture) : 0L;
-            if (effectiveType == typeof(int)) return token.Type == TokenType.Number ? int.Parse(token.StringValue, CultureInfo.InvariantCulture) : 0;
-
-            // 嵌套对象:反射填充
-            if (token.Type == TokenType.Object) return FillObject(token, effectiveType);
-
-            // 列表
-            if (token.Type == TokenType.Array && typeof(IList).IsAssignableFrom(effectiveType))
+            if (token == null) throw new FormatException("JSON value is malformed.");
+            var nullableType = Nullable.GetUnderlyingType(targetType);
+            if (token.Type == TokenType.Null)
             {
-                return FillList(token, effectiveType);
+                if (nullableType != null || !targetType.IsValueType) return null;
+                throw new FormatException("JSON null is not valid for " + targetType.Name + ".");
+            }
+            if (targetType == typeof(object)) return TokenToObject(token);
+
+            var effectiveType = nullableType ?? targetType;
+            if (effectiveType == typeof(string) || effectiveType == typeof(char))
+            {
+                if (token.Type != TokenType.String) throw new FormatException("Expected JSON string.");
+                if (effectiveType == typeof(char) && token.StringValue.Length != 1) throw new FormatException("Expected a single-character JSON string.");
+                return effectiveType == typeof(char) ? (object)token.StringValue[0] : token.StringValue;
+            }
+            if (effectiveType == typeof(bool))
+            {
+                if (token.Type != TokenType.True && token.Type != TokenType.False) throw new FormatException("Expected JSON boolean.");
+                return token.Type == TokenType.True;
+            }
+            if (effectiveType.IsEnum)
+            {
+                if (token.Type != TokenType.String || !Enum.IsDefined(effectiveType, token.StringValue)) throw new FormatException("Expected enum value for " + effectiveType.Name + ".");
+                return Enum.Parse(effectiveType, token.StringValue, false);
+            }
+            if (UnityCliSchemaDeriver.IsInteger(effectiveType) || UnityCliSchemaDeriver.IsNumber(effectiveType))
+                return ConvertNumberToken(token, effectiveType);
+
+            Type dictionaryValueType;
+            if (UnityCliSchemaDeriver.TryDictionaryValueType(effectiveType, out dictionaryValueType))
+            {
+                if (token.Type != TokenType.Object) throw new FormatException("Expected JSON object for " + effectiveType.Name + ".");
+                return FillDictionary(token, effectiveType, dictionaryValueType);
             }
 
-            return GetDefault(targetType);
+            Type elementType;
+            if (UnityCliSchemaDeriver.TryElementType(effectiveType, out elementType))
+            {
+                if (token.Type != TokenType.Array) throw new FormatException("Expected JSON array for " + effectiveType.Name + ".");
+                return FillList(token, effectiveType, elementType);
+            }
+
+            if (token.Type != TokenType.Object) throw new FormatException("Expected JSON object for " + effectiveType.Name + ".");
+            return FillObject(token, effectiveType);
         }
 
+        /// <summary>将 number token 严格转换到目标 CLR 数字类型并检测 overflow。</summary>
+        private static object ConvertNumberToken(Token token, Type type)
+        {
+            if (token.Type != TokenType.Number) throw new FormatException("Expected JSON number.");
+            try
+            {
+                if (type == typeof(byte)) return byte.Parse(token.StringValue, NumberStyles.Integer, CultureInfo.InvariantCulture);
+                if (type == typeof(sbyte)) return sbyte.Parse(token.StringValue, NumberStyles.Integer, CultureInfo.InvariantCulture);
+                if (type == typeof(short)) return short.Parse(token.StringValue, NumberStyles.Integer, CultureInfo.InvariantCulture);
+                if (type == typeof(ushort)) return ushort.Parse(token.StringValue, NumberStyles.Integer, CultureInfo.InvariantCulture);
+                if (type == typeof(int)) return int.Parse(token.StringValue, NumberStyles.Integer, CultureInfo.InvariantCulture);
+                if (type == typeof(uint)) return uint.Parse(token.StringValue, NumberStyles.Integer, CultureInfo.InvariantCulture);
+                if (type == typeof(long)) return long.Parse(token.StringValue, NumberStyles.Integer, CultureInfo.InvariantCulture);
+                if (type == typeof(ulong)) return ulong.Parse(token.StringValue, NumberStyles.Integer, CultureInfo.InvariantCulture);
+                if (type == typeof(decimal)) return decimal.Parse(token.StringValue, NumberStyles.Float, CultureInfo.InvariantCulture);
+                if (type == typeof(float))
+                {
+                    var single = float.Parse(token.StringValue, NumberStyles.Float, CultureInfo.InvariantCulture);
+                    if (float.IsNaN(single) || float.IsInfinity(single)) throw new OverflowException();
+                    return single;
+                }
+                var number = double.Parse(token.StringValue, NumberStyles.Float, CultureInfo.InvariantCulture);
+                if (double.IsNaN(number) || double.IsInfinity(number)) throw new OverflowException();
+                return number;
+            }
+            catch (Exception exception) when (exception is FormatException || exception is OverflowException)
+            {
+                throw new FormatException("JSON number is outside the target type range.", exception);
+            }
+        }
+
+        /// <summary>填充严格 DTO；未知字段和缺失 required 字段直接失败。</summary>
         private static object FillObject(Token token, Type type)
         {
-            var instance = Activator.CreateInstance(type);
-            var properties = type.GetProperties(BindingFlags.Public | BindingFlags.Instance);
-            foreach (var prop in properties)
+            var instance = Activator.CreateInstance(type, true);
+            var members = UnityCliSchemaDeriver.SerializableMembers(type);
+            var known = members.ToDictionary(member => ToCamelCase(member.Name), member => member, StringComparer.Ordinal);
+            foreach (var field in token.ObjectValue.Keys)
             {
-                if (!prop.CanWrite) continue;
-                // JSON key 是 camelCase;属性名 PascalCase → camelCase 查找
-                var key = ToCamelCase(prop.Name);
-                if (!token.ObjectValue.TryGetValue(key, out var child)) continue;
-                var value = ConvertToken(child, prop.PropertyType);
-                prop.SetValue(instance, value, null);
+                if (!known.ContainsKey(field)) throw new FormatException("Unknown JSON field for " + type.Name + ": " + field + ".");
+            }
+            foreach (var pair in known)
+            {
+                Token child;
+                if (!token.ObjectValue.TryGetValue(pair.Key, out child))
+                {
+                    if (pair.Value.IsDefined(typeof(UnityCliRequiredAttribute), true)) throw new FormatException("Missing required JSON field for " + type.Name + ": " + pair.Key + ".");
+                    continue;
+                }
+                if (child.Type == TokenType.Null && pair.Value.IsDefined(typeof(UnityCliRequiredAttribute), true))
+                    throw new FormatException("Required JSON field cannot be null for " + type.Name + ": " + pair.Key + ".");
+                UnityCliSchemaDeriver.SetMemberValue(pair.Value, instance, ConvertToken(child, UnityCliSchemaDeriver.MemberType(pair.Value)));
             }
             return instance;
         }
 
-        private static object FillList(Token token, Type type)
+        /// <summary>填充 array/list/interface collection，元素继续递归强类型转换。</summary>
+        private static object FillList(Token token, Type type, Type elementType)
         {
-            // 确定 元素类型
-            Type elementType = typeof(object);
-            if (type.IsArray) elementType = type.GetElementType();
-            else if (type.IsGenericType) elementType = type.GetGenericArguments()[0];
-
-            // 优先用 List<T>(生成的 DTO 用 List<T>)
             var listType = typeof(List<>).MakeGenericType(elementType);
             var list = (IList)Activator.CreateInstance(listType);
-            foreach (var item in token.ArrayValue)
-            {
-                list.Add(ConvertToken(item, elementType));
-            }
-
-            if (type.IsArray)
-            {
-                var array = Array.CreateInstance(elementType, list.Count);
-                list.CopyTo(array, 0);
-                return array;
-            }
-            return list;
+            foreach (var item in token.ArrayValue) list.Add(ConvertToken(item, elementType));
+            if (!type.IsArray) return list;
+            var array = Array.CreateInstance(elementType, list.Count);
+            list.CopyTo(array, 0);
+            return array;
         }
 
-        private static object GetDefault(Type type)
+        /// <summary>填充 string-key dictionary，value 按声明类型递归转换。</summary>
+        private static object FillDictionary(Token token, Type type, Type valueType)
         {
-            if (type.IsValueType) return Activator.CreateInstance(type);
-            return null;
+            var concreteType = typeof(Dictionary<,>).MakeGenericType(typeof(string), valueType);
+            var dictionary = (IDictionary)Activator.CreateInstance(concreteType);
+            foreach (var pair in token.ObjectValue) dictionary.Add(pair.Key, ConvertToken(pair.Value, valueType));
+            return dictionary;
         }
+
+        private static object TokenToObject(Token token)
+        {
+            switch (token.Type)
+            {
+                case TokenType.Null: return null;
+                case TokenType.True: return true;
+                case TokenType.False: return false;
+                case TokenType.String: return token.StringValue;
+                case TokenType.Number:
+                    long integer;
+                    if (long.TryParse(token.StringValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out integer)) return integer;
+                    decimal largeInteger;
+                    if (token.StringValue.IndexOf('.') < 0 && token.StringValue.IndexOf('e') < 0 && token.StringValue.IndexOf('E') < 0
+                        && decimal.TryParse(token.StringValue, NumberStyles.Integer, CultureInfo.InvariantCulture, out largeInteger)) return largeInteger;
+                    double number;
+                    if (!double.TryParse(token.StringValue, NumberStyles.Float, CultureInfo.InvariantCulture, out number) || double.IsNaN(number) || double.IsInfinity(number)) throw new FormatException("JSON number is invalid.");
+                    return number;
+                case TokenType.Array: return token.ArrayValue.Select(TokenToObject).ToList();
+                case TokenType.Object: return token.ObjectValue.ToDictionary(pair => pair.Key, pair => TokenToObject(pair.Value), StringComparer.Ordinal);
+                default: throw new FormatException("Unsupported JSON token.");
+            }
+        }
+
+        private static void WriteCanonicalValue(StringBuilder builder, object value)
+        {
+            if (value == null) { builder.Append("null"); return; }
+            if (value is string text) { WriteString(builder, text); return; }
+            if (value is bool boolean) { builder.Append(boolean ? "true" : "false"); return; }
+            if (value is byte || value is sbyte || value is short || value is ushort || value is int || value is uint || value is long || value is ulong)
+            {
+                builder.Append(Convert.ToString(value, CultureInfo.InvariantCulture));
+                return;
+            }
+            if (value is float || value is double || value is decimal)
+            {
+                var number = Convert.ToDouble(value, CultureInfo.InvariantCulture);
+                if (double.IsNaN(number) || double.IsInfinity(number)) throw new FormatException("Canonical JSON does not support non-finite numbers.");
+                if (number == 0) { builder.Append('0'); return; }
+                builder.Append(number.ToString("R", CultureInfo.InvariantCulture));
+                return;
+            }
+            if (value is IDictionary dictionary)
+            {
+                var entries = new List<Tuple<string, object>>();
+                foreach (DictionaryEntry entry in dictionary)
+                {
+                    entries.Add(Tuple.Create(Convert.ToString(entry.Key, CultureInfo.InvariantCulture), entry.Value));
+                }
+                entries.Sort((left, right) => string.CompareOrdinal(left.Item1, right.Item1));
+                builder.Append('{');
+                for (var index = 0; index < entries.Count; index++)
+                {
+                    if (index > 0) builder.Append(',');
+                    WriteString(builder, entries[index].Item1);
+                    builder.Append(':');
+                    WriteCanonicalValue(builder, entries[index].Item2);
+                }
+                builder.Append('}');
+                return;
+            }
+            if (value is IEnumerable enumerable)
+            {
+                builder.Append('[');
+                var first = true;
+                foreach (var item in enumerable)
+                {
+                    if (!first) builder.Append(',');
+                    first = false;
+                    WriteCanonicalValue(builder, item);
+                }
+                builder.Append(']');
+                return;
+            }
+            var properties = value.GetType().GetProperties(BindingFlags.Public | BindingFlags.Instance)
+                .Where(property => property.CanRead && property.GetValue(value, null) != null)
+                .OrderBy(property => ToCamelCase(property.Name), StringComparer.Ordinal)
+                .ToArray();
+            builder.Append('{');
+            for (var index = 0; index < properties.Length; index++)
+            {
+                if (index > 0) builder.Append(',');
+                WriteString(builder, ToCamelCase(properties[index].Name));
+                builder.Append(':');
+                WriteCanonicalValue(builder, properties[index].GetValue(value, null));
+            }
+            builder.Append('}');
+        }
+
     }
 }
 #endif

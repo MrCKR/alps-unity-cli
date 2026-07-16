@@ -13,7 +13,6 @@ namespace UnityCli
     /// prefab 域 IUnityCliTool 共享的基础设施 helper:Prefab 路径校验、Prefab 资产加载、
     /// Prefab Stage 反射操作、依赖/嵌套 Prefab 摘要构造、层级路径。仅供 prefab 域自包含工具复用;
     /// 不实现 IUnityCliTool,不参与工具发现。
-    /// 设计依据:.plan/工具统一形态.md(自包含工具共享只读 helper,handler 逻辑各自内聚)。
     /// </summary>
     public static class PrefabToolSupport
     {

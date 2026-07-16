@@ -1,6 +1,6 @@
 # Target 与 Instance
 
-> **发现路径**：`instances list` → `target set` → 进入工具发现
+> **发现路径**：`instances list` → 在发现与执行命令上显式传 `--instance` → 进入工具发现
 
 ## 什么是 Unity Instance？
 
@@ -26,9 +26,9 @@
 
 | 状态 | 含义 | 恢复方式 |
 |------|------|---------|
-| `ready` / `healthy` | 心跳正常，`/health` 可达 | — |
-| `stale` | 心跳超时（domain reload 或 Editor 关闭） | 重新打开 Unity Editor；执行 `instances prune` |
-| `unreachable` | 注册存在但 `/health` 无响应 | 检查 Editor 进程；执行 `instances prune` |
+| `ready` / `healthy` | `/health` 可达，且响应中的 target ID 与注册实例一致 | - |
+| `stale` | 心跳超时；可能只是 domain reload 的瞬时 registry 快照 | CLI 自动重探；持续失败时检查 Editor 后执行 `instances prune` |
+| `unreachable` | 注册存在，但 `/health` 无响应、响应畸形或 target ID 不匹配 | 检查 Editor 进程与端点身份；确认失效后执行 `instances prune` |
 
 ## 发现可用实例
 
@@ -40,18 +40,20 @@ unity_cli instances list
 unity_cli instances prune --yes
 ```
 
+`instances prune` 只删除失效的 registry 记录，不会终止记录中的 PID。domain reload 期间的 Editor 可能暂时显示为 `stale`；命令会先执行实时、带 target ID 校验的 health probe，仍可达的实例会恢复为 `ready` 并保留。
+
 ## 选择目标
 
 执行任何 Bridge 工具前，CLI 必须知道目标 Unity 实例。解析优先级：
 
-### 1. 显式 `--target <id|alias>`
+### 1. 显式 `--instance <id|alias>`
 
 ```powershell
-unity_cli tools group list <group> --target <instanceId|alias>
-unity_cli tools run camera.list --target my-project
+unity_cli tools group list <group> --instance <instanceId|alias>
+unity_cli tools run camera.list --instance my-project
 ```
 
-`--target` 接受实例 ID、别名或项目 hash 前缀。最确定性的解析方式。
+`--instance`（别名 `--target`）接受实例 ID、别名或项目 hash 前缀，是最确定性的解析方式。调用方已经知道目标时，应在每条 Bridge 命令上显式传入，不需要先执行 `target set`。
 
 ### 2. 活动目标（`target set`）
 
@@ -61,7 +63,7 @@ unity_cli target current       # 查看当前活动目标
 unity_cli target clear         # 清除活动目标
 ```
 
-存储在 `config.json` 中。后续命令无需 `--target` 即使用此目标。
+该命令会把可变的全局活动目标持久化到 `config.json`，属于 CLI 控制面副作用；只适合调用方明确希望后续命令省略 `--instance` 的交互式会话。已经显式传入 `--instance` 时不要执行 `target set`，它不会增加目标绑定保证。
 
 ### 3. CWD 匹配
 
@@ -96,4 +98,4 @@ unity_cli target alias unset <alias>                  # 删除别名
 
 ## 核心原则
 
-**CLI 绝不猜测目标。** 多个就绪实例时返回 `E_TARGET_AMBIGUOUS`，附带可操作的 `nextActions`。调用者必须显式选择目标。
+**CLI 绝不猜测目标。** 多个就绪实例时返回 `E_TARGET_AMBIGUOUS`，附带可操作的 `nextActions`。调用者应优先在当前命令上显式传 `--instance`；只有明确需要持久化全局默认值时才使用 `target set`。

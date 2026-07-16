@@ -7,21 +7,14 @@ namespace UnityCli
 {
     /// <summary>
     /// material.set — 设置 Material 资产属性(color/float/vector/texture)。session-affecting(asset-write)。
-    /// 对齐旧 MaterialSet handler。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class MaterialSetTool : IUnityCliTool<MaterialSetTool.Request, MaterialSetTool.Result>
     {
         public sealed class Request
         {
-            public string Path { get; set; }
-            public string Material { get; set; }
-            public string Property { get; set; }
-            public string Value { get; set; }
-            public string Color { get; set; }
-            public string FloatValue { get; set; }
-            public string Vector { get; set; }
-            public string Texture { get; set; }
+            [UnityCliRequired] public string Path { get; set; }
+            [UnityCliRequired] public string Property { get; set; }
+            [UnityCliRequired] public string Value { get; set; }
             public string Type { get; set; }
         }
 
@@ -30,7 +23,7 @@ namespace UnityCli
             public MaterialInfo Material { get; set; }
             public string Property { get; set; }
             public string PropertyType { get; set; }
-            public object AppliedValue { get; set; }
+            [UnityCliAnyJson] public object AppliedValue { get; set; }
             public List<MaterialPlannedEffect> PlannedEffects { get; set; }
         }
 
@@ -38,28 +31,27 @@ namespace UnityCli
         {
             Name = "material.set",
             Summary = "Set a Material asset property (color, float, vector or texture) by shader property name.",
-            Description = "Set a Material asset property by shader property name. The value type is inferred from the shader property when possible, or overridden with type. Use the color/floatValue/vector/texture aliases for typed inputs. Inspect properties with material.info first.",
+            Description = "Set a Material asset property by shader property name. Pass the property value as value; the value type is inferred from the shader property when possible or overridden with type. Inspect properties with material.info first.",
             Group = "material",
             Version = "1.0.0",
-            DestructiveHint = false,
+            DestructiveHint = true,
             SideEffects = new[] { "asset-write" },
             Target = "editor",
-            PlayModeSupport = "session-affecting",
+            PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 30000,
             MaxTimeoutMs = 600000,
             Examples = new[]
             {
-                new ToolExample { Description = "Set the base color", Input = new Request { Path = "Assets/Materials/Probe.mat", Property = "_Color", Color = "#ff0000ff" } }
+                new ToolExample { Description = "Set the base color", Input = new Request { Path = "Assets/Materials/Probe.mat", Property = "_Color", Value = "#ff0000ff", Type = "color" } }
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             MaterialToolSupport.EnsureEditorNotBusy("material.set");
-            var path = MaterialToolSupport.RequireMaterialPath(request.Path ?? request.Material);
+            var path = MaterialToolSupport.RequireMaterialPath(request.Path);
             var propertyName = request.Property;
-            // value/color/floatValue/vector/texture 别名回退到统一 value
-            var value = request.Value ?? request.Color ?? request.FloatValue ?? request.Vector ?? request.Texture;
+            var value = request.Value;
             var requestedType = request.Type;
             var material = MaterialToolSupport.LoadMaterialAsset(path);
             if (string.IsNullOrEmpty(propertyName))
@@ -85,14 +77,14 @@ namespace UnityCli
             var appliedValue = MaterialToolSupport.ApplyMaterialValue(material, propertyName, normalizedType, value);
             EditorUtility.SetDirty(material);
             AssetDatabase.SaveAssets();
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Material = MaterialToolSupport.BuildMaterialInfo(path, material, null),
                 Property = propertyName,
                 PropertyType = propertyType,
                 AppliedValue = appliedValue,
                 PlannedEffects = new List<MaterialPlannedEffect> { new MaterialPlannedEffect { Type = "material.set", Path = path, Property = propertyName } }
-            };
+            });
         }
     }
 }

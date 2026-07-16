@@ -34,9 +34,10 @@ namespace UnityCli.ProBuilder
         {
             Name = "probuilder.combine-meshes",
             Summary = "Combine multiple ProBuilder meshes into a single mesh.",
-            Description = "Combine multiple ProBuilder meshes into a single mesh. Requires at least 2 targets, each with a ProBuilderMesh component. Falls back to Unity Mesh.CombineMeshes when the ProBuilder CombineMeshes API is unavailable.",
+            Description = "Combine multiple ProBuilder meshes into exactly one mesh with the ProBuilder 5.x CombineMeshes API. Requires at least 2 targets, each with a ProBuilderMesh component, and fails if the result would require multiple meshes.",
             Group = "probuilder",
-            DestructiveHint = true,
+            DestructiveHint = false,
+            SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 15000,
@@ -49,12 +50,12 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var targets = ProBuilderInput.ResolveTargets(ctx.InputJson);
+            var targets = ProBuilderInput.ResolveTargets(request.Targets);
             if (targets == null || targets.Length < 2)
                 throw ProBuilderErrors.SchemaInvalid("At least 2 targets required for combine-meshes.");
 
@@ -77,51 +78,14 @@ namespace UnityCli.ProBuilder
 
             var combined = ProBuilderReflection.CombineMeshesViaReflection(pbMeshes.ToArray(), pbMeshes[0]);
             if (!combined)
-            {
-                // 回退到 Unity API
-                var combinedGo = new GameObject(name);
-                var meshFilter = combinedGo.AddComponent<MeshFilter>();
-                var meshRenderer = combinedGo.AddComponent<MeshRenderer>();
-                var combineInstances = new List<CombineInstance>();
-                var sources = new List<GameObject>();
-                foreach (var go in targets)
-                {
-                    var mf = go.GetComponent<MeshFilter>();
-                    if (mf != null && mf.sharedMesh != null)
-                    {
-                        combineInstances.Add(new CombineInstance { mesh = mf.sharedMesh, transform = go.transform.localToWorldMatrix });
-                        sources.Add(go);
-                    }
-                }
-                if (combineInstances.Count > 0)
-                {
-                    var mesh = new Mesh();
-                    mesh.CombineMeshes(combineInstances.ToArray());
-                    meshFilter.sharedMesh = mesh;
-                }
-                ProBuilderReflection.AddProBuilderMesh(combinedGo);
-                Undo.RegisterCreatedObjectUndo(combinedGo, "ProBuilder Combine Meshes");
-                EditorSceneManager.MarkSceneDirty(combinedGo.scene);
+                throw ProBuilderErrors.OperationFailed("combine-meshes", "ProBuilder 5.x CombineMeshes.Combine did not return exactly one mesh.");
 
-                return new Result
-                {
-                    CombinedObject = new ObjectRef
-                    {
-                        Id = combinedGo.GetInstanceID(),
-                        Name = combinedGo.name,
-                        Path = HierarchyPath(combinedGo)
-                    },
-                    SourceCount = sources.Count
-                };
-            }
-
-            // ProBuilder CombineMeshes 成功
             ProBuilderReflection.RefreshMesh(pbMeshes[0]);
             var firstGo = targets[0];
             if (!string.IsNullOrEmpty(name)) firstGo.name = name;
             EditorSceneManager.MarkSceneDirty(firstGo.scene);
 
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 CombinedObject = new ObjectRef
                 {
@@ -130,7 +94,7 @@ namespace UnityCli.ProBuilder
                     Path = HierarchyPath(firstGo)
                 },
                 SourceCount = pbMeshes.Count
-            };
+            });
         }
 
         private static string HierarchyPath(GameObject go)

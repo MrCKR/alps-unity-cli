@@ -29,7 +29,8 @@ export default defineTool<DocsTopicRequest, DocsTopicResult>({
   handler: "offline",
   supportStatus: "cli-only",
   examples: [
-    { description: "Read the scene topic", argv: ["tools", "run", "docs.topic", "--input", "{\"topic\":\"scene\"}"] }
+    { description: "Read the scene topic", argv: ["tools", "run", "docs.topic", "--input", "{\"topic\":\"scene\"}"] },
+    { description: "Render the scene topic as text", argv: ["tools", "run", "docs.topic", "--input", "{\"topic\":\"scene\",\"format\":\"text\"}"] }
   ],
   /** 读取单个内置 topic；找不到时返回稳定 docs 错误码而不是泛化失败。 */
   execute(request, context) {

@@ -8,16 +8,20 @@ import { execute } from "../src/cli.js";
 import { JobRunner } from "../src/job-runner.js";
 import { JobStore } from "../src/job-store.js";
 import { bridgeCommandRegistry, bridgeHttpTimeoutMs, executeBridgeCommand, type BridgeRequest } from "../src/bridge/index.js";
+import { ExtensionRegistry } from "../src/extensions/index.js";
+import { installExtensionBundle } from "../src/extensions/installer.js";
 
 process.env.UNITY_CLI_ALLOW_NON_WINDOWS = "1";
 
 let healthEndpoint1 = "http://127.0.0.1:47392";
 let healthEndpoint2 = "http://127.0.0.1:47393";
+let mismatchedHealthEndpoint = "http://127.0.0.1:47394";
 const healthServers: Server[] = [];
 
 test.before(async () => {
   healthEndpoint1 = await startHealthServer();
   healthEndpoint2 = await startHealthServer();
+  mismatchedHealthEndpoint = await startHealthServer("other-editor");
 });
 
 test.after(async () => {
@@ -36,11 +40,13 @@ async function writeRegistry(dataDir: string, instances: Array<Record<string, un
   await Promise.all(instances.map((item) => writeFile(join(registryDir, `${item.instanceId}.json`), JSON.stringify(item, null, 2), "utf8")));
 }
 
-async function startHealthServer(): Promise<string> {
+async function startHealthServer(fixedTargetId?: string): Promise<string> {
   const server = createServer((request, response) => {
     if (request.url === "/health") {
+      const expectedTargetId = request.headers["x-unity-cli-expected-target-id"];
+      const targetId = fixedTargetId ?? (typeof expectedTargetId === "string" ? expectedTargetId : "missing-target");
       response.writeHead(200, { "content-type": "application/json" });
-      response.end(JSON.stringify({ ok: true, status: "healthy" }));
+      response.end(JSON.stringify({ ok: true, requestId: "", data: { bridge: "unity_cli", target: { id: targetId } } }));
       return;
     }
     response.writeHead(404);
@@ -54,13 +60,13 @@ async function startHealthServer(): Promise<string> {
 }
 
 test("bridge HTTP timeout matches Unity queue window for regular commands", () => {
-  assert.equal(bridgeHttpTimeoutMs({ requestId: "req", command: "editor.state", args: {} }), 65_000);
-  assert.equal(bridgeHttpTimeoutMs({ requestId: "req", command: "scene.hierarchy", args: {} }), 65_000);
+  assert.equal(bridgeHttpTimeoutMs({ requestId: "req", command: "editor.state", input: {} }), 65_000);
+  assert.equal(bridgeHttpTimeoutMs({ requestId: "req", command: "scene.hierarchy", input: {} }), 65_000);
 });
 
 test("CLI help advertises --instance for live target selection", async () => {
   const result = await execute(["--help"]);
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   const commands = (result.data as { commands: string[] }).commands;
   assert.ok(commands.some((command) => command.includes("tools run <name>") && command.includes("--instance <id|alias>")));
   assert.ok(commands.some((command) => command.includes("context read <name>") && command.includes("--instance <id|alias>") && command.includes("--input-file <path>")));
@@ -92,15 +98,15 @@ test("instances list and prune normalize stale registry entries", async () => {
   const runtime = await makeRuntime();
   await writeRegistry(runtime.dataDir, [
     instance(),
-    instance({ instanceId: "editor-stale", projectHash: "hash-stale", status: "ready", bridgeEndpoint: healthEndpoint2, lastHeartbeatAt: new Date(Date.now() - 60_000).toISOString() })
+    instance({ instanceId: "editor-stale", projectHash: "hash-stale", status: "ready", bridgeEndpoint: mismatchedHealthEndpoint, lastHeartbeatAt: new Date(Date.now() - 60_000).toISOString() })
   ]);
 
   const list = await execute(["instances", "list"], runtime);
-  assert.equal(list.ok, true);
+  assert.ok(list.ok);
   assert.deepEqual((list.data as { instances: Array<{ state: string }> }).instances.map((item) => item.state), ["ready", "stale"]);
 
   const cleanup = await execute(["instances", "prune", "--yes"], runtime);
-  assert.equal(cleanup.ok, true);
+  assert.ok(cleanup.ok);
   assert.equal((cleanup.data as { removed: number }).removed, 1);
 });
 
@@ -118,7 +124,7 @@ test("instances list keeps latest endpoint for the same instance", async () => {
 
   const list = await execute(["instances", "list"], runtime);
 
-  assert.equal(list.ok, true);
+  assert.ok(list.ok);
   const instances = (list.data as { instances: Array<{ state: string; endpoint: string }> }).instances;
   assert.equal(instances.length, 1);
   assert.equal(instances[0].state, "ready");
@@ -129,14 +135,17 @@ test("bridge command does not select superseded healthy endpoint during reload",
   const runtime = await makeRuntime();
   const oldHeartbeat = new Date(Date.now() - 10_000).toISOString();
   const newHeartbeat = new Date().toISOString();
-  await writeRegistry(runtime.dataDir, [
-    instance({ status: "ready", bridgeEndpoint: healthEndpoint1, lastHeartbeatAt: oldHeartbeat }),
-    instance({ status: "stale", bridgeEndpoint: healthEndpoint1, lastHeartbeatAt: newHeartbeat })
-  ]);
+  await writeFile(join(runtime.dataDir, "instances.json"), JSON.stringify({
+    version: 1,
+    instances: [
+      instance({ status: "ready", bridgeEndpoint: healthEndpoint1, lastHeartbeatAt: oldHeartbeat }),
+      instance({ status: "stale", bridgeEndpoint: mismatchedHealthEndpoint, lastHeartbeatAt: newHeartbeat })
+    ]
+  }, null, 2), "utf8");
 
   const result = await execute(["tools", "run", "editor.state", "--instance", "editor-1"], runtime);
 
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "E_TARGET_STALE");
 });
 
@@ -152,15 +161,30 @@ test("bridge command routes --instance to the matching ready endpoint", async ()
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: { items: [] } };
+      return { ok: true as const, requestId: payload.requestId, data: { items: [] } };
     }
   });
 
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   assert.equal((result.data as { bridgeEndpoint: string }).bridgeEndpoint, healthEndpoint2);
   assert.equal("selectedInstance" in (result.data as Record<string, unknown>), false);
   assert.equal("target" in (result.data as Record<string, unknown>), false);
   assert.equal(requests[0].command, "project-tool.run");
+});
+
+test("live bridge transport failures are transient during listener restarts", async () => {
+  const runtime = await makeRuntime();
+  await writeRegistry(runtime.dataDir, [instance()]);
+
+  const result = await execute(["tools", "run", "editor.state", "--instance", "editor-1"], {
+    ...runtime,
+    bridgeExecute: async () => { throw new Error("This operation was aborted"); }
+  });
+
+  assert.equal(result.ok, false);
+  assert.equal(result.error?.code, "BRIDGE_CONNECTION_FAILED");
+  assert.equal(result.error?.transient, true);
+  assert.equal(result.error?.retryAfterMs, 1000);
 });
 
 test("tools run go.inspect keeps --target for instance selection and input target for GameObject", async () => {
@@ -172,15 +196,15 @@ test("tools run go.inspect keeps --target for instance selection and input targe
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: { gameObject: { name: "Main Camera" } } };
+      return { ok: true as const, requestId: payload.requestId, data: { gameObject: { name: "Main Camera" } } };
     }
   });
 
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   assert.equal((result.data as { bridgeEndpoint: string }).bridgeEndpoint, healthEndpoint2);
   assert.equal("selectedInstance" in (result.data as Record<string, unknown>), false);
   assert.equal(requests[0].command, "project-tool.run");
-  assert.deepEqual(requests[0].args, { name: "go.inspect", input: { target: "Main Camera" } });
+  assert.deepEqual(requests[0].input!, { name: "go.inspect", input: { target: "Main Camera" } });
 });
 
 test("tools run go.find keeps --target for instance selection and input target as search term", async () => {
@@ -192,15 +216,15 @@ test("tools run go.find keeps --target for instance selection and input target a
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: { items: [], pageInfo: { total: 0 } } };
+      return { ok: true as const, requestId: payload.requestId, data: { items: [], pageInfo: { total: 0 } } };
     }
   });
 
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   assert.equal((result.data as { bridgeEndpoint: string }).bridgeEndpoint, healthEndpoint2);
   assert.equal("selectedInstance" in (result.data as Record<string, unknown>), false);
   assert.equal(requests[0].command, "project-tool.run");
-  assert.deepEqual(requests[0].args, { name: "go.find", input: { searchTerm: "Main Camera", target: "Main Camera", pageSize: 5 } });
+  assert.deepEqual(requests[0].input!, { name: "go.find", input: { searchTerm: "Main Camera", target: "Main Camera", pageSize: 5 } });
 });
 
 
@@ -209,14 +233,16 @@ test("instances list and target selection mark failed health checks unreachable"
   await writeRegistry(runtime.dataDir, [instance({ bridgeEndpoint: "http://127.0.0.1:1" })]);
 
   const list = await execute(["instances", "list"], runtime);
-  assert.equal(list.ok, true);
+  assert.ok(list.ok);
   const instances = (list.data as { instances: Array<{ state: string; status: string }> }).instances;
   assert.equal(instances[0].state, "unreachable");
   assert.equal(instances[0].status, "unreachable");
 
   const result = await execute(["tools", "run", "editor.state", "--instance", "editor-1"], runtime);
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "E_TARGET_UNREACHABLE");
+  assert.equal(result.error?.transient, true);
+  assert.equal(result.error?.retryAfterMs, 1000);
 });
 
 test("target commands manage active target and aliases", async () => {
@@ -227,11 +253,11 @@ test("target commands manage active target and aliases", async () => {
   const set = await execute(["target", "set", "main"], runtime);
   const get = await execute(["target", "current"], runtime);
 
-  assert.equal(alias.ok, true);
-  assert.equal(set.ok, true);
+  assert.ok(alias.ok);
+  assert.ok(set.ok);
   assert.equal((set.data as { target: { id: string; alias: string } }).target.id, "editor-2");
   assert.equal((set.data as { target: { id: string; alias: string } }).target.alias, "main");
-  assert.equal(get.ok, true);
+  assert.ok(get.ok);
   assert.equal((get.data as { target: { id: string } }).target.id, "editor-2");
 });
 
@@ -244,12 +270,12 @@ test("target alias set requires --force to overwrite another target", async () =
   const forced = await execute(["target", "alias", "set", "editor-2", "main", "--force"], runtime);
   const set = await execute(["target", "set", "main"], runtime);
 
-  assert.equal(first.ok, true);
-  assert.equal(conflict.ok, false);
+  assert.ok(first.ok);
+  assert.ok(!conflict.ok);
   assert.equal(conflict.error?.code, "E_TARGET_ALIAS_CONFLICT");
-  assert.equal(forced.ok, true);
+  assert.ok(forced.ok);
   assert.equal((forced.data as { replacedInstanceId: string }).replacedInstanceId, "editor-1");
-  assert.equal(set.ok, true);
+  assert.ok(set.ok);
   assert.equal((set.data as { target: { id: string; alias: string } }).target.id, "editor-2");
   assert.equal((set.data as { target: { id: string; alias: string } }).target.alias, "main");
 });
@@ -260,10 +286,10 @@ test("bridge command auto-selects by current project path", async () => {
 
   const result = await execute(["tools", "run", "editor.state"], {
     ...runtime,
-    bridgeExecute: async () => ({ ok: true, data: { state: "ok" } })
+    bridgeExecute: async (payload) => ({ ok: true as const, requestId: payload.requestId, data: { state: "ok" } })
   });
 
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   assert.equal((result.data as { bridgeEndpoint: string }).bridgeEndpoint, healthEndpoint1);
   assert.equal("selectedInstance" in (result.data as Record<string, unknown>), false);
 });
@@ -272,30 +298,49 @@ test("bridge command reports missing, stale and ambiguous instances", async () =
   const missingRuntime = await makeRuntime();
   await writeRegistry(missingRuntime.dataDir, [instance()]);
   const missing = await execute(["tools", "run", "editor.state", "--instance", "missing"], missingRuntime);
-  assert.equal(missing.ok, false);
+  assert.ok(!missing.ok);
   assert.equal(missing.error?.code, "E_TARGET_NOT_FOUND");
 
   const staleRuntime = await makeRuntime();
-  await writeRegistry(staleRuntime.dataDir, [instance({ status: "stale" })]);
+  await writeRegistry(staleRuntime.dataDir, [instance({ status: "stale", bridgeEndpoint: mismatchedHealthEndpoint })]);
   const stale = await execute(["tools", "run", "editor.state", "--instance", "editor-1"], staleRuntime);
-  assert.equal(stale.ok, false);
+  assert.ok(!stale.ok);
   assert.equal(stale.error?.code, "E_TARGET_STALE");
+  assert.equal(stale.error?.transient, true);
+  assert.equal(stale.error?.retryAfterMs, 1000);
 
   const ambiguousRuntime = await makeRuntime();
   await writeRegistry(ambiguousRuntime.dataDir, [instance(), instance({ instanceId: "editor-2", projectPath: "/tmp/project-two", projectHash: "hash-two", bridgeEndpoint: healthEndpoint2 })]);
-  const ambiguous = await execute(["tools", "run", "editor.state"], ambiguousRuntime);
-  assert.equal(ambiguous.ok, false);
+  const ambiguous = await execute(["tools", "run", "editor.state"], {
+    ...ambiguousRuntime,
+    bridgeExecute: async (payload) => ({ ok: true as const, requestId: payload.requestId, data: {} })
+  });
+  assert.ok(!ambiguous.ok);
   assert.equal(ambiguous.error?.code, "E_TARGET_AMBIGUOUS");
 });
 
-test("bridge command marks expired healthy heartbeat as stale", async () => {
+test("expired heartbeat recovers only through matching health identity", async () => {
   const runtime = await makeRuntime();
   await writeRegistry(runtime.dataDir, [instance({ lastHeartbeatAt: new Date(Date.now() - 60_000).toISOString() })]);
 
+  const list = await execute(["instances", "list"], runtime);
+
+  assert.ok(list.ok);
+  const items = (list.data as { instances: Array<{ instanceId: string; state: string }> }).instances;
+  assert.equal(items[0].instanceId, "editor-1");
+  assert.equal(items[0].state, "ready");
+});
+
+test("health target mismatch keeps an expired target stale", async () => {
+  const runtime = await makeRuntime();
+  await writeRegistry(runtime.dataDir, [instance({ bridgeEndpoint: mismatchedHealthEndpoint, lastHeartbeatAt: new Date(Date.now() - 60_000).toISOString() })]);
+
   const result = await execute(["tools", "run", "editor.state", "--instance", "editor-1"], runtime);
 
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "E_TARGET_STALE");
+  assert.equal(result.error?.transient, true);
+  assert.equal(result.error?.retryAfterMs, 1000);
 });
 
 test("query command forwards stable bridge envelope", async () => {
@@ -305,13 +350,13 @@ test("query command forwards stable bridge envelope", async () => {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: { items: [{ path: "Main Camera" }], pageInfo: { pageSize: payload.args.pageSize } } };
+      return { ok: true as const, requestId: payload.requestId, data: { items: [{ path: "Main Camera" }], pageInfo: { pageSize: payload.input!.pageSize } } };
     }
   });
 
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   assert.deepEqual(requests[0].command, "project-tool.run");
-  assert.deepEqual(requests[0].args, { name: "scene.hierarchy", input: { pageSize: 50 } });
+  assert.deepEqual(requests[0].input!, { name: "scene.hierarchy", input: { pageSize: 50 } });
   assert.equal(((result.data as { items: Array<{ path: string }> }).items[0]).path, "Main Camera");
 });
 
@@ -322,13 +367,13 @@ test("console get forwards filter and cursor pagination", async () => {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: { command: payload.command, items: [], pageInfo: { pageSize: payload.args.count, cursor: payload.args.cursor } } };
+      return { ok: true as const, requestId: payload.requestId, data: { command: payload.command, items: [], pageInfo: { pageSize: payload.input!.count, cursor: payload.input!.cursor } } };
     }
   });
 
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   assert.equal(requests[0].command, "project-tool.run");
-  assert.deepEqual(requests[0].args, { name: "console.get", input: { type: "error", filter: "AlignmentProbe", count: 2, cursor: 4 } });
+  assert.deepEqual(requests[0].input!, { name: "console.get", input: { type: "error", filter: "AlignmentProbe", count: 2, cursor: 4 } });
 });
 
 test("console.get forwards structured --input fields", async () => {
@@ -339,13 +384,13 @@ test("console.get forwards structured --input fields", async () => {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: { command: payload.command, items: [], pageInfo: { pageSize: payload.args.count, cursor: payload.args.cursor } } };
+      return { ok: true as const, requestId: payload.requestId, data: { command: payload.command, items: [], pageInfo: { pageSize: payload.input!.count, cursor: payload.input!.cursor } } };
     }
   });
 
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   assert.equal(requests[0].command, "project-tool.run");
-  assert.deepEqual(requests[0].args, { name: "console.get", input: { type: "warning", filter: "CS", count: 3, cursor: 6 } });
+  assert.deepEqual(requests[0].input!, { name: "console.get", input: { type: "warning", filter: "CS", count: 3, cursor: 6 } });
 });
 
 test("controller transition forwards structured conditions from --input", async () => {
@@ -363,16 +408,16 @@ test("controller transition forwards structured conditions from --input", async 
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: { command: payload.command } };
+      return { ok: true as const, requestId: payload.requestId, data: { command: payload.command } };
     }
   });
 
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   assert.equal(requests[0].command, "project-tool.run");
-  assert.deepEqual(requests[0].args, { name: "controller.add-transition", input: { ...input, layerIndex: 0 } });
+  assert.deepEqual(requests[0].input!, { name: "controller.add-transition", input: { ...input, layerIndex: 0 } });
 });
 
-test("controller transition recovers PowerShell-escaped nested condition arrays", async () => {
+test("controller transition rejects PowerShell-escaped nested condition arrays without a recovery parser", async () => {
   const runtime = await makeRuntime();
   const requests: BridgeRequest[] = [];
   const escapedInput = "{\\controllerPath\\:\\Assets/UnityCliAlignmentFixtures/Alignment.controller\\,\\fromState\\:\\Idle\\,\\toState\\:\\Run\\,\\hasExitTime\\:false,\\conditions\\:[{\\parameter\\:\\Speed\\,\\mode\\:\\greater\\,\\threshold\\:0.1}]}";
@@ -381,23 +426,13 @@ test("controller transition recovers PowerShell-escaped nested condition arrays"
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: { command: payload.command } };
+      return { ok: true as const, requestId: payload.requestId, data: { command: payload.command } };
     }
   });
 
-  assert.equal(result.ok, true);
-  assert.equal(requests[0].command, "project-tool.run");
-  assert.deepEqual(requests[0].args, {
-    name: "controller.add-transition",
-    input: {
-      controllerPath: "Assets/UnityCliAlignmentFixtures/Alignment.controller",
-      fromState: "Idle",
-      toState: "Run",
-      layerIndex: 0,
-      hasExitTime: false,
-      conditions: [{ parameter: "Speed", mode: "greater", threshold: 0.1 }]
-    }
-  });
+  assert.ok(!result.ok);
+  assert.equal(result.error?.code, "E_TOOL_INPUT_JSON_INVALID");
+  assert.deepEqual(requests, []);
 });
 
 test("edit command forwards target and plannedEffects", async () => {
@@ -407,14 +442,14 @@ test("edit command forwards target and plannedEffects", async () => {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      const input = (payload.args.input ?? {}) as Record<string, unknown>;
-      return { ok: true, data: { plannedEffects: [{ type: payload.args.name, property: input.property }] } };
+      const input = (payload.input!.input ?? {}) as Record<string, unknown>;
+      return { ok: true as const, requestId: payload.requestId, data: { plannedEffects: [{ type: payload.input!.name, property: input.property }] } };
     }
   });
 
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   assert.equal(requests[0].command, "project-tool.run");
-  assert.deepEqual(requests[0].args, { name: "component.set", input: { target: "Player", component: "Camera", property: "enabled", value: "false" } });
+  assert.deepEqual(requests[0].input!, { name: "component.set", input: { target: "Player", component: "Camera", property: "enabled", value: "false" } });
   assert.deepEqual((result.data as { plannedEffects: unknown[] }).plannedEffects, [{ type: "component.set", property: "enabled" }]);
 });
 
@@ -427,80 +462,80 @@ test("component lifecycle tools forward structured --input fields", async () => 
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: { command: payload.command } };
+      return { ok: true as const, requestId: payload.requestId, data: { command: payload.command } };
     }
   });
-  assert.equal(addResult.ok, true);
+  assert.ok(addResult.ok);
   assert.equal(requests[0].command, "project-tool.run");
-  assert.deepEqual(requests[0].args, { name: "component.add", input: addInput });
+  assert.deepEqual(requests[0].input!, { name: "component.add", input: addInput });
 
   const setInput = { target: "UnityCliAlignmentProbe", component: "Rigidbody", componentIndex: 1, properties: { mass: 5, useGravity: false } };
   const setResult = await execute(["tools", "run", "component.set", "--input", JSON.stringify(setInput)], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: { command: payload.command } };
+      return { ok: true as const, requestId: payload.requestId, data: { command: payload.command } };
     }
   });
-  assert.equal(setResult.ok, true);
+  assert.ok(setResult.ok);
   assert.equal(requests[1].command, "project-tool.run");
-  assert.deepEqual(requests[1].args, { name: "component.set", input: setInput });
+  assert.deepEqual(requests[1].input!, { name: "component.set", input: setInput });
 
   const singleInput = { target: "Main Camera", component: "Camera", property: "enabled", value: false };
   const singleResult = await execute(["tools", "run", "component.set", "--input", JSON.stringify(singleInput)], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: { command: payload.command } };
+      return { ok: true as const, requestId: payload.requestId, data: { command: payload.command } };
     }
   });
-  assert.equal(singleResult.ok, true);
+  assert.ok(singleResult.ok);
   assert.equal(requests[2].command, "project-tool.run");
-  assert.deepEqual(requests[2].args, { name: "component.set", input: singleInput });
+  assert.deepEqual(requests[2].input!, { name: "component.set", input: singleInput });
 
   const getInput = { target: "Main Camera", component: "Camera", paths: ["layerCullDistances"], maxArrayItems: 5 };
   const getResult = await execute(["tools", "run", "component.get", "--input", JSON.stringify(getInput)], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: { command: payload.command } };
+      return { ok: true as const, requestId: payload.requestId, data: { command: payload.command } };
     }
   });
-  assert.equal(getResult.ok, true);
+  assert.ok(getResult.ok);
   assert.equal(requests[3].command, "project-tool.run");
-  assert.deepEqual(requests[3].args, { name: "component.get", input: { path: "Main Camera", component: "Camera", paths: ["layerCullDistances"], maxArrayItems: 5 } });
+  assert.deepEqual(requests[3].input!, { name: "component.get", input: { path: "Main Camera", component: "Camera", paths: ["layerCullDistances"], maxArrayItems: 5 } });
 
   const removeInput = { target: "UnityCliAlignmentProbe", component: "BoxCollider", componentIndex: 0 };
   const removeResult = await execute(["tools", "run", "component.remove", "--input", JSON.stringify(removeInput)], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: { command: payload.command } };
+      return { ok: true as const, requestId: payload.requestId, data: { command: payload.command } };
     }
   });
-  assert.equal(removeResult.ok, true);
+  assert.ok(removeResult.ok);
   assert.equal(requests[4].command, "project-tool.run");
-  assert.deepEqual(requests[4].args, { name: "component.remove", input: removeInput });
+  assert.deepEqual(requests[4].input!, { name: "component.remove", input: removeInput });
 
   const batchRemoveInput = { target: "UnityCliAlignmentProbe", components: ["BoxCollider", "Rigidbody"] };
   const batchRemoveResult = await execute(["tools", "run", "component.remove", "--input", JSON.stringify(batchRemoveInput)], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: { command: payload.command } };
+      return { ok: true as const, requestId: payload.requestId, data: { command: payload.command } };
     }
   });
-  assert.equal(batchRemoveResult.ok, true);
+  assert.ok(batchRemoveResult.ok);
   assert.equal(requests[5].command, "project-tool.run");
-  assert.deepEqual(requests[5].args, { name: "component.remove", input: batchRemoveInput });
+  assert.deepEqual(requests[5].input!, { name: "component.remove", input: batchRemoveInput });
 });
 
-test("tools run forwards structured --input fields with pwsh escaping", async () => {
+test("tools run parses valid JSON once and rejects PowerShell-escaped pseudo-JSON", async () => {
   const runtime = await makeRuntime();
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
     requests.push(payload);
-    return { ok: true, data: { command: payload.command, path: payload.args.path } };
+    return { ok: true as const, requestId: payload.requestId, data: { command: payload.command, path: payload.input!.path } };
   };
 
   const read = await execute(["tools", "run", "material.info", "--input", JSON.stringify({ path: "Assets/Materials/Probe.mat" })], { ...runtime, bridgeExecute });
@@ -514,13 +549,13 @@ test("tools run forwards structured --input fields with pwsh escaping", async ()
   ], { ...runtime, bridgeExecute });
   const backslashQuoted = await execute(["tools", "run", "material.info", "--input", '{\\"path\\":\\"Assets/Materials/Probe.mat\\"}'], { ...runtime, bridgeExecute });
 
-  assert.equal(read.ok, true);
-  assert.equal(pwshEscaped.ok, true);
-  assert.equal(backslashQuoted.ok, true);
-  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run"]);
-  assert.deepEqual(requests[0].args, { name: "material.info", input: { path: "Assets/Materials/Probe.mat" } });
-  assert.deepEqual(requests[1].args, { name: "material.info", input: { path: "Assets/Materials/Probe.mat" } });
-  assert.deepEqual(requests[2].args, { name: "material.info", input: { path: "Assets/Materials/Probe.mat" } });
+  assert.ok(read.ok);
+  assert.ok(!pwshEscaped.ok);
+  assert.ok(!backslashQuoted.ok);
+  assert.equal(pwshEscaped.error?.code, "E_TOOL_INPUT_JSON_INVALID");
+  assert.equal(backslashQuoted.error?.code, "E_TOOL_INPUT_JSON_INVALID");
+  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run"]);
+  assert.deepEqual(requests[0].input!, { name: "material.info", input: { path: "Assets/Materials/Probe.mat" } });
 });
 
 test("tools run rejects invalid --input JSON before bridge execution", async () => {
@@ -530,11 +565,11 @@ test("tools run rejects invalid --input JSON before bridge execution", async () 
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: {} };
+      return { ok: true as const, requestId: payload.requestId, data: {} };
     }
   });
 
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "E_TOOL_INPUT_JSON_INVALID");
   assert.deepEqual(requests, []);
 });
@@ -543,28 +578,28 @@ test("screenshot commands forward output and surround arguments", async () => {
   const runtime = await makeRuntime();
   const requests: BridgeRequest[] = [];
 
-  const result = await execute(["tools", "run", "screenshot.capture", "Artifacts/after.png", "--width", "1280", "--height", "720", "--inline-base64"], {
+  const result = await execute(["tools", "run", "screenshot.scene-view", "Artifacts/after.png", "--width", "1280", "--height", "720", "--inline-base64", "--yes"], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: { screenshotPath: "Artifacts/after.png", plannedEffects: [{ type: payload.command, path: "Artifacts/after.png" }] } };
+      return { ok: true as const, requestId: payload.requestId, data: { screenshotPath: "Artifacts/after.png", plannedEffects: [{ type: payload.command, path: "Artifacts/after.png" }] } };
     }
   });
   const surround = await execute(["tools", "run", "screenshot.surround", "Player", "--output-dir", "Assets/Shots", "--contact-sheet", "Assets/Shots/contact.png", "--width", "320", "--height", "240", "--radius", "6.5", "--fov", "55", "--inline-base64", "--dry-run"], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: { command: payload.command, dryRun: payload.dryRun, plannedArtifacts: [] } };
+      return { ok: true as const, requestId: payload.requestId, data: { command: payload.command, dryRun: payload.execution?.dryRun, plannedArtifacts: [] } };
     }
   });
 
-  assert.equal(result.ok, true);
-  assert.equal(surround.ok, true);
+  assert.ok(result.ok);
+  assert.ok(surround.ok);
   assert.equal(requests[0].command, "project-tool.run");
-  assert.deepEqual(requests[0].args, { name: "screenshot.capture", input: { path: "Artifacts/after.png", width: 1280, height: 720, inlineBase64: true } });
+  assert.deepEqual(requests[0].input!, { name: "screenshot.scene-view", input: { path: "Artifacts/after.png", width: 1280, height: 720, inlineBase64: true } });
   assert.equal((result.data as { screenshotPath: string }).screenshotPath, "Artifacts/after.png");
   assert.equal(requests[1].command, "project-tool.run");
-  assert.deepEqual(requests[1].args, { name: "screenshot.surround", input: { target: "Player", "output-dir": "Assets/Shots", contactSheetPath: "Assets/Shots/contact.png", width: 320, height: 240, radius: 6.5, fov: 55, inlineBase64: true, dryRun: true } });
+  assert.deepEqual(requests[1].input!, { name: "screenshot.surround", input: { target: "Player", "output-dir": "Assets/Shots", contactSheetPath: "Assets/Shots/contact.png", width: 320, height: 240, radius: 6.5, fov: 55, inlineBase64: true, dryRun: true } });
 });
 
 test("build commands forward settings and dry-run arguments", async () => {
@@ -572,23 +607,23 @@ test("build commands forward settings and dry-run arguments", async () => {
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
     requests.push(payload);
-    return { ok: true, data: { command: payload.command, plannedEffects: payload.dryRun ? [{ type: payload.command }] : [] } };
+    return { ok: true as const, requestId: payload.requestId, data: { command: payload.command, plannedEffects: payload.execution?.dryRun ? [{ type: payload.command }] : [] } };
   };
 
-  const scenes = await execute(["tools", "run", "build.scenes", "--input", "{\"action\":\"add\",\"path\":\"Assets/Scenes/Main.unity\"}", "--dry-run"], { ...runtime, bridgeExecute });
-  const platform = await execute(["tools", "run", "build.platform", "--input", "{\"action\":\"set\",\"target\":\"StandaloneWindows64\"}", "--dry-run"], { ...runtime, bridgeExecute });
-  const profiles = await execute(["tools", "run", "build.profiles", "--input", "{\"action\":\"create\",\"path\":\"Assets/BuildProfiles/Windows.asset\",\"name\":\"Windows\"}", "--dry-run"], { ...runtime, bridgeExecute });
-  const settings = await execute(["tools", "run", "build.settings", "--input", "{}"], { ...runtime, bridgeExecute });
+  const scenes = await execute(["tools", "run", "build.scene.add", "--input", "{\"path\":\"Assets/Scenes/Main.unity\"}", "--dry-run"], { ...runtime, bridgeExecute });
+  const platform = await execute(["tools", "run", "build.platform.set", "--input", "{\"target\":\"StandaloneWindows64\"}", "--dry-run"], { ...runtime, bridgeExecute });
+  const profiles = await execute(["tools", "run", "build.profile.create", "--input", "{\"path\":\"Assets/BuildProfiles/Windows.asset\",\"name\":\"Windows\"}", "--dry-run"], { ...runtime, bridgeExecute });
+  const settings = await execute(["tools", "run", "build.settings.get", "--input", "{}"], { ...runtime, bridgeExecute });
 
-  assert.equal(scenes.ok, true);
-  assert.equal(platform.ok, true);
-  assert.equal(profiles.ok, true);
-  assert.equal(settings.ok, true);
+  assert.ok(scenes.ok);
+  assert.ok(platform.ok);
+  assert.ok(profiles.ok);
+  assert.ok(settings.ok);
   assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
-  assert.deepEqual(requests[0].args, { name: "build.scenes", input: { action: "add", path: "Assets/Scenes/Main.unity", dryRun: true } });
-  assert.deepEqual(requests[1].args, { name: "build.platform", input: { action: "set", target: "StandaloneWindows64", dryRun: true } });
-  assert.deepEqual(requests[2].args, { name: "build.profiles", input: { action: "create", path: "Assets/BuildProfiles/Windows.asset", name: "Windows", dryRun: true } });
-  assert.deepEqual(requests[3].args, { name: "build.settings", input: {} });
+  assert.deepEqual(requests[0].input!, { name: "build.scene.add", input: { path: "Assets/Scenes/Main.unity" } });
+  assert.deepEqual(requests[1].input!, { name: "build.platform.set", input: { target: "StandaloneWindows64" } });
+  assert.deepEqual(requests[2].input!, { name: "build.profile.create", input: { path: "Assets/BuildProfiles/Windows.asset", name: "Windows" } });
+  assert.deepEqual(requests[3].input!, { name: "build.settings.get", input: {} });
 });
 
 test("camera commands forward target and screenshot options", async () => {
@@ -599,7 +634,7 @@ test("camera commands forward target and screenshot options", async () => {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: { cameras: [{ name: "Main Camera" }] } };
+      return { ok: true as const, requestId: payload.requestId, data: { cameras: [{ name: "Main Camera" }] } };
     }
   });
 
@@ -607,24 +642,24 @@ test("camera commands forward target and screenshot options", async () => {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: { camera: { name: payload.args.target } } };
+      return { ok: true as const, requestId: payload.requestId, data: { camera: { name: payload.input!.target } } };
     }
   });
 
-  const screenshot = await execute(["tools", "run", "camera.screenshot", "Main Camera", "--output", "Artifacts/camera.png", "--format", "png", "--width", "1920", "--height", "1080", "--transparent", "--overwrite", "--quality", "90"], {
+  const screenshot = await execute(["tools", "run", "camera.screenshot", "Main Camera", "--output", "Artifacts/camera.png", "--format", "png", "--width", "1920", "--height", "1080", "--transparent", "--overwrite", "--quality", "90", "--yes"], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: { screenshotPath: payload.args.path, format: payload.args.format, width: payload.args.width, height: payload.args.height } };
+      return { ok: true as const, requestId: payload.requestId, data: { screenshotPath: payload.input!.path, format: payload.input!.format, width: payload.input!.width, height: payload.input!.height } };
     }
   });
 
-  assert.equal(list.ok, true);
-  assert.equal(info.ok, true);
-  assert.equal(screenshot.ok, true);
+  assert.ok(list.ok);
+  assert.ok(info.ok);
+  assert.ok(screenshot.ok);
   assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run"]);
-  assert.deepEqual(requests[1].args, { name: "camera.info", input: { target: "Main Camera" } });
-  assert.deepEqual(requests[2].args, { name: "camera.screenshot", input: { path: "Artifacts/camera.png", format: "png", width: 1920, height: 1080, transparent: true, quality: 90, overwrite: true, target: "Main Camera" } });
+  assert.deepEqual(requests[1].input!, { name: "camera.info", input: { target: "Main Camera" } });
+  assert.deepEqual(requests[2].input!, { name: "camera.screenshot", input: { path: "Artifacts/camera.png", format: "png", width: 1920, height: 1080, transparent: true, quality: 90, overwrite: true, target: "Main Camera" } });
 });
 
 test("camera mutation tools forward structured --input fields", async () => {
@@ -632,39 +667,22 @@ test("camera mutation tools forward structured --input fields", async () => {
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
     requests.push(payload);
-    return { ok: true, data: { command: payload.command, plannedEffects: [{ type: payload.command }] } };
+    return { ok: true as const, requestId: payload.requestId, data: { command: payload.command, plannedEffects: [{ type: payload.command }] } };
   };
 
   const create = await execute(["tools", "run", "camera.create", "--input", "{\"name\":\"AlignmentCam\",\"position\":\"0,2,-6\",\"rotation\":\"15,0,0\",\"fieldOfView\":60,\"orthographic\":false,\"orthographicSize\":5,\"clearFlags\":\"SolidColor\",\"depth\":2,\"tag\":\"MainCamera\"}"], { ...runtime, bridgeExecute });
   const target = await execute(["tools", "run", "camera.target", "--input", "{\"target\":\"AlignmentCam\",\"lookAt\":\"UnityCliAlignmentProbe\",\"position\":\"0,3,-8\",\"rotation\":\"20,0,0\"}"], { ...runtime, bridgeExecute });
   const lens = await execute(["tools", "run", "camera.lens", "--input", "{\"target\":\"AlignmentCam\",\"fieldOfView\":45,\"orthographic\":true,\"orthographicSize\":10,\"nearClipPlane\":0.1,\"farClipPlane\":500,\"clearFlags\":\"Skybox\",\"depth\":3}"], { ...runtime, bridgeExecute });
-  const multiview = await execute(["tools", "run", "camera.multiview", "--input", "{\"targets\":\"Main Camera,AlignmentCam\",\"output\":\"Artifacts/cameras\",\"width\":320,\"height\":180,\"format\":\"png\"}"], { ...runtime, bridgeExecute });
+  const multiview = await execute(["tools", "run", "camera.multiview", "--input", "{\"targets\":\"Main Camera,AlignmentCam\",\"output\":\"Artifacts/cameras\",\"width\":320,\"height\":180,\"format\":\"png\"}", "--yes"], { ...runtime, bridgeExecute });
 
   for (const result of [create, target, lens, multiview]) {
-    assert.equal(result.ok, true);
+    assert.ok(result.ok);
   }
   assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
-  assert.deepEqual(requests[0].args, { name: "camera.create", input: { name: "AlignmentCam", position: "0,2,-6", rotation: "15,0,0", fieldOfView: 60, orthographic: false, orthographicSize: 5, clearFlags: "SolidColor", depth: 2, tag: "MainCamera" } });
-  assert.deepEqual(requests[1].args, { name: "camera.target", input: { target: "AlignmentCam", lookAt: "UnityCliAlignmentProbe", position: "0,3,-8", rotation: "20,0,0" } });
-  assert.deepEqual(requests[2].args, { name: "camera.lens", input: { target: "AlignmentCam", fieldOfView: 45, orthographic: true, orthographicSize: 10, nearClipPlane: 0.1, farClipPlane: 500, clearFlags: "Skybox", depth: 3 } });
-  assert.deepEqual(requests[3].args, { name: "camera.multiview", input: { targets: "Main Camera,AlignmentCam", output: "Artifacts/cameras", width: 320, height: 180, format: "png" } });
-});
-
-test("scene screenshot forwards output path and overwrite", async () => {
-  const runtime = await makeRuntime();
-  const requests: BridgeRequest[] = [];
-
-  const result = await execute(["tools", "run", "scene.screenshot", "Artifacts/scene.jpg", "--width", "800", "--height", "600", "--format", "jpg", "--overwrite"], {
-    ...runtime,
-    bridgeExecute: async (payload: BridgeRequest) => {
-      requests.push(payload);
-      return { ok: true, data: { screenshotPath: payload.args.path, source: "scene" } };
-    }
-  });
-
-  assert.equal(result.ok, true);
-  assert.equal(requests[0].command, "project-tool.run");
-  assert.deepEqual(requests[0].args, { name: "scene.screenshot", input: { path: "Artifacts/scene.jpg", format: "jpg", width: 800, height: 600, overwrite: true } });
+  assert.deepEqual(requests[0].input!, { name: "camera.create", input: { name: "AlignmentCam", position: "0,2,-6", rotation: "15,0,0", fieldOfView: 60, orthographic: false, orthographicSize: 5, clearFlags: "SolidColor", depth: 2, tag: "MainCamera" } });
+  assert.deepEqual(requests[1].input!, { name: "camera.target", input: { target: "AlignmentCam", lookAt: "UnityCliAlignmentProbe", position: "0,3,-8", rotation: "20,0,0" } });
+  assert.deepEqual(requests[2].input!, { name: "camera.lens", input: { target: "AlignmentCam", fieldOfView: 45, orthographic: true, orthographicSize: 10, nearClipPlane: 0.1, farClipPlane: 500, clearFlags: "Skybox", depth: 3 } });
+  assert.deepEqual(requests[3].input!, { name: "camera.multiview", input: { targets: "Main Camera,AlignmentCam", output: "Artifacts/cameras", width: 320, height: 180, format: "png" } });
 });
 
 test("prefab commands forward paths, pagination, modify args and planned effects", async () => {
@@ -672,32 +690,32 @@ test("prefab commands forward paths, pagination, modify args and planned effects
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
     requests.push(payload);
-    const input = (payload.args.input ?? {}) as Record<string, unknown>;
-    return { ok: true, data: { prefab: { path: input.path }, plannedEffects: payload.args.name === "prefab.create" ? [{ type: payload.args.name, path: input.path }] : [] } };
+    const input = (payload.input!.input ?? {}) as Record<string, unknown>;
+    return { ok: true as const, requestId: payload.requestId, data: { prefab: { path: input.path }, plannedEffects: payload.input!.name === "prefab.create" ? [{ type: payload.input!.name, path: input.path }] : [] } };
   };
 
   const info = await execute(["tools", "run", "prefab.info", "Assets/Prefabs/Player.prefab"], { ...runtime, bridgeExecute });
-  const create = await execute(["tools", "run", "prefab.create", "Player", "--path", "Assets/Prefabs/Player.prefab", "--overwrite"], { ...runtime, bridgeExecute });
-  const modify = await execute(["tools", "run", "prefab.modify", "Assets/Prefabs/Player.prefab", "--name", "Hero", "--add-child", "Socket", "--remove-child", "OldSocket", "--overwrite"], { ...runtime, bridgeExecute });
+  const create = await execute(["tools", "run", "prefab.create", "Player", "--path", "Assets/Prefabs/Player.prefab", "--overwrite", "--yes"], { ...runtime, bridgeExecute });
+  const modify = await execute(["tools", "run", "prefab.modify", "Assets/Prefabs/Player.prefab", "--name", "Hero", "--add-child", "Socket", "--remove-child", "OldSocket", "--overwrite", "--yes"], { ...runtime, bridgeExecute });
   const open = await execute(["tools", "run", "prefab.stage-open", "Assets/Prefabs/Player.prefab"], { ...runtime, bridgeExecute });
   const hierarchy = await execute(["tools", "run", "prefab.hierarchy", "Assets/Prefabs/Player.prefab", "--page-size", "25", "--cursor", "50", "--parent", "Player", "--query", "Socket", "--component-type", "Transform"], { ...runtime, bridgeExecute });
-  const save = await execute(["tools", "run", "prefab.stage-save"], { ...runtime, bridgeExecute });
-  const close = await execute(["tools", "run", "prefab.stage-close", "--save"], { ...runtime, bridgeExecute });
+  const save = await execute(["tools", "run", "prefab.stage-save", "--yes"], { ...runtime, bridgeExecute });
+  const close = await execute(["tools", "run", "prefab.stage-close"], { ...runtime, bridgeExecute });
 
-  assert.equal(info.ok, true);
-  assert.equal(create.ok, true);
-  assert.equal(modify.ok, true);
-  assert.equal(open.ok, true);
-  assert.equal(hierarchy.ok, true);
-  assert.equal(save.ok, true);
-  assert.equal(close.ok, true);
+  assert.ok(info.ok);
+  assert.ok(create.ok);
+  assert.ok(modify.ok);
+  assert.ok(open.ok);
+  assert.ok(hierarchy.ok);
+  assert.ok(save.ok);
+  assert.ok(close.ok);
   assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
-  assert.deepEqual(requests[0].args, { name: "prefab.info", input: { path: "Assets/Prefabs/Player.prefab" } });
-  assert.deepEqual(requests[1].args, { name: "prefab.create", input: { source: "Player", path: "Assets/Prefabs/Player.prefab", overwrite: true } });
-  assert.deepEqual(requests[2].args, { name: "prefab.modify", input: { path: "Assets/Prefabs/Player.prefab", name: "Hero", addChild: "Socket", removeChild: "OldSocket", overwrite: true } });
-  assert.deepEqual(requests[4].args, { name: "prefab.hierarchy", input: { pageSize: 25, cursor: "50", path: "Assets/Prefabs/Player.prefab", parent: "Player", query: "Socket", componentType: "Transform" } });
-  assert.deepEqual(requests[5].args, { name: "prefab.stage-save", input: {} });
-  assert.deepEqual(requests[6].args, { name: "prefab.stage-close", input: { save: true } });
+  assert.deepEqual(requests[0].input!, { name: "prefab.info", input: { path: "Assets/Prefabs/Player.prefab" } });
+  assert.deepEqual(requests[1].input!, { name: "prefab.create", input: { source: "Player", path: "Assets/Prefabs/Player.prefab", overwrite: true } });
+  assert.deepEqual(requests[2].input!, { name: "prefab.modify", input: { path: "Assets/Prefabs/Player.prefab", name: "Hero", addChild: "Socket", removeChild: "OldSocket", overwrite: true } });
+  assert.deepEqual(requests[4].input!, { name: "prefab.hierarchy", input: { pageSize: 25, cursor: "50", path: "Assets/Prefabs/Player.prefab", parent: "Player", query: "Socket", componentType: "Transform" } });
+  assert.deepEqual(requests[5].input!, { name: "prefab.stage-save", input: {} });
+  assert.deepEqual(requests[6].input!, { name: "prefab.stage-close", input: {} });
   assert.deepEqual((create.data as { plannedEffects: unknown[] }).plannedEffects, [{ type: "prefab.create", path: "Assets/Prefabs/Player.prefab" }]);
 });
 
@@ -705,16 +723,17 @@ test("destructive bridge commands require --yes before execution", async () => {
   const runtime = await makeRuntime();
   let called = false;
 
-  const result = await execute(["tools", "run", "asset.delete", "Assets/DeleteMe.asset"], {
-    ...runtime,
-    bridgeExecute: async () => {
-      called = true;
-      return { ok: true, data: {} };
-    }
-  });
+  const bridgeExecute = async (payload: BridgeRequest) => {
+    called = true;
+    return { ok: true as const, requestId: payload.requestId, data: {} };
+  };
+  const assetResult = await execute(["tools", "run", "asset.delete", "Assets/DeleteMe.asset"], { ...runtime, bridgeExecute });
+  const prefabResult = await execute(["tools", "run", "prefab.create", "--input", "{\"path\":\"Assets/Prefabs/Player.prefab\",\"source\":\"Player\"}"], { ...runtime, bridgeExecute });
 
-  assert.equal(result.ok, false);
-  assert.equal(result.error?.code, "E_DESTRUCTIVE_CONFIRMATION_REQUIRED");
+  for (const result of [assetResult, prefabResult]) {
+    assert.ok(!result.ok);
+    assert.equal(result.error?.code, "E_DESTRUCTIVE_CONFIRMATION_REQUIRED");
+  }
   assert.equal(called, false);
 });
 
@@ -726,29 +745,44 @@ test("destructive bridge commands pass dryRun and security proof when explicitly
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: { plannedEffects: [] } };
+      return { ok: true as const, requestId: payload.requestId, data: { plannedEffects: [] } };
+    }
+  });
+  const prefabConfirmed = await execute(["tools", "run", "prefab.create", "--input", "{\"path\":\"Assets/Prefabs/Player.prefab\",\"source\":\"Player\"}", "--yes"], {
+    ...runtime,
+    bridgeExecute: async (payload: BridgeRequest) => {
+      requests.push(payload);
+      return { ok: true as const, requestId: payload.requestId, data: { plannedEffects: [] } };
     }
   });
   const dryRun = await execute(["tools", "run", "asset.delete", "Assets/DeleteMe.asset", "--dry-run"], {
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: true, data: { dryRun: payload.dryRun } };
+      return { ok: true as const, requestId: payload.requestId, data: { dryRun: payload.execution?.dryRun } };
     }
   });
 
-  assert.equal(confirmed.ok, true);
+  assert.ok(confirmed.ok);
   assert.equal(requests[0].command, "project-tool.run");
-  assert.equal(requests[0].args.name, "asset.delete");
+  assert.equal(requests[0].input!.name, "asset.delete");
   assert.equal(requests[0].security?.confirmed, true);
-  assert.equal(requests[0].security?.destructiveFingerprint, "destructive-safety-v1");
-  assert.equal(dryRun.ok, true);
-  assert.equal(requests[1].command, "project-tool.run");
-  assert.equal(requests[1].args.name, "asset.delete");
-  assert.equal(requests[1].dryRun, true);
-  assert.equal((requests[1].args.input as Record<string, unknown>).dryRun, true);
-  assert.equal(requests[1].security?.confirmed, false);
-  assert.equal(requests[1].security?.destructiveFingerprint, "destructive-safety-v1");
+  assert.equal(requests[0].security?.toolName, "asset.delete");
+  assert.match(requests[0].security?.descriptorFingerprint ?? "", /^[a-f0-9]{64}$/);
+  assert.match(requests[0].security?.inputSha256 ?? "", /^[a-f0-9]{64}$/);
+  assert.ok(prefabConfirmed.ok);
+  assert.equal(requests[1].input!.name, "prefab.create");
+  assert.equal(requests[1].security?.confirmed, true);
+  assert.match(requests[1].security?.descriptorFingerprint ?? "", /^[a-f0-9]{64}$/);
+  assert.ok(dryRun.ok);
+  assert.equal(requests[2].command, "project-tool.run");
+  assert.equal(requests[2].input!.name, "asset.delete");
+  assert.equal(requests[2].execution?.dryRun, true);
+  assert.equal((requests[2].input!.input as Record<string, unknown>).dryRun, true);
+  assert.equal(requests[2].security?.confirmed, false);
+  assert.equal(requests[2].security?.toolName, "asset.delete");
+  assert.match(requests[2].security?.descriptorFingerprint ?? "", /^[a-f0-9]{64}$/);
+  assert.match(requests[2].security?.inputSha256 ?? "", /^[a-f0-9]{64}$/);
 });
 
  test("asset commands forward CRUD and move-style envelopes", async () => {
@@ -758,40 +792,42 @@ test("destructive bridge commands pass dryRun and security proof when explicitly
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
     requests.push(payload);
-    return { ok: true, data: { asset: { path: payload.args.path ?? payload.args.destination }, plannedEffects: [{ type: payload.command }] } };
+    return { ok: true as const, requestId: payload.requestId, data: { asset: { path: payload.input!.path ?? payload.input!.destination }, plannedEffects: [{ type: payload.command }] } };
   };
 
   const search = await execute(["tools", "run", "asset.search", "Player", "--type", "Prefab", "--page-size", "10"], { ...runtime, bridgeExecute });
   const info = await execute(["tools", "run", "asset.info", "Assets/Prefabs/Player.prefab"], { ...runtime, bridgeExecute });
   const components = await execute(["tools", "run", "asset.get-components", "Assets/Prefabs/Player.prefab", "--page-size", "25", "--query", "Camera", "--component-type", "Transform"], { ...runtime, bridgeExecute });
   const refresh = await execute(["tools", "run", "asset.refresh", "Assets/Generated", "--force-update", "--dry-run"], { ...runtime, bridgeExecute });
-  const create = await execute(["tools", "run", "asset.create", "Assets/Generated/config.json", "--content", "{}", "--overwrite"], { ...runtime, bridgeExecute });
-  const mkdir = await execute(["tools", "run", "asset.create", "Assets/Generated"], { ...runtime, bridgeExecute });
-  const imported = await execute(["tools", "run", "asset.import", "Assets/Generated/asset.txt", "--source", contentFile, "--overwrite"], { ...runtime, bridgeExecute });
-  const modify = await execute(["tools", "run", "asset.modify", "Assets/Generated/config.json", "--content-file", contentFile], { ...runtime, bridgeExecute });
-  const duplicate = await execute(["tools", "run", "asset.duplicate", "Assets/Generated/config.json", "--to", "Assets/Generated/config-copy.json"], { ...runtime, bridgeExecute });
-  const move = await execute(["tools", "run", "asset.move", "Assets/Generated/config-copy.json", "--to", "Assets/Generated/config-moved.json"], { ...runtime, bridgeExecute });
-  const rename = await execute(["tools", "run", "asset.rename", "Assets/Generated/config-moved.json", "--name", "config-renamed.json"], { ...runtime, bridgeExecute });
+  const create = await execute(["tools", "run", "asset.create", "Assets/Generated/config.json", "--content", "{}", "--overwrite", "--yes"], { ...runtime, bridgeExecute });
+  const mkdir = await execute(["tools", "run", "asset.create", "Assets/Generated", "--yes"], { ...runtime, bridgeExecute });
+  const imported = await execute(["tools", "run", "asset.import", "Assets/Generated/asset.txt", "--source", contentFile, "--overwrite", "--yes"], { ...runtime, bridgeExecute });
+  const modify = await execute(["tools", "run", "asset.modify", "Assets/Generated/config.json", "--content-file", contentFile, "--yes"], { ...runtime, bridgeExecute });
+  const duplicate = await execute(["tools", "run", "asset.duplicate", "Assets/Generated/config.json", "--to", "Assets/Generated/config-copy.json", "--yes"], { ...runtime, bridgeExecute });
+  const move = await execute(["tools", "run", "asset.move", "Assets/Generated/config-copy.json", "--to", "Assets/Generated/config-moved.json", "--yes"], { ...runtime, bridgeExecute });
+  const rename = await execute(["tools", "run", "asset.rename", "Assets/Generated/config-moved.json", "--name", "config-renamed.json", "--yes"], { ...runtime, bridgeExecute });
   const deleted = await execute(["tools", "run", "asset.delete", "Assets/Generated/config-renamed.json", "--yes"], { ...runtime, bridgeExecute });
 
   for (const result of [search, info, components, refresh, create, mkdir, imported, modify, duplicate, move, rename, deleted]) {
-    assert.equal(result.ok, true);
+    assert.ok(result.ok);
   }
   assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
-  assert.deepEqual(requests.map((request) => request.args.name), ["asset.search", "asset.info", "asset.get-components", "asset.refresh", "asset.create", "asset.create", "asset.import", "asset.modify", "asset.duplicate", "asset.move", "asset.rename", "asset.delete"]);
-  assert.deepEqual(requests[0].args.input, { pageSize: 10, target: "Player", query: "Player", type: "Prefab" });
-  assert.deepEqual(requests[2].args.input, { assetPath: "Assets/Prefabs/Player.prefab", query: "Camera", componentType: "Transform", pageSize: 25 });
-  assert.deepEqual(requests[3].args.input, { path: "Assets/Generated", forceUpdate: true, dryRun: true });
-  assert.equal(requests[3].dryRun, true);
-  assert.deepEqual(requests[4].args.input, { path: "Assets/Generated/config.json", content: "{}", overwrite: true });
-  assert.deepEqual(requests[5].args.input, { path: "Assets/Generated" });
-  assert.deepEqual(requests[6].args.input, { path: "Assets/Generated/asset.txt", source: contentFile, overwrite: true });
-  assert.deepEqual(requests[7].args.input, { path: "Assets/Generated/config.json", content: "hello" });
-  assert.deepEqual(requests[8].args.input, { path: "Assets/Generated/config.json", destination: "Assets/Generated/config-copy.json" });
-  assert.deepEqual(requests[9].args.input, { path: "Assets/Generated/config-copy.json", destination: "Assets/Generated/config-moved.json" });
-  assert.deepEqual(requests[10].args.input, { path: "Assets/Generated/config-moved.json", name: "config-renamed.json" });
-  assert.deepEqual(requests[11].args.input, { path: "Assets/Generated/config-renamed.json" });
-  assert.equal(requests[11].security?.destructiveFingerprint, "destructive-safety-v1");
+  assert.deepEqual(requests.map((request) => request.input!.name), ["asset.search", "asset.info", "asset.get-components", "asset.refresh", "asset.create", "asset.create", "asset.import", "asset.modify", "asset.duplicate", "asset.move", "asset.rename", "asset.delete"]);
+  assert.deepEqual(requests[0].input!.input, { pageSize: 10, target: "Player", query: "Player", type: "Prefab" });
+  assert.deepEqual(requests[2].input!.input, { assetPath: "Assets/Prefabs/Player.prefab", query: "Camera", componentType: "Transform", pageSize: 25 });
+  assert.deepEqual(requests[3].input!.input, { path: "Assets/Generated", forceUpdate: true });
+  assert.equal(requests[3].execution?.dryRun, true);
+  assert.deepEqual(requests[4].input!.input, { path: "Assets/Generated/config.json", content: "{}", overwrite: true });
+  assert.deepEqual(requests[5].input!.input, { path: "Assets/Generated" });
+  assert.deepEqual(requests[6].input!.input, { path: "Assets/Generated/asset.txt", source: contentFile, overwrite: true });
+  assert.deepEqual(requests[7].input!.input, { path: "Assets/Generated/config.json", content: "hello" });
+  assert.deepEqual(requests[8].input!.input, { path: "Assets/Generated/config.json", destination: "Assets/Generated/config-copy.json" });
+  assert.deepEqual(requests[9].input!.input, { path: "Assets/Generated/config-copy.json", destination: "Assets/Generated/config-moved.json" });
+  assert.deepEqual(requests[10].input!.input, { path: "Assets/Generated/config-moved.json", name: "config-renamed.json" });
+  assert.deepEqual(requests[11].input!.input, { path: "Assets/Generated/config-renamed.json" });
+  assert.equal(requests[11].security?.toolName, "asset.delete");
+  assert.match(requests[11].security?.descriptorFingerprint ?? "", /^[a-f0-9]{64}$/);
+  assert.match(requests[11].security?.inputSha256 ?? "", /^[a-f0-9]{64}$/);
 });
 
 test("asset mutation tools forward structured --input fields", async () => {
@@ -799,24 +835,24 @@ test("asset mutation tools forward structured --input fields", async () => {
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
     requests.push(payload);
-    return { ok: true, data: { asset: { path: payload.args.path ?? payload.args.destination }, plannedEffects: [{ type: payload.command }] } };
+    return { ok: true as const, requestId: payload.requestId, data: { asset: { path: payload.input!.path ?? payload.input!.destination }, plannedEffects: [{ type: payload.command }] } };
   };
 
-  const create = await execute(["tools", "run", "asset.create", "--input", "{\"path\":\"Assets/Generated/config.json\",\"type\":\"file\",\"content\":\"{}\",\"overwrite\":true}"], { ...runtime, bridgeExecute });
-  const duplicate = await execute(["tools", "run", "asset.duplicate", "--input", "{\"source\":\"Assets/Generated/config.json\",\"destination\":\"Assets/Generated/config-copy.json\"}"], { ...runtime, bridgeExecute });
-  const rename = await execute(["tools", "run", "asset.rename", "--input", "{\"path\":\"Assets/Generated/config-copy.json\",\"name\":\"config-renamed.json\"}"], { ...runtime, bridgeExecute });
+  const create = await execute(["tools", "run", "asset.create", "--input", "{\"path\":\"Assets/Generated/config.json\",\"type\":\"file\",\"content\":\"{}\",\"overwrite\":true}", "--yes"], { ...runtime, bridgeExecute });
+  const duplicate = await execute(["tools", "run", "asset.duplicate", "--input", "{\"source\":\"Assets/Generated/config.json\",\"destination\":\"Assets/Generated/config-copy.json\"}", "--yes"], { ...runtime, bridgeExecute });
+  const rename = await execute(["tools", "run", "asset.rename", "--input", "{\"path\":\"Assets/Generated/config-copy.json\",\"name\":\"config-renamed.json\"}", "--yes"], { ...runtime, bridgeExecute });
   const deleted = await execute(["tools", "run", "asset.delete", "--input", "{\"path\":\"Assets/Generated/config-renamed.json\"}", "--dry-run"], { ...runtime, bridgeExecute });
 
   for (const result of [create, duplicate, rename, deleted]) {
-    assert.equal(result.ok, true);
+    assert.ok(result.ok);
   }
   assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
-  assert.deepEqual(requests.map((request) => request.args.name), ["asset.create", "asset.duplicate", "asset.rename", "asset.delete"]);
-  assert.deepEqual(requests[0].args.input, { path: "Assets/Generated/config.json", type: "file", content: "{}", overwrite: true });
-  assert.deepEqual(requests[1].args.input, { path: "Assets/Generated/config.json", source: "Assets/Generated/config.json", destination: "Assets/Generated/config-copy.json" });
-  assert.deepEqual(requests[2].args.input, { path: "Assets/Generated/config-copy.json", name: "config-renamed.json" });
-  assert.deepEqual(requests[3].args.input, { path: "Assets/Generated/config-renamed.json", dryRun: true });
-  assert.equal(requests[3].dryRun, true);
+  assert.deepEqual(requests.map((request) => request.input!.name), ["asset.create", "asset.duplicate", "asset.rename", "asset.delete"]);
+  assert.deepEqual(requests[0].input!.input, { path: "Assets/Generated/config.json", type: "file", content: "{}", overwrite: true });
+  assert.deepEqual(requests[1].input!.input, { path: "Assets/Generated/config.json", source: "Assets/Generated/config.json", destination: "Assets/Generated/config-copy.json" });
+  assert.deepEqual(requests[2].input!.input, { path: "Assets/Generated/config-copy.json", name: "config-renamed.json" });
+  assert.deepEqual(requests[3].input!.input, { path: "Assets/Generated/config-renamed.json", dryRun: true });
+  assert.equal(requests[3].execution?.dryRun, true);
 });
 
 test("material commands forward asset paths, target, values and planned effects", async () => {
@@ -824,72 +860,68 @@ test("material commands forward asset paths, target, values and planned effects"
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
     requests.push(payload);
-    const input = (payload.args.input ?? {}) as Record<string, unknown>;
-    return { ok: true, data: { material: { path: input.path ?? input.material }, plannedEffects: payload.args.name === "material.info" ? [] : [{ type: payload.args.name, path: input.path ?? input.material }] } };
+    const input = (payload.input!.input ?? {}) as Record<string, unknown>;
+    return { ok: true as const, requestId: payload.requestId, data: { material: { path: input.path ?? input.material }, plannedEffects: payload.input!.name === "material.info" ? [] : [{ type: payload.input!.name, path: input.path ?? input.material }] } };
   };
 
   const info = await execute(["tools", "run", "material.info", "Assets/Materials/Player.mat"], { ...runtime, bridgeExecute });
-  const create = await execute(["tools", "run", "material.create", "Assets/Materials/Player.mat", "--shader", "Standard", "--overwrite"], { ...runtime, bridgeExecute });
+  const create = await execute(["tools", "run", "material.create", "Assets/Materials/Player.mat", "--shader", "Standard", "--overwrite", "--yes"], { ...runtime, bridgeExecute });
   const assign = await execute(["tools", "run", "material.assign", "--target", "Canvas/Button", "--material", "Assets/Materials/Player.mat", "--slot", "1"], { ...runtime, bridgeExecute });
-  const set = await execute(["tools", "run", "material.set", "Assets/Materials/Player.mat", "--property", "_Metallic", "--input", "{\"floatValue\":0.8,\"type\":\"float\"}"], { ...runtime, bridgeExecute });
+  const set = await execute(["tools", "run", "material.set", "Assets/Materials/Player.mat", "--property", "_Metallic", "--input", "{\"value\":0.8,\"type\":\"float\"}", "--yes"], { ...runtime, bridgeExecute });
   const rendererColor = await execute(["tools", "run", "material.set-renderer-color", "Player", "--color", "#ff00ffff", "--slot", "0", "--dry-run"], { ...runtime, bridgeExecute });
 
-  assert.equal(info.ok, true);
-  assert.equal(create.ok, true);
-  assert.equal(assign.ok, true);
-  assert.equal(set.ok, true);
-  assert.equal(rendererColor.ok, true);
+  assert.ok(info.ok);
+  assert.ok(create.ok);
+  assert.ok(assign.ok);
+  assert.ok(set.ok);
+  assert.ok(rendererColor.ok);
   assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
-  assert.deepEqual(requests[0].args, { name: "material.info", input: { path: "Assets/Materials/Player.mat" } });
-  assert.deepEqual(requests[1].args, { name: "material.create", input: { path: "Assets/Materials/Player.mat", shader: "Standard", overwrite: true } });
-  assert.deepEqual(requests[2].args, { name: "material.assign", input: { target: "Canvas/Button", material: "Assets/Materials/Player.mat", slot: 1 } });
-  assert.deepEqual(requests[3].args, { name: "material.set", input: { path: "Assets/Materials/Player.mat", property: "_Metallic", floatValue: "0.8", type: "float" } });
-  assert.deepEqual(requests[4].args, { name: "material.set-renderer-color", input: { target: "Player", color: "#ff00ffff", slot: 0, dryRun: true } });
+  assert.deepEqual(requests[0].input!, { name: "material.info", input: { path: "Assets/Materials/Player.mat" } });
+  assert.deepEqual(requests[1].input!, { name: "material.create", input: { path: "Assets/Materials/Player.mat", shader: "Standard", overwrite: true } });
+  assert.deepEqual(requests[2].input!, { name: "material.assign", input: { target: "Canvas/Button", material: "Assets/Materials/Player.mat", slot: 1 } });
+  assert.deepEqual(requests[3].input!, { name: "material.set", input: { path: "Assets/Materials/Player.mat", property: "_Metallic", value: "0.8", type: "float" } });
+  assert.deepEqual(requests[4].input!, { name: "material.set-renderer-color", input: { target: "Player", color: "#ff00ffff", slot: 0, dryRun: true } });
   assert.deepEqual((set.data as { plannedEffects: unknown[] }).plannedEffects, [{ type: "material.set", path: "Assets/Materials/Player.mat" }]);
 });
 
 
 test("material bridge errors preserve structured diagnostics", async () => {
   const runtime = await makeRuntime();
-  const result = await execute(["tools", "run", "material.set", "Assets/Materials/Player.mat", "--property", "_Missing", "--value", "1"], {
+  const result = await execute(["tools", "run", "material.set", "Assets/Materials/Player.mat", "--property", "_Missing", "--value", "1", "--yes"], {
     ...runtime,
-    bridgeExecute: async () => ({ ok: false, error: { code: "E_MATERIAL_PROPERTY_NOT_FOUND", message: "Material property not found: _Missing" }, nextActions: ["Run unity_cli tools run material.info --input '{\"path\":\"<path>\"}' to inspect shader properties."] })
+    bridgeExecute: async (payload) => ({ ok: false as const, requestId: payload.requestId, error: { code: "E_MATERIAL_PROPERTY_NOT_FOUND", message: "Material property not found: _Missing", nextActions: ["Run unity_cli tools run material.info --input '{\"path\":\"<path>\"}' to inspect shader properties."], transient: false, retryAfterMs: 0 } })
   });
 
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "E_MATERIAL_PROPERTY_NOT_FOUND");
   assert.deepEqual(result.error?.nextActions, ["Run unity_cli tools run material.info --input '{\"path\":\"<path>\"}' to inspect shader properties."]);
 });
 
-test("graphics commands forward settings and screenshot diagnostics", async () => {
+test("graphics commands forward settings, pipeline info, and volume inputs", async () => {
   const runtime = await makeRuntime();
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
     requests.push(payload);
-    return { ok: true, data: { graphics: { renderPipeline: { active: "Built-in" } }, plannedEffects: payload.args } };
+    return { ok: true as const, requestId: payload.requestId, data: { graphics: { renderPipeline: { active: "Built-in" } }, plannedEffects: payload.input! } };
   };
 
-  const quality = await execute(["tools", "run", "graphics.quality", "--input", JSON.stringify({ level: "High", vSyncCount: 1, shadowDistance: 75.5, softParticles: false })], { ...runtime, bridgeExecute });
-  const settings = await execute(["tools", "run", "graphics.settings", "--render-pipeline", "Assets/Settings/URP.asset", "--anti-aliasing", "4"], { ...runtime, bridgeExecute });
-  const pipeline = await execute(["tools", "run", "graphics.pipeline"], { ...runtime, bridgeExecute });
-  const pipelineQuality = await execute(["tools", "run", "graphics.pipeline-quality", "--input", JSON.stringify({ level: "Medium" })], { ...runtime, bridgeExecute });
-  const pipelineSettings = await execute(["tools", "run", "graphics.pipeline-settings", "--input", JSON.stringify({ renderPipeline: "built-in" })], { ...runtime, bridgeExecute });
+  const quality = await execute(["tools", "run", "graphics.quality", "--input", JSON.stringify({ level: "High", vSyncCount: 1, shadowDistance: 75.5, softParticles: false }), "--yes"], { ...runtime, bridgeExecute });
+  const settings = await execute(["tools", "run", "graphics.settings", "--render-pipeline", "Assets/Settings/URP.asset", "--anti-aliasing", "4", "--yes"], { ...runtime, bridgeExecute });
+  const pipelineQuality = await execute(["tools", "run", "graphics.pipeline-quality", "--input", JSON.stringify({ level: "Medium" }), "--yes"], { ...runtime, bridgeExecute });
+  const pipelineSettings = await execute(["tools", "run", "graphics.pipeline-settings", "--input", JSON.stringify({ renderPipeline: "built-in" }), "--yes"], { ...runtime, bridgeExecute });
   const pipelineInfo = await execute(["tools", "run", "graphics.pipeline-info"], { ...runtime, bridgeExecute });
   const volume = await execute(["tools", "run", "graphics.volume", "Global Volume"], { ...runtime, bridgeExecute });
-  const screenshot = await execute(["tools", "run", "graphics.screenshot", "Artifacts/graphics.png", "--width", "1024", "--height", "768", "--include-diagnostics", "--overwrite"], { ...runtime, bridgeExecute });
 
-  for (const result of [quality, settings, pipeline, pipelineQuality, pipelineSettings, pipelineInfo, volume, screenshot]) {
-    assert.equal(result.ok, true);
+  for (const result of [quality, settings, pipelineQuality, pipelineSettings, pipelineInfo, volume]) {
+    assert.ok(result.ok);
   }
-  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
-  assert.deepEqual(requests[0].args, { name: "graphics.quality", input: { qualityLevel: "High", vSyncCount: 1, shadowDistance: 75.5, softParticles: false } });
-  assert.deepEqual(requests[1].args, { name: "graphics.settings", input: { antiAliasing: 4, renderPipeline: "Assets/Settings/URP.asset" } });
-  assert.deepEqual(requests[2].args, { name: "graphics.pipeline", input: {} });
-  assert.deepEqual(requests[3].args, { name: "graphics.pipeline-quality", input: { qualityLevel: "Medium" } });
-  assert.deepEqual(requests[4].args, { name: "graphics.pipeline-settings", input: { renderPipeline: "built-in" } });
-  assert.deepEqual(requests[5].args, { name: "graphics.pipeline-info", input: {} });
-  assert.deepEqual(requests[6].args, { name: "graphics.volume", input: { target: "Global Volume" } });
-  assert.deepEqual(requests[7].args, { name: "graphics.screenshot", input: { path: "Artifacts/graphics.png", width: 1024, height: 768, overwrite: true, includeDiagnostics: true } });
+  assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
+  assert.deepEqual(requests[0].input!, { name: "graphics.quality", input: { qualityLevel: "High", vSyncCount: 1, shadowDistance: 75.5, softParticles: false } });
+  assert.deepEqual(requests[1].input!, { name: "graphics.settings", input: { antiAliasing: 4, renderPipeline: "Assets/Settings/URP.asset" } });
+  assert.deepEqual(requests[2].input!, { name: "graphics.pipeline-quality", input: { qualityLevel: "Medium" } });
+  assert.deepEqual(requests[3].input!, { name: "graphics.pipeline-settings", input: { renderPipeline: "built-in" } });
+  assert.deepEqual(requests[4].input!, { name: "graphics.pipeline-info", input: {} });
+  assert.deepEqual(requests[5].input!, { name: "graphics.volume", input: { target: "Global Volume" } });
 });
 
 test("physics commands forward settings, queries, joint and material assignment inputs", async () => {
@@ -897,30 +929,30 @@ test("physics commands forward settings, queries, joint and material assignment 
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
     requests.push(payload);
-    return { ok: true, data: { physics: {}, plannedEffects: payload.args.name === "physics.raycast" ? [] : [{ type: payload.args.name ?? payload.command }] } };
+    return { ok: true as const, requestId: payload.requestId, data: { physics: {}, plannedEffects: payload.input!.name === "physics.raycast" ? [] : [{ type: payload.input!.name ?? payload.command }] } };
   };
 
-  const settings = await execute(["tools", "run", "physics.settings", "--gravity-y", "-9.81", "--gravity2d-y", "-12.5", "--queries-hit-triggers", "false", "--default-solver-iterations", "8"], { ...runtime, bridgeExecute });
+  const settings = await execute(["tools", "run", "physics.settings", "--gravity-y", "-9.81", "--gravity2d-y", "-12.5", "--queries-hit-triggers", "false", "--default-solver-iterations", "8", "--yes"], { ...runtime, bridgeExecute });
   const raycast = await execute(["tools", "run", "physics.raycast", "--mode", "2d", "--origin-x", "1", "--origin-y", "2", "--direction-x", "0", "--direction-y", "-1", "--distance", "50", "--layer-mask", "5", "--all"], { ...runtime, bridgeExecute });
   const shapecast = await execute(["tools", "run", "physics.shapecast", "--mode", "2d", "--shape", "capsule", "--origin-x", "1", "--origin-y", "2", "--direction-x", "1", "--direction-y", "0", "--distance", "3.5", "--radius", "0.5", "--height", "2", "--capsule-direction", "horizontal", "--angle", "15"], { ...runtime, bridgeExecute });
   const assign = await execute(["tools", "run", "physics.assign-material", "--target", "Ball", "--path", "Assets/Physics/Bouncy.physicMaterial", "--collider", "BoxCollider", "--collider-index", "1", "--dry-run"], { ...runtime, bridgeExecute });
-  const joint = await execute(["tools", "run", "physics.joint", "--input", "{\"target\":\"Ball\",\"type\":\"FixedJoint\",\"action\":\"remove\",\"componentIndex\":0}"], { ...runtime, bridgeExecute });
+  const joint = await execute(["tools", "run", "physics.joint.remove", "--input", "{\"target\":\"Ball\",\"type\":\"FixedJoint\",\"componentIndex\":0}"], { ...runtime, bridgeExecute });
   const simulation = await execute(["tools", "run", "physics.simulation", "--steps", "3", "--delta-time", "0.016", "--simulate"], { ...runtime, bridgeExecute });
 
-  assert.equal(settings.ok, true);
-  assert.equal(raycast.ok, true);
-  assert.equal(shapecast.ok, true);
-  assert.equal(assign.ok, true);
-  assert.equal(joint.ok, true);
-  assert.equal(simulation.ok, true);
+  assert.ok(settings.ok);
+  assert.ok(raycast.ok);
+  assert.ok(shapecast.ok);
+  assert.ok(assign.ok);
+  assert.ok(joint.ok);
+  assert.ok(simulation.ok);
   assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
-  assert.deepEqual(requests[0].args, { name: "physics.settings", input: { gravityY: -9.81, gravity2dY: -12.5, defaultSolverIterations: 8, queriesHitTriggers: false } });
-  assert.deepEqual(requests[1].args, { name: "physics.raycast", input: { mode: "2d", originX: 1, originY: 2, directionX: 0, directionY: -1, distance: 50, layerMask: 5, all: true } });
-  assert.deepEqual(requests[2].args, { name: "physics.shapecast", input: { shape: "capsule", radius: 0.5, height: 2, capsuleDirection: "horizontal", angle: 15, mode: "2d", originX: 1, originY: 2, directionX: 1, directionY: 0, distance: 3.5 } });
-  assert.deepEqual(requests[3].args, { name: "physics.assign-material", input: { target: "Ball", materialPath: "Assets/Physics/Bouncy.physicMaterial", path: "Assets/Physics/Bouncy.physicMaterial", collider: "BoxCollider", colliderIndex: 1 } });
-  assert.equal(requests[3].dryRun, true);
-  assert.deepEqual(requests[4].args, { name: "physics.joint", input: { target: "Ball", type: "FixedJoint", action: "remove", componentIndex: 0 } });
-  assert.deepEqual(requests[5].args, { name: "physics.simulation", input: { steps: 3, deltaTime: 0.016, simulate: true } });
+  assert.deepEqual(requests[0].input!, { name: "physics.settings", input: { gravityY: -9.81, gravity2dY: -12.5, defaultSolverIterations: 8, queriesHitTriggers: false } });
+  assert.deepEqual(requests[1].input!, { name: "physics.raycast", input: { mode: "2d", originX: 1, originY: 2, directionX: 0, directionY: -1, distance: 50, layerMask: 5, all: true } });
+  assert.deepEqual(requests[2].input!, { name: "physics.shapecast", input: { shape: "capsule", radius: 0.5, height: 2, capsuleDirection: "horizontal", angle: 15, mode: "2d", originX: 1, originY: 2, directionX: 1, directionY: 0, distance: 3.5 } });
+  assert.deepEqual(requests[3].input!, { name: "physics.assign-material", input: { target: "Ball", materialPath: "Assets/Physics/Bouncy.physicMaterial", path: "Assets/Physics/Bouncy.physicMaterial", collider: "BoxCollider", colliderIndex: 1 } });
+  assert.equal(requests[3].execution?.dryRun, true);
+  assert.deepEqual(requests[4].input!, { name: "physics.joint.remove", input: { target: "Ball", type: "FixedJoint", componentIndex: 0 } });
+  assert.deepEqual(requests[5].input!, { name: "physics.simulation", input: { steps: 3, deltaTime: 0.016, simulate: true } });
 });
 
 test("profiler commands forward session, counter, memory, frame and export args", async () => {
@@ -928,7 +960,7 @@ test("profiler commands forward session, counter, memory, frame and export args"
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
     requests.push(payload);
-    return { ok: true, data: { profiler: { enabled: payload.command === "profiler.start" }, counters: [], memory: {}, frame: {}, artifactPath: payload.args.path, plannedEffects: [{ type: payload.command }] } };
+    return { ok: true as const, requestId: payload.requestId, data: { profiler: { enabled: payload.command === "profiler.start" }, counters: [], memory: {}, frame: {}, artifactPath: payload.input!.path, plannedEffects: [{ type: payload.command }] } };
   };
 
   const status = await execute(["tools", "run", "profiler.status"], { ...runtime, bridgeExecute });
@@ -937,35 +969,56 @@ test("profiler commands forward session, counter, memory, frame and export args"
   const counter = await execute(["tools", "run", "profiler.counter", "--category", "memory", "--counter", "MonoUsedSizeLong"], { ...runtime, bridgeExecute });
   const memory = await execute(["tools", "run", "profiler.memory"], { ...runtime, bridgeExecute });
   const frame = await execute(["tools", "run", "profiler.frame", "--module", "CPU Usage"], { ...runtime, bridgeExecute });
-  const capture = await execute(["tools", "run", "profiler.capture", "Artifacts/profile.json", "--duration-ms", "100", "--frames", "2", "--format", "json", "--overwrite"], { ...runtime, bridgeExecute });
-  const exportResult = await execute(["tools", "run", "profiler.export", "Artifacts/profile-export.json", "--format", "json", "--overwrite"], { ...runtime, bridgeExecute });
+  const capture = await execute(["tools", "run", "profiler.capture", "Artifacts/profile.json", "--duration-ms", "100", "--frames", "2", "--format", "json", "--overwrite", "--yes"], { ...runtime, bridgeExecute });
+  const exportResult = await execute(["tools", "run", "profiler.export", "Artifacts/profile-export.json", "--format", "json", "--overwrite", "--yes"], { ...runtime, bridgeExecute });
   const stop = await execute(["tools", "run", "profiler.stop"], { ...runtime, bridgeExecute });
 
-  assert.equal(status.ok, true);
-  assert.equal(start.ok, true);
-  assert.equal(pause.ok, true);
-  assert.equal(counter.ok, true);
-  assert.equal(memory.ok, true);
-  assert.equal(frame.ok, true);
-  assert.equal(capture.ok, true);
-  assert.equal(exportResult.ok, true);
-  assert.equal(stop.ok, true);
+  assert.ok(status.ok);
+  assert.ok(start.ok);
+  assert.ok(pause.ok);
+  assert.ok(counter.ok);
+  assert.ok(memory.ok);
+  assert.ok(frame.ok);
+  assert.ok(capture.ok);
+  assert.ok(exportResult.ok);
+  assert.ok(stop.ok);
   assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
-  assert.deepEqual(requests[1].args, { name: "profiler.start", input: { deepProfiling: true } });
-  assert.deepEqual(requests[2].args, { name: "profiler.pause", input: { paused: true } });
-  assert.deepEqual(requests[3].args, { name: "profiler.counter", input: { counter: "MonoUsedSizeLong", category: "memory" } });
-  assert.deepEqual(requests[4].args, { name: "profiler.memory", input: {} });
-  assert.deepEqual(requests[5].args, { name: "profiler.frame", input: { module: "CPU Usage" } });
-  assert.deepEqual(requests[6].args, { name: "profiler.capture", input: { path: "Artifacts/profile.json", format: "json", durationMs: 100, frames: 2, overwrite: true } });
-  assert.deepEqual(requests[7].args, { name: "profiler.export", input: { path: "Artifacts/profile-export.json", format: "json", overwrite: true } });
+  assert.deepEqual(requests[1].input!, { name: "profiler.start", input: { deepProfiling: true } });
+  assert.deepEqual(requests[2].input!, { name: "profiler.pause", input: { paused: true } });
+  assert.deepEqual(requests[3].input!, { name: "profiler.counter", input: { counter: "MonoUsedSizeLong", category: "memory" } });
+  assert.deepEqual(requests[4].input!, { name: "profiler.memory", input: {} });
+  assert.deepEqual(requests[5].input!, { name: "profiler.frame", input: { module: "CPU Usage" } });
+  assert.deepEqual(requests[6].input!, { name: "profiler.capture", input: { path: "Artifacts/profile.json", format: "json", durationMs: 100, frames: 2, overwrite: true } });
+  assert.deepEqual(requests[7].input!, { name: "profiler.export", input: { path: "Artifacts/profile-export.json", format: "json", overwrite: true } });
 });
 
 test("animation and vfx commands forward Windows paths, targets and effects", async () => {
-  const runtime = await makeRuntime();
+  const vfxNames = ["vfx.graph.create", "vfx.effect.add", "vfx.particle-module", "vfx.line-create", "vfx.line-positions", "vfx.trail.create"];
+  const projectPath = await mkdtemp(join(tmpdir(), "unity_cli-vfx-extension-"));
+  await mkdir(join(projectPath, "Packages"), { recursive: true });
+  await writeFile(join(projectPath, "Packages", "manifest.json"), JSON.stringify({ dependencies: { "com.unity.visualeffectgraph": "14.0.0" } }), "utf8");
+  await writeFile(join(projectPath, "Packages", "packages-lock.json"), JSON.stringify({ dependencies: { "com.unity.visualeffectgraph": { version: "14.0.0" } } }), "utf8");
+  const extensionRegistry = new ExtensionRegistry();
+  await installExtensionBundle(projectPath, extensionRegistry.getExtension("vfx-graph")!.manifest);
+  const extensionArgs = ["--project", projectPath];
+  const runtime = {
+    ...await makeRuntime(),
+    projectTools: vfxNames.map((name) => ({
+      name,
+      summary: `${name} tool`,
+      description: `${name} tool`,
+      group: "vfx",
+      source: "extension" as const,
+      requiresPackages: ["com.unity.visualeffectgraph"],
+      target: "editor",
+      inputSchema: { type: "object", properties: {}, additionalProperties: true },
+      destructiveHint: false
+    }))
+  };
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
     requests.push(payload);
-    return { ok: true, data: { plannedEffects: [{ type: payload.command }], clip: { path: payload.args.path }, graph: { path: payload.args.path }, target: { path: payload.args.target } } };
+    return { ok: true as const, requestId: payload.requestId, data: { plannedEffects: [{ type: payload.command }], clip: { path: payload.input!.path }, graph: { path: payload.input!.path }, target: { path: payload.input!.target } } };
   };
 
   const clipInfo = await execute(["tools", "run", "animation.clip", "Assets\\Animations\\Idle.anim", "--max-curve-keys", "2"], { ...runtime, bridgeExecute });
@@ -974,10 +1027,10 @@ test("animation and vfx commands forward Windows paths, targets and effects", as
   const state = await execute(["tools", "run", "animation.state", "Rig/Player", "--layer", "1"], { ...runtime, bridgeExecute });
   const play = await execute(["tools", "run", "animation.play", "Rig/Player", "--state", "Base Layer.Run", "--layer", "0", "--normalized-time", "0.25"], { ...runtime, bridgeExecute });
   const stop = await execute(["tools", "run", "animation.stop", "Rig/Player"], { ...runtime, bridgeExecute });
-  const graphCreate = await execute(["tools", "run", "vfx.graph", "--input", JSON.stringify({ path: "Assets\\VFX\\Explosion.vfx", create: true, overwrite: true })], { ...runtime, bridgeExecute });
-  const effect = await execute(["tools", "run", "vfx.effect", "--input", JSON.stringify({ target: "Effects/Emitter", graph: "Assets\\VFX\\Explosion.vfx", add: true })], { ...runtime, bridgeExecute });
+  const graphCreate = await execute(["tools", "run", "vfx.graph.create", "--input", JSON.stringify({ path: "Assets\\VFX\\Explosion.vfx", overwrite: true }), "--yes", ...extensionArgs], { ...runtime, bridgeExecute });
+  const effect = await execute(["tools", "run", "vfx.effect.add", "--input", JSON.stringify({ target: "Effects/Emitter", graph: "Assets\\VFX\\Explosion.vfx" }), ...extensionArgs], { ...runtime, bridgeExecute });
   const particleModuleInput = { target: "Dust", module: "trails", enabled: true, ratio: 0.5, lifetime: 0.75, width: 0.08, color: "#FFAA33FF" };
-  const particleModule = await execute(["tools", "run", "vfx.particle-module", "--input", JSON.stringify(particleModuleInput)], { ...runtime, bridgeExecute });
+  const particleModule = await execute(["tools", "run", "vfx.particle-module", "--input", JSON.stringify(particleModuleInput), ...extensionArgs], { ...runtime, bridgeExecute });
   const lineCreateInput = {
     name: "AimLine",
     material: "Assets\\Materials\\Line.mat",
@@ -987,44 +1040,43 @@ test("animation and vfx commands forward Windows paths, targets and effects", as
     alignment: "View",
     textureMode: "Tile"
   };
-  const lineCreate = await execute(["tools", "run", "vfx.line-create", "--input", JSON.stringify(lineCreateInput)], { ...runtime, bridgeExecute });
+  const lineCreate = await execute(["tools", "run", "vfx.line-create", "--input", JSON.stringify(lineCreateInput), ...extensionArgs], { ...runtime, bridgeExecute });
   const linePositionsInput = { target: "AimLine", positions: [{ x: 2, y: 0, z: 0 }, { x: 4, y: 0, z: 0 }] };
-  const linePositions = await execute(["tools", "run", "vfx.line-positions", "--input", JSON.stringify(linePositionsInput)], { ...runtime, bridgeExecute });
+  const linePositions = await execute(["tools", "run", "vfx.line-positions", "--input", JSON.stringify(linePositionsInput), ...extensionArgs], { ...runtime, bridgeExecute });
   const trailInput = {
     name: "DashTrail",
-    create: true,
     material: "Assets\\Materials\\Trail.mat",
     widthCurve: [{ time: 0, value: 0.3 }, { time: 1, value: 0 }],
     colorGradient: [{ time: 0, color: "#FFFFFFFF" }, { time: 1, color: "#00FFFFFF" }],
     emitting: true
   };
-  const trail = await execute(["tools", "run", "vfx.trail", "--input", JSON.stringify(trailInput)], { ...runtime, bridgeExecute });
+  const trail = await execute(["tools", "run", "vfx.trail.create", "--input", JSON.stringify(trailInput), ...extensionArgs], { ...runtime, bridgeExecute });
 
-  assert.equal(clipInfo.ok, true);
-  assert.equal(clipCreate.ok, true);
-  assert.equal(clipModify.ok, true);
-  assert.equal(state.ok, true);
-  assert.equal(play.ok, true);
-  assert.equal(stop.ok, true);
-  assert.equal(graphCreate.ok, true);
-  assert.equal(effect.ok, true);
-  assert.equal(particleModule.ok, true);
-  assert.equal(lineCreate.ok, true);
-  assert.equal(linePositions.ok, true);
-  assert.equal(trail.ok, true);
+  assert.ok(clipInfo.ok);
+  assert.ok(clipCreate.ok);
+  assert.ok(clipModify.ok);
+  assert.ok(state.ok);
+  assert.ok(play.ok);
+  assert.ok(stop.ok);
+  assert.ok(graphCreate.ok);
+  assert.ok(effect.ok);
+  assert.ok(particleModule.ok);
+  assert.ok(lineCreate.ok);
+  assert.ok(linePositions.ok);
+  assert.ok(trail.ok);
   assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
-  assert.deepEqual(requests[0].args, { name: "animation.clip", input: { path: "Assets\\Animations\\Idle.anim", maxCurveKeys: 2 } });
-  assert.deepEqual(requests[1].args, { name: "animation.clip.create", input: { path: "Assets\\Animations\\Run.anim", overwrite: true, frameRate: 30, legacy: false, wrapMode: "Loop", loopTime: true, length: 1, maxCurveKeys: 2 } });
-  assert.deepEqual(requests[2].args, { name: "animation.clip.modify", input: { path: "Assets\\Animations\\Run.anim", frameRate: 24, wrapMode: "ClampForever", loopTime: false } });
-  assert.deepEqual(requests[3].args, { name: "animation.state", input: { target: "Rig/Player", layer: 1 } });
-  assert.deepEqual(requests[4].args, { name: "animation.play", input: { target: "Rig/Player", state: "Base Layer.Run", layer: 0, normalizedTime: 0.25 } });
-  assert.deepEqual(requests[5].args, { name: "animation.stop", input: { target: "Rig/Player" } });
-  assert.deepEqual(requests[6].args, { name: "vfx.graph", input: { path: "Assets\\VFX\\Explosion.vfx", action: "create", create: true, overwrite: true } });
-  assert.deepEqual(requests[7].args, { name: "vfx.effect", input: { target: "Effects/Emitter", graph: "Assets\\VFX\\Explosion.vfx", add: true } });
-  assert.deepEqual(requests[8].args, { name: "vfx.particle-module", input: particleModuleInput });
-  assert.deepEqual(requests[9].args, { name: "vfx.line-create", input: lineCreateInput });
-  assert.deepEqual(requests[10].args, { name: "vfx.line-positions", input: linePositionsInput });
-  assert.deepEqual(requests[11].args, { name: "vfx.trail", input: trailInput });
+  assert.deepEqual(requests[0].input!, { name: "animation.clip", input: { path: "Assets\\Animations\\Idle.anim", maxCurveKeys: 2 } });
+  assert.deepEqual(requests[1].input!, { name: "animation.clip.create", input: { path: "Assets\\Animations\\Run.anim", overwrite: true, frameRate: 30, legacy: false, wrapMode: "Loop", loopTime: true, length: 1, maxCurveKeys: 2 } });
+  assert.deepEqual(requests[2].input!, { name: "animation.clip.modify", input: { path: "Assets\\Animations\\Run.anim", frameRate: 24, wrapMode: "ClampForever", loopTime: false } });
+  assert.deepEqual(requests[3].input!, { name: "animation.state", input: { target: "Rig/Player", layer: 1 } });
+  assert.deepEqual(requests[4].input!, { name: "animation.play", input: { target: "Rig/Player", state: "Base Layer.Run", layer: 0, normalizedTime: 0.25 } });
+  assert.deepEqual(requests[5].input!, { name: "animation.stop", input: { target: "Rig/Player" } });
+  assert.deepEqual(requests[6].input!, { name: "vfx.graph.create", input: { path: "Assets\\VFX\\Explosion.vfx", overwrite: true } });
+  assert.deepEqual(requests[7].input!, { name: "vfx.effect.add", input: { target: "Effects/Emitter", graph: "Assets\\VFX\\Explosion.vfx" } });
+  assert.deepEqual(requests[8].input!, { name: "vfx.particle-module", input: particleModuleInput });
+  assert.deepEqual(requests[9].input!, { name: "vfx.line-create", input: lineCreateInput });
+  assert.deepEqual(requests[10].input!, { name: "vfx.line-positions", input: linePositionsInput });
+  assert.deepEqual(requests[11].input!, { name: "vfx.trail.create", input: trailInput });
 });
 
 test("animation and vfx bridge errors preserve diagnostics", async () => {
@@ -1032,15 +1084,15 @@ test("animation and vfx bridge errors preserve diagnostics", async () => {
   const cases: Array<{ argv: string[]; code: string; message: string; nextActions: string[] }> = [
     { argv: ["tools", "run", "animation.play", "Player", "--state", "Missing"], code: "E_TARGET_AMBIGUOUS", message: "Multiple GameObjects matched: Player", nextActions: ["Pass a hierarchy path or instance id."] },
     { argv: ["tools", "run", "animation.clip", "Assets/Animations/Missing.anim"], code: "E_ANIMATION_CLIP_NOT_FOUND", message: "AnimationClip asset not found", nextActions: ["Check the path or create one with unity_cli tools run animation.clip.create --input '{\"path\":\"<path>\"}' --yes."] },
-    { argv: ["tools", "run", "vfx.graph", "--input", JSON.stringify({ path: "Assets/VFX/Explosion.vfx" })], code: "E_VFX_PACKAGE_MISSING", message: "Visual Effect Graph package is not installed", nextActions: ["Install com.unity.visualeffectgraph manually via Unity Package Manager or Packages/manifest.json, run unity_cli tools run package.resolve, then retry."] },
-    { argv: ["tools", "run", "vfx.graph", "--input", JSON.stringify({ path: "Assets/VFX/Explosion.vfx", create: true })], code: "E_VFX_GRAPH_CREATE_FAILED", message: "VFX Graph asset creation did not produce a readable VisualEffectAsset", nextActions: ["Check Unity Console and UnityCliBridge.log; the Visual Effect Graph package may have changed its internal authoring API."] },
+    { argv: ["tools", "run", "vfx.graph.info", "--input", JSON.stringify({ path: "Assets/VFX/Explosion.vfx" })], code: "E_VFX_PACKAGE_MISSING", message: "Visual Effect Graph package is not installed", nextActions: ["Install com.unity.visualeffectgraph manually via Unity Package Manager or Packages/manifest.json, run unity_cli tools run package.resolve, then retry."] },
+    { argv: ["tools", "run", "vfx.graph.create", "--input", JSON.stringify({ path: "Assets/VFX/Explosion.vfx" }), "--yes"], code: "E_VFX_GRAPH_CREATE_FAILED", message: "VFX Graph asset creation did not produce a readable VisualEffectAsset", nextActions: ["Check Unity Console and UnityCliBridge.log; the Visual Effect Graph package may have changed its internal authoring API."] },
     { argv: ["tools", "run", "animation.clip", "D:\\tmp\\Bad.anim"], code: "E_ANIMATION_CLIP_PATH_INVALID", message: "AnimationClip path must be under Assets/ and end with .anim: D:\\tmp\\Bad.anim", nextActions: ["Pass a Unity asset path such as Assets/Animations/Player.anim."] }
   ];
 
   for (const item of cases) {
     const result = await execute(item.argv, {
       ...runtime,
-      bridgeExecute: async () => ({ ok: false, error: { code: item.code, message: item.message }, nextActions: item.nextActions })
+      bridgeExecute: async (payload) => ({ ok: false as const, requestId: payload.requestId, error: { code: item.code, message: item.message , nextActions: item.nextActions, transient: false, retryAfterMs: 0 }})
     });
 
     assert.equal(result.ok, false, item.code);
@@ -1057,31 +1109,31 @@ test("shader commands forward paths, content and overwrite", async () => {
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
     requests.push(payload);
-    return { ok: true, data: { shader: { path: payload.args.path }, plannedEffects: payload.command.startsWith("shader.") ? [{ type: payload.command, path: payload.args.path }] : [] } };
+    return { ok: true as const, requestId: payload.requestId, data: { shader: { path: payload.input!.path }, plannedEffects: payload.command.startsWith("shader.") ? [{ type: payload.command, path: payload.input!.path }] : [] } };
   };
 
   const info = await execute(["tools", "run", "shader.info", "Assets/Shaders/Unlit.shader"], { ...runtime, bridgeExecute });
   const read = await execute(["tools", "run", "shader.read", "Assets/Shaders/Unlit.shader", "--offset", "5", "--max-bytes", "128"], { ...runtime, bridgeExecute });
-  const create = await execute(["tools", "run", "shader.create", "Assets/Shaders/Created.shader", "--content-file", contentFile, "--overwrite"], { ...runtime, bridgeExecute });
-  const update = await execute(["tools", "run", "shader.update", "Assets/Shaders/Unlit.shader", "--content", "Shader X {}"], { ...runtime, bridgeExecute });
+  const create = await execute(["tools", "run", "shader.create", "Assets/Shaders/Created.shader", "--content-file", contentFile, "--overwrite", "--yes"], { ...runtime, bridgeExecute });
+  const update = await execute(["tools", "run", "shader.update", "Assets/Shaders/Unlit.shader", "--content", "Shader X {}", "--yes"], { ...runtime, bridgeExecute });
   const del = await execute(["tools", "run", "shader.delete", "Assets/Shaders/Unlit.shader", "--dry-run"], { ...runtime, bridgeExecute });
   const getData = await execute(["tools", "run", "shader.get-data", "--input", "{\"assetPath\":\"Assets/Shaders/Unlit.shader\",\"includeSubshaders\":true,\"includeSourceCode\":false,\"maxPasses\":4}"], { ...runtime, bridgeExecute });
 
-  assert.equal(info.ok, true);
-  assert.equal(read.ok, true);
-  assert.equal(create.ok, true);
-  assert.equal(update.ok, true);
-  assert.equal(del.ok, true);
-  assert.equal(getData.ok, true);
+  assert.ok(info.ok);
+  assert.ok(read.ok);
+  assert.ok(create.ok);
+  assert.ok(update.ok);
+  assert.ok(del.ok);
+  assert.ok(getData.ok);
   assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
-  assert.deepEqual(requests.map((request) => request.args.name), ["shader.info", "shader.read", "shader.create", "shader.update", "shader.delete", "shader.get-data"]);
-  assert.deepEqual(requests[0].args.input, { path: "Assets/Shaders/Unlit.shader", target: "Assets/Shaders/Unlit.shader" });
-  assert.deepEqual(requests[1].args.input, { path: "Assets/Shaders/Unlit.shader", target: "Assets/Shaders/Unlit.shader", offset: 5, maxBytes: 128 });
-  assert.equal((requests[2].args.input as Record<string, unknown>).content, "Shader \"UnityCli/Test\" {}\n");
-  assert.equal((requests[2].args.input as Record<string, unknown>).overwrite, true);
-  assert.equal((requests[3].args.input as Record<string, unknown>).content, "Shader X {}");
-  assert.equal(requests[4].dryRun, true);
-  assert.deepEqual(requests[5].args.input, { path: "Assets/Shaders/Unlit.shader", assetPath: "Assets/Shaders/Unlit.shader", target: "Assets/Shaders/Unlit.shader", includeSubshaders: true, includeSourceCode: false, maxPasses: 4 });
+  assert.deepEqual(requests.map((request) => request.input!.name), ["shader.info", "shader.read", "shader.create", "shader.update", "shader.delete", "shader.get-data"]);
+  assert.deepEqual(requests[0].input!.input, { path: "Assets/Shaders/Unlit.shader", target: "Assets/Shaders/Unlit.shader" });
+  assert.deepEqual(requests[1].input!.input, { path: "Assets/Shaders/Unlit.shader", target: "Assets/Shaders/Unlit.shader", offset: 5, maxBytes: 128 });
+  assert.equal((requests[2].input!.input as Record<string, unknown>).content, "Shader \"UnityCli/Test\" {}\n");
+  assert.equal((requests[2].input!.input as Record<string, unknown>).overwrite, true);
+  assert.equal((requests[3].input!.input as Record<string, unknown>).content, "Shader X {}");
+  assert.equal(requests[4].execution?.dryRun, true);
+  assert.deepEqual(requests[5].input!.input, { path: "Assets/Shaders/Unlit.shader", assetPath: "Assets/Shaders/Unlit.shader", target: "Assets/Shaders/Unlit.shader", includeSubshaders: true, includeSourceCode: false, maxPasses: 4 });
 });
 
 test("texture commands forward importer, sprite and creation options", async () => {
@@ -1089,50 +1141,50 @@ test("texture commands forward importer, sprite and creation options", async () 
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
     requests.push(payload);
-    return { ok: true, data: { texture: { path: payload.args.path }, importSettings: { textureType: payload.args.textureType }, plannedEffects: [{ type: payload.command, path: payload.args.path }] } };
+    return { ok: true as const, requestId: payload.requestId, data: { texture: { path: payload.input!.path }, importSettings: { textureType: payload.input!.textureType }, plannedEffects: [{ type: payload.command, path: payload.input!.path }] } };
   };
 
   const info = await execute(["tools", "run", "texture.info", "Assets/Textures/Icon.png"], { ...runtime, bridgeExecute });
-  const create = await execute(["tools", "run", "texture.create", "Assets/Textures/Icon.png", "--source", "C:/tmp/icon.png", "--overwrite", "--texture-type", "Sprite"], { ...runtime, bridgeExecute });
-  const sprite = await execute(["tools", "run", "texture.sprite", "Assets/Textures/Icon.png", "--input", "{\"pixelsPerUnit\":128,\"pivotX\":\"0.25\",\"pivotY\":\"0.75\",\"spriteMode\":\"Multiple\",\"slices\":[{\"name\":\"left\",\"x\":0,\"y\":0,\"width\":16,\"height\":16}]}"], { ...runtime, bridgeExecute });
+  const create = await execute(["tools", "run", "texture.create", "Assets/Textures/Icon.png", "--source", "C:/tmp/icon.png", "--overwrite", "--texture-type", "Sprite", "--yes"], { ...runtime, bridgeExecute });
+  const sprite = await execute(["tools", "run", "texture.sprite", "Assets/Textures/Icon.png", "--input", "{\"pixelsPerUnit\":128,\"pivotX\":\"0.25\",\"pivotY\":\"0.75\",\"spriteMode\":\"Multiple\",\"slices\":[{\"name\":\"left\",\"x\":0,\"y\":0,\"width\":16,\"height\":16}]}", "--yes"], { ...runtime, bridgeExecute });
   const modify = await execute(["tools", "run", "texture.modify", "Assets/Textures/Icon.png", "--fill-color", "#ff0000", "--x", "1", "--y", "2", "--width", "3", "--height", "4", "--dry-run"], { ...runtime, bridgeExecute });
   const del = await execute(["tools", "run", "texture.delete", "Assets/Textures/Icon.png", "--dry-run"], { ...runtime, bridgeExecute });
-  const importSettings = await execute(["tools", "run", "texture.import-settings", "Assets/Textures/Icon.png", "--readable", "false", "--mipmap", "false", "--srgb", "true", "--alpha-is-transparency", "--wrap-mode", "Clamp", "--filter-mode", "Point", "--max-texture-size", "512", "--compression", "Uncompressed"], { ...runtime, bridgeExecute });
+  const importSettings = await execute(["tools", "run", "texture.import-settings", "Assets/Textures/Icon.png", "--readable", "false", "--mipmap", "false", "--srgb", "true", "--alpha-is-transparency", "--wrap-mode", "Clamp", "--filter-mode", "Point", "--max-texture-size", "512", "--compression", "Uncompressed", "--yes"], { ...runtime, bridgeExecute });
 
-  assert.equal(info.ok, true);
-  assert.equal(create.ok, true);
-  assert.equal(sprite.ok, true);
-  assert.equal(modify.ok, true);
-  assert.equal(del.ok, true);
-  assert.equal(importSettings.ok, true);
+  assert.ok(info.ok);
+  assert.ok(create.ok);
+  assert.ok(sprite.ok);
+  assert.ok(modify.ok);
+  assert.ok(del.ok);
+  assert.ok(importSettings.ok);
   assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
-  assert.deepEqual(requests.map((request) => request.args.name), ["texture.info", "texture.create", "texture.sprite", "texture.modify", "texture.delete", "texture.import-settings"]);
-  assert.deepEqual(requests[1].args.input, { path: "Assets/Textures/Icon.png", target: "Assets/Textures/Icon.png", source: "C:/tmp/icon.png", overwrite: true, textureType: "Sprite" });
-  assert.deepEqual(requests[2].args.input, { path: "Assets/Textures/Icon.png", target: "Assets/Textures/Icon.png", spriteMode: "Multiple", pixelsPerUnit: 128, pivotX: "0.25", pivotY: "0.75", slices: [{ name: "left", x: 0, y: 0, width: 16, height: 16 }] });
-  assert.deepEqual(requests[3].args.input, { path: "Assets/Textures/Icon.png", target: "Assets/Textures/Icon.png", width: 3, height: 4, fillColor: "#ff0000", x: 1, y: 2, dryRun: true });
-  assert.equal(requests[4].dryRun, true);
-  assert.equal((requests[5].args.input as Record<string, unknown>).readable, false);
-  assert.equal((requests[5].args.input as Record<string, unknown>).mipmap, false);
-  assert.equal((requests[5].args.input as Record<string, unknown>).sRGB, true);
-  assert.equal((requests[5].args.input as Record<string, unknown>).alphaIsTransparency, true);
-  assert.equal((requests[5].args.input as Record<string, unknown>).maxTextureSize, 512);
+  assert.deepEqual(requests.map((request) => request.input!.name), ["texture.info", "texture.create", "texture.sprite", "texture.modify", "texture.delete", "texture.import-settings"]);
+  assert.deepEqual(requests[1].input!.input, { path: "Assets/Textures/Icon.png", target: "Assets/Textures/Icon.png", source: "C:/tmp/icon.png", overwrite: true, textureType: "Sprite" });
+  assert.deepEqual(requests[2].input!.input, { path: "Assets/Textures/Icon.png", target: "Assets/Textures/Icon.png", spriteMode: "Multiple", pixelsPerUnit: 128, pivotX: "0.25", pivotY: "0.75", slices: [{ name: "left", x: 0, y: 0, width: 16, height: 16 }] });
+  assert.deepEqual(requests[3].input!.input, { path: "Assets/Textures/Icon.png", target: "Assets/Textures/Icon.png", width: 3, height: 4, fillColor: "#ff0000", x: 1, y: 2, dryRun: true });
+  assert.equal(requests[4].execution?.dryRun, true);
+  assert.equal((requests[5].input!.input as Record<string, unknown>).readable, false);
+  assert.equal((requests[5].input!.input as Record<string, unknown>).mipmap, false);
+  assert.equal((requests[5].input!.input as Record<string, unknown>).sRGB, true);
+  assert.equal((requests[5].input!.input as Record<string, unknown>).alphaIsTransparency, true);
+  assert.equal((requests[5].input!.input as Record<string, unknown>).maxTextureSize, 512);
 });
 
 test("shader and texture bridge errors preserve structured diagnostics", async () => {
   const runtime = await makeRuntime();
   const shader = await execute(["tools", "run", "shader.info", "Assets/Shaders/Missing.shader"], {
     ...runtime,
-    bridgeExecute: async () => ({ ok: false, error: { code: "E_SHADER_NOT_FOUND", message: "Shader asset not found." }, nextActions: ["Check the path."] })
+    bridgeExecute: async (payload) => ({ ok: false as const, requestId: payload.requestId, error: { code: "E_SHADER_NOT_FOUND", message: "Shader asset not found." , nextActions: ["Check the path."], transient: false, retryAfterMs: 0 }})
   });
   const texture = await execute(["tools", "run", "texture.import-settings", "Assets/Textures/Missing.png"], {
     ...runtime,
-    bridgeExecute: async () => ({ ok: false, error: { code: "E_IMPORT_FAILED", message: "Failed to apply texture import settings." }, nextActions: ["Check Unity Console."] })
+    bridgeExecute: async (payload) => ({ ok: false as const, requestId: payload.requestId, error: { code: "E_IMPORT_FAILED", message: "Failed to apply texture import settings." , nextActions: ["Check Unity Console."], transient: false, retryAfterMs: 0 }})
   });
 
-  assert.equal(shader.ok, false);
+  assert.ok(!shader.ok);
   assert.equal(shader.error?.code, "E_SHADER_NOT_FOUND");
   assert.deepEqual(shader.error?.nextActions, ["Check the path."]);
-  assert.equal(texture.ok, false);
+  assert.ok(!texture.ok);
   assert.equal(texture.error?.code, "E_IMPORT_FAILED");
   assert.deepEqual(texture.error?.nextActions, ["Check Unity Console."]);
 });
@@ -1144,14 +1196,14 @@ test("ui commands forward creation, document and hierarchy arguments", async () 
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
     requests.push(payload);
-    return { ok: true, data: { plannedEffects: payload.command.includes("create") ? [{ type: payload.command, args: payload.args }] : [], document: payload.command.includes("document") ? { path: payload.args.uxml ?? payload.args.path } : undefined } };
+    return { ok: true as const, requestId: payload.requestId, data: { plannedEffects: payload.command.includes("create") ? [{ type: payload.command, args: payload.input! }] : [], document: payload.command.includes("document") ? { path: payload.input!.uxml ?? payload.input!.path } : undefined } };
   };
 
   const canvas = await execute(["tools", "run", "ui.canvas.create", "HUD"], { ...runtime, bridgeExecute });
   const text = await execute(["tools", "run", "ui.text.create", "Title", "--parent", "HUD", "--text", "Start", "--width", "320", "--height", "80", "--x", "10", "--y", "20", "--font-size", "32"], { ...runtime, bridgeExecute });
   const button = await execute(["tools", "run", "ui.button.create", "PlayButton", "--canvas", "HUD", "--label", "Play"], { ...runtime, bridgeExecute });
   const image = await execute(["tools", "run", "ui.image.create", "Logo", "--parent", "HUD", "--sprite", "Assets/UI/logo.png", "--color", "#ffffff"], { ...runtime, bridgeExecute });
-  const documentCreate = await execute(["tools", "run", "ui.document.create", "--name", "MainUIDocument", "--uxml", "Assets/UI/Main.uxml", "--uss", "Assets/UI/Main.uss", "--panel-settings", "Assets/UI/Panel.asset", "--overwrite"], { ...runtime, bridgeExecute });
+  const documentCreate = await execute(["tools", "run", "ui.document.create", "--name", "MainUIDocument", "--uxml", "Assets/UI/Main.uxml", "--uss", "Assets/UI/Main.uss", "--panel-settings", "Assets/UI/Panel.asset", "--overwrite", "--yes"], { ...runtime, bridgeExecute });
   const documentInfo = await execute(["tools", "run", "ui.document.info", "MainUIDocument", "--uss", "Assets/UI/Main.uss"], { ...runtime, bridgeExecute });
   const documentUpdate = await execute(["tools", "run", "ui.document.update", "Assets/UI/Main.uxml", "--content-file", contentFile, "--dry-run"], { ...runtime, bridgeExecute });
   const documentDelete = await execute(["tools", "run", "ui.document.delete", "Assets/UI/Main.uxml", "--dry-run"], { ...runtime, bridgeExecute });
@@ -1166,67 +1218,61 @@ test("ui commands forward creation, document and hierarchy arguments", async () 
   const listDocuments = await execute(["tools", "run", "ui.list-documents", "uxml", "--page-size", "20"], { ...runtime, bridgeExecute });
   const renderPreview = await execute(["tools", "run", "ui.render-preview", "Assets/UI/Main.uxml", "--output", "Assets/UI/preview.png", "--dry-run"], { ...runtime, bridgeExecute });
 
-  assert.equal(canvas.ok, true);
-  assert.equal(text.ok, true);
-  assert.equal(button.ok, true);
-  assert.equal(image.ok, true);
-  assert.equal(documentCreate.ok, true);
-  assert.equal(documentInfo.ok, true);
-  assert.equal(documentUpdate.ok, true);
-  assert.equal(documentDelete.ok, true);
-  assert.equal(hierarchy.ok, true);
-  assert.equal(attach.ok, true);
-  assert.equal(detach.ok, true);
-  assert.equal(panelCreate.ok, true);
-  assert.equal(panelUpdate.ok, true);
-  assert.equal(visualTree.ok, true);
-  assert.equal(modifyVisual.ok, true);
-  assert.equal(linkStylesheet.ok, true);
-  assert.equal(listDocuments.ok, true);
-  assert.equal(renderPreview.ok, true);
+  assert.ok(canvas.ok);
+  assert.ok(text.ok);
+  assert.ok(button.ok);
+  assert.ok(image.ok);
+  assert.ok(documentCreate.ok);
+  assert.ok(documentInfo.ok);
+  assert.ok(documentUpdate.ok);
+  assert.ok(documentDelete.ok);
+  assert.ok(hierarchy.ok);
+  assert.ok(attach.ok);
+  assert.ok(detach.ok);
+  assert.ok(panelCreate.ok);
+  assert.ok(panelUpdate.ok);
+  assert.ok(visualTree.ok);
+  assert.ok(modifyVisual.ok);
+  assert.ok(linkStylesheet.ok);
+  assert.ok(listDocuments.ok);
+  assert.ok(renderPreview.ok);
   assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
-  assert.deepEqual(requests[0].args, { name: "ui.canvas.create", input: { name: "HUD" } });
-  assert.deepEqual(requests[1].args, { name: "ui.text.create", input: { name: "Title", parent: "HUD", text: "Start", width: 320, height: 80, x: 10, y: 20, fontSize: 32 } });
-  assert.deepEqual(requests[2].args, { name: "ui.button.create", input: { name: "PlayButton", parent: "HUD", text: "Play" } });
-  assert.deepEqual(requests[3].args, { name: "ui.image.create", input: { name: "Logo", parent: "HUD", sprite: "Assets/UI/logo.png", color: "#ffffff" } });
-  assert.deepEqual(requests[4].args, { name: "ui.document.create", input: { name: "MainUIDocument", path: "Assets/UI/Main.uxml", uxml: "Assets/UI/Main.uxml", uss: "Assets/UI/Main.uss", panelSettings: "Assets/UI/Panel.asset", overwrite: true } });
-  assert.deepEqual(requests[5].args, { name: "ui.document.info", input: { target: "MainUIDocument", uss: "Assets/UI/Main.uss" } });
-  assert.equal((requests[6].args.input as Record<string, unknown>).content, "<ui:UXML xmlns:ui=\"UnityEngine.UIElements\" />\n");
-  assert.equal((requests[6].args.input as Record<string, unknown>).dryRun, true);
-  assert.equal(requests[7].dryRun, true);
-  assert.deepEqual(requests[8].args, { name: "ui.hierarchy", input: { pageSize: 25, cursor: "50", target: "HUD", query: "Canvas", type: "RectTransform", className: "screen" } });
-  assert.deepEqual(requests[9].args, { name: "ui.attach-document", input: { target: "UIDoc", sourceAsset: "Assets/UI/Main.uxml", panelSettings: "Assets/UI/Panel.asset", sortOrder: 5 } });
-  assert.deepEqual(requests[10].args, { name: "ui.detach-document", input: { target: "UIDoc", dryRun: true } });
-  assert.deepEqual(requests[11].args, { name: "ui.create-panel-settings", input: { path: "Assets/UI/Panel.asset", referenceWidth: 1920, referenceHeight: 1080, sortingOrder: 3, targetTexture: "Assets/UI/Target.renderTexture" } });
-  assert.deepEqual(requests[12].args, { name: "ui.update-panel-settings", input: { path: "Assets/UI/Panel.asset", scaleMode: "ScaleWithScreenSize", referenceWidth: 1280, referenceHeight: 720, sortingLayerName: "UI", match: 0.5, dryRun: true } });
-  assert.deepEqual(requests[13].args, { name: "ui.get-visual-tree", input: { target: "UIDoc", parent: "root", query: "button", type: "Button", className: "primary", pageSize: 10, cursor: "20", maxDepth: 4 } });
-  assert.deepEqual(requests[14].args, { name: "ui.modify-visual-element", input: { target: "UIDoc", elementName: "Root", addClass: "selected", backgroundColor: "#ff0000", dryRun: true } });
-  assert.deepEqual(requests[15].args, { name: "ui.link-stylesheet", input: { target: "Assets/UI/Main.uxml", path: "Assets/UI/Main.uxml", uxml: "Assets/UI/Main.uxml", uss: "Assets/UI/Main.uss", dryRun: true } });
-  assert.deepEqual(requests[16].args, { name: "ui.list-documents", input: { kind: "uxml", pageSize: 20 } });
-  assert.deepEqual(requests[17].args, { name: "ui.render-preview", input: { target: "Assets/UI/Main.uxml", path: "Assets/UI/Main.uxml", uxml: "Assets/UI/Main.uxml", output: "Assets/UI/preview.png", dryRun: true } });
+  assert.deepEqual(requests[0].input!, { name: "ui.canvas.create", input: { name: "HUD" } });
+  assert.deepEqual(requests[1].input!, { name: "ui.text.create", input: { name: "Title", parent: "HUD", text: "Start", width: 320, height: 80, x: 10, y: 20, fontSize: 32 } });
+  assert.deepEqual(requests[2].input!, { name: "ui.button.create", input: { name: "PlayButton", parent: "HUD", text: "Play" } });
+  assert.deepEqual(requests[3].input!, { name: "ui.image.create", input: { name: "Logo", parent: "HUD", sprite: "Assets/UI/logo.png", color: "#ffffff" } });
+  assert.deepEqual(requests[4].input!, { name: "ui.document.create", input: { name: "MainUIDocument", uxml: "Assets/UI/Main.uxml", uss: "Assets/UI/Main.uss", panelSettings: "Assets/UI/Panel.asset", overwrite: true } });
+  assert.deepEqual(requests[5].input!, { name: "ui.document.info", input: { target: "MainUIDocument", uss: "Assets/UI/Main.uss" } });
+  assert.deepEqual(requests[6].input!, { name: "ui.document.update", input: { path: "Assets/UI/Main.uxml", content: "<ui:UXML xmlns:ui=\"UnityEngine.UIElements\" />\n" } });
+  assert.equal(requests[7].execution?.dryRun, true);
+  assert.deepEqual(requests[8].input!, { name: "ui.hierarchy", input: { pageSize: 25, cursor: "50", target: "HUD", query: "Canvas", type: "RectTransform", className: "screen" } });
+  assert.deepEqual(requests[9].input!, { name: "ui.attach-document", input: { target: "UIDoc", sourceAsset: "Assets/UI/Main.uxml", panelSettings: "Assets/UI/Panel.asset", sortOrder: 5 } });
+  assert.deepEqual(requests[10].input!, { name: "ui.detach-document", input: { target: "UIDoc", dryRun: true } });
+  assert.deepEqual(requests[11].input!, { name: "ui.create-panel-settings", input: { path: "Assets/UI/Panel.asset", referenceWidth: 1920, referenceHeight: 1080, sortingOrder: 3, targetTexture: "Assets/UI/Target.renderTexture" } });
+  assert.deepEqual(requests[12].input!, { name: "ui.update-panel-settings", input: { path: "Assets/UI/Panel.asset", scaleMode: "ScaleWithScreenSize", referenceWidth: 1280, referenceHeight: 720, sortingLayerName: "UI", match: 0.5, dryRun: true } });
+  assert.deepEqual(requests[13].input!, { name: "ui.get-visual-tree", input: { target: "UIDoc", parent: "root", query: "button", type: "Button", className: "primary", pageSize: 10, cursor: "20", maxDepth: 4 } });
+  assert.deepEqual(requests[14].input!, { name: "ui.modify-visual-element", input: { target: "UIDoc", elementName: "Root", addClass: "selected", backgroundColor: "#ff0000", dryRun: true } });
+  assert.deepEqual(requests[15].input!, { name: "ui.link-stylesheet", input: { path: "Assets/UI/Main.uxml", uss: "Assets/UI/Main.uss" } });
+  assert.deepEqual(requests[16].input!, { name: "ui.list-documents", input: { kind: "uxml", pageSize: 20 } });
+  assert.deepEqual(requests[17].input!, { name: "ui.render-preview", input: { target: "Assets/UI/Main.uxml", output: "Assets/UI/preview.png" } });
 });
 
-test("ui document info reads UXML offline when bridge endpoint is absent", async () => {
+test("ui document info requires the live Unity capability catalog", async () => {
   const runtime = await makeRuntime();
-  const uxmlPath = join(runtime.dataDir, "Main.uxml");
-  await writeFile(uxmlPath, "<ui:UXML xmlns:ui=\"UnityEngine.UIElements\"><ui:VisualElement name=\"Root\" /></ui:UXML>\n", "utf8");
+  const result = await execute(["tools", "run", "ui.document.info", "Assets/UI/Main.uxml"], runtime);
 
-  const result = await execute(["tools", "run", "ui.document.info", uxmlPath], runtime);
-
-  assert.equal(result.ok, true);
-  assert.equal((result.data as { mode: string }).mode, "offline-reader");
-  assert.equal((result.data as { document: { kind: string } }).document.kind, "uxml");
-  assert.deepEqual((result.data as { diagnostics: Array<{ code: string }> }).diagnostics.map((item) => item.code), ["UI_DOCUMENT_READ_OK"]);
+  assert.ok(!result.ok);
+  assert.equal(result.error?.code, "E_TOOL_NOT_FOUND_FOR_TARGET");
 });
 
 test("ui bridge errors preserve structured diagnostics", async () => {
   const runtime = await makeRuntime();
-  const result = await execute(["tools", "run", "ui.document.create", "--uxml", "Assets/UI/Main.uxml", "--panel-settings", "Assets/UI/Missing.asset"], {
+  const result = await execute(["tools", "run", "ui.document.create", "--uxml", "Assets/UI/Main.uxml", "--panel-settings", "Assets/UI/Missing.asset", "--yes"], {
     ...runtime,
-    bridgeExecute: async () => ({ ok: false, error: { code: "E_UI_PANEL_SETTINGS_NOT_FOUND", message: "PanelSettings asset not found: Assets/UI/Missing.asset" }, nextActions: ["Create a PanelSettings asset in Unity."] })
+    bridgeExecute: async (payload) => ({ ok: false as const, requestId: payload.requestId, error: { code: "E_UI_PANEL_SETTINGS_NOT_FOUND", message: "PanelSettings asset not found: Assets/UI/Missing.asset" , nextActions: ["Create a PanelSettings asset in Unity."], transient: false, retryAfterMs: 0 }})
   });
 
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "E_UI_PANEL_SETTINGS_NOT_FOUND");
   assert.deepEqual(result.error?.nextActions, ["Create a PanelSettings asset in Unity."]);
 });
@@ -1242,28 +1288,34 @@ test("ui target ambiguity diagnostics are preserved for parent, document and hie
   for (const item of cases) {
     const result = await execute(item.args, {
       ...runtime,
-      bridgeExecute: async () => ({
+      bridgeExecute: async (payload) => ({
         ok: false,
+        requestId: payload.requestId,
         error: {
           code: "E_TARGET_AMBIGUOUS",
           message: item.message,
-          target: "HUD",
-          matchCount: 2,
-          matches: [
-            { id: 101, name: "HUD", path: "Canvas/HUD", components: ["RectTransform"] },
-            { id: 202, name: "HUD", path: "Overlay/HUD", components: ["UIDocument"] }
-          ]
-        },
-        nextActions: [item.nextAction]
+          details: {
+            target: "HUD",
+            matchCount: 2,
+            matches: [
+              { id: 101, name: "HUD", path: "Canvas/HUD", components: ["RectTransform"] },
+              { id: 202, name: "HUD", path: "Overlay/HUD", components: ["UIDocument"] }
+            ]
+          },
+          nextActions: [item.nextAction],
+          transient: false,
+          retryAfterMs: 0
+        }
       })
     });
 
     assert.equal(result.ok, false, item.name);
     assert.equal(result.error?.code, "E_TARGET_AMBIGUOUS", item.name);
     assert.equal(result.error?.message, item.message, item.name);
-    assert.equal(result.error?.target, "HUD", item.name);
-    assert.equal(result.error?.matchCount, 2, item.name);
-    assert.deepEqual(result.error?.matches, [
+    const details = result.error?.details as { target: string; matchCount: number; matches: unknown[] };
+    assert.equal(details.target, "HUD", item.name);
+    assert.equal(details.matchCount, 2, item.name);
+    assert.deepEqual(details.matches, [
       { id: 101, name: "HUD", path: "Canvas/HUD", components: ["RectTransform"] },
       { id: 202, name: "HUD", path: "Overlay/HUD", components: ["UIDocument"] }
     ], item.name);
@@ -1275,12 +1327,12 @@ test("prefab bridge errors preserve structured diagnostics", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["tools", "run", "prefab.stage-close"], {
     ...runtime,
-    bridgeExecute: async () => ({ ok: false, error: { code: "E_PREFAB_DIRTY_CONFLICT", message: "Prefab Stage has unsaved changes." }, nextActions: ["Run unity_cli tools run prefab.stage-close --save."] })
+    bridgeExecute: async (payload) => ({ ok: false as const, requestId: payload.requestId, error: { code: "E_PREFAB_DIRTY_CONFLICT", message: "Prefab Stage has unsaved changes." , nextActions: ["Run unity_cli tools run prefab.stage-save, then retry prefab.stage-close."], transient: false, retryAfterMs: 0 }})
   });
 
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "E_PREFAB_DIRTY_CONFLICT");
-  assert.deepEqual(result.error?.nextActions, ["Run unity_cli tools run prefab.stage-close --save."]);
+  assert.deepEqual(result.error?.nextActions, ["Run unity_cli tools run prefab.stage-save, then retry prefab.stage-close."]);
 });
 
 test("go commands forward structured search and transform inputs", async () => {
@@ -1288,7 +1340,7 @@ test("go commands forward structured search and transform inputs", async () => {
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
     requests.push(payload);
-    return { ok: true, data: { gameObject: { path: payload.args.target ?? payload.args.name }, items: [], pageInfo: { total: 0 }, plannedEffects: [{ type: payload.command }] } };
+    return { ok: true as const, requestId: payload.requestId, data: { gameObject: { path: payload.input!.target ?? payload.input!.name }, items: [], pageInfo: { total: 0 }, plannedEffects: [{ type: payload.command }] } };
   };
 
   const find = await execute(["tools", "run", "go.find", "--input", JSON.stringify({ searchTerm: "Camera", searchMethod: "by_component", includeInactive: true, pageSize: 10, cursor: 20 })], { ...runtime, bridgeExecute });
@@ -1299,26 +1351,41 @@ test("go commands forward structured search and transform inputs", async () => {
   const parent = await execute(["tools", "run", "go.set-parent", "--dry-run", "--input", JSON.stringify({ target: "AlignmentCubeRenamed", parent: "Parent", worldPositionStays: false })], { ...runtime, bridgeExecute });
 
   for (const result of [find, create, modify, batchModify, move, parent]) {
-    assert.equal(result.ok, true);
+    assert.ok(result.ok);
   }
   assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
-  assert.deepEqual(requests[0].args, { name: "go.find", input: { pageSize: 10, cursor: 20, searchTerm: "Camera", searchMethod: "by_component", includeInactive: true } });
-  assert.deepEqual(requests[1].args, { name: "go.create", input: { name: "AlignmentCube", active: false, primitive: "cube", x: 1, y: 2, z: 3, rotationX: 0, rotationY: 45, rotationZ: 0, scaleX: 2, scaleY: 2, scaleZ: 2 } });
-  assert.deepEqual(requests[2].args, { name: "go.modify", input: { target: "AlignmentCube", newName: "AlignmentCubeRenamed", active: false, layerValue: "Default", tagValue: "Untagged" } });
-  assert.deepEqual(requests[3].args, { name: "go.modify", input: { targets: ["Batch/A", "Batch/B"], active: true, x: 4, y: 5, z: 6 } });
-  assert.deepEqual(requests[4].args, { name: "go.move-relative", input: { target: "AlignmentCubeRenamed", offsetX: 0, offsetY: 1, offsetZ: -2 } });
-  assert.deepEqual(requests[5].args, { name: "go.set-parent", input: { target: "AlignmentCubeRenamed", parent: "Parent", worldPositionStays: false, dryRun: true } });
-  assert.equal(requests[5].dryRun, true);
+  assert.deepEqual(requests[0].input!, { name: "go.find", input: { pageSize: 10, cursor: 20, searchTerm: "Camera", searchMethod: "by_component", includeInactive: true } });
+  assert.deepEqual(requests[1].input!, { name: "go.create", input: { name: "AlignmentCube", active: false, primitive: "cube", x: 1, y: 2, z: 3, rotationX: 0, rotationY: 45, rotationZ: 0, scaleX: 2, scaleY: 2, scaleZ: 2 } });
+  assert.deepEqual(requests[2].input!, { name: "go.modify", input: { target: "AlignmentCube", newName: "AlignmentCubeRenamed", active: false, layerValue: "Default", tagValue: "Untagged" } });
+  assert.deepEqual(requests[3].input!, { name: "go.modify", input: { targets: ["Batch/A", "Batch/B"], active: true, x: 4, y: 5, z: 6 } });
+  assert.deepEqual(requests[4].input!, { name: "go.move-relative", input: { target: "AlignmentCubeRenamed", offsetX: 0, offsetY: 1, offsetZ: -2 } });
+  assert.deepEqual(requests[5].input!, { name: "go.set-parent", input: { target: "AlignmentCubeRenamed", parent: "Parent", worldPositionStays: false, dryRun: true } });
+  assert.equal(requests[5].execution?.dryRun, true);
+});
+
+test("go.create keeps top-level numeric example fields as numbers", async () => {
+  const runtime = await makeRuntime();
+  let request: BridgeRequest | undefined;
+  const result = await execute(["tools", "run", "go.create", "--input", JSON.stringify({ name: "AlignmentCube", primitive: "cube", x: 0, y: 1, z: 0 })], {
+    ...runtime,
+    bridgeExecute: async (payload) => {
+      request = payload;
+      return { ok: true as const, requestId: payload.requestId, data: { gameObject: { path: "AlignmentCube" }, plannedEffects: [] } };
+    }
+  });
+
+  assert.ok(result.ok);
+  assert.deepEqual(request?.input, { name: "go.create", input: { name: "AlignmentCube", primitive: "cube", x: 0, y: 1, z: 0 } });
 });
 
 test("bridge errors return CLI failure envelope", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["tools", "run", "go.inspect", "Player"], {
     ...runtime,
-    bridgeExecute: async () => ({ ok: false, error: { code: "E_TARGET_AMBIGUOUS", message: "Multiple targets matched." }, nextActions: ["Pass --path or --id."] })
+    bridgeExecute: async (payload) => ({ ok: false as const, requestId: payload.requestId, error: { code: "E_TARGET_AMBIGUOUS", message: "Multiple targets matched." , nextActions: ["Pass --path or --id."], transient: false, retryAfterMs: 0 }})
   });
 
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "E_TARGET_AMBIGUOUS");
   assert.deepEqual(result.error?.nextActions, ["Pass --path or --id."]);
 });
@@ -1332,9 +1399,9 @@ test("camera screenshot bridge target and IO errors preserve protocol envelopes"
   ];
 
   for (const item of cases) {
-    const result = await execute(["tools", "run", "camera.screenshot", item.name === "empty target" ? "" : "Missing Camera", "--output", "Artifacts/out.png"], {
+    const result = await execute(["tools", "run", "camera.screenshot", item.name === "empty target" ? "" : "Missing Camera", "--output", "Artifacts/out.png", "--yes"], {
       ...runtime,
-      bridgeExecute: async () => ({ ok: false, error: item.response, nextActions: item.nextActions })
+      bridgeExecute: async (payload) => ({ ok: false as const, requestId: payload.requestId, error: { ...item.response, nextActions: item.nextActions, transient: false, retryAfterMs: 0 } })
     });
 
     assert.equal(result.ok, false, item.name);
@@ -1349,15 +1416,15 @@ test("editor state/play/pause/stop/menu commands forward args and return envelop
   const requests: BridgeRequest[] = [];
   const bridgeExecute = async (payload: BridgeRequest) => {
     requests.push(payload);
-    const name = (payload.args.name as string) ?? payload.command;
+    const name = (payload.input!.name as string) ?? payload.command;
     if (name === "editor.state") {
-      return { ok: true, data: { command: name, playMode: { isPlaying: false, isPaused: false }, activeScene: { path: "Assets/Scenes/Main.unity" } } };
+      return { ok: true as const, requestId: payload.requestId, data: { command: name, playMode: { isPlaying: false, isPaused: false }, activeScene: { path: "Assets/Scenes/Main.unity" } } };
     }
     if (name === "editor.menu") {
-      const input = (payload.args.input ?? {}) as Record<string, unknown>;
-      return { ok: true, data: { command: name, plannedEffects: [{ type: "editor.menu", path: input.path }], result: { path: input.path, executed: true } } };
+      const input = (payload.input!.input ?? {}) as Record<string, unknown>;
+      return { ok: true as const, requestId: payload.requestId, data: { command: name, plannedEffects: [{ type: "editor.menu", path: input.path }], result: { path: input.path, executed: true } } };
     }
-    return { ok: true, data: { command: name, plannedEffects: [{ type: name }], result: { requested: name.split(".")[1] } } };
+    return { ok: true as const, requestId: payload.requestId, data: { command: name, plannedEffects: [{ type: name }], result: { requested: name.split(".")[1] } } };
   };
 
   const state = await execute(["tools", "run", "editor.state"], { ...runtime, bridgeExecute });
@@ -1366,16 +1433,16 @@ test("editor state/play/pause/stop/menu commands forward args and return envelop
   const stop = await execute(["tools", "run", "editor.stop", "--timeout", "3000"], { ...runtime, bridgeExecute });
   const menu = await execute(["tools", "run", "editor.menu", "File/Save", "--timeout-ms", "7000", "--yes"], { ...runtime, bridgeExecute });
 
-  assert.equal(state.ok, true);
-  assert.equal(play.ok, true);
-  assert.equal(pause.ok, true);
-  assert.equal(stop.ok, true);
-  assert.equal(menu.ok, true);
+  assert.ok(state.ok);
+  assert.ok(play.ok);
+  assert.ok(pause.ok);
+  assert.ok(stop.ok);
+  assert.ok(menu.ok);
   assert.deepEqual(requests.map((request) => request.command), ["project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run", "project-tool.run"]);
-  assert.deepEqual(requests[1].args, { name: "editor.play", input: { timeoutMs: 2500 } });
-  assert.deepEqual(requests[2].args, { name: "editor.pause", input: {} });
-  assert.deepEqual(requests[3].args, { name: "editor.stop", input: { timeoutMs: 3000 } });
-  assert.deepEqual(requests[4].args, { name: "editor.menu", input: { path: "File/Save", timeoutMs: 7000 } });
+  assert.deepEqual(requests[1].input!, { name: "editor.play", input: { timeoutMs: 2500 } });
+  assert.deepEqual(requests[2].input!, { name: "editor.pause", input: {} });
+  assert.deepEqual(requests[3].input!, { name: "editor.stop", input: { timeoutMs: 3000 } });
+  assert.deepEqual(requests[4].input!, { name: "editor.menu", input: { path: "File/Save", timeoutMs: 7000 } });
 });
 
 test("editor bridge errors preserve structured diagnostics", async () => {
@@ -1390,7 +1457,7 @@ test("editor bridge errors preserve structured diagnostics", async () => {
   for (const item of cases) {
     const result = await execute(item.args, {
       ...runtime,
-      bridgeExecute: async () => ({ ok: false, error: item.response, nextActions: item.nextActions })
+      bridgeExecute: async (payload) => ({ ok: false as const, requestId: payload.requestId, error: { ...item.response, nextActions: item.nextActions, transient: false, retryAfterMs: 0 } })
     });
 
     assert.equal(result.ok, false, item.name);
@@ -1402,14 +1469,14 @@ test("editor bridge errors preserve structured diagnostics", async () => {
 test("runtime-tool list is blocked from CLI as internal command", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["tools", "run", "runtime-tool.list"], runtime);
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "E_TOOL_NOT_FOUND_FOR_TARGET");
 });
 
 test("runtime-tool run is blocked from CLI as internal command", async () => {
   const runtime = await makeRuntime();
   const result = await execute(["tools", "run", "runtime-tool.run", "sample.runtime-echo", "--yes"], runtime);
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "E_TOOL_NOT_FOUND_FOR_TARGET");
 });
 
@@ -1420,11 +1487,11 @@ test("runtime-tool run direct bridge command does not require confirmation befor
     ...runtime,
     bridgeExecute: async (payload: BridgeRequest) => {
       requests.push(payload);
-      return { ok: false, error: { code: "E_RUNTIME_NOT_READY", message: "not ready", transient: true, retryAfterMs: 3000 }, nextActions: ["Enter Play Mode first."] };
+      return { ok: false as const, requestId: payload.requestId, error: { code: "E_RUNTIME_NOT_READY", message: "not ready", transient: true, retryAfterMs: 3000, nextActions: ["Enter Play Mode first."] }};
     }
   });
 
-  assert.equal(result.ok, false);
+  assert.ok(!result.ok);
   assert.equal(result.error?.code, "E_RUNTIME_NOT_READY");
   assert.equal(requests[0].command, "runtime-tool.run");
   assert.equal(requests[0].security, undefined);

@@ -1,8 +1,0 @@
-{
-  "command": "scene.build-settings",
-  "data": {
-    "scenes": "<array of {path: string, enabled: boolean, buildIndex: integer}>",
-    "count": "<integer>",
-    "logPath": "<string>"
-  }
-}

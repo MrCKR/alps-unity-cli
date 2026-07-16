@@ -36,16 +36,12 @@ test("gen-protocol 生成 envelope.cs 且为 auto-generated", () => {
   assert.match(cs, /namespace UnityCli\.Protocol/);
 });
 
-test("生成的 Envelope 类字段映射正确(camelCase→PascalCase + 可空)", () => {
+test("生成的成功和错误 Envelope 字段映射正确", () => {
   const cs = readFileSync(GENERATED_CS, "utf8");
-  // ok: boolean(必填)→ bool,无 ?
-  assert.match(cs, /public bool Ok \{ get; set; \}/);
-  // requestId?: string → string?
-  assert.match(cs, /public string\? RequestId \{ get; set; \}/);
-  // error?: ToolError → ToolError?(interface 引用)
-  assert.match(cs, /public ToolError\? Error \{ get; set; \}/);
-  // data?: TData(泛型参数)→ object?
-  assert.match(cs, /public object\? Data \{ get; set; \}/);
+  assert.match(cs, /public sealed partial class SuccessEnvelope[\s\S]*public bool Ok \{ get; set; \}/);
+  assert.match(cs, /public sealed partial class SuccessEnvelope[\s\S]*public string RequestId \{ get; set; \}/);
+  assert.match(cs, /public sealed partial class SuccessEnvelope[\s\S]*public object Data \{ get; set; \}/);
+  assert.match(cs, /public sealed partial class ErrorEnvelope[\s\S]*public ToolError Error \{ get; set; \}/);
 });
 
 test("生成的 ToolError 类字段映射正确(含数组与 number)", () => {
@@ -54,24 +50,31 @@ test("生成的 ToolError 类字段映射正确(含数组与 number)", () => {
   assert.match(cs, /public string Code \{ get; set; \}/);
   // message: string → string
   assert.match(cs, /public string Message \{ get; set; \}/);
-  // details?: TDetails(泛型)→ object?
-  assert.match(cs, /public object\? Details \{ get; set; \}/);
-  // nextActions?: string[] → List<string>?
-  assert.match(cs, /public System\.Collections\.Generic\.List<string>\? NextActions \{ get; set; \}/);
-  // transient?: boolean → bool?
-  assert.match(cs, /public bool\? Transient \{ get; set; \}/);
-  // retryAfterMs?: number → double?
-  assert.match(cs, /public double\? RetryAfterMs \{ get; set; \}/);
+  // 可选引用类型由序列化器按缺省值省略。
+  assert.match(cs, /public object Details \{ get; set; \}/);
+  // 错误建议是当前错误协议的必填数组。
+  assert.match(cs, /public System\.Collections\.Generic\.List<string> NextActions \{ get; set; \}/);
+  // transient: boolean → bool
+  assert.match(cs, /public bool Transient \{ get; set; \}/);
+  // retryAfterMs: number → double
+  assert.match(cs, /public double RetryAfterMs \{ get; set; \}/);
+});
+
+test("C# ProtocolEnvelopeFactory 为所有错误写入 required retry 元数据", () => {
+  const factory = readSrc("unitypkg/Editor/Protocol/ProtocolEnvelopeFactory.cs");
+  assert.match(factory, /Transient = transient/);
+  assert.match(factory, /RetryAfterMs = transient \? \(retryAfterMs \?\? 5000d\) : 0d/);
+  assert.match(factory, /NextActions = \(nextActions \?\? Array\.Empty<string>\(\)\)/);
 });
 
 test("生成的 BridgeRequest 类字段映射正确", () => {
   const cs = readFileSync(GENERATED_CS, "utf8");
   // command: string(必填)→ string
   assert.match(cs, /public string Command \{ get; set; \}/);
-  // requestId?: string → string?
-  assert.match(cs, /public string\? RequestId \{ get; set; \}/);
-  // input?: TInput(泛型)→ object?
-  assert.match(cs, /public object\? Input \{ get; set; \}/);
+  assert.match(cs, /public string RequestId \{ get; set; \}/);
+  assert.match(cs, /public object Input \{ get; set; \}/);
+  assert.match(cs, /public BridgeExecution Execution \{ get; set; \}/);
+  assert.match(cs, /public BridgeSecurity Security \{ get; set; \}/);
 });
 
 test("生成器不新增 ts-morph 依赖(用已装 typescript Compiler API)", () => {
@@ -84,26 +87,26 @@ test("生成器不新增 ts-morph 依赖(用已装 typescript Compiler API)", ()
 
 test("协议 TS 源头存在且定义三大传输类型", () => {
   const ts = readFileSync(TS_SOURCE, "utf8");
-  assert.match(ts, /export interface Envelope/);
+  assert.match(ts, /export type Envelope/);
   assert.match(ts, /export interface ToolError/);
   assert.match(ts, /export interface BridgeRequest/);
 });
 
-test("协议 TS 源头用 camelCase(retryAfterMs 非 legacy retry field)", () => {
+test("协议 TS 源头只使用 camelCase retryAfterMs", () => {
   const ts = readFileSync(TS_SOURCE, "utf8");
   const legacyRetryField = "retry" + "_after_ms";
-  assert.match(ts, /retryAfterMs\?/);
+  assert.match(ts, /retryAfterMs: number/);
   assert.doesNotMatch(ts, new RegExp(legacyRetryField));
-  assert.match(ts, /nextActions\?/);
+  assert.match(ts, /nextActions: string\[\]/);
 });
 
-test("序列化器源码存在且为反射驱动隐藏 helper", () => {
+test("序列化器源码存在且为独立 Extension assembly 共享的隐藏 CLI helper", () => {
   const cs = readSrc("unitypkg/Editor/Infrastructure/UnityCliSerializer.cs");
   // 反射 Serialize/Deserialize 入口
   assert.match(cs, /public static string Serialize\(object value\)/);
   assert.match(cs, /public static T Deserialize<T>\(string json\)/);
-  // 对外隐藏:internal
-  assert.match(cs, /internal static class UnityCliSerializer/);
+  // CLR public 供独立 Extension assembly 复用，但不进入公开 CLI catalog。
+  assert.match(cs, /public static class UnityCliSerializer/);
   // proto3 null 省略语义
   assert.match(cs, /null 省略|proto3/);
   // camelCase 映射

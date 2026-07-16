@@ -48,7 +48,7 @@ namespace UnityCli.ProBuilder
         {
             Name = "probuilder.mesh-info",
             Summary = "Read detailed vertex, face, edge, bounds, and material info for a ProBuilder mesh.",
-            Description = "Get detailed information about a ProBuilder mesh including vertex, face, edge counts, renderer bounds, and assigned materials. Edge count is approximated as faceCount * 3 / 2 for triangle meshes.",
+            Description = "Get detailed information about a ProBuilder mesh including exact vertex, face, and edge counts from ProBuilderMesh, renderer bounds, and assigned materials.",
             Group = "probuilder",
             DestructiveHint = false,
             Target = "editor",
@@ -63,12 +63,12 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            var go = ProBuilderInput.ResolveTarget(request.Target);
             if (go == null)
                 throw ProBuilderErrors.TargetNotFound(request.Target);
 
@@ -78,12 +78,15 @@ namespace UnityCli.ProBuilder
 
             var faceCount = ProBuilderReflection.GetFaceCount(mesh);
             var vertexCount = ProBuilderReflection.GetVertexCount(mesh);
+            var edgeCount = ProBuilderReflection.GetEdgeCount(mesh);
+            if (faceCount < 0 || vertexCount < 0 || edgeCount < 0)
+                throw ProBuilderErrors.OperationFailed("mesh-info", "Failed to read exact ProBuilderMesh counts.");
 
             var result = new Result
             {
                 VertexCount = vertexCount,
                 FaceCount = faceCount,
-                EdgeCount = faceCount * 3 / 2 // 三角形近似
+                EdgeCount = edgeCount
             };
 
             var renderer = go.GetComponent<MeshRenderer>();
@@ -109,7 +112,7 @@ namespace UnityCli.ProBuilder
                 result.Materials = materials;
             }
 
-            return result;
+            return new System.Threading.Tasks.ValueTask<Result>(result);
         }
     }
 }

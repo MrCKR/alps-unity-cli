@@ -34,7 +34,7 @@ test("tools.run is the unified hybrid execution entry", () => {
   const props = run.inputSchema.properties as Record<string, unknown>;
   assert.ok(props.name, "tools.run requires name");
   assert.ok(props.input, "tools.run accepts input");
-  assert.ok(props.timeoutMs, "tools.run accepts timeoutMs");
+  assert.equal(props.timeoutMs, undefined, "tools.run timeout is an execution control, not business input");
   assert.ok(props.fingerprintMode, "tools.run accepts fingerprintMode");
   assert.ok(run.description.toLowerCase().includes("runtime") || run.description.includes("Play Mode"), "tools.run describes runtime/Play Mode routing");
 });

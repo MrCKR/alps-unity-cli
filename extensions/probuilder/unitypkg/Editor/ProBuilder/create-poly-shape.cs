@@ -48,6 +48,7 @@ namespace UnityCli.ProBuilder
             Description = "Create a ProBuilder mesh from a set of 2D polygon points extruded to a given height. Requires at least 3 points. Optionally flip normals and name the created GameObject.",
             Group = "probuilder",
             DestructiveHint = false,
+            SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 15000,
@@ -60,7 +61,7 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
@@ -96,7 +97,7 @@ namespace UnityCli.ProBuilder
             var faceCount = ProBuilderReflection.GetFaceCount(pbMesh);
             var vertexCount = ProBuilderReflection.GetVertexCount(pbMesh);
 
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Object = new ObjectRef
                 {
@@ -106,7 +107,7 @@ namespace UnityCli.ProBuilder
                     FaceCount = faceCount,
                     VertexCount = vertexCount
                 }
-            };
+            });
         }
 
         private static string HierarchyPath(GameObject go)

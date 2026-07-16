@@ -29,6 +29,7 @@ namespace UnityCli.ProBuilder
             Description = "Convert a regular Unity mesh to a ProBuilder mesh by adding a ProBuilderMesh component and importing via MeshImporter. Fails if the target already has a ProBuilderMesh component.",
             Group = "probuilder",
             DestructiveHint = false,
+            SideEffects = new[] { "scene-modify", "undo-stack" },
             Target = "editor",
             PlayModeSupport = "editor-only",
             DefaultTimeoutMs = 10000,
@@ -41,12 +42,12 @@ namespace UnityCli.ProBuilder
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             if (!ProBuilderReflection.IsAvailable)
                 throw ProBuilderErrors.PackageNotAvailable();
 
-            var go = ProBuilderInput.ResolveTarget(ctx.InputJson);
+            var go = ProBuilderInput.ResolveTarget(request.Target);
             if (go == null) throw ProBuilderErrors.TargetNotFound(request.Target);
 
             var existingMesh = ProBuilderReflection.GetProBuilderMesh(go);
@@ -55,28 +56,24 @@ namespace UnityCli.ProBuilder
 
             Undo.RecordObject(go, "ProBuilder Convert to ProBuilder");
 
-            var pbMesh = ProBuilderReflection.AddProBuilderMesh(go);
+            var pbMesh = ProBuilderReflection.ConvertToProBuilderMesh(go);
             if (pbMesh == null)
-                throw ProBuilderErrors.OperationFailed("convert-to-probuilder", "Failed to add ProBuilderMesh component.");
+                throw ProBuilderErrors.OperationFailed("convert-to-probuilder", "ProBuilder 5.x MeshImporter failed.");
 
-            ProBuilderReflection.ConvertViaMeshImporter(go, pbMesh);
+            var vertexCount = ProBuilderReflection.GetVertexCount(pbMesh);
+            var faceCount = ProBuilderReflection.GetFaceCount(pbMesh);
+            if (vertexCount < 1 || faceCount < 1)
+                throw ProBuilderErrors.OperationFailed("convert-to-probuilder", "Imported ProBuilderMesh contains no geometry.");
 
-            var converted = pbMesh != null;
-            var vertexCount = converted ? ProBuilderReflection.GetVertexCount(pbMesh) : 0;
-            var faceCount = converted ? ProBuilderReflection.GetFaceCount(pbMesh) : 0;
+            ProBuilderReflection.RefreshMesh(pbMesh);
+            EditorSceneManager.MarkSceneDirty(go.scene);
 
-            if (converted)
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
-                ProBuilderReflection.RefreshMesh(pbMesh);
-                EditorSceneManager.MarkSceneDirty(go.scene);
-            }
-
-            return new Result
-            {
-                Converted = converted,
+                Converted = true,
                 VertexCount = vertexCount,
                 FaceCount = faceCount
-            };
+            });
         }
     }
 }

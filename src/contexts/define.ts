@@ -1,7 +1,7 @@
 import type { BridgeRuntime } from "../bridge/index.js";
 import type { ProjectToolRuntime } from "../project-tool-discovery.js";
 import type { CliResult } from "../types.js";
-import type { ContextAvailabilityScope, ContextDescriptor, ContextPlayModeSupport, ContextSource, ContextTarget } from "../context/types.js";
+import type { ContextAvailabilityScope, ContextDescriptor, ContextExample, ContextPlayModeSupport, ContextSource, ContextTarget } from "./types.js";
 
 export interface ContextDefinition<TReq = unknown, TRes = unknown> {
   name: string;
@@ -15,6 +15,7 @@ export interface ContextDefinition<TReq = unknown, TRes = unknown> {
   supportStatus?: string;
   refreshBehavior?: string;
   requiresPackages?: string[];
+  examples: ContextExample[];
   /** 只读读取入口。不得修改 Unity、项目文件或会话状态。 */
   read: (req: TReq, ctx: ContextReadContext) => Promise<TRes> | TRes;
 }
@@ -67,6 +68,9 @@ export function defineContextMetadata(): ContextDescriptor[] {
   const result: ContextDescriptor[] = [];
   for (const [, entry] of registry) {
     const d = entry.definition;
+    if (!entry.inputSchema || !entry.outputSchema) {
+      throw new Error(`Context schema was not generated for ${d.name}`);
+    }
     result.push({
       name: d.name,
       summary: d.summary ?? d.description,
@@ -79,8 +83,9 @@ export function defineContextMetadata(): ContextDescriptor[] {
       supportStatus: d.supportStatus,
       requiresPackages: d.requiresPackages,
       refreshBehavior: d.refreshBehavior,
-      inputSchema: entry.inputSchema ?? { type: "object", properties: {} },
-      outputSchema: entry.outputSchema ?? { type: "object", properties: {} },
+      inputSchema: entry.inputSchema,
+      outputSchema: entry.outputSchema,
+      examples: d.examples,
       cliCommand: `context read ${d.name}`
     });
   }
@@ -92,11 +97,8 @@ export function findDefineContext(name: string): ContextDefinition | undefined {
 }
 
 export function contextErrorFromResult(result: CliResult): StructuredContextError {
-  const error = result.error;
-  if (!error) {
-    return new StructuredContextError("CONTEXT_READ_FAILED", "Context read failed without an error envelope.");
+  if (result.ok) {
+    return new StructuredContextError("CONTEXT_READ_FAILED", "Context read returned a success envelope.");
   }
-  const { code, message, nextActions, requestId: _requestId, transient: _transient, retryAfterMs: _retryAfterMs, details, ...rest } = error as Record<string, unknown> & { code: string; message: string; nextActions?: string[] };
-  const extraDetails = Object.keys(rest).length > 0 || details !== undefined ? { ...rest, ...(details !== undefined ? { details } : {}) } : undefined;
-  return new StructuredContextError(code, message, Array.isArray(nextActions) ? nextActions : [], extraDetails);
+  return new StructuredContextError(result.error.code, result.error.message, result.error.nextActions, result.error.details as Record<string, unknown> | undefined);
 }

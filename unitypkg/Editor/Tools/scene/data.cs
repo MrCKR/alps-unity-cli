@@ -8,8 +8,6 @@ namespace UnityCli
 {
     /// <summary>
     /// scene.data — 参数化 Scene 深读:maxDepth/nameFilter/includeComponents/maxResults。
-    /// 对齐旧 SceneData handler;只读。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class SceneDataTool : IUnityCliTool<SceneDataTool.Request, SceneDataTool.Result>
     {
@@ -56,7 +54,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var maxDepth = Math.Max(1, Math.Min(request.MaxDepth ?? 2, 6));
             var maxResults = Math.Max(1, Math.Min(request.MaxResults ?? 200, 2000));
@@ -71,13 +69,13 @@ namespace UnityCli
                 if (count >= maxResults) break;
                 CollectSceneData(root.transform, 0, maxDepth, nameFilter, includeComponents, items, ref count, maxResults);
             }
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Scene = SceneToolSupport.BuildSceneInfo(scene),
                 MaxDepth = maxDepth,
                 Count = count,
                 Items = items
-            };
+            });
         }
 
         // 递归收集场景节点摘要,受 maxDepth/maxResults/nameFilter 约束。

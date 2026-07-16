@@ -8,8 +8,6 @@ namespace UnityCli
 {
     /// <summary>
     /// go.look-at — 旋转 GameObject 使其 forward 指向另一个 GameObject。
-    /// 对齐旧 GameObjectLookAt handler;session-affecting。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class GameObjectLookAtTool : IUnityCliTool<GameObjectLookAtTool.Request, GameObjectLookAtTool.Result>
     {
@@ -45,7 +43,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             GameObjectToolSupport.EnsureEditorNotBusy("go.look-at");
             if (string.IsNullOrEmpty(request.Target))
@@ -55,14 +53,14 @@ namespace UnityCli
             var gameObject = GameObjectToolSupport.ResolveUniqueTarget(request.Target, "GameObject look-at requires a target.");
             var lookAtName = request.LookAt ?? request.Destination;
             var lookAt = GameObjectToolSupport.ResolveUniqueTarget(lookAtName, "GameObject look-at requires a lookAt target. Use unity_cli tools run go.look-at --input '{\"target\":\"CameraRig\",\"lookAt\":\"Player\"}'.");
-            Undo.RecordObject(gameObject.transform, "unity_cli go.look-at");
+            UnityCliSceneMutation.RecordObject(gameObject.transform, "go.look-at");
             gameObject.transform.LookAt(lookAt.transform);
-            EditorSceneManager.MarkSceneDirty(gameObject.scene);
-            return new Result
+            UnityCliSceneMutation.MarkSceneDirty(gameObject.scene);
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 GameObject = GameObjectToolSupport.BuildGameObjectDetail(gameObject),
                 PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "go.look-at", Target = GameObjectToolSupport.HierarchyPath(gameObject) } }
-            };
+            });
         }
     }
 }

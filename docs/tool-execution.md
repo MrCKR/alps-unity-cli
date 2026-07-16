@@ -48,6 +48,10 @@ unity_cli tools run camera.screenshot --input '{}'
 # → E_SCHEMA_INVALID, nextActions 指向 tools describe
 ```
 
+## Descriptor 示例
+
+`tools describe <name>` 的每个示例把业务 `input` 与命令层 `execution` 分开。`input` 必须只包含 `inputSchema` 定义的 Request 字段；dry-run 与 timeout 会在示例 `argv` 中显示为 `--dry-run` 和 `--timeout-ms <n>`，不能放入 JSON input。`examples[].argv` 是参数 token 数组，不是可直接粘贴的 shell 字符串；PowerShell 内联 JSON 必须用单引号包裹，复杂输入应改用 `--input-file`。`context describe <name>` 同样提供 `context read <name> --input <json>` 示例。
+
 ## Bridge 执行约束
 
 Bridge-backed tools 由 Unity Editor 侧队列调度到 Unity 主线程执行。Unity 正在 compile/import/build、切换 Play Mode 或 domain reload 时，工具可能返回 busy/transient 错误；先读 `tools run editor.state --input '{"waitReady":true}'`，等 `busy.isBusy=false` 后再重试。
@@ -114,10 +118,10 @@ unity_cli tools run asset.delete --input '{"path":"Assets/Temp.mat"}' --yes
 unity_cli tools run profiler.capture --input '{"path":"profile.json"}'
 
 # Job 模式
-unity_cli tools run profiler.capture --input '{"path":"profile.json"}' --job --project . --unity "C:\Program Files\Unity\Unity-2022.3.61f1\Editor\Unity.exe"
+unity_cli tools run profiler.capture --input '{"path":"profile.json"}' --job --project . --unity "<path-to-Unity.exe>"
 
 # 等待并取回 Bridge envelope 摘要
-unity_cli tools run profiler.capture --input '{"path":"profile.json"}' --job --wait --project . --unity "C:\Program Files\Unity\Unity-2022.3.61f1\Editor\Unity.exe"
+unity_cli tools run profiler.capture --input '{"path":"profile.json"}' --job --wait --project . --unity "<path-to-Unity.exe>"
 
 # 查看任务状态
 unity_cli jobs status <jobId>
@@ -129,8 +133,8 @@ unity_cli jobs status <jobId>
 
 通用规则：
 
-- 列表/层级工具优先传 `pageSize`、`cursor`、`parent`、`query`、`componentType` 或 `className`。继续读取时使用输出里的 `pageInfo.nextCursor`；`hasMore`、`truncated` 或 `childrenTruncated` 表示还有更深或更多内容。
-- 深度序列化工具（`object.get-data`、`asset.get-data`、`component.get`）优先传 `paths` 或 `viewQuery`，并保持 `maxDepth` 较低。数组、列表和字典受 `maxArrayItems` 限制；输出里的 `totalCount`、`returnedCount`、`truncated`、`nextPath` 用于判断是否需要继续按路径读取。
+- 列表/层级工具优先传 `pageSize`、`cursor`、`parent`、`query`、`componentType` 或 `className`。继续读取时将输出里的 `pageInfo.nextCursor` 原值传回 `cursor`；两者保持相同 JSON 类型。`hasMore`、`truncated` 或 `childrenTruncated` 表示还有更深或更多内容。
+- 深度序列化工具（`object.get-data`、`asset.get-data`、`component.get`）优先传 `paths` 或 `viewQuery`，并保持 `maxDepth` 较低。数组、列表和字典受 `maxArrayItems` 限制；输出里的 `totalCount`、`returnedCount`、`truncated`、`nextPath` 用于判断是否需要继续按路径读取。CLR 的 `NaN`、正无穷和负无穷无法作为 JSON number，会在 AnyJson 值节点中分别表示为字符串 `"NaN"`、`"Infinity"`、`"-Infinity"`。
 - 文本源码工具（如 `shader.read`）使用 `offset` 和 `maxBytes` 分段读取。输出 `truncated=true` 时，下一次把 `nextOffset` 作为新的 `offset`。
 - 截图和相机工具默认返回 artifact 路径。只有确实需要内联图片时才传 `inlineBase64:true`；图片超过 Bridge 内联上限时会省略 `imageBase64` 并返回 warning，继续使用 artifact 路径。
 
@@ -175,7 +179,7 @@ unity_cli tools run shader.read --input '{"path":"Assets/Shaders/Probe.shader","
 
 `object.modify` / `component.modify` / `asset.modify` 共享同一套 patch 引擎（底层 `ObjectPatch`），支持三个修改面，执行顺序对齐 IvanMurzak ReflectorNet：`jsonPatch` → `pathPatches` → `objectDiff`/`componentDiff`。
 
-- `pathPatches`：`[{"path":"...","value":...}]`，路径语法 `fieldName`、`nested/field`、`arrayField/[i]`、`dictField/[key]`，同时兼容 `.` 分隔。
+- `pathPatches`：`[{"path":"...","value":...}]`，路径使用 `/` 分隔：`fieldName`、`nested/field`、`arrayField/[i]`、`dictField/[key]`，并可带 `#/` 前缀。
 - `jsonPatch`：JSON Merge Patch (RFC 7396) 对象。
 - `objectDiff`/`componentDiff`：SerializedMember 风格的完整 diff（等价 jsonPatch merge 语义）。
 
@@ -193,19 +197,19 @@ unity_cli tools run component.modify --input '{"path":"Player","component":"Rigi
 
 ## reflection.method.call 安全确认流
 
-`reflection.method.call` 不做调用范围限制（public/private/static/instance、任意 namespace/assembly、Editor/Runtime），分类为 `riskLevel: critical`、`destructiveHint: true`。必须传 `security` 对象：
+`reflection.method.call` 不做调用范围限制（public/private/static/instance、任意 namespace/assembly、Editor/Runtime），分类为 `riskLevel: critical`、`destructiveHint: true`。先用 `reflection.method.find` 获取签名；存在同名 overload 时，将选中签名的 `parameterType` 数组作为 `parameterTypes`。执行必须传 `--yes`：
 
 ```powershell
-unity_cli tools run reflection.method.call --input '{
+unity_cli tools run reflection.method.call --yes --input '{
   "typeName":"UnityEngine.Transform",
   "methodName":"Translate",
-  "args":[1,0,0],
-  "instanceRef":{"instanceId":123},
-  "security":{"confirmed":true,"destructiveFingerprint":"<sha256>"}
+  "parameterTypes":["UnityEngine.Vector3","UnityEngine.Space"],
+  "args":[{"x":1,"y":0,"z":0},0],
+  "instanceRef":{"instanceId":123}
 }'
 ```
 
-未提供确认时返回 preview，包含 `fingerprint` 与 `plannedEffects`。确认后返回 target method preview、参数、结果序列化、异常（如有）与结构化 audit。
+`--dry-run` 返回 `plannedEffects` 且不执行方法；未确认时返回 `E_DESTRUCTIVE_CONFIRMATION_REQUIRED`。无法唯一选择 overload 时返回 `E_METHOD_AMBIGUOUS` 和候选签名。确认后返回参数、结果序列化、异常（如有）与结构化 audit。
 
 ## asset.get-data 复用 serializer
 

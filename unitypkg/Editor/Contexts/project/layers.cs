@@ -34,13 +34,14 @@ namespace UnityCli.Contexts.Project
             Target = "editor",
             AvailabilityScope = "editorSession",
             PlayModeSupport = "supported",
-            RefreshBehavior = "on-demand"
+            RefreshBehavior = "on-demand",
+            Examples = new[] { new ContextExample { Description = "List configured project layers", Input = new Request { } } }
         };
 
         /// <summary>
         /// 读取非空 Layer 槽位；只读，不修改 TagManager 或项目设置。
-        /// </summary>
-        public Result Read(Request request, UnityCliProjectToolContext ctx)
+    /// </summary>
+        public System.Threading.Tasks.ValueTask<Result> ReadAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             var layers = new List<LayerEntry>();
             for (var i = 0; i < 32; i++)
@@ -52,11 +53,11 @@ namespace UnityCli.Contexts.Project
                 }
             }
 
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Layers = layers.ToArray(),
                 Count = layers.Count
-            };
+            });
         }
     }
 }

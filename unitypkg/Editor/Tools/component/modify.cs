@@ -9,20 +9,25 @@ namespace UnityCli
 {
     /// <summary>
     /// component.modify — 用 pathPatches/jsonPatch/componentDiff 深改单个 Component。支持 dryRun。
-    /// 对齐旧 ComponentModify handler;session-affecting。执行顺序:jsonPatch/componentDiff → pathPatches。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class ComponentModifyTool : IUnityCliTool<ComponentModifyTool.Request, ComponentModifyTool.Result>
     {
-        public sealed class Request
+        public sealed class Request : IUnityCliObjectReferenceInput
         {
             public int? InstanceId { get; set; }
             public string Path { get; set; }
+            public string Name { get; set; }
+            public string Target { get; set; }
+            public string AssetPath { get; set; }
+            public string Guid { get; set; }
             public int? ComponentInstanceId { get; set; }
             public int? ComponentIndex { get; set; }
             public string Component { get; set; }
+            public string ComponentType { get; set; }
             public int? MaxDepth { get; set; }
-            public bool? DryRun { get; set; }
+            [UnityCliAnyJson] public List<object> PathPatches { get; set; }
+            [UnityCliAnyJson] public object JsonPatch { get; set; }
+            [UnityCliAnyJson] public object ComponentDiff { get; set; }
         }
 
         public sealed class Result
@@ -32,9 +37,9 @@ namespace UnityCli
             public long ComponentInstanceId { get; set; }
             public string TypeName { get; set; }
             public List<string> ChangedPaths { get; set; }
-            public object UpdatedData { get; set; }
+            [UnityCliAnyJson] public object UpdatedData { get; set; }
             public List<string> Logs { get; set; }
-            public object Audit { get; set; }
+            [UnityCliAnyJson] public object Audit { get; set; }
             public List<GameObjectPlannedEffect> PlannedEffects { get; set; }
         }
 
@@ -54,63 +59,63 @@ namespace UnityCli
             MaxTimeoutMs = 600000,
             Examples = new[]
             {
-                new ToolExample { Description = "Patch localPosition", Input = new Request { Path = "Player", Component = "Transform" } }
+                new ToolExample { Description = "Patch localPosition", Input = new Request { Path = "Player", Component = "Transform", PathPatches = new List<object> { new Dictionary<string, object> { { "path", "localPosition/x" }, { "value", 1L } } } } }
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             GameObjectToolSupport.EnsureEditorNotBusy("component.modify");
-            // 通过原始输入 JSON 构建 BridgeRequest,复用 ObjectRefResolver 组件解析与 ObjectPatch
-            var bridgeRequest = UnityCliBridge.BridgeRequest.Parse(ctx.InputJson);
-            var component = UnityCliBridge.ObjectRefResolver.ResolveComponent(bridgeRequest);
-            var pathPatchesJson = bridgeRequest.RawJsonArg("pathPatches");
-            var jsonPatchJson = bridgeRequest.RawJsonArg("jsonPatch");
-            var componentDiffJson = bridgeRequest.RawJsonArg("componentDiff");
-            if (string.IsNullOrEmpty(pathPatchesJson) && string.IsNullOrEmpty(jsonPatchJson) && string.IsNullOrEmpty(componentDiffJson))
+            var component = UnityCliBridge.ObjectRefResolver.ResolveComponent(request);
+            if ((request.PathPatches == null || request.PathPatches.Count == 0) && request.JsonPatch == null && request.ComponentDiff == null)
             {
                 throw new UnityCliBridge.BridgeCommandException("E_COMPONENT_PATCH_REQUIRED",
                     "component.modify requires pathPatches, jsonPatch or componentDiff.",
                     "Pass --input '{\"component\":{\"type\":\"Transform\"},\"pathPatches\":[{\"path\":\"localPosition\",\"value\":{\"x\":1}}]}'.");
             }
-            if (request.DryRun == true)
+            if (ctx.DryRun)
             {
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Command = "component.modify",
                     DryRun = true,
                     ComponentInstanceId = component.GetInstanceID(),
                     TypeName = component.GetType().FullName,
                     PlannedEffects = new List<GameObjectPlannedEffect> { new GameObjectPlannedEffect { Type = "component.modify", Target = component.gameObject.name } }
-                };
+                });
             }
+            if (EditorApplication.isPlaying && EditorUtility.IsPersistent(component))
+            {
+                throw new UnityCliBridge.BridgeCommandException("E_TOOL_PLAYMODE_UNAVAILABLE", "component.modify cannot modify persistent assets during Play Mode.", "Target a scene component or exit Play Mode before modifying an asset.");
+            }
+
             // 执行顺序对齐 IvanMurzak: jsonPatch/componentDiff → pathPatches
             UnityCliBridge.ObjectPatch.PatchResult result = null;
-            var effectiveMerge = !string.IsNullOrEmpty(jsonPatchJson) ? jsonPatchJson : componentDiffJson;
-            if (!string.IsNullOrEmpty(effectiveMerge))
+            var effectiveMerge = request.JsonPatch ?? request.ComponentDiff;
+            if (effectiveMerge != null)
             {
                 result = UnityCliBridge.ObjectPatch.ApplyMergePatch(component, effectiveMerge);
             }
-            if (!string.IsNullOrEmpty(pathPatchesJson))
+            if (request.PathPatches != null && request.PathPatches.Count > 0)
             {
-                var pathResult = UnityCliBridge.ObjectPatch.ApplyPathPatches(component, pathPatchesJson);
+                var pathResult = UnityCliBridge.ObjectPatch.ApplyPathPatches(component, request.PathPatches);
                 if (result == null) result = pathResult;
                 else { result.ChangedPaths.AddRange(pathResult.ChangedPaths); result.Logs.AddRange(pathResult.Logs); }
             }
-            EditorUtility.SetDirty(component);
-            EditorSceneManager.MarkSceneDirty(component.gameObject.scene);
-            var maxDepth = bridgeRequest.IntArg("maxDepth", 2);
-            var afterJson = UnityCliBridge.ObjectSerializer.Serialize(component, new UnityCliBridge.ObjectSerializer.Options { MaxDepth = maxDepth, IncludeFields = true, IncludeProperties = true, DeepSerialization = false });
-            return new Result
+            UnityCliSceneMutation.MarkSceneObjectDirty(component);
+            UnityCliSceneMutation.MarkSceneDirty(component.gameObject.scene);
+            var maxDepth = request.MaxDepth ?? 2;
+            var updatedData = UnityCliBridge.ObjectSerializer.Serialize(component, new UnityCliBridge.ObjectSerializer.Options { MaxDepth = maxDepth, IncludeFields = true, IncludeProperties = true, DeepSerialization = false });
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Command = "component.modify",
                 ComponentInstanceId = component.GetInstanceID(),
                 TypeName = component.GetType().FullName,
                 ChangedPaths = new List<string>(result.ChangedPaths),
                 Logs = new List<string>(result.Logs),
-                UpdatedData = GameObjectToolSupport.ParseJsonToObject(afterJson),
-                Audit = GameObjectToolSupport.ParseJsonToObject(UnityCliBridge.ObjectPatch.ResultToJson(result))
-            };
+                UpdatedData = updatedData,
+                Audit = UnityCliBridge.ObjectPatch.ResultData(result)
+            });
         }
     }
 }

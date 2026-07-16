@@ -8,8 +8,6 @@ namespace UnityCli
 {
     /// <summary>
     /// scene.move-object — 将 GameObject 移动到另一个已加载场景。
-    /// 对齐旧 SceneMoveObject handler;session-affecting,支持 dryRun。
-    /// 设计依据:.plan/工具统一形态.md(C# Bridge 工具 → C# 自包含)。
     /// </summary>
     public class SceneMoveObjectTool : IUnityCliTool<SceneMoveObjectTool.Request, SceneMoveObjectTool.Result>
     {
@@ -20,7 +18,6 @@ namespace UnityCli
             public int? InstanceId { get; set; }
             [UnityCliRequired]
             public string Scene { get; set; }
-            public bool? DryRun { get; set; }
         }
 
         public sealed class Result
@@ -53,7 +50,7 @@ namespace UnityCli
             }
         };
 
-        public Result Execute(Request request, UnityCliProjectToolContext ctx)
+        public System.Threading.Tasks.ValueTask<Result> ExecuteAsync(Request request, UnityCliProjectToolContext ctx, System.Threading.CancellationToken ct = default)
         {
             SceneToolSupport.EnsureEditorNotBusy("scene.move-object");
             var target = request.Target ?? request.Path;
@@ -83,17 +80,17 @@ namespace UnityCli
             }
             if (go.scene == destScene)
             {
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Target = go.name,
                     ToScene = destScenePath,
                     Moved = false,
                     Reason = "already in destination scene"
-                };
+                });
             }
-            if (request.DryRun == true)
+            if (ctx.DryRun)
             {
-                return new Result
+                return new System.Threading.Tasks.ValueTask<Result>(new Result
                 {
                     Target = go.name,
                     FromScene = go.scene.path,
@@ -103,17 +100,17 @@ namespace UnityCli
                     {
                         new ScenePlannedEffect { Type = "scene.move-object", Target = go.name }
                     }
-                };
+                });
             }
             var fromScene = go.scene.path;
             SceneManager.MoveGameObjectToScene(go, destScene);
-            return new Result
+            return new System.Threading.Tasks.ValueTask<Result>(new Result
             {
                 Target = go.name,
                 FromScene = fromScene,
                 ToScene = destScenePath,
                 Moved = true
-            };
+            });
         }
     }
 }

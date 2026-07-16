@@ -34,7 +34,7 @@ export async function readEditorCsSources(): Promise<string> {
  */
 export async function discoverLiveTools(...tools: ToolMetadata[]): Promise<Map<string, ResolvedToolMetadata>> {
   const result = await discoverProjectTools({}, { projectTools: tools }, "req_test_discover_tools");
-  assert.equal(result.ok, true);
+  assert.ok(result.ok);
   return new Map(result.tools.map((tool) => [tool.name, tool]));
 }
 

@@ -138,13 +138,13 @@ doctor 会输出 `extension.probuilder` 检查项，包括：
 unity_cli doctor --project /path/to/unity/project
 ```
 
-### capabilities 查看
+### 扩展状态查看
 
 ```bash
-unity_cli capabilities --project /path/to/unity/project
+unity_cli extensions list --project /path/to/unity/project
 ```
 
-在 `extensions` 部分可以看到 ProBuilder 扩展包的可用性状态和工具数量。`extensionGroups.probuilder=36` 只在扩展包安装后出现。
+返回结果会区分 Unity package 依赖与 ProBuilder extension 的物理安装状态，并列出贡献的工具数量。
 
 ## 常见问题
 
